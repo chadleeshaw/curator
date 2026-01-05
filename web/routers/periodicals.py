@@ -26,7 +26,9 @@ def set_dependencies(session_factory):
 
 
 @router.get("/periodicals")
-async def list_periodicals(skip: int = 0, limit: int = 50, sort_by: str = "title", sort_order: str = "asc") -> Dict[str, Any]:
+async def list_periodicals(
+    skip: int = 0, limit: int = 50, sort_by: str = "title", sort_order: str = "asc"
+) -> Dict[str, Any]:
     """
     List organized periodicals from library.
 
@@ -49,13 +51,23 @@ async def list_periodicals(skip: int = 0, limit: int = 50, sort_by: str = "title
             query = db_session.query(Magazine)
 
             if sort_by == "publisher":
-                sort_expr = Magazine.publisher.desc() if is_descending else Magazine.publisher.asc()
+                sort_expr = (
+                    Magazine.publisher.desc()
+                    if is_descending
+                    else Magazine.publisher.asc()
+                )
                 query = query.order_by(sort_expr, Magazine.title.asc())
             elif sort_by == "issue_date":
-                sort_expr = Magazine.issue_date.desc() if is_descending else Magazine.issue_date.asc()
+                sort_expr = (
+                    Magazine.issue_date.desc()
+                    if is_descending
+                    else Magazine.issue_date.asc()
+                )
                 query = query.order_by(sort_expr)
             else:  # Default to title
-                sort_expr = Magazine.title.desc() if is_descending else Magazine.title.asc()
+                sort_expr = (
+                    Magazine.title.desc() if is_descending else Magazine.title.asc()
+                )
                 query = query.order_by(sort_expr)
 
             magazines = query.offset(skip).limit(limit).all()
@@ -67,7 +79,9 @@ async def list_periodicals(skip: int = 0, limit: int = 50, sort_by: str = "title
                         "id": m.id,
                         "title": m.title,
                         "publisher": m.publisher,
-                        "issue_date": m.issue_date.isoformat() if m.issue_date else None,
+                        "issue_date": (
+                            m.issue_date.isoformat() if m.issue_date else None
+                        ),
                         "file_path": m.file_path,
                         "cover_path": m.cover_path,
                         "metadata": m.extra_metadata,
@@ -92,7 +106,9 @@ async def get_magazine(magazine_id: int) -> MagazineResponse:
     try:
         db_session = _session_factory()
         try:
-            magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+            magazine = (
+                db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+            )
 
             if not magazine:
                 raise HTTPException(status_code=404, detail="Magazine not found")
@@ -101,7 +117,9 @@ async def get_magazine(magazine_id: int) -> MagazineResponse:
                 "id": magazine.id,
                 "title": magazine.title,
                 "publisher": magazine.publisher,
-                "issue_date": magazine.issue_date.isoformat() if magazine.issue_date else None,
+                "issue_date": (
+                    magazine.issue_date.isoformat() if magazine.issue_date else None
+                ),
                 "file_path": magazine.file_path,
                 "cover_path": magazine.cover_path,
                 "metadata": magazine.extra_metadata,
@@ -120,7 +138,9 @@ async def get_cover(magazine_id: int):
     try:
         db_session = _session_factory()
         try:
-            magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+            magazine = (
+                db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+            )
 
             if not magazine or not magazine.cover_path:
                 raise HTTPException(status_code=404, detail="Cover not found")
@@ -146,7 +166,9 @@ async def get_pdf(magazine_id: int):
     try:
         db_session = _session_factory()
         try:
-            magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+            magazine = (
+                db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+            )
 
             if not magazine:
                 raise HTTPException(status_code=404, detail="Magazine not found")
@@ -167,7 +189,9 @@ async def get_pdf(magazine_id: int):
 
 
 @router.delete("/magazines/{magazine_id}")
-async def delete_periodical(magazine_id: int, delete_files: bool = False) -> Dict[str, Any]:
+async def delete_periodical(
+    magazine_id: int, delete_files: bool = False
+) -> Dict[str, Any]:
     """
     Delete a periodical from the library
 
@@ -178,7 +202,9 @@ async def delete_periodical(magazine_id: int, delete_files: bool = False) -> Dic
     try:
         db_session = _session_factory()
         try:
-            magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+            magazine = (
+                db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+            )
 
             if not magazine:
                 raise HTTPException(status_code=404, detail="Magazine not found")

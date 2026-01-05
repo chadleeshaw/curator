@@ -33,7 +33,9 @@ class WikipediaProvider(SearchProvider):
             results = self._search_wikipedia(query)
 
             if results:
-                logger.info(f"Wikipedia search found {len(results)} results for '{query}'")
+                logger.info(
+                    f"Wikipedia search found {len(results)} results for '{query}'"
+                )
 
         except Exception as e:
             logger.error(f"Wikipedia search error: {e}")
@@ -52,14 +54,14 @@ class WikipediaProvider(SearchProvider):
                 "srsearch": query,
                 "srnamespace": "0",  # Only article namespace
                 "srlimit": "10",
-                "format": "json"
+                "format": "json",
             }
 
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Magazine Curator)"
-            }
+            headers = {"User-Agent": "Mozilla/5.0 (Magazine Curator)"}
 
-            response = requests.get(self.base_url, params=search_params, headers=headers, timeout=10)
+            response = requests.get(
+                self.base_url, params=search_params, headers=headers, timeout=10
+            )
             response.raise_for_status()
 
             search_data = response.json()
@@ -80,7 +82,7 @@ class WikipediaProvider(SearchProvider):
                         title=page_data["title"],
                         url=f"https://en.wikipedia.org/wiki/{page_data['title'].replace(' ', '_')}",
                         provider=self.type,
-                        raw_metadata=page_data["metadata"]
+                        raw_metadata=page_data["metadata"],
                     )
                     results.append(result)
 
@@ -102,14 +104,14 @@ class WikipediaProvider(SearchProvider):
                 "explaintext": True,
                 "exlimit": "max",  # Get full extract
                 "inprop": "url",
-                "format": "json"
+                "format": "json",
             }
 
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Magazine Curator)"
-            }
+            headers = {"User-Agent": "Mozilla/5.0 (Magazine Curator)"}
 
-            response = requests.get(self.base_url, params=page_params, headers=headers, timeout=10)
+            response = requests.get(
+                self.base_url, params=page_params, headers=headers, timeout=10
+            )
             response.raise_for_status()
 
             data = response.json()
@@ -139,11 +141,7 @@ class WikipediaProvider(SearchProvider):
             metadata["url"] = url
             metadata["source"] = "Wikipedia"
 
-            return {
-                "title": title,
-                "url": url,
-                "metadata": metadata
-            }
+            return {"title": title, "url": url, "metadata": metadata}
 
         except Exception as e:
             logger.error(f"Error getting Wikipedia page info: {e}")
@@ -196,7 +194,7 @@ class WikipediaProvider(SearchProvider):
             "publisher": "",
             "issn": "",
             "country": "",
-            "frequency": ""
+            "frequency": "",
         }
 
         if not extract:
@@ -230,7 +228,7 @@ class WikipediaProvider(SearchProvider):
         ]
 
         # Search line by line for better accuracy
-        lines = extract.split('\n')
+        lines = extract.split("\n")
 
         logger.debug(f"Searching for ISSN in {len(lines)} lines of Wikipedia extract")
 
@@ -242,11 +240,13 @@ class WikipediaProvider(SearchProvider):
             for pattern_idx, pattern in enumerate(issn_patterns):
                 issn_match = re.search(pattern, line, re.IGNORECASE)
                 if issn_match:
-                    issn = issn_match.group(1).strip().replace(' ', '-').upper()
+                    issn = issn_match.group(1).strip().replace(" ", "-").upper()
                     # Validate it looks like an ISSN (4 digits, hyphen, 3 digits, 1 digit or X)
                     if re.match(r"^\d{4}-\d{3}[\dX]$", issn):
                         metadata["issn"] = issn
-                        logger.debug(f"Found ISSN '{issn}' on line {i + 1} (pattern {pattern_idx}): {line[:80]}")
+                        logger.debug(
+                            f"Found ISSN '{issn}' on line {i + 1} (pattern {pattern_idx}): {line[:80]}"
+                        )
                         break
 
             if metadata["issn"]:
@@ -258,7 +258,7 @@ class WikipediaProvider(SearchProvider):
             for pattern in issn_patterns:
                 issn_match = re.search(pattern, extract, re.IGNORECASE)
                 if issn_match:
-                    issn = issn_match.group(1).strip().replace(' ', '-').upper()
+                    issn = issn_match.group(1).strip().replace(" ", "-").upper()
                     if re.match(r"^\d{4}-\d{3}[\dX]$", issn):
                         metadata["issn"] = issn
                         logger.debug(f"Found ISSN '{issn}' in full text")

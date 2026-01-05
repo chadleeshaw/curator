@@ -112,13 +112,21 @@ class NZBGetClient(DownloadClient):
                     elif status_str == "DOWNLOADING":
                         return {
                             "status": "downloading",
-                            "progress": int(group.get("DownloadedSize", 0) / max(group.get("FileSizeMB", 1) * 1024 * 1024, 1) * 100),
+                            "progress": int(
+                                group.get("DownloadedSize", 0)
+                                / max(group.get("FileSizeMB", 1) * 1024 * 1024, 1)
+                                * 100
+                            ),
                             "size": group.get("FileSizeMB"),
                         }
                     else:
                         return {
                             "status": "pending",
-                            "progress": int(group.get("DownloadedSize", 0) / max(group.get("FileSizeMB", 1) * 1024 * 1024, 1) * 100),
+                            "progress": int(
+                                group.get("DownloadedSize", 0)
+                                / max(group.get("FileSizeMB", 1) * 1024 * 1024, 1)
+                                * 100
+                            ),
                         }
 
             return {"status": "unknown", "progress": 0}

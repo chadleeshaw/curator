@@ -98,10 +98,19 @@ class DownloadManager:
 
         # Normalize common month abbreviations to full names for better matching
         month_mapping = {
-            "jan": "january", "feb": "february", "mar": "march",
-            "apr": "april", "may": "may", "jun": "june",
-            "jul": "july", "aug": "august", "sep": "september",
-            "sept": "september", "oct": "october", "nov": "november", "dec": "december"
+            "jan": "january",
+            "feb": "february",
+            "mar": "march",
+            "apr": "april",
+            "may": "may",
+            "jun": "june",
+            "jul": "july",
+            "aug": "august",
+            "sep": "september",
+            "sept": "september",
+            "oct": "october",
+            "nov": "november",
+            "dec": "december",
         }
 
         words = []
@@ -174,7 +183,9 @@ class DownloadManager:
         Returns:
             DownloadSubmission record if submitted, None if duplicate or error
         """
-        logger.debug(f"[DownloadManager] submit_download called for: {search_result['title']}")
+        logger.debug(
+            f"[DownloadManager] submit_download called for: {search_result['title']}"
+        )
 
         # Check for duplicates
         is_dup, existing = self.check_duplicate_submission(
@@ -201,7 +212,9 @@ class DownloadManager:
 
         # Submit to download client
         try:
-            logger.debug(f"[DownloadManager] Submitting to download client: {search_result['title']}")
+            logger.debug(
+                f"[DownloadManager] Submitting to download client: {search_result['title']}"
+            )
             job_id = self.download_client.submit(
                 nzb_url=search_result["url"], title=search_result["title"]
             )
@@ -241,7 +254,9 @@ class DownloadManager:
             )
             session.add(submission)
             session.commit()
-            logger.debug(f"[DownloadManager] Created DownloadSubmission record ID: {submission.id}")
+            logger.debug(
+                f"[DownloadManager] Created DownloadSubmission record ID: {submission.id}"
+            )
 
             logger.info(
                 f"Submitted download: {search_result['title']} (job_id: {job_id})"
@@ -319,9 +334,7 @@ class DownloadManager:
                 session.flush()
                 search_result_db_id = db_result.id
             except Exception as e:
-                logger.warning(
-                    f"Could not create DB search result: {e}", exc_info=True
-                )
+                logger.warning(f"Could not create DB search result: {e}", exc_info=True)
 
             # Submit download
             submission = self.submit_download(
@@ -417,7 +430,9 @@ class DownloadManager:
         # Get status from client
         try:
             client_status = self.download_client.get_status(job_id)
-            logger.debug(f"[DownloadManager] Client status for {job_id}: {client_status}")
+            logger.debug(
+                f"[DownloadManager] Client status for {job_id}: {client_status}"
+            )
 
             # Map client status to our status
             status_map = {
@@ -438,7 +453,9 @@ class DownloadManager:
 
             if "file_path" in client_status:
                 submission.file_path = client_status["file_path"]
-                logger.debug(f"[DownloadManager] Updated file_path for {job_id}: {submission.file_path}")
+                logger.debug(
+                    f"[DownloadManager] Updated file_path for {job_id}: {submission.file_path}"
+                )
 
             if new_status == DownloadSubmission.StatusEnum.FAILED:
                 submission.last_error = client_status.get("error", "Unknown error")

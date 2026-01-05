@@ -9,7 +9,11 @@ from typing import Any, Dict
 from fastapi import APIRouter, HTTPException
 
 from models.database import DownloadSubmission, MagazineTracking
-from web.schemas import DownloadAllIssuesRequest, DownloadSingleIssueRequest, DownloadSubmissionResponse
+from web.schemas import (
+    DownloadAllIssuesRequest,
+    DownloadSingleIssueRequest,
+    DownloadSubmissionResponse,
+)
 
 router = APIRouter(prefix="/api/downloads", tags=["downloads"])
 logger = logging.getLogger(__name__)
@@ -29,19 +33,29 @@ def set_dependencies(session_factory, download_manager, download_client):
 
 
 @router.post("/all-issues")
-async def download_all_periodical_issues(request: DownloadAllIssuesRequest) -> Dict[str, Any]:
+async def download_all_periodical_issues(
+    request: DownloadAllIssuesRequest,
+) -> Dict[str, Any]:
     """Search for and download all available issues of a tracked periodical"""
     try:
         if not _download_manager:
-            raise HTTPException(status_code=503, detail="Download manager not available")
+            raise HTTPException(
+                status_code=503, detail="Download manager not available"
+            )
 
         db_session = _session_factory()
         try:
-            tracking = db_session.query(MagazineTracking).filter(MagazineTracking.id == request.tracking_id).first()
+            tracking = (
+                db_session.query(MagazineTracking)
+                .filter(MagazineTracking.id == request.tracking_id)
+                .first()
+            )
             if not tracking:
                 raise HTTPException(status_code=404, detail="Tracking record not found")
 
-            results = _download_manager.download_all_periodical_issues(request.tracking_id, db_session)
+            results = _download_manager.download_all_periodical_issues(
+                request.tracking_id, db_session
+            )
             return {
                 "success": True,
                 "tracking_id": request.tracking_id,
@@ -61,15 +75,23 @@ async def download_all_periodical_issues(request: DownloadAllIssuesRequest) -> D
 
 
 @router.post("/single-issue")
-async def download_single_issue(request: DownloadSingleIssueRequest) -> DownloadSubmissionResponse:
+async def download_single_issue(
+    request: DownloadSingleIssueRequest,
+) -> DownloadSubmissionResponse:
     """Download a single issue"""
     try:
         if not _download_manager:
-            raise HTTPException(status_code=503, detail="Download manager not available")
+            raise HTTPException(
+                status_code=503, detail="Download manager not available"
+            )
 
         db_session = _session_factory()
         try:
-            tracking = db_session.query(MagazineTracking).filter(MagazineTracking.id == request.tracking_id).first()
+            tracking = (
+                db_session.query(MagazineTracking)
+                .filter(MagazineTracking.id == request.tracking_id)
+                .first()
+            )
             if not tracking:
                 raise HTTPException(status_code=404, detail="Tracking record not found")
 
@@ -77,11 +99,17 @@ async def download_single_issue(request: DownloadSingleIssueRequest) -> Download
                 "title": request.title,
                 "url": request.url,
                 "provider": request.provider or "manual",
-                "publication_date": datetime.fromisoformat(request.publication_date) if request.publication_date else None,
+                "publication_date": (
+                    datetime.fromisoformat(request.publication_date)
+                    if request.publication_date
+                    else None
+                ),
                 "raw_metadata": {},
             }
 
-            submission = _download_manager.download_single_issue(request.tracking_id, search_result, db_session)
+            submission = _download_manager.download_single_issue(
+                request.tracking_id, search_result, db_session
+            )
             if not submission:
                 raise HTTPException(status_code=500, detail="Failed to submit download")
 
@@ -109,13 +137,20 @@ async def get_download_status_for_tracking(tracking_id: int) -> Dict[str, Any]:
     try:
         db_session = _session_factory()
         try:
-            tracking = db_session.query(MagazineTracking).filter(MagazineTracking.id == tracking_id).first()
+            tracking = (
+                db_session.query(MagazineTracking)
+                .filter(MagazineTracking.id == tracking_id)
+                .first()
+            )
             if not tracking:
                 raise HTTPException(status_code=404, detail="Tracking record not found")
 
-            submissions = db_session.query(DownloadSubmission).filter(
-                DownloadSubmission.tracking_id == tracking_id
-            ).order_by(DownloadSubmission.created_at.desc()).all()
+            submissions = (
+                db_session.query(DownloadSubmission)
+                .filter(DownloadSubmission.tracking_id == tracking_id)
+                .order_by(DownloadSubmission.created_at.desc())
+                .all()
+            )
 
             status_list = []
             for sub in submissions:
@@ -126,15 +161,21 @@ async def get_download_status_for_tracking(tracking_id: int) -> Dict[str, Any]:
                     except Exception:
                         pass
 
-                status_list.append({
-                    "submission_id": sub.id,
-                    "title": sub.result_title,
-                    "status": sub.status.value,
-                    "job_id": sub.job_id,
-                    "progress": client_status.get("progress", 0) if client_status else 0,
-                    "file_path": sub.file_path,
-                    "created_at": sub.created_at.isoformat() if sub.created_at else None,
-                })
+                status_list.append(
+                    {
+                        "submission_id": sub.id,
+                        "title": sub.result_title,
+                        "status": sub.status.value,
+                        "job_id": sub.job_id,
+                        "progress": (
+                            client_status.get("progress", 0) if client_status else 0
+                        ),
+                        "file_path": sub.file_path,
+                        "created_at": (
+                            sub.created_at.isoformat() if sub.created_at else None
+                        ),
+                    }
+                )
 
             return {
                 "success": True,
@@ -158,9 +199,15 @@ async def get_completed_downloads() -> Dict[str, Any]:
     try:
         db_session = _session_factory()
         try:
-            completed = db_session.query(DownloadSubmission).filter(
-                DownloadSubmission.status == DownloadSubmission.StatusEnum.COMPLETED
-            ).order_by(DownloadSubmission.updated_at.desc()).limit(100).all()
+            completed = (
+                db_session.query(DownloadSubmission)
+                .filter(
+                    DownloadSubmission.status == DownloadSubmission.StatusEnum.COMPLETED
+                )
+                .order_by(DownloadSubmission.updated_at.desc())
+                .limit(100)
+                .all()
+            )
 
             return {
                 "success": True,
@@ -170,7 +217,9 @@ async def get_completed_downloads() -> Dict[str, Any]:
                         "title": d.result_title,
                         "tracking_id": d.tracking_id,
                         "file_path": d.file_path,
-                        "completed_at": d.updated_at.isoformat() if d.updated_at else None,
+                        "completed_at": (
+                            d.updated_at.isoformat() if d.updated_at else None
+                        ),
                     }
                     for d in completed
                 ],
@@ -191,7 +240,10 @@ async def get_download_queue(status: str = None) -> Dict[str, Any]:
         try:
             query = db_session.query(DownloadSubmission)
             if status:
-                query = query.filter(DownloadSubmission.status == DownloadSubmission.StatusEnum[status.upper()])
+                query = query.filter(
+                    DownloadSubmission.status
+                    == DownloadSubmission.StatusEnum[status.upper()]
+                )
 
             submissions = query.order_by(DownloadSubmission.created_at.desc()).all()
 
@@ -206,7 +258,9 @@ async def get_download_queue(status: str = None) -> Dict[str, Any]:
                         "job_id": s.job_id,
                         "error": s.last_error,
                         "attempts": s.attempt_count,
-                        "created_at": s.created_at.isoformat() if s.created_at else None,
+                        "created_at": (
+                            s.created_at.isoformat() if s.created_at else None
+                        ),
                     }
                     for s in submissions
                 ],
@@ -224,11 +278,17 @@ async def retry_download(submission_id: int) -> Dict[str, Any]:
     """Retry a failed download submission"""
     try:
         if not _download_manager:
-            raise HTTPException(status_code=503, detail="Download manager not available")
+            raise HTTPException(
+                status_code=503, detail="Download manager not available"
+            )
 
         db_session = _session_factory()
         try:
-            submission = db_session.query(DownloadSubmission).filter(DownloadSubmission.id == submission_id).first()
+            submission = (
+                db_session.query(DownloadSubmission)
+                .filter(DownloadSubmission.id == submission_id)
+                .first()
+            )
             if not submission:
                 raise HTTPException(status_code=404, detail="Submission not found")
 
@@ -253,7 +313,11 @@ async def delete_from_queue(submission_id: int) -> Dict[str, Any]:
     try:
         db_session = _session_factory()
         try:
-            submission = db_session.query(DownloadSubmission).filter(DownloadSubmission.id == submission_id).first()
+            submission = (
+                db_session.query(DownloadSubmission)
+                .filter(DownloadSubmission.id == submission_id)
+                .first()
+            )
             if not submission:
                 raise HTTPException(status_code=404, detail="Submission not found")
 
@@ -272,17 +336,25 @@ async def delete_from_queue(submission_id: int) -> Dict[str, Any]:
 
 
 @router.post("/queue/cleanup")
-async def cleanup_old_submissions(days_old: int = 30, status_filter: str = None) -> Dict[str, Any]:
+async def cleanup_old_submissions(
+    days_old: int = 30, status_filter: str = None
+) -> Dict[str, Any]:
     """Clean up old download submissions"""
     try:
         db_session = _session_factory()
         try:
             from datetime import timedelta
+
             cutoff_date = datetime.utcnow() - timedelta(days=days_old)
 
-            query = db_session.query(DownloadSubmission).filter(DownloadSubmission.created_at < cutoff_date)
+            query = db_session.query(DownloadSubmission).filter(
+                DownloadSubmission.created_at < cutoff_date
+            )
             if status_filter:
-                query = query.filter(DownloadSubmission.status == DownloadSubmission.StatusEnum[status_filter.upper()])
+                query = query.filter(
+                    DownloadSubmission.status
+                    == DownloadSubmission.StatusEnum[status_filter.upper()]
+                )
 
             count = query.count()
             query.delete()

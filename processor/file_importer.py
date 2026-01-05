@@ -40,7 +40,13 @@ class FileImporter:
         "News": ["news", "daily", "newspaper"],
     }
 
-    def __init__(self, downloads_dir: str, organize_base_dir: str, fuzzy_threshold: int = 80, organization_pattern: Optional[str] = None):
+    def __init__(
+        self,
+        downloads_dir: str,
+        organize_base_dir: str,
+        fuzzy_threshold: int = 80,
+        organization_pattern: Optional[str] = None,
+    ):
         """
         Initialize file importer.
 
@@ -63,7 +69,9 @@ class FileImporter:
             category_dir = self.organize_base_dir / f"_{category}"
             category_dir.mkdir(parents=True, exist_ok=True)
 
-    def process_downloads(self, session: Session, organization_pattern: Optional[str] = None) -> Dict[str, Any]:
+    def process_downloads(
+        self, session: Session, organization_pattern: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Scan downloads folder and process any PDFs found.
 
@@ -109,7 +117,13 @@ class FileImporter:
 
         return results
 
-    def import_pdf(self, pdf_path: Path, session: Session, organization_pattern: Optional[str] = None, auto_track: bool = True) -> bool:
+    def import_pdf(
+        self,
+        pdf_path: Path,
+        session: Session,
+        organization_pattern: Optional[str] = None,
+        auto_track: bool = True,
+    ) -> bool:
         """
         Import a single PDF file.
 
@@ -134,7 +148,9 @@ class FileImporter:
             # Check for duplicates using fuzzy matching on standardized titles
             existing_magazines = session.query(Magazine).all()
             for existing in existing_magazines:
-                is_match, score = self.title_matcher.match(standardized_title, existing.title)
+                is_match, score = self.title_matcher.match(
+                    standardized_title, existing.title
+                )
                 if is_match:
                     logger.warning(
                         f"Duplicate detected: '{standardized_title}' matches existing '{existing.title}' "
@@ -149,7 +165,9 @@ class FileImporter:
             category = self._categorize_file(standardized_title)
 
             # Organize the file
-            organized_path = self._organize_file(pdf_path, metadata, category, organization_pattern)
+            organized_path = self._organize_file(
+                pdf_path, metadata, category, organization_pattern
+            )
 
             if not organized_path:
                 return False
@@ -176,7 +194,11 @@ class FileImporter:
             # Also create a tracking record for this periodical if auto_track is enabled and not already tracking it
             if auto_track:
                 olid = standardized_title.lower().replace(" ", "_").replace("-", "_")
-                existing_tracking = session.query(MagazineTracking).filter(MagazineTracking.olid == olid).first()
+                existing_tracking = (
+                    session.query(MagazineTracking)
+                    .filter(MagazineTracking.olid == olid)
+                    .first()
+                )
                 if not existing_tracking:
                     tracking = MagazineTracking(
                         olid=olid,
@@ -238,7 +260,9 @@ class FileImporter:
                 metadata["issue_date"] = datetime.strptime(date_str, "%b %Y")
                 return metadata
             except ValueError:
-                logger.warning(f"Could not parse date from filename pattern1: {filename}")
+                logger.warning(
+                    f"Could not parse date from filename pattern1: {filename}"
+                )
 
         # Pattern 2: "Title Periodical Month Year" (e.g., "Wired Periodical January 2024")
         pattern2 = r"(.+?)\s+([A-Za-z]+)\s+(\d{4})"
@@ -256,7 +280,9 @@ class FileImporter:
                     metadata["issue_date"] = datetime.strptime(date_str, "%b %Y")
                     return metadata
                 except ValueError:
-                    logger.warning(f"Could not parse date from filename pattern2: {filename}")
+                    logger.warning(
+                        f"Could not parse date from filename pattern2: {filename}"
+                    )
 
         # Pattern 3: "Title YYYY-MM" (e.g., "National Geographic 2000-01" or "PC Gamer 2024-12")
         pattern3 = r"(.+?)\s+(\d{4})-(\d{2})$"
@@ -278,13 +304,17 @@ class FileImporter:
             year_str = year_match.group(1)
             try:
                 # Assume January if no month specified
-                metadata["issue_date"] = datetime.strptime(f"{year_str}-01-01", "%Y-%m-%d")
+                metadata["issue_date"] = datetime.strptime(
+                    f"{year_str}-01-01", "%Y-%m-%d"
+                )
                 logger.info(f"Extracted year {year_str} from filename: {filename}")
                 return metadata
             except ValueError:
                 logger.warning(f"Could not parse year from filename: {filename}")
 
-        logger.info(f"No date pattern matched in filename: {filename}, using current date")
+        logger.info(
+            f"No date pattern matched in filename: {filename}, using current date"
+        )
         return metadata
 
     def _extract_cover(self, pdf_path: Path) -> Optional[Path]:
@@ -304,7 +334,9 @@ class FileImporter:
             cover_path = cover_dir / f"{pdf_path.stem}.jpg"
 
             # Convert first page to image
-            images = convert_from_path(str(pdf_path), first_page=1, last_page=1, dpi=150)
+            images = convert_from_path(
+                str(pdf_path), first_page=1, last_page=1, dpi=150
+            )
             if not images:
                 logger.warning(f"Could not extract images from PDF: {pdf_path}")
                 return None
@@ -315,7 +347,9 @@ class FileImporter:
             return cover_path
 
         except ImportError:
-            logger.warning("pdf2image not available. Install with: pip install pdf2image Pillow")
+            logger.warning(
+                "pdf2image not available. Install with: pip install pdf2image Pillow"
+            )
             return None
         except Exception as e:
             logger.error(f"Error extracting cover from {pdf_path}: {e}")
@@ -340,7 +374,13 @@ class FileImporter:
 
         return "Magazines"  # Default category
 
-    def _organize_file(self, pdf_path: Path, metadata: Dict[str, Any], category: str, pattern: Optional[str] = None) -> Optional[Path]:
+    def _organize_file(
+        self,
+        pdf_path: Path,
+        metadata: Dict[str, Any],
+        category: str,
+        pattern: Optional[str] = None,
+    ) -> Optional[Path]:
         """
         Move and rename PDF to organized location based on pattern.
         Available pattern tags: {category}, {title}, {year}, {month}, {day}
@@ -373,11 +413,7 @@ class FileImporter:
 
             # Substitute tags in pattern
             target_path_str = pattern.format(
-                category=category,
-                title=safe_title,
-                year=year,
-                month=month,
-                day=day
+                category=category, title=safe_title, year=year, month=month, day=day
             )
 
             # Make absolute path from organize_base_dir
@@ -408,7 +444,9 @@ class FileImporter:
             logger.error(f"Error organizing file {pdf_path}: {e}")
             return None
 
-    def process_organized_files(self, session: Session, auto_track: bool = True) -> Dict[str, Any]:
+    def process_organized_files(
+        self, session: Session, auto_track: bool = True
+    ) -> Dict[str, Any]:
         """
         Process PDF files from organized folders (e.g., _Magazines, _Comics, _Articles, _News).
         These are files that have been manually placed or previously organized.
@@ -420,12 +458,7 @@ class FileImporter:
         Returns:
             Dict with import results
         """
-        results = {
-            "imported": 0,
-            "failed": 0,
-            "skipped": 0,
-            "errors": []
-        }
+        results = {"imported": 0, "failed": 0, "skipped": 0, "errors": []}
 
         if not self.organize_base_dir.exists():
             logger.warning(f"Organize directory not found: {self.organize_base_dir}")
@@ -444,10 +477,17 @@ class FileImporter:
             try:
                 # Use stored organization pattern from config (if available)
                 pattern = self.organization_pattern or "_{category}/{title}/{year}"
-                result = self.import_pdf(pdf_path, session, organization_pattern=pattern, auto_track=auto_track)
+                result = self.import_pdf(
+                    pdf_path,
+                    session,
+                    organization_pattern=pattern,
+                    auto_track=auto_track,
+                )
                 if result:
                     results["imported"] += 1
-                    logger.info(f"Successfully imported organized file: {pdf_path.name}")
+                    logger.info(
+                        f"Successfully imported organized file: {pdf_path.name}"
+                    )
                 else:
                     results["failed"] += 1
                     results["errors"].append(f"Failed to import {pdf_path.name}")

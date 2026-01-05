@@ -20,7 +20,11 @@ class FileProcessor:
         self.organize_dir.mkdir(parents=True, exist_ok=True)
 
     def organize_file(
-        self, source_path: str, title: str, issue_date: datetime, cover_path: Optional[str] = None
+        self,
+        source_path: str,
+        title: str,
+        issue_date: datetime,
+        cover_path: Optional[str] = None,
     ) -> Tuple[str, str]:
         """
         Organize file into standard naming convention with cover art.
@@ -138,7 +142,11 @@ class FileProcessor:
             if month:
                 try:
                     issue_date = datetime(int(year), month, 1)
-                    return {"title": title.strip(), "issue_date": issue_date, "confidence": "high"}
+                    return {
+                        "title": title.strip(),
+                        "issue_date": issue_date,
+                        "confidence": "high",
+                    }
                 except ValueError:
                     pass
 

@@ -26,24 +26,24 @@ class TitleMatcher:
         """
         # First, handle camelCase by inserting spaces before uppercase letters
         # followed by lowercase letters (e.g., "NationalGeographic" -> "National Geographic")
-        title = re.sub(r'([a-z])([A-Z])', r'\1 \2', title)
+        title = re.sub(r"([a-z])([A-Z])", r"\1 \2", title)
 
         # Remove "Magazine", "magazine", etc. suffixes (often redundant)
-        title = re.sub(r'\s+(magazine|mag|mag\.)$', '', title, flags=re.IGNORECASE)
+        title = re.sub(r"\s+(magazine|mag|mag\.)$", "", title, flags=re.IGNORECASE)
 
         # Clean up multiple spaces
-        title = re.sub(r'\s+', ' ', title).strip()
+        title = re.sub(r"\s+", " ", title).strip()
 
         # Title case (capitalize first letter of each word)
         # But preserve special formatting for common periodicals
         common_titles = {
-            'national geographic': 'National Geographic',
-            'pcgamer': 'PC Gamer',
-            'pc gamer': 'PC Gamer',
-            'pc world': 'PC World',
-            'mac world': 'Mac World',
-            'e-news': 'E-News',
-            'wired': 'Wired',
+            "national geographic": "National Geographic",
+            "pcgamer": "PC Gamer",
+            "pc gamer": "PC Gamer",
+            "pc world": "PC World",
+            "mac world": "Mac World",
+            "e-news": "E-News",
+            "wired": "Wired",
         }
 
         title_lower = title.lower()

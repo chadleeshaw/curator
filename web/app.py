@@ -19,7 +19,17 @@ from processor.organizer import FileProcessor
 from processor.task_scheduler import TaskScheduler
 
 # Import all routers
-from web.routers import auth, config, downloads, imports, pages, periodicals, search, tasks, tracking
+from web.routers import (
+    auth,
+    config,
+    downloads,
+    imports,
+    pages,
+    periodicals,
+    search,
+    tasks,
+    tracking,
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -64,7 +74,9 @@ async def lifespan(app: FastAPI):
         for provider_config in search_provider_configs:
             try:
                 if not provider_config.get("type"):
-                    logger.warning(f"Skipping provider with no type: {provider_config.get('name')}")
+                    logger.warning(
+                        f"Skipping provider with no type: {provider_config.get('name')}"
+                    )
                     continue
 
                 # Check if provider is properly configured
@@ -76,44 +88,62 @@ async def lifespan(app: FastAPI):
                     logger.warning("Skipping RSS provider: Feed URL not configured")
                     continue
 
-                logger.debug(f"Creating search provider: {provider_config.get('name')} (type: {provider_type})")
+                logger.debug(
+                    f"Creating search provider: {provider_config.get('name')} (type: {provider_type})"
+                )
                 provider = ProviderFactory.create(provider_config)
                 search_providers.append(provider)
                 logger.info(f"Loaded search provider: {provider.name}")
             except Exception as e:
-                logger.error(f"Failed to load search provider {provider_config.get('name')}: {e}", exc_info=True)
+                logger.error(
+                    f"Failed to load search provider {provider_config.get('name')}: {e}",
+                    exc_info=True,
+                )
 
         # Initialize metadata providers (CrossRef, Wikipedia)
         metadata_provider_configs = config_loader.get_metadata_providers()
         for provider_config in metadata_provider_configs:
             try:
                 if not provider_config.get("type"):
-                    logger.warning(f"Skipping metadata provider with no type: {provider_config.get('name')}")
+                    logger.warning(
+                        f"Skipping metadata provider with no type: {provider_config.get('name')}"
+                    )
                     continue
 
-                logger.debug(f"Creating metadata provider: {provider_config.get('name')} (type: {provider_config.get('type')})")
+                logger.debug(
+                    f"Creating metadata provider: {provider_config.get('name')} (type: {provider_config.get('type')})"
+                )
                 provider = ProviderFactory.create(provider_config)
                 metadata_providers.append(provider)
                 logger.info(f"Loaded metadata provider: {provider.name}")
             except Exception as e:
-                logger.error(f"Failed to load metadata provider {provider_config.get('name')}: {e}", exc_info=True)
+                logger.error(
+                    f"Failed to load metadata provider {provider_config.get('name')}: {e}",
+                    exc_info=True,
+                )
 
         # Initialize download client (optional - can fail gracefully)
         try:
             client_config = config_loader.get_download_client()
             if not client_config.get("api_key"):
-                logger.warning("Download client not available: API key not configured (configure in Settings)")
+                logger.warning(
+                    "Download client not available: API key not configured (configure in Settings)"
+                )
                 download_client = None
             else:
                 download_client = ClientFactory.create(client_config)
                 logger.info(f"Loaded download client: {download_client.name}")
         except Exception as e:
-            logger.warning(f"Download client not available (configure in Settings): {e}")
+            logger.warning(
+                f"Download client not available (configure in Settings): {e}"
+            )
             download_client = None
 
         # Initialize other components
         title_matcher = TitleMatcher(matching_config.get("fuzzy_threshold", 80))
-        file_processor = FileProcessor(storage_config.get("organize_dir", "./magazines"))
+        file_processor = FileProcessor(
+            storage_config.get("organize_dir", "./magazines")
+        )
         file_importer = FileImporter(
             downloads_dir=storage_config.get("download_dir", "./downloads"),
             organize_base_dir=storage_config.get("organize_dir", "./magazines"),
@@ -138,7 +168,9 @@ async def lifespan(app: FastAPI):
             )
             logger.info("Download monitor task initialized")
         else:
-            logger.warning("Download manager not initialized: missing download client or search providers")
+            logger.warning(
+                "Download manager not initialized: missing download client or search providers"
+            )
 
         # Initialize task scheduler
         task_scheduler = TaskScheduler()
@@ -149,7 +181,9 @@ async def lifespan(app: FastAPI):
             try:
                 db_session = session_factory()
                 try:
-                    downloads_dir = Path(storage_config.get("download_dir", "./downloads"))
+                    downloads_dir = Path(
+                        storage_config.get("download_dir", "./downloads")
+                    )
                     pdf_count = len(list(downloads_dir.glob("*.pdf")))
 
                     if pdf_count > 0:
@@ -177,11 +211,18 @@ async def lifespan(app: FastAPI):
                 db_session = session_factory()
                 try:
                     # Get all covers in the database
-                    periodicals = db_session.query(Magazine).filter(Magazine.cover_path is not None).all()
+                    periodicals = (
+                        db_session.query(Magazine)
+                        .filter(Magazine.cover_path is not None)
+                        .all()
+                    )
                     db_cover_paths = {m.cover_path for m in periodicals if m.cover_path}
 
                     # Find all cover files on disk
-                    covers_dir = Path(storage_config.get("organize_base_dir", "./local/data")) / ".covers"
+                    covers_dir = (
+                        Path(storage_config.get("organize_base_dir", "./local/data"))
+                        / ".covers"
+                    )
                     if covers_dir.exists():
                         cover_files = set(str(f) for f in covers_dir.glob("*.jpg"))
 
@@ -196,10 +237,14 @@ async def lifespan(app: FastAPI):
                                 deleted_count += 1
                                 logger.debug(f"Deleted orphaned cover: {orphan_path}")
                             except Exception as e:
-                                logger.error(f"Error deleting orphaned cover {orphan_path}: {e}")
+                                logger.error(
+                                    f"Error deleting orphaned cover {orphan_path}: {e}"
+                                )
 
                         if deleted_count > 0:
-                            logger.info(f"Cleanup covers: Deleted {deleted_count} orphaned cover files")
+                            logger.info(
+                                f"Cleanup covers: Deleted {deleted_count} orphaned cover files"
+                            )
                     else:
                         logger.debug("Covers directory does not exist yet")
                 finally:
@@ -211,26 +256,36 @@ async def lifespan(app: FastAPI):
         task_scheduler.schedule_periodic("auto_import", auto_import_task, 300)
 
         # Schedule download monitoring every 30 seconds
-        task_scheduler.schedule_periodic("download_monitor", download_monitoring_task, 30)
+        task_scheduler.schedule_periodic(
+            "download_monitor", download_monitoring_task, 30
+        )
 
         # Schedule cover cleanup every 24 hours (86400 seconds)
-        task_scheduler.schedule_periodic("cleanup_orphaned_covers", cleanup_orphaned_covers_task, 86400)
+        task_scheduler.schedule_periodic(
+            "cleanup_orphaned_covers", cleanup_orphaned_covers_task, 86400
+        )
 
         # Start scheduler in background
         scheduler_task = asyncio.create_task(task_scheduler.start())
 
         # Initialize router dependencies
         auth.set_auth_manager(auth_manager)
-        search.set_dependencies(search_providers, metadata_providers, title_matcher, session_factory)
+        search.set_dependencies(
+            search_providers, metadata_providers, title_matcher, session_factory
+        )
         periodicals.set_dependencies(session_factory)
         tracking.set_dependencies(session_factory, search_providers)
         downloads.set_dependencies(session_factory, download_manager, download_client)
         imports.set_dependencies(session_factory, file_importer, storage_config)
-        tasks.set_dependencies(session_factory, download_monitor_task, file_importer, storage_config)
+        tasks.set_dependencies(
+            session_factory, download_monitor_task, file_importer, storage_config
+        )
         config.set_dependencies(config_loader)
         pages.set_dependencies(session_factory)
 
-        logger.info("Curator initialized successfully with auto-import and download monitoring enabled")
+        logger.info(
+            "Curator initialized successfully with auto-import and download monitoring enabled"
+        )
 
     except Exception as e:
         logger.error(f"Startup error: {e}")
@@ -274,7 +329,11 @@ async def health_check():
         except Exception as e:
             logger.error(f"Health check database error: {e}")
             db_status = "error"
-            return {"status": "unhealthy", "service": "curator", "database": db_status}, 503
+            return {
+                "status": "unhealthy",
+                "service": "curator",
+                "database": db_status,
+            }, 503
         finally:
             session.close()
 
@@ -290,7 +349,9 @@ async def get_status():
     return {
         "status": "running",
         "providers": [p.get_provider_info() for p in search_providers],
-        "download_client": download_client.get_client_info() if download_client else None,
+        "download_client": (
+            download_client.get_client_info() if download_client else None
+        ),
     }
 
 

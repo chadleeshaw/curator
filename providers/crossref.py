@@ -16,9 +16,11 @@ class CrossRefProvider(SearchProvider):
         self.base_url = "https://api.crossref.org/v1"
         self.session = requests.Session()
         # Add user agent as per CrossRef API best practices
-        self.session.headers.update({
-            "User-Agent": "Curator (https://github.com/yourusername/curator)",
-        })
+        self.session.headers.update(
+            {
+                "User-Agent": "Curator (https://github.com/yourusername/curator)",
+            }
+        )
 
     def search(self, query: str) -> List[SearchResult]:
         """
@@ -35,7 +37,9 @@ class CrossRefProvider(SearchProvider):
         try:
             results = self._search_journals(query)
             if results:
-                logger.info(f"CrossRef search found {len(results)} results for '{query}'")
+                logger.info(
+                    f"CrossRef search found {len(results)} results for '{query}'"
+                )
                 return results
 
         except Exception as e:
@@ -60,7 +64,9 @@ class CrossRefProvider(SearchProvider):
             response.raise_for_status()
 
             data = response.json()
-            logger.debug(f"CrossRef API response for '{query}': {data.get('message', {}).get('total-results')} total results")
+            logger.debug(
+                f"CrossRef API response for '{query}': {data.get('message', {}).get('total-results')} total results"
+            )
 
             # Parse response
             if data.get("status") == "ok":
@@ -123,7 +129,7 @@ class CrossRefProvider(SearchProvider):
                         "coverage": coverage,
                         "source": "CrossRef API",
                         "crossref_id": item.get("ISSN-type"),
-                    }
+                    },
                 )
                 logger.debug(f"Added CrossRef result: {title} (ISSN: {issn})")
                 return result

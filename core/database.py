@@ -25,6 +25,7 @@ class DatabaseManager:
     def create_tables(self):
         """Create all database tables"""
         from models.database import Base
+
         Base.metadata.create_all(self.engine)
 
     @contextmanager

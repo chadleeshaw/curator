@@ -41,7 +41,11 @@ class SearchProvider(ABC):
 
     def get_provider_info(self) -> Dict[str, Any]:
         """Get metadata about this provider"""
-        return {"type": self.type, "name": self.name, "enabled": self.config.get("enabled", True)}
+        return {
+            "type": self.type,
+            "name": self.name,
+            "enabled": self.config.get("enabled", True),
+        }
 
 
 class DownloadClient(ABC):

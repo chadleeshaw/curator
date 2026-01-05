@@ -28,7 +28,9 @@ def set_dependencies(session_factory, file_importer, storage_config):
 
 
 @router.post("/process")
-async def import_from_downloads(background_tasks: BackgroundTasks, options: Optional[ImportOptionsRequest] = None) -> Dict[str, Any]:
+async def import_from_downloads(
+    background_tasks: BackgroundTasks, options: Optional[ImportOptionsRequest] = None
+) -> Dict[str, Any]:
     """
     Process PDFs from downloads folder and import them into the library.
     Runs asynchronously in background.
@@ -78,7 +80,11 @@ async def get_import_status() -> Dict[str, Any]:
         downloads_dir = Path(_storage_config.get("download_dir", "./downloads"))
 
         if not downloads_dir.exists():
-            return {"ready": False, "files": 0, "message": "Downloads directory not found"}
+            return {
+                "ready": False,
+                "files": 0,
+                "message": "Downloads directory not found",
+            }
 
         pdf_files = list(downloads_dir.glob("*.pdf"))
 
@@ -98,7 +104,7 @@ async def get_import_status() -> Dict[str, Any]:
 async def import_from_organize_dir(
     background_tasks: BackgroundTasks,
     auto_track: bool = True,
-    organization_pattern: str = None
+    organization_pattern: str = None,
 ) -> Dict[str, Any]:
     """
     Import PDFs from the organized data directory back into the library.
@@ -118,7 +124,9 @@ async def import_from_organize_dir(
         organize_dir = Path(_storage_config.get("organize_dir", "./local/data"))
 
         if not organize_dir.exists():
-            raise HTTPException(status_code=400, detail=f"Organize directory not found: {organize_dir}")
+            raise HTTPException(
+                status_code=400, detail=f"Organize directory not found: {organize_dir}"
+            )
 
         # Count PDFs available
         pdf_files = list(organize_dir.rglob("*.pdf"))
@@ -140,15 +148,21 @@ async def import_from_organize_dir(
                     if organization_pattern:
                         _file_importer.organization_pattern = organization_pattern
 
-                    results = _file_importer.process_organized_files(db_session, auto_track=auto_track)
-                    logger.info(f"Organize directory import results: {results['imported']} imported, {results['failed']} failed")
+                    results = _file_importer.process_organized_files(
+                        db_session, auto_track=auto_track
+                    )
+                    logger.info(
+                        f"Organize directory import results: {results['imported']} imported, {results['failed']} failed"
+                    )
 
                     # Restore original pattern
                     _file_importer.organization_pattern = original_pattern
                 finally:
                     db_session.close()
             except Exception as e:
-                logger.error(f"Error processing organize directory imports: {e}", exc_info=True)
+                logger.error(
+                    f"Error processing organize directory imports: {e}", exc_info=True
+                )
 
         background_tasks.add_task(process_organize_dir_imports)
 

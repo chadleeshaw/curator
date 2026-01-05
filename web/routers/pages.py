@@ -46,7 +46,9 @@ async def view_periodical_by_id(id: int = Query(...)):
             periodical = db_session.query(Magazine).filter(Magazine.id == id).first()
 
             if not periodical:
-                raise HTTPException(status_code=404, detail=f"Periodical with ID {id} not found")
+                raise HTTPException(
+                    status_code=404, detail=f"Periodical with ID {id} not found"
+                )
 
             # Redirect to the title-based route
             periodical_title = periodical.title
@@ -60,7 +62,10 @@ async def view_periodical_by_id(id: int = Query(...)):
             )
 
             if not periodicals:
-                raise HTTPException(status_code=404, detail=f"No periodicals found for '{periodical_title}'")
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No periodicals found for '{periodical_title}'",
+                )
 
             # Group periodicals by year
             periodicals_by_year = defaultdict(list)
@@ -70,7 +75,9 @@ async def view_periodical_by_id(id: int = Query(...)):
                     {
                         "id": p.id,
                         "title": p.title,
-                        "issue_date": p.issue_date.isoformat() if p.issue_date else None,
+                        "issue_date": (
+                            p.issue_date.isoformat() if p.issue_date else None
+                        ),
                         "cover_path": p.cover_path,
                         "file_path": p.file_path,
                     }
@@ -85,7 +92,9 @@ async def view_periodical_by_id(id: int = Query(...)):
                     template_content = f.read()
             except FileNotFoundError:
                 logger.error("periodical.html template not found")
-                raise HTTPException(status_code=500, detail="Periodical template not found")
+                raise HTTPException(
+                    status_code=500, detail="Periodical template not found"
+                )
 
             # Build years data JSON
             years_data = []
@@ -106,6 +115,7 @@ async def view_periodical_by_id(id: int = Query(...)):
 
             # Replace template variables
             import html
+
             html_content = template_content.replace(
                 "{{PERIODICAL_TITLE}}", periodical_title
             ).replace("{{YEARS_DATA}}", html.escape(json.dumps(years_data)))
@@ -137,7 +147,10 @@ async def view_periodical(periodical_title: str):
             )
 
             if not periodicals:
-                raise HTTPException(status_code=404, detail=f"No periodicals found for '{periodical_title}'")
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No periodicals found for '{periodical_title}'",
+                )
 
             # Group periodicals by year
             periodicals_by_year = defaultdict(list)
@@ -147,7 +160,9 @@ async def view_periodical(periodical_title: str):
                     {
                         "id": p.id,
                         "title": p.title,
-                        "issue_date": p.issue_date.isoformat() if p.issue_date else None,
+                        "issue_date": (
+                            p.issue_date.isoformat() if p.issue_date else None
+                        ),
                         "cover_path": p.cover_path,
                         "file_path": p.file_path,
                     }
@@ -162,7 +177,9 @@ async def view_periodical(periodical_title: str):
                     template_content = f.read()
             except FileNotFoundError:
                 logger.error("periodical.html template not found")
-                raise HTTPException(status_code=500, detail="Periodical template not found")
+                raise HTTPException(
+                    status_code=500, detail="Periodical template not found"
+                )
 
             # Build years data JSON
             years_data = []
@@ -181,8 +198,13 @@ async def view_periodical(periodical_title: str):
 
             # Replace template variables
             import html
-            html_content = template_content.replace("{{PERIODICAL_TITLE}}", periodical_title)
-            html_content = html_content.replace("{{YEARS_DATA}}", html.escape(json.dumps(years_data)))
+
+            html_content = template_content.replace(
+                "{{PERIODICAL_TITLE}}", periodical_title
+            )
+            html_content = html_content.replace(
+                "{{YEARS_DATA}}", html.escape(json.dumps(years_data))
+            )
 
             return HTMLResponse(content=html_content)
         finally:

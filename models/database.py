@@ -2,7 +2,16 @@ import enum
 from datetime import datetime
 
 import bcrypt
-from sqlalchemy import JSON, Boolean, Column, DateTime, Enum, ForeignKey, Integer, String
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+)
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
@@ -21,11 +30,15 @@ class Credentials(Base):
 
     def set_password(self, password: str):
         """Hash and set the password"""
-        self.password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        self.password_hash = bcrypt.hashpw(
+            password.encode("utf-8"), bcrypt.gensalt()
+        ).decode("utf-8")
 
     def verify_password(self, password: str) -> bool:
         """Verify a password against the stored hash"""
-        return bcrypt.checkpw(password.encode('utf-8'), self.password_hash.encode('utf-8'))
+        return bcrypt.checkpw(
+            password.encode("utf-8"), self.password_hash.encode("utf-8")
+        )
 
 
 class Magazine(Base):
@@ -51,7 +64,9 @@ class MagazineTracking(Base):
     __tablename__ = "periodical_tracking"
 
     id = Column(Integer, primary_key=True)
-    olid = Column(String(50), nullable=False, unique=True, index=True)  # Open Library ID
+    olid = Column(
+        String(50), nullable=False, unique=True, index=True
+    )  # Open Library ID
     title = Column(String(255), nullable=False, index=True)
     publisher = Column(String(255), nullable=True)
     issn = Column(String(20), nullable=True, index=True)
@@ -59,8 +74,12 @@ class MagazineTracking(Base):
     total_editions_known = Column(Integer, default=0)
 
     # Selection preferences
-    track_all_editions = Column(Boolean, default=False)  # Auto-download all new editions
-    track_new_only = Column(Boolean, default=False)  # Auto-download only new/future editions
+    track_all_editions = Column(
+        Boolean, default=False
+    )  # Auto-download all new editions
+    track_new_only = Column(
+        Boolean, default=False
+    )  # Auto-download only new/future editions
     selected_editions = Column(JSON, default={})  # Dict: {olid: True/False, ...}
     selected_years = Column(JSON, default=[])  # List of years to track
 
@@ -84,9 +103,13 @@ class SearchResult(Base):
     url = Column(String(512), nullable=False)
     publication_date = Column(DateTime, nullable=True)
     raw_metadata = Column(JSON, nullable=True)  # Provider-specific fields as JSON
-    fuzzy_match_group_id = Column(String(255), nullable=True, index=True)  # Grouping for deduplication
+    fuzzy_match_group_id = Column(
+        String(255), nullable=True, index=True
+    )  # Grouping for deduplication
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
-    magazine_id = Column(Integer, ForeignKey("periodicals.id"), nullable=True)  # Links to downloaded periodical
+    magazine_id = Column(
+        Integer, ForeignKey("periodicals.id"), nullable=True
+    )  # Links to downloaded periodical
 
 
 class DownloadSubmission(Base):
@@ -102,13 +125,21 @@ class DownloadSubmission(Base):
         SKIPPED = "skipped"
 
     id = Column(Integer, primary_key=True)
-    tracking_id = Column(Integer, ForeignKey("periodical_tracking.id"), nullable=False, index=True)  # Which periodical
-    search_result_id = Column(Integer, ForeignKey("search_results.id"), nullable=True, index=True)  # Which search result
-    job_id = Column(String(255), nullable=True, index=True)  # Client's job ID (if submitted)
+    tracking_id = Column(
+        Integer, ForeignKey("periodical_tracking.id"), nullable=False, index=True
+    )  # Which periodical
+    search_result_id = Column(
+        Integer, ForeignKey("search_results.id"), nullable=True, index=True
+    )  # Which search result
+    job_id = Column(
+        String(255), nullable=True, index=True
+    )  # Client's job ID (if submitted)
     status = Column(Enum(StatusEnum), default=StatusEnum.PENDING, index=True)
     source_url = Column(String(512), nullable=False)  # NZB URL or download link
     result_title = Column(String(255), nullable=False)  # Title from search result
-    fuzzy_match_group = Column(String(255), nullable=True, index=True)  # For dedup grouping
+    fuzzy_match_group = Column(
+        String(255), nullable=True, index=True
+    )  # For dedup grouping
     client_name = Column(String(100), nullable=True)  # Which client handled this
     attempt_count = Column(Integer, default=0)  # Number of download attempts
     last_error = Column(String(512), nullable=True)  # Last error message
@@ -129,7 +160,9 @@ class Download(Base):
         FAILED = "failed"
 
     id = Column(Integer, primary_key=True)
-    job_id = Column(String(255), nullable=False, unique=True, index=True)  # Client's job ID
+    job_id = Column(
+        String(255), nullable=False, unique=True, index=True
+    )  # Client's job ID
     status = Column(Enum(StatusEnum), default=StatusEnum.PENDING, index=True)
     source_url = Column(String(512), nullable=False)  # NZB URL sent to client
     client_name = Column(String(100), nullable=False)  # Which client handled this

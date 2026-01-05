@@ -23,7 +23,9 @@ db_path = Path(storage_config.get("db_path", "./local/config/magazines.db"))
 download_dir = Path(storage_config.get("download_dir", "./local/downloads"))
 organize_dir = Path(storage_config.get("organize_dir", "./local/data"))
 cache_dir = Path(storage_config.get("cache_dir", "./local/cache"))
-log_file = config_loader.get_logging().get("log_file", "./local/logs/periodical_manager.log")
+log_file = config_loader.get_logging().get(
+    "log_file", "./local/logs/periodical_manager.log"
+)
 log_dir = Path(log_file).parent
 
 # Ensure all directories exist
@@ -31,8 +33,10 @@ for directory in [db_path.parent, download_dir, organize_dir, cache_dir, log_dir
     directory.mkdir(parents=True, exist_ok=True)
 
 # Configure logging (after directories are created and config is loaded)
+log_config = config_loader.get_logging()
+log_level = log_config.get("level", "INFO").upper()
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, log_level),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[logging.FileHandler(log_file), logging.StreamHandler()],
 )
@@ -54,7 +58,12 @@ if __name__ == "__main__":
         log_level = log_config.get("level", "INFO").upper()
         access_log = log_level == "DEBUG"
 
-        uvicorn.run(app, host="0.0.0.0", port=8000, access_log=access_log)
+        # Get server configuration (supports env vars)
+        server_config = config_loader.get_server()
+        host = server_config.get("host", "0.0.0.0")
+        port = server_config.get("port", 8000)
+
+        uvicorn.run(app, host=host, port=port, access_log=access_log)
 
     except KeyboardInterrupt:
         logger.info("Shutting down...")

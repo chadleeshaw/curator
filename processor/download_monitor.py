@@ -88,7 +88,9 @@ class DownloadMonitorTask:
 
         for submission in pending:
             if not submission.job_id:
-                logger.debug(f"[DownloadMonitor] Skipping submission {submission.id} - no job_id")
+                logger.debug(
+                    f"[DownloadMonitor] Skipping submission {submission.id} - no job_id"
+                )
                 continue
 
             try:
@@ -97,7 +99,9 @@ class DownloadMonitorTask:
                     submission.job_id, session
                 )
                 if result:
-                    logger.debug(f"[DownloadMonitor] Status updated: {result.status.value}")
+                    logger.debug(
+                        f"[DownloadMonitor] Status updated: {result.status.value}"
+                    )
             except Exception as e:
                 logger.error(
                     f"Error updating status for job {submission.job_id}: {e}",
@@ -120,7 +124,9 @@ class DownloadMonitorTask:
         logger.debug(f"[DownloadMonitor] Processing {len(completed)} items...")
 
         for submission in completed:
-            logger.info(f"[DownloadMonitor] Processing submission {submission.id}: {submission.result_title}")
+            logger.info(
+                f"[DownloadMonitor] Processing submission {submission.id}: {submission.result_title}"
+            )
 
             if not submission.file_path:
                 logger.warning(f"Submission {submission.id} has no file path")

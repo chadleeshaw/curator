@@ -36,12 +36,18 @@ async def start_tracking_periodical(
     """Start tracking a periodical"""
     try:
         if not title or len(title.strip()) < 2:
-            raise HTTPException(status_code=400, detail="Title must be at least 2 characters")
+            raise HTTPException(
+                status_code=400, detail="Title must be at least 2 characters"
+            )
 
         olid = title.lower().replace(" ", "_").replace("-", "_")
         db_session = _session_factory()
         try:
-            existing = db_session.query(MagazineTracking).filter(MagazineTracking.olid == olid).first()
+            existing = (
+                db_session.query(MagazineTracking)
+                .filter(MagazineTracking.olid == olid)
+                .first()
+            )
             if existing:
                 return {
                     "success": False,
@@ -75,7 +81,9 @@ async def start_tracking_periodical(
         raise
     except Exception as e:
         logger.error(f"Error tracking periodical: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error tracking periodical: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error tracking periodical: {str(e)}"
+        )
 
 
 @router.get("/periodicals/tracked")
@@ -97,7 +105,9 @@ async def list_tracked_periodicals(skip: int = 0, limit: int = 50) -> Dict[str, 
                         "publisher": m.publisher,
                         "issn": m.issn,
                         "track_all_editions": m.track_all_editions,
-                        "created_at": m.created_at.isoformat() if m.created_at else None,
+                        "created_at": (
+                            m.created_at.isoformat() if m.created_at else None
+                        ),
                     }
                     for m in tracked
                 ],
@@ -118,12 +128,20 @@ async def search_tracked_periodical_issues(tracking_id: int) -> Dict[str, Any]:
     try:
         db_session = _session_factory()
         try:
-            tracking = db_session.query(MagazineTracking).filter(MagazineTracking.id == tracking_id).first()
+            tracking = (
+                db_session.query(MagazineTracking)
+                .filter(MagazineTracking.id == tracking_id)
+                .first()
+            )
             if not tracking:
-                raise HTTPException(status_code=404, detail="Tracked magazine not found")
+                raise HTTPException(
+                    status_code=404, detail="Tracked magazine not found"
+                )
 
             if not _search_providers:
-                raise HTTPException(status_code=503, detail="No search providers configured")
+                raise HTTPException(
+                    status_code=503, detail="No search providers configured"
+                )
 
             all_results = []
             for provider in _search_providers:
@@ -146,13 +164,19 @@ async def search_tracked_periodical_issues(tracking_id: int) -> Dict[str, Any]:
                             raw_metadata=result.raw_metadata or {},
                         )
                         db_session.add(db_result)
-                        result_dicts.append({
-                            "title": result.title,
-                            "url": result.url,
-                            "provider": result.provider,
-                            "publication_date": result.publication_date.isoformat() if result.publication_date else None,
-                            "metadata": result.raw_metadata or {},
-                        })
+                        result_dicts.append(
+                            {
+                                "title": result.title,
+                                "url": result.url,
+                                "provider": result.provider,
+                                "publication_date": (
+                                    result.publication_date.isoformat()
+                                    if result.publication_date
+                                    else None
+                                ),
+                                "metadata": result.raw_metadata or {},
+                            }
+                        )
                     except Exception as e:
                         logger.warning(f"Error saving search result: {e}")
 
@@ -183,13 +207,21 @@ async def search_tracked_periodical_issues(tracking_id: int) -> Dict[str, Any]:
 
 
 @router.post("/periodicals/tracking/save")
-async def save_tracking_preferences(request: TrackingPreferencesRequest) -> Dict[str, Any]:
+async def save_tracking_preferences(
+    request: TrackingPreferencesRequest,
+) -> Dict[str, Any]:
     """Save magazine tracking preferences"""
     try:
         db_session = _session_factory()
         try:
-            olid = request.olid or request.title.lower().replace(" ", "_").replace("-", "_")
-            existing = db_session.query(MagazineTracking).filter(MagazineTracking.olid == olid).first()
+            olid = request.olid or request.title.lower().replace(" ", "_").replace(
+                "-", "_"
+            )
+            existing = (
+                db_session.query(MagazineTracking)
+                .filter(MagazineTracking.olid == olid)
+                .first()
+            )
 
             if existing:
                 existing.title = request.title
@@ -225,7 +257,9 @@ async def save_tracking_preferences(request: TrackingPreferencesRequest) -> Dict
                 "tracking_id": tracking.id,
                 "message": f"Tracking preferences saved for '{request.title}'",
                 "track_all_editions": tracking.track_all_editions,
-                "selected_count": len([v for v in tracking.selected_editions.values() if v]),
+                "selected_count": len(
+                    [v for v in tracking.selected_editions.values() if v]
+                ),
             }
         finally:
             db_session.close()
@@ -235,7 +269,9 @@ async def save_tracking_preferences(request: TrackingPreferencesRequest) -> Dict
 
 
 @router.get("/periodicals/tracking")
-async def list_tracked_magazines(skip: int = 0, limit: int = 50, sort_by: str = "title", sort_order: str = "asc") -> Dict[str, Any]:
+async def list_tracked_magazines(
+    skip: int = 0, limit: int = 50, sort_by: str = "title", sort_order: str = "asc"
+) -> Dict[str, Any]:
     """List all currently tracked magazines"""
     try:
         db_session = _session_factory()
@@ -244,23 +280,31 @@ async def list_tracked_magazines(skip: int = 0, limit: int = 50, sort_by: str = 
             query = db_session.query(MagazineTracking)
 
             if sort_by == "publisher":
-                sort_expr = MagazineTracking.publisher.desc() if is_descending else MagazineTracking.publisher.asc()
+                sort_expr = (
+                    MagazineTracking.publisher.desc()
+                    if is_descending
+                    else MagazineTracking.publisher.asc()
+                )
                 query = query.order_by(sort_expr, MagazineTracking.title.asc())
             elif sort_by == "tracking_mode":
                 if is_descending:
                     query = query.order_by(
                         MagazineTracking.track_all_editions.asc(),
                         MagazineTracking.track_new_only.asc(),
-                        MagazineTracking.title.desc()
+                        MagazineTracking.title.desc(),
                     )
                 else:
                     query = query.order_by(
                         MagazineTracking.track_all_editions.desc(),
                         MagazineTracking.track_new_only.desc(),
-                        MagazineTracking.title.asc()
+                        MagazineTracking.title.asc(),
                     )
             else:
-                sort_expr = MagazineTracking.title.desc() if is_descending else MagazineTracking.title.asc()
+                sort_expr = (
+                    MagazineTracking.title.desc()
+                    if is_descending
+                    else MagazineTracking.title.asc()
+                )
                 query = query.order_by(sort_expr)
 
             tracked = query.offset(skip).limit(limit).all()
@@ -277,9 +321,15 @@ async def list_tracked_magazines(skip: int = 0, limit: int = 50, sort_by: str = 
                         "issn": t.issn,
                         "track_all_editions": t.track_all_editions,
                         "track_new_only": t.track_new_only,
-                        "selected_count": len([v for v in t.selected_editions.values() if v]) if t.selected_editions else 0,
+                        "selected_count": (
+                            len([v for v in t.selected_editions.values() if v])
+                            if t.selected_editions
+                            else 0
+                        ),
                         "total_known": t.total_editions_known,
-                        "created_at": t.created_at.isoformat() if t.created_at else None,
+                        "created_at": (
+                            t.created_at.isoformat() if t.created_at else None
+                        ),
                     }
                     for t in tracked
                 ],
@@ -300,7 +350,11 @@ async def get_tracking_details(tracking_id: int) -> Dict[str, Any]:
     try:
         db_session = _session_factory()
         try:
-            tracking = db_session.query(MagazineTracking).filter(MagazineTracking.id == tracking_id).first()
+            tracking = (
+                db_session.query(MagazineTracking)
+                .filter(MagazineTracking.id == tracking_id)
+                .first()
+            )
             if not tracking:
                 raise HTTPException(status_code=404, detail="Tracking record not found")
 
@@ -318,8 +372,14 @@ async def get_tracking_details(tracking_id: int) -> Dict[str, Any]:
                     "selected_editions": tracking.selected_editions,
                     "selected_years": tracking.selected_years,
                     "metadata": tracking.periodical_metadata,
-                    "last_metadata_update": tracking.last_metadata_update.isoformat() if tracking.last_metadata_update else None,
-                    "created_at": tracking.created_at.isoformat() if tracking.created_at else None,
+                    "last_metadata_update": (
+                        tracking.last_metadata_update.isoformat()
+                        if tracking.last_metadata_update
+                        else None
+                    ),
+                    "created_at": (
+                        tracking.created_at.isoformat() if tracking.created_at else None
+                    ),
                 },
             }
         finally:
@@ -337,7 +397,11 @@ async def delete_tracking(tracking_id: int) -> Dict[str, Any]:
     try:
         db_session = _session_factory()
         try:
-            tracking = db_session.query(MagazineTracking).filter(MagazineTracking.id == tracking_id).first()
+            tracking = (
+                db_session.query(MagazineTracking)
+                .filter(MagazineTracking.id == tracking_id)
+                .first()
+            )
             if not tracking:
                 raise HTTPException(status_code=404, detail="Tracking record not found")
 
@@ -362,7 +426,11 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
     try:
         db_session = _session_factory()
         try:
-            tracking = db_session.query(MagazineTracking).filter(MagazineTracking.id == tracking_id).first()
+            tracking = (
+                db_session.query(MagazineTracking)
+                .filter(MagazineTracking.id == tracking_id)
+                .first()
+            )
             if not tracking:
                 raise HTTPException(status_code=404, detail="Tracking record not found")
 

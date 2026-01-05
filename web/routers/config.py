@@ -34,7 +34,9 @@ def _mask_sensitive_config(config: Dict[str, Any]) -> Dict[str, Any]:
 
     # Mask download client API key
     if "download_client" in masked and "api_key" in masked["download_client"]:
-        masked["download_client"]["api_key"] = "***" if masked["download_client"].get("api_key") else ""
+        masked["download_client"]["api_key"] = (
+            "***" if masked["download_client"].get("api_key") else ""
+        )
 
     return masked
 
@@ -60,14 +62,23 @@ def _deep_merge(base: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, Any]:
     # Preserve original API keys if masked values are submitted
     if "search_providers" in result and "search_providers" in update:
         for i, provider in enumerate(update.get("search_providers", [])):
-            if provider.get("api_key") == "***" and i < len(base.get("search_providers", [])):
+            if provider.get("api_key") == "***" and i < len(
+                base.get("search_providers", [])
+            ):
                 # User didn't change the API key, preserve the original
-                result["search_providers"][i]["api_key"] = base["search_providers"][i].get("api_key", "***")
+                result["search_providers"][i]["api_key"] = base["search_providers"][
+                    i
+                ].get("api_key", "***")
 
     # Preserve download client API key if masked
-    if "download_client" in update and update["download_client"].get("api_key") == "***":
+    if (
+        "download_client" in update
+        and update["download_client"].get("api_key") == "***"
+    ):
         if "download_client" in base:
-            result["download_client"]["api_key"] = base["download_client"].get("api_key", "***")
+            result["download_client"]["api_key"] = base["download_client"].get(
+                "api_key", "***"
+            )
 
     return result
 
@@ -123,7 +134,10 @@ async def reload_config():
         # This endpoint signals the need to reload but actual reloading happens elsewhere
         _config_loader.reload_config()
 
-        return {"status": "success", "message": "Configuration reloaded. Providers will be reinitialized."}
+        return {
+            "status": "success",
+            "message": "Configuration reloaded. Providers will be reinitialized.",
+        }
     except Exception as e:
         logger.error(f"Reload config error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

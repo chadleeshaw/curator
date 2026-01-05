@@ -34,6 +34,7 @@ class ChangePasswordRequest(BaseModel):
 
 class UpdateUserRequest(BaseModel):
     """Request to update username and/or password"""
+
     current_password: str
     username: Optional[str] = None
     new_password: Optional[str] = None
@@ -42,6 +43,7 @@ class UpdateUserRequest(BaseModel):
 # ==============================================================================
 # Search
 # ==============================================================================
+
 
 class SearchRequest(BaseModel):
     query: str
@@ -73,6 +75,7 @@ class MagazineSearchResponse(BaseModel):
 # ==============================================================================
 # Magazines/Periodicals
 # ==============================================================================
+
 
 class MagazineResponse(BaseModel):
     id: int
@@ -113,6 +116,7 @@ class MagazineEditionsResponse(BaseModel):
 # Tracking
 # ==============================================================================
 
+
 class TrackingPreferencesRequest(BaseModel):
     """Request to save tracking preferences for a magazine"""
 
@@ -142,6 +146,7 @@ class TrackingPreferencesResponse(BaseModel):
 # ==============================================================================
 # Downloads
 # ==============================================================================
+
 
 class DownloadAllIssuesRequest(BaseModel):
     """Request to download all issues of a tracked periodical"""
@@ -190,10 +195,13 @@ class DownloadStatusResponse(BaseModel):
 # Import
 # ==============================================================================
 
+
 class ImportOptionsRequest(BaseModel):
     """Request with import options"""
 
     category: Optional[str] = None  # None for auto-detect
-    organization_pattern: Optional[str] = "data/{category}/{title}/{year}/"  # File organization pattern with tags
+    organization_pattern: Optional[str] = (
+        "data/{category}/{title}/{year}/"  # File organization pattern with tags
+    )
     auto_track: bool = True
     scan_nested: bool = True

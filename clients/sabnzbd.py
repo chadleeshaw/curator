@@ -91,12 +91,18 @@ class SABnzbdClient(DownloadClient):
             logger.debug(f"[SABnzbd] Queue has {len(slots)} active items")
 
             if slots:
-                logger.debug(f"[SABnzbd] Queue slots: {[s.get('nzo_id') for s in slots]}")
+                logger.debug(
+                    f"[SABnzbd] Queue slots: {[s.get('nzo_id') for s in slots]}"
+                )
 
             for slot in slots:
                 if slot.get("nzo_id") == job_id:
                     logger.info(f"[SABnzbd] Found {job_id} in queue")
-                    status = "downloading" if slot.get("status") == "Downloading" else "pending"
+                    status = (
+                        "downloading"
+                        if slot.get("status") == "Downloading"
+                        else "pending"
+                    )
                     return {
                         "status": status,
                         "progress": int(float(slot.get("percentage", 0))),
@@ -113,16 +119,22 @@ class SABnzbdClient(DownloadClient):
             logger.debug(f"[SABnzbd] History has {len(slots)} items")
 
             if slots:
-                logger.debug(f"[SABnzbd] History slots: {[s.get('nzo_id') for s in slots]}")
+                logger.debug(
+                    f"[SABnzbd] History slots: {[s.get('nzo_id') for s in slots]}"
+                )
 
             for slot in slots:
                 if slot.get("nzo_id") == job_id:
                     slot_status = slot.get("status", "Unknown").lower()
-                    logger.info(f"[SABnzbd] Found {job_id} in history with status: {slot_status}")
+                    logger.info(
+                        f"[SABnzbd] Found {job_id} in history with status: {slot_status}"
+                    )
                     logger.info(f"[SABnzbd] History slot: {slot}")
 
                     if "completed" in slot_status:
-                        logger.info(f"[SABnzbd] Job {job_id} completed, file_path: {slot.get('storage')}")
+                        logger.info(
+                            f"[SABnzbd] Job {job_id} completed, file_path: {slot.get('storage')}"
+                        )
                         return {
                             "status": "completed",
                             "progress": 100,
@@ -136,7 +148,9 @@ class SABnzbdClient(DownloadClient):
                             "error": f"Download {slot_status}: {slot.get('fail_message', 'No details available')}",
                         }
                     else:
-                        logger.warning(f"[SABnzbd] Job {job_id} has unknown status: {slot_status}")
+                        logger.warning(
+                            f"[SABnzbd] Job {job_id} has unknown status: {slot_status}"
+                        )
                         return {
                             "status": "unknown",
                             "progress": int(float(slot.get("percentage", 0))),

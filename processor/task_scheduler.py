@@ -49,20 +49,32 @@ class TaskScheduler:
                 for task_name, task_info in self.tasks.items():
                     if now >= task_info["next_run"]:
                         try:
-                            logger.debug(f"[TaskScheduler] About to run task: {task_name}")
+                            logger.debug(
+                                f"[TaskScheduler] About to run task: {task_name}"
+                            )
                             logger.debug(f"Running task: {task_name}")
 
                             await task_info["func"]()
 
                             task_info["last_run"] = now
-                            task_info["next_run"] = now + timedelta(seconds=task_info["interval"])
-                            logger.debug(f"[TaskScheduler] Task completed: {task_name}, next_run: {task_info['next_run']}")
+                            task_info["next_run"] = now + timedelta(
+                                seconds=task_info["interval"]
+                            )
+                            logger.debug(
+                                f"[TaskScheduler] Task completed: {task_name}, next_run: {task_info['next_run']}"
+                            )
                             logger.debug(f"Task completed: {task_name}")
                         except Exception as e:
-                            logger.debug(f"[TaskScheduler] Error in task {task_name}: {e}")
-                            logger.error(f"Error in task {task_name}: {e}", exc_info=True)
+                            logger.debug(
+                                f"[TaskScheduler] Error in task {task_name}: {e}"
+                            )
+                            logger.error(
+                                f"Error in task {task_name}: {e}", exc_info=True
+                            )
                             # Reschedule even on failure
-                            task_info["next_run"] = now + timedelta(seconds=task_info["interval"])
+                            task_info["next_run"] = now + timedelta(
+                                seconds=task_info["interval"]
+                            )
 
                 # Sleep for a short interval
                 await asyncio.sleep(1)
@@ -86,7 +98,9 @@ class TaskScheduler:
             "tasks": {
                 name: {
                     "interval": info["interval"],
-                    "last_run": info["last_run"].isoformat() if info["last_run"] else None,
+                    "last_run": (
+                        info["last_run"].isoformat() if info["last_run"] else None
+                    ),
                     "next_run": info["next_run"].isoformat(),
                 }
                 for name, info in self.tasks.items()
