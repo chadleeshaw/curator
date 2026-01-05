@@ -1,0 +1,62 @@
+/* Curator - Theme Styles */
+/* Dark Mode and Theme Variables */
+
+/* ==========================================================================
+   Dark Mode Theme
+   ========================================================================== */
+
+body.dark-mode {
+    /* Surface Colors */
+    --background: #1a1a1a;
+    --surface: #2d2d2d;
+    --surface-variant: #3d3d3d;
+    
+    /* Text Colors */
+    --text-primary: #f0f0f0;
+    --text-secondary: #b0b0b0;
+    --text-disabled: #707070;
+    
+    /* Border & Divider Colors */
+    --border-color: #4a4a4a;
+    --table-border: #4a4a4a;
+    --url-text: #999;
+    
+    /* Input Colors */
+    --input-bg: #4a4a4a;
+}
+
+/* Dark mode specific image adjustments */
+body.dark-mode img {
+    opacity: 0.9;
+}
+
+body.dark-mode .periodical-card:hover img {
+    opacity: 1;
+}
+
+/* Theme toggle button */
+.theme-toggle {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-size: 24px;
+    box-shadow: var(--shadow-lg);
+    transition: transform 0.2s, box-shadow 0.2s;
+    z-index: 1000;
+}
+
+.theme-toggle:hover {
+    transform: scale(1.1);
+    box-shadow: var(--shadow-xl);
+}
+
+.theme-toggle:active {
+    transform: scale(0.95);
+}

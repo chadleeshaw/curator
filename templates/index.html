@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Curator</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🪙</text></svg>">
+    <link rel="stylesheet" href="/static/css/base.css">
+    <link rel="stylesheet" href="/static/css/themes.css">
+    <link rel="stylesheet" href="/static/css/layout.css">
+    <link rel="stylesheet" href="/static/css/components.css">
+    <link rel="stylesheet" href="/static/css/pages.css">
+    <script type="module" src="/static/js/main.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-logout">
+                <div>
+                    <h1>🪙 Curator</h1>
+                    <p>Search, download, and organize your periodicals</p>
+                </div>
+                <button class="logout-btn" onclick="logout()">🚪 Logout</button>
+            </div>
+        </header>
+
+        <nav>
+            <button class="nav-btn active" onclick="showTab('library', event)">📚 Library</button>
+            <button class="nav-btn" onclick="showTab('tracking', event)">📌 Track Periodicals</button>
+            <button class="nav-btn" onclick="showTab('tasks', event)">⚙️ Tasks</button>
+            <button class="nav-btn" onclick="showTab('settings', event)">🔧 Settings</button>
+        </nav>
+
+        <!-- Library Tab -->
+        <div id="library-tab" class="tab active">
+            <div class="library-container">
+                <h2>Your PDF Library</h2>
+                <div class="library-header flex justify-between items-center gap-30 mb-40 flex-wrap">
+                    <div class="flex gap-10 flex-wrap">
+                        <button onclick="openImportModal()" class="btn-primary import-button-group">
+                            📁 Import Downloads Folder
+                        </button>
+                        <button onclick="importFromOrganizeDir()" class="btn-primary import-button-group">
+                            📁 Import Data Folder
+                        </button>
+                    </div>
+                    <div class="library-controls flex gap-15">
+                        <div class="sort-buttons">
+                            <button class="sort-btn active" data-lib-sort="title" onclick="setLibrarySortField('title')">Title</button>
+                            <button class="sort-btn" data-lib-sort="publisher" onclick="setLibrarySortField('publisher')">Publisher</button>
+                            <button class="sort-btn" data-lib-sort="issue_date" onclick="setLibrarySortField('issue_date')">Issue Date</button>
+                        </div>
+                        <button id="library-sort-toggle" class="sort-toggle-btn" onclick="toggleLibrarySortOrder()" title="Toggle ascending/descending">
+                            ↑
+                        </button>
+                    </div>
+                </div>
+                <div id="import-status" class="hidden import-status bg-success"></div>
+                <div id="periodicals-grid" class="periodical-grid"></div>
+            </div>
+        </div>
+
+        <!-- Periodical Tracking Tab -->
+        <div id="tracking-tab" class="tab">
+            <div class="tracking-container">
+                <div class="tracked-periodicals">
+                    <div class="tracked-header">
+                        <h2>Tracked Periodicals</h2>
+                        <button onclick="openTrackNewPeriodicalModal()" class="btn-primary">📌 Track New Periodical</button>
+                        <div class="sort-controls">
+                            <div class="sort-buttons">
+                                <button class="sort-btn active" data-sort="title" onclick="setSortField('title')">Title</button>
+                                <button class="sort-btn" data-sort="publisher" onclick="setSortField('publisher')">Publisher</button>
+                                <button class="sort-btn" data-sort="tracking_mode" onclick="setSortField('tracking_mode')">Tracking</button>
+                            </div>
+                            <button id="sort-toggle" class="sort-toggle-btn" onclick="toggleSortOrder()" title="Toggle ascending/descending">
+                                ↑
+                            </button>
+                        </div>
+                    </div>
+                    <div id="tracked-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tasks Tab -->
+        <div id="tasks-tab" class="tab">
+            <div class="tasks-container">
+                <!-- Scheduled Tasks Section -->
+                <div class="scheduled-tasks-section mb-40">
+                    <h2>⚙️ Scheduled Tasks</h2>
+                    <p>View automated tasks and their last execution times. You can manually trigger tasks as needed.</p>
+                    <div id="tasks-status" class="hidden"></div>
+                    <div id="scheduled-tasks-list" class="grid gap-15 mt-20">
+                        <!-- Will be populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Download Queue Section -->
+                <div class="download-queue-section">
+                    <h2>⬇️ Download Queue</h2>
+                <p>Monitor and manage your periodical downloads. See what's downloading, pending, completed, or failed.</p>
+                <div id="downloads-status" class="hidden"></div>
+
+                <div class="queue-controls my-30 flex gap-15 flex-wrap items-center justify-between">
+                    <div class="flex gap-10">
+                        <button onclick="loadDownloadQueue()" class="btn-secondary">🔄 Refresh</button>
+                        <button onclick="openCleanupModal()" class="btn-secondary">🧹 Cleanup Stuck Items</button>
+                    </div>
+                    <div class="sort-buttons flex gap-5">
+                        <button class="sort-btn active" data-queue-filter="" onclick="filterQueue('')">All</button>
+                        <button class="sort-btn" data-queue-filter="pending" onclick="filterQueue('pending')">Pending</button>
+                        <button class="sort-btn" data-queue-filter="downloading" onclick="filterQueue('downloading')">Downloading</button>
+                        <button class="sort-btn" data-queue-filter="completed" onclick="filterQueue('completed')">Completed</button>
+                        <button class="sort-btn" data-queue-filter="failed" onclick="filterQueue('failed')">Failed</button>
+                        <button class="sort-btn" data-queue-filter="skipped" onclick="filterQueue('skipped')">Skipped</button>
+                    </div>
+                </div>
+
+                <div class="queue-stats flex gap-20 mb-30 p-15 bg-surface-variant rounded-lg flex-wrap" id="queue-stats">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+
+                <div id="queue-empty" class="hidden queue-empty-state">
+                    <p>No downloads in queue</p>
+                    <p class="text-base mt-10">💡 Tip: Use "Track Periodicals" tab → Find Issues → Download button to submit downloads for tracking</p>
+                </div>
+
+                <div id="queue-table-container" class="hidden">
+                    <table class="queue-table w-full border-collapse mt-20">
+                        <thead>
+                            <tr class="table-header-row">
+                                <th class="table-cell-left">Issue</th>
+                                <th class="table-cell-left">Magazine</th>
+                                <th class="table-cell-center">Status</th>
+                                <th class="table-cell-left">Submitted</th>
+                                <th class="table-cell-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="queue-body">
+                            <!-- Will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div id="settings-tab" class="tab">
+            <div class="settings-container">
+                <div class="flex justify-between items-center mb-20">
+                    <h2>Configuration Settings</h2>
+                    <button onclick="restartApplication()" class="btn-danger">🔄 Restart Application</button>
+                </div>
+
+                <!-- Settings Navigation Shortcuts -->
+                <div class="settings-nav mb-30">
+                    <button class="settings-nav-btn" onclick="scrollToSection('search-providers-section')">🔍 Search Providers</button>
+                    <button class="settings-nav-btn" onclick="scrollToSection('download-client-section')">⬇️ Download Client</button>
+                    <button class="settings-nav-btn" onclick="scrollToSection('storage-section')">💾 Storage</button>
+                    <button class="settings-nav-btn" onclick="scrollToSection('matching-section')">🎯 Matching</button>
+                    <button class="settings-nav-btn" onclick="scrollToSection('logging-section')">📝 Logging</button>
+                    <button class="settings-nav-btn" onclick="scrollToSection('theme-section')">🎨 Theme</button>
+                    <button class="settings-nav-btn" onclick="scrollToSection('import-section')">📁 Import</button>
+                    <button class="settings-nav-btn" onclick="scrollToSection('user-account-section')">👤 Account</button>
+                </div>
+
+                <div id="settings-status" class="hidden"></div>
+
+                <!-- Search Providers -->
+                <div id="search-providers-section" class="settings-section">
+                    <h3>Search Providers</h3>
+                    <p class="text-base text-muted mb-15">For finding and downloading periodical issues (Newsnab, RSS, etc.)</p>
+                    <div id="search-providers-list"></div>
+                    <button onclick="addSearchProvider()" class="save-btn">+ Add Search Provider</button>
+                    <div id="search-providers-message" class="hidden"></div>
+                </div>
+
+                <!-- Download Client Settings -->
+                <div id="download-client-section" class="settings-section">
+                    <h3>Download Client</h3>
+                    <div class="settings-field">
+                        <label for="download-client-type">Type:</label>
+                        <select id="download-client-type">
+                            <option value="sabnzbd">SABnzbd</option>
+                            <option value="nzbget">NZBGet</option>
+                        </select>
+                    </div>
+                    <div class="settings-field">
+                        <label for="download-client-name">Name:</label>
+                        <input type="text" id="download-client-name" placeholder="e.g., SABnzbd">
+                    </div>
+                    <div class="settings-field">
+                        <label for="download-client-url">API URL:</label>
+                        <input type="text" id="download-client-url" placeholder="http://192.168.1.112:9080">
+                    </div>
+                    <div class="settings-field">
+                        <label for="download-client-apikey">API Key:</label>
+                        <input type="password" id="download-client-apikey" placeholder="Enter your API key">
+                    </div>
+                    <button onclick="saveDownloadClientSettings()" class="save-btn">Save Download Client</button>
+                    <div id="download-client-message" class="hidden"></div>
+                </div>
+
+                <!-- Storage Settings -->
+                <div id="storage-section" class="settings-section">
+                    <h3>Storage Settings</h3>
+                    <div class="settings-field">
+                        <label for="storage-db-path">Database Path:</label>
+                        <input type="text" id="storage-db-path" placeholder="./data/magazines.db">
+                    </div>
+                    <div class="settings-field">
+                        <label for="storage-download-dir">Download Directory:</label>
+                        <input type="text" id="storage-download-dir" placeholder="./downloads">
+                    </div>
+                    <div class="settings-field">
+                        <label for="storage-organize-dir">Organize Directory:</label>
+                        <input type="text" id="storage-organize-dir" placeholder="./periodicals">
+                    </div>
+                    <div class="settings-field">
+                        <label for="storage-cache-dir">Cache Directory:</label>
+                        <input type="text" id="storage-cache-dir" placeholder="./cache">
+                    </div>
+                    <button onclick="saveStorageSettings()" class="save-btn">Save Storage Settings</button>
+                    <div id="storage-message" class="hidden"></div>
+                </div>
+
+                <!-- Matching Settings -->
+                <div id="matching-section" class="settings-section">
+                    <h3>Matching Settings</h3>
+                    <div class="settings-field">
+                        <label for="matching-fuzzy-threshold">Fuzzy Match Threshold (%):</label>
+                        <input type="number" id="matching-fuzzy-threshold" placeholder="80" min="0" max="100">
+                    </div>
+                    <button onclick="saveMatchingSettings()" class="save-btn">Save Matching Settings</button>
+                    <div id="matching-message" class="hidden"></div>
+                </div>
+
+                <!-- Logging Settings -->
+                <div id="logging-section" class="settings-section">
+                    <h3>Logging Settings</h3>
+                    <div class="settings-field">
+                        <label for="logging-level">Log Level:</label>
+                        <select id="logging-level">
+                            <option value="DEBUG">DEBUG</option>
+                            <option value="INFO">INFO</option>
+                            <option value="WARNING">WARNING</option>
+                            <option value="ERROR">ERROR</option>
+                        </select>
+                    </div>
+                    <div class="settings-field">
+                        <label for="logging-file">Log File:</label>
+                        <input type="text" id="logging-file" placeholder="./logs/periodical_manager.log">
+                    </div>
+                    <button onclick="saveLoggingSettings()" class="save-btn">Save Logging Settings</button>
+                    <div id="logging-message" class="hidden"></div>
+                </div>
+
+                <!-- Theme Settings -->
+                <div id="theme-section" class="settings-section">
+                    <h3>Theme Settings</h3>
+                    <div class="settings-field">
+                        <label for="theme-mode">Color Mode:</label>
+                        <select id="theme-mode">
+                            <option value="light">Light</option>
+                            <option value="dark">Dark</option>
+                        </select>
+                    </div>
+                    <button onclick="saveThemeSettings()" class="save-btn">Save Theme Settings</button>
+                    <div id="theme-message" class="hidden"></div>
+                </div>
+
+                <!-- Import & Organization Settings -->
+                <div id="import-section" class="settings-section">
+                    <h3>Import & Organization</h3>
+                    <div class="settings-field">
+                        <label for="import-organize-pattern">File Organization Pattern:</label>
+                        <input type="text" id="import-organize-pattern" placeholder="data/{category}/{title}/{year}/" class="w-full mt-8">
+                        <p class="text-sm text-hint mt-8">Available tags: {category}, {title}, {year}, {month}, {day}. Leave empty to disable organization.</p>
+                    </div>
+                    <p class="text-base text-muted mt-10">Nested folder scanning in Downloads is always enabled.</p>
+                    <button onclick="saveImportSettings()" class="save-btn">Save Import Settings</button>
+                    <div id="import-message" class="hidden"></div>
+                </div>
+
+                <!-- User Account Settings -->
+                <div id="user-account-section" class="settings-section">
+                    <h3>User Account</h3>
+                    <p class="text-base text-muted mb-15">Update your login credentials</p>
+                    <div class="settings-field">
+                        <label for="account-username">Username:</label>
+                        <input type="text" id="account-username" placeholder="Loading...">
+                    </div>
+                    <div class="settings-field">
+                        <label for="account-current-password">Current Password:</label>
+                        <input type="password" id="account-current-password" placeholder="Enter current password to make changes">
+                    </div>
+                    <div class="settings-field">
+                        <label for="account-new-password">New Password:</label>
+                        <input type="password" id="account-new-password" placeholder="Leave blank to keep current password">
+                    </div>
+                    <div class="settings-field">
+                        <label for="account-confirm-password">Confirm New Password:</label>
+                        <input type="password" id="account-confirm-password" placeholder="Confirm new password">
+                    </div>
+                    <button onclick="saveAccountSettings()" class="save-btn">Save Account Settings</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PDF Viewer Modal -->
+    <div id="pdf-modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close" onclick="closePDFViewer()">&times;</span>
+            <div id="pdf-viewer"></div>
+        </div>
+    </div>
+
+    <!-- Add Provider Modal -->
+    <div id="add-provider-modal" class="modal hidden">
+        <div class="modal-content max-w-500">
+            <span class="close" onclick="closeAddProviderModal()">&times;</span>
+            <h3>Add New Search Provider</h3>
+            <form id="add-provider-form" class="p-20">
+                <div class="settings-field">
+                    <label for="new-provider-type">Provider Type:</label>
+                    <select id="new-provider-type" required>
+                        <option value="newsnab">Newsnab</option>
+                        <option value="rss">RSS</option>
+                        <option value="torznab">Torznab</option>
+                        <option value="custom">Custom</option>
+                    </select>
+                </div>
+                <div class="settings-field">
+                    <label for="new-provider-name">Name:</label>
+                    <input type="text" id="new-provider-name" placeholder="e.g., My Newsnab" required>
+                </div>
+                <div class="settings-field">
+                    <label for="new-provider-url">API URL:</label>
+                    <input type="text" id="new-provider-url" placeholder="http://example.com/api" required>
+                </div>
+                <div class="settings-field">
+                    <label for="new-provider-key">API Key:</label>
+                    <input type="password" id="new-provider-key" placeholder="Enter API key">
+                </div>
+                <div class="settings-field">
+                    <label>
+                        <input type="checkbox" id="new-provider-enabled" checked>
+                        <span>Enabled</span>
+                    </label>
+                </div>
+                <div class="flex gap-10 mt-20">
+                    <button type="submit" class="save-btn flex-1">Add Provider</button>
+                    <button type="button" class="save-btn btn-cancel flex-1" onclick="closeAddProviderModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Tracking Details Modal -->
+    <div id="edit-tracking-modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close" onclick="closeEditTrackingModal()">&times;</span>
+            <h2>Edit Tracking Details</h2>
+            
+            <div class="settings-field">
+                <label>Periodical Title:</label>
+                <input type="hidden" id="edit-tracking-id">
+                <input type="text" id="edit-tracking-title" placeholder="Enter title">
+            </div>
+            
+            <div class="settings-field">
+                <label>Publisher:</label>
+                <div class="flex gap-10">
+                    <input type="text" id="edit-tracking-publisher" placeholder="Enter publisher" class="flex-1">
+                    <button onclick="searchPublisherMetadata()" class="save-btn">Search Metadata</button>
+                </div>
+            </div>
+            
+            <div class="settings-field">
+                <label>ISSN:</label>
+                <input type="text" id="edit-tracking-issn" placeholder="Enter ISSN">
+            </div>
+            
+            <div class="settings-field">
+                <label>Tracking Mode:</label>
+                <select id="edit-tracking-mode" class="w-full">
+                    <option value="all">Track All Issues - Download all past and future issues</option>
+                    <option value="new">Track New Issues - Only download issues published after today</option>
+                    <option value="none">Track Nothing - Monitor but don't auto-download</option>
+                </select>
+            </div>
+
+            <div class="settings-field">
+                <label for="edit-tracking-org-pattern">File Organization Pattern:</label>
+                <input type="text" id="edit-tracking-org-pattern" placeholder="Leave empty to use global default" class="w-full">
+                <p class="text-sm text-hint mt-8">Available tags: {category}, {title}, {year}, {month}, {day}. Example: data/{category}/{title}/{year}/</p>
+            </div>
+
+            <div class="flex gap-10 mt-20">
+                <button onclick="saveEditedTracking()" class="save-btn btn-save flex-1">Save Changes</button>
+                <button onclick="closeEditTrackingModal()" class="save-btn btn-cancel flex-1">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search Issues Modal -->
+    <div id="search-issues-modal" class="modal hidden">
+        <div class="modal-content max-w-800">
+            <span class="close" onclick="closeSearchIssuesModal()">&times;</span>
+            <div id="search-issues-content"></div>
+            <div class="mt-20">
+                <button onclick="closeSearchIssuesModal()" class="save-btn w-full">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Options Modal -->
+    <div id="import-options-modal" class="modal hidden">
+        <div class="modal-content max-w-600">
+            <span class="close" onclick="closeImportModal()">&times;</span>
+            <h3>Import Options</h3>
+            
+            <div class="settings-field" style="margin-top: 20px; margin-bottom: 10px;">
+                <label>
+                    <input type="checkbox" id="import-auto-track" checked>
+                    Auto-create tracking record for imported periodicals
+                </label>
+            </div>
+            
+            <div class="settings-field">
+                <label for="import-category">Category:</label>
+                <select id="import-category" class="w-full">
+                    <option value="auto">Auto-detect from title</option>
+                    <option value="Magazines">Magazines</option>
+                    <option value="Comics">Comics</option>
+                    <option value="Articles">Articles</option>
+                    <option value="News">News</option>
+                </select>
+            </div>
+            
+            <div class="settings-field">
+                <label for="import-modal-organize-pattern">File Organization Pattern:</label>
+                <input type="text" id="import-modal-organize-pattern" placeholder="Leave empty to use global default" class="w-full">
+                <p class="text-sm text-hint mt-8">Available tags: {category}, {title}, {year}, {month}, {day}. Example: data/{category}/{title}/{year}/</p>
+            </div>
+            
+            <div class="flex gap-10 mt-20">
+                <button onclick="startImportWithOptions()" class="save-btn btn-save flex-1">Import</button>
+                <button onclick="closeImportModal()" class="save-btn btn-cancel flex-1">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Track New Periodical Modal -->
+    <div id="track-new-periodical-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 800px;">
+            <span class="close" onclick="closeTrackNewPeriodicalModal()">&times;</span>
+            <h2>Track New Periodical</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 20px;">Search for a periodical to track</p>
+
+            <div id="tracking-status" class="hidden"></div>
+
+            <!-- Step 1: Search -->
+            <div class="tracking-step">
+                <h3>Step 1: Find Periodical</h3>
+                <div class="tracking-search">
+                    <input type="text" id="tracking-search-query" placeholder="Enter periodical title..."
+                        onkeyup="event.key === 'Enter' && searchPeriodicalMetadata()">
+                    <button onclick="searchPeriodicalMetadata()">Search</button>
+                </div>
+                <div id="tracking-search-loading" class="hidden">Searching...</div>
+                <div id="tracking-search-result" class="tracking-result hidden">
+                    <div id="periodical-info-card"></div>
+                </div>
+                <div id="tracking-search-error" class="error hidden"></div>
+            </div>
+
+            <!-- Step 2: Configure Tracking -->
+            <div class="tracking-step hidden" id="save-step">
+                <h3>Step 2: Configure Tracking</h3>
+                <div id="save-info"></div>
+                <div class="save-controls">
+                    <div class="tracking-mode-options">
+                        <label class="radio-label">
+                            <input type="radio" name="tracking-mode" value="all" checked onchange="updateTrackingMode()">
+                            <span><strong>Track All Issues</strong> - Download all past and future issues</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="tracking-mode" value="new" onchange="updateTrackingMode()">
+                            <span><strong>Track New Issues</strong> - Only download issues published after today</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="tracking-mode" value="none" onchange="updateTrackingMode()">
+                            <span><strong>Track Nothing</strong> - Monitor but don't auto-download</span>
+                        </label>
+                    </div>
+                    <div class="flex gap-10 mt-20">
+                        <button class="btn-primary flex-1" onclick="saveTrackingPreferences()">Save & Start Tracking</button>
+                        <button class="btn-secondary flex-1" onclick="closeTrackNewPeriodicalModal()">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Periodical Modal - Outside Container -->
+    <div id="delete-modal" class="modal hidden">
+        <div class="modal-content delete-modal-content">
+            <h3 class="delete-modal-title">Delete Periodical</h3>
+            <p id="delete-modal-title" class="delete-modal-subtitle"></p>
+            
+            <div class="bg-warning rounded-lg p-15 mb-20">
+                <strong>⚠️ Warning:</strong> This action cannot be undone.
+            </div>
+
+            <div class="bg-surface-variant rounded-lg p-15 mb-20">
+                <p class="m-0 mb-10 font-bold text-primary">What would you like to do?</p>
+                <div class="flex gap-10 flex-col">
+                    <label class="delete-option-label">
+                        <input type="radio" name="delete-option" value="db-only" checked class="radio-input">
+                        <span><strong>Remove from library only</strong><br><small>Files remain on disk</small></span>
+                    </label>
+                    <label class="delete-option-label">
+                        <input type="radio" name="delete-option" value="delete-files" class="radio-input">
+                        <span><strong>Delete from library AND disk</strong><br><small>PDF and cover files will be permanently deleted</small></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="flex gap-10 justify-end">
+                <button onclick="closeDeleteModal()" class="save-btn btn-cancel flex-0">Cancel</button>
+                <button onclick="confirmDeletePeriodical()" class="save-btn btn-delete flex-0">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Restart Application Modal -->
+    <div id="restart-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 500px;">
+            <span class="close" onclick="closeRestartModal()">&times;</span>
+            <h2>🔄 Restart Application</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 20px;">
+                Are you sure you want to restart the application? This will temporarily disconnect all users.
+            </p>
+            <div class="flex gap-10 justify-end">
+                <button onclick="closeRestartModal()" class="save-btn btn-cancel flex-0">Cancel</button>
+                <button onclick="confirmRestartApplication()" class="save-btn btn-danger flex-0">Restart</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

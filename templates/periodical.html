@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{PERIODICAL_TITLE}} - Curator</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🪙</text></svg>">
+    <link rel="stylesheet" href="/static/css/base.css">
+    <link rel="stylesheet" href="/static/css/themes.css">
+    <link rel="stylesheet" href="/static/css/layout.css">
+    <link rel="stylesheet" href="/static/css/components.css">
+    <link rel="stylesheet" href="/static/css/pages.css">
+    <style>
+        .periodical-header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 40px 20px;
+            margin-bottom: 30px;
+            text-align: center;
+            border-radius: 8px;
+        }
+
+        .periodical-header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: bold;
+        }
+
+        .periodical-header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .back-button {
+            display: inline-block;
+            margin-bottom: 20px;
+            padding: 10px 20px;
+            background: var(--primary-color);
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: 600;
+            transition: background 0.3s;
+        }
+
+        .back-button:hover {
+            background: var(--primary-dark);
+        }
+
+        .year-section {
+            margin-bottom: 50px;
+        }
+
+        .year-title {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+            border-bottom: 3px solid var(--primary-color);
+            padding-bottom: 10px;
+        }
+
+        .issues-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .issue-card {
+            background: var(--surface);
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: var(--shadow-md);
+            transition: transform 0.3s, box-shadow 0.3s;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            border: 3px solid var(--primary-color);
+        }
+
+        .issue-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .issue-cover {
+            width: 100%;
+            height: 200px;
+            background: linear-gradient(135deg, var(--surface-variant) 0%, var(--border-color) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .issue-cover img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .issue-cover-placeholder {
+            text-align: center;
+            color: var(--text-disabled);
+            font-size: 0.9em;
+            padding: 10px;
+            width: 100%;
+        }
+
+        .issue-info {
+            padding: 15px;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .issue-date {
+            font-size: 0.9em;
+            color: var(--text-secondary);
+            margin-bottom: 5px;
+        }
+
+        .issue-title {
+            font-size: 0.85em;
+            color: var(--text-primary);
+            font-weight: 600;
+            flex-grow: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .issue-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .issue-actions button {
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+            font-size: 0.85em;
+        }
+
+        .open-pdf-btn {
+            flex: 1;
+            padding: 6px 12px;
+            background: var(--primary-color);
+            color: white;
+            white-space: nowrap;
+        }
+
+        .open-pdf-btn:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .delete-issue-btn {
+            background: #f44336;
+            color: white;
+            padding: 10px 14px;
+            min-width: auto;
+            font-size: 1.1em;
+        }
+
+        .delete-issue-btn:hover {
+            background: #d32f2f;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .no-issues {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-disabled);
+            font-size: 1.1em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="periodical-container" data-years="{{YEARS_DATA}}">
+        <button onclick="goBack()" class="back-button">← Back to Library</button>
+
+        <div class="periodical-header">
+            <h1 id="periodical-title">{{PERIODICAL_TITLE}}</h1>
+            <p>Published Issues by Year</p>
+        </div>
+
+        <div id="issues-container"></div>
+        <div id="status-message" class="hidden mt-20 p-15 rounded"></div>
+
+        <!-- Delete Issue Modal -->
+        <div id="delete-modal" class="modal hidden">
+            <div class="modal-content delete-modal-content">
+                <h3 class="delete-modal-title">Delete Issue</h3>
+                <p id="delete-modal-title" class="delete-modal-subtitle"></p>
+                
+                <div class="bg-warning rounded-lg p-15 mb-20">
+                    <strong>⚠️ Warning:</strong> This action cannot be undone.
+                </div>
+
+                <div class="bg-surface-variant rounded-lg p-15 mb-20">
+                    <p class="m-0 mb-10 font-bold text-primary">What would you like to do?</p>
+                    <div class="flex gap-10 flex-col">
+                        <label class="delete-option-label">
+                            <input type="radio" name="delete-option" value="db-only" checked class="radio-input">
+                            <span><strong>Remove from library only</strong><br><small>Files remain on disk</small></span>
+                        </label>
+                        <label class="delete-option-label">
+                            <input type="radio" name="delete-option" value="delete-files" class="radio-input">
+                            <span><strong>Delete from library AND disk</strong><br><small>PDF and cover files will be permanently deleted</small></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="flex gap-10 justify-end">
+                    <button onclick="closeDeleteModal()" class="save-btn btn-cancel">Cancel</button>
+                    <button onclick="confirmDeleteIssue()" class="save-btn btn-delete">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Parse years data from data attribute
+        const container = document.getElementById('periodical-container');
+        const yearsData = container ? JSON.parse(container.getAttribute('data-years') || '[]') : [];
+        let pendingDeleteId = null;
+        let pendingDeleteTitle = null;
+
+        // Initialize theme from localStorage
+        function initializeTheme() {
+            const savedTheme = localStorage.getItem('curator-theme') || 'light';
+            if (savedTheme === 'dark') {
+                document.body.classList.add('dark-mode');
+            }
+        }
+
+        // Delete modal functions
+        function openDeleteModal(magazineId, title) {
+            pendingDeleteId = magazineId;
+            pendingDeleteTitle = title;
+            
+            const modal = document.getElementById('delete-modal');
+            
+            const titleElement = document.getElementById('delete-modal-title');
+            if (titleElement) {
+                titleElement.textContent = `Are you sure you want to delete "${title}"?`;
+            }
+            
+            modal.classList.remove('hidden');
+        }
+
+        function closeDeleteModal() {
+            const modal = document.getElementById('delete-modal');
+            modal.classList.add('hidden');
+            pendingDeleteId = null;
+            pendingDeleteTitle = null;
+        }
+
+        // Close modal when clicking outside of it
+        document.addEventListener('click', (event) => {
+            const modal = document.getElementById('delete-modal');
+            if (modal && event.target === modal) {
+                closeDeleteModal();
+            }
+        });
+
+        // Extract base title without year/issue code
+        function extractBaseTitleFromMagazineTitle(fullTitle) {
+            // Remove patterns like " 2000-01", " 2024-12", etc.
+            return fullTitle.replace(/\s+\d{4}-\d{2}$/i, '').trim();
+        }
+
+        function renderIssues() {
+            const container = document.getElementById('issues-container');
+
+            if (!yearsData || yearsData.length === 0) {
+                container.innerHTML = '<div class="no-issues">No issues found for this periodical.</div>';
+                return;
+            }
+
+            // Extract and display clean title
+            if (yearsData.length > 0 && yearsData[0].issues.length > 0) {
+                const firstIssueTitle = yearsData[0].issues[0].title;
+                const baseTitleElement = document.getElementById('periodical-title');
+                if (baseTitleElement && firstIssueTitle) {
+                    baseTitleElement.textContent = extractBaseTitleFromMagazineTitle(firstIssueTitle);
+                }
+            }
+
+            yearsData.forEach((yearData) => {
+                const yearSection = document.createElement('div');
+                yearSection.className = 'year-section';
+
+                const yearTitle = document.createElement('h2');
+                yearTitle.className = 'year-title';
+                yearTitle.textContent = yearData.year;
+                yearSection.appendChild(yearTitle);
+
+                const issuesGrid = document.createElement('div');
+                issuesGrid.className = 'issues-grid';
+
+                yearData.issues.forEach((issue) => {
+                    const issueCard = document.createElement('div');
+                    issueCard.className = 'issue-card';
+
+                    const coverDiv = document.createElement('div');
+                    coverDiv.className = 'issue-cover';
+
+                    if (issue.cover_url) {
+                        const img = document.createElement('img');
+                        img.src = issue.cover_url;
+                        img.alt = issue.title;
+                        img.onerror = function () {
+                            this.style.display = 'none';
+                            coverDiv.innerHTML =
+                                '<div class="issue-cover-placeholder">Cover Not Available</div>';
+                        };
+                        coverDiv.appendChild(img);
+                    } else {
+                        coverDiv.innerHTML =
+                            '<div class="issue-cover-placeholder">No Cover Available</div>';
+                    }
+
+                    issueCard.appendChild(coverDiv);
+
+                    const infoDiv = document.createElement('div');
+                    infoDiv.className = 'issue-info';
+
+                    const dateP = document.createElement('p');
+                    dateP.className = 'issue-date';
+                    dateP.textContent =
+                        issue.issue_date ? new Date(issue.issue_date).toLocaleDateString() : 'Unknown Date';
+                    infoDiv.appendChild(dateP);
+
+                    const titleP = document.createElement('p');
+                    titleP.className = 'issue-title';
+                    titleP.textContent = issue.title || 'Unknown Title';
+                    infoDiv.appendChild(titleP);
+
+                    // Create actions container with Open and Delete buttons
+                    const actionsDiv = document.createElement('div');
+                    actionsDiv.className = 'issue-actions';
+
+                    const openButton = document.createElement('button');
+                    openButton.className = 'open-pdf-btn';
+                    openButton.textContent = '📖 View';
+                    openButton.onclick = () => openPDF(issue.id);
+                    actionsDiv.appendChild(openButton);
+
+                    const deleteButton = document.createElement('button');
+                    deleteButton.className = 'delete-issue-btn';
+                    deleteButton.textContent = '🗑️';
+                    deleteButton.title = 'Delete this issue';
+                    deleteButton.onclick = (e) => {
+                        e.stopPropagation();
+                        deleteIssue(issue.id, issue.title);
+                    };
+                    actionsDiv.appendChild(deleteButton);
+
+                    infoDiv.appendChild(actionsDiv);
+                    issueCard.appendChild(infoDiv);
+                    issuesGrid.appendChild(issueCard);
+                });
+
+                yearSection.appendChild(issuesGrid);
+                container.appendChild(yearSection);
+            });
+        }
+
+        function openPDF(magazineId) {
+            window.open(`/api/periodicals/${magazineId}/pdf`, '_blank');
+        }
+
+        // Delete an issue/magazine - opens the modal
+        function deleteIssue(magazineId, title) {
+            openDeleteModal(magazineId, title);
+        }
+
+        // Confirm delete from modal
+        async function confirmDeleteIssue() {
+            if (!pendingDeleteId) {
+                console.error('No issue selected for deletion');
+                return;
+            }
+
+            const deleteOption = document.querySelector('input[name="delete-option"]:checked');
+            if (!deleteOption) {
+                console.error('No delete option selected');
+                return;
+            }
+            
+            const deleteFiles = deleteOption.value === 'delete-files';
+            
+            // Count total issues before deletion
+            const issueCards = document.querySelectorAll('.issue-card');
+            const isLastIssue = issueCards.length === 1;
+
+            try {
+                const response = await fetch(`/api/periodicals/${pendingDeleteId}?delete_files=${deleteFiles}`, {
+                    method: 'DELETE',
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to delete');
+                }
+
+                const result = await response.json();
+
+                // Show success message
+                const statusDiv = document.getElementById('status-message');
+                statusDiv.style.background = '#e8f5e9';
+                statusDiv.style.color = '#2e7d32';
+                statusDiv.style.borderColor = '#4caf50';
+                statusDiv.textContent = `✓ ${result.message}`;
+                statusDiv.style.display = 'block';
+
+                // Close modal
+                closeDeleteModal();
+
+                // After a short delay, handle the result
+                setTimeout(() => {
+                    if (isLastIssue) {
+                        // If this was the last issue, go back to library
+                        statusDiv.textContent = '✓ Last issue deleted. Returning to library...';
+                        setTimeout(() => {
+                            window.location.href = '/#library';
+                        }, 1000);
+                    } else {
+                        // Otherwise reload to show updated list
+                        location.reload();
+                    }
+                }, 1500);
+            } catch (error) {
+                console.error('Error deleting issue:', error);
+                const statusDiv = document.getElementById('status-message');
+                statusDiv.style.background = '#ffebee';
+                statusDiv.style.color = '#c62828';
+                statusDiv.style.borderColor = '#f44336';
+                statusDiv.textContent = `✗ Error: ${error.message}`;
+                statusDiv.style.display = 'block';
+            }
+        }
+
+        function goBack() {
+            // Navigate to main page with library hash
+            window.location.href = '/#library';
+        }
+
+        // Initialize theme on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeTheme();
+            try {
+                renderIssues();
+                // If yearsData is empty or no issues were rendered, show a message
+                const issuesContainer = document.getElementById('issues-container');
+                if (!issuesContainer || issuesContainer.innerHTML.includes('No issues found')) {
+                    // Add a back button message if all issues are deleted
+                    const message = document.createElement('div');
+                    message.style.textAlign = 'center';
+                    message.style.padding = '40px';
+                    message.style.color = 'var(--text-secondary)';
+                    message.innerHTML = '<p>This periodical has no issues remaining.</p><p><button onclick="goBack()" class="back-button">← Back to Library</button></p>';
+                    const statusDiv = document.getElementById('status-message');
+                    if (statusDiv && statusDiv.style.display === 'none') {
+                        // Show helpful message if not already showing deletion success
+                    }
+                }
+            } catch (error) {
+                console.error('Error rendering issues:', error);
+                // If there's an error (e.g., no data), go back to library
+                window.location.href = '/#library';
+            }
+        });
+    </script>
+</body>
+</html>

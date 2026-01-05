@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# Local development
+local/config/*.db
+local/config/*.db-*
+local/downloads/*
+local/data/*
+local/cache/*
+local/logs/*
+
+# Keep config template but ignore actual config with secrets
+!local/config/
+local/config/config.yaml
+
+# Tests
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+README.md
+*.md
+
+# Build files
+Makefile
+eslint.config.mjs
+setup.cfg
+
+# Node
+node_modules/
+package.json
+package-lock.json
