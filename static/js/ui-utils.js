@@ -80,7 +80,7 @@ export class UIUtils {
    * Initialize theme from localStorage
    */
   static initTheme() {
-    const savedTheme = localStorage.getItem('curator-theme') || 'light';
+    const savedTheme = localStorage.getItem('curator-theme') || 'dark';
     if (savedTheme === 'dark') {
       document.body.classList.add('dark-mode');
     }
