@@ -52,21 +52,48 @@ export class TasksManager {
         if (task.stats) {
           const stats = task.stats;
           statsHtml = `
-          <div style="margin-top: 10px; padding: 10px; background: var(--background); border-radius: 6px; border: 1px solid var(--border-color);">
-            <div style="font-weight: 600; margin-bottom: 8px; color: var(--primary-color);">📊 Statistics</div>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; font-size: 0.85em;">
-              <div>🔄 Total runs: <strong>${stats.total_runs || 0}</strong></div>
-              ${stats.client_downloads_processed !== undefined ? `<div>✅ Client processed: <strong>${stats.client_downloads_processed}</strong></div>` : ''}
-              ${stats.client_downloads_failed !== undefined && stats.client_downloads_failed > 0 ? `<div style="color: var(--status-failed);">❌ Client failed: <strong>${stats.client_downloads_failed}</strong></div>` : ''}
-              ${stats.folder_files_imported !== undefined ? `<div>📁 Folder imported: <strong>${stats.folder_files_imported}</strong></div>` : ''}
-              ${stats.bad_files_detected !== undefined && stats.bad_files_detected > 0 ? `<div style="color: var(--status-failed); font-weight: 600;">🚫 Bad files: <strong>${stats.bad_files_detected}</strong></div>` : ''}
+          <div style="margin-top: 15px; padding: 15px; background: var(--background); border-radius: 8px; border: 1px solid var(--border-color);">
+            <div style="font-weight: 600; margin-bottom: 12px; color: var(--primary-color); font-size: 0.95em;">📊 Statistics</div>
+
+            <!-- Metrics Grid -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 12px;">
+              <div style="background: var(--surface); padding: 10px; border-radius: 6px; text-align: center;">
+                <div style="font-size: 1.5em; font-weight: bold; color: var(--primary-color);">${stats.total_runs || 0}</div>
+                <div style="font-size: 0.75em; color: var(--text-secondary); margin-top: 2px;">Total Runs</div>
+              </div>
+              ${stats.client_downloads_processed !== undefined ? `
+              <div style="background: var(--surface); padding: 10px; border-radius: 6px; text-align: center;">
+                <div style="font-size: 1.5em; font-weight: bold; color: var(--status-completed);">${stats.client_downloads_processed}</div>
+                <div style="font-size: 0.75em; color: var(--text-secondary); margin-top: 2px;">Client Processed</div>
+              </div>
+              ` : ''}
+              ${stats.client_downloads_failed !== undefined ? `
+              <div style="background: var(--surface); padding: 10px; border-radius: 6px; text-align: center;">
+                <div style="font-size: 1.5em; font-weight: bold; color: ${stats.client_downloads_failed > 0 ? 'var(--status-failed)' : 'var(--text-secondary)'};">${stats.client_downloads_failed}</div>
+                <div style="font-size: 0.75em; color: var(--text-secondary); margin-top: 2px;">Client Failed</div>
+              </div>
+              ` : ''}
+              ${stats.folder_files_imported !== undefined ? `
+              <div style="background: var(--surface); padding: 10px; border-radius: 6px; text-align: center;">
+                <div style="font-size: 1.5em; font-weight: bold; color: var(--status-completed);">${stats.folder_files_imported}</div>
+                <div style="font-size: 0.75em; color: var(--text-secondary); margin-top: 2px;">Folder Imported</div>
+              </div>
+              ` : ''}
+              ${stats.bad_files_detected !== undefined ? `
+              <div style="background: var(--surface); padding: 10px; border-radius: 6px; text-align: center;">
+                <div style="font-size: 1.5em; font-weight: bold; color: ${stats.bad_files_detected > 0 ? 'var(--status-failed)' : 'var(--text-secondary)'};">${stats.bad_files_detected}</div>
+                <div style="font-size: 0.75em; color: var(--text-secondary); margin-top: 2px;">Bad Files</div>
+              </div>
+              ` : ''}
             </div>
+
+            <!-- Last Scan Times -->
             ${
               stats.last_client_check || stats.last_folder_scan
                 ? `
-              <div style="margin-top: 8px; font-size: 0.8em; color: var(--text-secondary);">
-                ${stats.last_client_check ? `<div>Last client check: ${new Date(stats.last_client_check).toLocaleString()}</div>` : ''}
-                ${stats.last_folder_scan ? `<div>Last folder scan: ${new Date(stats.last_folder_scan).toLocaleString()}</div>` : ''}
+              <div style="padding-top: 10px; border-top: 1px solid var(--border-color); font-size: 0.8em; color: var(--text-secondary); display: grid; gap: 4px;">
+                ${stats.last_client_check ? `<div>🕐 Last client check: <strong>${new Date(stats.last_client_check).toLocaleString()}</strong></div>` : ''}
+                ${stats.last_folder_scan ? `<div>🕐 Last folder scan: <strong>${new Date(stats.last_folder_scan).toLocaleString()}</strong></div>` : ''}
               </div>
             `
                 : ''
