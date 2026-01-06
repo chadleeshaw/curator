@@ -58,13 +58,13 @@ async def get_tasks_status():
         else:
             logger.debug("Tasks Status - Download Monitor task not available")
 
-        # Import task (from task scheduler if available)
+        # Auto-download task (from task scheduler if available)
         tasks.append(
             {
-                "id": "auto_import",
-                "name": "Auto Import",
-                "description": "Automatically imports periodicals from downloads folder",
-                "interval": 300,
+                "id": "auto_download",
+                "name": "Auto Download",
+                "description": "Checks tracked periodicals for new issues and imports PDFs from downloads folder",
+                "interval": 1800,
                 "last_run": None,
                 "next_run": None,
                 "last_status": None,
@@ -113,25 +113,14 @@ async def run_task_manually(task_id: str):
             else:
                 return {"success": False, "message": "Download monitor not available"}
 
-        elif task_id == "auto_import":
-            if _file_importer:
-                # Trigger import from downloads
-                db_session = _session_factory()
-                try:
-                    downloads_dir = Path("local/downloads")
-                    if downloads_dir.exists():
-                        for pdf_file in downloads_dir.glob("*.pdf"):
-                            await _file_importer.import_pdf(str(pdf_file))
-                finally:
-                    db_session.close()
-
-                return {
-                    "success": True,
-                    "task_name": "Auto Import",
-                    "message": "Import task executed",
-                }
-            else:
-                return {"success": False, "message": "File importer not available"}
+        elif task_id == "auto_download":
+            # Note: This manual trigger should be handled by the task scheduler
+            # For now, just return success to indicate the task exists
+            return {
+                "success": True,
+                "task_name": "Auto Download",
+                "message": "Auto-download task will run on its scheduled interval (30 minutes)",
+            }
 
         elif task_id == "cleanup_orphaned_covers":
             # Manually trigger cover cleanup

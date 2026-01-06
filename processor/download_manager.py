@@ -172,7 +172,7 @@ class DownloadManager:
         search_result_db_id: Optional[int] = None,
     ) -> Optional[DownloadSubmission]:
         """
-        Submit a search result for download, checking for duplicates first.
+        Submit a search result for download, checking for duplicates and bad files first.
 
         Args:
             tracking_id: Periodical tracking ID
@@ -186,6 +186,20 @@ class DownloadManager:
         logger.debug(
             f"[DownloadManager] submit_download called for: {search_result['title']}"
         )
+
+        # Check if this URL has failed too many times (bad file)
+        MAX_RETRIES = 3
+        previous_failures = session.query(DownloadSubmission).filter(
+            DownloadSubmission.source_url == search_result["url"],
+            DownloadSubmission.status == DownloadSubmission.StatusEnum.FAILED,
+            DownloadSubmission.attempt_count >= MAX_RETRIES
+        ).first()
+
+        if previous_failures:
+            logger.info(
+                f"Skipping bad file (failed {previous_failures.attempt_count} times): {search_result['title']}"
+            )
+            return None
 
         # Check for duplicates
         is_dup, existing = self.check_duplicate_submission(

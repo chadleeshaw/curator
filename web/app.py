@@ -177,25 +177,54 @@ async def lifespan(app: FastAPI):
         # Initialize task scheduler
         task_scheduler = TaskScheduler()
 
-        # Define import task
-        async def auto_import_task():
-            """Check downloads folder and import new files every 5 minutes"""
+        # Define auto-download task
+        async def auto_download_task():
+            """Auto-download tracked periodicals and import new files every 30 minutes"""
             try:
                 db_session = session_factory()
                 try:
+                    # Part 1: Auto-download for tracked periodicals
+                    if download_manager:
+                        logger.debug("Auto-download: Checking tracked periodicals for new issues")
+
+                        # Get all tracked periodicals with auto-download enabled
+                        tracked = db_session.query(MagazineTracking).filter(
+                            (MagazineTracking.track_all_editions == True) |
+                            (MagazineTracking.track_new_only == True)
+                        ).all()
+
+                        if tracked:
+                            logger.info(f"Auto-download: Found {len(tracked)} periodicals to check")
+
+                            for periodical in tracked:
+                                try:
+                                    logger.debug(f"Auto-download: Checking '{periodical.title}' for new issues")
+                                    results = download_manager.download_all_periodical_issues(
+                                        periodical.id, db_session
+                                    )
+                                    if results.get("submitted", 0) > 0:
+                                        logger.info(
+                                            f"Auto-download: Submitted {results['submitted']} issues for '{periodical.title}'"
+                                        )
+                                except Exception as e:
+                                    logger.error(
+                                        f"Auto-download: Error checking '{periodical.title}': {e}"
+                                    )
+
+                    # Part 2: Import PDFs from downloads folder
                     downloads_dir = Path(
                         storage_config.get("download_dir", "./downloads")
                     )
                     pdf_count = len(list(downloads_dir.glob("*.pdf")))
 
                     if pdf_count > 0:
-                        logger.debug(f"Auto-import: Found {pdf_count} PDFs to process")
+                        logger.debug(f"Auto-download: Found {pdf_count} PDFs to import")
                         results = file_importer.process_downloads(db_session)
-                        logger.debug(f"Auto-import results: {results}")
+                        logger.debug(f"Auto-download import results: {results}")
                 finally:
                     db_session.close()
             except Exception as e:
-                logger.error(f"Auto-import error: {e}", exc_info=True)
+                logger.error(f"Auto-download error: {e}", exc_info=True)
 
         # Define download monitoring task
         async def download_monitoring_task():
@@ -254,8 +283,8 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 logger.error(f"Cover cleanup error: {e}", exc_info=True)
 
-        # Schedule auto-import every 5 minutes (300 seconds)
-        task_scheduler.schedule_periodic("auto_import", auto_import_task, 300)
+        # Schedule auto-download every 30 minutes (1800 seconds)
+        task_scheduler.schedule_periodic("auto_download", auto_download_task, 1800)
 
         # Schedule download monitoring every 30 seconds
         task_scheduler.schedule_periodic(
