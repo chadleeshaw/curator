@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 
 from core.auth import AuthManager
 from core.config import ConfigLoader
@@ -424,7 +425,7 @@ async def health_check():
         session = session_factory()
         try:
             # Simple query to verify DB is accessible
-            session.execute("SELECT 1")
+            session.execute(text("SELECT 1"))
             session.commit()
             db_status = "connected"
         except Exception as e:

@@ -128,6 +128,9 @@ export class UIUtils {
       statusDiv.style.borderColor = '#2196f3';
       statusDiv.textContent = `ℹ ${message}`;
     }
+    
+    // Scroll to the status message so it's visible
+    statusDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   /**

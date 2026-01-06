@@ -341,8 +341,16 @@ export class SettingsManager {
     // Reset form
     form.reset();
     
-    // Set up form submission
-    form.onsubmit = (e) => this.submitAddProvider(e);
+    // Remove any existing submit handlers
+    const newForm = form.cloneNode(true);
+    form.parentNode.replaceChild(newForm, form);
+    
+    // Set up form submission with proper binding
+    newForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      this.submitAddProvider(e);
+      return false;
+    });
     
     // Show modal
     modal.classList.remove('hidden');
@@ -360,7 +368,9 @@ export class SettingsManager {
    * Submit add provider form
    */
   async submitAddProvider(event) {
-    event.preventDefault();
+    if (event) {
+      event.preventDefault();
+    }
     
     try {
       const type = document.getElementById('new-provider-type').value;
@@ -379,6 +389,9 @@ export class SettingsManager {
 
       // Get current config
       const response = await APIClient.get('/api/config');
+      if (!response || !response.ok) {
+        throw new Error('Failed to fetch current configuration');
+      }
       const data = await response.json();
       const config = data.config;
       
@@ -387,12 +400,17 @@ export class SettingsManager {
       
       // Save config
       const saveResponse = await APIClient.post('/api/config', { search_providers: config.search_providers });
+      if (!saveResponse || !saveResponse.ok) {
+        const errorData = await saveResponse.json().catch(() => ({ message: 'Unknown error' }));
+        throw new Error(errorData.message || 'Failed to save configuration');
+      }
       const saveData = await saveResponse.json();
       
       if (saveData.success) {
         UIUtils.showStatus('settings-status', 'Search provider added successfully', 'success');
         this.closeAddProviderModal();
-        setTimeout(() => this.loadSettings(), 1500);
+        // Reload settings after a short delay
+        setTimeout(() => this.loadSettings(), 500);
       } else {
         UIUtils.showStatus('settings-status', saveData.message || 'Failed to add provider', 'error');
       }
@@ -400,6 +418,8 @@ export class SettingsManager {
       console.error('Failed to add search provider:', error);
       UIUtils.showStatus('settings-status', 'Error: ' + error.message, 'error');
     }
+    
+    return false;
   }
 
   /**
