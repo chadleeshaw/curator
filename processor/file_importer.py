@@ -102,7 +102,9 @@ class FileImporter:
 
         for pdf_path in pdf_files:
             try:
-                result = self.import_pdf(pdf_path, session, organization_pattern)
+                result = self.import_pdf(
+                    pdf_path, session, organization_pattern=organization_pattern
+                )
                 if result:
                     results["imported"] += 1
                     logger.info(f"Successfully imported: {pdf_path.name}")

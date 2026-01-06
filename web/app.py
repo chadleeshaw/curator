@@ -13,7 +13,7 @@ from core.config import ConfigLoader
 from core.database import DatabaseManager
 from core.factory import ClientFactory, ProviderFactory
 from core.matching import TitleMatcher
-from models.database import Magazine
+from models.database import Magazine, MagazineTracking
 from processor.download_manager import DownloadManager
 from processor.download_monitor import DownloadMonitorTask
 from processor.file_importer import FileImporter
@@ -188,10 +188,14 @@ async def lifespan(app: FastAPI):
                         logger.debug("Auto-download: Checking tracked periodicals for new issues")
 
                         # Get all tracked periodicals with auto-download enabled
-                        tracked = db_session.query(MagazineTracking).filter(
-                            (MagazineTracking.track_all_editions == True) |
-                            (MagazineTracking.track_new_only == True)
-                        ).all()
+                        tracked = (
+                            db_session.query(MagazineTracking)
+                            .filter(
+                                (MagazineTracking.track_all_editions.is_(True))
+                                | (MagazineTracking.track_new_only.is_(True))
+                            )
+                            .all()
+                        )
 
                         if tracked:
                             logger.info(f"Auto-download: Found {len(tracked)} periodicals to check")
