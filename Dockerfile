@@ -25,6 +25,9 @@ RUN mkdir -p \
     /app/local/cache \
     /app/local/logs
 
+# Copy sample config as default if no config exists
+RUN cp config.sample.yaml /app/local/config/config.yaml
+
 # Environment variables with defaults
 ENV CURATOR_CONFIG_PATH=/app/local/config/config.yaml \
     CURATOR_DB_PATH=/app/local/config/periodicals.db \
