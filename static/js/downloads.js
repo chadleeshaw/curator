@@ -387,9 +387,15 @@ export class DownloadsManager {
     } else {
       filteredItems.forEach((item) => {
         const statusColor = this.getStatusColor(item.status);
+        // If title is just the magazine name, add submission ID for clarity
+        let displayTitle = item.title;
+        if (item.title === item.magazine || item.title === periodical) {
+          const date = item.created_at ? new Date(item.created_at).toLocaleDateString() : '';
+          displayTitle = `${item.title} <span style="color: var(--text-secondary); font-size: 0.85em;">(#${item.submission_id}${date ? ' - ' + date : ''})</span>`;
+        }
         html += `
           <tr>
-            <td style="padding: 10px; border-bottom: 1px solid var(--border-color);">${item.title}</td>
+            <td style="padding: 10px; border-bottom: 1px solid var(--border-color);">${displayTitle}</td>
             <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
               <span style="background: ${statusColor}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.85em;">${item.status}</span>
             </td>
