@@ -87,6 +87,9 @@ class MagazineTracking(Base):
     )  # Auto-download only new/future editions
     selected_editions = Column(JSON, default={})  # Dict: {olid: True/False, ...}
     selected_years = Column(JSON, default=[])  # List of years to track
+    delete_from_client_on_completion = Column(
+        Boolean, default=False
+    )  # Delete from download client after completion or failure
 
     # Metadata
     periodical_metadata = Column(JSON, nullable=True)  # Full metadata from Open Library

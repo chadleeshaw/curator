@@ -10,7 +10,7 @@ from typing import Callable, Optional
 
 from sqlalchemy.orm import Session, sessionmaker
 
-from models.database import DownloadSubmission
+from models.database import DownloadSubmission, MagazineTracking
 from processor.download_manager import DownloadManager
 from processor.file_importer import FileImporter
 
@@ -231,6 +231,23 @@ class DownloadMonitorTask:
                         and previous_status != DownloadSubmission.StatusEnum.FAILED
                     ):
                         failed_count += 1
+
+                        # Check if we should delete from client after failure
+                        if submission.tracking_id:
+                            tracking = (
+                                session.query(MagazineTracking)
+                                .filter(MagazineTracking.id == submission.tracking_id)
+                                .first()
+                            )
+                            if tracking and tracking.delete_from_client_on_completion:
+                                try:
+                                    if self.download_manager.download_client.delete(submission.job_id):
+                                        logger.info(
+                                            f"[DownloadMonitor] Deleted failed job {submission.job_id} "
+                                            f"from download client"
+                                        )
+                                except Exception as e:
+                                    logger.error(f"Error deleting from client: {e}")
             except Exception as e:
                 logger.error(
                     f"Error updating status for job {submission.job_id}: {e}",
@@ -287,6 +304,23 @@ class DownloadMonitorTask:
 
                     # Mark submission as processed
                     self.download_manager.mark_processed(submission.id, session)
+
+                    # Check if we should delete from client after successful completion
+                    if submission.tracking_id:
+                        tracking = (
+                            session.query(MagazineTracking)
+                            .filter(MagazineTracking.id == submission.tracking_id)
+                            .first()
+                        )
+                        if tracking and tracking.delete_from_client_on_completion:
+                            try:
+                                if self.download_manager.download_client.delete(submission.job_id):
+                                    logger.info(
+                                        f"[DownloadMonitor] Deleted completed job {submission.job_id} "
+                                        f"from download client"
+                                    )
+                            except Exception as e:
+                                logger.error(f"Error deleting from client: {e}")
 
                     # Call optional callback (e.g., for database updates)
                     if self.import_callback:

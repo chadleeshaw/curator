@@ -20,28 +20,29 @@ export class ImportsManager {
    * Save import settings
    */
   async saveImportSettings() {
-    const pattern = document.getElementById('import-organize-pattern').value || 'data/{category}/{title}/{year}/';
+    const pattern =
+      document.getElementById('import-organize-pattern').value || 'data/{category}/{title}/{year}/';
     const messageDiv = document.getElementById('import-message');
-    
+
     try {
       const response = await fetch('/api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           import: {
-            organization_pattern: pattern
-          }
-        })
+            organization_pattern: pattern,
+          },
+        }),
       });
-      
+
       const _result = await response.json();
-      
+
       messageDiv.textContent = '✓ Organization pattern saved';
       messageDiv.style.background = '#e8f5e9';
       messageDiv.style.color = '#2e7d32';
       messageDiv.style.borderColor = '#4caf50';
       messageDiv.classList.remove('hidden');
-      
+
       setTimeout(() => {
         messageDiv.classList.add('hidden');
       }, 3000);
@@ -65,16 +66,16 @@ export class ImportsManager {
 
     try {
       const statusDiv = document.getElementById('import-status');
-      
+
       // Show importing status
       statusDiv.textContent = '📁 Importing from data directory...';
       statusDiv.style.background = 'var(--surface-variant)';
       statusDiv.style.color = 'var(--text-primary)';
       statusDiv.classList.remove('hidden');
-      
+
       // Close modal
       library.closeImportModal();
-      
+
       // Import from organize directory
       const response = await APIClient.authenticatedFetch('/api/import/from-organize-dir', {
         method: 'POST',

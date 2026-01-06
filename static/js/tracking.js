@@ -1,7 +1,7 @@
 /**
  * Tracking Module
  * Handles periodical tracking, metadata search, and issue downloads
- * 
+ *
  * NOTE: This is a working skeleton extracted from script.js lines 620-1650
  * Contains core functionality - may need additional methods added
  */
@@ -70,10 +70,10 @@ export class TrackingManager {
    */
   displaySearchResultsGrouped(results) {
     const container = document.getElementById('tracking-search-result');
-    
+
     // Extract unique periodical editions and group results
     const uniquePeriodicals = {};
-    
+
     results.forEach((result) => {
       // Extract clean title from the result title/filename
       let cleanTitle = result.title;
@@ -85,24 +85,20 @@ export class TrackingManager {
       }
 
       // Normalize title for deduplication
-      const normalizedKey = cleanTitle
-        .toLowerCase()
-        .replace(/\s+/g, ' ')
-        .trim();
+      const normalizedKey = cleanTitle.toLowerCase().replace(/\s+/g, ' ').trim();
 
       if (!uniquePeriodicals[normalizedKey]) {
         uniquePeriodicals[normalizedKey] = {
           displayTitle: cleanTitle,
           count: 0,
-          firstResult: result
+          firstResult: result,
         };
       }
       uniquePeriodicals[normalizedKey].count++;
     });
 
     // Convert to array and sort by count (most common first)
-    const periodicalsList = Object.values(uniquePeriodicals)
-      .sort((a, b) => b.count - a.count);
+    const periodicalsList = Object.values(uniquePeriodicals).sort((a, b) => b.count - a.count);
 
     container.innerHTML = '<h4>Select a Periodical Edition:</h4><div class="search-results"></div>';
     const resultsContainer = container.querySelector('.search-results');
@@ -110,7 +106,7 @@ export class TrackingManager {
     periodicalsList.forEach((periodical) => {
       const result = periodical.firstResult;
       const publisher = result.metadata?.publisher || '';
-      
+
       const div = document.createElement('div');
       div.className = 'result-item';
       div.style.padding = '15px';
@@ -122,7 +118,7 @@ export class TrackingManager {
       div.style.display = 'flex';
       div.style.justifyContent = 'space-between';
       div.style.alignItems = 'center';
-      
+
       div.innerHTML = `
         <div class="result-info">
           <h5 style="margin: 0 0 8px 0;">${periodical.displayTitle}</h5>
@@ -133,13 +129,14 @@ export class TrackingManager {
         </div>
         <div class="result-select" style="font-size: 24px; color: var(--primary);">→</div>
       `;
-      
-      div.onclick = () => this.chooseSearchResult({
-        ...result,
-        title: periodical.displayTitle,  // Override with clean title
-        publisher: publisher || ''  // Empty string if no publisher metadata
-      });
-      
+
+      div.onclick = () =>
+        this.chooseSearchResult({
+          ...result,
+          title: periodical.displayTitle, // Override with clean title
+          publisher: publisher || '', // Empty string if no publisher metadata
+        });
+
       resultsContainer.appendChild(div);
     });
   }
@@ -150,7 +147,7 @@ export class TrackingManager {
   displaySearchResults(results) {
     const container = document.getElementById('tracking-search-result');
     container.innerHTML = '<h4>Select a Periodical:</h4>';
-    
+
     results.forEach((result, _index) => {
       const div = document.createElement('div');
       div.style.padding = '15px';
@@ -159,13 +156,13 @@ export class TrackingManager {
       div.style.borderRadius = '8px';
       div.style.cursor = 'pointer';
       div.style.background = 'var(--surface)';
-      
+
       div.innerHTML = `
         <h5>${result.title}</h5>
         <p>${result.publisher || 'Unknown Publisher'}</p>
         <p style="color: var(--text-secondary);">${result.source || ''}</p>
       `;
-      
+
       div.onclick = () => this.chooseSearchResult(result);
       container.appendChild(div);
     });
@@ -176,14 +173,14 @@ export class TrackingManager {
    */
   async chooseSearchResult(result) {
     this.currentPeriodicalMetadata = result;
-    
+
     // Hide the search results
     document.getElementById('tracking-search-result').classList.add('hidden');
-    
+
     // Show Step 3 (Save Preferences)
     const saveStep = document.getElementById('save-step');
     const saveInfo = document.getElementById('save-info');
-    
+
     saveInfo.innerHTML = `
       <div style="padding: 15px; background: var(--surface); border-radius: 8px; border: 1px solid var(--border-color);">
         <h4 style="margin: 0 0 8px 0;">${result.title}</h4>
@@ -192,9 +189,9 @@ export class TrackingManager {
         </p>
       </div>
     `;
-    
+
     saveStep.classList.remove('hidden');
-    
+
     // Scroll to the save step
     saveStep.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
@@ -207,15 +204,19 @@ export class TrackingManager {
       UIUtils.showStatus('tracking-status', 'No periodical selected', 'error');
       return;
     }
-    
+
     // Get tracking mode from radio buttons
     const trackingModeElement = document.querySelector('input[name="tracking-mode"]:checked');
     const trackingMode = trackingModeElement ? trackingModeElement.value : 'all';
-    
+
     // Generate olid from title if not present
-    const olid = this.currentPeriodicalMetadata.olid || 
-                this.currentPeriodicalMetadata.title.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-    
+    const olid =
+      this.currentPeriodicalMetadata.olid ||
+      this.currentPeriodicalMetadata.title
+        .toLowerCase()
+        .replace(/\s+/g, '_')
+        .replace(/[^a-z0-9_]/g, '');
+
     const preferences = {
       olid: olid,
       title: this.currentPeriodicalMetadata.title,
@@ -226,13 +227,13 @@ export class TrackingManager {
       track_new_only: trackingMode === 'new',
       selected_editions: {},
       selected_years: [],
-      metadata: this.currentPeriodicalMetadata
+      metadata: this.currentPeriodicalMetadata,
     };
-    
+
     try {
       const response = await APIClient.post('/api/periodicals/tracking/save', preferences);
       const data = await response.json();
-      
+
       if (data.success) {
         UIUtils.showStatus('tracking-status', 'Tracking saved successfully', 'success');
 
@@ -307,8 +308,8 @@ export class TrackingManager {
       </div>
       <div class="tracked-card-buttons">
         <button onclick="editTracking(${tracked.id})" class="btn-small">✏️ Edit</button>
-        <button onclick='searchForIssues(${tracked.id}, "${tracked.title.replace(/"/g, '&quot;').replace(/'/g, "&#39;")}")' class="btn-small">🔍 Search Issues</button>
-        <button onclick='deleteTracking(${tracked.id}, "${tracked.title.replace(/"/g, '&quot;').replace(/'/g, "&#39;")}")' class="btn-small btn-danger">🗑️ Delete</button>
+        <button onclick='searchForIssues(${tracked.id}, "${tracked.title.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}")' class="btn-small">🔍 Search Issues</button>
+        <button onclick='deleteTracking(${tracked.id}, "${tracked.title.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}")' class="btn-small btn-danger">🗑️ Delete</button>
       </div>
     `;
 
@@ -321,15 +322,15 @@ export class TrackingManager {
   setSortField(field) {
     this.sortManager.field = field;
     this.sortManager.order = 'asc';
-    
-    document.querySelectorAll('.tracking-controls .sort-btn').forEach(btn => {
+
+    document.querySelectorAll('.tracking-controls .sort-btn').forEach((btn) => {
       btn.classList.remove('active');
     });
     const activeBtn = document.querySelector(`.tracking-controls [data-track-sort="${field}"]`);
     if (activeBtn) {
       activeBtn.classList.add('active');
     }
-    
+
     this.updateSortToggleButton();
     this.loadTrackedPeriodicals();
   }
@@ -358,7 +359,9 @@ export class TrackingManager {
    */
   async editTracking(trackingId) {
     try {
-      const response = await APIClient.authenticatedFetch(`/api/periodicals/tracking/${trackingId}`);
+      const response = await APIClient.authenticatedFetch(
+        `/api/periodicals/tracking/${trackingId}`
+      );
       const data = await response.json();
 
       if (data.success) {
@@ -375,6 +378,10 @@ export class TrackingManager {
         if (t.track_all_editions) mode = 'all';
         else if (t.track_new_only) mode = 'new';
         document.getElementById('edit-tracking-mode').value = mode;
+
+        // Set delete from client checkbox
+        document.getElementById('edit-delete-from-client').checked =
+          t.delete_from_client_on_completion || false;
 
         // Set organization pattern
         document.getElementById('edit-tracking-org-pattern').value = t.organization_pattern || '';
@@ -436,7 +443,7 @@ export class TrackingManager {
     const _issues = [];
     const issueMap = new Map();
 
-    results.forEach(result => {
+    results.forEach((result) => {
       const parsed = this.parseIssueTitle(result.title);
       if (parsed) {
         // Deduplicate by year-month-issue only (not URL) to group language variants
@@ -444,7 +451,9 @@ export class TrackingManager {
 
         if (!issueMap.has(key)) {
           // Extract language variant from title if present
-          const langMatch = result.title.match(/\b(German|Dutch|French|Spanish|Italian|English|DE|NL|FR|ES|IT|EN|USA|UK)\b/i);
+          const langMatch = result.title.match(
+            /\b(German|Dutch|French|Spanish|Italian|English|DE|NL|FR|ES|IT|EN|USA|UK)\b/i
+          );
           const language = langMatch ? langMatch[0] : '';
 
           issueMap.set(key, {
@@ -455,7 +464,7 @@ export class TrackingManager {
             publication_date: result.publication_date,
             already_downloaded: result.already_downloaded || false,
             language: language,
-            variants: [result] // Store all variants
+            variants: [result], // Store all variants
           });
         } else {
           // Add to variants if it's a different language edition
@@ -479,7 +488,7 @@ export class TrackingManager {
 
     // Group by year
     const grouped = {};
-    sortedIssues.forEach(issue => {
+    sortedIssues.forEach((issue) => {
       if (!grouped[issue.year]) {
         grouped[issue.year] = [];
       }
@@ -532,11 +541,27 @@ export class TrackingManager {
     }
 
     // Try to extract month
-    const monthMatch = title.match(/(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\s(\d{1,2})[\s.](?:20|19))/i);
+    const monthMatch = title.match(
+      /(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\s(\d{1,2})[\s.](?:20|19))/i
+    );
     if (monthMatch) {
-      const monthNames = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+      const monthNames = [
+        'january',
+        'february',
+        'march',
+        'april',
+        'may',
+        'june',
+        'july',
+        'august',
+        'september',
+        'october',
+        'november',
+        'december',
+      ];
       const lowerTitle = title.toLowerCase();
-      month = monthNames.findIndex(m => lowerTitle.includes(m)) + 1 || parseInt(monthMatch[1]) || 0;
+      month =
+        monthNames.findIndex((m) => lowerTitle.includes(m)) + 1 || parseInt(monthMatch[1]) || 0;
     }
 
     if (year) {
@@ -556,10 +581,11 @@ export class TrackingManager {
         { method: 'POST' }
       );
       const data = await response.json();
-      
+
       if (data.success) {
-        UIUtils.showStatus('tracking-status', 
-          `Issue ${track ? 'marked for' : 'removed from'} tracking (${data.total_selected} total)`, 
+        UIUtils.showStatus(
+          'tracking-status',
+          `Issue ${track ? 'marked for' : 'removed from'} tracking (${data.total_selected} total)`,
           'success'
         );
         setTimeout(() => UIUtils.hideStatus('tracking-status'), 2000);
@@ -589,22 +615,50 @@ export class TrackingManager {
 
     const years = Object.keys(groupedByYear).sort((a, b) => b - a);
 
-    years.forEach(year => {
+    years.forEach((year) => {
       const issues = groupedByYear[year];
       html += `<div style="margin-bottom: 20px;">
         <h4 style="color: var(--primary-color); margin-bottom: 10px;">📅 ${year}</h4>
         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px;">`;
 
-      issues.forEach(issue => {
+      issues.forEach((issue) => {
         // Create display label based on available information
         let displayLabel;
         if (issue.month > 0 && issue.issue > 0) {
           // Has both month and issue: "M11 #405"
-          const monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          const monthNames = [
+            '',
+            'Jan',
+            'Feb',
+            'Mar',
+            'Apr',
+            'May',
+            'Jun',
+            'Jul',
+            'Aug',
+            'Sep',
+            'Oct',
+            'Nov',
+            'Dec',
+          ];
           displayLabel = `${monthNames[issue.month]} #${issue.issue}`;
         } else if (issue.month > 0) {
           // Has month but no issue: "Nov 2025"
-          const monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          const monthNames = [
+            '',
+            'Jan',
+            'Feb',
+            'Mar',
+            'Apr',
+            'May',
+            'Jun',
+            'Jul',
+            'Aug',
+            'Sep',
+            'Oct',
+            'Nov',
+            'Dec',
+          ];
           displayLabel = `${monthNames[issue.month]} ${issue.year}`;
         } else if (issue.issue > 0) {
           // Has issue but no month: "#405"
@@ -618,17 +672,30 @@ export class TrackingManager {
         const isDownloaded = issue.already_downloaded;
 
         const backgroundColor = isLibraryOnly ? 'var(--surface)' : 'var(--surface-variant)';
-        const borderColor = isLibraryOnly ? 'var(--border-color)' : (isDownloaded ? '#4caf50' : 'transparent');
-        const opacity = isLibraryOnly ? '0.85' : (isDownloaded ? '0.7' : '1');
+        const borderColor = isLibraryOnly
+          ? 'var(--border-color)'
+          : isDownloaded
+            ? '#4caf50'
+            : 'transparent';
+        const opacity = isLibraryOnly ? '0.85' : isDownloaded ? '0.7' : '1';
         const textColor = isLibraryOnly ? 'var(--text-secondary)' : 'var(--text-primary)';
 
-        const providerDisplay = isLibraryOnly ? '' : `<div style="font-size: 10px; color: var(--text-secondary); margin-top: 6px;">${issue.provider}</div>`;
-        const statusBadge = isLibraryOnly ? '<div style="font-size: 10px; margin-top: 6px; color: var(--text-secondary); font-weight: 600;">📚 In Library</div>' : (isDownloaded ? '<div style="font-size: 10px; margin-top: 6px; color: #4caf50; font-weight: 600;">✓ Have</div>' : '');
+        const providerDisplay = isLibraryOnly
+          ? ''
+          : `<div style="font-size: 10px; color: var(--text-secondary); margin-top: 6px;">${issue.provider}</div>`;
+        const statusBadge = isLibraryOnly
+          ? '<div style="font-size: 10px; margin-top: 6px; color: var(--text-secondary); font-weight: 600;">📚 In Library</div>'
+          : isDownloaded
+            ? '<div style="font-size: 10px; margin-top: 6px; color: #4caf50; font-weight: 600;">✓ Have</div>'
+            : '';
 
         // Show language variants badge if multiple editions exist
-        const variantsBadge = issue.variants && issue.variants.length > 1 ?
-          `<div style="font-size: 10px; margin-top: 6px; color: var(--primary-color); font-weight: 600;">🌍 ${issue.variants.length} editions</div>` :
-          (issue.language ? `<div style="font-size: 10px; margin-top: 6px; color: var(--text-secondary);">${issue.language}</div>` : '');
+        const variantsBadge =
+          issue.variants && issue.variants.length > 1
+            ? `<div style="font-size: 10px; margin-top: 6px; color: var(--primary-color); font-weight: 600;">🌍 ${issue.variants.length} editions</div>`
+            : issue.language
+              ? `<div style="font-size: 10px; margin-top: 6px; color: var(--text-secondary);">${issue.language}</div>`
+              : '';
 
         let cardHtml = `<div style="
           padding: 12px;
@@ -736,21 +803,22 @@ export class TrackingManager {
 export const tracking = new TrackingManager();
 
 // Modal management functions
-window.closeEditTrackingModal = function() {
+window.closeEditTrackingModal = function () {
   document.getElementById('edit-tracking-modal').classList.add('hidden');
 };
 
-window.closeSearchIssuesModal = function() {
+window.closeSearchIssuesModal = function () {
   document.getElementById('search-issues-modal').classList.add('hidden');
 };
 
 // Save edited tracking
-window.saveEditedTracking = async function() {
+window.saveEditedTracking = async function () {
   const trackingId = document.getElementById('edit-tracking-id').value;
   const title = document.getElementById('edit-tracking-title').value;
   const publisher = document.getElementById('edit-tracking-publisher').value;
   const issn = document.getElementById('edit-tracking-issn').value;
   const mode = document.getElementById('edit-tracking-mode').value;
+  const deleteFromClient = document.getElementById('edit-delete-from-client').checked;
   const orgPattern = document.getElementById('edit-tracking-org-pattern').value.trim();
 
   try {
@@ -760,7 +828,8 @@ window.saveEditedTracking = async function() {
       issn,
       track_all_editions: mode === 'all',
       track_new_only: mode === 'new',
-      organization_pattern: orgPattern || null  // Send null if empty to use global default
+      delete_from_client_on_completion: deleteFromClient,
+      organization_pattern: orgPattern || null, // Send null if empty to use global default
     });
 
     const result = await response.json();
@@ -779,7 +848,7 @@ window.saveEditedTracking = async function() {
 };
 
 // Search for publisher metadata (from edit modal)
-window.searchPublisherMetadata = async function() {
+window.searchPublisherMetadata = async function () {
   const title = document.getElementById('edit-tracking-title').value;
   if (!title) {
     UIUtils.showStatus('tracking-status', 'Please enter a title', 'error');
@@ -834,7 +903,7 @@ window.searchPublisherMetadata = async function() {
 };
 
 // Show metadata search results modal
-window.showMetadataSearchResults = function(results, title) {
+window.showMetadataSearchResults = function (results, title) {
   // Create a modal to display search results
   const modalHTML = `
     <div id="metadata-results-modal" class="modal" style="display: flex;">
@@ -871,8 +940,8 @@ window.showMetadataSearchResults = function(results, title) {
       cursor: pointer;
       transition: background 0.2s;
     `;
-    resultDiv.onmouseover = () => resultDiv.style.background = 'var(--surface-variant)';
-    resultDiv.onmouseout = () => resultDiv.style.background = 'transparent';
+    resultDiv.onmouseover = () => (resultDiv.style.background = 'var(--surface-variant)');
+    resultDiv.onmouseout = () => (resultDiv.style.background = 'transparent');
 
     const titleP = document.createElement('p');
     titleP.style.cssText = 'margin: 0 0 8px 0; font-weight: 600; font-size: 15px;';
@@ -893,7 +962,8 @@ window.showMetadataSearchResults = function(results, title) {
 
     if (result.issn) {
       const issnP = document.createElement('p');
-      issnP.style.cssText = 'margin: 0 0 5px 0; font-size: 13px; font-weight: 500; color: var(--primary-color);';
+      issnP.style.cssText =
+        'margin: 0 0 5px 0; font-size: 13px; font-weight: 500; color: var(--primary-color);';
       issnP.textContent = `ISSN: ${result.issn}`;
       resultDiv.appendChild(issnP);
     }
@@ -911,11 +981,11 @@ window.showMetadataSearchResults = function(results, title) {
 };
 
 // Merge metadata results from different sources
-window.mergeMetadataResults = function(results) {
+window.mergeMetadataResults = function (results) {
   // Group results by title (case-insensitive)
   const grouped = new Map();
 
-  results.forEach(result => {
+  results.forEach((result) => {
     const titleKey = result.title.toLowerCase().trim();
 
     if (!grouped.has(titleKey)) {
@@ -926,7 +996,7 @@ window.mergeMetadataResults = function(results) {
         sources: [],
         publication_date: result.publication_date,
         url: result.url,
-        raw_metadata: result.raw_metadata || {}
+        raw_metadata: result.raw_metadata || {},
       });
     }
 
@@ -961,7 +1031,7 @@ window.mergeMetadataResults = function(results) {
 };
 
 // Select a metadata result and populate form
-window.selectMetadataResult = function(result) {
+window.selectMetadataResult = function (result) {
   // Populate the form fields with the selected result
   if (result.title) {
     document.getElementById('edit-tracking-title').value = result.title;
@@ -979,7 +1049,7 @@ window.selectMetadataResult = function(result) {
 };
 
 // Close metadata results modal
-window.closeMetadataModal = function() {
+window.closeMetadataModal = function () {
   const modal = document.getElementById('metadata-results-modal');
   if (modal) {
     modal.remove();
@@ -987,7 +1057,7 @@ window.closeMetadataModal = function() {
 };
 
 // Select and download issue with language variant selection
-window.selectIssueWithVariants = function(issueKey, alreadyDownloaded) {
+window.selectIssueWithVariants = function (issueKey, alreadyDownloaded) {
   const variants = window.issueVariants[issueKey];
 
   if (!variants || variants.length === 0) {
@@ -998,7 +1068,12 @@ window.selectIssueWithVariants = function(issueKey, alreadyDownloaded) {
   // If only one variant, download directly
   if (variants.length === 1) {
     const variant = variants[0];
-    window.selectIssue(variant.title, variant.provider, variant.url, variant.already_downloaded || alreadyDownloaded);
+    window.selectIssue(
+      variant.title,
+      variant.provider,
+      variant.url,
+      variant.already_downloaded || alreadyDownloaded
+    );
     return;
   }
 
@@ -1019,11 +1094,15 @@ window.selectIssueWithVariants = function(issueKey, alreadyDownloaded) {
   const optionsDiv = document.getElementById('variant-options');
   variants.forEach((variant, index) => {
     // Detect language
-    const langMatch = variant.title.match(/\b(German|Dutch|French|Spanish|Italian|English|DE|NL|FR|ES|IT|EN|USA|UK)\b/i);
+    const langMatch = variant.title.match(
+      /\b(German|Dutch|French|Spanish|Italian|English|DE|NL|FR|ES|IT|EN|USA|UK)\b/i
+    );
     const lang = langMatch ? langMatch[0].toUpperCase() : '';
 
     // Detect special editions (Traveler, Kids, etc.)
-    const editionMatch = variant.title.match(/\b(Traveler|Traveller|Kids|Junior|Special|History|Science)\b/i);
+    const editionMatch = variant.title.match(
+      /\b(Traveler|Traveller|Kids|Junior|Special|History|Science)\b/i
+    );
     const edition = editionMatch ? editionMatch[0] : '';
 
     // Build display label
@@ -1039,7 +1118,8 @@ window.selectIssueWithVariants = function(issueKey, alreadyDownloaded) {
     // Different styling for re-download vs new download
     if (isDownloaded) {
       btn.className = 'btn-secondary';
-      btn.style.cssText = 'width: 100%; text-align: left; padding: 15px; background: #4caf50; color: white; border: 2px solid #45a049;';
+      btn.style.cssText =
+        'width: 100%; text-align: left; padding: 15px; background: #4caf50; color: white; border: 2px solid #45a049;';
     } else {
       btn.className = 'btn-primary';
       btn.style.cssText = 'width: 100%; text-align: left; padding: 15px;';
@@ -1056,13 +1136,13 @@ window.selectIssueWithVariants = function(issueKey, alreadyDownloaded) {
   });
 };
 
-window.closeLangVariantModal = function() {
+window.closeLangVariantModal = function () {
   const modal = document.getElementById('language-variant-modal');
   if (modal) modal.remove();
 };
 
 // Select and download issue
-window.selectIssue = async function(title, provider, url, alreadyDownloaded) {
+window.selectIssue = async function (title, provider, url, alreadyDownloaded) {
   const isLibraryOnly = !url || url === '';
 
   if (isLibraryOnly) {
@@ -1074,7 +1154,8 @@ window.selectIssue = async function(title, provider, url, alreadyDownloaded) {
   // Build confirmation message with filename
   let confirmMessage = `<p><strong>File:</strong> ${title}</p><p><strong>Provider:</strong> ${provider}</p>`;
   if (alreadyDownloaded) {
-    confirmMessage += '<p style="color: #ff9800; margin-top: 10px;">⚠️ You already have this issue in your library.</p><p>Re-download it anyway?</p>';
+    confirmMessage +=
+      '<p style="color: #ff9800; margin-top: 10px;">⚠️ You already have this issue in your library.</p><p>Re-download it anyway?</p>';
   } else {
     confirmMessage += '<p style="margin-top: 10px;">Download this issue?</p>';
   }
@@ -1086,7 +1167,7 @@ window.selectIssue = async function(title, provider, url, alreadyDownloaded) {
 };
 
 // Download a single issue
-window.downloadIssue = async function(title, url, provider) {
+window.downloadIssue = async function (title, url, provider) {
   try {
     const trackingId = window.currentTrackingId;
     if (!trackingId) {

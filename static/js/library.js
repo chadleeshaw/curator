@@ -46,16 +46,16 @@ export class LibraryManager {
   setLibrarySortField(field) {
     this.sortManager.field = field;
     this.sortManager.order = 'asc';
-    
+
     // Update button active states
-    document.querySelectorAll('.library-controls .sort-btn').forEach(btn => {
+    document.querySelectorAll('.library-controls .sort-btn').forEach((btn) => {
       btn.classList.remove('active');
     });
     const activeBtn = document.querySelector(`.library-controls [data-lib-sort="${field}"]`);
     if (activeBtn) {
       activeBtn.classList.add('active');
     }
-    
+
     this.updateLibrarySortToggleButton();
     this.loadPeriodicals();
   }
@@ -76,9 +76,10 @@ export class LibraryManager {
     const btn = document.getElementById('library-sort-toggle');
     if (btn) {
       btn.textContent = this.sortManager.order === 'asc' ? '↑' : '↓';
-      btn.title = this.sortManager.order === 'asc' 
-        ? 'Ascending (click to descend)' 
-        : 'Descending (click to ascend)';
+      btn.title =
+        this.sortManager.order === 'asc'
+          ? 'Ascending (click to descend)'
+          : 'Descending (click to ascend)';
     }
   }
 
@@ -139,8 +140,8 @@ export class LibraryManager {
       e.stopPropagation();
       this.viewPeriodical(periodical.title);
     };
-    viewBtn.onmouseover = () => viewBtn.style.backgroundColor = 'var(--primary-dark)';
-    viewBtn.onmouseout = () => viewBtn.style.backgroundColor = 'var(--primary-color)';
+    viewBtn.onmouseover = () => (viewBtn.style.backgroundColor = 'var(--primary-dark)');
+    viewBtn.onmouseout = () => (viewBtn.style.backgroundColor = 'var(--primary-color)');
     actionsDiv.appendChild(viewBtn);
 
     // Delete button
@@ -160,8 +161,8 @@ export class LibraryManager {
       e.stopPropagation();
       this.deletePeriodical(periodical.id, periodical.title);
     };
-    deleteBtn.onmouseover = () => deleteBtn.style.backgroundColor = '#d32f2f';
-    deleteBtn.onmouseout = () => deleteBtn.style.backgroundColor = '#f44336';
+    deleteBtn.onmouseover = () => (deleteBtn.style.backgroundColor = '#d32f2f');
+    deleteBtn.onmouseout = () => (deleteBtn.style.backgroundColor = '#f44336');
     actionsDiv.appendChild(deleteBtn);
 
     info.appendChild(actionsDiv);
@@ -190,18 +191,18 @@ export class LibraryManager {
   deletePeriodical(periodicalId, title) {
     this.pendingDeleteId = periodicalId;
     this.pendingDeleteTitle = title;
-    
+
     const modal = document.getElementById('delete-modal');
     if (!modal) {
       console.error('Delete modal not found in DOM');
       return;
     }
-    
+
     const titleElement = document.getElementById('delete-modal-title');
     if (titleElement) {
       titleElement.textContent = `Are you sure you want to delete "${title}"?`;
     }
-    
+
     UIUtils.showModal('delete-modal');
   }
 
@@ -228,13 +229,13 @@ export class LibraryManager {
       console.error('No delete option selected');
       return;
     }
-    
+
     const deleteFiles = deleteOption.value === 'delete-files';
     const removeTracking = document.getElementById('delete-remove-tracking').checked;
 
     try {
       const response = await APIClient.authenticatedFetch(
-        `/api/periodicals/${this.pendingDeleteId}?delete_files=${deleteFiles}&remove_tracking=${removeTracking}`, 
+        `/api/periodicals/${this.pendingDeleteId}?delete_files=${deleteFiles}&remove_tracking=${removeTracking}`,
         { method: 'DELETE' }
       );
 
@@ -269,11 +270,11 @@ export class LibraryManager {
    */
   openImportModal() {
     UIUtils.showModal('import-options-modal');
-    
+
     // Set up event listeners for tracking options
     const autoTrackCheckbox = document.getElementById('import-auto-track');
     const trackingModeSelect = document.getElementById('import-tracking-mode');
-    
+
     // Sync tracking mode dropdown with checkbox
     const syncTrackingOptions = () => {
       if (autoTrackCheckbox.checked) {
@@ -283,10 +284,10 @@ export class LibraryManager {
         trackingModeSelect.value = 'none';
       }
     };
-    
+
     // Initial sync
     syncTrackingOptions();
-    
+
     // Add change listener
     autoTrackCheckbox.addEventListener('change', syncTrackingOptions);
   }

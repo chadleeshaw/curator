@@ -1,7 +1,7 @@
 /**
  * Settings Module
  * Handles application settings and provider configuration
- * 
+ *
  * NOTE: This is a working skeleton extracted from script.js settings section
  * Contains core functionality - provider management needs full implementation
  */
@@ -70,27 +70,27 @@ export class SettingsManager {
     if (config.config?.search_providers) {
       this.renderSearchProviders(config.config.search_providers);
     }
-    
+
     // Display download client config
     if (config.config?.download_client) {
       this.displayDownloadClient(config.config.download_client);
     }
-    
+
     // Display storage settings
     if (config.config?.storage) {
       this.displayStorageSettings(config.config.storage);
     }
-    
+
     // Display matching settings
     if (config.config?.matching) {
       this.displayMatchingSettings(config.config.matching);
     }
-    
+
     // Display logging settings
     if (config.config?.logging) {
       this.displayLoggingSettings(config.config.logging);
     }
-    
+
     // Display import settings
     if (config.config?.import) {
       this.displayImportSettings(config.config.import);
@@ -103,12 +103,12 @@ export class SettingsManager {
   renderSearchProviders(providers) {
     const list = document.getElementById('search-providers-list');
     if (!list) return;
-    
+
     list.innerHTML = '';
     providers.forEach((provider, index) => {
       const div = document.createElement('div');
       div.className = 'provider-block';
-      
+
       div.innerHTML = `
         <h4>${provider.name || 'Provider ' + (index + 1)}</h4>
         <div style="margin: 10px 0;">
@@ -146,7 +146,7 @@ export class SettingsManager {
           <button onclick="removeSearchProvider(${index})" class="btn-danger">Remove</button>
         </div>
       `;
-      
+
       list.appendChild(div);
     });
   }
@@ -159,7 +159,7 @@ export class SettingsManager {
     const nameInput = document.getElementById('download-client-name');
     const urlInput = document.getElementById('download-client-url');
     const apiKeyInput = document.getElementById('download-client-apikey');
-    
+
     if (typeSelect) typeSelect.value = clientConfig.type || 'sabnzbd';
     if (nameInput) nameInput.value = clientConfig.name || '';
     if (urlInput) urlInput.value = clientConfig.api_url || '';
@@ -178,7 +178,7 @@ export class SettingsManager {
     const downloadDir = document.getElementById('storage-download-dir');
     const organizeDir = document.getElementById('storage-organize-dir');
     const cacheDir = document.getElementById('storage-cache-dir');
-    
+
     if (dbPath) dbPath.value = storageConfig.db_path || '';
     if (downloadDir) downloadDir.value = storageConfig.download_dir || '';
     if (organizeDir) organizeDir.value = storageConfig.organize_dir || '';
@@ -199,7 +199,7 @@ export class SettingsManager {
   displayLoggingSettings(loggingConfig) {
     const level = document.getElementById('logging-level');
     const logFile = document.getElementById('logging-file');
-    
+
     if (level) level.value = loggingConfig.level || 'INFO';
     if (logFile) logFile.value = loggingConfig.log_file || '';
   }
@@ -209,7 +209,8 @@ export class SettingsManager {
    */
   displayImportSettings(importConfig) {
     const pattern = document.getElementById('import-organize-pattern');
-    if (pattern) pattern.value = importConfig.organization_pattern || 'data/{category}/{title}/{year}/';
+    if (pattern)
+      pattern.value = importConfig.organization_pattern || 'data/{category}/{title}/{year}/';
   }
 
   /**
@@ -219,7 +220,7 @@ export class SettingsManager {
     try {
       const response = await APIClient.post('/api/config', this.currentConfig);
       const data = await response.json();
-      
+
       if (data.success) {
         UIUtils.showStatus('settings-status', 'Settings saved successfully', 'success');
         setTimeout(() => UIUtils.hideStatus('settings-status'), 3000);
@@ -243,7 +244,7 @@ export class SettingsManager {
 
     const downloadClientConfig = {
       type,
-      api_url: url
+      api_url: url,
     };
 
     // Only include api_key if user entered a new one
@@ -256,7 +257,7 @@ export class SettingsManager {
 
     try {
       const response = await APIClient.post('/api/config', {
-        download_client: downloadClientConfig
+        download_client: downloadClientConfig,
       });
       const data = await response.json();
 
@@ -291,7 +292,7 @@ export class SettingsManager {
         type: this.currentConfig.config.search_providers[index].type,
         name: name,
         api_url: url,
-        enabled: enabled
+        enabled: enabled,
       };
 
       // Add categories if provided (optional field)
@@ -308,18 +309,26 @@ export class SettingsManager {
       }
 
       // Clone the current providers array and update the specific provider
-      const updatedProviders = JSON.parse(JSON.stringify(this.currentConfig.config.search_providers));
+      const updatedProviders = JSON.parse(
+        JSON.stringify(this.currentConfig.config.search_providers)
+      );
       updatedProviders[index] = providerUpdate;
 
       // Save config
-      const saveResponse = await APIClient.post('/api/config', { search_providers: updatedProviders });
+      const saveResponse = await APIClient.post('/api/config', {
+        search_providers: updatedProviders,
+      });
       const saveData = await saveResponse.json();
 
       if (saveData.success) {
         UIUtils.showStatus('settings-status', 'Search provider updated successfully', 'success');
         setTimeout(() => this.loadSettings(), 1500);
       } else {
-        UIUtils.showStatus('settings-status', saveData.message || 'Failed to update provider', 'error');
+        UIUtils.showStatus(
+          'settings-status',
+          saveData.message || 'Failed to update provider',
+          'error'
+        );
       }
     } catch (error) {
       console.error('Failed to update search provider:', error);
@@ -328,25 +337,36 @@ export class SettingsManager {
   }
 
   async removeSearchProvider(index) {
-    const confirmed = await UIUtils.confirm('Remove Provider', 'Are you sure you want to remove this search provider?');
+    const confirmed = await UIUtils.confirm(
+      'Remove Provider',
+      'Are you sure you want to remove this search provider?'
+    );
     if (!confirmed) {
       return;
     }
 
     try {
       // Clone the current providers array and remove the provider
-      const updatedProviders = JSON.parse(JSON.stringify(this.currentConfig.config.search_providers));
+      const updatedProviders = JSON.parse(
+        JSON.stringify(this.currentConfig.config.search_providers)
+      );
       updatedProviders.splice(index, 1);
 
       // Save config
-      const saveResponse = await APIClient.post('/api/config', { search_providers: updatedProviders });
+      const saveResponse = await APIClient.post('/api/config', {
+        search_providers: updatedProviders,
+      });
       const saveData = await saveResponse.json();
 
       if (saveData.success) {
         UIUtils.showStatus('settings-status', 'Search provider removed successfully', 'success');
         setTimeout(() => this.loadSettings(), 1500);
       } else {
-        UIUtils.showStatus('settings-status', saveData.message || 'Failed to remove provider', 'error');
+        UIUtils.showStatus(
+          'settings-status',
+          saveData.message || 'Failed to remove provider',
+          'error'
+        );
       }
     } catch (error) {
       console.error('Failed to remove search provider:', error);
@@ -360,21 +380,21 @@ export class SettingsManager {
   addSearchProvider() {
     const modal = document.getElementById('add-provider-modal');
     const form = document.getElementById('add-provider-form');
-    
+
     // Reset form
     form.reset();
-    
+
     // Remove any existing submit handlers
     const newForm = form.cloneNode(true);
     form.parentNode.replaceChild(newForm, form);
-    
+
     // Set up form submission with proper binding
     newForm.addEventListener('submit', (e) => {
       e.preventDefault();
       this.submitAddProvider(e);
       return false;
     });
-    
+
     // Show modal
     modal.classList.remove('hidden');
   }
@@ -408,7 +428,7 @@ export class SettingsManager {
         name,
         api_url: apiUrl,
         api_key: apiKey,
-        enabled
+        enabled,
       };
 
       // Add categories if provided (optional field)
@@ -417,11 +437,15 @@ export class SettingsManager {
       }
 
       // Clone current providers array and add new provider
-      const updatedProviders = JSON.parse(JSON.stringify(this.currentConfig.config.search_providers));
+      const updatedProviders = JSON.parse(
+        JSON.stringify(this.currentConfig.config.search_providers)
+      );
       updatedProviders.push(newProvider);
 
       // Save config
-      const saveResponse = await APIClient.post('/api/config', { search_providers: updatedProviders });
+      const saveResponse = await APIClient.post('/api/config', {
+        search_providers: updatedProviders,
+      });
       if (!saveResponse || !saveResponse.ok) {
         const errorData = await saveResponse.json().catch(() => ({ message: 'Unknown error' }));
         throw new Error(errorData.message || 'Failed to save configuration');
@@ -434,7 +458,11 @@ export class SettingsManager {
         // Reload settings after a short delay
         setTimeout(() => this.loadSettings(), 500);
       } else {
-        UIUtils.showStatus('settings-status', saveData.message || 'Failed to add provider', 'error');
+        UIUtils.showStatus(
+          'settings-status',
+          saveData.message || 'Failed to add provider',
+          'error'
+        );
       }
     } catch (error) {
       console.error('Failed to add search provider:', error);
@@ -453,17 +481,17 @@ export class SettingsManager {
       const downloadDir = document.getElementById('storage-download-dir')?.value;
       const organizeDir = document.getElementById('storage-organize-dir')?.value;
       const cacheDir = document.getElementById('storage-cache-dir')?.value;
-      
+
       const storageConfig = {
         db_path: dbPath,
         download_dir: downloadDir,
         organize_dir: organizeDir,
-        cache_dir: cacheDir
+        cache_dir: cacheDir,
       };
-      
+
       const response = await APIClient.post('/api/config', { storage: storageConfig });
       const data = await response.json();
-      
+
       if (data.success) {
         UIUtils.showStatus('settings-status', 'Storage settings saved', 'success');
         setTimeout(() => UIUtils.hideStatus('settings-status'), 3000);
@@ -482,14 +510,14 @@ export class SettingsManager {
   async saveMatchingSettings() {
     try {
       const threshold = document.getElementById('matching-fuzzy-threshold')?.value;
-      
+
       const matchingConfig = {
-        fuzzy_threshold: parseInt(threshold) || 80
+        fuzzy_threshold: parseInt(threshold) || 80,
       };
-      
+
       const response = await APIClient.post('/api/config', { matching: matchingConfig });
       const data = await response.json();
-      
+
       if (data.success) {
         UIUtils.showStatus('settings-status', 'Matching settings saved', 'success');
         setTimeout(() => UIUtils.hideStatus('settings-status'), 3000);
@@ -509,15 +537,15 @@ export class SettingsManager {
     try {
       const level = document.getElementById('logging-level')?.value;
       const logFile = document.getElementById('logging-file')?.value;
-      
+
       const loggingConfig = {
         level: level || 'INFO',
-        log_file: logFile
+        log_file: logFile,
       };
-      
+
       const response = await APIClient.post('/api/config', { logging: loggingConfig });
       const data = await response.json();
-      
+
       if (data.success) {
         UIUtils.showStatus('settings-status', 'Logging settings saved', 'success');
         setTimeout(() => UIUtils.hideStatus('settings-status'), 3000);
@@ -575,7 +603,11 @@ export class SettingsManager {
       // If changing password, validate new password
       if (newPassword) {
         if (newPassword.length < 6) {
-          UIUtils.showStatus('settings-status', 'New password must be at least 6 characters', 'error');
+          UIUtils.showStatus(
+            'settings-status',
+            'New password must be at least 6 characters',
+            'error'
+          );
           return;
         }
 
@@ -586,7 +618,7 @@ export class SettingsManager {
       }
 
       const payload = {
-        current_password: currentPassword
+        current_password: currentPassword,
       };
 
       // Only include username if it changed
@@ -648,14 +680,18 @@ export class SettingsManager {
 
     try {
       UIUtils.showStatus('settings-status', 'Restarting application...', 'info');
-      
+
       const response = await APIClient.authenticatedFetch('/api/config/restart', {
-        method: 'POST'
+        method: 'POST',
       });
 
       if (response.ok) {
-        UIUtils.showStatus('settings-status', 'Application is restarting. Page will reload in a few seconds...', 'success');
-        
+        UIUtils.showStatus(
+          'settings-status',
+          'Application is restarting. Page will reload in a few seconds...',
+          'success'
+        );
+
         // Wait a bit then start polling for server availability
         setTimeout(() => {
           this.waitForServerRestart();
@@ -680,7 +716,11 @@ export class SettingsManager {
       try {
         const response = await fetch('/api/config');
         if (response.ok) {
-          UIUtils.showStatus('settings-status', 'Application restarted successfully. Reloading...', 'success');
+          UIUtils.showStatus(
+            'settings-status',
+            'Application restarted successfully. Reloading...',
+            'success'
+          );
           setTimeout(() => window.location.reload(), 1000);
           return;
         }
@@ -692,7 +732,11 @@ export class SettingsManager {
       if (attempts < maxAttempts) {
         setTimeout(checkServer, 2000);
       } else {
-        UIUtils.showStatus('settings-status', 'Restart taking longer than expected. Please refresh manually.', 'warning');
+        UIUtils.showStatus(
+          'settings-status',
+          'Restart taking longer than expected. Please refresh manually.',
+          'warning'
+        );
       }
     };
 

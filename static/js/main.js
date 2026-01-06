@@ -17,7 +17,7 @@ import { imports } from './imports.js';
  */
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('[Main] Application initializing...');
-  
+
   // Check authentication first
   const isAuthenticated = await AuthManager.checkAuthentication();
   if (!isAuthenticated) {
@@ -26,13 +26,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Initialize theme from localStorage
   UIUtils.initTheme();
-  
+
   // Check if there's a tab in the URL hash
   const hash = window.location.hash.substring(1);
   if (hash && ['library', 'tracking', 'tasks', 'settings'].includes(hash)) {
     // Show the tab from the hash
     const tabName = UIUtils.showTab(hash, null);
-    
+
     // Load data for specific tabs
     if (tabName === 'library') {
       library.loadPeriodicals();
@@ -51,11 +51,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     UIUtils.showTab('library', null);
     library.loadPeriodicals();
   }
-  
+
   // Load initial data for other tabs
   tracking.loadTrackedPeriodicals();
   settings.loadSettings();
-  
+
   // Close delete modal when clicking outside of it
   const modal = document.getElementById('delete-modal');
   if (modal) {
@@ -65,7 +65,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
   }
-  
+
   console.log('[Main] Application initialized successfully');
 });
 
@@ -75,9 +75,9 @@ window.addEventListener('hashchange', () => {
   if (hash) {
     // Stop any running auto-refresh when changing tabs
     downloads.stopAutoRefresh();
-    
+
     const tabName = UIUtils.showTab(hash, null);
-    
+
     // Load data for the tab if needed
     if (tabName === 'library') {
       library.loadPeriodicals();
@@ -102,7 +102,7 @@ window.__modules = {
   tasks,
   imports,
   AuthManager,
-  UIUtils
+  UIUtils,
 };
 
 console.log('[Main] Modules loaded:', Object.keys(window.__modules));

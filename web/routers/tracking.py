@@ -437,6 +437,10 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
                 tracking.issn = updates["issn"]
             if "track_all_editions" in updates:
                 tracking.track_all_editions = updates["track_all_editions"]
+            if "track_new_only" in updates:
+                tracking.track_new_only = updates["track_new_only"]
+            if "delete_from_client_on_completion" in updates:
+                tracking.delete_from_client_on_completion = updates["delete_from_client_on_completion"]
 
             db_session.commit()
             return {
@@ -448,6 +452,8 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
                     "publisher": tracking.publisher,
                     "issn": tracking.issn,
                     "track_all_editions": tracking.track_all_editions,
+                    "track_new_only": tracking.track_new_only,
+                    "delete_from_client_on_completion": tracking.delete_from_client_on_completion,
                 },
             }
         finally:

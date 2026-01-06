@@ -23,7 +23,7 @@ export class APIClient {
 
     return fetch(url, {
       ...options,
-      headers
+      headers,
     });
   }
 
@@ -43,9 +43,9 @@ export class APIClient {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+        Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify(data)
+      body: JSON.stringify(data),
     });
   }
 
@@ -58,9 +58,9 @@ export class APIClient {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+        Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify(data)
+      body: JSON.stringify(data),
     });
   }
 
@@ -69,7 +69,7 @@ export class APIClient {
    */
   static async delete(url) {
     return this.authenticatedFetch(url, {
-      method: 'DELETE'
+      method: 'DELETE',
     });
   }
 }

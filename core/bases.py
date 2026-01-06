@@ -90,6 +90,18 @@ class DownloadClient(ABC):
             List of dicts with keys: job_id, file_path, title
         """
 
+    @abstractmethod
+    def delete(self, job_id: str) -> bool:
+        """
+        Delete a job from the download client (queue or history).
+
+        Args:
+            job_id: Job ID to delete
+
+        Returns:
+            True if successfully deleted, False otherwise
+        """
+
     def get_client_info(self) -> Dict[str, Any]:
         """Get metadata about this client"""
         return {"type": self.type, "name": self.name}

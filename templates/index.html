@@ -409,6 +409,14 @@
                     <option value="none">Track Nothing - Monitor but don't auto-download</option>
                 </select>
             </div>
+            
+            <div class="settings-field">
+                <label>
+                    <input type="checkbox" id="edit-delete-from-client">
+                    Delete from download client after completion or failure
+                </label>
+                <p class="text-sm text-hint mt-8">Automatically removes completed/failed downloads from your download client history</p>
+            </div>
 
             <div class="settings-field">
                 <label for="edit-tracking-org-pattern">File Organization Pattern:</label>
@@ -567,6 +575,26 @@
             <div class="flex gap-10 justify-end">
                 <button onclick="closeDeleteModal()" class="save-btn btn-cancel flex-0">Cancel</button>
                 <button onclick="confirmDeletePeriodical()" class="save-btn btn-delete flex-0">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manage Queue Modal -->
+    <div id="manage-queue-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 900px;">
+            <span class="close" onclick="downloads.closeManageQueueModal()">&times;</span>
+            <div id="manage-queue-modal-content">
+                <!-- Content will be dynamically populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Manage Failed Downloads Modal -->
+    <div id="manage-failed-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 900px;">
+            <span class="close" onclick="downloads.closeManageFailedModal()">&times;</span>
+            <div id="manage-failed-modal-content">
+                <!-- Content will be dynamically populated by JavaScript -->
             </div>
         </div>
     </div>

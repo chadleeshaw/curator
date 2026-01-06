@@ -110,7 +110,7 @@ export class UIUtils {
     if (!statusDiv) return;
 
     statusDiv.classList.remove('hidden');
-    
+
     // Style based on type
     if (type === 'success') {
       statusDiv.style.background = '#e8f5e9';
@@ -128,7 +128,7 @@ export class UIUtils {
       statusDiv.style.borderColor = '#2196f3';
       statusDiv.textContent = `ℹ ${message}`;
     }
-    
+
     // Scroll to the status message so it's visible
     statusDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
@@ -257,7 +257,7 @@ export class SortManager {
   getSortParams() {
     return {
       field: this.field,
-      order: this.order
+      order: this.order,
     };
   }
 }

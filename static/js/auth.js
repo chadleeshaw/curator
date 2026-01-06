@@ -30,12 +30,12 @@ export class AuthManager {
    */
   static async checkAuthentication() {
     const token = this.getToken();
-    
+
     if (!token) {
       window.location.href = '/login.html';
       return false;
     }
-    
+
     return true;
   }
 

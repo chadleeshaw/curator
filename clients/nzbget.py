@@ -113,9 +113,7 @@ class NZBGetClient(DownloadClient):
                         return {
                             "status": "downloading",
                             "progress": int(
-                                group.get("DownloadedSize", 0)
-                                / max(group.get("FileSizeMB", 1) * 1024 * 1024, 1)
-                                * 100
+                                group.get("DownloadedSize", 0) / max(group.get("FileSizeMB", 1) * 1024 * 1024, 1) * 100
                             ),
                             "size": group.get("FileSizeMB"),
                         }
@@ -123,9 +121,7 @@ class NZBGetClient(DownloadClient):
                         return {
                             "status": "pending",
                             "progress": int(
-                                group.get("DownloadedSize", 0)
-                                / max(group.get("FileSizeMB", 1) * 1024 * 1024, 1)
-                                * 100
+                                group.get("DownloadedSize", 0) / max(group.get("FileSizeMB", 1) * 1024 * 1024, 1) * 100
                             ),
                         }
 
@@ -164,3 +160,35 @@ class NZBGetClient(DownloadClient):
             logger.error(f"Error getting completed downloads: {e}")
 
         return completed
+
+    def delete(self, job_id: str) -> bool:
+        """
+        Delete a job from NZBGet (queue or history).
+
+        Args:
+            job_id: NZBID to delete
+
+        Returns:
+            True if successfully deleted
+        """
+        try:
+            # Try deleting from history first
+            result = self._api_call("editqueue", ["HistoryDelete", 0, "", [int(job_id)]])
+
+            if result:
+                logger.info(f"[NZBGet] Deleted job {job_id} from history")
+                return True
+
+            # If not in history, try deleting from queue
+            result = self._api_call("editqueue", ["GroupDelete", 0, "", [int(job_id)]])
+
+            if result:
+                logger.info(f"[NZBGet] Deleted job {job_id} from queue")
+                return True
+
+            logger.warning(f"[NZBGet] Could not delete job {job_id} - not found")
+            return False
+
+        except Exception as e:
+            logger.error(f"[NZBGet] Error deleting job {job_id}: {e}")
+            return False
