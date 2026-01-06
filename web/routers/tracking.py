@@ -3,14 +3,14 @@ Periodical tracking routes
 """
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
 from models.database import MagazineTracking
 from models.database import SearchResult as DBSearchResult
-from web.schemas import TrackingPreferencesRequest
+from web.schemas import APIError, TrackingPreferencesRequest
 
 router = APIRouter(prefix="/api", tags=["tracking"])
 logger = logging.getLogger(__name__)
@@ -27,7 +27,27 @@ def set_dependencies(session_factory, search_providers):
     _search_providers = search_providers
 
 
-@router.post("/periodicals/track")
+@router.post(
+    "/periodicals/track",
+    summary="Start tracking a periodical",
+    description="Begin tracking a magazine, comic, or newspaper for automatic downloads.",
+    responses={
+        200: {
+            "description": "Tracking started successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": True,
+                        "message": "Started tracking Wired",
+                        "tracking_id": 1,
+                    }
+                }
+            },
+        },
+        400: {"description": "Invalid input", "model": APIError},
+        500: {"description": "Failed to start tracking", "model": APIError},
+    },
+)
 async def start_tracking_periodical(
     title: str = Query(...),
     publisher: Optional[str] = Query(None),
@@ -63,7 +83,7 @@ async def start_tracking_periodical(
                 track_all_editions=False,
                 selected_editions={},
                 selected_years=[],
-                last_metadata_update=datetime.utcnow(),
+                last_metadata_update=datetime.now(UTC),
             )
             db_session.add(tracking)
             db_session.commit()
@@ -86,7 +106,28 @@ async def start_tracking_periodical(
         )
 
 
-@router.get("/periodicals/tracked")
+@router.get(
+    "/periodicals/tracked",
+    summary="List tracked periodicals",
+    description="Get a paginated list of all periodicals currently being tracked.",
+    responses={
+        200: {
+            "description": "List retrieved successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": True,
+                        "tracked": [
+                            {"id": 1, "title": "Wired", "publisher": "Condé Nast"}
+                        ],
+                        "total": 1,
+                    }
+                }
+            },
+        },
+        500: {"description": "Failed to retrieve tracking list", "model": APIError},
+    },
+)
 async def list_tracked_periodicals(skip: int = 0, limit: int = 50) -> Dict[str, Any]:
     """List all tracked periodicals"""
     try:
@@ -233,7 +274,7 @@ async def save_tracking_preferences(
                 existing.selected_editions = request.selected_editions
                 existing.selected_years = request.selected_years
                 existing.periodical_metadata = request.metadata
-                existing.last_metadata_update = datetime.utcnow()
+                existing.last_metadata_update = datetime.now(UTC)
                 tracking = existing
             else:
                 tracking = MagazineTracking(
@@ -247,7 +288,7 @@ async def save_tracking_preferences(
                     selected_editions=request.selected_editions,
                     selected_years=request.selected_years,
                     periodical_metadata=request.metadata,
-                    last_metadata_update=datetime.utcnow(),
+                    last_metadata_update=datetime.now(UTC),
                 )
                 db_session.add(tracking)
 
@@ -391,7 +432,23 @@ async def get_tracking_details(tracking_id: int) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.delete("/periodicals/tracking/{tracking_id}")
+@router.delete(
+    "/periodicals/tracking/{tracking_id}",
+    summary="Stop tracking a periodical",
+    description="Remove a periodical from the tracking list. This does not delete downloaded files.",
+    responses={
+        200: {
+            "description": "Tracking stopped successfully",
+            "content": {
+                "application/json": {
+                    "example": {"success": True, "message": "Stopped tracking 'Wired'"}
+                }
+            },
+        },
+        404: {"description": "Tracking record not found", "model": APIError},
+        500: {"description": "Failed to delete tracking", "model": APIError},
+    },
+)
 async def delete_tracking(tracking_id: int) -> Dict[str, Any]:
     """Delete a magazine tracking record"""
     try:

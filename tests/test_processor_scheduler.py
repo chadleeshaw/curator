@@ -30,7 +30,7 @@ def test_schedule_periodic():
     assert scheduler.tasks["test_task"]["last_run"] is None
 
     print("Testing TaskScheduler.schedule_periodic()... ✓ PASS")
-    return True
+    pass
 
 
 def test_get_status():
@@ -55,7 +55,7 @@ def test_get_status():
     assert status["tasks"]["task2"]["last_run"] is None
 
     print("Testing TaskScheduler.get_status()... ✓ PASS")
-    return True
+    pass
 
 
 def test_start_and_stop():
@@ -86,13 +86,15 @@ def test_start_and_stop():
     asyncio.run(run_scheduler())
 
     # Task should have been called approximately 2-3 times (every 1 second for ~2.5 seconds)
-    assert call_count["count"] >= 2, f"Expected at least 2 calls, got {call_count['count']}"
+    assert (
+        call_count["count"] >= 2
+    ), f"Expected at least 2 calls, got {call_count['count']}"
 
     # Verify scheduler stopped
     assert scheduler.running is False
 
     print("Testing TaskScheduler.start()/stop()... ✓ PASS")
-    return True
+    pass
 
 
 def test_scheduler_error_handling():
@@ -123,11 +125,13 @@ def test_scheduler_error_handling():
     asyncio.run(run_scheduler_with_errors())
 
     # Task should still be rescheduled even after errors
-    assert error_log["count"] >= 2, f"Expected at least 2 calls despite errors, got {error_log['count']}"
+    assert (
+        error_log["count"] >= 2
+    ), f"Expected at least 2 calls despite errors, got {error_log['count']}"
     assert scheduler.running is False
 
     print("Testing TaskScheduler error handling... ✓ PASS")
-    return True
+    pass
 
 
 def test_multiple_tasks():
@@ -173,7 +177,7 @@ def test_multiple_tasks():
     assert len(status["tasks"]) == 3
 
     print("Testing TaskScheduler with multiple tasks... ✓ PASS")
-    return True
+    pass
 
 
 def test_task_intervals():
@@ -191,7 +195,7 @@ def test_task_intervals():
     assert status["tasks"]["slow_task"]["interval"] == 300
 
     print("Testing TaskScheduler task intervals... ✓ PASS")
-    return True
+    pass
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 fastapi==0.104.1
 uvicorn==0.24.0
+httpx<0.28.0  # Pin httpx for compatibility with starlette test client
 sqlalchemy==2.0.45
 pyyaml==6.0.1
 fuzzywuzzy==0.18.0

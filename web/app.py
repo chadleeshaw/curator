@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from core.auth import AuthManager
@@ -41,7 +42,7 @@ storage_config = config_loader.get_storage()
 matching_config = config_loader.get_matching()
 
 # Initialize database
-db_url = f"sqlite:///{storage_config.get('db_path', './data/magazines.db')}"
+db_url = f"sqlite:///{storage_config.get('db_path', './data/periodicals.db')}"
 db_manager = DatabaseManager(db_url)
 db_manager.create_tables()
 session_factory = db_manager.session_factory
@@ -142,11 +143,11 @@ async def lifespan(app: FastAPI):
         # Initialize other components
         title_matcher = TitleMatcher(matching_config.get("fuzzy_threshold", 80))
         file_processor = FileProcessor(
-            storage_config.get("organize_dir", "./magazines")
+            storage_config.get("organize_dir", "./_Magazines")
         )
         file_importer = FileImporter(
             downloads_dir=storage_config.get("download_dir", "./downloads"),
-            organize_base_dir=storage_config.get("organize_dir", "./magazines"),
+            organize_base_dir=storage_config.get("organize_dir", "./_Magazines"),
             fuzzy_threshold=matching_config.get("fuzzy_threshold", 80),
             organization_pattern=storage_config.get("organization_pattern"),
         )
@@ -311,8 +312,108 @@ async def lifespan(app: FastAPI):
         logger.error(f"Shutdown error: {e}")
 
 
-# Initialize FastAPI app
-app = FastAPI(title="Curator", lifespan=lifespan)
+# Initialize FastAPI app with comprehensive documentation
+app = FastAPI(
+    title="Curator - Periodical Management System",
+    description="""
+## Curator API
+
+A comprehensive periodical management system for discovering, downloading, and organizing
+magazines, comics, and newspapers.
+
+### Features
+
+* 🔍 **Multi-Provider Search** - Integrates with Newsnab APIs, RSS feeds, CrossRef, and Wikipedia
+* 📥 **Download Management** - Supports SABnzbd and NZBGet download clients
+* 📚 **Smart Organization** - Automatic file organization with metadata enrichment
+* 🎯 **Tracking System** - Monitor and automatically download specific periodicals
+* 🔐 **Secure Authentication** - JWT-based authentication with secure password hashing
+* 🚀 **Automated Tasks** - Background tasks for monitoring downloads and imports
+
+### Authentication
+
+Most endpoints require authentication. To get started:
+
+1. Create initial credentials: `POST /api/auth/setup`
+2. Login to get JWT token: `POST /api/auth/login`
+3. Include token in requests: `Authorization: Bearer <token>`
+
+### Quick Start
+
+1. Set up credentials
+2. Search for periodicals: `GET /api/search/periodicals`
+3. Start tracking: `POST /api/tracking/start`
+4. Download issues: `POST /api/downloads/all-issues`
+5. Monitor progress: `GET /api/downloads/status/{tracking_id}`
+    """,
+    version="1.0.0",
+    contact={
+        "name": "Curator Support",
+        "url": "https://github.com/chadleeshaw/curator",
+    },
+    license_info={
+        "name": "MIT License",
+        "url": "https://opensource.org/licenses/MIT",
+    },
+    openapi_tags=[
+        {
+            "name": "authentication",
+            "description": "User authentication and credential management",
+        },
+        {
+            "name": "search",
+            "description": "Search for periodicals across multiple providers",
+        },
+        {
+            "name": "tracking",
+            "description": "Track periodicals for automatic downloads",
+        },
+        {
+            "name": "downloads",
+            "description": "Manage download submissions and monitor progress",
+        },
+        {
+            "name": "periodicals",
+            "description": "View and manage organized periodicals",
+        },
+        {
+            "name": "imports",
+            "description": "Import and organize downloaded files",
+        },
+        {
+            "name": "config",
+            "description": "Application configuration and settings",
+        },
+        {
+            "name": "tasks",
+            "description": "Background task management and monitoring",
+        },
+    ],
+    lifespan=lifespan,
+    docs_url="/api/docs",  # Swagger UI
+    redoc_url="/api/redoc",  # ReDoc
+    openapi_url="/api/openapi.json",
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure this in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Add rate limiting middleware
+from web.middleware import RateLimitMiddleware
+
+app.add_middleware(
+    RateLimitMiddleware,
+    calls=60,  # 60 calls per minute for regular endpoints
+    period=60,
+    auth_calls=10,  # 10 calls per minute for auth endpoints
+    auth_period=60,
+)
 
 
 @app.get("/api/health")
@@ -356,10 +457,12 @@ async def get_status():
 
 
 # Include all routers
+# Note: tracking must come before periodicals to avoid route conflicts
+# (/periodicals/tracking must match before /periodicals/{magazine_id})
 app.include_router(auth.router)
 app.include_router(search.router)
-app.include_router(periodicals.router)
 app.include_router(tracking.router)
+app.include_router(periodicals.router)
 app.include_router(downloads.router)
 app.include_router(imports.router)
 app.include_router(tasks.router)

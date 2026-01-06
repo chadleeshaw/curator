@@ -53,7 +53,7 @@ class ConfigLoader:
         return client
 
     def get_storage(self) -> Dict[str, Any]:
-        """Get storage configuration with environment variable overrides"""
+        """Get storage configuration with environment variable overrides and validation"""
         storage = self.config.get("storage", {}).copy()
 
         # Environment variables override YAML config
@@ -65,6 +65,38 @@ class ConfigLoader:
             storage["organize_dir"] = os.environ["CURATOR_ORGANIZE_DIR"]
         if os.environ.get("CURATOR_CACHE_DIR"):
             storage["cache_dir"] = os.environ["CURATOR_CACHE_DIR"]
+
+        # Validate and create directories
+        for key in ["download_dir", "organize_dir", "cache_dir"]:
+            if key in storage:
+                dir_path = Path(storage[key])
+                try:
+                    dir_path.mkdir(parents=True, exist_ok=True)
+                    if not dir_path.is_dir():
+                        raise ValueError(
+                            f"{key} path exists but is not a directory: {dir_path}"
+                        )
+                    if not os.access(dir_path, os.W_OK):
+                        raise ValueError(f"{key} directory is not writable: {dir_path}")
+                    logger.debug(f"Validated {key}: {dir_path}")
+                except PermissionError as e:
+                    raise ValueError(
+                        f"Permission denied creating {key} directory: {dir_path}"
+                    ) from e
+
+        # Validate database path
+        if "db_path" in storage:
+            db_path = Path(storage["db_path"])
+            db_dir = db_path.parent
+            try:
+                db_dir.mkdir(parents=True, exist_ok=True)
+                if not os.access(db_dir, os.W_OK):
+                    raise ValueError(f"Database directory is not writable: {db_dir}")
+                logger.debug(f"Validated db_path: {db_path}")
+            except PermissionError as e:
+                raise ValueError(
+                    f"Permission denied creating database directory: {db_dir}"
+                ) from e
 
         return storage
 

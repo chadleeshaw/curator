@@ -4,9 +4,10 @@ from pathlib import Path  # noqa: E402
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import logging
+
 # Suppress debug logging to reduce output
 logging.basicConfig(level=logging.WARNING)
-logging.getLogger('urllib3').setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 from core.config import ConfigLoader  # noqa: E402
 from core.factory import ProviderFactory  # noqa: E402
@@ -23,7 +24,9 @@ print("Testing WikipediaProvider.__init__()...", end=" ")
 try:
     config_loader = ConfigLoader()
     metadata_providers_config = config_loader.get_metadata_providers()
-    wiki_config = next((p for p in metadata_providers_config if p.get("type") == "wikipedia"), None)
+    wiki_config = next(
+        (p for p in metadata_providers_config if p.get("type") == "wikipedia"), None
+    )
 
     if wiki_config:
         provider = WikipediaProvider(wiki_config)
@@ -72,7 +75,9 @@ except Exception as e:
 # CrossRef tests
 print("Testing CrossRefProvider.__init__()...", end=" ")
 try:
-    crossref_config = next((p for p in metadata_providers_config if p.get("type") == "crossref"), None)
+    crossref_config = next(
+        (p for p in metadata_providers_config if p.get("type") == "crossref"), None
+    )
 
     if crossref_config:
         provider = CrossRefProvider(crossref_config)
@@ -110,7 +115,7 @@ try:
             "ISSN": ["0028-0836"],
             "publisher": "Nature Publishing Group",
             "URL": "https://www.nature.com",
-            "coverage": {}
+            "coverage": {},
         }
         result = provider._parse_journal_item(test_item)
         assert result is not None

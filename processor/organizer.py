@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 from datetime import datetime
 from pathlib import Path
@@ -37,8 +38,28 @@ class FileProcessor:
 
         Returns:
             Tuple of (pdf_path, jpg_path)
+
+        Raises:
+            FileNotFoundError: If source file doesn't exist
+            ValueError: If source path is invalid or not a file
         """
         source = Path(source_path)
+
+        # Validate source file exists
+        if not source.exists():
+            raise FileNotFoundError(f"Source file not found: {source_path}")
+
+        # Validate source is a file (not a directory)
+        if not source.is_file():
+            raise ValueError(f"Source path is not a file: {source_path}")
+
+        # Validate file is readable
+        if not os.access(source, os.R_OK):
+            raise ValueError(f"Source file is not readable: {source_path}")
+
+        # Validate title is not empty
+        if not title or not title.strip():
+            raise ValueError("Title cannot be empty")
 
         # Generate filename: {Title} - {MonYear}
         month = issue_date.strftime("%b")  # Jan, Feb, Mar, etc.

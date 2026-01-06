@@ -3,13 +3,14 @@ Download management routes
 """
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException
 
 from models.database import DownloadSubmission, MagazineTracking
 from web.schemas import (
+    APIError,
     DownloadAllIssuesRequest,
     DownloadSingleIssueRequest,
     DownloadSubmissionResponse,
@@ -32,7 +33,28 @@ def set_dependencies(session_factory, download_manager, download_client):
     _download_client = download_client
 
 
-@router.post("/all-issues")
+@router.post(
+    "/all-issues",
+    summary="Download all issues of a periodical",
+    description="Search providers and download all available issues of a tracked periodical.",
+    responses={
+        200: {
+            "description": "Download submissions created",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": True,
+                        "submitted": 5,
+                        "duplicates": 2,
+                        "failed": 0,
+                    }
+                }
+            },
+        },
+        404: {"description": "Tracking record not found", "model": APIError},
+        503: {"description": "Download manager not available", "model": APIError},
+    },
+)
 async def download_all_periodical_issues(
     request: DownloadAllIssuesRequest,
 ) -> Dict[str, Any]:
@@ -343,9 +365,7 @@ async def cleanup_old_submissions(
     try:
         db_session = _session_factory()
         try:
-            from datetime import timedelta
-
-            cutoff_date = datetime.utcnow() - timedelta(days=days_old)
+            cutoff_date = datetime.now(UTC) - timedelta(days=days_old)
 
             query = db_session.query(DownloadSubmission).filter(
                 DownloadSubmission.created_at < cutoff_date

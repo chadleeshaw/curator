@@ -19,7 +19,7 @@ config_loader = ConfigLoader()
 storage_config = config_loader.get_storage()
 
 # Extract paths from config
-db_path = Path(storage_config.get("db_path", "./local/config/magazines.db"))
+db_path = Path(storage_config.get("db_path", "./local/config/periodicals.db"))
 download_dir = Path(storage_config.get("download_dir", "./local/downloads"))
 organize_dir = Path(storage_config.get("organize_dir", "./local/data"))
 cache_dir = Path(storage_config.get("cache_dir", "./local/cache"))

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Test FileImporter processor with various organization patterns"""
 import sys
-sys.path.insert(0, '.')
+
+sys.path.insert(0, ".")
 
 import logging
 import tempfile
@@ -29,22 +30,13 @@ try:
         temp_pdf = Path(tmpdir) / TEST_PDF.name
         shutil.copy2(TEST_PDF, temp_pdf)
 
-        importer = FileImporter(
-            downloads_dir=tmpdir,
-            organize_base_dir=tmpdir
-        )
+        importer = FileImporter(downloads_dir=tmpdir, organize_base_dir=tmpdir)
 
-        metadata = {
-            "title": "National Geographic",
-            "issue_date": datetime(2000, 1, 15)
-        }
+        metadata = {"title": "National Geographic", "issue_date": datetime(2000, 1, 15)}
 
         # Test pattern: data/{category}/{title}/{year}/
         organized = importer._organize_file(
-            temp_pdf,
-            metadata,
-            "Magazines",
-            pattern="data/{category}/{title}/{year}/"
+            temp_pdf, metadata, "Magazines", pattern="data/{category}/{title}/{year}/"
         )
 
         assert organized is not None
@@ -74,7 +66,9 @@ try:
         importer = FileImporter(tmpdir, tmpdir)
 
         # Test Pattern 1: "Title - MonYear"
-        meta1 = importer._extract_metadata_from_filename("National Geographic - Dec2000")
+        meta1 = importer._extract_metadata_from_filename(
+            "National Geographic - Dec2000"
+        )
         assert meta1["title"] == "National Geographic"
         assert meta1["issue_date"].month == 12
         assert meta1["issue_date"].year == 2000
@@ -120,10 +114,7 @@ print("Testing organization patterns with real PDF...", end=" ")
 try:
     from processor.file_importer import FileImporter
 
-    metadata = {
-        "title": "National Geographic",
-        "issue_date": datetime(2000, 1, 15)
-    }
+    metadata = {"title": "National Geographic", "issue_date": datetime(2000, 1, 15)}
 
     # Test multiple pattern formats
     patterns = [
@@ -167,15 +158,14 @@ try:
 
     config_loader = ConfigLoader()
     import_config = config_loader.config.get("import", {})
-    pattern = import_config.get("organization_pattern", "data/{category}/{title}/{year}/")
+    pattern = import_config.get(
+        "organization_pattern", "data/{category}/{title}/{year}/"
+    )
 
     with tempfile.TemporaryDirectory() as tmpdir:
         importer = FileImporter(tmpdir, tmpdir)
 
-        metadata = {
-            "title": "National Geographic",
-            "issue_date": datetime(2000, 1, 15)
-        }
+        metadata = {"title": "National Geographic", "issue_date": datetime(2000, 1, 15)}
 
         # Copy test PDF to temp directory
         temp_pdf = Path(tmpdir) / TEST_PDF.name
@@ -184,7 +174,9 @@ try:
         result = importer._organize_file(temp_pdf, metadata, "Magazines", pattern)
         assert result is not None
         assert "Magazines" in str(result)
-        assert "National Geographic" in str(result) or "National_Geographic" in str(result)
+        assert "National Geographic" in str(result) or "National_Geographic" in str(
+            result
+        )
         assert "2000" in str(result)
 
         # Verify file was moved

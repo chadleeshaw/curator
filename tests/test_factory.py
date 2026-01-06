@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Test ProviderFactory functionality"""
 import sys
-sys.path.insert(0, '.')
+
+sys.path.insert(0, ".")
 
 from core.config import ConfigLoader  # noqa: E402
 from core.factory import ProviderFactory, ClientFactory  # noqa: E402
@@ -25,7 +26,7 @@ try:
     for provider_config in search_config[:1]:  # Test first one
         provider = ProviderFactory.create(provider_config)
         assert isinstance(provider, SearchProvider)
-        assert hasattr(provider, 'search')
+        assert hasattr(provider, "search")
         assert provider.type == provider_config.get("type")
         assert provider.name == provider_config.get("name")
         created_count += 1
@@ -47,7 +48,7 @@ try:
     for provider_config in metadata_config:
         provider = ProviderFactory.create(provider_config)
         assert isinstance(provider, SearchProvider)
-        assert hasattr(provider, 'search')
+        assert hasattr(provider, "search")
         assert provider.type == provider_config.get("type")
         created_count += 1
 
@@ -82,9 +83,9 @@ try:
 
     client = ClientFactory.create(client_config)
     assert isinstance(client, DownloadClient)
-    assert hasattr(client, 'submit')
-    assert hasattr(client, 'get_status')
-    assert hasattr(client, 'get_completed_downloads')
+    assert hasattr(client, "submit")
+    assert hasattr(client, "get_status")
+    assert hasattr(client, "get_completed_downloads")
     assert client.type == client_config.get("type")
     print("✓ PASS")
     results["create_download_client"] = True

@@ -103,16 +103,14 @@ async def get_import_status() -> Dict[str, Any]:
 @router.post("/from-organize-dir")
 async def import_from_organize_dir(
     background_tasks: BackgroundTasks,
-    auto_track: bool = True,
-    organization_pattern: str = None,
+    options: ImportOptionsRequest,
 ) -> Dict[str, Any]:
     """
     Import PDFs from the organized data directory back into the library.
     Useful for syncing files that exist in the organize directory but aren't in the database.
 
     Args:
-        auto_track: Whether to auto-track newly imported periodicals
-        organization_pattern: Optional organization pattern override for this import
+        options: Import options including auto_track, tracking_mode, and organization_pattern
 
     Returns:
         Status of import operation
@@ -141,15 +139,16 @@ async def import_from_organize_dir(
         def process_organize_dir_imports():
             """Background task to process imports from organize directory"""
             try:
+                logger.info(f"Import settings: auto_track={options.auto_track}, tracking_mode={options.tracking_mode}")
                 db_session = _session_factory()
                 try:
                     # Temporarily override organization pattern if provided
                     original_pattern = _file_importer.organization_pattern
-                    if organization_pattern:
-                        _file_importer.organization_pattern = organization_pattern
+                    if options.organization_pattern:
+                        _file_importer.organization_pattern = options.organization_pattern
 
                     results = _file_importer.process_organized_files(
-                        db_session, auto_track=auto_track
+                        db_session, auto_track=options.auto_track, tracking_mode=options.tracking_mode
                     )
                     logger.info(
                         f"Organize directory import results: {results['imported']} imported, {results['failed']} failed"

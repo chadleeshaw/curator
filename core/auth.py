@@ -2,7 +2,7 @@
 Authentication module for managing login credentials
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Optional, Tuple
 
 import jwt
@@ -78,8 +78,8 @@ class AuthManager:
         """Create a JWT token for authenticated user"""
         payload = {
             "username": username,
-            "iat": datetime.utcnow(),
-            "exp": datetime.utcnow() + timedelta(hours=TOKEN_EXPIRATION_HOURS),
+            "iat": datetime.now(UTC),
+            "exp": datetime.now(UTC) + timedelta(hours=TOKEN_EXPIRATION_HOURS),
         }
         token = jwt.encode(payload, self.jwt_secret, algorithm=JWT_ALGORITHM)
         return token
@@ -115,7 +115,7 @@ class AuthManager:
                 return False, "Current password is incorrect"
 
             creds.set_password(new_password)
-            creds.updated_at = datetime.utcnow()
+            creds.updated_at = datetime.now(UTC)
             session.commit()
             return True, "Password updated successfully"
         except Exception as e:
@@ -143,7 +143,7 @@ class AuthManager:
                 return False, "Username already exists"
 
             creds.username = new_username
-            creds.updated_at = datetime.utcnow()
+            creds.updated_at = datetime.now(UTC)
             session.commit()
             return True, "Username updated successfully"
         except Exception as e:

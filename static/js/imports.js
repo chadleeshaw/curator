@@ -45,7 +45,7 @@ export class ImportsManager {
       setTimeout(() => {
         messageDiv.classList.add('hidden');
       }, 3000);
-    } catch (err) {
+    } catch {
       messageDiv.textContent = '✗ Error saving settings';
       messageDiv.style.background = '#ffebee';
       messageDiv.style.color = '#c62828';
@@ -60,6 +60,7 @@ export class ImportsManager {
   async startImportWithOptions() {
     const _category = document.getElementById('import-category').value;
     const autoTrack = document.getElementById('import-auto-track').checked;
+    const trackingMode = document.getElementById('import-tracking-mode').value;
     const organizationPattern = document.getElementById('import-modal-organize-pattern').value;
 
     try {
@@ -79,7 +80,8 @@ export class ImportsManager {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          auto_track: autoTrack,
+          auto_track: autoTrack && trackingMode !== 'none',
+          tracking_mode: trackingMode,
           organization_pattern: organizationPattern || null,
         }),
       });

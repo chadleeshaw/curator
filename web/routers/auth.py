@@ -7,6 +7,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Header, HTTPException
 
 from web.schemas import (
+    APIError,
+    APIResponse,
     ChangePasswordRequest,
     CreateCredentialsRequest,
     LoginRequest,
@@ -44,7 +46,17 @@ async def verify_token(authorization: Optional[str] = Header(None)) -> str:
     return username
 
 
-@router.get("/status")
+@router.get(
+    "/status",
+    summary="Check authentication status",
+    description="Check if initial credentials have been set up",
+    responses={
+        200: {
+            "description": "Authentication status retrieved",
+            "content": {"application/json": {"example": {"credentials_exist": True}}},
+        }
+    },
+)
 async def auth_status():
     """Check if credentials are set up"""
     return {"credentials_exist": _auth_manager.credentials_exist()}
@@ -59,7 +71,15 @@ async def get_login_mode():
         return {"mode": "setup"}
 
 
-@router.post("/setup")
+@router.post(
+    "/setup",
+    summary="Set up initial credentials",
+    description="Create the first user account. Can only be called once.",
+    responses={
+        200: {"description": "Credentials created successfully"},
+        400: {"description": "Credentials already exist", "model": APIError},
+    },
+)
 async def setup_credentials(request: CreateCredentialsRequest):
     """Set up initial login credentials"""
     if _auth_manager.credentials_exist():

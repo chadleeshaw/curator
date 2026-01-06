@@ -123,6 +123,8 @@ class FileImporter:
         session: Session,
         organization_pattern: Optional[str] = None,
         auto_track: bool = True,
+        skip_organize: bool = False,
+        tracking_mode: str = "all",
     ) -> bool:
         """
         Import a single PDF file.
@@ -132,6 +134,8 @@ class FileImporter:
             session: Database session
             organization_pattern: Optional custom organization pattern with tags like {category}, {title}, {year}
             auto_track: Whether to auto-create tracking records for imported periodicals
+            skip_organize: If True, skip file organization and use file in place (for already-organized files)
+            tracking_mode: Tracking mode - "all" (track all editions), "new" (track new only), "watch" (watch only), "none" (no tracking)
 
         Returns:
             True if successful, False otherwise
@@ -164,13 +168,19 @@ class FileImporter:
             # Categorize the file
             category = self._categorize_file(standardized_title)
 
-            # Organize the file
-            organized_path = self._organize_file(
-                pdf_path, metadata, category, organization_pattern
-            )
+            # Organize the file (skip if already organized)
+            if skip_organize:
+                # Use file in place - already organized
+                organized_path = pdf_path
+                logger.info(f"Using file in place (already organized): {pdf_path}")
+            else:
+                # Organize the file to new location
+                organized_path = self._organize_file(
+                    pdf_path, metadata, category, organization_pattern
+                )
 
-            if not organized_path:
-                return False
+                if not organized_path:
+                    return False
 
             # Add to database
             magazine = Magazine(
@@ -191,34 +201,57 @@ class FileImporter:
 
             logger.info(f"Added to database: {standardized_title} ({category})")
 
-            # Also create a tracking record for this periodical if auto_track is enabled and not already tracking it
+            # Manage tracking record based on import settings
+            olid = standardized_title.lower().replace(" ", "_").replace("-", "_")
+            existing_tracking = (
+                session.query(MagazineTracking)
+                .filter(MagazineTracking.olid == olid)
+                .first()
+            )
+            
             if auto_track:
-                olid = standardized_title.lower().replace(" ", "_").replace("-", "_")
-                existing_tracking = (
-                    session.query(MagazineTracking)
-                    .filter(MagazineTracking.olid == olid)
-                    .first()
-                )
+                # Create or update tracking record
                 if not existing_tracking:
+                    # Set tracking flags based on mode
+                    track_all_editions = tracking_mode == "all"
+                    track_new_only = tracking_mode == "new"
+                    # watch mode means track_all_editions=False and track_new_only=False
+                    
                     tracking = MagazineTracking(
                         olid=olid,
                         title=standardized_title,
                         publisher=metadata.get("publisher"),
-                        track_all_editions=True,  # Auto-import all editions for imported periodicals
+                        track_all_editions=track_all_editions,
+                        track_new_only=track_new_only,
                         selected_editions={},
                         selected_years=[],
                         last_metadata_update=datetime.now(),
                     )
                     session.add(tracking)
                     session.commit()
-                    logger.info(f"Created tracking record for: {standardized_title}")
+                    logger.info(f"Created tracking record for: {standardized_title} (mode: {tracking_mode})")
+                else:
+                    # Update existing tracking record with new mode
+                    existing_tracking.track_all_editions = tracking_mode == "all"
+                    existing_tracking.track_new_only = tracking_mode == "new"
+                    existing_tracking.last_metadata_update = datetime.now()
+                    session.commit()
+                    logger.info(f"Updated tracking record for: {standardized_title} (mode: {tracking_mode})")
+            else:
+                # If auto_track is disabled, remove any existing tracking record
+                if existing_tracking:
+                    session.delete(existing_tracking)
+                    session.commit()
+                    logger.info(f"Removed tracking record for: {standardized_title} (tracking disabled)")
 
             # Delete the original PDF from downloads folder after successful import
-            try:
-                pdf_path.unlink()
-                logger.info(f"Deleted original PDF from downloads: {pdf_path.name}")
-            except Exception as e:
-                logger.warning(f"Failed to delete original PDF {pdf_path.name}: {e}")
+            # (but only if we organized/moved it)
+            if not skip_organize:
+                try:
+                    pdf_path.unlink()
+                    logger.info(f"Deleted original PDF from downloads: {pdf_path.name}")
+                except Exception as e:
+                    logger.warning(f"Failed to delete original PDF {pdf_path.name}: {e}")
 
             return True
 
@@ -445,7 +478,7 @@ class FileImporter:
             return None
 
     def process_organized_files(
-        self, session: Session, auto_track: bool = True
+        self, session: Session, auto_track: bool = True, tracking_mode: str = "all"
     ) -> Dict[str, Any]:
         """
         Process PDF files from organized folders (e.g., _Magazines, _Comics, _Articles, _News).
@@ -454,6 +487,7 @@ class FileImporter:
         Args:
             session: Database session
             auto_track: Whether to auto-create tracking records for imported periodicals
+            tracking_mode: Tracking mode - "all" (track all editions), "new" (track new only), "watch" (watch only), "none" (no tracking)
 
         Returns:
             Dict with import results
@@ -475,13 +509,14 @@ class FileImporter:
 
         for pdf_path in pdf_files:
             try:
-                # Use stored organization pattern from config (if available)
-                pattern = self.organization_pattern or "_{category}/{title}/{year}"
+                # For already-organized files, skip reorganization
                 result = self.import_pdf(
                     pdf_path,
                     session,
-                    organization_pattern=pattern,
+                    organization_pattern=None,
                     auto_track=auto_track,
+                    skip_organize=True,  # Files are already organized
+                    tracking_mode=tracking_mode,
                 )
                 if result:
                     results["imported"] += 1

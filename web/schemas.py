@@ -4,7 +4,48 @@ Pydantic models for request and response validation
 
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+# ==============================================================================
+# Standard API Responses
+# ==============================================================================
+
+
+class APIResponse(BaseModel):
+    """Standard successful API response"""
+
+    success: bool = True
+    message: str
+    data: Optional[Dict[str, Any]] = None
+
+
+class APIError(BaseModel):
+    """Standard error response"""
+
+    success: bool = False
+    error: str = Field(..., description="Error type or category")
+    message: str = Field(..., description="Human-readable error message")
+    details: Optional[Dict[str, Any]] = Field(
+        None, description="Additional error details"
+    )
+
+
+class ValidationErrorDetail(BaseModel):
+    """Detailed validation error information"""
+
+    field: str
+    message: str
+    value: Optional[Any] = None
+
+
+class ValidationError(APIError):
+    """Validation error response with field-level details"""
+
+    error: str = "validation_error"
+    validation_errors: List[ValidationErrorDetail] = Field(
+        default_factory=list, description="List of validation errors"
+    )
+
 
 # ==============================================================================
 # Authentication
@@ -204,4 +245,5 @@ class ImportOptionsRequest(BaseModel):
         "data/{category}/{title}/{year}/"  # File organization pattern with tags
     )
     auto_track: bool = True
+    tracking_mode: str = "all"  # "all", "new", "watch", or "none"
     scan_nested: bool = True

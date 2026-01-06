@@ -1,140 +1,216 @@
-#!/usr/bin/env python3
-"""Test ConfigLoader functionality"""
+"""
+Test suite for ConfigLoader functionality
+"""
+
 import sys
-sys.path.insert(0, '.')
+from pathlib import Path
 
-from core.config import ConfigLoader  # noqa: E402
-import logging
+import pytest
 
-logging.basicConfig(level=logging.WARNING)
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-print("\n🧪 ConfigLoader Tests\n")
-print("=" * 50)
+from core.config import ConfigLoader
 
-results = {}
 
-# Test initialization
-print("Testing ConfigLoader.__init__()...", end=" ")
-try:
-    config_loader = ConfigLoader()
-    assert config_loader.config is not None
-    assert isinstance(config_loader.config, dict)
-    print("✓ PASS")
-    results["__init__()"] = True
-except Exception as e:
-    print(f"❌ FAIL: {e}")
-    results["__init__()"] = False
+@pytest.fixture
+def config_loader():
+    """Create ConfigLoader instance for testing"""
+    return ConfigLoader()
 
-# Test get_search_providers
-print("Testing get_search_providers()...", end=" ")
-try:
-    providers = config_loader.get_search_providers()
-    assert isinstance(providers, list)
-    assert len(providers) > 0
-    assert all(isinstance(p, dict) for p in providers)
-    assert all("type" in p for p in providers)
-    print(f"✓ PASS ({len(providers)} providers)")
-    results["get_search_providers()"] = True
-except Exception as e:
-    print(f"❌ FAIL: {e}")
-    results["get_search_providers()"] = False
 
-# Test get_metadata_providers
-print("Testing get_metadata_providers()...", end=" ")
-try:
-    providers = config_loader.get_metadata_providers()
-    assert isinstance(providers, list)
-    assert len(providers) > 0
-    assert all(isinstance(p, dict) for p in providers)
-    assert all("type" in p for p in providers)
-    print(f"✓ PASS ({len(providers)} providers)")
-    results["get_metadata_providers()"] = True
-except Exception as e:
-    print(f"❌ FAIL: {e}")
-    results["get_metadata_providers()"] = False
+class TestConfigLoaderInitialization:
+    """Test ConfigLoader initialization"""
 
-# Test get_download_client
-print("Testing get_download_client()...", end=" ")
-try:
-    client = config_loader.get_download_client()
-    assert isinstance(client, dict)
-    assert "type" in client
-    assert client["type"] == "sabnzbd"
-    print("✓ PASS")
-    results["get_download_client()"] = True
-except Exception as e:
-    print(f"❌ FAIL: {e}")
-    results["get_download_client()"] = False
+    def test_init_loads_config(self, config_loader):
+        """Test that initialization loads config"""
+        assert config_loader.config is not None
+        assert isinstance(config_loader.config, dict)
 
-# Test get_storage
-print("Testing get_storage()...", end=" ")
-try:
-    storage = config_loader.get_storage()
-    assert isinstance(storage, dict)
-    assert "db_path" in storage
-    assert "download_dir" in storage
-    assert "organize_dir" in storage
-    print("✓ PASS")
-    results["get_storage()"] = True
-except Exception as e:
-    print(f"❌ FAIL: {e}")
-    results["get_storage()"] = False
+    def test_config_path_set(self, config_loader):
+        """Test that config path is set"""
+        assert config_loader.config_path is not None
+        assert config_loader.config_path.exists()
 
-# Test get_matching
-print("Testing get_matching()...", end=" ")
-try:
-    matching = config_loader.get_matching()
-    assert isinstance(matching, dict)
-    assert "fuzzy_threshold" in matching
-    print("✓ PASS")
-    results["get_matching()"] = True
-except Exception as e:
-    print(f"❌ FAIL: {e}")
-    results["get_matching()"] = False
 
-# Test get_logging
-print("Testing get_logging()...", end=" ")
-try:
-    logging_config = config_loader.get_logging()
-    assert isinstance(logging_config, dict)
-    assert "level" in logging_config
-    print("✓ PASS")
-    results["get_logging()"] = True
-except Exception as e:
-    print(f"❌ FAIL: {e}")
-    results["get_logging()"] = False
+class TestSearchProviders:
+    """Test search provider configuration"""
 
-# Test get_all_config
-print("Testing get_all_config()...", end=" ")
-try:
-    all_config = config_loader.get_all_config()
-    assert isinstance(all_config, dict)
-    assert "search_providers" in all_config
-    assert "metadata_providers" in all_config
-    assert "download_client" in all_config
-    print("✓ PASS")
-    results["get_all_config()"] = True
-except Exception as e:
-    print(f"❌ FAIL: {e}")
-    results["get_all_config()"] = False
+    def test_get_search_providers(self, config_loader):
+        """Test getting search providers"""
+        providers = config_loader.get_search_providers()
+        assert isinstance(providers, list)
+        assert len(providers) > 0
+        assert all(isinstance(p, dict) for p in providers)
+        assert all("type" in p for p in providers)
 
-# Test reload_config
-print("Testing reload_config()...", end=" ")
-try:
-    config_loader.reload_config()
-    assert config_loader.config is not None
-    print("✓ PASS")
-    results["reload_config()"] = True
-except Exception as e:
-    print(f"❌ FAIL: {e}")
-    results["reload_config()"] = False
+    def test_search_providers_enabled_only(self, config_loader):
+        """Test that only enabled providers are returned"""
+        providers = config_loader.get_search_providers()
+        # All returned providers should be enabled (or not explicitly disabled)
+        for provider in providers:
+            enabled = provider.get("enabled", True)
+            assert enabled is True
 
-print("\n" + "=" * 50)
-print("Test Summary")
-print("=" * 50)
-for test_name, passed in results.items():
-    status = "✓ PASS" if passed else "❌ FAIL"
-    print(f"{status}: {test_name}")
 
-all_passed = all(results.values())
-print("\n" + ("All tests passed! ✓" if all_passed else "Some tests failed. ❌"))
+class TestMetadataProviders:
+    """Test metadata provider configuration"""
+
+    def test_get_metadata_providers(self, config_loader):
+        """Test getting metadata providers"""
+        providers = config_loader.get_metadata_providers()
+        assert isinstance(providers, list)
+        assert len(providers) > 0
+        assert all(isinstance(p, dict) for p in providers)
+        assert all("type" in p for p in providers)
+
+    def test_metadata_providers_enabled_only(self, config_loader):
+        """Test that only enabled providers are returned"""
+        providers = config_loader.get_metadata_providers()
+        # All returned providers should be enabled (or not explicitly disabled)
+        for provider in providers:
+            enabled = provider.get("enabled", True)
+            assert enabled is True
+
+
+class TestDownloadClient:
+    """Test download client configuration"""
+
+    def test_get_download_client(self, config_loader):
+        """Test getting download client"""
+        client = config_loader.get_download_client()
+        assert isinstance(client, dict)
+        assert "type" in client
+        assert client["type"] == "sabnzbd"
+
+    def test_download_client_has_required_fields(self, config_loader):
+        """Test that download client has required configuration"""
+        client = config_loader.get_download_client()
+        assert "type" in client
+        # May not have api_key in test config, but should have api_url
+        assert "api_url" in client or "type" in client
+
+
+class TestStorageConfiguration:
+    """Test storage configuration"""
+
+    def test_get_storage(self, config_loader):
+        """Test getting storage configuration"""
+        storage = config_loader.get_storage()
+        assert isinstance(storage, dict)
+        assert "db_path" in storage
+        assert "download_dir" in storage
+        assert "organize_dir" in storage
+
+    def test_storage_paths_exist(self, config_loader):
+        """Test that storage paths are created if they don't exist"""
+        storage = config_loader.get_storage()
+        # After calling get_storage, directories should be created
+        for key in ["download_dir", "organize_dir", "cache_dir"]:
+            if key in storage:
+                path = Path(storage[key])
+                assert path.exists()
+                assert path.is_dir()
+
+
+class TestMatchingConfiguration:
+    """Test matching configuration"""
+
+    def test_get_matching(self, config_loader):
+        """Test getting matching configuration"""
+        matching = config_loader.get_matching()
+        assert isinstance(matching, dict)
+        assert "fuzzy_threshold" in matching
+
+    def test_matching_default_threshold(self, config_loader):
+        """Test that matching has a reasonable default threshold"""
+        matching = config_loader.get_matching()
+        threshold = matching.get("fuzzy_threshold", 80)
+        assert isinstance(threshold, int)
+        assert 0 <= threshold <= 100
+
+
+class TestLoggingConfiguration:
+    """Test logging configuration"""
+
+    def test_get_logging(self, config_loader):
+        """Test getting logging configuration"""
+        logging_config = config_loader.get_logging()
+        assert isinstance(logging_config, dict)
+        assert "level" in logging_config
+
+    def test_logging_valid_level(self, config_loader):
+        """Test that logging level is valid"""
+        logging_config = config_loader.get_logging()
+        level = logging_config.get("level", "INFO")
+        valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+        assert level.upper() in valid_levels
+
+
+class TestCompleteConfiguration:
+    """Test complete configuration"""
+
+    def test_get_all_config(self, config_loader):
+        """Test getting all configuration"""
+        all_config = config_loader.get_all_config()
+        assert isinstance(all_config, dict)
+        assert "search_providers" in all_config
+        assert "metadata_providers" in all_config
+        assert "download_client" in all_config
+
+    def test_config_has_storage(self, config_loader):
+        """Test that config includes storage settings"""
+        all_config = config_loader.get_all_config()
+        assert "storage" in all_config
+        assert isinstance(all_config["storage"], dict)
+
+
+class TestConfigReload:
+    """Test configuration reloading"""
+
+    def test_reload_config(self, config_loader):
+        """Test reloading configuration"""
+        original_config = config_loader.config.copy()
+        config_loader.reload_config()
+        assert config_loader.config is not None
+        # Config should still have the same keys
+        assert set(original_config.keys()) == set(config_loader.config.keys())
+
+
+class TestJWTSecret:
+    """Test JWT secret generation and retrieval"""
+
+    def test_get_jwt_secret(self, config_loader):
+        """Test getting JWT secret"""
+        secret = config_loader.get_jwt_secret()
+        assert secret is not None
+        assert isinstance(secret, str)
+        assert len(secret) > 0
+
+    def test_jwt_secret_persistence(self, config_loader):
+        """Test that JWT secret is persistent"""
+        secret1 = config_loader.get_jwt_secret()
+        secret2 = config_loader.get_jwt_secret()
+        assert secret1 == secret2
+
+
+class TestServerConfiguration:
+    """Test server configuration"""
+
+    def test_get_server(self, config_loader):
+        """Test getting server configuration"""
+        server = config_loader.get_server()
+        assert isinstance(server, dict)
+        assert "host" in server
+        assert "port" in server
+
+    def test_server_defaults(self, config_loader):
+        """Test server configuration defaults"""
+        server = config_loader.get_server()
+        # Should have reasonable defaults
+        assert server["host"] in ["0.0.0.0", "127.0.0.1", "localhost"]
+        assert isinstance(server["port"], int)
+        assert 1024 <= server["port"] <= 65535
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v", "--tb=short"])

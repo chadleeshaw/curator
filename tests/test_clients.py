@@ -34,7 +34,7 @@ def test_sabnzbd_initialization():
     assert client.api_key == "test-key-12345"
 
     print("Testing SABnzbd initialization... ✓ PASS")
-    return True
+    pass
 
 
 def test_sabnzbd_missing_api_key():
@@ -52,7 +52,7 @@ def test_sabnzbd_missing_api_key():
         assert "api_key" in str(e)
 
     print("Testing SABnzbd missing API key... ✓ PASS")
-    return True
+    pass
 
 
 def test_sabnzbd_defaults():
@@ -68,7 +68,7 @@ def test_sabnzbd_defaults():
     assert client.api_key == "test-key"
 
     print("Testing SABnzbd defaults... ✓ PASS")
-    return True
+    pass
 
 
 def test_sabnzbd_submit():
@@ -83,13 +83,15 @@ def test_sabnzbd_submit():
     with patch.object(client, "_api_call") as mock_api:
         mock_api.return_value = {"status": True, "nzo_ids": ["nzo_12345"]}
 
-        job_id = client.submit("https://example.com/nzb/test.nzb", title="Test Magazine")
+        job_id = client.submit(
+            "https://example.com/nzb/test.nzb", title="Test Magazine"
+        )
 
         assert job_id == "nzo_12345"
         mock_api.assert_called_once()
 
     print("Testing SABnzbd submit... ✓ PASS")
-    return True
+    pass
 
 
 def test_sabnzbd_submit_failure():
@@ -109,7 +111,7 @@ def test_sabnzbd_submit_failure():
         assert job_id is None
 
     print("Testing SABnzbd submit failure... ✓ PASS")
-    return True
+    pass
 
 
 def test_sabnzbd_get_status_downloading():
@@ -143,7 +145,7 @@ def test_sabnzbd_get_status_downloading():
         assert status["size"] == "1.5GB"
 
     print("Testing SABnzbd get status (downloading)... ✓ PASS")
-    return True
+    pass
 
 
 def test_sabnzbd_get_status_completed():
@@ -185,7 +187,7 @@ def test_sabnzbd_get_status_completed():
         assert status["file_path"] == "/downloads/magazine.nzb"
 
     print("Testing SABnzbd get status (completed)... ✓ PASS")
-    return True
+    pass
 
 
 def test_sabnzbd_get_completed_downloads():
@@ -229,7 +231,7 @@ def test_sabnzbd_get_completed_downloads():
         assert downloads[1]["title"] == "Magazine 2"
 
     print("Testing SABnzbd get completed downloads... ✓ PASS")
-    return True
+    pass
 
 
 # ==================== NZBGet Tests ====================
@@ -254,7 +256,7 @@ def test_nzbget_initialization():
     assert client.password == "test-password"
 
     print("Testing NZBGet initialization... ✓ PASS")
-    return True
+    pass
 
 
 def test_nzbget_missing_password():
@@ -273,7 +275,7 @@ def test_nzbget_missing_password():
         assert "password" in str(e)
 
     print("Testing NZBGet missing password... ✓ PASS")
-    return True
+    pass
 
 
 def test_nzbget_defaults():
@@ -290,7 +292,7 @@ def test_nzbget_defaults():
     assert client.password == "test-password"
 
     print("Testing NZBGet defaults... ✓ PASS")
-    return True
+    pass
 
 
 def test_nzbget_submit():
@@ -306,13 +308,15 @@ def test_nzbget_submit():
     with patch.object(client, "_api_call") as mock_api:
         mock_api.return_value = 123  # NZBID returned as number
 
-        job_id = client.submit("https://example.com/nzb/test.nzb", title="Test Magazine")
+        job_id = client.submit(
+            "https://example.com/nzb/test.nzb", title="Test Magazine"
+        )
 
         assert job_id == "123"
         mock_api.assert_called_once()
 
     print("Testing NZBGet submit... ✓ PASS")
-    return True
+    pass
 
 
 def test_nzbget_submit_failure():
@@ -333,7 +337,7 @@ def test_nzbget_submit_failure():
         assert job_id is None
 
     print("Testing NZBGet submit failure... ✓ PASS")
-    return True
+    pass
 
 
 def test_nzbget_get_status_downloading():
@@ -365,7 +369,7 @@ def test_nzbget_get_status_downloading():
         assert status["size"] == 1024
 
     print("Testing NZBGet get status (downloading)... ✓ PASS")
-    return True
+    pass
 
 
 def test_nzbget_get_status_completed():
@@ -397,7 +401,7 @@ def test_nzbget_get_status_completed():
         assert status["file_path"] == "/downloads/test"
 
     print("Testing NZBGet get status (completed)... ✓ PASS")
-    return True
+    pass
 
 
 def test_nzbget_get_status_unknown():
@@ -419,7 +423,7 @@ def test_nzbget_get_status_unknown():
         assert status["progress"] == 0
 
     print("Testing NZBGet get status (unknown)... ✓ PASS")
-    return True
+    pass
 
 
 def test_nzbget_get_completed_downloads():
@@ -463,7 +467,7 @@ def test_nzbget_get_completed_downloads():
         assert downloads[1]["title"] == "Magazine 2"
 
     print("Testing NZBGet get completed downloads... ✓ PASS")
-    return True
+    pass
 
 
 def test_nzbget_api_call_json_rpc():
@@ -482,7 +486,9 @@ def test_nzbget_api_call_json_rpc():
         mock_response.raise_for_status = Mock()
         mock_post.return_value = mock_response
 
-        result = client._api_call("append", ["https://example.com/nzb", "Test", 50, False])
+        result = client._api_call(
+            "append", ["https://example.com/nzb", "Test", 50, False]
+        )
 
         # Verify JSON-RPC format
         call_args = mock_post.call_args
@@ -491,7 +497,7 @@ def test_nzbget_api_call_json_rpc():
         assert result == 123
 
     print("Testing NZBGet API call JSON-RPC format... ✓ PASS")
-    return True
+    pass
 
 
 if __name__ == "__main__":

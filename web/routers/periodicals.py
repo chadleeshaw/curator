@@ -100,7 +100,7 @@ async def list_periodicals(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/magazines/{magazine_id}")
+@router.get("/periodicals/{magazine_id}")
 async def get_magazine(magazine_id: int) -> MagazineResponse:
     """Get magazine details"""
     try:
@@ -188,9 +188,9 @@ async def get_pdf(magazine_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.delete("/magazines/{magazine_id}")
+@router.delete("/periodicals/{magazine_id}")
 async def delete_periodical(
-    magazine_id: int, delete_files: bool = False
+    magazine_id: int, delete_files: bool = False, remove_tracking: bool = False
 ) -> Dict[str, Any]:
     """
     Delete a periodical from the library
@@ -198,6 +198,7 @@ async def delete_periodical(
     Args:
         magazine_id: ID of periodical to delete
         delete_files: If True, also delete the PDF and cover files from disk. If False, only remove from database.
+        remove_tracking: If True, also remove the tracking record for this periodical.
     """
     try:
         db_session = _session_factory()
@@ -209,14 +210,28 @@ async def delete_periodical(
             if not magazine:
                 raise HTTPException(status_code=404, detail="Magazine not found")
 
-            # Store file paths for potential deletion
+            # Store file paths and title for potential deletion
             pdf_path = Path(magazine.file_path)
             cover_path = Path(magazine.cover_path) if magazine.cover_path else None
+            title = magazine.title
 
             # Delete database entry
-            title = magazine.title
             db_session.delete(magazine)
             db_session.commit()
+
+            # Remove tracking record if requested
+            if remove_tracking:
+                from models.database import MagazineTracking
+                olid = title.lower().replace(" ", "_").replace("-", "_")
+                tracking = (
+                    db_session.query(MagazineTracking)
+                    .filter(MagazineTracking.olid == olid)
+                    .first()
+                )
+                if tracking:
+                    db_session.delete(tracking)
+                    db_session.commit()
+                    logger.info(f"Removed tracking record for: {title}")
 
             # Delete files from filesystem if requested
             if delete_files:
@@ -235,15 +250,21 @@ async def delete_periodical(
                     logger.warning(f"Could not delete cover file {cover_path}: {e}")
 
                 logger.info(f"Deleted magazine and files from disk: {title}")
+                message = f"Deleted '{title}' and files from disk"
+                if remove_tracking:
+                    message += " (tracking removed)"
                 return {
                     "success": True,
-                    "message": f"Deleted '{title}' and files from disk",
+                    "message": message,
                 }
             else:
                 logger.info(f"Deleted magazine from library (files retained): {title}")
+                message = f"Removed '{title}' from library (files retained on disk)"
+                if remove_tracking:
+                    message += " (tracking removed)"
                 return {
                     "success": True,
-                    "message": f"Removed '{title}' from library (files retained on disk)",
+                    "message": message,
                 }
         finally:
             db_session.close()

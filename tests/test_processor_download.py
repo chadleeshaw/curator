@@ -4,7 +4,8 @@ Tests download manager, deduplication, status tracking, and processing integrati
 """
 
 import sys
-sys.path.insert(0, '.')
+
+sys.path.insert(0, ".")
 
 import pytest
 import asyncio
@@ -84,7 +85,11 @@ def mock_download_client():
 
     # Mock get_status
     def get_status_side_effect(job_id):
-        return {"status": "completed", "progress": 100, "file_path": f"/downloads/{job_id}.pdf"}
+        return {
+            "status": "completed",
+            "progress": 100,
+            "file_path": f"/downloads/{job_id}.pdf",
+        }
 
     client.get_status = Mock(side_effect=get_status_side_effect)
 
@@ -151,9 +156,7 @@ class TestDownloadManager:
             "raw_metadata": {},
         }
 
-        submission1 = manager.submit_download(
-            tracking.id, search_result1, session
-        )
+        submission1 = manager.submit_download(tracking.id, search_result1, session)
         assert submission1 is not None
         assert submission1.status == DownloadSubmission.StatusEnum.PENDING
 
@@ -166,16 +169,16 @@ class TestDownloadManager:
             "raw_metadata": {},
         }
 
-        submission2 = manager.submit_download(
-            tracking.id, search_result2, session
-        )
+        submission2 = manager.submit_download(tracking.id, search_result2, session)
         # Should return None because it's a duplicate
         assert submission2 is None
 
         # Verify duplicate was recorded
-        duplicates = session.query(DownloadSubmission).filter(
-            DownloadSubmission.status == DownloadSubmission.StatusEnum.SKIPPED
-        ).all()
+        duplicates = (
+            session.query(DownloadSubmission)
+            .filter(DownloadSubmission.status == DownloadSubmission.StatusEnum.SKIPPED)
+            .all()
+        )
         assert len(duplicates) == 1
 
         session.close()
@@ -204,9 +207,7 @@ class TestDownloadManager:
             "raw_metadata": {},
         }
 
-        submission = manager.submit_download(
-            tracking.id, search_result, session
-        )
+        submission = manager.submit_download(tracking.id, search_result, session)
 
         assert submission is not None
         assert submission.job_id == "job_1"
@@ -249,9 +250,11 @@ class TestDownloadManager:
         assert results["failed"] == 0
 
         # Verify submissions were created
-        submissions = session.query(DownloadSubmission).filter(
-            DownloadSubmission.tracking_id == tracking.id
-        ).all()
+        submissions = (
+            session.query(DownloadSubmission)
+            .filter(DownloadSubmission.tracking_id == tracking.id)
+            .all()
+        )
         assert len(submissions) == 2
 
         session.close()

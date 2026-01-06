@@ -230,10 +230,11 @@ export class LibraryManager {
     }
     
     const deleteFiles = deleteOption.value === 'delete-files';
+    const removeTracking = document.getElementById('delete-remove-tracking').checked;
 
     try {
       const response = await APIClient.authenticatedFetch(
-        `/api/periodicals/${this.pendingDeleteId}?delete_files=${deleteFiles}`, 
+        `/api/periodicals/${this.pendingDeleteId}?delete_files=${deleteFiles}&remove_tracking=${removeTracking}`, 
         { method: 'DELETE' }
       );
 
@@ -268,6 +269,26 @@ export class LibraryManager {
    */
   openImportModal() {
     UIUtils.showModal('import-options-modal');
+    
+    // Set up event listeners for tracking options
+    const autoTrackCheckbox = document.getElementById('import-auto-track');
+    const trackingModeSelect = document.getElementById('import-tracking-mode');
+    
+    // Sync tracking mode dropdown with checkbox
+    const syncTrackingOptions = () => {
+      if (autoTrackCheckbox.checked) {
+        trackingModeSelect.disabled = false;
+      } else {
+        trackingModeSelect.disabled = true;
+        trackingModeSelect.value = 'none';
+      }
+    };
+    
+    // Initial sync
+    syncTrackingOptions();
+    
+    // Add change listener
+    autoTrackCheckbox.addEventListener('change', syncTrackingOptions);
   }
 
   /**

@@ -9,7 +9,7 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, HTTPException, Query
 
 from models.database import Magazine
-from web.schemas import SearchRequest
+from web.schemas import APIError, SearchRequest
 
 router = APIRouter(prefix="/api", tags=["search"])
 logger = logging.getLogger(__name__)
@@ -100,7 +100,33 @@ def _filter_edition_variants(
     return filtered_results
 
 
-@router.post("/search")
+@router.post(
+    "/search",
+    summary="Search for periodicals",
+    description="Search across configured providers for magazines, comics, and newspapers. Supports automatic deduplication or manual provider selection.",
+    responses={
+        200: {
+            "description": "Search results retrieved successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "results": [
+                            {
+                                "title": "Wired Magazine - January 2024",
+                                "url": "http://example.com/wired.nzb",
+                                "provider": "newsnab",
+                                "publication_date": "2024-01-01",
+                            }
+                        ],
+                        "total": 1,
+                        "mode": "automatic",
+                    }
+                }
+            },
+        },
+        500: {"description": "Search failed", "model": APIError},
+    },
+)
 async def search(request: SearchRequest) -> Dict[str, Any]:
     """
     Search for magazines.
@@ -170,7 +196,27 @@ async def search(request: SearchRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/periodicals/search-providers")
+@router.post(
+    "/periodicals/search-providers",
+    summary="Search providers for periodical issues",
+    description="Search Newsnab and RSS providers for downloadable periodical issues. Does not query metadata providers.",
+    responses={
+        200: {
+            "description": "Issue search results retrieved",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "query": "Wired",
+                        "results": [{"title": "Wired - Jan 2024", "url": "http://..."}],
+                        "total": 1,
+                    }
+                }
+            },
+        },
+        400: {"description": "Invalid query parameter", "model": APIError},
+        500: {"description": "Search failed", "model": APIError},
+    },
+)
 async def search_periodical_providers(query: str = Query(...)) -> Dict[str, Any]:
     """
     Search for periodical issues by querying SEARCH providers only (Newsnab, RSS).
@@ -307,7 +353,33 @@ async def search_periodical_providers(query: str = Query(...)) -> Dict[str, Any]
         raise HTTPException(status_code=500, detail=f"Search error: {str(e)}")
 
 
-@router.post("/periodicals/search-metadata")
+@router.post(
+    "/periodicals/search-metadata",
+    summary="Search for periodical metadata",
+    description="Query metadata providers (CrossRef, Wikipedia) for periodical information. Does not search for downloadable issues.",
+    responses={
+        200: {
+            "description": "Metadata retrieved successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "query": "Wired",
+                        "results": [
+                            {
+                                "title": "Wired Magazine",
+                                "publisher": "Condé Nast",
+                                "issn": "1059-1028",
+                            }
+                        ],
+                        "total": 1,
+                    }
+                }
+            },
+        },
+        400: {"description": "Invalid query parameter", "model": APIError},
+        500: {"description": "Metadata search failed", "model": APIError},
+    },
+)
 async def search_periodical_metadata(query: str = Query(...)) -> Dict[str, Any]:
     """
     Search for periodical metadata using only METADATA providers (CrossRef, Wikipedia).
@@ -389,7 +461,29 @@ async def search_periodical_metadata(query: str = Query(...)) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Search error: {str(e)}")
 
 
-@router.get("/periodicals/editions/{magazine_title}")
+@router.get(
+    "/periodicals/editions/{magazine_title}",
+    summary="Get periodical editions",
+    description="Retrieve all available editions/issues of a specific periodical by searching configured providers.",
+    responses={
+        200: {
+            "description": "Editions retrieved successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "periodical": "Wired",
+                        "editions": [
+                            {"title": "Wired - Jan 2024", "url": "http://..."}
+                        ],
+                        "total": 1,
+                    }
+                }
+            },
+        },
+        400: {"description": "Invalid periodical title", "model": APIError},
+        503: {"description": "No search providers configured", "model": APIError},
+    },
+)
 async def get_periodical_editions(magazine_title: str) -> Dict[str, Any]:
     """
     Get all editions/publications of a specific periodical by searching providers.

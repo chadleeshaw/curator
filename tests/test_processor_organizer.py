@@ -27,11 +27,11 @@ def test_sanitize_filename():
     assert result == "National Geographic"
 
     # Test with pipes and backslashes
-    result = sanitize_filename('Test|File\\Path')
+    result = sanitize_filename("Test|File\\Path")
     assert result == "TestFilePath"
 
     print("Testing sanitize_filename()... ✓ PASS")
-    return True
+    pass
 
 
 def test_parse_filename_for_metadata():
@@ -63,7 +63,7 @@ def test_parse_filename_for_metadata():
     assert result["issue_date"].year == 2010
 
     print("Testing FileProcessor.parse_filename_for_metadata()... ✓ PASS")
-    return True
+    pass
 
 
 def test_organize_file():
@@ -89,7 +89,7 @@ def test_organize_file():
         assert not test_pdf.exists()
 
         print("Testing FileProcessor.organize_file()... ✓ PASS")
-        return True
+        pass
 
 
 def test_organize_file_with_cover():
@@ -122,7 +122,7 @@ def test_organize_file_with_cover():
         assert not test_jpg.exists()
 
         print("Testing FileProcessor.organize_file() with cover... ✓ PASS")
-        return True
+        pass
 
 
 def test_organize_file_non_pdf():
@@ -143,7 +143,7 @@ def test_organize_file_non_pdf():
         assert pdf_path == "None"
 
         print("Testing FileProcessor.organize_file() with non-PDF... ✓ PASS")
-        return True
+        pass
 
 
 def test_organize_directory_creation():
@@ -162,7 +162,7 @@ def test_organize_directory_creation():
         assert organize_path.is_dir()
 
         print("Testing FileProcessor directory creation... ✓ PASS")
-        return True
+        pass
 
 
 def test_filename_patterns():
@@ -173,8 +173,16 @@ def test_filename_patterns():
         test_cases = [
             ("Wired", datetime(2006, 1, 1), "Wired - Jan2006"),
             ("Time Magazine", datetime(2015, 12, 1), "Time Magazine - Dec2015"),
-            ("National Geographic", datetime(2023, 7, 1), "National Geographic - Jul2023"),
-            ("Scientific American", datetime(2010, 2, 1), "Scientific American - Feb2010"),
+            (
+                "National Geographic",
+                datetime(2023, 7, 1),
+                "National Geographic - Jul2023",
+            ),
+            (
+                "Scientific American",
+                datetime(2010, 2, 1),
+                "Scientific American - Feb2010",
+            ),
         ]
 
         for title, date, expected_base in test_cases:
@@ -187,14 +195,27 @@ def test_filename_patterns():
             assert Path(pdf_path).name == f"{expected_base}.pdf"
 
         print("Testing FileProcessor filename patterns... ✓ PASS")
-        return True
+        pass
 
 
 def test_parse_all_months():
     """Test parsing all month abbreviations"""
     processor = FileProcessor(tempfile.gettempdir())
 
-    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    months = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+    ]
 
     for month_num, month_abbr in enumerate(months, 1):
         filename = f"Test Magazine - {month_abbr}2020"
@@ -205,7 +226,7 @@ def test_parse_all_months():
         assert result["issue_date"].year == 2020
 
     print("Testing FileProcessor all month parsing... ✓ PASS")
-    return True
+    pass
 
 
 def test_organize_pattern():
@@ -216,7 +237,7 @@ def test_organize_pattern():
     assert processor.ORGANIZED_PATTERN == expected_pattern
 
     print("Testing FileProcessor pattern... ✓ PASS")
-    return True
+    pass
 
 
 if __name__ == "__main__":

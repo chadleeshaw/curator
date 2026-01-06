@@ -1,5 +1,5 @@
 import enum
-from datetime import datetime
+from datetime import UTC, datetime
 
 import bcrypt
 from sqlalchemy import (
@@ -17,6 +17,11 @@ from sqlalchemy.ext.declarative import declarative_base
 Base = declarative_base()
 
 
+def utcnow():
+    """Return current UTC time - helper for SQLAlchemy defaults"""
+    return datetime.now(UTC)
+
+
 class Credentials(Base):
     """Single user login credentials"""
 
@@ -25,8 +30,8 @@ class Credentials(Base):
     id = Column(Integer, primary_key=True)
     username = Column(String(255), nullable=False, unique=True, index=True)
     password_hash = Column(String(255), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     def set_password(self, password: str):
         """Hash and set the password"""
@@ -54,8 +59,8 @@ class Magazine(Base):
     file_path = Column(String(512), nullable=False, unique=True)
     cover_path = Column(String(512), nullable=True)
     extra_metadata = Column(JSON, nullable=True)  # Extra metadata from Open Library
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow, index=True)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
 
 class MagazineTracking(Base):
@@ -87,8 +92,8 @@ class MagazineTracking(Base):
     periodical_metadata = Column(JSON, nullable=True)  # Full metadata from Open Library
     last_metadata_update = Column(DateTime, nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow, index=True)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
 
 class SearchResult(Base):
@@ -106,7 +111,7 @@ class SearchResult(Base):
     fuzzy_match_group_id = Column(
         String(255), nullable=True, index=True
     )  # Grouping for deduplication
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=utcnow, index=True)
     magazine_id = Column(
         Integer, ForeignKey("periodicals.id"), nullable=True
     )  # Links to downloaded periodical
@@ -144,8 +149,8 @@ class DownloadSubmission(Base):
     attempt_count = Column(Integer, default=0)  # Number of download attempts
     last_error = Column(String(512), nullable=True)  # Last error message
     file_path = Column(String(512), nullable=True)  # Path where file was downloaded
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow, index=True)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
 
 class Download(Base):
@@ -168,5 +173,5 @@ class Download(Base):
     client_name = Column(String(100), nullable=False)  # Which client handled this
     magazine_id = Column(Integer, ForeignKey("periodicals.id"), nullable=True)
     search_result_id = Column(Integer, ForeignKey("search_results.id"), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow, index=True)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)

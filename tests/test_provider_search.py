@@ -4,9 +4,10 @@ from pathlib import Path  # noqa: E402
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import logging
+
 # Suppress debug logging to reduce output
 logging.basicConfig(level=logging.WARNING)
-logging.getLogger('urllib3').setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 from core.config import ConfigLoader  # noqa: E402
 from core.factory import ProviderFactory  # noqa: E402
@@ -22,12 +23,14 @@ print("Testing NewsnabProvider.__init__()...", end=" ")
 try:
     config_loader = ConfigLoader()
     search_providers_config = config_loader.get_search_providers()
-    newsnab_config = next((p for p in search_providers_config if p.get("type") == "newsnab"), None)
+    newsnab_config = next(
+        (p for p in search_providers_config if p.get("type") == "newsnab"), None
+    )
 
     if newsnab_config:
         provider = NewsnabProvider(newsnab_config)
-        assert hasattr(provider, 'api_url')
-        assert hasattr(provider, 'api_key')
+        assert hasattr(provider, "api_url")
+        assert hasattr(provider, "api_key")
         print("✓ PASS")
         results["NewsnabProvider.__init__()"] = True
     else:

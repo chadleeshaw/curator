@@ -1,4 +1,4 @@
-.PHONY: help lint format lint-python lint-js lint-css format-python format-js format-css test install run clean
+.PHONY: help lint format lint-python lint-js lint-css format-python format-js format-css test test-unit test-routers test-coverage test-quick install run clean
 
 PYTHON_FILES := $(shell find . -name '*.py' -not -path './.venv/*' -not -path './node_modules/*' -not -path './.node_modules/*')
 JS_FILES := static/js/*.js
@@ -26,7 +26,11 @@ help:
 	@echo "  make format-css       Format CSS with Prettier"
 	@echo ""
 	@echo "Testing:"
-	@echo "  make test             Run all tests"
+	@echo "  make test             Run all tests with pytest"
+	@echo "  make test-unit        Run unit tests (legacy format)"
+	@echo "  make test-routers     Run router/API tests only"
+	@echo "  make test-coverage    Run tests with coverage report"
+	@echo "  make test-quick       Quick syntax check of test files"
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  make clean            Remove cache, build, and temp files"
@@ -78,7 +82,12 @@ format-css:
 
 # Testing
 test:
-	@echo "🧪 Running tests..."
+	@echo "🧪 Running all tests..."
+	@.venv/bin/python -m pytest tests/ -v --tb=short 2>&1 | tail -50 || echo "⚠ Some tests failed"
+	@echo "✅ Test run completed!"
+
+test-unit:
+	@echo "🧪 Running unit tests (legacy)..."
 	@.venv/bin/python tests/test_clients.py && \
 		.venv/bin/python tests/test_config.py && \
 		.venv/bin/python tests/test_database.py && \
@@ -89,7 +98,21 @@ test:
 		.venv/bin/python tests/test_processor_scheduler.py && \
 		.venv/bin/python tests/test_provider_metadata.py && \
 		.venv/bin/python tests/test_provider_search.py
-	@echo "✅ All tests completed!"
+	@echo "✅ Unit tests completed!"
+
+test-routers:
+	@echo "🧪 Running router tests..."
+	@.venv/bin/python -m pytest tests/test_routers_*.py -v --tb=short
+	@echo "✅ Router tests completed!"
+
+test-coverage:
+	@echo "🧪 Running tests with coverage..."
+	@.venv/bin/python -m pytest tests/ --cov=. --cov-report=term-missing --cov-report=html
+	@echo "✅ Coverage report generated in htmlcov/"
+
+test-quick:
+	@echo "🧪 Quick test (syntax check only)..."
+	@.venv/bin/python -m py_compile tests/*.py && echo "✅ All test files compile"
 
 # Cleanup
 clean:

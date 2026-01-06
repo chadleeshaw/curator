@@ -642,7 +642,7 @@ export class SettingsManager {
           setTimeout(() => window.location.reload(), 1000);
           return;
         }
-      } catch (error) {
+      } catch {
         // Server not ready yet
       }
 
