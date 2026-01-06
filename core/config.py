@@ -24,7 +24,16 @@ class ConfigLoader:
     def _load_config(self) -> Dict[str, Any]:
         """Load config from YAML file"""
         if not self.config_path.exists():
-            raise FileNotFoundError(f"Config file not found: {self.config_path}")
+            # Try test config as fallback (for CI/CD environments)
+            test_config_path = Path("config.test.yaml")
+            if test_config_path.exists():
+                logger.warning(
+                    f"Config file not found at {self.config_path}, "
+                    f"using test config: {test_config_path}"
+                )
+                self.config_path = test_config_path
+            else:
+                raise FileNotFoundError(f"Config file not found: {self.config_path}")
 
         with open(self.config_path, "r") as f:
             config = yaml.safe_load(f)

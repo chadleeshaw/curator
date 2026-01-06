@@ -1,0 +1,65 @@
+# Sample configuration file for Curator
+# Copy this to local/config/config.yaml and update with your settings
+
+search_providers:
+  - type: newsnab
+    name: Newsnab Provider
+    api_url: https://your-newsnab-server.com/api
+    api_key: your-api-key-here
+    enabled: true
+
+metadata_providers:
+  - type: crossref
+    name: CrossRef
+    enabled: true
+  - type: wikipedia
+    name: Wikipedia
+    enabled: true
+
+download_client:
+  type: sabnzbd
+  name: SABnzbd
+  api_url: http://localhost:8080
+  api_key: your-sabnzbd-api-key
+
+storage:
+  db_path: ./local/config/periodicals.db
+  download_dir: ./local/downloads
+  organize_dir: ./local/data
+  cache_dir: ./local/cache
+
+import:
+  organization_pattern: data/{category}/{title}/{year}/
+  auto_track_imports: true
+  category_keywords:
+    Magazines:
+      - magazine
+      - national geographic
+      - wired
+      - time
+      - newsweek
+      - economist
+    Comics:
+      - comic
+      - marvel
+      - dc
+      - graphic novel
+    Articles:
+      - article
+      - paper
+      - journal
+    News:
+      - news
+      - daily
+      - newspaper
+
+matching:
+  fuzzy_threshold: 80
+
+logging:
+  level: INFO
+  log_file: ./local/logs/periodical_manager.log
+
+server:
+  host: 0.0.0.0
+  port: 8000

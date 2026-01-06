@@ -1,0 +1,53 @@
+# Test configuration file for CI/CD and automated testing
+# This file is used when running tests in environments without a local config
+
+search_providers:
+  - type: newsnab
+    name: Test Newsnab
+    api_url: http://test-newsnab.example.com/api
+    api_key: test-api-key
+    enabled: false  # Disabled for tests to avoid actual API calls
+
+metadata_providers:
+  - type: crossref
+    name: CrossRef
+    enabled: false  # Disabled for tests
+  - type: wikipedia
+    name: Wikipedia
+    enabled: false  # Disabled for tests
+
+download_client:
+  type: sabnzbd
+  name: Test SABnzbd
+  api_url: http://localhost:8080
+  api_key: test-api-key
+
+storage:
+  db_path: :memory:
+  download_dir: ./test_downloads
+  organize_dir: ./test_data
+  cache_dir: ./test_cache
+
+import:
+  organization_pattern: data/{category}/{title}/{year}/
+  auto_track_imports: true
+  category_keywords:
+    Magazines:
+      - magazine
+    Comics:
+      - comic
+    Articles:
+      - article
+    News:
+      - news
+
+matching:
+  fuzzy_threshold: 80
+
+logging:
+  level: WARNING
+  log_file: ./test_logs/test.log
+
+server:
+  host: 127.0.0.1
+  port: 8000

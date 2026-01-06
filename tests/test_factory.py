@@ -19,7 +19,7 @@ results = {}
 # Test ProviderFactory with search providers
 print("Testing ProviderFactory.create() - Search Providers...", end=" ")
 try:
-    config_loader = ConfigLoader()
+    config_loader = ConfigLoader(config_path="config.test.yaml")
     search_config = config_loader.get_search_providers()
 
     created_count = 0

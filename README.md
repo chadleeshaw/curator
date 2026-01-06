@@ -36,8 +36,9 @@ docker run -d \
 # Install dependencies
 pip install -r requirements.txt
 
-# Configure services (edit local/config/config.yaml)
-# Add your API keys and URLs
+# Set up configuration
+cp config.sample.yaml local/config/config.yaml
+# Edit local/config/config.yaml with your API keys and URLs
 
 # Run the application
 python main.py
@@ -47,23 +48,53 @@ Access the web interface at `http://localhost:8000`
 
 ## Configuration
 
-Edit `local/config/config.yaml`:
+### Initial Setup
+
+1. Create the local config directory:
+   ```bash
+   mkdir -p local/config local/data local/downloads local/cache local/logs
+   ```
+
+2. Copy the sample configuration:
+   ```bash
+   cp config.sample.yaml local/config/config.yaml
+   ```
+
+3. Edit `local/config/config.yaml` with your settings:
 
 ```yaml
 search_providers:
   - type: newsnab
+    name: Prowlarr
     enabled: true
-    api_url: "http://localhost:9696"
-    api_key: "your_prowlarr_key"
+    api_url: "http://localhost:9696/api"
+    api_key: "your_prowlarr_api_key"
 
 download_client:
   type: sabnzbd
+  name: SABnzbd
   api_url: "http://localhost:8080"
-  api_key: "your_sabnzbd_key"
+  api_key: "your_sabnzbd_api_key"
 
 storage:
-  base_dir: "./local/data"
-  download_dir: "/path/to/downloads"
+  db_path: "./local/config/periodicals.db"
+  download_dir: "./local/downloads"
+  organize_dir: "./local/data"
+  cache_dir: "./local/cache"
+```
+
+### Configuration Files
+
+- `config.sample.yaml` - Sample configuration with all available options
+- `config.test.yaml` - Test configuration used by CI/CD (do not edit)
+- `local/config/config.yaml` - Your personal configuration (gitignored)
+
+### Environment Variables
+
+You can override the config file location:
+```bash
+export CURATOR_CONFIG_PATH=/path/to/custom/config.yaml
+python main.py
 ```
 
 ## Usage

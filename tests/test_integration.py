@@ -16,7 +16,6 @@ from sqlalchemy.orm import sessionmaker
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.auth import AuthManager
-from core.config import ConfigLoader
 from core.database import DatabaseManager
 from models.database import Base, DownloadSubmission, Magazine, MagazineTracking
 from processor.download_manager import DownloadManager
