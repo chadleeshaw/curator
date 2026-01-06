@@ -25,8 +25,8 @@ RUN mkdir -p \
     /app/local/cache \
     /app/local/logs
 
-# Copy sample config as default if no config exists
-RUN cp config.sample.yaml /app/local/config/config.yaml
+# Make entrypoint script executable
+RUN chmod +x /app/docker-entrypoint.sh
 
 # Environment variables with defaults
 ENV CURATOR_CONFIG_PATH=/app/local/config/config.yaml \
@@ -48,6 +48,9 @@ EXPOSE 8000
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8000/api/health')" || exit 1
+
+# Set entrypoint
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 
 # Run the application
 CMD ["python", "main.py"]
