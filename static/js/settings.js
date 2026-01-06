@@ -231,20 +231,27 @@ export class SettingsManager {
     const type = document.getElementById('download-client-type')?.value;
     const url = document.getElementById('download-client-url')?.value;
     const apiKeyInput = document.getElementById('download-client-apikey');
-    const apiKey = apiKeyInput?.value || apiKeyInput?.getAttribute('data-original-key') || '';
-    
+    const apiKey = apiKeyInput?.value; // Only use the actual input value
+
     const downloadClientConfig = {
       type,
-      api_url: url,
-      api_key: apiKey
+      api_url: url
     };
-    
+
+    // Only include api_key if user entered a new one
+    if (apiKey) {
+      downloadClientConfig.api_key = apiKey;
+    } else if (this.currentConfig?.config?.download_client?.api_key) {
+      // Preserve existing key from cached config
+      downloadClientConfig.api_key = this.currentConfig.config.download_client.api_key;
+    }
+
     try {
       const response = await APIClient.post('/api/config', {
         download_client: downloadClientConfig
       });
       const data = await response.json();
-      
+
       if (data.success) {
         UIUtils.showStatus('settings-status', 'Download client settings saved', 'success');
         setTimeout(() => UIUtils.hideStatus('settings-status'), 3000);
@@ -262,32 +269,38 @@ export class SettingsManager {
       const name = document.getElementById(`search-provider-name-${index}`).value;
       const url = document.getElementById(`search-provider-url-${index}`).value;
       const keyInput = document.getElementById(`search-provider-key-${index}`);
-      const key = keyInput.value || keyInput.getAttribute('data-original-key');
+      const key = keyInput.value; // Only use the actual input value, not data-original-key
       const enabled = document.getElementById(`search-provider-enabled-${index}`).checked;
-      
-      if (!name || !url || !key) {
-        UIUtils.showStatus('settings-status', 'Please fill in all provider fields', 'error');
+
+      if (!name || !url) {
+        UIUtils.showStatus('settings-status', 'Please fill in provider name and URL', 'error');
         return;
       }
-      
-      // Get current config
-      const response = await APIClient.get('/api/config');
-      const data = await response.json();
-      const config = data.config;
-      
-      // Update the provider
-      config.search_providers[index] = {
-        type: config.search_providers[index].type,
+
+      // Build the provider update - only include api_key if it was actually entered
+      const providerUpdate = {
+        type: this.currentConfig.config.search_providers[index].type,
         name: name,
         api_url: url,
-        api_key: key,
         enabled: enabled
       };
-      
+
+      // Only include api_key if user entered a new one
+      if (key) {
+        providerUpdate.api_key = key;
+      } else {
+        // If no new key entered, preserve the existing one from our cached config
+        providerUpdate.api_key = this.currentConfig.config.search_providers[index].api_key;
+      }
+
+      // Clone the current providers array and update the specific provider
+      const updatedProviders = JSON.parse(JSON.stringify(this.currentConfig.config.search_providers));
+      updatedProviders[index] = providerUpdate;
+
       // Save config
-      const saveResponse = await APIClient.post('/api/config', { search_providers: config.search_providers });
+      const saveResponse = await APIClient.post('/api/config', { search_providers: updatedProviders });
       const saveData = await saveResponse.json();
-      
+
       if (saveData.success) {
         UIUtils.showStatus('settings-status', 'Search provider updated successfully', 'success');
         setTimeout(() => this.loadSettings(), 1500);
@@ -307,16 +320,12 @@ export class SettingsManager {
     }
 
     try {
-      // Get current config
-      const response = await APIClient.get('/api/config');
-      const data = await response.json();
-      const config = data.config;
-
-      // Remove provider
-      config.search_providers.splice(index, 1);
+      // Clone the current providers array and remove the provider
+      const updatedProviders = JSON.parse(JSON.stringify(this.currentConfig.config.search_providers));
+      updatedProviders.splice(index, 1);
 
       // Save config
-      const saveResponse = await APIClient.post('/api/config', { search_providers: config.search_providers });
+      const saveResponse = await APIClient.post('/api/config', { search_providers: updatedProviders });
       const saveData = await saveResponse.json();
 
       if (saveData.success) {
@@ -371,7 +380,7 @@ export class SettingsManager {
     if (event) {
       event.preventDefault();
     }
-    
+
     try {
       const type = document.getElementById('new-provider-type').value;
       const name = document.getElementById('new-provider-name').value;
@@ -387,25 +396,18 @@ export class SettingsManager {
         enabled
       };
 
-      // Get current config
-      const response = await APIClient.get('/api/config');
-      if (!response || !response.ok) {
-        throw new Error('Failed to fetch current configuration');
-      }
-      const data = await response.json();
-      const config = data.config;
-      
-      // Add new provider
-      config.search_providers.push(newProvider);
-      
+      // Clone current providers array and add new provider
+      const updatedProviders = JSON.parse(JSON.stringify(this.currentConfig.config.search_providers));
+      updatedProviders.push(newProvider);
+
       // Save config
-      const saveResponse = await APIClient.post('/api/config', { search_providers: config.search_providers });
+      const saveResponse = await APIClient.post('/api/config', { search_providers: updatedProviders });
       if (!saveResponse || !saveResponse.ok) {
         const errorData = await saveResponse.json().catch(() => ({ message: 'Unknown error' }));
         throw new Error(errorData.message || 'Failed to save configuration');
       }
       const saveData = await saveResponse.json();
-      
+
       if (saveData.success) {
         UIUtils.showStatus('settings-status', 'Search provider added successfully', 'success');
         this.closeAddProviderModal();
@@ -418,7 +420,7 @@ export class SettingsManager {
       console.error('Failed to add search provider:', error);
       UIUtils.showStatus('settings-status', 'Error: ' + error.message, 'error');
     }
-    
+
     return false;
   }
 
