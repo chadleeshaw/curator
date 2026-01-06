@@ -487,14 +487,14 @@ class FileImporter:
 
             # Convert first page to image
             images = convert_from_path(
-                str(pdf_path), first_page=1, last_page=1, dpi=150
+                str(pdf_path), first_page=1, last_page=1, dpi=120
             )
             if not images:
                 logger.warning(f"Could not extract images from PDF: {pdf_path}")
                 return None
 
             # Save as JPEG
-            images[0].save(str(cover_path), "JPEG", quality=85)
+            images[0].save(str(cover_path), "JPEG", quality=50)
             logger.info(f"Extracted cover: {cover_path}")
             return cover_path
 

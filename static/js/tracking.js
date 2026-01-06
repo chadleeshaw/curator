@@ -504,6 +504,7 @@ export class TrackingManager {
   parseIssueTitle(title) {
     const patterns = [
       /(?:No\.|Issue|#)?\.?(\d+)\.?(\d{4})/, // No.405.2026 or Issue.12.2025
+      /(\d{4})[\s.-](\d{1,2})(?:\D|$)/, // 2007-11 or 2007 11 or 2007.11 (year-month)
       /(\d{4})[\s.](?:Issue|No\.)?[\s.]?(\d+)/, // 2026 No. 405
       /Vol\.?(\d+).*?(\d{4})/, // Vol.123 2026
       /(\d{4})/, // Just a year
@@ -529,10 +530,22 @@ export class TrackingManager {
 
           if (num2 > 1900 && num2 < 2100) {
             year = num2;
-            issue = num1;
+            // num1 could be issue or month - if it's 1-12, likely month
+            if (num1 >= 1 && num1 <= 12 && title.match(/(\d{4})[\s.-](\d{1,2})/)) {
+              month = num1;
+              issue = 0;
+            } else {
+              issue = num1;
+            }
           } else if (num1 > 1900 && num1 < 2100) {
             year = num1;
-            issue = num2;
+            // num2 could be issue or month - if it's 1-12 and follows year with dash/space, likely month
+            if (num2 >= 1 && num2 <= 12 && title.match(/(\d{4})[\s.-](\d{1,2})/)) {
+              month = num2;
+              issue = 0;
+            } else {
+              issue = num2;
+            }
           }
 
           if (year) break;
@@ -540,28 +553,29 @@ export class TrackingManager {
       }
     }
 
-    // Try to extract month
-    const monthMatch = title.match(
-      /(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\s(\d{1,2})[\s.](?:20|19))/i
-    );
-    if (monthMatch) {
-      const monthNames = [
-        'january',
-        'february',
-        'march',
-        'april',
-        'may',
-        'june',
-        'july',
-        'august',
-        'september',
-        'october',
-        'november',
-        'december',
-      ];
-      const lowerTitle = title.toLowerCase();
-      month =
-        monthNames.findIndex((m) => lowerTitle.includes(m)) + 1 || parseInt(monthMatch[1]) || 0;
+    // Try to extract month (only if not already found)
+    if (!month) {
+      const monthMatch = title.match(
+        /(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i
+      );
+      if (monthMatch) {
+        const monthNames = [
+          'january',
+          'february',
+          'march',
+          'april',
+          'may',
+          'june',
+          'july',
+          'august',
+          'september',
+          'october',
+          'november',
+          'december',
+        ];
+        const lowerTitle = title.toLowerCase();
+        month = monthNames.findIndex((m) => lowerTitle.includes(m)) + 1 || 0;
+      }
     }
 
     if (year) {
