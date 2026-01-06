@@ -29,6 +29,10 @@ class NewsnabProvider(SearchProvider):
         self.api_url = api_url
         self.api_key = config.get("api_key")
 
+        # Allow configurable categories (comma-separated) or default to all book-related categories
+        # Common Newznab categories: 7000=Books (all), 7010=Magazines, 7020=Ebooks, 7030=Comics
+        self.categories = config.get("categories", "7000,7010,7020,7030")  # All books including magazines
+
         if not self.api_key:
             raise ValueError("Newsnab provider requires api_key")
 
@@ -65,8 +69,10 @@ class NewsnabProvider(SearchProvider):
                 "apikey": self.api_key,
                 "t": "search",
                 "q": query,
-                "cat": "7010",  # Magazine category
+                "cat": self.categories,  # Configurable categories
             }
+
+            logger.debug(f"Newsnab searching: query='{query}', categories={self.categories}, url={url}")
 
             response = requests.get(url, params=params, timeout=10)
             response.raise_for_status()
@@ -97,7 +103,7 @@ class NewsnabProvider(SearchProvider):
                     )
                     results.append(result)
 
-            logger.info(f"Newsnab (XML API) found {len(results)} results for '{query}'")
+            logger.info(f"Newsnab (XML API) found {len(results)} results for '{query}' in categories {self.categories}")
 
         except requests.exceptions.RequestException as e:
             logger.debug(f"Newsnab XML API error: {e}")

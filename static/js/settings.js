@@ -128,6 +128,14 @@ export class SettingsManager {
                 style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
         </div>
         <div style="margin: 10px 0;">
+          <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">
+            Categories <span style="font-weight: 400; color: var(--text-secondary); font-size: 12px;">(Newsnab only, comma-separated, e.g., 7000,7010,7030)</span>:
+          </label>
+          <input type="text" id="search-provider-categories-${index}" value="${provider.categories || ''}"
+                placeholder="7000,7010,7020,7030"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
+        </div>
+        <div style="margin: 10px 0;">
           <label style="display: flex; align-items: center; gap: 8px;">
             <input type="checkbox" id="search-provider-enabled-${index}" ${provider.enabled ? 'checked' : ''}>
             Enabled
@@ -270,6 +278,7 @@ export class SettingsManager {
       const url = document.getElementById(`search-provider-url-${index}`).value;
       const keyInput = document.getElementById(`search-provider-key-${index}`);
       const key = keyInput.value; // Only use the actual input value, not data-original-key
+      const categories = document.getElementById(`search-provider-categories-${index}`).value;
       const enabled = document.getElementById(`search-provider-enabled-${index}`).checked;
 
       if (!name || !url) {
@@ -284,6 +293,11 @@ export class SettingsManager {
         api_url: url,
         enabled: enabled
       };
+
+      // Add categories if provided (optional field)
+      if (categories) {
+        providerUpdate.categories = categories;
+      }
 
       // Only include api_key if user entered a new one
       if (key) {
@@ -386,6 +400,7 @@ export class SettingsManager {
       const name = document.getElementById('new-provider-name').value;
       const apiUrl = document.getElementById('new-provider-url').value;
       const apiKey = document.getElementById('new-provider-key').value;
+      const categories = document.getElementById('new-provider-categories').value;
       const enabled = document.getElementById('new-provider-enabled').checked;
 
       const newProvider = {
@@ -395,6 +410,11 @@ export class SettingsManager {
         api_key: apiKey,
         enabled
       };
+
+      // Add categories if provided (optional field)
+      if (categories) {
+        newProvider.categories = categories;
+      }
 
       // Clone current providers array and add new provider
       const updatedProviders = JSON.parse(JSON.stringify(this.currentConfig.config.search_providers));

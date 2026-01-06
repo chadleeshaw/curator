@@ -3,6 +3,7 @@ search_providers:
   name: Test Newsnab
   api_url: http://test-newsnab.example.com/api
   api_key: test-api-key
+  categories: "7000,7010,7020,7030"
   enabled: true
 metadata_providers:
 - type: crossref

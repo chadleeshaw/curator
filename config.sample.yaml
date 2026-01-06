@@ -7,6 +7,11 @@ search_providers:
     api_url: https://your-newsnab-server.com/api
     api_key: your-api-key-here
     enabled: true
+    # Optional: Newznab categories to search (comma-separated)
+    # Default: 7000,7010,7020,7030 (All books, magazines, ebooks, comics)
+    # Common categories: 7000=Books (all), 7010=Magazines, 7020=Ebooks, 7030=Comics
+    # Leave empty or omit to search all categories
+    categories: "7000,7010,7020,7030"
 
 metadata_providers:
   - type: crossref

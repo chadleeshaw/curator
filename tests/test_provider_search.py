@@ -31,6 +31,7 @@ try:
         provider = NewsnabProvider(newsnab_config)
         assert hasattr(provider, "api_url")
         assert hasattr(provider, "api_key")
+        assert hasattr(provider, "categories")
         print("✓ PASS")
         results["NewsnabProvider.__init__()"] = True
     else:
@@ -39,6 +40,30 @@ try:
 except Exception as e:
     print(f"❌ FAIL: {e}")
     results["NewsnabProvider.__init__()"] = False
+
+# Test Newsnab categories configuration
+print("Testing NewsnabProvider categories config...", end=" ")
+try:
+    if newsnab_config:
+        # Test with configured categories
+        provider = NewsnabProvider(newsnab_config)
+        assert provider.categories == "7000,7010,7020,7030"
+
+        # Test with default categories (no categories in config)
+        config_no_categories = newsnab_config.copy()
+        if "categories" in config_no_categories:
+            del config_no_categories["categories"]
+        provider_default = NewsnabProvider(config_no_categories)
+        assert provider_default.categories == "7000,7010,7020,7030"
+
+        print("✓ PASS")
+        results["NewsnabProvider categories config"] = True
+    else:
+        print("⚠ SKIP (not configured)")
+        results["NewsnabProvider categories config"] = True
+except Exception as e:
+    print(f"❌ FAIL: {e}")
+    results["NewsnabProvider categories config"] = False
 
 # Test Newsnab search
 print("Testing NewsnabProvider.search()...", end=" ")
