@@ -222,6 +222,7 @@ async def delete_periodical(
             # Remove tracking record if requested
             if remove_tracking:
                 from models.database import MagazineTracking
+
                 olid = title.lower().replace(" ", "_").replace("-", "_")
                 tracking = (
                     db_session.query(MagazineTracking)

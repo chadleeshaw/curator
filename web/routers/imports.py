@@ -139,7 +139,10 @@ async def import_from_organize_dir(
         def process_organize_dir_imports():
             """Background task to process imports from organize directory"""
             try:
-                logger.info(f"Import settings: auto_track={options.auto_track}, tracking_mode={options.tracking_mode}")
+                logger.info(
+                    f"Import settings: auto_track={options.auto_track}, "
+                    f"tracking_mode={options.tracking_mode}"
+                )
                 db_session = _session_factory()
                 try:
                     # Temporarily override organization pattern if provided
@@ -148,7 +151,9 @@ async def import_from_organize_dir(
                         _file_importer.organization_pattern = options.organization_pattern
 
                     results = _file_importer.process_organized_files(
-                        db_session, auto_track=options.auto_track, tracking_mode=options.tracking_mode
+                        db_session,
+                        auto_track=options.auto_track,
+                        tracking_mode=options.tracking_mode,
                     )
                     logger.info(
                         f"Organize directory import results: {results['imported']} imported, {results['failed']} failed"

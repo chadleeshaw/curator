@@ -121,6 +121,7 @@ class FileImporter:
         self,
         pdf_path: Path,
         session: Session,
+        *,
         organization_pattern: Optional[str] = None,
         auto_track: bool = True,
         skip_organize: bool = False,

@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -13,9 +14,7 @@ from sqlalchemy.orm import sessionmaker
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.auth import AuthManager
-from core.config import ConfigLoader
 from models.database import Base, Credentials  # Import Credentials to register with Base
-from web.app import app
 from web.routers import auth
 
 
@@ -44,11 +43,18 @@ def test_auth_manager(test_db):
     return auth_manager
 
 
+@pytest.fixture(scope="module")
+def test_app():
+    """Create test FastAPI app with auth router"""
+    app = FastAPI(title="Test App")
+    app.include_router(auth.router)
+    return app
+
+
 @pytest.fixture
-def test_client(test_auth_manager):
+def test_client(test_auth_manager, test_app):
     """Create test client with auth manager injected"""
-    # Don't use the app's lifespan to avoid it overriding our test auth manager
-    with TestClient(app, raise_server_exceptions=True) as client:
+    with TestClient(test_app, raise_server_exceptions=True) as client:
         # Re-set auth manager to ensure it's not overridden
         auth.set_auth_manager(test_auth_manager)
         yield client
