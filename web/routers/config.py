@@ -90,6 +90,8 @@ def _deep_merge(base: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, Any]:
 async def get_config():
     """Get current configuration"""
     try:
+        # Reload from file to ensure we have the latest (including manual edits)
+        _config_loader.reload_config()
         config = _config_loader.get_all_config()
 
         # Mask sensitive data in response
@@ -105,6 +107,8 @@ async def get_config():
 async def update_config(config_update: Dict[str, Any]):
     """Update configuration"""
     try:
+        # Reload from file to ensure we have the latest (including manual edits)
+        _config_loader.reload_config()
         current_config = _config_loader.get_all_config()
 
         # Deep merge the update with current config
