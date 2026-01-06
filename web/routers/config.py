@@ -48,13 +48,21 @@ def _deep_merge(base: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, Any]:
     for key, value in update.items():
         if key in result:
             if isinstance(result[key], list) and isinstance(value, list):
-                # For lists, replace the entire list but preserve unmasked API keys
+                # For search_providers, preserve original API keys where they're masked
                 if key == "search_providers":
-                    # Preserve original API keys where they haven't changed
+                    # Create new list to avoid modifying the input
+                    merged_list = []
                     for i, provider in enumerate(value):
-                        if provider.get("api_key") == "***" and i < len(result[key]):
-                            provider["api_key"] = result[key][i].get("api_key", "")
-                result[key] = value
+                        provider_copy = provider.copy()
+                        # If the API key is masked and there's an original, use the original
+                        if provider_copy.get("api_key") == "***" and i < len(result[key]):
+                            original_key = result[key][i].get("api_key", "")
+                            provider_copy["api_key"] = original_key
+                        merged_list.append(provider_copy)
+                    result[key] = merged_list
+                else:
+                    # For other lists, replace entirely
+                    result[key] = value
             elif isinstance(result[key], dict) and isinstance(value, dict):
                 # For dicts, recursively merge
                 result[key] = _deep_merge(result[key], value)
