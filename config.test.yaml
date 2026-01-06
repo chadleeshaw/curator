@@ -23,7 +23,7 @@ download_client:
   api_key: test-api-key
 
 storage:
-  db_path: :memory:
+  db_path: ":memory:"
   download_dir: ./test_downloads
   organize_dir: ./test_data
   cache_dir: ./test_cache
