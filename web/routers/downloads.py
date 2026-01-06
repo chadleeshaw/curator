@@ -269,13 +269,35 @@ async def get_download_queue(status: str = None) -> Dict[str, Any]:
 
             submissions = query.order_by(DownloadSubmission.created_at.desc()).all()
 
+            # Get tracking info for magazine names
+            tracking_map = {}
+            tracking_ids = {s.tracking_id for s in submissions if s.tracking_id}
+            if tracking_ids:
+                trackings = db_session.query(MagazineTracking).filter(
+                    MagazineTracking.id.in_(tracking_ids)
+                ).all()
+                tracking_map = {t.id: t.title for t in trackings}
+
+            # Count by status
+            status_counts = {
+                "pending": 0,
+                "downloading": 0,
+                "completed": 0,
+                "failed": 0,
+                "skipped": 0,
+            }
+            for s in submissions:
+                status_counts[s.status.value] = status_counts.get(s.status.value, 0) + 1
+
             return {
                 "success": True,
                 "queue": [
                     {
-                        "id": s.id,
+                        "submission_id": s.id,  # Changed from 'id' to match frontend
                         "tracking_id": s.tracking_id,
                         "title": s.result_title,
+                        "magazine": tracking_map.get(s.tracking_id, "Unknown"),  # Added
+                        "url": s.source_url or "",  # Added
                         "status": s.status.value,
                         "job_id": s.job_id,
                         "error": s.last_error,
@@ -283,10 +305,14 @@ async def get_download_queue(status: str = None) -> Dict[str, Any]:
                         "created_at": (
                             s.created_at.isoformat() if s.created_at else None
                         ),
+                        "updated_at": (
+                            s.updated_at.isoformat() if s.updated_at else None
+                        ),
                     }
                     for s in submissions
                 ],
                 "count": len(submissions),
+                "status_counts": status_counts,  # Added for stats display
             }
         finally:
             db_session.close()
