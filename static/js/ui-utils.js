@@ -191,6 +191,94 @@ export class UIUtils {
       };
     });
   }
+
+  /**
+   * Show a progress modal for batch operations
+   * Returns an object with update and close methods
+   */
+  static showProgressModal(title, total) {
+    const modalHTML = `
+      <div id="progress-modal" class="modal" style="display: flex;">
+        <div class="modal-content" style="max-width: 500px;">
+          <h2>${title}</h2>
+          <div style="margin: 30px 0;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+              <span id="progress-status" style="color: var(--text-secondary);">Preparing...</span>
+              <span id="progress-count" style="color: var(--text-primary); font-weight: 600;">0/${total}</span>
+            </div>
+            <div style="width: 100%; height: 24px; background: var(--background-alt); border-radius: 12px; overflow: hidden; border: 1px solid var(--border-color);">
+              <div id="progress-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, var(--primary-color), var(--primary-hover)); transition: width 0.3s ease;"></div>
+            </div>
+          </div>
+          <div id="progress-message" style="color: var(--text-secondary); font-size: 0.9em; min-height: 20px; text-align: center;"></div>
+          <div id="progress-close-container" style="display: none; margin-top: 20px;">
+            <button id="progress-close-btn" class="btn-primary" style="width: 100%;">Close</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+    const modal = document.getElementById('progress-modal');
+    const progressBar = document.getElementById('progress-bar');
+    const progressCount = document.getElementById('progress-count');
+    const progressStatus = document.getElementById('progress-status');
+    const progressMessage = document.getElementById('progress-message');
+    const closeContainer = document.getElementById('progress-close-container');
+    const closeBtn = document.getElementById('progress-close-btn');
+
+    let currentCount = 0;
+
+    return {
+      update: (count, status = null, message = null) => {
+        currentCount = count;
+        const percentage = (count / total) * 100;
+        progressBar.style.width = `${percentage}%`;
+        progressCount.textContent = `${count}/${total}`;
+        if (status) progressStatus.textContent = status;
+        if (message) progressMessage.textContent = message;
+      },
+
+      complete: (finalMessage, success = true) => {
+        progressBar.style.width = '100%';
+        progressBar.style.background = success 
+          ? 'linear-gradient(90deg, #28a745, #20c997)' 
+          : 'linear-gradient(90deg, #dc3545, #c82333)';
+        progressStatus.textContent = success ? 'Complete' : 'Finished';
+        progressCount.textContent = `${currentCount}/${total}`;
+        progressMessage.textContent = finalMessage;
+        closeContainer.style.display = 'block';
+
+        closeBtn.onclick = () => {
+          if (modal) modal.remove();
+        };
+
+        // Auto-close after 3 seconds if successful
+        if (success) {
+          setTimeout(() => {
+            if (modal) modal.remove();
+          }, 3000);
+        }
+      },
+
+      error: (errorMessage) => {
+        progressBar.style.background = 'linear-gradient(90deg, #dc3545, #c82333)';
+        progressStatus.textContent = 'Error';
+        progressMessage.textContent = errorMessage;
+        progressMessage.style.color = 'var(--status-failed)';
+        closeContainer.style.display = 'block';
+
+        closeBtn.onclick = () => {
+          if (modal) modal.remove();
+        };
+      },
+
+      close: () => {
+        if (modal) modal.remove();
+      }
+    };
+  }
 }
 
 /**

@@ -114,7 +114,11 @@ export class DownloadsManager {
    * Delete a failed download
    */
   async deleteFailedDownload(submissionId) {
-    if (!confirm('Remove this failed download from the database?')) return;
+    const confirmed = await UIUtils.confirm(
+      'Remove Download',
+      'Remove this failed download from the database?'
+    );
+    if (!confirmed) return;
 
     try {
       const response = await APIClient.authenticatedFetch(`/api/downloads/failed/${submissionId}`, {
@@ -520,24 +524,42 @@ export class DownloadsManager {
       return;
     }
 
-    if (!confirm(`Retry ${failedItems.length} failed downloads for ${this.currentModalPeriodical}?`))
-      return;
+    const confirmed = await UIUtils.confirm(
+      'Retry Downloads',
+      `Retry ${failedItems.length} failed downloads for ${this.currentModalPeriodical}?`
+    );
+    if (!confirmed) return;
 
+    const progress = UIUtils.showProgressModal('Retrying Downloads', failedItems.length);
     let succeeded = 0;
-    for (const item of failedItems) {
+    let failed = 0;
+
+    for (let i = 0; i < failedItems.length; i++) {
+      const item = failedItems[i];
       try {
+        progress.update(i + 1, 'Retrying...', `Processing: ${item.issue || 'Unknown'}`);
         const response = await APIClient.authenticatedFetch(
           `/api/downloads/queue/retry/${item.submission_id}`,
           { method: 'POST' }
         );
         const data = await response.json();
-        if (data.success) succeeded++;
+        if (data.success) {
+          succeeded++;
+        } else {
+          failed++;
+        }
       } catch (e) {
         console.error('Retry failed:', e);
+        failed++;
       }
     }
 
-    UIUtils.showStatus('downloads-status', `Retried ${succeeded} of ${failedItems.length} downloads`, 'success');
+    const message = failed > 0 
+      ? `Retried ${succeeded} of ${failedItems.length} downloads (${failed} failed)`
+      : `Successfully retried all ${succeeded} downloads`;
+    progress.complete(message, failed === 0);
+
+    UIUtils.showStatus('downloads-status', message, failed === 0 ? 'success' : 'warning');
     this.closeManageQueueModal();
     this.loadDownloadQueue();
   }
@@ -548,28 +570,42 @@ export class DownloadsManager {
   async bulkRemoveQueue() {
     if (!this.currentModalItems) return;
 
-    if (
-      !confirm(
-        `Remove ALL ${this.currentModalItems.length} downloads for ${this.currentModalPeriodical}? This cannot be undone.`
-      )
-    )
-      return;
+    const confirmed = await UIUtils.confirm(
+      'Remove All Downloads',
+      `Remove ALL ${this.currentModalItems.length} downloads for ${this.currentModalPeriodical}? This cannot be undone.`
+    );
+    if (!confirmed) return;
 
+    const progress = UIUtils.showProgressModal('Removing Downloads', this.currentModalItems.length);
     let succeeded = 0;
-    for (const item of this.currentModalItems) {
+    let failed = 0;
+
+    for (let i = 0; i < this.currentModalItems.length; i++) {
+      const item = this.currentModalItems[i];
       try {
+        progress.update(i + 1, 'Deleting...', `Processing: ${item.issue || 'Unknown'}`);
         const response = await APIClient.authenticatedFetch(
           `/api/downloads/queue/${item.submission_id}`,
           { method: 'DELETE' }
         );
         const data = await response.json();
-        if (data.success) succeeded++;
+        if (data.success) {
+          succeeded++;
+        } else {
+          failed++;
+        }
       } catch (e) {
         console.error('Remove failed:', e);
+        failed++;
       }
     }
 
-    UIUtils.showStatus('downloads-status', `Removed ${succeeded} of ${this.currentModalItems.length} downloads`, 'success');
+    const message = failed > 0
+      ? `Removed ${succeeded} of ${this.currentModalItems.length} downloads (${failed} failed)`
+      : `Successfully removed all ${succeeded} downloads`;
+    progress.complete(message, failed === 0);
+
+    UIUtils.showStatus('downloads-status', message, failed === 0 ? 'success' : 'warning');
     this.closeManageQueueModal();
     this.loadDownloadQueue();
   }
@@ -580,27 +616,41 @@ export class DownloadsManager {
   async bulkRemoveFailed() {
     if (!this.currentModalItems) return;
 
-    if (
-      !confirm(
-        `Remove ALL ${this.currentModalItems.length} failed downloads for ${this.currentModalPeriodical}? This cannot be undone.`
-      )
-    )
-      return;
+    const confirmed = await UIUtils.confirm(
+      'Remove All Failed',
+      `Remove ALL ${this.currentModalItems.length} failed downloads for ${this.currentModalPeriodical}? This cannot be undone.`
+    );
+    if (!confirmed) return;
 
+    const progress = UIUtils.showProgressModal('Removing Failed Downloads', this.currentModalItems.length);
     let succeeded = 0;
-    for (const item of this.currentModalItems) {
+    let failed = 0;
+
+    for (let i = 0; i < this.currentModalItems.length; i++) {
+      const item = this.currentModalItems[i];
       try {
+        progress.update(i + 1, 'Deleting...', `Processing: ${item.issue || 'Unknown'}`);
         const response = await APIClient.authenticatedFetch(`/api/downloads/failed/${item.id}`, {
           method: 'DELETE',
         });
         const data = await response.json();
-        if (data.success) succeeded++;
+        if (data.success) {
+          succeeded++;
+        } else {
+          failed++;
+        }
       } catch (e) {
         console.error('Remove failed:', e);
+        failed++;
       }
     }
 
-    UIUtils.showStatus('downloads-status', `Removed ${succeeded} of ${this.currentModalItems.length} failed downloads`, 'success');
+    const message = failed > 0
+      ? `Removed ${succeeded} of ${this.currentModalItems.length} failed downloads (${failed} failed)`
+      : `Successfully removed all ${succeeded} failed downloads`;
+    progress.complete(message, failed === 0);
+
+    UIUtils.showStatus('downloads-status', message, failed === 0 ? 'success' : 'warning');
     this.closeManageFailedModal();
     this.loadFailedDownloads();
   }
