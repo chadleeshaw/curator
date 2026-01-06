@@ -142,7 +142,8 @@ class SABnzbdClient(DownloadClient):
                             "progress": int(float(slot.get("percentage", 0))),
                         }
 
-            logger.warning(f"[SABnzbd] Job {job_id} not found in queue or history")
+            # Job not found - likely deleted or expired from history
+            logger.debug(f"[SABnzbd] Job {job_id} not found in queue or history (may have been deleted)")
             return {"status": "unknown", "progress": 0}
 
         except Exception as e:

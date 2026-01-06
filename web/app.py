@@ -46,6 +46,7 @@ matching_config = config_loader.get_matching()
 db_url = f"sqlite:///{storage_config.get('db_path', './data/periodicals.db')}"
 db_manager = DatabaseManager(db_url)
 db_manager.create_tables()
+db_manager.run_migrations()
 session_factory = db_manager.session_factory
 
 # Initialize auth manager with JWT secret from config
