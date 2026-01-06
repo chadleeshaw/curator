@@ -48,7 +48,12 @@ def _deep_merge(base: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, Any]:
     for key, value in update.items():
         if key in result:
             if isinstance(result[key], list) and isinstance(value, list):
-                # For lists, replace the entire list
+                # For lists, replace the entire list but preserve unmasked API keys
+                if key == "search_providers":
+                    # Preserve original API keys where they haven't changed
+                    for i, provider in enumerate(value):
+                        if provider.get("api_key") == "***" and i < len(result[key]):
+                            provider["api_key"] = result[key][i].get("api_key", "")
                 result[key] = value
             elif isinstance(result[key], dict) and isinstance(value, dict):
                 # For dicts, recursively merge
@@ -59,17 +64,6 @@ def _deep_merge(base: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, Any]:
         else:
             result[key] = value
 
-    # Preserve original API keys if masked values are submitted
-    if "search_providers" in result and "search_providers" in update:
-        for i, provider in enumerate(update.get("search_providers", [])):
-            if provider.get("api_key") == "***" and i < len(
-                base.get("search_providers", [])
-            ):
-                # User didn't change the API key, preserve the original
-                result["search_providers"][i]["api_key"] = base["search_providers"][
-                    i
-                ].get("api_key", "***")
-
     # Preserve download client API key if masked
     if (
         "download_client" in update
@@ -77,7 +71,7 @@ def _deep_merge(base: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, Any]:
     ):
         if "download_client" in base:
             result["download_client"]["api_key"] = base["download_client"].get(
-                "api_key", "***"
+                "api_key", ""
             )
 
     return result
@@ -116,6 +110,7 @@ async def update_config(config_update: Dict[str, Any]):
         logger.info("Configuration updated via UI")
 
         return {
+            "success": True,
             "status": "success",
             "message": "Configuration updated. Please restart the application for changes to take effect.",
             "config": safe_config,
