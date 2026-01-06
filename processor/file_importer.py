@@ -208,7 +208,7 @@ class FileImporter:
                 .filter(MagazineTracking.olid == olid)
                 .first()
             )
-            
+
             if auto_track:
                 # Create or update tracking record
                 if not existing_tracking:
@@ -216,7 +216,7 @@ class FileImporter:
                     track_all_editions = tracking_mode == "all"
                     track_new_only = tracking_mode == "new"
                     # watch mode means track_all_editions=False and track_new_only=False
-                    
+
                     tracking = MagazineTracking(
                         olid=olid,
                         title=standardized_title,

@@ -21,6 +21,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     def __init__(
         self,
         app,
+        *,
         calls: int = 10,
         period: int = 60,
         auth_calls: int = 5,
