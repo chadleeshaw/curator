@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Curator</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🪙</text></svg>">
-    <link rel="stylesheet" href="/static/css/base.css?v=1767725600">
-    <link rel="stylesheet" href="/static/css/themes.css?v=1767725600">
-    <link rel="stylesheet" href="/static/css/layout.css?v=1767725600">
-    <link rel="stylesheet" href="/static/css/components.css?v=1767725600">
-    <link rel="stylesheet" href="/static/css/pages.css?v=1767725600">
-    <script type="module" src="/static/js/main.js?v=1767725600"></script>
+    <link rel="stylesheet" href="/static/css/base.css?v=1767725875">
+    <link rel="stylesheet" href="/static/css/themes.css?v=1767725875">
+    <link rel="stylesheet" href="/static/css/layout.css?v=1767725875">
+    <link rel="stylesheet" href="/static/css/components.css?v=1767725875">
+    <link rel="stylesheet" href="/static/css/pages.css?v=1767725875">
+    <script type="module" src="/static/js/main.js?v=1767725875"></script>
 </head>
 <body>
     <div class="container">
@@ -99,13 +99,8 @@
                 <!-- Download Queue Section -->
                 <div class="download-queue-section">
                     <h2>⬇️ Download Queue</h2>
-                <p>Monitor and manage your periodical downloads. See what's downloading, pending, completed, or failed.</p>
+                <p>Monitor and manage your periodical downloads. See what's downloading, pending, completed, or failed. Auto-refreshes every 10 seconds.</p>
                 <div id="downloads-status" class="hidden"></div>
-
-                <div class="queue-controls my-30 flex gap-15 flex-wrap items-center">
-                    <button onclick="loadDownloadQueue()" class="btn-secondary">🔄 Refresh</button>
-                    <button onclick="openCleanupModal()" class="btn-secondary">🧹 Cleanup Stuck Items</button>
-                </div>
 
                 <div class="queue-stats flex gap-20 mb-30 p-15 bg-surface-variant rounded-lg flex-wrap" id="queue-stats">
                     <!-- Will be populated by JavaScript -->
@@ -129,12 +124,9 @@
                 <div class="download-queue-section mt-40">
                     <h2>⚠️ Failed Downloads</h2>
                     <p>View and manage downloads that have failed, including files marked as bad (3+ failures).</p>
-                    <div class="queue-controls my-30">
-                        <button onclick="downloads.loadFailedDownloads()" class="btn-secondary">🔄 Refresh Failed</button>
-                    </div>
                     <div id="failed-downloads-container">
                         <!-- Will be populated by JavaScript -->
-                        <p style="text-align: center; color: var(--text-secondary); padding: 40px;">Click Refresh to load failed downloads</p>
+                        <p style="text-align: center; color: var(--text-secondary); padding: 40px;">Loading failed downloads...</p>
                     </div>
                 </div>
             </div>

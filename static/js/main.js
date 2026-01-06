@@ -3,14 +3,14 @@
  * Initializes the application and coordinates all modules
  */
 
-import { AuthManager } from './auth.js?v=1767725600';
-import { UIUtils } from './ui-utils.js?v=1767725600';
-import { library } from './library.js?v=1767725600';
-import { tracking } from './tracking.js?v=1767725600';
-import { downloads } from './downloads.js?v=1767725600';
-import { settings } from './settings.js?v=1767725600';
-import { tasks } from './tasks.js?v=1767725600';
-import { imports } from './imports.js?v=1767725600';
+import { AuthManager } from './auth.js?v=1767725875';
+import { UIUtils } from './ui-utils.js?v=1767725875';
+import { library } from './library.js?v=1767725875';
+import { tracking } from './tracking.js?v=1767725875';
+import { downloads } from './downloads.js?v=1767725875';
+import { settings } from './settings.js?v=1767725875';
+import { tasks } from './tasks.js?v=1767725875';
+import { imports } from './imports.js?v=1767725875';
 
 /**
  * Initialize the application
