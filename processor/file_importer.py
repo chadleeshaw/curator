@@ -111,10 +111,10 @@ class FileImporter:
         all_files = pdf_files + epub_files
 
         if not all_files:
-            logger.info("No PDF or EPUB files found in downloads folder")
+            logger.info(f"No PDF or EPUB files found in downloads folder: {self.downloads_dir}")
             return results
 
-        logger.info(f"Found {len(all_files)} files to process ({len(pdf_files)} PDFs, {len(epub_files)} EPUBs)")
+        logger.info(f"[DOWNLOADS IMPORT] Found {len(all_files)} files to process from {self.downloads_dir} ({len(pdf_files)} PDFs, {len(epub_files)} EPUBs)")
 
         # Process PDF files
         for pdf_path in pdf_files:
@@ -293,6 +293,43 @@ class FileImporter:
             logger.error(f"Error importing PDF {pdf_path}: {e}", exc_info=True)
             return False
 
+    def _get_magazine_name_from_path(self, pdf_path: Path) -> Optional[str]:
+        """
+        Walk up the directory tree to find a suitable magazine name.
+        Skips year folders (4-digit numbers) and system folders.
+
+        Args:
+            pdf_path: Path to the PDF file
+
+        Returns:
+            Magazine name from parent directories, or None if not found
+        """
+        system_folders = {'.', '..', 'downloads', 'data', '_Magazines', '_Comics', '_Articles', '_News',
+                        'local', 'cache', 'config', 'logs'}
+
+        # Start with immediate parent and walk up
+        current = pdf_path.parent
+        while current and current != current.parent:  # Stop at root
+            folder_name = current.name
+
+            # Skip system folders
+            if folder_name.lower() in system_folders:
+                current = current.parent
+                continue
+
+            # Skip year folders (4-digit numbers in valid year range 1900-2100)
+            # This allows "2600" (the magazine) while skipping actual year folders
+            if folder_name.isdigit() and len(folder_name) == 4:
+                year_value = int(folder_name)
+                if 1900 <= year_value <= 2100:
+                    current = current.parent
+                    continue
+
+            # Found a suitable magazine name
+            return folder_name
+
+        return None
+
     def _extract_metadata_from_filename(self, pdf_path: Path) -> Dict[str, Any]:
         """
         Extract metadata from filename and parent directory.
@@ -300,7 +337,7 @@ class FileImporter:
         - "National Geographic - Dec2024" or "Wired Magazine December 2024"
         - "National Geographic 2000-01" (year-issue format)
         - "PC Gamer 2023-06" (year-month format)
-        - "Apr2001" in folder "Playboy/" (uses parent folder as title)
+        - "Apr2001" in folder "2600/2001/" (walks up to find "2600")
 
         Args:
             pdf_path: Path object to the PDF file
@@ -309,7 +346,7 @@ class FileImporter:
             Dict with extracted metadata
         """
         filename = pdf_path.stem  # Get filename without extension
-        parent_name = pdf_path.parent.name  # Get immediate parent directory name
+        magazine_name = self._get_magazine_name_from_path(pdf_path)  # Get magazine name from directory tree
 
         metadata = {
             "title": filename,
@@ -388,13 +425,13 @@ class FileImporter:
 
                 metadata["issue_date"] = parsed_date
 
-                # Use parent directory name as title if available and not a system folder
-                if parent_name and parent_name not in ['.', '..', 'downloads', 'data', '_Magazines', '_Comics', '_Articles', '_News']:
-                    metadata["title"] = parent_name
-                    logger.info(f"Extracted title '{parent_name}' from parent folder for date-only filename: {filename}")
+                # Use magazine name from directory tree as title
+                if magazine_name:
+                    metadata["title"] = magazine_name
+                    logger.info(f"Extracted title '{magazine_name}' from directory tree for date-only filename: {filename}")
                 else:
                     metadata["title"] = filename
-                    logger.warning(f"Filename is date-only ({filename}) but no suitable parent folder found")
+                    logger.warning(f"Filename is date-only ({filename}) but no suitable magazine folder found")
 
                 return metadata
             except ValueError:
@@ -410,10 +447,10 @@ class FileImporter:
                     f"{year_str}-01-01", "%Y-%m-%d"
                 )
 
-                # If title is still just the filename and parent is available, use parent as title
-                if parent_name and parent_name not in ['.', '..', 'downloads', 'data', '_Magazines', '_Comics', '_Articles', '_News']:
-                    metadata["title"] = parent_name
-                    logger.info(f"Extracted title '{parent_name}' from parent folder for year-only filename: {filename}")
+                # If magazine name found in directory tree, use it as title
+                if magazine_name:
+                    metadata["title"] = magazine_name
+                    logger.info(f"Extracted title '{magazine_name}' from directory tree for year-only filename: {filename}")
                 else:
                     logger.info(f"Extracted year {year_str} from filename: {filename}")
 
@@ -578,10 +615,10 @@ class FileImporter:
         pdf_files = list(self.organize_base_dir.glob("**/*.pdf"))
 
         if not pdf_files:
-            logger.info("No PDF files found in organized folders")
+            logger.info(f"No PDF files found in organized folders: {self.organize_base_dir}")
             return results
 
-        logger.info(f"Found {len(pdf_files)} PDF files in organized folders to process")
+        logger.info(f"[DATA IMPORT] Found {len(pdf_files)} PDF files in organized folders to process from {self.organize_base_dir}")
 
         for pdf_path in pdf_files:
             try:
