@@ -6,15 +6,15 @@ search_providers:
     name: Test Newsnab
     api_url: http://test-newsnab.example.com/api
     api_key: test-api-key
-    enabled: false  # Disabled for tests to avoid actual API calls
+    enabled: true  # Enabled for config tests (won't make actual API calls)
 
 metadata_providers:
   - type: crossref
     name: CrossRef
-    enabled: false  # Disabled for tests
+    enabled: true  # Enabled for config tests
   - type: wikipedia
     name: Wikipedia
-    enabled: false  # Disabled for tests
+    enabled: true  # Enabled for config tests
 
 download_client:
   type: sabnzbd
