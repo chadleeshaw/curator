@@ -182,6 +182,39 @@
             color: var(--text-disabled);
             font-size: 1.1em;
         }
+
+        /* Status message styles - theme-aware */
+        #status-message {
+            padding: 15px;
+            border-radius: 5px;
+            border: 2px solid;
+            font-weight: 500;
+        }
+
+        #status-message.status-success {
+            background: var(--success-bg, #e8f5e9);
+            color: var(--success-text, #2e7d32);
+            border-color: var(--success-border, #4caf50);
+        }
+
+        #status-message.status-error {
+            background: var(--error-bg, #ffebee);
+            color: var(--error-text, #c62828);
+            border-color: var(--error-border, #f44336);
+        }
+
+        /* Dark mode overrides for status messages */
+        body.dark-mode #status-message.status-success {
+            background: rgba(76, 175, 80, 0.2);
+            color: #81c784;
+            border-color: #66bb6a;
+        }
+
+        body.dark-mode #status-message.status-error {
+            background: rgba(244, 67, 54, 0.2);
+            color: #e57373;
+            border-color: #ef5350;
+        }
     </style>
 </head>
 <body>
@@ -237,7 +270,7 @@
 
         // Initialize theme from localStorage
         function initializeTheme() {
-            const savedTheme = localStorage.getItem('curator-theme') || 'light';
+            const savedTheme = localStorage.getItem('curator-theme') || 'dark';
             if (savedTheme === 'dark') {
                 document.body.classList.add('dark-mode');
             }
@@ -418,9 +451,7 @@
 
                 // Show success message
                 const statusDiv = document.getElementById('status-message');
-                statusDiv.style.background = '#e8f5e9';
-                statusDiv.style.color = '#2e7d32';
-                statusDiv.style.borderColor = '#4caf50';
+                statusDiv.className = 'status-success mt-20 p-15 rounded';
                 statusDiv.textContent = `✓ ${result.message}`;
                 statusDiv.style.display = 'block';
 
@@ -443,9 +474,7 @@
             } catch (error) {
                 console.error('Error deleting issue:', error);
                 const statusDiv = document.getElementById('status-message');
-                statusDiv.style.background = '#ffebee';
-                statusDiv.style.color = '#c62828';
-                statusDiv.style.borderColor = '#f44336';
+                statusDiv.className = 'status-error mt-20 p-15 rounded';
                 statusDiv.textContent = `✗ Error: ${error.message}`;
                 statusDiv.style.display = 'block';
             }

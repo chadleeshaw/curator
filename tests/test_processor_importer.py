@@ -66,15 +66,15 @@ try:
         importer = FileImporter(tmpdir, tmpdir)
 
         # Test Pattern 1: "Title - MonYear"
-        meta1 = importer._extract_metadata_from_filename(
-            "National Geographic - Dec2000"
-        )
+        test_path1 = Path(tmpdir) / "National Geographic - Dec2000.pdf"
+        meta1 = importer._extract_metadata_from_filename(test_path1)
         assert meta1["title"] == "National Geographic"
         assert meta1["issue_date"].month == 12
         assert meta1["issue_date"].year == 2000
 
         # Test Pattern 3: "Title YYYY-MM"
-        meta3 = importer._extract_metadata_from_filename("National Geographic 2000-01")
+        test_path3 = Path(tmpdir) / "National Geographic 2000-01.pdf"
+        meta3 = importer._extract_metadata_from_filename(test_path3)
         assert meta3["title"] == "National Geographic"
         assert meta3["issue_date"].month == 1
         assert meta3["issue_date"].year == 2000

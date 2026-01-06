@@ -159,7 +159,7 @@ export class LibraryManager {
     deleteBtn.title = 'Delete this periodical';
     deleteBtn.onclick = (e) => {
       e.stopPropagation();
-      this.deletePeriodical(periodical.id, periodical.title);
+      window.deletePeriodical(periodical.id, periodical.title);
     };
     deleteBtn.onmouseover = () => (deleteBtn.style.backgroundColor = '#d32f2f');
     deleteBtn.onmouseout = () => (deleteBtn.style.backgroundColor = '#f44336');
@@ -189,6 +189,7 @@ export class LibraryManager {
    * Show delete confirmation modal for a periodical
    */
   deletePeriodical(periodicalId, title) {
+    console.log(`[Library] Setting pending delete: ID=${periodicalId}, Title=${title}`);
     this.pendingDeleteId = periodicalId;
     this.pendingDeleteTitle = title;
 
@@ -219,6 +220,7 @@ export class LibraryManager {
    * Confirm and execute periodical deletion
    */
   async confirmDeletePeriodical() {
+    console.log(`[Library] Confirming delete: pendingDeleteId=${this.pendingDeleteId}, pendingDeleteTitle=${this.pendingDeleteTitle}`);
     if (!this.pendingDeleteId) {
       console.error('No periodical selected for deletion');
       return;
@@ -306,6 +308,7 @@ export const library = new LibraryManager();
 // Expose functions globally for onclick handlers
 window.setLibrarySortField = (field) => library.setLibrarySortField(field);
 window.toggleLibrarySortOrder = () => library.toggleLibrarySortOrder();
+window.deletePeriodical = (id, title) => library.deletePeriodical(id, title);
 window.closeDeleteModal = () => library.closeDeleteModal();
 window.confirmDeletePeriodical = () => library.confirmDeletePeriodical();
 window.openImportModal = () => library.openImportModal();

@@ -92,6 +92,21 @@ class FileImporter:
         pdf_files = list(self.downloads_dir.glob("**/*.pdf"))
         epub_files = list(self.downloads_dir.glob("**/*.epub"))
 
+        # Filter out files that are within the organize_dir to prevent overlap
+        # This prevents scanning the same files if organize_dir is somehow nested in downloads_dir
+        organize_dir_resolved = self.organize_base_dir.resolve()
+
+        def is_in_organize_dir(file_path: Path) -> bool:
+            """Check if file is within the organize directory"""
+            try:
+                file_resolved = file_path.resolve()
+                return organize_dir_resolved in file_resolved.parents or file_resolved == organize_dir_resolved
+            except Exception:
+                return False
+
+        pdf_files = [f for f in pdf_files if not is_in_organize_dir(f)]
+        epub_files = [f for f in epub_files if not is_in_organize_dir(f)]
+
         # Combine all files
         all_files = pdf_files + epub_files
 
@@ -159,8 +174,8 @@ class FileImporter:
             True if successful, False otherwise
         """
         try:
-            # Extract metadata from filename
-            metadata = self._extract_metadata_from_filename(pdf_path.stem)
+            # Extract metadata from filename (pass full path for parent folder context)
+            metadata = self._extract_metadata_from_filename(pdf_path)
 
             # Standardize the title for consistency
             raw_title = metadata.get("title", "")
@@ -278,20 +293,24 @@ class FileImporter:
             logger.error(f"Error importing PDF {pdf_path}: {e}", exc_info=True)
             return False
 
-    def _extract_metadata_from_filename(self, filename: str) -> Dict[str, Any]:
+    def _extract_metadata_from_filename(self, pdf_path: Path) -> Dict[str, Any]:
         """
-        Extract metadata from filename.
+        Extract metadata from filename and parent directory.
         Supports formats like:
         - "National Geographic - Dec2024" or "Wired Magazine December 2024"
         - "National Geographic 2000-01" (year-issue format)
         - "PC Gamer 2023-06" (year-month format)
+        - "Apr2001" in folder "Playboy/" (uses parent folder as title)
 
         Args:
-            filename: PDF filename without extension
+            pdf_path: Path object to the PDF file
 
         Returns:
             Dict with extracted metadata
         """
+        filename = pdf_path.stem  # Get filename without extension
+        parent_name = pdf_path.parent.name  # Get immediate parent directory name
+
         metadata = {
             "title": filename,
             "publisher": None,
@@ -349,7 +368,39 @@ class FileImporter:
             except ValueError:
                 logger.warning(f"Could not parse year-month from filename: {filename}")
 
-        # Pattern 4: Just extract a 4-digit year anywhere in the filename
+        # Pattern 4: Filename is just a date (e.g., "Apr2001", "January2015")
+        # In this case, use parent directory name as the title
+        # Match: MonthYear or Month Year (e.g., "Apr2001", "January 2015")
+        date_only_pattern1 = r"^([A-Za-z]+)(\d{4})$"  # "Apr2001"
+        date_only_pattern2 = r"^([A-Za-z]+)\s+(\d{4})$"  # "April 2001"
+
+        match = re.search(date_only_pattern1, filename) or re.search(date_only_pattern2, filename)
+        if match:
+            month_str = match.group(1)
+            year_str = match.group(2)
+            try:
+                # Try full month name first, then 3-letter abbreviation
+                date_str = f"{month_str} {year_str}"
+                try:
+                    parsed_date = datetime.strptime(date_str, "%B %Y")
+                except ValueError:
+                    parsed_date = datetime.strptime(date_str, "%b %Y")
+
+                metadata["issue_date"] = parsed_date
+
+                # Use parent directory name as title if available and not a system folder
+                if parent_name and parent_name not in ['.', '..', 'downloads', 'data', '_Magazines', '_Comics', '_Articles', '_News']:
+                    metadata["title"] = parent_name
+                    logger.info(f"Extracted title '{parent_name}' from parent folder for date-only filename: {filename}")
+                else:
+                    metadata["title"] = filename
+                    logger.warning(f"Filename is date-only ({filename}) but no suitable parent folder found")
+
+                return metadata
+            except ValueError:
+                logger.warning(f"Could not parse date from date-only filename: {filename}")
+
+        # Pattern 5: Just extract a 4-digit year anywhere in the filename
         year_match = re.search(r"(\d{4})", filename)
         if year_match:
             year_str = year_match.group(1)
@@ -358,7 +409,14 @@ class FileImporter:
                 metadata["issue_date"] = datetime.strptime(
                     f"{year_str}-01-01", "%Y-%m-%d"
                 )
-                logger.info(f"Extracted year {year_str} from filename: {filename}")
+
+                # If title is still just the filename and parent is available, use parent as title
+                if parent_name and parent_name not in ['.', '..', 'downloads', 'data', '_Magazines', '_Comics', '_Articles', '_News']:
+                    metadata["title"] = parent_name
+                    logger.info(f"Extracted title '{parent_name}' from parent folder for year-only filename: {filename}")
+                else:
+                    logger.info(f"Extracted year {year_str} from filename: {filename}")
+
                 return metadata
             except ValueError:
                 logger.warning(f"Could not parse year from filename: {filename}")
