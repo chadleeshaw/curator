@@ -3,8 +3,8 @@
  * Handles download queue management and cleanup
  */
 
-import { APIClient } from './api.js?v=1767724592';
-import { UIUtils } from './ui-utils.js?v=1767724592';
+import { APIClient } from './api.js?v=1767725019';
+import { UIUtils } from './ui-utils.js?v=1767725019';
 
 export class DownloadsManager {
   constructor() {
@@ -51,25 +51,22 @@ export class DownloadsManager {
 
     grouped.forEach((group) => {
       const hasBadFiles = group.badCount > 0;
-      const borderColor = hasBadFiles ? 'var(--status-failed)' : 'orange';
       const icon = hasBadFiles ? '🚫' : '⚠️';
 
       html += `
-        <div style="background: var(--surface); border: 2px solid ${borderColor}; border-radius: 8px; padding: 15px; cursor: pointer;"
+        <div style="background: var(--surface); border-radius: 8px; padding: 12px; cursor: pointer; border-bottom: 2px solid var(--border-color);"
              onclick="downloads.openManageFailedModal('${group.periodical}', ${JSON.stringify(group.items).replace(/"/g, '&quot;')})">
-          <div style="display: flex; justify-content: between; align-items: center; gap: 15px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
             <div style="flex: 1;">
-              <h4 style="margin: 0; display: flex; align-items: center; gap: 10px;">
-                ${icon} ${group.periodical}
-              </h4>
-              <div style="display: flex; gap: 20px; margin-top: 10px; font-size: 0.9em; color: var(--text-secondary);">
-                <span><strong style="color: orange;">${group.failedCount}</strong> Recent Failures</span>
-                ${hasBadFiles ? `<span><strong style="color: var(--status-failed);">${group.badCount}</strong> Bad Files</span>` : ''}
-                <span><strong>${group.totalCount}</strong> Total Issues</span>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 1.1em;">${icon} ${group.periodical}</span>
+                <span style="font-size: 0.9em; color: var(--text-secondary);">${group.totalCount} issues</span>
               </div>
             </div>
-            <div style="font-size: 1.5em; color: var(--text-secondary);">
-              →
+            <div style="display: flex; gap: 10px; align-items: center;">
+              ${group.failedCount > 0 ? `<span style="background: orange; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.85em;">${group.failedCount} failed</span>` : ''}
+              ${hasBadFiles ? `<span style="background: var(--status-failed); color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.85em;">${group.badCount} bad</span>` : ''}
+              <span style="font-size: 1.2em; color: var(--text-secondary);">→</span>
             </div>
           </div>
         </div>
