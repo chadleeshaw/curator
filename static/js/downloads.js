@@ -3,8 +3,8 @@
  * Handles download queue management and cleanup
  */
 
-import { APIClient } from './api.js?v=1767726693';
-import { UIUtils } from './ui-utils.js?v=1767726693';
+import { APIClient } from './api.js?v=1767730102';
+import { UIUtils } from './ui-utils.js?v=1767730102';
 
 export class DownloadsManager {
   constructor() {
@@ -674,10 +674,19 @@ export class DownloadsManager {
     if (!confirmed) return;
 
     // Determine which status element to use (modal or base page)
-    const statusId = document.getElementById('modal-queue-status') && 
-                     !document.getElementById('manage-queue-modal').classList.contains('hidden')
-      ? 'modal-queue-status'
-      : 'downloads-status';
+    let statusId = 'downloads-status';
+    
+    // Check if we're in the manage queue modal
+    const queueModal = document.getElementById('manage-queue-modal');
+    if (queueModal && !queueModal.classList.contains('hidden')) {
+      statusId = 'modal-queue-status';
+    }
+    
+    // Check if we're in the manage failed modal
+    const failedModal = document.getElementById('manage-failed-modal');
+    if (failedModal && !failedModal.classList.contains('hidden')) {
+      statusId = 'modal-failed-status';
+    }
 
     try {
       const response = await APIClient.authenticatedFetch(
