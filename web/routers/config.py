@@ -2,6 +2,7 @@
 Configuration management routes
 """
 
+import copy
 import logging
 import os
 import sys
@@ -24,7 +25,7 @@ def set_dependencies(config_loader):
 
 def _mask_sensitive_config(config: Dict[str, Any]) -> Dict[str, Any]:
     """Mask sensitive data in config for UI display"""
-    masked = config.copy()
+    masked = copy.deepcopy(config)
 
     # Mask API keys in search providers
     if "search_providers" in masked:

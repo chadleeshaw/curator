@@ -83,6 +83,35 @@ class TestMaskSensitiveConfig:
         # Should not have added api_key fields
         assert "api_key" not in masked["search_providers"][0]
 
+    def test_mask_does_not_modify_original(self):
+        """Test that masking doesn't modify the original config (deep copy bug)"""
+        original_config = {
+            "search_providers": [
+                {"name": "Provider1", "api_key": "original_secret_key", "api_url": "http://example.com"}
+            ],
+            "download_client": {
+                "type": "sabnzbd",
+                "api_key": "original_download_key"
+            }
+        }
+
+        # Create a reference to check original values
+        original_search_key = original_config["search_providers"][0]["api_key"]
+        original_download_key = original_config["download_client"]["api_key"]
+
+        # Mask the config
+        masked = _mask_sensitive_config(original_config)
+
+        # Verify masked config has "***"
+        assert masked["search_providers"][0]["api_key"] == "***"
+        assert masked["download_client"]["api_key"] == "***"
+
+        # CRITICAL: Verify original config is unchanged
+        assert original_config["search_providers"][0]["api_key"] == original_search_key
+        assert original_config["download_client"]["api_key"] == original_download_key
+        assert original_config["search_providers"][0]["api_key"] == "original_secret_key"
+        assert original_config["download_client"]["api_key"] == "original_download_key"
+
 
 class TestDeepMerge:
     """Test deep merge functionality for config updates"""
