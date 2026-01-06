@@ -102,19 +102,9 @@
                 <p>Monitor and manage your periodical downloads. See what's downloading, pending, completed, or failed.</p>
                 <div id="downloads-status" class="hidden"></div>
 
-                <div class="queue-controls my-30 flex gap-15 flex-wrap items-center justify-between">
-                    <div class="flex gap-10">
-                        <button onclick="loadDownloadQueue()" class="btn-secondary">🔄 Refresh</button>
-                        <button onclick="openCleanupModal()" class="btn-secondary">🧹 Cleanup Stuck Items</button>
-                    </div>
-                    <div class="sort-buttons flex gap-5">
-                        <button class="sort-btn active" data-queue-filter="" onclick="filterQueue('')">All</button>
-                        <button class="sort-btn" data-queue-filter="pending" onclick="filterQueue('pending')">Pending</button>
-                        <button class="sort-btn" data-queue-filter="downloading" onclick="filterQueue('downloading')">Downloading</button>
-                        <button class="sort-btn" data-queue-filter="completed" onclick="filterQueue('completed')">Completed</button>
-                        <button class="sort-btn" data-queue-filter="failed" onclick="filterQueue('failed')">Failed</button>
-                        <button class="sort-btn" data-queue-filter="skipped" onclick="filterQueue('skipped')">Skipped</button>
-                    </div>
+                <div class="queue-controls my-30 flex gap-15 flex-wrap items-center">
+                    <button onclick="loadDownloadQueue()" class="btn-secondary">🔄 Refresh</button>
+                    <button onclick="openCleanupModal()" class="btn-secondary">🧹 Cleanup Stuck Items</button>
                 </div>
 
                 <div class="queue-stats flex gap-20 mb-30 p-15 bg-surface-variant rounded-lg flex-wrap" id="queue-stats">

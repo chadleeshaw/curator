@@ -138,28 +138,11 @@ export class DownloadsManager {
   }
 
   /**
-   * Filter queue by status
+   * Load download queue
    */
-  filterQueue(status) {
-    // Update active button state
-    document.querySelectorAll('.sort-buttons .sort-btn[data-queue-filter]').forEach((btn) => {
-      btn.classList.remove('active');
-    });
-    const activeBtn = document.querySelector(`.sort-btn[data-queue-filter="${status}"]`);
-    if (activeBtn) {
-      activeBtn.classList.add('active');
-    }
-
-    this.loadDownloadQueue(status);
-  }
-
-  /**
-   * Load download queue with optional filter
-   */
-  async loadDownloadQueue(statusFilter = '') {
+  async loadDownloadQueue() {
     try {
-      const filter = statusFilter || '';
-      const url = filter ? `/api/downloads/queue/all?status=${filter}` : '/api/downloads/queue/all';
+      const url = '/api/downloads/queue/all';
 
       console.log('[Queue] Fetching from:', url);
       const response = await APIClient.authenticatedFetch(url);
@@ -335,6 +318,21 @@ export class DownloadsManager {
     // Store current items
     this.currentModalItems = items;
     this.currentModalPeriodical = periodical;
+    this.currentModalFilter = 'all';
+
+    this.renderManageQueueModal();
+  }
+
+  /**
+   * Render the manage queue modal with current filter
+   */
+  renderManageQueueModal() {
+    const items = this.currentModalItems;
+    const periodical = this.currentModalPeriodical;
+    const filter = this.currentModalFilter || 'all';
+
+    // Filter items based on current filter
+    const filteredItems = filter === 'all' ? items : items.filter(item => item.status === filter);
 
     const statusCounts = this.getStatusCounts(items);
     const statusList = Object.entries(statusCounts)
@@ -345,6 +343,15 @@ export class DownloadsManager {
       <div class="modal-header">
         <h3>Manage Downloads: ${periodical}</h3>
         <p style="color: var(--text-secondary); margin-top: 10px;">${items.length} issues - ${statusList}</p>
+        
+        <div style="display: flex; gap: 5px; margin-top: 15px; flex-wrap: wrap;">
+          <button onclick="downloads.filterModalQueue('all')" class="sort-btn ${filter === 'all' ? 'active' : ''}">All (${items.length})</button>
+          <button onclick="downloads.filterModalQueue('pending')" class="sort-btn ${filter === 'pending' ? 'active' : ''}">Pending (${statusCounts.pending || 0})</button>
+          <button onclick="downloads.filterModalQueue('downloading')" class="sort-btn ${filter === 'downloading' ? 'active' : ''}">Downloading (${statusCounts.downloading || 0})</button>
+          <button onclick="downloads.filterModalQueue('completed')" class="sort-btn ${filter === 'completed' ? 'active' : ''}">Completed (${statusCounts.completed || 0})</button>
+          <button onclick="downloads.filterModalQueue('failed')" class="sort-btn ${filter === 'failed' ? 'active' : ''}">Failed (${statusCounts.failed || 0})</button>
+          <button onclick="downloads.filterModalQueue('skipped')" class="sort-btn ${filter === 'skipped' ? 'active' : ''}">Skipped (${statusCounts.skipped || 0})</button>
+        </div>
       </div>
       
       <div class="modal-body" style="max-height: 400px; overflow-y: auto; margin: 20px 0;">
@@ -359,20 +366,30 @@ export class DownloadsManager {
           <tbody>
     `;
 
-    items.forEach((item) => {
-      const statusColor = this.getStatusColor(item.status);
+    if (filteredItems.length === 0) {
       html += `
         <tr>
-          <td style="padding: 10px; border-bottom: 1px solid var(--border-color);">${item.title}</td>
-          <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
-            <span style="background: ${statusColor}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.85em;">${item.status}</span>
-          </td>
-          <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
-            ${this.getQueueActionButtons(item)}
+          <td colspan="3" style="padding: 40px; text-align: center; color: var(--text-secondary);">
+            No ${filter === 'all' ? '' : filter} items found
           </td>
         </tr>
       `;
-    });
+    } else {
+      filteredItems.forEach((item) => {
+        const statusColor = this.getStatusColor(item.status);
+        html += `
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid var(--border-color);">${item.title}</td>
+            <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
+              <span style="background: ${statusColor}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.85em;">${item.status}</span>
+            </td>
+            <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
+              ${this.getQueueActionButtons(item)}
+            </td>
+          </tr>
+        `;
+      });
+    }
 
     html += `
           </tbody>
@@ -396,14 +413,22 @@ export class DownloadsManager {
   }
 
   /**
+   * Filter items in the manage queue modal
+   */
+  filterModalQueue(status) {
+    this.currentModalFilter = status;
+    this.renderManageQueueModal();
+  }
+
+  /**
    * Close manage queue modal
    */
   closeManageQueueModal() {
     document.getElementById('manage-queue-modal').classList.add('hidden');
     this.currentModalItems = null;
     this.currentModalPeriodical = null;
+    this.currentModalFilter = 'all';
   }
-
   /**
    * Open modal to manage failed downloads for a periodical
    */
