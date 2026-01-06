@@ -112,7 +112,12 @@ export class LibraryManager {
     info.appendChild(h4);
 
     const dateP = document.createElement('p');
-    dateP.textContent = new Date(periodical.issue_date).toLocaleDateString();
+    const dateText = new Date(periodical.issue_date).toLocaleDateString();
+    const issueCount = periodical.issue_count || 1;
+    const issueText = issueCount === 1 ? '1 issue' : `${issueCount} issues`;
+    dateP.textContent = `Latest: ${dateText} • ${issueText}`;
+    dateP.style.fontSize = '0.9em';
+    dateP.style.color = 'var(--text-secondary)';
     info.appendChild(dateP);
 
     // Add action buttons container

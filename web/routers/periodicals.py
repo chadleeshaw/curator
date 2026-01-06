@@ -30,7 +30,8 @@ async def list_periodicals(
     skip: int = 0, limit: int = 50, sort_by: str = "title", sort_order: str = "asc"
 ) -> Dict[str, Any]:
     """
-    List organized periodicals from library.
+    List unique periodicals from library (grouped by title).
+    Returns one entry per periodical title with the latest issue's metadata.
 
     Args:
         skip: Number of records to skip for pagination
@@ -39,7 +40,7 @@ async def list_periodicals(
         sort_order: Sort direction - "asc" or "desc" (default: "asc")
 
     Returns:
-        List of periodicals with their metadata
+        List of unique periodicals with their metadata
     """
     try:
         db_session = _session_factory()
@@ -47,9 +48,27 @@ async def list_periodicals(
             # Validate sort_order
             is_descending = sort_order.lower() == "desc"
 
-            # Build query with sorting
-            query = db_session.query(Magazine)
+            # Group by title and get the latest issue for each periodical
+            from sqlalchemy import func
 
+            # Subquery to find the max issue_date for each title
+            subquery = (
+                db_session.query(
+                    Magazine.title,
+                    func.max(Magazine.issue_date).label("max_date")
+                )
+                .group_by(Magazine.title)
+                .subquery()
+            )
+
+            # Join to get full magazine record for each title's latest issue
+            query = db_session.query(Magazine).join(
+                subquery,
+                (Magazine.title == subquery.c.title) &
+                (Magazine.issue_date == subquery.c.max_date)
+            )
+
+            # Apply sorting
             if sort_by == "publisher":
                 sort_expr = (
                     Magazine.publisher.desc()
@@ -71,7 +90,15 @@ async def list_periodicals(
                 query = query.order_by(sort_expr)
 
             magazines = query.offset(skip).limit(limit).all()
-            total = db_session.query(Magazine).count()
+
+            # Get total count of unique titles
+            total_titles = db_session.query(func.count(func.distinct(Magazine.title))).scalar()
+
+            # Get issue counts for each title
+            issue_counts = {}
+            for title in set(m.title for m in magazines):
+                count = db_session.query(Magazine).filter(Magazine.title == title).count()
+                issue_counts[title] = count
 
             return {
                 "periodicals": [
@@ -85,10 +112,11 @@ async def list_periodicals(
                         "file_path": m.file_path,
                         "cover_path": m.cover_path,
                         "metadata": m.extra_metadata,
+                        "issue_count": issue_counts.get(m.title, 1),
                     }
                     for m in magazines
                 ],
-                "total": total,
+                "total": total_titles,
                 "skip": skip,
                 "limit": limit,
             }
@@ -274,4 +302,60 @@ async def delete_periodical(
         raise
     except Exception as e:
         logger.error(f"Delete periodical error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/purge-database")
+async def purge_database() -> Dict[str, Any]:
+    """
+    Purge all library entries and tracking records from the database.
+    Files on disk will NOT be deleted.
+
+    Returns:
+        Success message with counts of deleted entries
+    """
+    try:
+        db_session = _session_factory()
+        try:
+            from models.database import MagazineTracking, DownloadSubmission
+
+            # Count entries before deletion
+            magazine_count = db_session.query(Magazine).count()
+            tracking_count = db_session.query(MagazineTracking).count()
+            download_count = db_session.query(DownloadSubmission).count()
+
+            # Delete all library entries
+            db_session.query(Magazine).delete()
+            logger.info(f"Purged {magazine_count} magazine entries from database")
+
+            # Delete all tracking records
+            db_session.query(MagazineTracking).delete()
+            logger.info(f"Purged {tracking_count} tracking records from database")
+
+            # Delete all download submissions
+            db_session.query(DownloadSubmission).delete()
+            logger.info(f"Purged {download_count} download submissions from database")
+
+            # Commit all deletions
+            db_session.commit()
+
+            logger.warning("Database purged successfully. All library and tracking data removed.")
+
+            return {
+                "success": True,
+                "message": f"Database purged successfully. Removed {magazine_count} library entries, "
+                          f"{tracking_count} tracking records, and {download_count} downloads. "
+                          f"Files on disk remain untouched.",
+                "counts": {
+                    "magazines": magazine_count,
+                    "tracking": tracking_count,
+                    "downloads": download_count,
+                }
+            }
+
+        finally:
+            db_session.close()
+
+    except Exception as e:
+        logger.error(f"Purge database error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

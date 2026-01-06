@@ -742,6 +742,74 @@ export class SettingsManager {
 
     checkServer();
   }
+
+  /**
+   * Open purge database confirmation modal
+   */
+  openPurgeModal() {
+    // Reset checkbox
+    const checkbox = document.getElementById('purge-confirm-checkbox');
+    const confirmBtn = document.getElementById('purge-confirm-btn');
+
+    if (checkbox) {
+      checkbox.checked = false;
+      checkbox.onchange = () => {
+        if (confirmBtn) {
+          confirmBtn.disabled = !checkbox.checked;
+        }
+      };
+    }
+
+    if (confirmBtn) {
+      confirmBtn.disabled = true;
+    }
+
+    UIUtils.showModal('purge-database-modal');
+  }
+
+  /**
+   * Close purge database modal
+   */
+  closePurgeModal() {
+    UIUtils.closeModal('purge-database-modal');
+  }
+
+  /**
+   * Confirm and execute database purge
+   */
+  async confirmPurgeDatabase() {
+    const checkbox = document.getElementById('purge-confirm-checkbox');
+
+    if (!checkbox || !checkbox.checked) {
+      UIUtils.showStatus('settings-status', 'Please confirm you understand this action', 'error');
+      return;
+    }
+
+    try {
+      UIUtils.showStatus('settings-status', 'Purging database...', 'info');
+
+      const response = await APIClient.authenticatedFetch('/api/purge-database', {
+        method: 'POST',
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        this.closePurgeModal();
+        UIUtils.showStatus('settings-status', result.message, 'success');
+
+        // Reload the page after a delay to show empty library
+        setTimeout(() => {
+          window.location.reload();
+        }, 3000);
+      } else {
+        UIUtils.showStatus('settings-status', result.message || 'Purge failed', 'error');
+      }
+    } catch (error) {
+      console.error('Error purging database:', error);
+      UIUtils.showStatus('settings-status', `Error: ${error.message}`, 'error');
+    }
+  }
 }
 
 // Create singleton instance
@@ -762,3 +830,6 @@ window.saveAccountSettings = () => settings.saveAccountSettings();
 window.restartApplication = () => settings.restartApplication();
 window.confirmRestartApplication = () => settings.confirmRestartApplication();
 window.closeRestartModal = () => settings.closeRestartModal();
+window.openPurgeModal = () => settings.openPurgeModal();
+window.closePurgeModal = () => settings.closePurgeModal();
+window.confirmPurgeDatabase = () => settings.confirmPurgeDatabase();

@@ -150,6 +150,7 @@
                     <button class="settings-nav-btn" onclick="scrollToSection('theme-section')">🎨 Theme</button>
                     <button class="settings-nav-btn" onclick="scrollToSection('import-section')">📁 Import</button>
                     <button class="settings-nav-btn" onclick="scrollToSection('user-account-section')">👤 Account</button>
+                    <button class="settings-nav-btn" onclick="scrollToSection('database-section')" style="color: #f44336;">🗑️ Database</button>
                 </div>
 
                 <div id="settings-status" class="hidden"></div>
@@ -291,6 +292,25 @@
                         <input type="password" id="account-confirm-password" placeholder="Confirm new password">
                     </div>
                     <button onclick="saveAccountSettings()" class="save-btn">Save Account Settings</button>
+                </div>
+
+                <!-- Database Management -->
+                <div id="database-section" class="settings-section">
+                    <h3>Database Management</h3>
+                    <p class="text-base text-muted mb-15">Manage your library database</p>
+
+                    <div class="bg-warning rounded-lg p-15 mb-20">
+                        <strong>⚠️ Danger Zone</strong>
+                        <p class="mt-8 mb-0">These actions cannot be undone. Use with caution.</p>
+                    </div>
+
+                    <div class="settings-field">
+                        <label>Purge Database:</label>
+                        <p class="text-sm text-hint mb-10">Remove all library entries and tracking records from the database. Files on disk will remain untouched.</p>
+                        <button onclick="openPurgeModal()" class="save-btn btn-delete" style="background: #f44336;">
+                            🗑️ Purge Database
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -548,6 +568,42 @@
             <div class="flex gap-10 justify-end">
                 <button type="button" onclick="closeDeleteModal()" class="save-btn btn-cancel flex-0">Cancel</button>
                 <button type="button" onclick="confirmDeletePeriodical()" class="save-btn btn-delete flex-0">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Purge Database Modal -->
+    <div id="purge-database-modal" class="modal hidden">
+        <div class="modal-content delete-modal-content" style="max-width: 600px;">
+            <h3 class="delete-modal-title">⚠️ Purge Database</h3>
+            <p class="delete-modal-subtitle">Are you sure you want to purge the entire database?</p>
+
+            <div class="bg-warning rounded-lg p-15 mb-20">
+                <strong>⚠️ Warning:</strong> This action cannot be undone.
+            </div>
+
+            <div class="bg-surface-variant rounded-lg p-15 mb-20">
+                <p class="m-0 mb-10 font-bold text-primary">This will:</p>
+                <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary);">
+                    <li>Remove all library entries from the database</li>
+                    <li>Remove all tracking records</li>
+                    <li>Clear the download queue</li>
+                    <li><strong>Files on disk will NOT be deleted</strong></li>
+                </ul>
+            </div>
+
+            <div class="settings-field mb-20">
+                <label class="flex items-center gap-10">
+                    <input type="checkbox" id="purge-confirm-checkbox">
+                    <span style="color: var(--text-primary);"><strong>I understand this action cannot be undone</strong></span>
+                </label>
+            </div>
+
+            <div class="flex gap-10 justify-end">
+                <button type="button" onclick="closePurgeModal()" class="save-btn btn-cancel flex-0">Cancel</button>
+                <button type="button" onclick="confirmPurgeDatabase()" class="save-btn btn-delete flex-0" id="purge-confirm-btn" disabled>
+                    🗑️ Purge Database
+                </button>
             </div>
         </div>
     </div>
