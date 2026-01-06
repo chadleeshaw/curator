@@ -64,6 +64,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         library.closeDeleteModal();
       }
     });
+    
+    // Prevent modal content clicks from propagating to modal background
+    const modalContent = modal.querySelector('.modal-content');
+    if (modalContent) {
+      modalContent.addEventListener('click', (event) => {
+        event.stopPropagation();
+      });
+    }
   }
 
   console.log('[Main] Application initialized successfully');

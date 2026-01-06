@@ -223,6 +223,9 @@ export class LibraryManager {
     console.log(`[Library] Confirming delete: pendingDeleteId=${this.pendingDeleteId}, pendingDeleteTitle=${this.pendingDeleteTitle}`);
     if (!this.pendingDeleteId) {
       console.error('No periodical selected for deletion');
+      console.error('This usually means the state was cleared. Check if modal is being closed unexpectedly.');
+      UIUtils.showStatus('import-status', 'Error: No periodical selected for deletion. Please try again.', 'error');
+      this.closeDeleteModal();
       return;
     }
 
@@ -305,11 +308,21 @@ export class LibraryManager {
 // Create singleton instance
 export const library = new LibraryManager();
 
+console.log('[Library] LibraryManager singleton created:', library);
+
 // Expose functions globally for onclick handlers
 window.setLibrarySortField = (field) => library.setLibrarySortField(field);
 window.toggleLibrarySortOrder = () => library.toggleLibrarySortOrder();
-window.deletePeriodical = (id, title) => library.deletePeriodical(id, title);
+window.deletePeriodical = (id, title) => {
+  console.log('[Library] window.deletePeriodical called with:', id, title);
+  return library.deletePeriodical(id, title);
+};
 window.closeDeleteModal = () => library.closeDeleteModal();
-window.confirmDeletePeriodical = () => library.confirmDeletePeriodical();
+window.confirmDeletePeriodical = () => {
+  console.log('[Library] window.confirmDeletePeriodical called');
+  return library.confirmDeletePeriodical();
+};
 window.openImportModal = () => library.openImportModal();
 window.closeImportModal = () => library.closeImportModal();
+
+console.log('[Library] Window functions registered');

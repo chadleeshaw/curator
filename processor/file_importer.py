@@ -182,18 +182,24 @@ class FileImporter:
             standardized_title = self.title_matcher.standardize_title(raw_title)
             metadata["title"] = standardized_title
 
-            # Check for duplicates using fuzzy matching on standardized titles
+            # Check for duplicates using fuzzy matching on standardized titles AND issue date
+            # A duplicate is defined as: same title (fuzzy match) AND same issue date (within 5 days)
             existing_magazines = session.query(Magazine).all()
+            issue_date = metadata.get("issue_date")
             for existing in existing_magazines:
                 is_match, score = self.title_matcher.match(
                     standardized_title, existing.title
                 )
-                if is_match:
-                    logger.warning(
-                        f"Duplicate detected: '{standardized_title}' matches existing '{existing.title}' "
-                        f"(score: {score}). Skipping import."
-                    )
-                    return False
+                if is_match and issue_date and existing.issue_date:
+                    # Check if issue dates are within 5 days of each other
+                    date_diff = abs((issue_date - existing.issue_date).days)
+                    if date_diff <= 5:
+                        logger.warning(
+                            f"Duplicate detected: '{standardized_title}' ({issue_date.strftime('%b %Y')}) matches existing "
+                            f"'{existing.title}' ({existing.issue_date.strftime('%b %Y')}) "
+                            f"(title score: {score}, date diff: {date_diff} days). Skipping import."
+                        )
+                        return False
 
             # Extract cover image
             cover_path = self._extract_cover(pdf_path)
