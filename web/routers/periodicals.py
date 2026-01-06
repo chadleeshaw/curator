@@ -64,8 +64,8 @@ async def list_periodicals(
             # Join to get full magazine record for each title's latest issue
             query = db_session.query(Magazine).join(
                 subquery,
-                (Magazine.title == subquery.c.title) &
-                (Magazine.issue_date == subquery.c.max_date)
+                (Magazine.title == subquery.c.title)
+                & (Magazine.issue_date == subquery.c.max_date)
             )
 
             # Apply sorting
@@ -92,7 +92,7 @@ async def list_periodicals(
             magazines = query.offset(skip).limit(limit).all()
 
             # Get total count of unique titles
-            total_titles = db_session.query(func.count(func.distinct(Magazine.title))).scalar()
+            total_titles = db_session.query(func.count(func.distinct(Magazine.title))).scalar()  # pylint: disable=not-callable
 
             # Get issue counts for each title
             issue_counts = {}
@@ -344,8 +344,8 @@ async def purge_database() -> Dict[str, Any]:
             return {
                 "success": True,
                 "message": f"Database purged successfully. Removed {magazine_count} library entries, "
-                          f"{tracking_count} tracking records, and {download_count} downloads. "
-                          f"Files on disk remain untouched.",
+                           f"{tracking_count} tracking records, and {download_count} downloads. "
+                           f"Files on disk remain untouched.",
                 "counts": {
                     "magazines": magazine_count,
                     "tracking": tracking_count,
