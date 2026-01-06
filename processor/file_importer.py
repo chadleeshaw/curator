@@ -487,7 +487,7 @@ class FileImporter:
 
             # Convert first page to image
             images = convert_from_path(
-                str(pdf_path), first_page=1, last_page=1, dpi=120
+                str(pdf_path), first_page=1, last_page=1, dpi=60
             )
             if not images:
                 logger.warning(f"Could not extract images from PDF: {pdf_path}")
