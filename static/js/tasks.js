@@ -61,27 +61,21 @@ export class TasksManager {
                 <div style="font-size: 1.5em; font-weight: bold; color: var(--primary-color);">${stats.total_runs || 0}</div>
                 <div style="font-size: 0.75em; color: var(--text-secondary); margin-top: 2px;">Total Runs</div>
               </div>
-              ${stats.client_downloads_processed !== undefined ? `
+              ${(stats.client_downloads_processed !== undefined || stats.folder_files_imported !== undefined) ? `
               <div style="background: var(--surface); padding: 10px; border-radius: 6px; text-align: center;">
-                <div style="font-size: 1.5em; font-weight: bold; color: var(--status-completed);">${stats.client_downloads_processed}</div>
-                <div style="font-size: 0.75em; color: var(--text-secondary); margin-top: 2px;">Client Processed</div>
+                <div style="font-size: 1.5em; font-weight: bold; color: var(--status-completed);">${(stats.client_downloads_processed || 0) + (stats.folder_files_imported || 0)}</div>
+                <div style="font-size: 0.75em; color: var(--text-secondary); margin-top: 2px;">Files Processed</div>
               </div>
               ` : ''}
-              ${stats.client_downloads_failed !== undefined ? `
+              ${stats.client_downloads_failed !== undefined && stats.client_downloads_failed > 0 ? `
               <div style="background: var(--surface); padding: 10px; border-radius: 6px; text-align: center;">
-                <div style="font-size: 1.5em; font-weight: bold; color: ${stats.client_downloads_failed > 0 ? 'var(--status-failed)' : 'var(--text-secondary)'};">${stats.client_downloads_failed}</div>
-                <div style="font-size: 0.75em; color: var(--text-secondary); margin-top: 2px;">Client Failed</div>
+                <div style="font-size: 1.5em; font-weight: bold; color: var(--status-failed);">${stats.client_downloads_failed}</div>
+                <div style="font-size: 0.75em; color: var(--text-secondary); margin-top: 2px;">Failed Downloads</div>
               </div>
               ` : ''}
-              ${stats.folder_files_imported !== undefined ? `
+              ${stats.bad_files_detected !== undefined && stats.bad_files_detected > 0 ? `
               <div style="background: var(--surface); padding: 10px; border-radius: 6px; text-align: center;">
-                <div style="font-size: 1.5em; font-weight: bold; color: var(--status-completed);">${stats.folder_files_imported}</div>
-                <div style="font-size: 0.75em; color: var(--text-secondary); margin-top: 2px;">Folder Imported</div>
-              </div>
-              ` : ''}
-              ${stats.bad_files_detected !== undefined ? `
-              <div style="background: var(--surface); padding: 10px; border-radius: 6px; text-align: center;">
-                <div style="font-size: 1.5em; font-weight: bold; color: ${stats.bad_files_detected > 0 ? 'var(--status-failed)' : 'var(--text-secondary)'};">${stats.bad_files_detected}</div>
+                <div style="font-size: 1.5em; font-weight: bold; color: var(--status-failed);">${stats.bad_files_detected}</div>
                 <div style="font-size: 0.75em; color: var(--text-secondary); margin-top: 2px;">Bad Files</div>
               </div>
               ` : ''}

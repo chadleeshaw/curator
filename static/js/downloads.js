@@ -3,8 +3,8 @@
  * Handles download queue management and cleanup
  */
 
-import { APIClient } from './api.js?v=1767725875';
-import { UIUtils } from './ui-utils.js?v=1767725875';
+import { APIClient } from './api.js?v=1767726693';
+import { UIUtils } from './ui-utils.js?v=1767726693';
 
 export class DownloadsManager {
   constructor() {
