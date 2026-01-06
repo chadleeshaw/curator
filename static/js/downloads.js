@@ -3,8 +3,8 @@
  * Handles download queue management and cleanup
  */
 
-import { APIClient } from './api.js?v=1767721725';
-import { UIUtils } from './ui-utils.js?v=1767721725';
+import { APIClient } from './api.js?v=1767722639';
+import { UIUtils } from './ui-utils.js?v=1767722639';
 
 export class DownloadsManager {
   constructor() {
@@ -88,7 +88,7 @@ export class DownloadsManager {
 
     // Process failed downloads
     failed.forEach((item) => {
-      const key = item.title.split(' - ')[0] || 'Unknown';
+      const key = item.magazine || 'Unknown';
       if (!map.has(key)) {
         map.set(key, { periodical: key, items: [], failedCount: 0, badCount: 0, totalCount: 0 });
       }
@@ -100,7 +100,7 @@ export class DownloadsManager {
 
     // Process bad files
     bad.forEach((item) => {
-      const key = item.title.split(' - ')[0] || 'Unknown';
+      const key = item.magazine || 'Unknown';
       if (!map.has(key)) {
         map.set(key, { periodical: key, items: [], failedCount: 0, badCount: 0, totalCount: 0 });
       }
@@ -606,50 +606,6 @@ export class DownloadsManager {
     UIUtils.showStatus('downloads-status', `Removed ${succeeded} of ${this.currentModalItems.length} failed downloads`, 'success');
     this.closeManageFailedModal();
     this.loadFailedDownloads();
-  }
-
-  /**
-   * Get status color from CSS variables
-   */
-  getStatusColor(status) {
-    const colors = {
-      completed: getComputedStyle(document.documentElement)
-        .getPropertyValue('--status-completed')
-        .trim(),
-      downloading: getComputedStyle(document.documentElement)
-        .getPropertyValue('--status-downloading')
-        .trim(),
-      pending: getComputedStyle(document.documentElement)
-        .getPropertyValue('--status-pending')
-        .trim(),
-      failed: getComputedStyle(document.documentElement).getPropertyValue('--status-failed').trim(),
-      skipped: getComputedStyle(document.documentElement)
-        .getPropertyValue('--status-skipped')
-        .trim(),
-    };
-    return colors[status] || '#666';
-  }
-
-  /**
-   * Get action buttons for queue item
-   */
-  getQueueActionButtons(item) {
-    const pendingColor = getComputedStyle(document.documentElement)
-      .getPropertyValue('--status-pending')
-      .trim();
-    const failedColor = getComputedStyle(document.documentElement)
-      .getPropertyValue('--status-failed')
-      .trim();
-
-    let buttons = '';
-
-    if (item.status === 'failed') {
-      buttons += `<button onclick="retryDownload(${item.submission_id})" style="padding: 4px 8px; margin: 2px; background: ${pendingColor}; color: white; border: none; border-radius: 3px; cursor: pointer;">Retry</button>`;
-    }
-
-    buttons += `<button onclick="removeFromQueue(${item.submission_id})" style="padding: 4px 8px; margin: 2px; background: ${failedColor}; color: white; border: none; border-radius: 3px; cursor: pointer;">Remove</button>`;
-
-    return buttons;
   }
 
   /**

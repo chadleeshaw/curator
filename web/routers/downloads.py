@@ -397,6 +397,14 @@ async def get_failed_downloads(include_bad: bool = True) -> Dict[str, Any]:
             # Get bad files (failed 3+ times)
             bad_files = _download_manager.get_bad_files(db_session) if include_bad else []
 
+            # Get tracking info for magazine names
+            tracking_map = {}
+            all_items = list(failed) + list(bad_files)
+            tracking_ids = {d.tracking_id for d in all_items if d.tracking_id}
+            if tracking_ids:
+                trackings = db_session.query(MagazineTracking).filter(MagazineTracking.id.in_(tracking_ids)).all()
+                tracking_map = {t.id: t.title for t in trackings}
+
             return {
                 "success": True,
                 "failed_downloads": [
@@ -404,6 +412,7 @@ async def get_failed_downloads(include_bad: bool = True) -> Dict[str, Any]:
                         "id": d.id,
                         "title": d.result_title,
                         "tracking_id": d.tracking_id,
+                        "magazine": tracking_map.get(d.tracking_id, "Unknown"),
                         "url": d.source_url,
                         "attempt_count": d.attempt_count or 0,
                         "last_error": d.last_error,
@@ -416,6 +425,7 @@ async def get_failed_downloads(include_bad: bool = True) -> Dict[str, Any]:
                         "id": d.id,
                         "title": d.result_title,
                         "tracking_id": d.tracking_id,
+                        "magazine": tracking_map.get(d.tracking_id, "Unknown"),
                         "url": d.source_url,
                         "attempt_count": d.attempt_count,
                         "last_error": d.last_error,
