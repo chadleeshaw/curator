@@ -21,7 +21,7 @@ results = {}
 # Test Newsnab init
 print("Testing NewsnabProvider.__init__()...", end=" ")
 try:
-    config_loader = ConfigLoader(config_path="config.test.yaml")
+    config_loader = ConfigLoader(config_path="tests/config.test.yaml")
     search_providers_config = config_loader.get_search_providers()
     newsnab_config = next(
         (p for p in search_providers_config if p.get("type") == "newsnab"), None

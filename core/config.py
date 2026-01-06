@@ -25,7 +25,7 @@ class ConfigLoader:
         """Load config from YAML file"""
         if not self.config_path.exists():
             # Try test config as fallback (for CI/CD environments)
-            test_config_path = Path("config.test.yaml")
+            test_config_path = Path("tests/config.test.yaml")
             if test_config_path.exists():
                 logger.warning(
                     f"Config file not found at {self.config_path}, "

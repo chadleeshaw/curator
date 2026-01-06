@@ -15,7 +15,7 @@ from core.config import ConfigLoader
 @pytest.fixture
 def config_loader():
     """Create ConfigLoader instance for testing"""
-    return ConfigLoader(config_path="config.test.yaml")
+    return ConfigLoader(config_path="tests/config.test.yaml")
 
 
 class TestConfigLoaderInitialization:

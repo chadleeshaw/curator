@@ -156,7 +156,7 @@ try:
     from core.config import ConfigLoader
     from processor.file_importer import FileImporter
 
-    config_loader = ConfigLoader(config_path="config.test.yaml")
+    config_loader = ConfigLoader(config_path="tests/config.test.yaml")
     import_config = config_loader.config.get("import", {})
     pattern = import_config.get(
         "organization_pattern", "data/{category}/{title}/{year}/"

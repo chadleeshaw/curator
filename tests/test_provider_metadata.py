@@ -22,7 +22,7 @@ results = {}
 # Wikipedia tests
 print("Testing WikipediaProvider.__init__()...", end=" ")
 try:
-    config_loader = ConfigLoader(config_path="config.test.yaml")
+    config_loader = ConfigLoader(config_path="tests/config.test.yaml")
     metadata_providers_config = config_loader.get_metadata_providers()
     wiki_config = next(
         (p for p in metadata_providers_config if p.get("type") == "wikipedia"), None

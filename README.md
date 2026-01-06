@@ -86,7 +86,7 @@ storage:
 ### Configuration Files
 
 - `config.sample.yaml` - Sample configuration with all available options
-- `config.test.yaml` - Test configuration used by CI/CD (do not edit)
+- `tests/config.test.yaml` - Test configuration used by CI/CD (do not edit)
 - `local/config/config.yaml` - Your personal configuration (gitignored)
 
 ### Environment Variables
