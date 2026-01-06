@@ -40,6 +40,7 @@ async def get_tasks_status():
         if _download_monitor_task:
             dm_last_run = getattr(_download_monitor_task, "last_run_time", None)
             dm_status = getattr(_download_monitor_task, "last_status", None)
+            dm_stats = getattr(_download_monitor_task, "stats", {})
             logger.debug(
                 f"Tasks Status - Download Monitor: last_run={dm_last_run}, status={dm_status}"
             )
@@ -48,11 +49,20 @@ async def get_tasks_status():
                 {
                     "id": "download_monitor",
                     "name": "Download Monitor",
-                    "description": "Monitors download status and processes completed downloads",
+                    "description": "Monitors download client status and scans download folder recursively for PDF/EPUB files to organize",
                     "interval": 30,
                     "last_run": dm_last_run,
                     "next_run": getattr(_download_monitor_task, "next_run_time", None),
                     "last_status": dm_status,
+                    "stats": {
+                        "total_runs": dm_stats.get("total_runs", 0),
+                        "client_downloads_processed": dm_stats.get("client_downloads_processed", 0),
+                        "client_downloads_failed": dm_stats.get("client_downloads_failed", 0),
+                        "folder_files_imported": dm_stats.get("folder_files_imported", 0),
+                        "bad_files_detected": dm_stats.get("bad_files_detected", 0),
+                        "last_client_check": dm_stats.get("last_client_check"),
+                        "last_folder_scan": dm_stats.get("last_folder_scan"),
+                    },
                 }
             )
         else:
@@ -63,7 +73,7 @@ async def get_tasks_status():
             {
                 "id": "auto_download",
                 "name": "Auto Download",
-                "description": "Checks tracked periodicals for new issues and imports PDFs from downloads folder",
+                "description": "Searches for and downloads new issues of tracked periodicals (supports tracking entire series or individual issues)",
                 "interval": 1800,
                 "last_run": None,
                 "next_run": None,

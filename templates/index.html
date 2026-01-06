@@ -143,6 +143,19 @@
                     </table>
                 </div>
                 </div>
+
+                <!-- Failed Downloads Section -->
+                <div class="download-queue-section mt-40">
+                    <h2>⚠️ Failed Downloads</h2>
+                    <p>View and manage downloads that have failed, including files marked as bad (3+ failures).</p>
+                    <div class="queue-controls my-30">
+                        <button onclick="downloads.loadFailedDownloads()" class="btn-secondary">🔄 Refresh Failed</button>
+                    </div>
+                    <div id="failed-downloads-container">
+                        <!-- Will be populated by JavaScript -->
+                        <p style="text-align: center; color: var(--text-secondary); padding: 40px;">Click Refresh to load failed downloads</p>
+                    </div>
+                </div>
             </div>
         </div>
 

@@ -9,6 +9,129 @@ import { UIUtils } from './ui-utils.js';
 export class DownloadsManager {
   constructor() {
     this.refreshInterval = null;
+    this.showBadFiles = true;
+  }
+
+  /**
+   * Load failed downloads and bad files
+   */
+  async loadFailedDownloads() {
+    try {
+      const response = await APIClient.authenticatedFetch(
+        `/api/downloads/failed?include_bad=${this.showBadFiles}`
+      );
+      const data = await response.json();
+      this.displayFailedDownloads(data);
+    } catch (error) {
+      console.error('[Downloads] Error loading failed downloads:', error);
+      UIUtils.showStatus('downloads-status', 'Error loading failed downloads', 'error');
+    }
+  }
+
+  /**
+   * Display failed downloads and bad files
+   */
+  displayFailedDownloads(data) {
+    const container = document.getElementById('failed-downloads-container');
+    if (!container) return;
+
+    let html = '<h3>Failed Downloads</h3>';
+
+    // Bad files section (3+ failures)
+    if (data.bad_files && data.bad_files.length > 0) {
+      html += `
+        <div style="background: var(--surface); border: 2px solid var(--status-failed); border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+          <h4 style="color: var(--status-failed); margin-top: 0;">🚫 Bad Files (${data.total_bad}) - Will Not Retry</h4>
+          <p style="color: var(--text-secondary); font-size: 0.9em; margin-bottom: 15px;">
+            These files have failed 3+ times and will not be attempted again.
+          </p>
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+      `;
+      
+      data.bad_files.forEach(file => {
+        html += `
+          <div style="padding: 10px; background: var(--background); border-left: 4px solid var(--status-failed); border-radius: 4px;">
+            <div style="display: flex; justify-content: space-between; align-items: start; gap: 10px;">
+              <div style="flex: 1;">
+                <strong>${file.title}</strong>
+                <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">
+                  <div>❌ Attempts: ${file.attempt_count}</div>
+                  <div>📝 Error: ${file.last_error}</div>
+                  <div>🕐 Failed: ${new Date(file.failed_at).toLocaleString()}</div>
+                </div>
+              </div>
+              <button onclick="deleteFailedDownload(${file.id})" class="btn-secondary" style="background: var(--status-failed);">
+                🗑️ Remove
+              </button>
+            </div>
+          </div>
+        `;
+      });
+      
+      html += '</div></div>';
+    }
+
+    // Recent failures section (1-2 attempts)
+    if (data.failed_downloads && data.failed_downloads.length > 0) {
+      html += `
+        <div style="background: var(--surface); border: 1px solid var(--border-color); border-radius: 8px; padding: 15px;">
+          <h4 style="margin-top: 0;">⚠️ Recent Failures (${data.total_failed}) - May Retry</h4>
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+      `;
+      
+      data.failed_downloads.forEach(file => {
+        html += `
+          <div style="padding: 10px; background: var(--background); border-left: 4px solid orange; border-radius: 4px;">
+            <div style="display: flex; justify-content: space-between; align-items: start; gap: 10px;">
+              <div style="flex: 1;">
+                <strong>${file.title}</strong>
+                <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">
+                  <div>🔄 Attempts: ${file.attempt_count}/3</div>
+                  <div>📝 Error: ${file.last_error}</div>
+                  <div>🕐 Failed: ${new Date(file.failed_at).toLocaleString()}</div>
+                </div>
+              </div>
+              <button onclick="deleteFailedDownload(${file.id})" class="btn-secondary">
+                🗑️ Remove
+              </button>
+            </div>
+          </div>
+        `;
+      });
+      
+      html += '</div></div>';
+    }
+
+    if (data.total_failed === 0 && data.total_bad === 0) {
+      html += '<p style="text-align: center; color: var(--text-secondary); padding: 40px;">No failed downloads</p>';
+    }
+
+    container.innerHTML = html;
+  }
+
+  /**
+   * Delete a failed download
+   */
+  async deleteFailedDownload(submissionId) {
+    if (!confirm('Remove this failed download from the database?')) return;
+    
+    try {
+      const response = await APIClient.authenticatedFetch(
+        `/api/downloads/failed/${submissionId}`,
+        { method: 'DELETE' }
+      );
+      const data = await response.json();
+      
+      if (data.success) {
+        UIUtils.showStatus('downloads-status', 'Failed download removed', 'success');
+        this.loadFailedDownloads();
+      } else {
+        throw new Error(data.message || 'Failed to remove');
+      }
+    } catch (error) {
+      console.error('[Downloads] Error deleting failed download:', error);
+      UIUtils.showStatus('downloads-status', `Error: ${error.message}`, 'error');
+    }
   }
 
   /**
@@ -335,6 +458,7 @@ export const downloads = new DownloadsManager();
 window.filterQueue = (status) => downloads.filterQueue(status);
 window.retryDownload = (id) => downloads.retryDownload(id);
 window.removeFromQueue = (id) => downloads.removeFromQueue(id);
+window.deleteFailedDownload = (id) => downloads.deleteFailedDownload(id);
 window.openCleanupModal = () => downloads.openCleanupModal();
 window.closeCleanupModal = () => downloads.closeCleanupModal();
 window.previewCleanup = () => downloads.previewCleanup();

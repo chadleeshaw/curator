@@ -1,4 +1,4 @@
-.PHONY: help lint format lint-python lint-js lint-css format-python format-js format-css test test-unit test-routers test-coverage test-quick install run clean
+.PHONY: help lint format lint-python lint-js lint-css format-python format-js format-css test test-routers test-coverage test-quick install run clean
 
 PYTHON_FILES := $(shell find . -name '*.py' -not -path './.venv/*' -not -path './node_modules/*' -not -path './.node_modules/*')
 JS_FILES := static/js/*.js
@@ -27,7 +27,6 @@ help:
 	@echo ""
 	@echo "Testing:"
 	@echo "  make test             Run all tests with pytest"
-	@echo "  make test-unit        Run unit tests (legacy format)"
 	@echo "  make test-routers     Run router/API tests only"
 	@echo "  make test-coverage    Run tests with coverage report"
 	@echo "  make test-quick       Quick syntax check of test files"
@@ -85,20 +84,6 @@ test:
 	@echo "🧪 Running all tests..."
 	@.venv/bin/python -m pytest tests/ -v --tb=short 2>&1 | tail -50 || echo "⚠ Some tests failed"
 	@echo "✅ Test run completed!"
-
-test-unit:
-	@echo "🧪 Running unit tests (legacy)..."
-	@.venv/bin/python tests/test_clients.py && \
-		.venv/bin/python tests/test_config.py && \
-		.venv/bin/python tests/test_database.py && \
-		.venv/bin/python tests/test_factory.py && \
-		.venv/bin/python tests/test_processor_download.py && \
-		.venv/bin/python tests/test_processor_importer.py && \
-		.venv/bin/python tests/test_processor_organizer.py && \
-		.venv/bin/python tests/test_processor_scheduler.py && \
-		.venv/bin/python tests/test_provider_metadata.py && \
-		.venv/bin/python tests/test_provider_search.py
-	@echo "✅ Unit tests completed!"
 
 test-routers:
 	@echo "🧪 Running router tests..."

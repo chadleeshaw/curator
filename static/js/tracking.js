@@ -547,6 +547,34 @@ export class TrackingManager {
   }
 
   /**
+   * Toggle tracking for a single issue
+   */
+  async toggleIssueTracking(trackingId, editionId, track) {
+    try {
+      const response = await APIClient.authenticatedFetch(
+        `/api/periodicals/tracking/${trackingId}/editions/${editionId}/track?track=${track}`,
+        { method: 'POST' }
+      );
+      const data = await response.json();
+      
+      if (data.success) {
+        UIUtils.showStatus('tracking-status', 
+          `Issue ${track ? 'marked for' : 'removed from'} tracking (${data.total_selected} total)`, 
+          'success'
+        );
+        setTimeout(() => UIUtils.hideStatus('tracking-status'), 2000);
+        return true;
+      } else {
+        throw new Error(data.message || 'Failed to update tracking');
+      }
+    } catch (error) {
+      console.error('Error toggling issue tracking:', error);
+      UIUtils.showStatus('tracking-status', `Error: ${error.message}`, 'error');
+      return false;
+    }
+  }
+
+  /**
    * Display curated issues grouped by year
    */
   displayCuratedIssues(groupedByYear, title) {

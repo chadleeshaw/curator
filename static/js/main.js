@@ -43,6 +43,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else if (tabName === 'tasks') {
       tasks.loadScheduledTasks();
       downloads.loadDownloadQueue();
+      downloads.loadFailedDownloads();
       downloads.startAutoRefresh();
     }
   } else {
@@ -87,6 +88,7 @@ window.addEventListener('hashchange', () => {
     } else if (tabName === 'tasks') {
       tasks.loadScheduledTasks();
       downloads.loadDownloadQueue();
+      downloads.loadFailedDownloads();
     }
   }
 });

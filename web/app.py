@@ -76,9 +76,7 @@ async def lifespan(app: FastAPI):
         for provider_config in search_provider_configs:
             try:
                 if not provider_config.get("type"):
-                    logger.warning(
-                        f"Skipping provider with no type: {provider_config.get('name')}"
-                    )
+                    logger.warning(f"Skipping provider with no type: {provider_config.get('name')}")
                     continue
 
                 # Check if provider is properly configured
@@ -90,9 +88,7 @@ async def lifespan(app: FastAPI):
                     logger.warning("Skipping RSS provider: Feed URL not configured")
                     continue
 
-                logger.debug(
-                    f"Creating search provider: {provider_config.get('name')} (type: {provider_type})"
-                )
+                logger.debug(f"Creating search provider: {provider_config.get('name')} (type: {provider_type})")
                 provider = ProviderFactory.create(provider_config)
                 search_providers.append(provider)
                 logger.info(f"Loaded search provider: {provider.name}")
@@ -107,9 +103,7 @@ async def lifespan(app: FastAPI):
         for provider_config in metadata_provider_configs:
             try:
                 if not provider_config.get("type"):
-                    logger.warning(
-                        f"Skipping metadata provider with no type: {provider_config.get('name')}"
-                    )
+                    logger.warning(f"Skipping metadata provider with no type: {provider_config.get('name')}")
                     continue
 
                 logger.debug(
@@ -128,24 +122,18 @@ async def lifespan(app: FastAPI):
         try:
             client_config = config_loader.get_download_client()
             if not client_config.get("api_key"):
-                logger.warning(
-                    "Download client not available: API key not configured (configure in Settings)"
-                )
+                logger.warning("Download client not available: API key not configured (configure in Settings)")
                 download_client = None
             else:
                 download_client = ClientFactory.create(client_config)
                 logger.info(f"Loaded download client: {download_client.name}")
         except Exception as e:
-            logger.warning(
-                f"Download client not available (configure in Settings): {e}"
-            )
+            logger.warning(f"Download client not available (configure in Settings): {e}")
             download_client = None
 
         # Initialize other components
         title_matcher = TitleMatcher(matching_config.get("fuzzy_threshold", 80))
-        file_processor = FileProcessor(
-            storage_config.get("organize_dir", "./_Magazines")
-        )
+        file_processor = FileProcessor(storage_config.get("organize_dir", "./_Magazines"))
         file_importer = FileImporter(
             downloads_dir=storage_config.get("download_dir", "./downloads"),
             organize_base_dir=storage_config.get("organize_dir", "./_Magazines"),
@@ -167,27 +155,25 @@ async def lifespan(app: FastAPI):
                 download_manager=download_manager,
                 file_importer=file_importer,
                 session_factory=session_factory,
+                downloads_dir=storage_config.get("download_dir", "./downloads"),
             )
             logger.info("Download monitor task initialized")
         else:
-            logger.warning(
-                "Download manager not initialized: missing download client or search providers"
-            )
+            logger.warning("Download manager not initialized: missing download client or search providers")
 
         # Initialize task scheduler
         task_scheduler = TaskScheduler()
 
         # Define auto-download task
         async def auto_download_task():
-            """Auto-download tracked periodicals and import new files every 30 minutes"""
+            """Search and download new issues for tracked periodicals every 30 minutes"""
             try:
                 db_session = session_factory()
                 try:
-                    # Part 1: Auto-download for tracked periodicals
                     if download_manager:
                         logger.debug("Auto-download: Checking tracked periodicals for new issues")
 
-                        # Get all tracked periodicals with auto-download enabled
+                        # Get all tracked periodicals with any form of tracking enabled
                         tracked = (
                             db_session.query(MagazineTracking)
                             .filter(
@@ -197,34 +183,46 @@ async def lifespan(app: FastAPI):
                             .all()
                         )
 
-                        if tracked:
-                            logger.info(f"Auto-download: Found {len(tracked)} periodicals to check")
+                        # Also get periodicals with selected editions
+                        tracked_with_selections = (
+                            db_session.query(MagazineTracking)
+                            .filter(MagazineTracking.selected_editions.isnot(None))
+                            .all()
+                        )
 
-                            for periodical in tracked:
+                        # Combine and deduplicate
+                        all_tracked = {t.id: t for t in tracked}
+                        for t in tracked_with_selections:
+                            if t.id not in all_tracked and t.selected_editions:
+                                # Check if any editions are actually selected (True values)
+                                if any(t.selected_editions.values()):
+                                    all_tracked[t.id] = t
+
+                        if all_tracked:
+                            logger.info(f"Auto-download: Found {len(all_tracked)} periodicals to check")
+
+                            for periodical in all_tracked.values():
                                 try:
                                     logger.debug(f"Auto-download: Checking '{periodical.title}' for new issues")
-                                    results = download_manager.download_all_periodical_issues(
-                                        periodical.id, db_session
-                                    )
+
+                                    # Determine which download method to use
+                                    if periodical.track_all_editions or periodical.track_new_only:
+                                        # Download all available issues
+                                        results = download_manager.download_all_periodical_issues(
+                                            periodical.id, db_session
+                                        )
+                                    elif periodical.selected_editions and any(periodical.selected_editions.values()):
+                                        # Download only selected editions
+                                        results = download_manager.download_selected_editions(periodical.id, db_session)
+                                    else:
+                                        continue
+
                                     if results.get("submitted", 0) > 0:
                                         logger.info(
                                             f"Auto-download: Submitted {results['submitted']} issues for '{periodical.title}'"
                                         )
                                 except Exception as e:
-                                    logger.error(
-                                        f"Auto-download: Error checking '{periodical.title}': {e}"
-                                    )
-
-                    # Part 2: Import PDFs from downloads folder
-                    downloads_dir = Path(
-                        storage_config.get("download_dir", "./downloads")
-                    )
-                    pdf_count = len(list(downloads_dir.glob("*.pdf")))
-
-                    if pdf_count > 0:
-                        logger.debug(f"Auto-download: Found {pdf_count} PDFs to import")
-                        results = file_importer.process_downloads(db_session)
-                        logger.debug(f"Auto-download import results: {results}")
+                                    logger.error(f"Auto-download: Error checking '{periodical.title}': {e}")
                 finally:
                     db_session.close()
             except Exception as e:
@@ -232,7 +230,7 @@ async def lifespan(app: FastAPI):
 
         # Define download monitoring task
         async def download_monitoring_task():
-            """Monitor downloads and process completed ones every 30 seconds"""
+            """Monitor download client and scan downloads folder for files to import (runs every 30 seconds)"""
             if download_monitor_task:
                 try:
                     await download_monitor_task.run()
@@ -246,18 +244,11 @@ async def lifespan(app: FastAPI):
                 db_session = session_factory()
                 try:
                     # Get all covers in the database
-                    periodicals = (
-                        db_session.query(Magazine)
-                        .filter(Magazine.cover_path is not None)
-                        .all()
-                    )
+                    periodicals = db_session.query(Magazine).filter(Magazine.cover_path is not None).all()
                     db_cover_paths = {m.cover_path for m in periodicals if m.cover_path}
 
                     # Find all cover files on disk
-                    covers_dir = (
-                        Path(storage_config.get("organize_base_dir", "./local/data"))
-                        / ".covers"
-                    )
+                    covers_dir = Path(storage_config.get("organize_base_dir", "./local/data")) / ".covers"
                     if covers_dir.exists():
                         cover_files = set(str(f) for f in covers_dir.glob("*.jpg"))
 
@@ -272,14 +263,10 @@ async def lifespan(app: FastAPI):
                                 deleted_count += 1
                                 logger.debug(f"Deleted orphaned cover: {orphan_path}")
                             except Exception as e:
-                                logger.error(
-                                    f"Error deleting orphaned cover {orphan_path}: {e}"
-                                )
+                                logger.error(f"Error deleting orphaned cover {orphan_path}: {e}")
 
                         if deleted_count > 0:
-                            logger.info(
-                                f"Cleanup covers: Deleted {deleted_count} orphaned cover files"
-                            )
+                            logger.info(f"Cleanup covers: Deleted {deleted_count} orphaned cover files")
                     else:
                         logger.debug("Covers directory does not exist yet")
                 finally:
@@ -291,36 +278,26 @@ async def lifespan(app: FastAPI):
         task_scheduler.schedule_periodic("auto_download", auto_download_task, 1800)
 
         # Schedule download monitoring every 30 seconds
-        task_scheduler.schedule_periodic(
-            "download_monitor", download_monitoring_task, 30
-        )
+        task_scheduler.schedule_periodic("download_monitor", download_monitoring_task, 30)
 
         # Schedule cover cleanup every 24 hours (86400 seconds)
-        task_scheduler.schedule_periodic(
-            "cleanup_orphaned_covers", cleanup_orphaned_covers_task, 86400
-        )
+        task_scheduler.schedule_periodic("cleanup_orphaned_covers", cleanup_orphaned_covers_task, 86400)
 
         # Start scheduler in background
         scheduler_task = asyncio.create_task(task_scheduler.start())
 
         # Initialize router dependencies
         auth.set_auth_manager(auth_manager)
-        search.set_dependencies(
-            search_providers, metadata_providers, title_matcher, session_factory
-        )
+        search.set_dependencies(search_providers, metadata_providers, title_matcher, session_factory)
         periodicals.set_dependencies(session_factory)
         tracking.set_dependencies(session_factory, search_providers)
         downloads.set_dependencies(session_factory, download_manager, download_client)
         imports.set_dependencies(session_factory, file_importer, storage_config)
-        tasks.set_dependencies(
-            session_factory, download_monitor_task, file_importer, storage_config
-        )
+        tasks.set_dependencies(session_factory, download_monitor_task, file_importer, storage_config)
         config.set_dependencies(config_loader)
         pages.set_dependencies(session_factory)
 
-        logger.info(
-            "Curator initialized successfully with auto-import and download monitoring enabled"
-        )
+        logger.info("Curator initialized successfully with auto-import and download monitoring enabled")
 
     except Exception as e:
         logger.error(f"Startup error: {e}")
@@ -484,9 +461,7 @@ async def get_status():
     return {
         "status": "running",
         "providers": [p.get_provider_info() for p in search_providers],
-        "download_client": (
-            download_client.get_client_info() if download_client else None
-        ),
+        "download_client": (download_client.get_client_info() if download_client else None),
     }
 
 

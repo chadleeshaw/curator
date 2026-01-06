@@ -407,11 +407,14 @@ class TestDownloadMonitorTask:
         manager = Mock()
         file_importer = Mock()
 
-        task = DownloadMonitorTask(manager, file_importer, session_factory)
+        task = DownloadMonitorTask(
+            manager, file_importer, session_factory, downloads_dir="./test_downloads"
+        )
 
         assert task.download_manager == manager
         assert task.file_importer == file_importer
         assert task.session_factory == session_factory
+        assert task.downloads_dir.name == "test_downloads"
 
 
 if __name__ == "__main__":

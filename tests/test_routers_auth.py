@@ -287,9 +287,6 @@ class TestUpdateUser:
         )
         assert new_login.status_code == 200
 
-    @pytest.mark.xfail(
-        reason="Fails when run with full test suite due to test interaction. Passes in isolation."
-    )
     def test_update_both(self, test_client, test_auth_manager):
         """Test updating both username and password"""
         test_auth_manager.create_credentials("olduser", "oldpass123")
@@ -315,9 +312,6 @@ class TestUpdateUser:
         )
         assert new_login.status_code == 200
 
-    @pytest.mark.xfail(
-        reason="Fails when run with full test suite due to test interaction. Passes in isolation."
-    )
     def test_update_wrong_current_password(self, test_client, test_auth_manager):
         """Test update fails with wrong current password"""
         test_auth_manager.create_credentials("testuser", "password123")

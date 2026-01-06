@@ -88,18 +88,20 @@ class FileImporter:
             logger.warning(f"Downloads directory not found: {self.downloads_dir}")
             return results
 
-        # Find all PDF files - both flat and nested
-        pdf_files = list(self.downloads_dir.glob("*.pdf"))
+        # Find all PDF and EPUB files recursively
+        pdf_files = list(self.downloads_dir.glob("**/*.pdf"))
+        epub_files = list(self.downloads_dir.glob("**/*.epub"))
 
-        # Also look in subdirectories if configured
-        pdf_files.extend(list(self.downloads_dir.glob("*/*.pdf")))
+        # Combine all files
+        all_files = pdf_files + epub_files
 
-        if not pdf_files:
-            logger.info("No PDF files found in downloads folder")
+        if not all_files:
+            logger.info("No PDF or EPUB files found in downloads folder")
             return results
 
-        logger.info(f"Found {len(pdf_files)} PDF files to process")
+        logger.info(f"Found {len(all_files)} files to process ({len(pdf_files)} PDFs, {len(epub_files)} EPUBs)")
 
+        # Process PDF files
         for pdf_path in pdf_files:
             try:
                 result = self.import_pdf(
@@ -114,6 +116,19 @@ class FileImporter:
             except Exception as e:
                 results["failed"] += 1
                 error_msg = f"Error importing {pdf_path.name}: {str(e)}"
+                results["errors"].append(error_msg)
+                logger.error(error_msg, exc_info=True)
+
+        # Process EPUB files (convert to PDF first)
+        for epub_path in epub_files:
+            try:
+                logger.info(f"Converting EPUB to PDF: {epub_path.name}")
+                # TODO: Add EPUB to PDF conversion
+                # For now, just log that EPUBs are found
+                results["errors"].append(f"EPUB support coming soon: {epub_path.name}")
+                logger.warning(f"EPUB files not yet supported, skipping: {epub_path.name}")
+            except Exception as e:
+                error_msg = f"Error processing EPUB {epub_path.name}: {str(e)}"
                 results["errors"].append(error_msg)
                 logger.error(error_msg, exc_info=True)
 
