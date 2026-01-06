@@ -32,6 +32,7 @@ class DownloadMonitorTask:
         file_importer: FileImporter,
         session_factory: sessionmaker,
         downloads_dir: str,
+        *,
         import_callback: Optional[Callable] = None,
     ):
         """

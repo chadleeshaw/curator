@@ -305,7 +305,7 @@ class FileImporter:
             Magazine name from parent directories, or None if not found
         """
         system_folders = {'.', '..', 'downloads', 'data', '_Magazines', '_Comics', '_Articles', '_News',
-                        'local', 'cache', 'config', 'logs'}
+                          'local', 'cache', 'config', 'logs'}
 
         # Start with immediate parent and walk up
         current = pdf_path.parent
