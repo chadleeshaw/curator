@@ -120,6 +120,14 @@ export class DownloadsManager {
     );
     if (!confirmed) return;
 
+    // Determine which status element to use (modal or base page)
+    let statusId = 'downloads-status';
+    
+    const failedModal = document.getElementById('manage-failed-modal');
+    if (failedModal && !failedModal.classList.contains('hidden')) {
+      statusId = 'modal-failed-status';
+    }
+
     try {
       const response = await APIClient.authenticatedFetch(`/api/downloads/failed/${submissionId}`, {
         method: 'DELETE',
@@ -127,14 +135,14 @@ export class DownloadsManager {
       const data = await response.json();
 
       if (data.success) {
-        UIUtils.showStatus('downloads-status', 'Failed download removed', 'success');
+        UIUtils.showStatus(statusId, 'Failed download removed', 'success');
         this.loadFailedDownloads();
       } else {
         throw new Error(data.message || 'Failed to remove');
       }
     } catch (error) {
       console.error('[Downloads] Error deleting failed download:', error);
-      UIUtils.showStatus('downloads-status', `Error: ${error.message}`, 'error');
+      UIUtils.showStatus(statusId, `Error: ${error.message}`, 'error');
     }
   }
 
@@ -721,6 +729,19 @@ export class DownloadsManager {
     );
     if (!confirmed) return;
 
+    // Determine which status element to use (modal or base page)
+    let statusId = 'downloads-status';
+    
+    const queueModal = document.getElementById('manage-queue-modal');
+    if (queueModal && !queueModal.classList.contains('hidden')) {
+      statusId = 'modal-queue-status';
+    }
+    
+    const failedModal = document.getElementById('manage-failed-modal');
+    if (failedModal && !failedModal.classList.contains('hidden')) {
+      statusId = 'modal-failed-status';
+    }
+
     try {
       const response = await APIClient.authenticatedFetch(`/api/downloads/queue/${submissionId}`, {
         method: 'DELETE',
@@ -729,15 +750,15 @@ export class DownloadsManager {
       const data = await response.json();
 
       if (data.success) {
-        UIUtils.showStatus('downloads-status', data.message, 'success');
-        setTimeout(() => UIUtils.hideStatus('downloads-status'), 3000);
+        UIUtils.showStatus(statusId, data.message, 'success');
+        setTimeout(() => UIUtils.hideStatus(statusId), 3000);
         this.loadDownloadQueue();
       } else {
-        UIUtils.showStatus('downloads-status', data.message || 'Failed to remove', 'error');
+        UIUtils.showStatus(statusId, data.message || 'Failed to remove', 'error');
       }
     } catch (error) {
       console.error('Error removing from queue:', error);
-      UIUtils.showStatus('downloads-status', error.message, 'error');
+      UIUtils.showStatus(statusId, error.message, 'error');
     }
   }
 
