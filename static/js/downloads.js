@@ -841,7 +841,7 @@ export class DownloadsManager {
 export const downloads = new DownloadsManager();
 
 // Expose functions globally for onclick handlers
-window.filterQueue = (status) => downloads.filterQueue(status);
+window.loadDownloadQueue = () => downloads.loadDownloadQueue();
 window.retryDownload = (id) => downloads.retryDownload(id);
 window.removeFromQueue = (id) => downloads.removeFromQueue(id);
 window.deleteFailedDownload = (id) => downloads.deleteFailedDownload(id);
@@ -849,3 +849,4 @@ window.openCleanupModal = () => downloads.openCleanupModal();
 window.closeCleanupModal = () => downloads.closeCleanupModal();
 window.previewCleanup = () => downloads.previewCleanup();
 window.executeCleanup = () => downloads.executeCleanup();
+
