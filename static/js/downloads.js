@@ -3,8 +3,8 @@
  * Handles download queue management and cleanup
  */
 
-import { APIClient } from './api.js?v=1767722639';
-import { UIUtils } from './ui-utils.js?v=1767722639';
+import { APIClient } from './api.js?v=1767724592';
+import { UIUtils } from './ui-utils.js?v=1767724592';
 
 export class DownloadsManager {
   constructor() {
@@ -796,7 +796,8 @@ export class DownloadsManager {
 // Create singleton instance
 export const downloads = new DownloadsManager();
 
-// Expose functions globally for onclick handlers
+// Expose downloads object and functions globally for onclick handlers
+window.downloads = downloads;
 window.loadDownloadQueue = () => downloads.loadDownloadQueue();
 window.retryDownload = (id) => downloads.retryDownload(id);
 window.removeFromQueue = (id) => downloads.removeFromQueue(id);
