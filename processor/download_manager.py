@@ -701,3 +701,65 @@ class DownloadManager:
         )
         logger.debug(f"Found {len(bad_files)} bad files (failed 3+ times)")
         return bad_files
+
+    def retry_submission(self, submission_id: int, session: Session) -> Dict[str, Any]:
+        """
+        Retry a failed download submission by resubmitting it to the download client.
+
+        Args:
+            submission_id: ID of the DownloadSubmission to retry
+            session: Database session
+
+        Returns:
+            Dict with success status and message
+        """
+        submission = session.query(DownloadSubmission).filter(DownloadSubmission.id == submission_id).first()
+
+        if not submission:
+            logger.warning(f"Submission not found: {submission_id}")
+            return {"success": False, "message": "Submission not found"}
+
+        if submission.status not in [
+            DownloadSubmission.StatusEnum.FAILED,
+            DownloadSubmission.StatusEnum.SKIPPED,
+        ]:
+            return {"success": False, "message": f"Cannot retry submission with status: {submission.status.value}"}
+
+        # Check if this is a bad file (failed 3+ times)
+        if submission.attempt_count >= 3:
+            logger.warning(
+                f"Cannot retry bad file (failed {submission.attempt_count} times): "
+                f"{submission.result_title} (ID: {submission_id})"
+            )
+            return {
+                "success": False,
+                "message": f"Cannot retry: file has failed {submission.attempt_count} times (max 3)",
+            }
+
+        try:
+            # Resubmit to download client
+            logger.info(f"Retrying submission {submission_id}: {submission.result_title}")
+            job_id = self.download_client.submit(nzb_url=submission.source_url, title=submission.result_title)
+
+            if not job_id:
+                logger.warning(f"Download client rejected retry submission: {submission.result_title}")
+                return {"success": False, "message": "Download client rejected submission"}
+
+            # Update submission record
+            submission.job_id = job_id
+            submission.status = DownloadSubmission.StatusEnum.PENDING
+            submission.last_error = None
+            submission.updated_at = datetime.now(UTC)
+            # Note: Don't reset attempt_count, it should accumulate across retries
+            session.commit()
+
+            logger.info(f"Successfully retried submission {submission_id} with new job_id: {job_id}")
+            return {
+                "success": True,
+                "message": f"Retry submitted (attempt {submission.attempt_count + 1})",
+                "job_id": job_id,
+            }
+
+        except Exception as e:
+            logger.error(f"Error retrying submission {submission_id}: {e}", exc_info=True)
+            return {"success": False, "message": f"Error: {str(e)}"}

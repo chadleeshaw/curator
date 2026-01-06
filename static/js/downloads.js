@@ -344,6 +344,7 @@ export class DownloadsManager {
       <div class="modal-header">
         <h3>Manage Downloads: ${periodical}</h3>
         <p style="color: var(--text-secondary); margin-top: 10px;">${items.length} issues - ${statusList}</p>
+        <div id="modal-queue-status" class="hidden" style="margin-top: 10px;"></div>
         
         <div style="display: flex; gap: 5px; margin-top: 15px; flex-wrap: wrap;">
           <button onclick="downloads.filterModalQueue('all')" class="sort-btn ${filter === 'all' ? 'active' : ''}">All (${items.length})</button>
@@ -454,6 +455,7 @@ export class DownloadsManager {
       <div class="modal-header">
         <h3>Manage Failed Downloads: ${periodical}</h3>
         <p style="color: var(--text-secondary); margin-top: 10px;">${failedCount} recent failures, ${badCount} bad files</p>
+        <div id="modal-failed-status" class="hidden" style="margin-top: 10px;"></div>
       </div>
       
       <div class="modal-body" style="max-height: 400px; overflow-y: auto; margin: 20px 0;">
@@ -520,7 +522,7 @@ export class DownloadsManager {
 
     const failedItems = this.currentModalItems.filter((item) => item.status === 'failed');
     if (failedItems.length === 0) {
-      UIUtils.showStatus('downloads-status', 'No failed items to retry', 'info');
+      UIUtils.showStatus('modal-queue-status', 'No failed items to retry', 'info');
       return;
     }
 
@@ -559,9 +561,11 @@ export class DownloadsManager {
       : `Successfully retried all ${succeeded} downloads`;
     progress.complete(message, failed === 0);
 
-    UIUtils.showStatus('downloads-status', message, failed === 0 ? 'success' : 'warning');
-    this.closeManageQueueModal();
-    this.loadDownloadQueue();
+    UIUtils.showStatus('modal-queue-status', message, failed === 0 ? 'success' : 'warning');
+    setTimeout(() => {
+      this.closeManageQueueModal();
+      this.loadDownloadQueue();
+    }, 2000);
   }
 
   /**
@@ -605,9 +609,11 @@ export class DownloadsManager {
       : `Successfully removed all ${succeeded} downloads`;
     progress.complete(message, failed === 0);
 
-    UIUtils.showStatus('downloads-status', message, failed === 0 ? 'success' : 'warning');
-    this.closeManageQueueModal();
-    this.loadDownloadQueue();
+    UIUtils.showStatus('modal-queue-status', message, failed === 0 ? 'success' : 'warning');
+    setTimeout(() => {
+      this.closeManageQueueModal();
+      this.loadDownloadQueue();
+    }, 2000);
   }
 
   /**
@@ -650,9 +656,11 @@ export class DownloadsManager {
       : `Successfully removed all ${succeeded} failed downloads`;
     progress.complete(message, failed === 0);
 
-    UIUtils.showStatus('downloads-status', message, failed === 0 ? 'success' : 'warning');
-    this.closeManageFailedModal();
-    this.loadFailedDownloads();
+    UIUtils.showStatus('modal-failed-status', message, failed === 0 ? 'success' : 'warning');
+    setTimeout(() => {
+      this.closeManageFailedModal();
+      this.loadFailedDownloads();
+    }, 2000);
   }
 
   /**
@@ -665,6 +673,12 @@ export class DownloadsManager {
     );
     if (!confirmed) return;
 
+    // Determine which status element to use (modal or base page)
+    const statusId = document.getElementById('modal-queue-status') && 
+                     !document.getElementById('manage-queue-modal').classList.contains('hidden')
+      ? 'modal-queue-status'
+      : 'downloads-status';
+
     try {
       const response = await APIClient.authenticatedFetch(
         `/api/downloads/queue/retry/${submissionId}`,
@@ -676,15 +690,15 @@ export class DownloadsManager {
       const data = await response.json();
 
       if (data.success) {
-        UIUtils.showStatus('downloads-status', data.message, 'success');
-        setTimeout(() => UIUtils.hideStatus('downloads-status'), 3000);
+        UIUtils.showStatus(statusId, data.message, 'success');
+        setTimeout(() => UIUtils.hideStatus(statusId), 3000);
         this.loadDownloadQueue();
       } else {
-        UIUtils.showStatus('downloads-status', data.message || 'Failed to retry', 'error');
+        UIUtils.showStatus(statusId, data.message || 'Failed to retry', 'error');
       }
     } catch (error) {
       console.error('Error retrying download:', error);
-      UIUtils.showStatus('downloads-status', error.message, 'error');
+      UIUtils.showStatus(statusId, error.message, 'error');
     }
   }
 
