@@ -2,9 +2,12 @@
 Authentication routes
 """
 
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
+
+if TYPE_CHECKING:
+    from core.auth import AuthManager
 
 from web.schemas import (
     APIError,
@@ -19,10 +22,10 @@ router = APIRouter(prefix="/api/auth", tags=["authentication"])
 
 
 # This will be injected from the main app
-_auth_manager = None
+_auth_manager: Optional["AuthManager"] = None
 
 
-def set_auth_manager(auth_manager):
+def set_auth_manager(auth_manager: "AuthManager") -> None:
     """Set the auth manager instance (called from main app)"""
     global _auth_manager
     _auth_manager = auth_manager

@@ -1,3 +1,7 @@
+"""
+Newsnab provider for searching NZB indexers.
+Supports Newsnab-compatible APIs like Prowlarr, NZBHydra, and others.
+"""
 import logging
 import xml.etree.ElementTree as ET
 from typing import List

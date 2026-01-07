@@ -24,7 +24,12 @@ class AuthManager:
         self.jwt_secret = jwt_secret
 
     def credentials_exist(self) -> bool:
-        """Check if credentials have been set up"""
+        """
+        Check if credentials have been set up.
+
+        Returns:
+            True if credentials exist in database, False otherwise
+        """
         with get_db_session(self.session_factory) as session:
             count = session.query(Credentials).count()
             return count > 0
@@ -32,7 +37,13 @@ class AuthManager:
     def create_credentials(self, username: str, password: str) -> Tuple[bool, str]:
         """
         Create the initial login credentials.
-        Returns (success, message)
+
+        Args:
+            username: Username for login
+            password: Password for login (will be hashed before storage)
+
+        Returns:
+            Tuple of (success, message) where success is True if credentials created successfully
         """
         session = self.session_factory()
         try:
@@ -56,7 +67,13 @@ class AuthManager:
     def verify_credentials(self, username: str, password: str) -> Tuple[bool, str]:
         """
         Verify user credentials.
-        Returns (success, message)
+
+        Args:
+            username: Username to verify
+            password: Password to verify
+
+        Returns:
+            Tuple of (success, message) where success is True if credentials are valid
         """
         session = self.session_factory()
         try:
@@ -74,7 +91,15 @@ class AuthManager:
             session.close()
 
     def create_token(self, username: str) -> str:
-        """Create a JWT token for authenticated user"""
+        """
+        Create a JWT token for authenticated user.
+
+        Args:
+            username: Username to encode in the token
+
+        Returns:
+            JWT token string valid for TOKEN_EXPIRATION_HOURS hours
+        """
         payload = {
             "username": username,
             "iat": utc_now(),
@@ -86,7 +111,12 @@ class AuthManager:
     def verify_token(self, token: str) -> Tuple[bool, Optional[str]]:
         """
         Verify a JWT token.
-        Returns (is_valid, username or None)
+
+        Args:
+            token: JWT token string to verify
+
+        Returns:
+            Tuple of (is_valid, username) where username is None if token is invalid or expired
         """
         try:
             payload = jwt.decode(token, self.jwt_secret, algorithms=[JWT_ALGORITHM])
@@ -102,7 +132,14 @@ class AuthManager:
     ) -> Tuple[bool, str]:
         """
         Update the password.
-        Returns (success, message)
+
+        Args:
+            username: Current username (not used, kept for API compatibility)
+            old_password: Current password for verification
+            new_password: New password to set
+
+        Returns:
+            Tuple of (success, message) where success is True if password updated successfully
         """
         session = self.session_factory()
         try:
@@ -126,7 +163,13 @@ class AuthManager:
     def update_username(self, old_username: str, new_username: str) -> Tuple[bool, str]:
         """
         Update the username.
-        Returns (success, message)
+
+        Args:
+            old_username: Current username
+            new_username: New username to set
+
+        Returns:
+            Tuple of (success, message) where success is True if username updated successfully
         """
         session = self.session_factory()
         try:

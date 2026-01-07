@@ -51,10 +51,8 @@ class FileImporter:
         self.organization_pattern = organization_pattern
         self.title_matcher = TitleMatcher(threshold=fuzzy_threshold)
 
-        # Create base directory if it doesn't exist
         self.organize_base_dir.mkdir(parents=True, exist_ok=True)
 
-        # Create category subdirectories
         for category in CATEGORY_KEYWORDS.keys():
             category_dir = self.organize_base_dir / f"_{category}"
             category_dir.mkdir(parents=True, exist_ok=True)
@@ -78,7 +76,6 @@ class FileImporter:
             logger.warning(f"Downloads directory not found: {self.downloads_dir}")
             return results
 
-        # Find all PDF and EPUB files recursively
         pdf_files = list(self.downloads_dir.glob("**/*.pdf"))
         epub_files = list(self.downloads_dir.glob("**/*.epub"))
 
@@ -97,7 +94,6 @@ class FileImporter:
         pdf_files = [f for f in pdf_files if not is_in_organize_dir(f)]
         epub_files = [f for f in epub_files if not is_in_organize_dir(f)]
 
-        # Combine all files
         all_files = pdf_files + epub_files
 
         if not all_files:
@@ -106,7 +102,6 @@ class FileImporter:
 
         logger.info(f"[DOWNLOADS IMPORT] Found {len(all_files)} files to process from {self.downloads_dir} ({len(pdf_files)} PDFs, {len(epub_files)} EPUBs)")
 
-        # Process PDF files
         for pdf_path in pdf_files:
             try:
                 result = self.import_pdf(
@@ -167,7 +162,6 @@ class FileImporter:
             # Extract metadata from filename (pass full path for parent folder context)
             metadata = self._extract_metadata_from_filename(pdf_path)
 
-            # Standardize the title for consistency
             raw_title = metadata.get("title", "")
             standardized_title = self.title_matcher.standardize_title(raw_title)
             metadata["title"] = standardized_title
@@ -190,19 +184,14 @@ class FileImporter:
                         )
                         return False
 
-            # Extract cover image
             cover_path = self._extract_cover(pdf_path)
 
-            # Categorize the file
             category = self._categorize_file(standardized_title)
 
-            # Organize the file (skip if already organized)
             if skip_organize:
-                # Use file in place - already organized
                 organized_path = pdf_path
                 logger.info(f"Using file in place (already organized): {pdf_path}")
             else:
-                # Organize the file to new location
                 organized_path = self._organize_file(
                     pdf_path, metadata, category, organization_pattern
                 )
@@ -210,7 +199,6 @@ class FileImporter:
                 if not organized_path:
                     return False
 
-            # Add to database
             magazine = Magazine(
                 title=standardized_title,
                 publisher=metadata.get("publisher"),
@@ -238,9 +226,7 @@ class FileImporter:
             )
 
             if auto_track:
-                # Create or update tracking record
                 if not existing_tracking:
-                    # Set tracking flags based on mode
                     track_all_editions = tracking_mode == "all"
                     track_new_only = tracking_mode == "new"
                     # watch mode means track_all_editions=False and track_new_only=False
@@ -259,14 +245,12 @@ class FileImporter:
                     session.commit()
                     logger.info(f"Created tracking record for: {standardized_title} (mode: {tracking_mode})")
                 else:
-                    # Update existing tracking record with new mode
                     existing_tracking.track_all_editions = tracking_mode == "all"
                     existing_tracking.track_new_only = tracking_mode == "new"
                     existing_tracking.last_metadata_update = datetime.now()
                     session.commit()
                     logger.info(f"Updated tracking record for: {standardized_title} (mode: {tracking_mode})")
             else:
-                # If auto_track is disabled, remove any existing tracking record
                 if existing_tracking:
                     session.delete(existing_tracking)
                     session.commit()
@@ -302,17 +286,14 @@ class FileImporter:
         system_folders = {'.', '..', 'downloads', 'data', '_Magazines', '_Comics', '_Articles', '_News',
                           'local', 'cache', 'config', 'logs'}
 
-        # Start with immediate parent and walk up
         current = pdf_path.parent
-        while current and current != current.parent:  # Stop at root
+        while current and current != current.parent:
             folder_name = current.name
 
-            # Skip system folders
             if folder_name.lower() in system_folders:
                 current = current.parent
                 continue
 
-            # Skip year folders (4-digit numbers in valid year range)
             # This allows "2600" (the magazine) while skipping actual year folders
             if folder_name.isdigit() and len(folder_name) == 4:
                 year_value = int(folder_name)
@@ -320,7 +301,6 @@ class FileImporter:
                     current = current.parent
                     continue
 
-            # Found a suitable magazine name
             return folder_name
 
         return None
@@ -357,7 +337,6 @@ class FileImporter:
             month_str = match.group(2)
             year_str = match.group(3)
             try:
-                # Parse month and year
                 date_str = f"{month_str} {year_str}"
                 metadata["issue_date"] = datetime.strptime(date_str, "%b %Y")
                 return metadata
@@ -420,7 +399,6 @@ class FileImporter:
 
                 metadata["issue_date"] = parsed_date
 
-                # Use magazine name from directory tree as title
                 if magazine_name:
                     metadata["title"] = magazine_name
                     logger.info(f"Extracted title '{magazine_name}' from directory tree for date-only filename: {filename}")
@@ -442,7 +420,6 @@ class FileImporter:
                     f"{year_str}-01-01", "%Y-%m-%d"
                 )
 
-                # If magazine name found in directory tree, use it as title
                 if magazine_name:
                     metadata["title"] = magazine_name
                     logger.info(f"Extracted title '{magazine_name}' from directory tree for year-only filename: {filename}")
@@ -512,7 +489,6 @@ class FileImporter:
             Path to organized file, or None if failed
         """
         try:
-            # If no pattern, don't organize
             if not pattern:
                 return pdf_path
 
@@ -520,14 +496,12 @@ class FileImporter:
             title = metadata.get("title", pdf_path.stem)
             issue_date = metadata.get("issue_date", datetime.now())
 
-            # Sanitize title for filename/folder
             safe_title = sanitize_filename(title)
             month = issue_date.strftime("%b")
             year = issue_date.strftime("%Y")
             day = issue_date.strftime("%d")
             filename = f"{safe_title} - {month}{year}.pdf"
 
-            # Substitute tags in pattern
             target_path_str = pattern.format(
                 category=category, title=safe_title, year=year, month=month, day=day
             )
@@ -540,18 +514,14 @@ class FileImporter:
 
             target_dir.mkdir(parents=True, exist_ok=True)
 
-            # Target path
             target_path = target_dir / filename
 
-            # Handle duplicates
             if target_path.exists():
-                # Add timestamp to make unique
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 name_parts = filename.rsplit(".", 1)
                 filename = f"{name_parts[0]} ({timestamp}).pdf"
                 target_path = target_dir / filename
 
-            # Move file
             shutil.move(str(pdf_path), str(target_path))
             logger.info(f"Organized file: {target_path}")
             return target_path
@@ -581,7 +551,6 @@ class FileImporter:
             logger.warning(f"Organize directory not found: {self.organize_base_dir}")
             return results
 
-        # Recursively find all PDF files in organized folders
         pdf_files = list(self.organize_base_dir.glob("**/*.pdf"))
 
         if not pdf_files:
@@ -592,13 +561,12 @@ class FileImporter:
 
         for pdf_path in pdf_files:
             try:
-                # For already-organized files, skip reorganization
                 result = self.import_pdf(
                     pdf_path,
                     session,
                     organization_pattern=None,
                     auto_track=auto_track,
-                    skip_organize=True,  # Files are already organized
+                    skip_organize=True,
                     tracking_mode=tracking_mode,
                 )
                 if result:

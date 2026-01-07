@@ -48,34 +48,27 @@ class FileProcessor:
         """
         source = Path(source_path)
 
-        # Validate source file exists
         if not source.exists():
             raise FileNotFoundError(f"Source file not found: {source_path}")
 
-        # Validate source is a file (not a directory)
         if not source.is_file():
             raise ValueError(f"Source path is not a file: {source_path}")
 
-        # Validate file is readable
         if not os.access(source, os.R_OK):
             raise ValueError(f"Source file is not readable: {source_path}")
 
-        # Validate title is not empty
         if not title or not title.strip():
             raise ValueError("Title cannot be empty")
 
-        # Generate filename: {Title} - {MonYear}
-        month = issue_date.strftime("%b")  # Jan, Feb, Mar, etc.
+        month = issue_date.strftime("%b")
         year = issue_date.strftime("%Y")
 
-        # Sanitize title for filesystem
         safe_title = sanitize_filename(title)
         filename_base = f"{safe_title} - {month}{year}"
 
         pdf_path = self.organize_dir / f"{filename_base}.pdf"
         jpg_path = self.organize_dir / f"{filename_base}.jpg"
 
-        # Move/rename PDF
         if source.suffix.lower() == ".pdf":
             try:
                 source.rename(pdf_path)
@@ -87,7 +80,6 @@ class FileProcessor:
             logger.warning(f"Source file is not PDF: {source}")
             pdf_path = None
 
-        # Move cover art if provided
         if cover_path and Path(cover_path).exists():
             try:
                 Path(cover_path).rename(jpg_path)

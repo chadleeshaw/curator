@@ -9,16 +9,13 @@ import sys
 import logging
 from pathlib import Path
 
-# Setup path
 sys.path.insert(0, str(Path(__file__).parent))
 
-# Load config FIRST to get paths
 from core.config import ConfigLoader
 
 config_loader = ConfigLoader()
 storage_config = config_loader.get_storage()
 
-# Extract paths from config
 db_path = Path(storage_config.get("db_path", "./local/config/periodicals.db"))
 download_dir = Path(storage_config.get("download_dir", "./local/downloads"))
 organize_dir = Path(storage_config.get("organize_dir", "./local/data"))
@@ -28,7 +25,6 @@ log_file = config_loader.get_logging().get(
 )
 log_dir = Path(log_file).parent
 
-# Ensure all directories exist
 for directory in [db_path.parent, download_dir, organize_dir, cache_dir, log_dir]:
     directory.mkdir(parents=True, exist_ok=True)
 
@@ -43,7 +39,6 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-# Import app for uvicorn
 from web.app import app
 
 if __name__ == "__main__":
@@ -58,7 +53,6 @@ if __name__ == "__main__":
         log_level = log_config.get("level", "INFO").upper()
         access_log = log_level == "DEBUG"
 
-        # Get server configuration (supports env vars)
         server_config = config_loader.get_server()
         host = server_config.get("host", "0.0.0.0")
         port = server_config.get("port", 8000)

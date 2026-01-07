@@ -1,3 +1,7 @@
+"""
+SABnzbd download client implementation.
+Handles NZB submissions and status tracking for SABnzbd.
+"""
 import logging
 from typing import Any, Dict, List
 

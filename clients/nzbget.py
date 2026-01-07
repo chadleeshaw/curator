@@ -1,3 +1,7 @@
+"""
+NZBGet download client implementation.
+Handles NZB submissions and status tracking for NZBGet via JSON-RPC API.
+"""
 import logging
 from typing import Any, Dict, List
 
