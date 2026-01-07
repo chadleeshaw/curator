@@ -374,11 +374,6 @@
                         issue.issue_date ? new Date(issue.issue_date).toLocaleDateString() : 'Unknown Date';
                     infoDiv.appendChild(dateP);
 
-                    const titleP = document.createElement('p');
-                    titleP.className = 'issue-title';
-                    titleP.textContent = issue.title || 'Unknown Title';
-                    infoDiv.appendChild(titleP);
-
                     // Create actions container with Open and Delete buttons
                     const actionsDiv = document.createElement('div');
                     actionsDiv.className = 'issue-actions';
