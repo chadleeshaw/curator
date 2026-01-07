@@ -283,13 +283,20 @@ class DownloadMonitorTask:
                 logger.warning(f"Submission {submission.id} has no file path")
                 continue
 
-            file_path = Path(submission.file_path)
+            # Map the client path to Curator's download directory
+            # The client returns a path like "/downloads/Books/Magazine.Name" which is the client's view
+            # We need to look for it in our configured downloads_dir
+            client_path = Path(submission.file_path)
+            relative_path = client_path.name  # Get just the final component (filename/folder)
+            file_path = self.downloads_dir / relative_path
+            
+            logger.debug(f"[DownloadMonitor] Mapped client path '{submission.file_path}' to local path '{file_path}'")
 
-            # Check if file exists locally
+            # Check if file exists in our downloads directory
             if not file_path.exists():
-                logger.warning(f"Downloaded file not found: {file_path}")
+                logger.warning(f"Downloaded file not found in downloads directory: {file_path}")
                 submission.status = DownloadSubmission.StatusEnum.FAILED
-                submission.last_error = f"File not accessible: {submission.file_path}"
+                submission.last_error = f"File not found in downloads directory: {relative_path}"
                 session.commit()
                 continue
 
