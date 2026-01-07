@@ -499,64 +499,70 @@ export class TrackingManager {
   }
 
   /**
-   * Parse issue title to extract year, month, issue number
+   * Parse issue title to extract year, month, issue number, season
    */
   parseIssueTitle(title) {
-    const patterns = [
-      /(?:No\.|Issue|#)?\.?(\d+)\.?(\d{4})/, // No.405.2026 or Issue.12.2025
-      /(\d{4})[\s.-](\d{1,2})(?:\D|$)/, // 2007-11 or 2007 11 or 2007.11 (year-month)
-      /(\d{4})[\s.](?:Issue|No\.)?[\s.]?(\d+)/, // 2026 No. 405
-      /Vol\.?(\d+).*?(\d{4})/, // Vol.123 2026
-      /(\d{4})/, // Just a year
-    ];
-
     let year = null;
     let issue = null;
     let month = null;
+    let season = null;
 
-    for (const pattern of patterns) {
-      const match = title.match(pattern);
-      if (match) {
-        if (match.length === 2) {
-          const num = parseInt(match[1]);
-          if (num > 1900 && num < 2100) {
-            year = num;
-            issue = 0;
-            break;
-          }
-        } else {
-          const num1 = parseInt(match[1]);
-          const num2 = parseInt(match[2]);
+    // First, try to extract season
+    const seasonMatch = title.match(/\b(Spring|Summer|Fall|Autumn|Winter)\b/i);
+    if (seasonMatch) {
+      season = seasonMatch[1].charAt(0).toUpperCase() + seasonMatch[1].slice(1).toLowerCase();
+    }
 
-          if (num2 > 1900 && num2 < 2100) {
-            year = num2;
-            // num1 could be issue or month - if it's 1-12, likely month
-            if (num1 >= 1 && num1 <= 12 && title.match(/(\d{4})[\s.-](\d{1,2})/)) {
-              month = num1;
-              issue = 0;
-            } else {
-              issue = num1;
+    // Extract year-month pattern (e.g., "2007-11" or "2007 11")
+    const yearMonthMatch = title.match(/(\d{4})[\s.-](\d{1,2})(?:\D|$)/);
+    if (yearMonthMatch) {
+      year = parseInt(yearMonthMatch[1]);
+      const num = parseInt(yearMonthMatch[2]);
+      if (num >= 1 && num <= 12) {
+        month = num;
+      }
+    }
+
+    // If no year-month found, try other patterns
+    if (!year) {
+      const patterns = [
+        /(?:No\.|Issue|#)\.?(\d+)\.?(\d{4})/, // No.405.2026 or Issue.12.2025
+        /(\d{4})[\s.](?:Issue|No\.)?[\s.]?(\d+)/, // 2026 No. 405 or 2026 405
+        /Vol\.?(\d+).*?(\d{4})/, // Vol.123 2026
+        /(\d{4})/, // Just a year
+      ];
+
+      for (const pattern of patterns) {
+        const match = title.match(pattern);
+        if (match) {
+          if (match.length === 2) {
+            const num = parseInt(match[1]);
+            if (num > 1900 && num < 2100) {
+              year = num;
+              break;
             }
-          } else if (num1 > 1900 && num1 < 2100) {
-            year = num1;
-            // num2 could be issue or month - if it's 1-12 and follows year with dash/space, likely month
-            if (num2 >= 1 && num2 <= 12 && title.match(/(\d{4})[\s.-](\d{1,2})/)) {
-              month = num2;
-              issue = 0;
-            } else {
+          } else {
+            const num1 = parseInt(match[1]);
+            const num2 = parseInt(match[2]);
+
+            if (num2 > 1900 && num2 < 2100) {
+              year = num2;
+              issue = num1;
+            } else if (num1 > 1900 && num1 < 2100) {
+              year = num1;
               issue = num2;
             }
-          }
 
-          if (year) break;
+            if (year) break;
+          }
         }
       }
     }
 
-    // Try to extract month (only if not already found)
+    // Try to extract month name (only if not already found)
     if (!month) {
       const monthMatch = title.match(
-        /(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i
+        /\b(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/i
       );
       if (monthMatch) {
         const monthNames = [
@@ -573,13 +579,14 @@ export class TrackingManager {
           'november',
           'december',
         ];
-        const lowerTitle = title.toLowerCase();
-        month = monthNames.findIndex((m) => lowerTitle.includes(m)) + 1 || 0;
+        const monthAbbr = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+        const lowerMonth = monthMatch[1].toLowerCase();
+        month = monthNames.indexOf(lowerMonth) + 1 || monthAbbr.indexOf(lowerMonth) + 1 || 0;
       }
     }
 
     if (year) {
-      return { year, issue: issue || 0, month: month || 0 };
+      return { year, issue: issue || 0, month: month || 0, season: season || null };
     }
 
     return null;
@@ -638,47 +645,27 @@ export class TrackingManager {
       issues.forEach((issue) => {
         // Create display label based on available information
         let displayLabel;
-        if (issue.month > 0 && issue.issue > 0) {
-          // Has both month and issue: "M11 #405"
-          const monthNames = [
-            '',
-            'Jan',
-            'Feb',
-            'Mar',
-            'Apr',
-            'May',
-            'Jun',
-            'Jul',
-            'Aug',
-            'Sep',
-            'Oct',
-            'Nov',
-            'Dec',
-          ];
+        
+        // Priority 1: Season (if present)
+        if (issue.season) {
+          displayLabel = issue.season;
+        }
+        // Priority 2: Month and Issue
+        else if (issue.month > 0 && issue.issue > 0) {
+          const monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
           displayLabel = `${monthNames[issue.month]} #${issue.issue}`;
-        } else if (issue.month > 0) {
-          // Has month but no issue: "Nov 2025"
-          const monthNames = [
-            '',
-            'Jan',
-            'Feb',
-            'Mar',
-            'Apr',
-            'May',
-            'Jun',
-            'Jul',
-            'Aug',
-            'Sep',
-            'Oct',
-            'Nov',
-            'Dec',
-          ];
-          displayLabel = `${monthNames[issue.month]} ${issue.year}`;
-        } else if (issue.issue > 0) {
-          // Has issue but no month: "#405"
+        } 
+        // Priority 3: Month only
+        else if (issue.month > 0) {
+          const monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          displayLabel = monthNames[issue.month];
+        } 
+        // Priority 4: Issue number only
+        else if (issue.issue > 0) {
           displayLabel = `#${issue.issue}`;
-        } else {
-          // Only has year: "2025"
+        } 
+        // Fallback: Just show year (shouldn't happen often now)
+        else {
           displayLabel = `${issue.year}`;
         }
 
