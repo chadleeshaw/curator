@@ -16,13 +16,13 @@ from core.constants import (
     CATEGORY_KEYWORDS,
     DEFAULT_FUZZY_THRESHOLD,
     DUPLICATE_DATE_THRESHOLD_DAYS,
-    MAX_VALID_YEAR,
-    MIN_VALID_YEAR,
 )
 from core.matching import TitleMatcher
 from core.pdf_utils import extract_cover_from_pdf
-from core.utils import sanitize_filename
 from models.database import Magazine, MagazineTracking
+from processor.categorizer import FileCategorizer
+from processor.file_organizer import FileOrganizer
+from processor.metadata_extractor import MetadataExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +50,11 @@ class FileImporter:
         self.organize_base_dir = Path(organize_base_dir)
         self.organization_pattern = organization_pattern
         self.title_matcher = TitleMatcher(threshold=fuzzy_threshold)
+
+        # Initialize specialized helpers
+        self.metadata_extractor = MetadataExtractor()
+        self.categorizer = FileCategorizer()
+        self.organizer = FileOrganizer(self.organize_base_dir)
 
         self.organize_base_dir.mkdir(parents=True, exist_ok=True)
 
@@ -159,8 +164,7 @@ class FileImporter:
             True if successful, False otherwise
         """
         try:
-            # Extract metadata from filename (pass full path for parent folder context)
-            metadata = self._extract_metadata_from_filename(pdf_path)
+            metadata = self.metadata_extractor.extract_from_filename(pdf_path)
 
             raw_title = metadata.get("title", "")
             standardized_title = self.title_matcher.standardize_title(raw_title)
@@ -186,13 +190,13 @@ class FileImporter:
 
             cover_path = self._extract_cover(pdf_path)
 
-            category = self._categorize_file(standardized_title)
+            category = self.categorizer.categorize(standardized_title)
 
             if skip_organize:
                 organized_path = pdf_path
                 logger.info(f"Using file in place (already organized): {pdf_path}")
             else:
-                organized_path = self._organize_file(
+                organized_path = self.organizer.organize(
                     pdf_path, metadata, category, organization_pattern
                 )
 
@@ -272,169 +276,6 @@ class FileImporter:
             logger.error(f"Error importing PDF {pdf_path}: {e}", exc_info=True)
             return False
 
-    def _get_magazine_name_from_path(self, pdf_path: Path) -> Optional[str]:
-        """
-        Walk up the directory tree to find a suitable magazine name.
-        Skips year folders (4-digit numbers) and system folders.
-
-        Args:
-            pdf_path: Path to the PDF file
-
-        Returns:
-            Magazine name from parent directories, or None if not found
-        """
-        system_folders = {'.', '..', 'downloads', 'data', '_Magazines', '_Comics', '_Articles', '_News',
-                          'local', 'cache', 'config', 'logs'}
-
-        current = pdf_path.parent
-        while current and current != current.parent:
-            folder_name = current.name
-
-            if folder_name.lower() in system_folders:
-                current = current.parent
-                continue
-
-            # This allows "2600" (the magazine) while skipping actual year folders
-            if folder_name.isdigit() and len(folder_name) == 4:
-                year_value = int(folder_name)
-                if MIN_VALID_YEAR <= year_value <= MAX_VALID_YEAR:
-                    current = current.parent
-                    continue
-
-            return folder_name
-
-        return None
-
-    def _extract_metadata_from_filename(self, pdf_path: Path) -> Dict[str, Any]:
-        """
-        Extract metadata from filename and parent directory.
-        Supports formats like:
-        - "National Geographic - Dec2024" or "Wired Magazine December 2024"
-        - "National Geographic 2000-01" (year-issue format)
-        - "PC Gamer 2023-06" (year-month format)
-        - "Apr2001" in folder "2600/2001/" (walks up to find "2600")
-
-        Args:
-            pdf_path: Path object to the PDF file
-
-        Returns:
-            Dict with extracted metadata
-        """
-        filename = pdf_path.stem  # Get filename without extension
-        magazine_name = self._get_magazine_name_from_path(pdf_path)  # Get magazine name from directory tree
-
-        metadata = {
-            "title": filename,
-            "publisher": None,
-            "issue_date": datetime.now(),
-        }
-
-        # Pattern 1: "Title - MonYear" (e.g., "National Geographic - Dec2024")
-        pattern1 = r"(.+?)\s*-\s*([A-Za-z]{3})(\d{4})"
-        match = re.search(pattern1, filename)
-        if match:
-            metadata["title"] = match.group(1).strip()
-            month_str = match.group(2)
-            year_str = match.group(3)
-            try:
-                date_str = f"{month_str} {year_str}"
-                metadata["issue_date"] = datetime.strptime(date_str, "%b %Y")
-                return metadata
-            except ValueError:
-                logger.warning(
-                    f"Could not parse date from filename pattern1: {filename}"
-                )
-
-        # Pattern 2: "Title Periodical Month Year" (e.g., "Wired Periodical January 2024")
-        pattern2 = r"(.+?)\s+([A-Za-z]+)\s+(\d{4})"
-        match = re.search(pattern2, filename)
-        if match:
-            metadata["title"] = match.group(1).strip()
-            month_str = match.group(2)
-            year_str = match.group(3)
-            try:
-                date_str = f"{month_str} {year_str}"
-                metadata["issue_date"] = datetime.strptime(date_str, "%B %Y")
-                return metadata
-            except ValueError:
-                try:
-                    metadata["issue_date"] = datetime.strptime(date_str, "%b %Y")
-                    return metadata
-                except ValueError:
-                    logger.warning(
-                        f"Could not parse date from filename pattern2: {filename}"
-                    )
-
-        # Pattern 3: "Title YYYY-MM" (e.g., "National Geographic 2000-01" or "PC Gamer 2024-12")
-        pattern3 = r"(.+?)\s+(\d{4})-(\d{2})$"
-        match = re.search(pattern3, filename)
-        if match:
-            metadata["title"] = match.group(1).strip()
-            year_str = match.group(2)
-            month_str = match.group(3)
-            try:
-                date_str = f"{year_str}-{month_str}-01"
-                metadata["issue_date"] = datetime.strptime(date_str, "%Y-%m-%d")
-                return metadata
-            except ValueError:
-                logger.warning(f"Could not parse year-month from filename: {filename}")
-
-        # Pattern 4: Filename is just a date (e.g., "Apr2001", "January2015")
-        # In this case, use parent directory name as the title
-        # Match: MonthYear or Month Year (e.g., "Apr2001", "January 2015")
-        date_only_pattern1 = r"^([A-Za-z]+)(\d{4})$"  # "Apr2001"
-        date_only_pattern2 = r"^([A-Za-z]+)\s+(\d{4})$"  # "April 2001"
-
-        match = re.search(date_only_pattern1, filename) or re.search(date_only_pattern2, filename)
-        if match:
-            month_str = match.group(1)
-            year_str = match.group(2)
-            try:
-                # Try full month name first, then 3-letter abbreviation
-                date_str = f"{month_str} {year_str}"
-                try:
-                    parsed_date = datetime.strptime(date_str, "%B %Y")
-                except ValueError:
-                    parsed_date = datetime.strptime(date_str, "%b %Y")
-
-                metadata["issue_date"] = parsed_date
-
-                if magazine_name:
-                    metadata["title"] = magazine_name
-                    logger.info(f"Extracted title '{magazine_name}' from directory tree for date-only filename: {filename}")
-                else:
-                    metadata["title"] = filename
-                    logger.warning(f"Filename is date-only ({filename}) but no suitable magazine folder found")
-
-                return metadata
-            except ValueError:
-                logger.warning(f"Could not parse date from date-only filename: {filename}")
-
-        # Pattern 5: Just extract a 4-digit year anywhere in the filename
-        year_match = re.search(r"(\d{4})", filename)
-        if year_match:
-            year_str = year_match.group(1)
-            try:
-                # Assume January if no month specified
-                metadata["issue_date"] = datetime.strptime(
-                    f"{year_str}-01-01", "%Y-%m-%d"
-                )
-
-                if magazine_name:
-                    metadata["title"] = magazine_name
-                    logger.info(f"Extracted title '{magazine_name}' from directory tree for year-only filename: {filename}")
-                else:
-                    logger.info(f"Extracted year {year_str} from filename: {filename}")
-
-                return metadata
-            except ValueError:
-                logger.warning(f"Could not parse year from filename: {filename}")
-
-        logger.info(
-            f"No date pattern matched in filename: {filename}, using current date"
-        )
-        return metadata
-
     def _extract_cover(self, pdf_path: Path) -> Optional[Path]:
         """
         Extract first page of PDF as cover image.
@@ -447,88 +288,6 @@ class FileImporter:
         """
         cover_dir = self.organize_base_dir / ".covers"
         return extract_cover_from_pdf(pdf_path, cover_dir)
-
-    def _categorize_file(self, title: str) -> str:
-        """
-        Categorize file based on title keywords.
-
-        Args:
-            title: File or periodical title
-
-        Returns:
-            Category name (default: "Magazines")
-        """
-        title_lower = title.lower()
-
-        for category, keywords in CATEGORY_KEYWORDS.items():
-            for keyword in keywords:
-                if keyword in title_lower:
-                    return category
-
-        return "Magazines"  # Default category
-
-    def _organize_file(
-        self,
-        pdf_path: Path,
-        metadata: Dict[str, Any],
-        category: str,
-        pattern: Optional[str] = None,
-    ) -> Optional[Path]:
-        """
-        Move and rename PDF to organized location based on pattern.
-        Available pattern tags: {category}, {title}, {year}, {month}, {day}
-        Default: data/{category}/{title}/{year}/
-
-        Args:
-            pdf_path: Original PDF path
-            metadata: Extracted metadata
-            category: Category name
-            pattern: Organization pattern with tags (optional)
-
-        Returns:
-            Path to organized file, or None if failed
-        """
-        try:
-            if not pattern:
-                return pdf_path
-
-            # Create organized filename: "Title - MonYear.pdf"
-            title = metadata.get("title", pdf_path.stem)
-            issue_date = metadata.get("issue_date", datetime.now())
-
-            safe_title = sanitize_filename(title)
-            month = issue_date.strftime("%b")
-            year = issue_date.strftime("%Y")
-            day = issue_date.strftime("%d")
-            filename = f"{safe_title} - {month}{year}.pdf"
-
-            target_path_str = pattern.format(
-                category=category, title=safe_title, year=year, month=month, day=day
-            )
-
-            # Make absolute path from organize_base_dir
-            if not target_path_str.startswith("/"):
-                target_dir = self.organize_base_dir / target_path_str
-            else:
-                target_dir = Path(target_path_str)
-
-            target_dir.mkdir(parents=True, exist_ok=True)
-
-            target_path = target_dir / filename
-
-            if target_path.exists():
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                name_parts = filename.rsplit(".", 1)
-                filename = f"{name_parts[0]} ({timestamp}).pdf"
-                target_path = target_dir / filename
-
-            shutil.move(str(pdf_path), str(target_path))
-            logger.info(f"Organized file: {target_path}")
-            return target_path
-
-        except Exception as e:
-            logger.error(f"Error organizing file {pdf_path}: {e}")
-            return None
 
     def process_organized_files(
         self, session: Session, auto_track: bool = True, tracking_mode: str = "all"
