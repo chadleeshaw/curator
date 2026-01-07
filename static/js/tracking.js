@@ -446,6 +446,18 @@ export class TrackingManager {
     results.forEach((result) => {
       const parsed = this.parseIssueTitle(result.title);
       if (parsed) {
+        // If month/issue not found in title, try to extract from publication_date
+        if (parsed.month === 0 && result.publication_date) {
+          try {
+            const pubDate = new Date(result.publication_date);
+            if (!isNaN(pubDate.getTime())) {
+              parsed.month = pubDate.getMonth() + 1; // getMonth() returns 0-11
+            }
+          } catch (e) {
+            // Ignore date parsing errors
+          }
+        }
+
         // Create unique key including season and title to avoid over-deduplication
         // Include the original title hash to ensure different issues don't collide
         const titleHash = result.title.replace(/\s+/g, '-').substring(0, 30);
