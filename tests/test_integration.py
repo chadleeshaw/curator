@@ -316,10 +316,12 @@ class TestImportWorkflow:
         # Step 3: Process downloads
         results = importer.process_downloads(session)
 
-        # Verify files were processed (they might not import successfully without proper metadata)
-        assert "imported" in results
-        assert "failed" in results
-        assert "errors" in results
+        # Verify standardized response format
+        assert "success" in results
+        assert "data" in results
+        assert "imported" in results["data"]
+        assert "failed" in results["data"]
+        assert "skipped" in results["data"]
 
 
 class TestEndToEndJourney:

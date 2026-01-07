@@ -184,15 +184,18 @@ class DownloadMonitorTask:
                     f"({len(pdf_files)} PDFs, {len(epub_files)} EPUBs)"
                 )
                 results = self.file_importer.process_downloads(session)
-                imported_count = results.get("imported", 0)
+                data = results.get("data", {})
+                imported_count = data.get("imported", 0)
 
                 if imported_count > 0:
                     logger.info(f"[DownloadMonitor] Successfully imported {imported_count} files from folder")
 
-                if results.get("failed", 0) > 0:
+                if data.get("failed", 0) > 0:
+                    errors = results.get("errors", [])
+                    error_messages = [e.get("message", str(e)) for e in errors] if errors else []
                     logger.warning(
-                        f"[DownloadMonitor] Failed to import {results['failed']} files. "
-                        f"Errors: {results.get('errors', [])}"
+                        f"[DownloadMonitor] Failed to import {data['failed']} files. "
+                        f"Errors: {error_messages}"
                     )
             else:
                 logger.debug("[DownloadMonitor] No files found in downloads folder")

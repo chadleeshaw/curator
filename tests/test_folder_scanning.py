@@ -68,8 +68,15 @@ def mock_download_client():
 def mock_file_importer():
     """Create mock file importer"""
     importer = Mock(spec=FileImporter)
-    # Mock process_downloads (NOT async)
-    importer.process_downloads = Mock(return_value={"imported": 0, "failed": 0, "errors": []})
+    # Mock process_downloads with standardized response format
+    importer.process_downloads = Mock(return_value={
+        "success": True,
+        "data": {
+            "imported": 0,
+            "failed": 0,
+            "skipped": 0,
+        },
+    })
     return importer
 
 
@@ -203,11 +210,14 @@ class TestStatisticsTracking:
         """Test folder_files_imported counter increments when full run() is called"""
         engine, session_factory = test_db
 
-        # Mock file_importer to return processed count
+        # Mock file_importer to return standardized response format
         mock_file_importer.process_downloads.return_value = {
-            "imported": 5,
-            "failed": 0,
-            "errors": [],
+            "success": True,
+            "data": {
+                "imported": 5,
+                "failed": 0,
+                "skipped": 0,
+            },
         }
 
         monitor = DownloadMonitorTask(
@@ -236,9 +246,12 @@ class TestStatisticsTracking:
         engine, session_factory = test_db
 
         mock_file_importer.process_downloads.return_value = {
-            "imported": 2,
-            "failed": 0,
-            "errors": [],
+            "success": True,
+            "data": {
+                "imported": 2,
+                "failed": 0,
+                "skipped": 0,
+            },
         }
 
         monitor = DownloadMonitorTask(
