@@ -10,7 +10,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from pdf2image import convert_from_path
 from sqlalchemy.orm import Session
 
 from core.constants import (
@@ -19,10 +18,9 @@ from core.constants import (
     DUPLICATE_DATE_THRESHOLD_DAYS,
     MAX_VALID_YEAR,
     MIN_VALID_YEAR,
-    PDF_COVER_DPI_LOW,
-    PDF_COVER_QUALITY,
 )
 from core.matching import TitleMatcher
+from core.pdf_utils import extract_cover_from_pdf
 from core.utils import sanitize_filename
 from models.database import Magazine, MagazineTracking
 
@@ -470,33 +468,8 @@ class FileImporter:
         Returns:
             Path to extracted cover image, or None if failed
         """
-        try:
-            # Generate cover path
-            cover_dir = self.organize_base_dir / ".covers"
-            cover_dir.mkdir(parents=True, exist_ok=True)
-            cover_path = cover_dir / f"{pdf_path.stem}.jpg"
-
-            # Convert first page to image
-            images = convert_from_path(
-                str(pdf_path), first_page=1, last_page=1, dpi=PDF_COVER_DPI_LOW
-            )
-            if not images:
-                logger.warning(f"Could not extract images from PDF: {pdf_path}")
-                return None
-
-            # Save as JPEG
-            images[0].save(str(cover_path), "JPEG", quality=PDF_COVER_QUALITY)
-            logger.info(f"Extracted cover: {cover_path}")
-            return cover_path
-
-        except ImportError:
-            logger.warning(
-                "pdf2image not available. Install with: pip install pdf2image Pillow"
-            )
-            return None
-        except Exception as e:
-            logger.error(f"Error extracting cover from {pdf_path}: {e}")
-            return None
+        cover_dir = self.organize_base_dir / ".covers"
+        return extract_cover_from_pdf(pdf_path, cover_dir)
 
     def _categorize_file(self, title: str) -> str:
         """

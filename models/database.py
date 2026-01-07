@@ -1,5 +1,4 @@
 import enum
-from datetime import UTC, datetime
 
 import bcrypt
 from sqlalchemy import (
@@ -14,12 +13,14 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.declarative import declarative_base
 
+from core.date_utils import utc_now
+
 Base = declarative_base()
 
 
 def utcnow():
     """Return current UTC time - helper for SQLAlchemy defaults"""
-    return datetime.now(UTC)
+    return utc_now()
 
 
 class Credentials(Base):

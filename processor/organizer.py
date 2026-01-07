@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 from core.constants import PDF_COVER_DPI_HIGH, PDF_COVER_QUALITY_HIGH
+from core.date_utils import month_abbr_to_number
+from core.pdf_utils import extract_cover_from_pdf as extract_cover_util
 from core.utils import sanitize_filename
 
 logger = logging.getLogger(__name__)
@@ -107,19 +109,21 @@ class FileProcessor:
         Returns:
             True if successful, False otherwise
         """
-        try:
-            from pdf2image import convert_from_path
+        pdf_path_obj = Path(pdf_path)
+        output_path_obj = Path(output_path)
+        output_dir = output_path_obj.parent
 
-            images = convert_from_path(pdf_path, first_page=1, last_page=1, dpi=PDF_COVER_DPI_HIGH)
-            if images:
-                images[0].save(output_path, "JPEG", quality=PDF_COVER_QUALITY_HIGH)
-                logger.info(f"Extracted cover from PDF: {output_path}")
-                return True
-        except ImportError:
-            logger.warning("pdf2image not installed, falling back to PyPDF2")
-        except Exception as e:
-            logger.warning(f"Error extracting cover from PDF: {e}")
+        result = extract_cover_util(
+            pdf_path_obj,
+            output_dir,
+            dpi=PDF_COVER_DPI_HIGH,
+            quality=PDF_COVER_QUALITY_HIGH
+        )
 
+        if result:
+            if result != output_path_obj:
+                result.rename(output_path_obj)
+            return True
         return False
 
     def parse_filename_for_metadata(self, filename: str) -> Dict[str, Any]:
@@ -144,23 +148,7 @@ class FileProcessor:
         if match:
             title, month_abbr, year = match.groups()
 
-            # Convert month abbreviation to number
-            months = {
-                "Jan": 1,
-                "Feb": 2,
-                "Mar": 3,
-                "Apr": 4,
-                "May": 5,
-                "Jun": 6,
-                "Jul": 7,
-                "Aug": 8,
-                "Sep": 9,
-                "Oct": 10,
-                "Nov": 11,
-                "Dec": 12,
-            }
-
-            month = months.get(month_abbr.capitalize())
+            month = month_abbr_to_number(month_abbr.capitalize())
             if month:
                 try:
                     issue_date = datetime(int(year), month, 1)

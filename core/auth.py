@@ -2,12 +2,14 @@
 Authentication module for managing login credentials
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from typing import Optional, Tuple
 
 import jwt
 
 from core.constants import TOKEN_EXPIRATION_HOURS
+from core.date_utils import utc_now
+from core.db_utils import get_db_session
 from models.database import Credentials
 
 # JWT configuration constants
@@ -23,12 +25,9 @@ class AuthManager:
 
     def credentials_exist(self) -> bool:
         """Check if credentials have been set up"""
-        session = self.session_factory()
-        try:
+        with get_db_session(self.session_factory) as session:
             count = session.query(Credentials).count()
             return count > 0
-        finally:
-            session.close()
 
     def create_credentials(self, username: str, password: str) -> Tuple[bool, str]:
         """
@@ -78,8 +77,8 @@ class AuthManager:
         """Create a JWT token for authenticated user"""
         payload = {
             "username": username,
-            "iat": datetime.now(UTC),
-            "exp": datetime.now(UTC) + timedelta(hours=TOKEN_EXPIRATION_HOURS),
+            "iat": utc_now(),
+            "exp": utc_now() + timedelta(hours=TOKEN_EXPIRATION_HOURS),
         }
         token = jwt.encode(payload, self.jwt_secret, algorithm=JWT_ALGORITHM)
         return token
@@ -115,7 +114,7 @@ class AuthManager:
                 return False, "Current password is incorrect"
 
             creds.set_password(new_password)
-            creds.updated_at = datetime.now(UTC)
+            creds.updated_at = utc_now()
             session.commit()
             return True, "Password updated successfully"
         except Exception as e:
@@ -143,7 +142,7 @@ class AuthManager:
                 return False, "Username already exists"
 
             creds.username = new_username
-            creds.updated_at = datetime.now(UTC)
+            creds.updated_at = utc_now()
             session.commit()
             return True, "Username updated successfully"
         except Exception as e:

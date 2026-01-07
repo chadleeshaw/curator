@@ -4,7 +4,6 @@ Manages search, deduplication, submission, and status tracking.
 """
 
 import logging
-from datetime import datetime, UTC
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
@@ -15,6 +14,7 @@ from core.constants import (
     MAX_DOWNLOAD_RETRIES,
     MAX_DOWNLOADS_PER_BATCH,
 )
+from core.date_utils import normalize_month_name, utc_now
 from core.matching import TitleMatcher
 from models.database import (
     DownloadSubmission,
@@ -98,26 +98,9 @@ class DownloadManager:
         normalized = " ".join(title.lower().split())
 
         # Normalize common month abbreviations to full names for better matching
-        month_mapping = {
-            "jan": "january",
-            "feb": "february",
-            "mar": "march",
-            "apr": "april",
-            "may": "may",
-            "jun": "june",
-            "jul": "july",
-            "aug": "august",
-            "sep": "september",
-            "sept": "september",
-            "oct": "october",
-            "nov": "november",
-            "dec": "december",
-        }
-
         words = []
         for word in normalized.split():
-            # Replace month abbreviations with full month names
-            words.append(month_mapping.get(word, word))
+            words.append(normalize_month_name(word))
 
         # Keep first few significant words as group ID
         group_words = [w for w in words if len(w) > 2][:3]
@@ -591,7 +574,7 @@ class DownloadManager:
 
             # Update submission
             submission.status = new_status
-            submission.updated_at = datetime.now(UTC)
+            submission.updated_at = utc_now()
 
             if "file_path" in client_status:
                 submission.file_path = client_status["file_path"]
@@ -795,7 +778,7 @@ class DownloadManager:
             submission.job_id = job_id
             submission.status = DownloadSubmission.StatusEnum.PENDING
             submission.last_error = None
-            submission.updated_at = datetime.now(UTC)
+            submission.updated_at = utc_now()
             # Note: Don't reset attempt_count, it should accumulate across retries
             session.commit()
 
