@@ -446,8 +446,10 @@ export class TrackingManager {
     results.forEach((result) => {
       const parsed = this.parseIssueTitle(result.title);
       if (parsed) {
-        // Deduplicate by year-month-issue only (not URL) to group language variants
-        const key = `${parsed.year}-${parsed.month}-${parsed.issue}`;
+        // Create unique key including season and title to avoid over-deduplication
+        // Include the original title hash to ensure different issues don't collide
+        const titleHash = result.title.replace(/\s+/g, '-').substring(0, 30);
+        const key = `${parsed.year}-${parsed.month}-${parsed.issue}-${parsed.season || ''}-${titleHash}`;
 
         if (!issueMap.has(key)) {
           // Extract language variant from title if present
