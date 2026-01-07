@@ -56,9 +56,15 @@ async def get_tasks_status():
                     "last_status": dm_status,
                     "stats": {
                         "total_runs": dm_stats.get("total_runs", 0),
-                        "client_downloads_processed": dm_stats.get("client_downloads_processed", 0),
-                        "client_downloads_failed": dm_stats.get("client_downloads_failed", 0),
-                        "folder_files_imported": dm_stats.get("folder_files_imported", 0),
+                        "client_downloads_processed": dm_stats.get(
+                            "client_downloads_processed", 0
+                        ),
+                        "client_downloads_failed": dm_stats.get(
+                            "client_downloads_failed", 0
+                        ),
+                        "folder_files_imported": dm_stats.get(
+                            "folder_files_imported", 0
+                        ),
                         "bad_files_detected": dm_stats.get("bad_files_detected", 0),
                         "last_client_check": dm_stats.get("last_client_check"),
                         "last_folder_scan": dm_stats.get("last_folder_scan"),
@@ -86,7 +92,7 @@ async def get_tasks_status():
             {
                 "id": "cleanup_orphaned_covers",
                 "name": "Cleanup Orphaned Covers",
-                "description": "Removes cover files that aren't tied to any periodical",
+                "description": "Removes orphaned cover files and generates missing covers for periodicals",
                 "interval": 86400,
                 "last_run": None,
                 "next_run": None,
@@ -133,30 +139,31 @@ async def run_task_manually(task_id: str):
             }
 
         elif task_id == "cleanup_orphaned_covers":
-            # Manually trigger cover cleanup
+            # Manually trigger cover cleanup and generation
             db_session = _session_factory()
             try:
-                # Get all covers in the database
-                periodicals = (
-                    db_session.query(Magazine)
-                    .filter(Magazine.cover_path is not None)
-                    .all()
-                )
-                db_cover_paths = {m.cover_path for m in periodicals if m.cover_path}
+                # Get all periodicals
+                all_periodicals = db_session.query(Magazine).all()
+                periodicals_with_covers = [m for m in all_periodicals if m.cover_path]
+                periodicals_without_covers = [
+                    m for m in all_periodicals if not m.cover_path and m.file_path
+                ]
+
+                db_cover_paths = {m.cover_path for m in periodicals_with_covers}
 
                 # Find all cover files on disk
                 covers_dir = (
                     Path(_storage_config.get("organize_base_dir", "./local/data"))
                     / ".covers"
                 )
+                covers_dir.mkdir(parents=True, exist_ok=True)
+
+                # Part 1: Delete orphaned covers
+                deleted_count = 0
                 if covers_dir.exists():
                     cover_files = set(str(f) for f in covers_dir.glob("*.jpg"))
-
-                    # Find orphaned covers (files that exist on disk but not in DB)
                     orphaned_covers = cover_files - db_cover_paths
 
-                    # Delete orphaned covers
-                    deleted_count = 0
                     for orphan_path in orphaned_covers:
                         try:
                             Path(orphan_path).unlink()
@@ -166,17 +173,45 @@ async def run_task_manually(task_id: str):
                                 f"Error deleting orphaned cover {orphan_path}: {e}"
                             )
 
-                    return {
-                        "success": True,
-                        "task_name": "Cleanup Orphaned Covers",
-                        "message": f"Cleanup executed. Deleted {deleted_count} orphaned cover files.",
-                    }
+                # Part 2: Generate missing covers
+                generated_count = 0
+                for magazine in periodicals_without_covers:
+                    pdf_path = Path(magazine.file_path)
+                    if not pdf_path.exists():
+                        continue
+
+                    # Extract cover from PDF
+                    cover_path = _file_importer._extract_cover(pdf_path)
+                    if cover_path:
+                        magazine.cover_path = str(cover_path)
+                        generated_count += 1
+
+                if generated_count > 0:
+                    db_session.commit()
+
+                # Build result message
+                messages = []
+                if deleted_count > 0:
+                    messages.append(
+                        f"Deleted {deleted_count} orphaned cover file{'s' if deleted_count != 1 else ''}"
+                    )
+                if generated_count > 0:
+                    messages.append(
+                        f"Generated {generated_count} missing cover{'s' if generated_count != 1 else ''}"
+                    )
+
+                if messages:
+                    message = "Cleanup executed. " + ", ".join(messages) + "."
                 else:
-                    return {
-                        "success": True,
-                        "task_name": "Cleanup Orphaned Covers",
-                        "message": "Covers directory does not exist yet.",
-                    }
+                    message = (
+                        "No orphaned covers found and all periodicals have covers."
+                    )
+
+                return {
+                    "success": True,
+                    "task_name": "Cleanup Orphaned Covers",
+                    "message": message,
+                }
             finally:
                 db_session.close()
 

@@ -426,9 +426,52 @@ class DownloadManager:
         # Search for issues
         search_results = self.search_periodical_issues(tracking.title, session)
 
+        # Filter out issues that are already downloaded, pending, or in library
+        filtered_results = []
+        for search_result in search_results:
+            # Check if already submitted or downloaded
+            is_duplicate, _ = self.check_duplicate_submission(tracking_id, search_result["title"], session)
+            if not is_duplicate:
+                filtered_results.append(search_result)
+
+        logger.info(f"Found {len(filtered_results)} new issues (filtered from {len(search_results)} total results)")
+
+        # Prefer English editions and limit to 10 per batch
+        # Sort results: English first, then by date (newest first)
+        def sort_key(result):
+            title_lower = result.get("title", "").lower()
+            is_english = any(
+                lang in title_lower
+                for lang in ["english", "en", "usa", "uk", "us"]
+            )
+            # Put English first (0), others after (1)
+            lang_priority = 0 if is_english else 1
+            # Sort by publication date if available (newest first)
+            pub_date = result.get("publication_date")
+            if pub_date:
+                # Negate timestamp to sort newest first within same language priority
+                date_sort = -pub_date.timestamp()
+            else:
+                date_sort = 0
+            return (lang_priority, date_sort)
+
+        filtered_results.sort(key=sort_key)
+
+        # Limit to 10 issues per batch - scheduler will pick up next batch on next run
+        MAX_DOWNLOADS_PER_BATCH = 10
+        batch_results = filtered_results[:MAX_DOWNLOADS_PER_BATCH]
+
+        if len(batch_results) > 0:
+            logger.info(
+                f"Submitting batch of {len(batch_results)} issues (limited to {MAX_DOWNLOADS_PER_BATCH} per batch, "
+                f"English editions preferred). {len(filtered_results) - len(batch_results)} more available for next run."
+            )
+        elif len(filtered_results) == 0:
+            logger.info(f"No new issues to download for '{tracking.title}' - all found issues already downloaded or pending")
+
         results = {"submitted": 0, "skipped": 0, "failed": 0, "errors": []}
 
-        for search_result in search_results:
+        for search_result in batch_results:
             # Try to find or create SearchResult DB record
             search_result_db_id = None
             try:

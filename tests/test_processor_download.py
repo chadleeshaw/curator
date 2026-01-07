@@ -259,6 +259,180 @@ class TestDownloadManager:
 
         session.close()
 
+    def test_batch_download_limit_and_english_preference(self, test_db, mock_download_client):
+        """Test batch downloading limits to 10 per run and prefers English editions"""
+        engine, session_factory = test_db
+        session = session_factory()
+
+        # Create tracking record
+        tracking = MagazineTracking(
+            olid="test_magazine",
+            title="Test Magazine",
+            track_all_editions=True,
+        )
+        session.add(tracking)
+        session.commit()
+
+        # Create a mock search provider that returns 15 results
+        mock_provider = Mock(spec=SearchProvider)
+        mock_provider.name = "TestProvider"
+        mock_provider.type = "test"
+
+        def search_side_effect(query):
+            results = []
+            # Use unique first-word prefixes to ensure different fuzzy group IDs
+            # English: Alpha, Bravo, Charlie, Delta, Echo
+            english_prefixes = ["Alpha", "Bravo", "Charlie", "Delta", "Echo"]
+            for i in range(5):
+                results.append(
+                    SearchResult(
+                        title=f"{english_prefixes[i]} Test Magazine English Edition",
+                        url=f"http://example.com/test-{english_prefixes[i].lower()}-en.nzb",
+                        provider="TestProvider",
+                        publication_date=datetime(2024, i + 1, 1),
+                        raw_metadata={},
+                    )
+                )
+            # German: Foxtrot through Oscar (10 total)
+            german_prefixes = ["Foxtrot", "Golf", "Hotel", "India", "Juliet", "Kilo", "Lima", "Mike", "November", "Oscar"]
+            for i in range(10):
+                results.append(
+                    SearchResult(
+                        title=f"{german_prefixes[i]} Test Magazine German Edition",
+                        url=f"http://example.com/test-{german_prefixes[i].lower()}-de.nzb",
+                        provider="TestProvider",
+                        publication_date=datetime(2023, i + 1, 1),
+                        raw_metadata={},
+                    )
+                )
+            return results
+
+        mock_provider.search = Mock(side_effect=search_side_effect)
+
+        manager = DownloadManager(
+            [mock_provider], mock_download_client, fuzzy_threshold=80
+        )
+
+        # First batch - should get 10 issues (5 English + 5 German due to limit)
+        results = manager.download_all_periodical_issues(tracking.id, session)
+
+        assert results["submitted"] == 10
+        assert results["skipped"] == 0
+
+        # Verify submissions were created
+        submissions = (
+            session.query(DownloadSubmission)
+            .filter(DownloadSubmission.tracking_id == tracking.id)
+            .filter(DownloadSubmission.status == DownloadSubmission.StatusEnum.PENDING)
+            .order_by(DownloadSubmission.id)  # Order by ID to get insertion order
+            .all()
+        )
+        assert len(submissions) == 10
+
+        # Verify English editions came first - first 5 should be English
+        english_count = sum(1 for s in submissions[:5] if "English" in s.result_title)
+        assert english_count == 5
+
+        # Second batch - should get remaining 5 German issues
+        results2 = manager.download_all_periodical_issues(tracking.id, session)
+
+        assert results2["submitted"] == 5
+        # Note: skipped count is 0 because duplicates are filtered before batching, not during submission
+        assert results2["skipped"] == 0
+
+        # Verify total submissions
+        all_submissions = (
+            session.query(DownloadSubmission)
+            .filter(DownloadSubmission.tracking_id == tracking.id)
+            .filter(DownloadSubmission.status == DownloadSubmission.StatusEnum.PENDING)
+            .all()
+        )
+        assert len(all_submissions) == 15
+
+        session.close()
+
+    def test_batch_download_filters_duplicates(self, test_db, mock_download_client):
+        """Test that batch downloading filters out already downloaded items"""
+        engine, session_factory = test_db
+        session = session_factory()
+
+        # Create tracking record
+        tracking = MagazineTracking(
+            olid="test_magazine",
+            title="Test Magazine",
+            track_all_editions=True,
+        )
+        session.add(tracking)
+        session.commit()
+
+        # Create existing submissions (simulate already downloaded)
+        for i in range(3):
+            submission = DownloadSubmission(
+                tracking_id=tracking.id,
+                job_id=f"job_{i}",
+                status=DownloadSubmission.StatusEnum.COMPLETED,
+                source_url=f"http://example.com/test-2020-{i + 1:02d}-en.nzb",
+                result_title=f"Test Magazine - {['January', 'February', 'March'][i]} 2020 English",
+                fuzzy_match_group=f"test-magazine-{['january', 'february', 'march'][i]}",
+            )
+            session.add(submission)
+        session.commit()
+
+        # Create a mock search provider that returns 8 results (3 already downloaded + 5 new)
+        mock_provider = Mock(spec=SearchProvider)
+        mock_provider.name = "TestProvider"
+        mock_provider.type = "test"
+
+        def search_side_effect(query):
+            results = []
+            months = ["January", "February", "March", "April", "May", "June", "July", "August"]
+            # Add 3 already downloaded (should be filtered) - same months as existing
+            for i in range(3):
+                results.append(
+                    SearchResult(
+                        title=f"Test Magazine - {months[i]} 2020 English Edition",
+                        url=f"http://example.com/test-2020-{i + 1:02d}-en.nzb",
+                        provider="TestProvider",
+                        publication_date=datetime(2020, i + 1, 1),
+                        raw_metadata={},
+                    )
+                )
+            # Add 5 new results - different months
+            for i in range(3, 8):
+                results.append(
+                    SearchResult(
+                        title=f"Test Magazine - {months[i]} 2021 English",
+                        url=f"http://example.com/test-2021-{i + 1:02d}-en.nzb",
+                        provider="TestProvider",
+                        publication_date=datetime(2021, i + 1, 1),
+                        raw_metadata={},
+                    )
+                )
+            return results
+
+        mock_provider.search = Mock(side_effect=search_side_effect)
+
+        manager = DownloadManager(
+            [mock_provider], mock_download_client, fuzzy_threshold=80
+        )
+
+        # Should only download the 5 new issues, not the 3 duplicates
+        results = manager.download_all_periodical_issues(tracking.id, session)
+
+        assert results["submitted"] == 5
+        assert results["skipped"] == 0  # Duplicates are filtered before submission, so not counted as skipped
+
+        # Verify only new submissions were created
+        pending_submissions = (
+            session.query(DownloadSubmission)
+            .filter(DownloadSubmission.tracking_id == tracking.id)
+            .filter(DownloadSubmission.status == DownloadSubmission.StatusEnum.PENDING)
+            .all()
+        )
+        assert len(pending_submissions) == 5
+
+        session.close()
+
     def test_status_update(self, test_db, mock_download_client):
         """Test updating download status"""
         engine, session_factory = test_db
