@@ -4,6 +4,7 @@ Manages search, deduplication, submission, and status tracking.
 """
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
@@ -13,6 +14,7 @@ from core.constants import (
     DEFAULT_FUZZY_THRESHOLD,
     MAX_DOWNLOAD_RETRIES,
     MAX_DOWNLOADS_PER_BATCH,
+    PROVIDER_SEARCH_TIMEOUT,
 )
 from core.date_utils import normalize_month_name, utc_now
 from core.matching import TitleMatcher
@@ -59,24 +61,35 @@ class DownloadManager:
         """
         all_results = []
 
-        for provider in self.search_providers:
-            try:
-                logger.info(f"Searching {provider.name} for: {periodical_title}")
-                results = provider.search(periodical_title)
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            for provider in self.search_providers:
+                try:
+                    logger.info(f"Searching {provider.name} for: {periodical_title}")
 
-                for result in results:
-                    all_results.append(
-                        {
-                            "title": result.title,
-                            "url": result.url,
-                            "provider": result.provider,
-                            "publication_date": result.publication_date,
-                            "raw_metadata": result.raw_metadata or {},
-                        }
-                    )
+                    # Execute search with timeout
+                    future = executor.submit(provider.search, periodical_title)
+                    try:
+                        results = future.result(timeout=PROVIDER_SEARCH_TIMEOUT)
+                    except FuturesTimeoutError:
+                        logger.warning(
+                            f"Search timeout ({PROVIDER_SEARCH_TIMEOUT}s) for {provider.name} "
+                            f"searching '{periodical_title}'"
+                        )
+                        continue
 
-            except Exception as e:
-                logger.error(f"Error searching {provider.name} for '{periodical_title}': {e}")
+                    for result in results:
+                        all_results.append(
+                            {
+                                "title": result.title,
+                                "url": result.url,
+                                "provider": result.provider,
+                                "publication_date": result.publication_date,
+                                "raw_metadata": result.raw_metadata or {},
+                            }
+                        )
+
+                except Exception as e:
+                    logger.error(f"Error searching {provider.name} for '{periodical_title}': {e}")
 
         logger.info(
             f"Found {len(all_results)} results for '{periodical_title}' across {len(self.search_providers)} providers"

@@ -3,6 +3,7 @@ Scheduled task for monitoring downloads and triggering processing.
 Monitors download client progress and scans download folder for files to organize.
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -75,6 +76,11 @@ class DownloadMonitorTask:
         2. Processes completed download client submissions
         3. Scans download folder for new PDF/EPUB files and organizes them
         """
+        # Run synchronous database work in thread pool to avoid blocking event loop
+        await asyncio.to_thread(self._run_sync)
+
+    def _run_sync(self):
+        """Synchronous implementation of the monitoring task."""
         session = self.session_factory()
         try:
             self.last_run_time = datetime.now()
@@ -83,7 +89,7 @@ class DownloadMonitorTask:
 
             # Part 1: Monitor download client submissions
             logger.debug("[DownloadMonitor] Checking download client...")
-            client_processed, client_failed = await self._monitor_download_client(session)
+            client_processed, client_failed = self._monitor_download_client(session)
             self.stats["client_downloads_processed"] += client_processed
             self.stats["client_downloads_failed"] += client_failed
             self.stats["last_client_check"] = datetime.now()
@@ -94,7 +100,7 @@ class DownloadMonitorTask:
 
             # Part 2: Scan downloads folder for files
             logger.debug("[DownloadMonitor] Scanning downloads folder...")
-            folder_imported = await self._scan_downloads_folder(session)
+            folder_imported = self._scan_downloads_folder(session)
             self.stats["folder_files_imported"] += folder_imported
             self.stats["last_folder_scan"] = datetime.now()
 
@@ -110,7 +116,7 @@ class DownloadMonitorTask:
         finally:
             session.close()
 
-    async def _monitor_download_client(self, session: Session) -> tuple[int, int]:
+    def _monitor_download_client(self, session: Session) -> tuple[int, int]:
         """
         Monitor download client for pending and completed downloads.
 
@@ -126,7 +132,7 @@ class DownloadMonitorTask:
         try:
             # 1. Update status of all pending downloads
             logger.debug("[DownloadMonitor] Checking pending downloads...")
-            failed_count = await self._update_pending_downloads(session)
+            failed_count = self._update_pending_downloads(session)
 
             # Log failed downloads
             if failed_count > 0:
@@ -143,14 +149,14 @@ class DownloadMonitorTask:
 
             # 2. Process completed downloads
             logger.debug("[DownloadMonitor] Processing completed downloads...")
-            processed_count = await self._process_completed_downloads(session)
+            processed_count = self._process_completed_downloads(session)
 
         except Exception as e:
             logger.error(f"Error monitoring download client: {e}", exc_info=True)
 
         return processed_count, failed_count
 
-    async def _scan_downloads_folder(self, session: Session) -> int:
+    def _scan_downloads_folder(self, session: Session) -> int:
         """
         Scan downloads folder recursively for PDF and EPUB files and import them.
 
@@ -196,7 +202,7 @@ class DownloadMonitorTask:
 
         return imported_count
 
-    async def _update_pending_downloads(self, session: Session) -> int:
+    def _update_pending_downloads(self, session: Session) -> int:
         """
         Update status of all pending/downloading submissions from client.
 
@@ -257,7 +263,7 @@ class DownloadMonitorTask:
 
         return failed_count
 
-    async def _process_completed_downloads(self, session: Session) -> int:
+    def _process_completed_downloads(self, session: Session) -> int:
         """
         Get completed downloads and process them via file importer.
 
@@ -333,7 +339,7 @@ class DownloadMonitorTask:
                     # Call optional callback (e.g., for database updates)
                     if self.import_callback:
                         try:
-                            await self.import_callback(file_path, result, submission, session)
+                            self.import_callback(file_path, result, submission, session)
                         except Exception as e:
                             logger.error(f"Error in import callback: {e}", exc_info=True)
                 else:

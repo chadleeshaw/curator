@@ -100,7 +100,7 @@ class TestFolderScanning:
         )
 
         # Run just the folder scan part
-        await monitor._scan_downloads_folder(session)
+        monitor._scan_downloads_folder(session)
 
         # Should find 4 PDF files
         # test1.pdf, magazines/mag1.pdf, magazines/science/science1.pdf
@@ -121,7 +121,7 @@ class TestFolderScanning:
             downloads_dir=temp_downloads_dir,
         )
 
-        await monitor._scan_downloads_folder(session)
+        monitor._scan_downloads_folder(session)
 
         # Should find 2 EPUB files
         # test2.epub, comics/comic1.epub
@@ -143,7 +143,7 @@ class TestFolderScanning:
             downloads_dir=temp_downloads_dir,
         )
 
-        await monitor._scan_downloads_folder(session)
+        monitor._scan_downloads_folder(session)
 
         # Check that process_downloads wasn't called with txt or jpg files
         if mock_file_importer.process_downloads.called:
@@ -168,7 +168,7 @@ class TestFolderScanning:
         )
 
         # Should complete without error
-        await monitor._scan_downloads_folder(session)
+        monitor._scan_downloads_folder(session)
 
         # Should still call process_downloads (with empty list or not at all)
         # Either is acceptable behavior
@@ -189,7 +189,7 @@ class TestFolderScanning:
         )
 
         # Should complete without error (logs warning)
-        await monitor._scan_downloads_folder(session)
+        monitor._scan_downloads_folder(session)
         session.close()
 
 
@@ -316,7 +316,7 @@ class TestFileImporterIntegration:
             downloads_dir=temp_downloads_dir,
         )
 
-        await monitor._scan_downloads_folder(session)
+        monitor._scan_downloads_folder(session)
 
         # Should have called process_downloads
         assert mock_file_importer.process_downloads.called
@@ -341,7 +341,7 @@ class TestFileImporterIntegration:
         )
 
         # Should complete without raising (logs error)
-        await monitor._scan_downloads_folder(session)
+        monitor._scan_downloads_folder(session)
         session.close()
 
     @pytest.mark.asyncio
@@ -357,7 +357,7 @@ class TestFileImporterIntegration:
             downloads_dir=temp_downloads_dir,
         )
 
-        await monitor._scan_downloads_folder(session)
+        monitor._scan_downloads_folder(session)
 
         # Check that method was called (it scans folder itself, no paths passed)
         if mock_file_importer.process_downloads.called:

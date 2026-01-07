@@ -19,6 +19,7 @@ from core.constants import (
 )
 from core.matching import TitleMatcher
 from core.pdf_utils import extract_cover_from_pdf
+from core.response_models import ErrorCodes, OperationResult
 from models.database import Magazine, MagazineTracking
 from processor.categorizer import FileCategorizer
 from processor.metadata_extractor import MetadataExtractor
@@ -73,13 +74,17 @@ class FileImporter:
             organization_pattern: Optional custom organization pattern with tags like {category}, {title}, {year}
 
         Returns:
-            Dict with import results
+            Dict with import results in standardized format
         """
-        results = {"imported": 0, "failed": 0, "errors": []}
+        result = OperationResult()
+        result.add_count("imported", 0)
+        result.add_count("failed", 0)
+        result.add_count("skipped", 0)
 
         if not self.downloads_dir.exists():
             logger.warning(f"Downloads directory not found: {self.downloads_dir}")
-            return results
+            result.add_error(ErrorCodes.FILE_NOT_FOUND, f"Downloads directory not found: {self.downloads_dir}", retryable=False)
+            return result.to_dict()
 
         pdf_files = list(self.downloads_dir.glob("**/*.pdf"))
         epub_files = list(self.downloads_dir.glob("**/*.epub"))
@@ -103,41 +108,40 @@ class FileImporter:
 
         if not all_files:
             logger.info(f"No PDF or EPUB files found in downloads folder: {self.downloads_dir}")
-            return results
+            return result.to_dict()
 
         logger.info(f"[DOWNLOADS IMPORT] Found {len(all_files)} files to process from {self.downloads_dir} ({len(pdf_files)} PDFs, {len(epub_files)} EPUBs)")
 
         for pdf_path in pdf_files:
             try:
-                result = self.import_pdf(
+                import_result = self.import_pdf(
                     pdf_path, session, organization_pattern=organization_pattern
                 )
-                if result:
-                    results["imported"] += 1
+                if import_result:
+                    result.data["imported"] += 1
                     logger.info(f"Successfully imported: {pdf_path.name}")
                 else:
-                    results["failed"] += 1
-                    results["errors"].append(f"Failed to import {pdf_path.name}")
+                    result.data["failed"] += 1
+                    result.add_error(ErrorCodes.IMPORT_FAILED, f"Failed to import {pdf_path.name}", retryable=True)
             except Exception as e:
-                results["failed"] += 1
+                result.data["failed"] += 1
                 error_msg = f"Error importing {pdf_path.name}: {str(e)}"
-                results["errors"].append(error_msg)
+                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
                 logger.error(error_msg, exc_info=True)
 
         # Process EPUB files (convert to PDF first)
         for epub_path in epub_files:
             try:
                 logger.info(f"Converting EPUB to PDF: {epub_path.name}")
-                # TODO: Add EPUB to PDF conversion
-                # For now, just log that EPUBs are found
-                results["errors"].append(f"EPUB support coming soon: {epub_path.name}")
+                result.data["skipped"] += 1
+                result.add_error(ErrorCodes.PROCESSING_FAILED, f"EPUB support coming soon: {epub_path.name}", retryable=False)
                 logger.warning(f"EPUB files not yet supported, skipping: {epub_path.name}")
             except Exception as e:
                 error_msg = f"Error processing EPUB {epub_path.name}: {str(e)}"
-                results["errors"].append(error_msg)
+                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=False)
                 logger.error(error_msg, exc_info=True)
 
-        return results
+        return result.to_dict()
 
     def import_pdf(
         self,
@@ -302,25 +306,29 @@ class FileImporter:
             tracking_mode: Tracking mode - "all" (track all editions), "new" (track new only), "watch" (watch only), "none" (no tracking)
 
         Returns:
-            Dict with import results
+            Dict with import results in standardized format
         """
-        results = {"imported": 0, "failed": 0, "skipped": 0, "errors": []}
+        result = OperationResult()
+        result.add_count("imported", 0)
+        result.add_count("failed", 0)
+        result.add_count("skipped", 0)
 
         if not self.organize_base_dir.exists():
             logger.warning(f"Organize directory not found: {self.organize_base_dir}")
-            return results
+            result.add_error(ErrorCodes.FILE_NOT_FOUND, f"Organize directory not found: {self.organize_base_dir}", retryable=False)
+            return result.to_dict()
 
         pdf_files = list(self.organize_base_dir.glob("**/*.pdf"))
 
         if not pdf_files:
             logger.info(f"No PDF files found in organized folders: {self.organize_base_dir}")
-            return results
+            return result.to_dict()
 
         logger.info(f"[DATA IMPORT] Found {len(pdf_files)} PDF files in organized folders to process from {self.organize_base_dir}")
 
         for pdf_path in pdf_files:
             try:
-                result = self.import_pdf(
+                import_result = self.import_pdf(
                     pdf_path,
                     session,
                     organization_pattern=None,
@@ -328,18 +336,18 @@ class FileImporter:
                     skip_organize=True,
                     tracking_mode=tracking_mode,
                 )
-                if result:
-                    results["imported"] += 1
+                if import_result:
+                    result.data["imported"] += 1
                     logger.info(
                         f"Successfully imported organized file: {pdf_path.name}"
                     )
                 else:
-                    results["failed"] += 1
-                    results["errors"].append(f"Failed to import {pdf_path.name}")
+                    result.data["failed"] += 1
+                    result.add_error(ErrorCodes.IMPORT_FAILED, f"Failed to import {pdf_path.name}", retryable=True)
             except Exception as e:
-                results["failed"] += 1
+                result.data["failed"] += 1
                 error_msg = f"Error importing organized file {pdf_path.name}: {str(e)}"
-                results["errors"].append(error_msg)
+                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
                 logger.error(error_msg, exc_info=True)
 
-        return results
+        return result.to_dict()
