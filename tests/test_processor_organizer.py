@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test suite for FileProcessor (Organizer)
+Test suite for FileOrganizer (Organizer)
 """
 
 import sys
@@ -12,7 +12,7 @@ from datetime import datetime  # noqa: E402
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from processor.organizer import FileProcessor  # noqa: E402
+from processor.organizer import FileOrganizer  # noqa: E402
 from core.utils import sanitize_filename  # noqa: E402
 
 
@@ -36,7 +36,7 @@ def test_sanitize_filename():
 
 def test_parse_filename_for_metadata():
     """Test parsing metadata from filenames"""
-    processor = FileProcessor(tempfile.gettempdir())
+    processor = FileOrganizer(tempfile.gettempdir())
 
     # Valid format: "Title - MonYear"
     result = processor.parse_filename_for_metadata("Wired Magazine - Dec2006")
@@ -62,14 +62,14 @@ def test_parse_filename_for_metadata():
     assert result["issue_date"].month == 1
     assert result["issue_date"].year == 2010
 
-    print("Testing FileProcessor.parse_filename_for_metadata()... ✓ PASS")
+    print("Testing FileOrganizer.parse_filename_for_metadata()... ✓ PASS")
     pass
 
 
 def test_organize_file():
     """Test organizing files with proper naming"""
     with tempfile.TemporaryDirectory() as tmpdir:
-        processor = FileProcessor(tmpdir)
+        processor = FileOrganizer(tmpdir)
 
         # Create a temporary PDF file
         test_pdf = Path(tmpdir) / "source.pdf"
@@ -88,14 +88,14 @@ def test_organize_file():
         # Verify source file no longer exists
         assert not test_pdf.exists()
 
-        print("Testing FileProcessor.organize_file()... ✓ PASS")
+        print("Testing FileOrganizer.organize_file()... ✓ PASS")
         pass
 
 
 def test_organize_file_with_cover():
     """Test organizing file with cover art"""
     with tempfile.TemporaryDirectory() as tmpdir:
-        processor = FileProcessor(tmpdir)
+        processor = FileOrganizer(tmpdir)
 
         # Create temporary files
         test_pdf = Path(tmpdir) / "source.pdf"
@@ -121,14 +121,14 @@ def test_organize_file_with_cover():
         assert not test_pdf.exists()
         assert not test_jpg.exists()
 
-        print("Testing FileProcessor.organize_file() with cover... ✓ PASS")
+        print("Testing FileOrganizer.organize_file() with cover... ✓ PASS")
         pass
 
 
 def test_organize_file_non_pdf():
     """Test that non-PDF files are not moved"""
     with tempfile.TemporaryDirectory() as tmpdir:
-        processor = FileProcessor(tmpdir)
+        processor = FileOrganizer(tmpdir)
 
         # Create a non-PDF file
         test_file = Path(tmpdir) / "source.txt"
@@ -142,7 +142,7 @@ def test_organize_file_non_pdf():
         assert test_file.exists()
         assert pdf_path == "None"
 
-        print("Testing FileProcessor.organize_file() with non-PDF... ✓ PASS")
+        print("Testing FileOrganizer.organize_file() with non-PDF... ✓ PASS")
         pass
 
 
@@ -155,20 +155,20 @@ def test_organize_directory_creation():
         assert not organize_path.exists()
 
         # Create processor
-        processor = FileProcessor(str(organize_path))
+        processor = FileOrganizer(str(organize_path))
 
         # Path should now exist
         assert organize_path.exists()
         assert organize_path.is_dir()
 
-        print("Testing FileProcessor directory creation... ✓ PASS")
+        print("Testing FileOrganizer directory creation... ✓ PASS")
         pass
 
 
 def test_filename_patterns():
     """Test organizing with different date patterns"""
     with tempfile.TemporaryDirectory() as tmpdir:
-        processor = FileProcessor(tmpdir)
+        processor = FileOrganizer(tmpdir)
 
         test_cases = [
             ("Wired", datetime(2006, 1, 1), "Wired - Jan2006"),
@@ -194,13 +194,13 @@ def test_filename_patterns():
             # Verify naming pattern
             assert Path(pdf_path).name == f"{expected_base}.pdf"
 
-        print("Testing FileProcessor filename patterns... ✓ PASS")
+        print("Testing FileOrganizer filename patterns... ✓ PASS")
         pass
 
 
 def test_parse_all_months():
     """Test parsing all month abbreviations"""
-    processor = FileProcessor(tempfile.gettempdir())
+    processor = FileOrganizer(tempfile.gettempdir())
 
     months = [
         "Jan",
@@ -225,18 +225,18 @@ def test_parse_all_months():
         assert result["issue_date"].month == month_num
         assert result["issue_date"].year == 2020
 
-    print("Testing FileProcessor all month parsing... ✓ PASS")
+    print("Testing FileOrganizer all month parsing... ✓ PASS")
     pass
 
 
 def test_organize_pattern():
     """Test the organized filename pattern"""
-    processor = FileProcessor(tempfile.gettempdir())
+    processor = FileOrganizer(tempfile.gettempdir())
 
     expected_pattern = "{title} - {month}{year}"
     assert processor.ORGANIZED_PATTERN == expected_pattern
 
-    print("Testing FileProcessor pattern... ✓ PASS")
+    print("Testing FileOrganizer pattern... ✓ PASS")
     pass
 
 
@@ -249,55 +249,55 @@ if __name__ == "__main__":
     try:
         results["sanitize_filename"] = test_sanitize_filename()
     except Exception as e:
-        print(f"Testing FileProcessor._sanitize_filename()... ❌ FAIL: {e}")
+        print(f"Testing FileOrganizer._sanitize_filename()... ❌ FAIL: {e}")
         results["sanitize_filename"] = False
 
     try:
         results["parse_filename"] = test_parse_filename_for_metadata()
     except Exception as e:
-        print(f"Testing FileProcessor.parse_filename_for_metadata()... ❌ FAIL: {e}")
+        print(f"Testing FileOrganizer.parse_filename_for_metadata()... ❌ FAIL: {e}")
         results["parse_filename"] = False
 
     try:
         results["organize_file"] = test_organize_file()
     except Exception as e:
-        print(f"Testing FileProcessor.organize_file()... ❌ FAIL: {e}")
+        print(f"Testing FileOrganizer.organize_file()... ❌ FAIL: {e}")
         results["organize_file"] = False
 
     try:
         results["organize_with_cover"] = test_organize_file_with_cover()
     except Exception as e:
-        print(f"Testing FileProcessor.organize_file() with cover... ❌ FAIL: {e}")
+        print(f"Testing FileOrganizer.organize_file() with cover... ❌ FAIL: {e}")
         results["organize_with_cover"] = False
 
     try:
         results["non_pdf"] = test_organize_file_non_pdf()
     except Exception as e:
-        print(f"Testing FileProcessor.organize_file() with non-PDF... ❌ FAIL: {e}")
+        print(f"Testing FileOrganizer.organize_file() with non-PDF... ❌ FAIL: {e}")
         results["non_pdf"] = False
 
     try:
         results["directory_creation"] = test_organize_directory_creation()
     except Exception as e:
-        print(f"Testing FileProcessor directory creation... ❌ FAIL: {e}")
+        print(f"Testing FileOrganizer directory creation... ❌ FAIL: {e}")
         results["directory_creation"] = False
 
     try:
         results["filename_patterns"] = test_filename_patterns()
     except Exception as e:
-        print(f"Testing FileProcessor filename patterns... ❌ FAIL: {e}")
+        print(f"Testing FileOrganizer filename patterns... ❌ FAIL: {e}")
         results["filename_patterns"] = False
 
     try:
         results["all_months"] = test_parse_all_months()
     except Exception as e:
-        print(f"Testing FileProcessor all month parsing... ❌ FAIL: {e}")
+        print(f"Testing FileOrganizer all month parsing... ❌ FAIL: {e}")
         results["all_months"] = False
 
     try:
         results["organize_pattern"] = test_organize_pattern()
     except Exception as e:
-        print(f"Testing FileProcessor pattern... ❌ FAIL: {e}")
+        print(f"Testing FileOrganizer pattern... ❌ FAIL: {e}")
         results["organize_pattern"] = False
 
     print("\n" + "=" * 70)

@@ -17,7 +17,7 @@ from models.database import Magazine, MagazineTracking
 from processor.download_manager import DownloadManager
 from processor.download_monitor import DownloadMonitorTask
 from processor.file_importer import FileImporter
-from processor.organizer import FileProcessor
+from processor.organizer import FileOrganizer
 from processor.task_scheduler import TaskScheduler
 
 # Import all routers
@@ -148,7 +148,7 @@ async def lifespan(app: FastAPI):
         # Initialize other components
         fuzzy_threshold = matching_config.get("fuzzy_threshold")
         title_matcher = TitleMatcher(fuzzy_threshold)
-        file_processor = FileProcessor(
+        file_processor = FileOrganizer(
             storage_config.get("organize_dir", "./_Magazines")
         )
         file_importer = FileImporter(

@@ -21,8 +21,8 @@ from core.matching import TitleMatcher
 from core.pdf_utils import extract_cover_from_pdf
 from models.database import Magazine, MagazineTracking
 from processor.categorizer import FileCategorizer
-from processor.file_organizer import FileOrganizer
 from processor.metadata_extractor import MetadataExtractor
+from processor.organizer import FileOrganizer
 
 logger = logging.getLogger(__name__)
 

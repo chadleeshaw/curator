@@ -20,7 +20,7 @@ from core.database import DatabaseManager
 from models.database import Base, DownloadSubmission, Magazine, MagazineTracking
 from processor.download_manager import DownloadManager
 from processor.file_importer import FileImporter
-from processor.organizer import FileProcessor
+from processor.organizer import FileOrganizer
 
 
 @pytest.fixture
@@ -274,7 +274,7 @@ class TestFileOrganizationWorkflow:
     def test_organize_downloaded_file(self, temp_dirs, session):
         """Test organizing a downloaded file"""
         # Step 1: Create organizer
-        organizer = FileProcessor(str(temp_dirs["organize_dir"]))
+        organizer = FileOrganizer(str(temp_dirs["organize_dir"]))
 
         # Step 2: Create a test file in downloads
         test_file = temp_dirs["download_dir"] / "test_magazine.pdf"
