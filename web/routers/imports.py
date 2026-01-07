@@ -75,7 +75,7 @@ async def import_from_downloads(
 
 @router.get("/status")
 async def get_import_status() -> Dict[str, Any]:
-    """Get information about available files in downloads folder"""
+    """Get information about available files in downloads folder (searches recursively)"""
     try:
         downloads_dir = Path(_storage_config.get("download_dir", "./downloads"))
 
@@ -86,13 +86,16 @@ async def get_import_status() -> Dict[str, Any]:
                 "message": "Downloads directory not found",
             }
 
-        pdf_files = list(downloads_dir.glob("*.pdf"))
+        # Search recursively for PDF and EPUB files (matches process_downloads behavior)
+        pdf_files = list(downloads_dir.glob("**/*.pdf"))
+        epub_files = list(downloads_dir.glob("**/*.epub"))
+        all_files = pdf_files + epub_files
 
         return {
-            "ready": len(pdf_files) > 0,
-            "files": len(pdf_files),
-            "file_list": [f.name for f in pdf_files],
-            "message": f"Found {len(pdf_files)} PDF files ready to import",
+            "ready": len(all_files) > 0,
+            "files": len(all_files),
+            "file_list": [str(f.relative_to(downloads_dir)) for f in all_files],
+            "message": f"Found {len(all_files)} files ready to import ({len(pdf_files)} PDFs, {len(epub_files)} EPUBs)",
         }
 
     except Exception as e:
