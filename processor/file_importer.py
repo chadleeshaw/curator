@@ -13,6 +13,15 @@ from typing import Any, Dict, Optional
 from pdf2image import convert_from_path
 from sqlalchemy.orm import Session
 
+from core.constants import (
+    CATEGORY_KEYWORDS,
+    DEFAULT_FUZZY_THRESHOLD,
+    DUPLICATE_DATE_THRESHOLD_DAYS,
+    MAX_VALID_YEAR,
+    MIN_VALID_YEAR,
+    PDF_COVER_DPI_LOW,
+    PDF_COVER_QUALITY,
+)
 from core.matching import TitleMatcher
 from core.utils import sanitize_filename
 from models.database import Magazine, MagazineTracking
@@ -23,28 +32,11 @@ logger = logging.getLogger(__name__)
 class FileImporter:
     """Import and process PDF files from downloads folder"""
 
-    # Category keywords for automatic categorization
-    CATEGORIES = {
-        "Magazines": [
-            "magazine",
-            "national geographic",
-            "wired",
-            "time",
-            "newsweek",
-            "economist",
-            "pc gamer",
-            "forbes",
-        ],
-        "Comics": ["comic", "marvel", "dc", "graphic novel", "comic book"],
-        "Articles": ["article", "paper", "journal", "report"],
-        "News": ["news", "daily", "newspaper"],
-    }
-
     def __init__(
         self,
         downloads_dir: str,
         organize_base_dir: str,
-        fuzzy_threshold: int = 80,
+        fuzzy_threshold: int = DEFAULT_FUZZY_THRESHOLD,
         organization_pattern: Optional[str] = None,
     ):
         """
@@ -65,7 +57,7 @@ class FileImporter:
         self.organize_base_dir.mkdir(parents=True, exist_ok=True)
 
         # Create category subdirectories
-        for category in self.CATEGORIES.keys():
+        for category in CATEGORY_KEYWORDS.keys():
             category_dir = self.organize_base_dir / f"_{category}"
             category_dir.mkdir(parents=True, exist_ok=True)
 
@@ -191,9 +183,8 @@ class FileImporter:
                     standardized_title, existing.title
                 )
                 if is_match and issue_date and existing.issue_date:
-                    # Check if issue dates are within 5 days of each other
                     date_diff = abs((issue_date - existing.issue_date).days)
-                    if date_diff <= 5:
+                    if date_diff <= DUPLICATE_DATE_THRESHOLD_DAYS:
                         logger.warning(
                             f"Duplicate detected: '{standardized_title}' ({issue_date.strftime('%b %Y')}) matches existing "
                             f"'{existing.title}' ({existing.issue_date.strftime('%b %Y')}) "
@@ -323,11 +314,11 @@ class FileImporter:
                 current = current.parent
                 continue
 
-            # Skip year folders (4-digit numbers in valid year range 1900-2100)
+            # Skip year folders (4-digit numbers in valid year range)
             # This allows "2600" (the magazine) while skipping actual year folders
             if folder_name.isdigit() and len(folder_name) == 4:
                 year_value = int(folder_name)
-                if 1900 <= year_value <= 2100:
+                if MIN_VALID_YEAR <= year_value <= MAX_VALID_YEAR:
                     current = current.parent
                     continue
 
@@ -487,14 +478,14 @@ class FileImporter:
 
             # Convert first page to image
             images = convert_from_path(
-                str(pdf_path), first_page=1, last_page=1, dpi=60
+                str(pdf_path), first_page=1, last_page=1, dpi=PDF_COVER_DPI_LOW
             )
             if not images:
                 logger.warning(f"Could not extract images from PDF: {pdf_path}")
                 return None
 
             # Save as JPEG
-            images[0].save(str(cover_path), "JPEG", quality=50)
+            images[0].save(str(cover_path), "JPEG", quality=PDF_COVER_QUALITY)
             logger.info(f"Extracted cover: {cover_path}")
             return cover_path
 
@@ -519,7 +510,7 @@ class FileImporter:
         """
         title_lower = title.lower()
 
-        for category, keywords in self.CATEGORIES.items():
+        for category, keywords in CATEGORY_KEYWORDS.items():
             for keyword in keywords:
                 if keyword in title_lower:
                     return category

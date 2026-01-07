@@ -10,6 +10,11 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from core.bases import DownloadClient, SearchProvider
+from core.constants import (
+    DEFAULT_FUZZY_THRESHOLD,
+    MAX_DOWNLOAD_RETRIES,
+    MAX_DOWNLOADS_PER_BATCH,
+)
 from core.matching import TitleMatcher
 from models.database import (
     DownloadSubmission,
@@ -27,7 +32,7 @@ class DownloadManager:
         self,
         search_providers: List[SearchProvider],
         download_client: DownloadClient,
-        fuzzy_threshold: int = 80,
+        fuzzy_threshold: int = DEFAULT_FUZZY_THRESHOLD,
     ):
         """
         Initialize download manager.
@@ -180,13 +185,12 @@ class DownloadManager:
         logger.debug(f"[DownloadManager] submit_download called for: {search_result['title']}")
 
         # Check if this URL has failed too many times (bad file)
-        MAX_RETRIES = 3
         previous_failures = (
             session.query(DownloadSubmission)
             .filter(
                 DownloadSubmission.source_url == search_result["url"],
                 DownloadSubmission.status == DownloadSubmission.StatusEnum.FAILED,
-                DownloadSubmission.attempt_count >= MAX_RETRIES,
+                DownloadSubmission.attempt_count >= MAX_DOWNLOAD_RETRIES,
             )
             .first()
         )
@@ -457,8 +461,7 @@ class DownloadManager:
 
         filtered_results.sort(key=sort_key)
 
-        # Limit to 10 issues per batch - scheduler will pick up next batch on next run
-        MAX_DOWNLOADS_PER_BATCH = 10
+        # Limit issues per batch - scheduler will pick up next batch on next run
         batch_results = filtered_results[:MAX_DOWNLOADS_PER_BATCH]
 
         if len(batch_results) > 0:

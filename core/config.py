@@ -111,7 +111,47 @@ class ConfigLoader:
 
     def get_matching(self) -> Dict[str, Any]:
         """Get matching configuration"""
-        return self.config.get("matching", {"fuzzy_threshold": 80})
+        from core.constants import DEFAULT_FUZZY_THRESHOLD, DUPLICATE_DATE_THRESHOLD_DAYS
+        return self.config.get("matching", {
+            "fuzzy_threshold": DEFAULT_FUZZY_THRESHOLD,
+            "duplicate_date_threshold_days": DUPLICATE_DATE_THRESHOLD_DAYS
+        })
+
+    def get_pdf(self) -> Dict[str, Any]:
+        """Get PDF processing configuration"""
+        from core.constants import (
+            PDF_COVER_DPI_LOW,
+            PDF_COVER_DPI_HIGH,
+            PDF_COVER_QUALITY,
+            PDF_COVER_QUALITY_HIGH
+        )
+        return self.config.get("pdf", {
+            "cover_dpi_low": PDF_COVER_DPI_LOW,
+            "cover_dpi_high": PDF_COVER_DPI_HIGH,
+            "cover_quality_low": PDF_COVER_QUALITY,
+            "cover_quality_high": PDF_COVER_QUALITY_HIGH
+        })
+
+    def get_downloads(self) -> Dict[str, Any]:
+        """Get downloads configuration"""
+        from core.constants import MAX_DOWNLOAD_RETRIES, MAX_DOWNLOADS_PER_BATCH
+        return self.config.get("downloads", {
+            "max_retries": MAX_DOWNLOAD_RETRIES,
+            "max_per_batch": MAX_DOWNLOADS_PER_BATCH
+        })
+
+    def get_tasks(self) -> Dict[str, Any]:
+        """Get task scheduling configuration"""
+        from core.constants import (
+            AUTO_DOWNLOAD_INTERVAL,
+            DOWNLOAD_MONITOR_INTERVAL,
+            CLEANUP_COVERS_INTERVAL
+        )
+        return self.config.get("tasks", {
+            "auto_download_interval": AUTO_DOWNLOAD_INTERVAL,
+            "download_monitor_interval": DOWNLOAD_MONITOR_INTERVAL,
+            "cleanup_covers_interval": CLEANUP_COVERS_INTERVAL
+        })
 
     def get_logging(self) -> Dict[str, Any]:
         """Get logging configuration with environment variable overrides"""

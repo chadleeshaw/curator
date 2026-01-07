@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
+from core.constants import PDF_COVER_DPI_HIGH, PDF_COVER_QUALITY_HIGH
 from core.utils import sanitize_filename
 
 logger = logging.getLogger(__name__)
@@ -109,9 +110,9 @@ class FileProcessor:
         try:
             from pdf2image import convert_from_path
 
-            images = convert_from_path(pdf_path, first_page=1, last_page=1, dpi=200)
+            images = convert_from_path(pdf_path, first_page=1, last_page=1, dpi=PDF_COVER_DPI_HIGH)
             if images:
-                images[0].save(output_path, "JPEG", quality=85)
+                images[0].save(output_path, "JPEG", quality=PDF_COVER_QUALITY_HIGH)
                 logger.info(f"Extracted cover from PDF: {output_path}")
                 return True
         except ImportError:

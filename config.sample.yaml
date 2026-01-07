@@ -59,7 +59,43 @@ import:
       - newspaper
 
 matching:
+  # Fuzzy matching threshold (0-100) for duplicate detection
+  # Higher = stricter matching, Lower = more lenient
   fuzzy_threshold: 80
+
+  # Days threshold for considering publications as duplicates
+  # Publications with same title within this many days are considered duplicates
+  duplicate_date_threshold_days: 5
+
+pdf:
+  # DPI settings for cover extraction (higher = better quality, slower)
+  cover_dpi_low: 60        # For thumbnails/previews
+  cover_dpi_high: 200      # For high-quality covers
+
+  # JPEG quality (1-100) for cover images
+  cover_quality_low: 50    # For thumbnails
+  cover_quality_high: 85   # For high-quality covers
+
+downloads:
+  # Maximum number of retry attempts for failed downloads
+  max_retries: 3
+
+  # Maximum number of downloads to submit per batch
+  # Larger batches = faster but more resource intensive
+  max_per_batch: 10
+
+tasks:
+  # Task interval settings (in seconds)
+  # How often each background task runs
+
+  # Auto-download: Search for and download new tracked issues
+  auto_download_interval: 1800    # 30 minutes
+
+  # Download monitor: Check download status and import completed files
+  download_monitor_interval: 30   # 30 seconds
+
+  # Cover cleanup: Remove orphaned covers and generate missing ones
+  cleanup_covers_interval: 86400  # 24 hours
 
 logging:
   level: INFO

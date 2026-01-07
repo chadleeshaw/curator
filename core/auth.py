@@ -7,11 +7,11 @@ from typing import Optional, Tuple
 
 import jwt
 
+from core.constants import TOKEN_EXPIRATION_HOURS
 from models.database import Credentials
 
 # JWT configuration constants
 JWT_ALGORITHM = "HS256"
-TOKEN_EXPIRATION_HOURS = 24
 
 
 class AuthManager:

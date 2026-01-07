@@ -41,6 +41,9 @@ logger = logging.getLogger(__name__)
 config_loader = ConfigLoader()
 storage_config = config_loader.get_storage()
 matching_config = config_loader.get_matching()
+pdf_config = config_loader.get_pdf()
+downloads_config = config_loader.get_downloads()
+tasks_config = config_loader.get_tasks()
 
 # Initialize database
 db_url = f"sqlite:///{storage_config.get('db_path', './data/periodicals.db')}"
@@ -143,14 +146,15 @@ async def lifespan(app: FastAPI):
             download_client = None
 
         # Initialize other components
-        title_matcher = TitleMatcher(matching_config.get("fuzzy_threshold", 80))
+        fuzzy_threshold = matching_config.get("fuzzy_threshold")
+        title_matcher = TitleMatcher(fuzzy_threshold)
         file_processor = FileProcessor(
             storage_config.get("organize_dir", "./_Magazines")
         )
         file_importer = FileImporter(
             downloads_dir=storage_config.get("download_dir", "./downloads"),
             organize_base_dir=storage_config.get("organize_dir", "./_Magazines"),
-            fuzzy_threshold=matching_config.get("fuzzy_threshold", 80),
+            fuzzy_threshold=fuzzy_threshold,
             organization_pattern=storage_config.get("organization_pattern"),
         )
 
@@ -159,7 +163,7 @@ async def lifespan(app: FastAPI):
             download_manager = DownloadManager(
                 search_providers=search_providers,
                 download_client=download_client,
-                fuzzy_threshold=matching_config.get("fuzzy_threshold", 80),
+                fuzzy_threshold=fuzzy_threshold,
             )
             logger.info("Download manager initialized")
 
@@ -346,17 +350,23 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 logger.error(f"Cover cleanup error: {e}", exc_info=True)
 
-        # Schedule auto-download every 30 minutes (1800 seconds)
-        task_scheduler.schedule_periodic("auto_download", auto_download_task, 1800)
-
-        # Schedule download monitoring every 30 seconds
+        # Schedule tasks with intervals from config
         task_scheduler.schedule_periodic(
-            "download_monitor", download_monitoring_task, 30
+            "auto_download",
+            auto_download_task,
+            tasks_config.get("auto_download_interval")
         )
 
-        # Schedule cover cleanup every 24 hours (86400 seconds)
         task_scheduler.schedule_periodic(
-            "cleanup_orphaned_covers", cleanup_orphaned_covers_task, 86400
+            "download_monitor",
+            download_monitoring_task,
+            tasks_config.get("download_monitor_interval")
+        )
+
+        task_scheduler.schedule_periodic(
+            "cleanup_orphaned_covers",
+            cleanup_orphaned_covers_task,
+            tasks_config.get("cleanup_covers_interval")
         )
 
         # Start scheduler in background
