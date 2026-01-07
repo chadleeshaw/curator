@@ -289,7 +289,7 @@ class DownloadMonitorTask:
             client_path = Path(submission.file_path)
             relative_path = client_path.name  # Get just the final component (filename/folder)
             file_path = self.downloads_dir / relative_path
-            
+
             logger.debug(f"[DownloadMonitor] Mapped client path '{submission.file_path}' to local path '{file_path}'")
 
             # Check if file exists in our downloads directory
