@@ -221,9 +221,6 @@ class FileImporter:
             )
 
             session.add(magazine)
-            session.commit()
-
-            logger.info(f"Added to database: {standardized_title} ({category})")
 
             # Manage tracking record based on import settings
             olid = standardized_title.lower().replace(" ", "_").replace("-", "_")
@@ -237,7 +234,6 @@ class FileImporter:
                 if not existing_tracking:
                     track_all_editions = tracking_mode == "all"
                     track_new_only = tracking_mode == "new"
-                    # watch mode means track_all_editions=False and track_new_only=False
 
                     tracking = MagazineTracking(
                         olid=olid,
@@ -250,22 +246,23 @@ class FileImporter:
                         last_metadata_update=datetime.now(),
                     )
                     session.add(tracking)
-                    session.commit()
-                    logger.info(f"Created tracking record for: {standardized_title} (mode: {tracking_mode})")
+                    logger.debug(f"Will create tracking record for: {standardized_title} (mode: {tracking_mode})")
                 else:
                     existing_tracking.track_all_editions = tracking_mode == "all"
                     existing_tracking.track_new_only = tracking_mode == "new"
                     existing_tracking.last_metadata_update = datetime.now()
-                    session.commit()
-                    logger.info(f"Updated tracking record for: {standardized_title} (mode: {tracking_mode})")
+                    logger.debug(f"Will update tracking record for: {standardized_title} (mode: {tracking_mode})")
             else:
                 if existing_tracking:
                     session.delete(existing_tracking)
-                    session.commit()
-                    logger.info(f"Removed tracking record for: {standardized_title} (tracking disabled)")
+                    logger.debug(f"Will remove tracking record for: {standardized_title} (tracking disabled)")
+
+            # Commit all database changes in a single transaction
+            session.commit()
+            logger.info(f"Added to database: {standardized_title} ({category})")
 
             # Delete the original PDF from downloads folder after successful import
-            # (but only if we organized/moved it)
+            # This happens AFTER commit so database changes are safe even if deletion fails
             if not skip_organize:
                 try:
                     pdf_path.unlink()
