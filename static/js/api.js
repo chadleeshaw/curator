@@ -7,13 +7,12 @@ import { AuthManager } from './auth.js';
 
 export class APIClient {
   /**
-   * Fetch wrapper that automatically includes authentication token
+   * Fetch wrapper that automatically includes authentication token and error handling
    */
   static async authenticatedFetch(url, options = {}) {
     const token = AuthManager.getToken();
 
     if (!token) {
-      // Redirect to login if no token
       window.location.href = '/login.html';
       return null;
     }
@@ -21,19 +20,28 @@ export class APIClient {
     const headers = options.headers || {};
     headers['Authorization'] = `Bearer ${token}`;
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers,
+      });
 
-    // Handle 401 Unauthorized - token is invalid or expired
-    if (response.status === 401) {
-      AuthManager.removeToken();
-      window.location.href = '/login.html';
-      return null;
+      if (response.status === 401) {
+        AuthManager.removeToken();
+        window.location.href = '/login.html';
+        return null;
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `HTTP ${response.status}`);
+      }
+
+      return response;
+    } catch (error) {
+      console.error('API request failed:', error);
+      throw error;
     }
-
-    return response;
   }
 
   /**
@@ -47,12 +55,10 @@ export class APIClient {
    * Convenience method for POST requests
    */
   static async post(url, data) {
-    const token = AuthManager.getToken();
-    return fetch(url, {
+    return this.authenticatedFetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(data),
     });
@@ -62,12 +68,10 @@ export class APIClient {
    * Convenience method for PUT requests
    */
   static async put(url, data) {
-    const token = AuthManager.getToken();
-    return fetch(url, {
+    return this.authenticatedFetch(url, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(data),
     });
