@@ -125,6 +125,7 @@ class DownloadManager:
         search_result: Dict[str, Any],
         status: DownloadSubmission.StatusEnum,
         session: Session,
+        *,
         search_result_db_id: Optional[int] = None,
         job_id: Optional[str] = None,
         error_message: Optional[str] = None,
