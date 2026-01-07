@@ -12,18 +12,30 @@ from pathlib import Path
 from unittest.mock import Mock, AsyncMock, patch
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from processor.download_monitor import DownloadMonitorTask
 from processor.download_manager import DownloadManager
 from processor.file_importer import FileImporter
 from core.bases import DownloadClient
-from models.database import Base
+from models.database import (
+    Base,
+    Credentials,
+    Download,
+    DownloadSubmission,
+    Magazine,
+    MagazineTracking,
+    SearchResult,
+)
 
 
 @pytest.fixture
 def test_db():
     """Create in-memory test database"""
-    engine = create_engine("sqlite:///:memory:")
+    # Use StaticPool to keep the same connection for all threads
+    engine = create_engine("sqlite:///:memory:",
+                          connect_args={"check_same_thread": False},
+                          poolclass=StaticPool)
     Base.metadata.create_all(engine)
     session_factory = sessionmaker(bind=engine)
     return engine, session_factory
