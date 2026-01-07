@@ -119,6 +119,55 @@ class DownloadManager:
         group_words = [w for w in words if len(w) > 2][:3]
         return "-".join(group_words)
 
+    def _create_submission_record(
+        self,
+        tracking_id: int,
+        search_result: Dict[str, Any],
+        status: DownloadSubmission.StatusEnum,
+        session: Session,
+        search_result_db_id: Optional[int] = None,
+        job_id: Optional[str] = None,
+        error_message: Optional[str] = None,
+        client_name: Optional[str] = None,
+        attempt_count: int = 0,
+    ) -> DownloadSubmission:
+        """
+        Create and commit a DownloadSubmission record.
+
+        Centralizes submission creation to ensure consistency.
+
+        Args:
+            tracking_id: Periodical tracking ID
+            search_result: Search result dict with title, url, provider, etc.
+            status: Submission status
+            session: Database session
+            search_result_db_id: Optional ID of SearchResult DB record
+            job_id: Download client job ID (for PENDING/DOWNLOADING)
+            error_message: Error message (for FAILED)
+            client_name: Name of download client (for PENDING/DOWNLOADING)
+            attempt_count: Number of attempts (default 0, set to 1 for new submissions)
+
+        Returns:
+            Created DownloadSubmission record
+        """
+        fuzzy_group = self._get_fuzzy_group_id(search_result["title"])
+
+        submission = DownloadSubmission(
+            tracking_id=tracking_id,
+            search_result_id=search_result_db_id,
+            job_id=job_id,
+            status=status,
+            source_url=search_result["url"],
+            result_title=search_result["title"],
+            fuzzy_match_group=fuzzy_group,
+            client_name=client_name,
+            attempt_count=attempt_count,
+            last_error=error_message,
+        )
+        session.add(submission)
+        session.commit()
+        return submission
+
     def check_duplicate_submission(
         self, tracking_id: int, result_title: str, session: Session
     ) -> Tuple[bool, Optional[DownloadSubmission]]:
@@ -203,17 +252,13 @@ class DownloadManager:
 
         if is_dup:
             logger.debug("[DownloadManager] Duplicate found, recording as SKIPPED")
-            # Record this as a skipped submission
-            skipped = DownloadSubmission(
-                tracking_id=tracking_id,
-                search_result_id=search_result_db_id,
-                status=DownloadSubmission.StatusEnum.SKIPPED,
-                source_url=search_result["url"],
-                result_title=search_result["title"],
-                fuzzy_match_group=self._get_fuzzy_group_id(search_result["title"]),
+            self._create_submission_record(
+                tracking_id,
+                search_result,
+                DownloadSubmission.StatusEnum.SKIPPED,
+                session,
+                search_result_db_id=search_result_db_id,
             )
-            session.add(skipped)
-            session.commit()
             logger.info(f"Skipped duplicate download: {search_result['title']} (tracking_id: {tracking_id})")
             return None
 
@@ -225,36 +270,28 @@ class DownloadManager:
             if not job_id:
                 logger.warning(f"Download client rejected submission: {search_result['title']}")
                 logger.debug("[DownloadManager] Recording as FAILED - client rejected")
-                # Record failed submission
-                submission = DownloadSubmission(
-                    tracking_id=tracking_id,
-                    search_result_id=search_result_db_id,
-                    status=DownloadSubmission.StatusEnum.FAILED,
-                    source_url=search_result["url"],
-                    result_title=search_result["title"],
-                    fuzzy_match_group=self._get_fuzzy_group_id(search_result["title"]),
-                    last_error="Client rejected submission",
+                self._create_submission_record(
+                    tracking_id,
+                    search_result,
+                    DownloadSubmission.StatusEnum.FAILED,
+                    session,
+                    search_result_db_id=search_result_db_id,
+                    error_message="Client rejected submission",
                 )
-                session.add(submission)
-                session.commit()
                 return None
 
             # Create submission record
             logger.debug(f"[DownloadManager] Client accepted, job_id: {job_id}")
-            fuzzy_group = self._get_fuzzy_group_id(search_result["title"])
-            submission = DownloadSubmission(
-                tracking_id=tracking_id,
-                search_result_id=search_result_db_id,
+            submission = self._create_submission_record(
+                tracking_id,
+                search_result,
+                DownloadSubmission.StatusEnum.PENDING,
+                session,
+                search_result_db_id=search_result_db_id,
                 job_id=job_id,
-                status=DownloadSubmission.StatusEnum.PENDING,
-                source_url=search_result["url"],
-                result_title=search_result["title"],
-                fuzzy_match_group=fuzzy_group,
                 client_name=self.download_client.name,
                 attempt_count=1,
             )
-            session.add(submission)
-            session.commit()
             logger.debug(f"[DownloadManager] Created DownloadSubmission record ID: {submission.id}")
 
             logger.info(f"Submitted download: {search_result['title']} (job_id: {job_id})")
@@ -266,18 +303,14 @@ class DownloadManager:
                 exc_info=True,
             )
             logger.debug("[DownloadManager] Recording as FAILED - exception occurred")
-            # Record error
-            submission = DownloadSubmission(
-                tracking_id=tracking_id,
-                search_result_id=search_result_db_id,
-                status=DownloadSubmission.StatusEnum.FAILED,
-                source_url=search_result["url"],
-                result_title=search_result["title"],
-                fuzzy_match_group=self._get_fuzzy_group_id(search_result["title"]),
-                last_error=str(e),
+            self._create_submission_record(
+                tracking_id,
+                search_result,
+                DownloadSubmission.StatusEnum.FAILED,
+                session,
+                search_result_db_id=search_result_db_id,
+                error_message=str(e),
             )
-            session.add(submission)
-            session.commit()
             return None
 
     def download_selected_editions(self, tracking_id: int, session: Session) -> Dict[str, Any]:
