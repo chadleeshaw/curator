@@ -21,10 +21,19 @@ export class APIClient {
     const headers = options.headers || {};
     headers['Authorization'] = `Bearer ${token}`;
 
-    return fetch(url, {
+    const response = await fetch(url, {
       ...options,
       headers,
     });
+
+    // Handle 401 Unauthorized - token is invalid or expired
+    if (response.status === 401) {
+      AuthManager.removeToken();
+      window.location.href = '/login.html';
+      return null;
+    }
+
+    return response;
   }
 
   /**
