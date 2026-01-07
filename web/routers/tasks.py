@@ -144,9 +144,16 @@ async def run_task_manually(task_id: str):
             try:
                 # Get all periodicals
                 all_periodicals = db_session.query(Magazine).all()
-                periodicals_with_covers = [m for m in all_periodicals if m.cover_path]
+                periodicals_with_covers = [
+                    m
+                    for m in all_periodicals
+                    if m.cover_path and Path(m.cover_path).exists()
+                ]
                 periodicals_without_covers = [
-                    m for m in all_periodicals if not m.cover_path and m.file_path
+                    m
+                    for m in all_periodicals
+                    if m.file_path
+                    and (not m.cover_path or not Path(m.cover_path).exists())
                 ]
 
                 db_cover_paths = {m.cover_path for m in periodicals_with_covers}
