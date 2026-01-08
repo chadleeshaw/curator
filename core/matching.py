@@ -117,6 +117,9 @@ class TitleMatcher:
         # Remove torrent tracker suffixes like [ettv], [rartv], [rarbg]
         title = re.sub(r'\[(?:ettv|rartv|rarbg|cttv|eztv)\]$', '', title, flags=re.IGNORECASE)
 
+        # Remove common download/unpack prefixes
+        title = re.sub(r'^(?:Unpack|Download|Get|Read)\s+', '', title, flags=re.IGNORECASE)
+
         # Remove release group tags (e.g., "-LORENZ-xpost", "[hash]-xpost") - BEFORE quality removal
         title = re.sub(r'-[A-Z][A-Za-z0-9]+(?:-[a-z]+)?\[[\w]+\].*$', '', title)  # -LORENZ[hash]
         title = re.sub(r'\[[\w]+\](?:-[a-z]+)?$', '', title)  # [hash]-xpost or [hash]
@@ -152,7 +155,20 @@ class TitleMatcher:
         # followed by lowercase letters (e.g., "NationalGeographic" -> "National Geographic")
         title = re.sub(r"([a-z])([A-Z])", r"\1 \2", title)
 
-        # Remove "Magazine", "magazine", etc. suffixes (often redundant)
+        # Remove issue numbers and dates that appear in titles
+        # Pattern: "No 123", "Issue 456", "No.789", "#42", "Vol 5"
+        title = re.sub(r'\s+(?:No|Issue|Vol|Volume|Edition)[.\s]*\d+', '', title, flags=re.IGNORECASE)
+        title = re.sub(r'\s+#\d+', '', title, flags=re.IGNORECASE)
+        
+        # Remove standalone years and dates (YYYY, YYYY MM, MM YYYY, etc.)
+        title = re.sub(r'\s+(?:19|20)\d{2}(?:\s+\d{1,2})?(?:\s+\d{1,2})?', '', title)
+        
+        # Remove month names followed by years
+        months = '(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)'
+        title = re.sub(rf'\s+{months}\s+(?:19|20)\d{{2}}', '', title, flags=re.IGNORECASE)
+        
+        # Remove magazine type suffixes (often redundant metadata)
+        title = re.sub(r"\s+(?:Hybrid|Digital|PDF|eMag|True|HQ)\s+(?:Magazine|Mag)", "", title, flags=re.IGNORECASE)
         title = re.sub(r"\s+(magazine|mag|mag\.)$", "", title, flags=re.IGNORECASE)
 
         # Clean up multiple spaces again after replacements
