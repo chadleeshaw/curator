@@ -39,6 +39,11 @@ class DatabaseManager:
         expected_schemas = {
             "periodical_tracking": [
                 ("delete_from_client_on_completion", "BOOLEAN DEFAULT 0"),
+                ("language", "VARCHAR(50) DEFAULT 'English'"),
+            ],
+            "periodicals": [
+                ("language", "VARCHAR(50) DEFAULT 'English'"),
+                ("tracking_id", "INTEGER"),
             ],
             "download_submissions": [
                 # Add any future columns here
