@@ -111,6 +111,22 @@ export class LibraryManager {
     h4.textContent = periodical.title;
     info.appendChild(h4);
 
+    // Add language badge if present
+    if (periodical.language && periodical.language !== 'English') {
+      const langBadge = document.createElement('span');
+      langBadge.className = 'language-badge';
+      langBadge.textContent = periodical.language;
+      langBadge.style.display = 'inline-block';
+      langBadge.style.padding = '2px 8px';
+      langBadge.style.marginTop = '4px';
+      langBadge.style.fontSize = '0.75em';
+      langBadge.style.fontWeight = '500';
+      langBadge.style.backgroundColor = 'var(--accent-color, #6366f1)';
+      langBadge.style.color = 'white';
+      langBadge.style.borderRadius = '12px';
+      info.appendChild(langBadge);
+    }
+
     const dateP = document.createElement('p');
     const dateText = new Date(periodical.issue_date).toLocaleDateString();
     const issueCount = periodical.issue_count || 1;
@@ -143,7 +159,7 @@ export class LibraryManager {
     viewBtn.style.transition = 'background 0.3s';
     viewBtn.onclick = (e) => {
       e.stopPropagation();
-      this.viewPeriodical(periodical.title);
+      this.viewPeriodical(periodical.title, periodical.language);
     };
     viewBtn.onmouseover = () => (viewBtn.style.backgroundColor = 'var(--primary-dark)');
     viewBtn.onmouseout = () => (viewBtn.style.backgroundColor = 'var(--primary-color)');
@@ -164,7 +180,7 @@ export class LibraryManager {
     deleteBtn.title = 'Delete this periodical';
     deleteBtn.onclick = (e) => {
       e.stopPropagation();
-      window.deletePeriodical(periodical.id, periodical.title);
+      window.deletePeriodical(periodical.id, periodical.title, periodical.issue_count);
     };
     deleteBtn.onmouseover = () => (deleteBtn.style.backgroundColor = '#d32f2f');
     deleteBtn.onmouseout = () => (deleteBtn.style.backgroundColor = '#f44336');
@@ -174,7 +190,7 @@ export class LibraryManager {
     card.appendChild(info);
 
     // Make card clickable on cover/title but not buttons
-    const coverClickable = () => this.viewPeriodical(periodical.title);
+    const coverClickable = () => this.viewPeriodical(periodical.title, periodical.language);
     cover.style.cursor = 'pointer';
     cover.onclick = coverClickable;
     h4.style.cursor = 'pointer';
@@ -186,17 +202,22 @@ export class LibraryManager {
   /**
    * View periodical (navigate to periodical page)
    */
-  viewPeriodical(periodicalTitle) {
-    window.location.href = `/periodicals/${encodeURIComponent(periodicalTitle)}`;
+  viewPeriodical(periodicalTitle, language = null) {
+    let url = `/periodicals/${encodeURIComponent(periodicalTitle)}`;
+    if (language) {
+      url += `?language=${encodeURIComponent(language)}`;
+    }
+    window.location.href = url;
   }
 
   /**
    * Show delete confirmation modal for a periodical
    */
-  deletePeriodical(periodicalId, title) {
-    console.log(`[Library] Setting pending delete: ID=${periodicalId}, Title=${title}`);
+  deletePeriodical(periodicalId, title, issueCount = null) {
+    console.log(`[Library] Setting pending delete: ID=${periodicalId}, Title=${title}, IssueCount=${issueCount}`);
     this.pendingDeleteId = periodicalId;
     this.pendingDeleteTitle = title;
+    this.pendingDeleteIssueCount = issueCount;
 
     const modal = document.getElementById('delete-modal');
     if (!modal) {
@@ -206,7 +227,11 @@ export class LibraryManager {
 
     const titleElement = document.getElementById('delete-modal-title');
     if (titleElement) {
-      titleElement.textContent = `Are you sure you want to delete "${title}"?`;
+      if (issueCount && issueCount > 1) {
+        titleElement.textContent = `Are you sure you want to delete all ${issueCount} issues of "${title}"?`;
+      } else {
+        titleElement.textContent = `Are you sure you want to delete "${title}"?`;
+      }
     }
 
     UIUtils.showModal('delete-modal');
@@ -219,6 +244,7 @@ export class LibraryManager {
     UIUtils.closeModal('delete-modal');
     this.pendingDeleteId = null;
     this.pendingDeleteTitle = null;
+    this.pendingDeleteIssueCount = null;
   }
 
   /**
@@ -242,10 +268,11 @@ export class LibraryManager {
 
     const deleteFiles = deleteOption.value === 'delete-files';
     const removeTracking = document.getElementById('delete-remove-tracking').checked;
+    const deleteAllIssues = true; // Always delete all issues when deleting from library page
 
     try {
       const response = await APIClient.authenticatedFetch(
-        `/api/periodicals/${this.pendingDeleteId}?delete_files=${deleteFiles}&remove_tracking=${removeTracking}`,
+        `/api/periodicals/${this.pendingDeleteId}?delete_files=${deleteFiles}&remove_tracking=${removeTracking}&delete_all_issues=${deleteAllIssues}`,
         { method: 'DELETE' }
       );
 
@@ -318,9 +345,9 @@ console.log('[Library] LibraryManager singleton created:', library);
 // Expose functions globally for onclick handlers
 window.setLibrarySortField = (field) => library.setLibrarySortField(field);
 window.toggleLibrarySortOrder = () => library.toggleLibrarySortOrder();
-window.deletePeriodical = (id, title) => {
-  console.log('[Library] window.deletePeriodical called with:', id, title);
-  return library.deletePeriodical(id, title);
+window.deletePeriodical = (id, title, issueCount) => {
+  console.log('[Library] window.deletePeriodical called with:', id, title, issueCount);
+  return library.deletePeriodical(id, title, issueCount);
 };
 window.closeDeleteModal = () => library.closeDeleteModal();
 window.confirmDeletePeriodical = () => {

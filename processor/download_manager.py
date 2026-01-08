@@ -268,15 +268,15 @@ class DownloadManager:
         # Compute tracking_title the same way file_importer does
         base_title, is_special, special_name = matcher.extract_base_title(standardized)
         tracking_title = base_title if is_special else standardized
-        if result_language != "English":
-            tracking_title = f"{tracking_title} - {result_language}"
+        # Language is stored separately in the language field, not appended to title
 
-        # Check if this tracking_title with this tracking_id already exists in library
+        # Check if this tracking_title with this language already exists in library
         in_library = (
             session.query(Magazine)
             .filter(
                 Magazine.tracking_id == tracking_id,
                 Magazine.title == tracking_title,
+                Magazine.language == result_language,
             )
             .first()
         )

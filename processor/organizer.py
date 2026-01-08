@@ -116,13 +116,13 @@ class FileOrganizer:
         Move and rename PDF to organized location based on pattern.
 
         Pattern-based organization with support for subdirectories and tags.
-        Available pattern tags: {category}, {title}, {year}, {month}, {day}
+        Available pattern tags: {category}, {title}, {year}, {month}, {day}, {language}
 
         Args:
             pdf_path: Original PDF path
             metadata: Extracted metadata
             category: Category name
-            pattern: Organization pattern with tags (optional, defaults to flat structure)
+            pattern: Organization pattern with tags (optional, defaults to: {category}/{title}/{language}/{year}/)
 
         Returns:
             Path to organized file, or None if failed
@@ -130,6 +130,7 @@ class FileOrganizer:
         try:
             title = metadata.get("title", pdf_path.stem)
             issue_date = metadata.get("issue_date", datetime.now())
+            language = metadata.get("language", "English")
 
             safe_title = sanitize_filename(title)
             month = issue_date.strftime("%b")
@@ -140,12 +141,17 @@ class FileOrganizer:
             # Apply category prefix
             category_with_prefix = f"{self.category_prefix}{category}"
 
-            # If no pattern provided, use default: {category}/{title}/{year}/
+            # If no pattern provided, use default with language: {category}/{title}/{language}/{year}/
             if not pattern:
-                target_dir = self.organize_dir / category_with_prefix / safe_title / year
+                target_dir = self.organize_dir / category_with_prefix / safe_title / language / year
             else:
                 target_path_str = pattern.format(
-                    category=category_with_prefix, title=safe_title, year=year, month=month, day=day
+                    category=category_with_prefix,
+                    title=safe_title,
+                    language=language,
+                    year=year,
+                    month=month,
+                    day=day
                 )
 
                 if not target_path_str.startswith("/"):

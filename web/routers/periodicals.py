@@ -48,23 +48,25 @@ async def list_periodicals(
             # Validate sort_order
             is_descending = sort_order.lower() == "desc"
 
-            # Group by title and get the latest issue for each periodical
+            # Group by title AND language to get unique periodical editions
             from sqlalchemy import func
 
-            # Subquery to find the max issue_date for each title
+            # Subquery to find the max issue_date for each (title, language) combination
             subquery = (
                 db_session.query(
                     Magazine.title,
+                    Magazine.language,
                     func.max(Magazine.issue_date).label("max_date")
                 )
-                .group_by(Magazine.title)
+                .group_by(Magazine.title, Magazine.language)
                 .subquery()
             )
 
-            # Join to get full magazine record for each title's latest issue
+            # Join to get full magazine record for each title+language's latest issue
             query = db_session.query(Magazine).join(
                 subquery,
                 (Magazine.title == subquery.c.title)
+                & (Magazine.language == subquery.c.language)
                 & (Magazine.issue_date == subquery.c.max_date)
             )
 
@@ -91,20 +93,28 @@ async def list_periodicals(
 
             magazines = query.offset(skip).limit(limit).all()
 
-            # Get total count of unique titles
-            total_titles = db_session.query(func.count(func.distinct(Magazine.title))).scalar()  # pylint: disable=not-callable
+            # Get total count of unique (title, language) combinations
+            total_titles = db_session.query(
+                func.count(func.distinct(Magazine.title + '_' + func.coalesce(Magazine.language, 'English')))
+            ).scalar()  # pylint: disable=not-callable
 
-            # Get issue counts for each title
+            # Get issue counts for each (title, language) combination
             issue_counts = {}
-            for title in set(m.title for m in magazines):
-                count = db_session.query(Magazine).filter(Magazine.title == title).count()
-                issue_counts[title] = count
+            for mag in magazines:
+                key = (mag.title, mag.language or 'English')
+                if key not in issue_counts:
+                    count = db_session.query(Magazine).filter(
+                        Magazine.title == mag.title,
+                        Magazine.language == mag.language
+                    ).count()
+                    issue_counts[key] = count
 
             return {
                 "periodicals": [
                     {
                         "id": m.id,
                         "title": m.title,
+                        "language": m.language or "English",
                         "publisher": m.publisher,
                         "issue_date": (
                             m.issue_date.isoformat() if m.issue_date else None
@@ -112,7 +122,7 @@ async def list_periodicals(
                         "file_path": m.file_path,
                         "cover_path": m.cover_path,
                         "metadata": m.extra_metadata,
-                        "issue_count": issue_counts.get(m.title, 1),
+                        "issue_count": issue_counts.get((m.title, m.language or 'English'), 1),
                     }
                     for m in magazines
                 ],
@@ -218,7 +228,7 @@ async def get_pdf(magazine_id: int):
 
 @router.delete("/periodicals/{magazine_id}")
 async def delete_periodical(
-    magazine_id: int, delete_files: bool = False, remove_tracking: bool = False
+    magazine_id: int, delete_files: bool = False, remove_tracking: bool = False, delete_all_issues: bool = False
 ) -> Dict[str, Any]:
     """
     Delete a periodical from the library
@@ -227,6 +237,7 @@ async def delete_periodical(
         magazine_id: ID of periodical to delete
         delete_files: If True, also delete the PDF and cover files from disk. If False, only remove from database.
         remove_tracking: If True, also remove the tracking record for this periodical.
+        delete_all_issues: If True, delete all issues with the same title and language. If False, only delete the single issue.
     """
     try:
         db_session = _session_factory()
@@ -238,14 +249,35 @@ async def delete_periodical(
             if not magazine:
                 raise HTTPException(status_code=404, detail="Magazine not found")
 
-            # Store file paths and title for potential deletion
-            pdf_path = Path(magazine.file_path)
-            cover_path = Path(magazine.cover_path) if magazine.cover_path else None
+            # Store title and language for potential deletion of all issues
             title = magazine.title
-
-            # Delete database entry
-            db_session.delete(magazine)
+            language = magazine.language
+            
+            # Determine which magazines to delete
+            if delete_all_issues:
+                # Get all magazines with the same title and language
+                magazines_to_delete = (
+                    db_session.query(Magazine)
+                    .filter(Magazine.title == title, Magazine.language == language)
+                    .all()
+                )
+            else:
+                # Only delete the single specified magazine
+                magazines_to_delete = [magazine]
+            
+            # Store file paths for potential deletion
+            file_paths_to_delete = []
+            for mag in magazines_to_delete:
+                pdf_path = Path(mag.file_path)
+                cover_path = Path(mag.cover_path) if mag.cover_path else None
+                file_paths_to_delete.append((pdf_path, cover_path))
+            
+            # Delete database entries
+            for mag in magazines_to_delete:
+                db_session.delete(mag)
             db_session.commit()
+            
+            deleted_count = len(magazines_to_delete)
 
             # Remove tracking record if requested
             if remove_tracking:
@@ -264,22 +296,28 @@ async def delete_periodical(
 
             # Delete files from filesystem if requested
             if delete_files:
-                try:
-                    if pdf_path.exists():
-                        pdf_path.unlink()
-                        logger.info(f"Deleted PDF file: {pdf_path}")
-                except Exception as e:
-                    logger.warning(f"Could not delete PDF file {pdf_path}: {e}")
+                files_deleted = 0
+                for pdf_path, cover_path in file_paths_to_delete:
+                    try:
+                        if pdf_path.exists():
+                            pdf_path.unlink()
+                            files_deleted += 1
+                            logger.info(f"Deleted PDF file: {pdf_path}")
+                    except Exception as e:
+                        logger.warning(f"Could not delete PDF file {pdf_path}: {e}")
 
-                try:
-                    if cover_path and cover_path.exists():
-                        cover_path.unlink()
-                        logger.info(f"Deleted cover file: {cover_path}")
-                except Exception as e:
-                    logger.warning(f"Could not delete cover file {cover_path}: {e}")
+                    try:
+                        if cover_path and cover_path.exists():
+                            cover_path.unlink()
+                            logger.info(f"Deleted cover file: {cover_path}")
+                    except Exception as e:
+                        logger.warning(f"Could not delete cover file {cover_path}: {e}")
 
-                logger.info(f"Deleted magazine and files from disk: {title}")
-                message = f"Deleted '{title}' and files from disk"
+                logger.info(f"Deleted {deleted_count} issue(s) and files from disk: {title}")
+                if deleted_count > 1:
+                    message = f"Deleted {deleted_count} issues of '{title}' and their files from disk"
+                else:
+                    message = f"Deleted '{title}' and files from disk"
                 if remove_tracking:
                     message += " (tracking removed)"
                 return {
@@ -287,8 +325,11 @@ async def delete_periodical(
                     "message": message,
                 }
             else:
-                logger.info(f"Deleted magazine from library (files retained): {title}")
-                message = f"Removed '{title}' from library (files retained on disk)"
+                logger.info(f"Deleted {deleted_count} issue(s) from library (files retained): {title}")
+                if deleted_count > 1:
+                    message = f"Removed {deleted_count} issues of '{title}' from library (files retained on disk)"
+                else:
+                    message = f"Removed '{title}' from library (files retained on disk)"
                 if remove_tracking:
                     message += " (tracking removed)"
                 return {

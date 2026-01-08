@@ -248,13 +248,9 @@ class FileImporter:
                 self.title_matcher.extract_base_title(standardized_title)
             )
 
-            # For non-English editions, append language to tracking title
-            # Always use base_title for tracking to group all issues of the same periodical
+            # Use base_title for tracking - language is stored separately in the language field
+            # This keeps titles clean and allows proper filtering by language
             tracking_title = base_title
-            if language and language != "English":
-                # Check if language is already in the title (e.g., "Wired - German")
-                if not re.search(rf"\b{language}\b", tracking_title, re.IGNORECASE):
-                    tracking_title = f"{tracking_title} - {language}"
 
             # Check for duplicates using fuzzy matching on tracking titles AND issue date
             # A duplicate is defined as: same tracking title (fuzzy match) AND same issue date (within 5 days)

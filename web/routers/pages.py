@@ -134,18 +134,19 @@ async def view_periodical_by_id(id: int = Query(...)):
 
 
 @router.get("/periodicals/{periodical_title}")
-async def view_periodical(periodical_title: str):
+async def view_periodical(periodical_title: str, language: str = Query(None)):
     """View all published issues of a periodical organized by year"""
     try:
         db_session = _session_factory()
         try:
-            # Query all periodicals with this title
-            periodicals = (
-                db_session.query(Magazine)
-                .filter(Magazine.title == periodical_title)
-                .order_by(Magazine.issue_date.desc())
-                .all()
-            )
+            # Build query for all periodicals with this title
+            query = db_session.query(Magazine).filter(Magazine.title == periodical_title)
+            
+            # Add language filter if provided
+            if language:
+                query = query.filter(Magazine.language == language)
+            
+            periodicals = query.order_by(Magazine.issue_date.desc()).all()
 
             if not periodicals:
                 raise HTTPException(

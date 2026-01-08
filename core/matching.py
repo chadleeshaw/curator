@@ -155,19 +155,13 @@ class TitleMatcher:
         # followed by lowercase letters (e.g., "NationalGeographic" -> "National Geographic")
         title = re.sub(r"([a-z])([A-Z])", r"\1 \2", title)
 
-        # Remove issue numbers and dates that appear in titles
-        # Pattern: "No 123", "Issue 456", "No.789", "#42", "Vol 5"
-        title = re.sub(r'\s+(?:No|Issue|Vol|Volume|Edition)[.\s]*\d+', '', title, flags=re.IGNORECASE)
-        title = re.sub(r'\s+#\d+', '', title, flags=re.IGNORECASE)
+        # Remove issue numbers that appear as metadata: "No 123", "Issue 456", "No.789", "#42", "Vol 5", "Vol.5"
+        # Must do this AFTER replacing dots with spaces
+        title = re.sub(r'\s+(?:No|Issue|Vol|Volume|Edition)\s+\d+\s+(?:(?:19|20)\d{2}|German|Hybrid|Digital|PDF)', '', title, flags=re.IGNORECASE)
+        title = re.sub(r'\s+(?:No|Issue|Vol|Volume|Edition)\s+\d+', '', title, flags=re.IGNORECASE)  # Remove remaining
+        title = re.sub(r'\s+#\d+(?:\s+(?:19|20)\d{2})?$', '', title, flags=re.IGNORECASE)
 
-        # Remove standalone years and dates (YYYY, YYYY MM, MM YYYY, etc.)
-        title = re.sub(r'\s+(?:19|20)\d{2}(?:\s+\d{1,2})?(?:\s+\d{1,2})?', '', title)
-
-        # Remove month names followed by years
-        months = '(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)'
-        title = re.sub(rf'\s+{months}\s+(?:19|20)\d{{2}}', '', title, flags=re.IGNORECASE)
-
-        # Remove magazine type suffixes (often redundant metadata)
+        # Remove magazine type suffixes (often redundant metadata like "Hybrid Magazine", "Digital Magazine")
         title = re.sub(r"\s+(?:Hybrid|Digital|PDF|eMag|True|HQ)\s+(?:Magazine|Mag)", "", title, flags=re.IGNORECASE)
         title = re.sub(r"\s+(magazine|mag|mag\.)$", "", title, flags=re.IGNORECASE)
 
