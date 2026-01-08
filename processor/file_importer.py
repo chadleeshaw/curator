@@ -236,7 +236,18 @@ class FileImporter:
             session.add(magazine)
 
             # Manage tracking record based on import settings
-            olid = standardized_title.lower().replace(" ", "_").replace("-", "_")
+            # Check if this is a special edition
+            base_title, is_special_edition, special_name = self.title_matcher.extract_base_title(standardized_title)
+            
+            # For non-English editions, append language to tracking title
+            tracking_title = base_title if is_special_edition else standardized_title
+            if language and language != "English":
+                # Check if language is already in the title (e.g., "Wired - German")
+                if not re.search(rf'\b{language}\b', tracking_title, re.IGNORECASE):
+                    tracking_title = f"{tracking_title} - {language}"
+            
+            # Generate OLID from tracking title (with language if applicable)
+            olid = tracking_title.lower().replace(" ", "_").replace("-", "_")
             existing_tracking = (
                 session.query(MagazineTracking)
                 .filter(MagazineTracking.olid == olid)
@@ -250,7 +261,7 @@ class FileImporter:
 
                     tracking = MagazineTracking(
                         olid=olid,
-                        title=standardized_title,
+                        title=tracking_title,
                         publisher=metadata.get("publisher"),
                         track_all_editions=track_all_editions,
                         track_new_only=track_new_only,
@@ -259,16 +270,30 @@ class FileImporter:
                         last_metadata_update=datetime.now(),
                     )
                     session.add(tracking)
-                    logger.debug(f"Will create tracking record for: {standardized_title} (mode: {tracking_mode})")
+                    logger.debug(f"Will create tracking record for: {tracking_title} (mode: {tracking_mode})")
+                    
+                    # If this is a special edition, add it to the selected_editions
+                    if is_special_edition:
+                        logger.debug(f"Detected special edition '{special_name}' for: {tracking_title}")
                 else:
                     existing_tracking.track_all_editions = tracking_mode == "all"
                     existing_tracking.track_new_only = tracking_mode == "new"
                     existing_tracking.last_metadata_update = datetime.now()
-                    logger.debug(f"Will update tracking record for: {standardized_title} (mode: {tracking_mode})")
+                    logger.debug(f"Will update tracking record for: {tracking_title} (mode: {tracking_mode})")
+                    
+                    # If this is a special edition, ensure it's in the selected_editions
+                    if is_special_edition and special_name:
+                        if existing_tracking.selected_editions is None:
+                            existing_tracking.selected_editions = {}
+                        # Add this special edition if not already tracked
+                        if special_name not in existing_tracking.selected_editions:
+                            existing_tracking.selected_editions[special_name] = True
+                            logger.debug(f"Added special edition '{special_name}' to tracking record: {tracking_title}")
+
             else:
                 if existing_tracking:
                     session.delete(existing_tracking)
-                    logger.debug(f"Will remove tracking record for: {standardized_title} (tracking disabled)")
+                    logger.debug(f"Will remove tracking record for: {tracking_title} (tracking disabled)")
 
             session.commit()
             logger.info(f"Added to database: {standardized_title} ({category})")
