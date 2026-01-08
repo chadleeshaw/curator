@@ -74,6 +74,27 @@ class MetadataExtractor:
                     f"Could not parse date from filename pattern1: {filename}"
                 )
 
+        # Pattern 1b: "Title.Month.Year" with dots (e.g. "Wired.Jan.2024")
+        # This handles release group naming conventions
+        pattern1b = r"^([^.]+)\.(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.(\d{4})"
+        match = re.search(pattern1b, filename, re.IGNORECASE)
+        if match:
+            metadata["title"] = match.group(1).replace(".", " ").strip()
+            month_str = match.group(2)
+            year_str = match.group(3)
+            try:
+                date_str = f"{month_str} {year_str}"
+                try:
+                    metadata["issue_date"] = datetime.strptime(date_str, "%B %Y")
+                except ValueError:
+                    metadata["issue_date"] = datetime.strptime(date_str, "%b %Y")
+                logger.info(f"Extracted '{metadata['title']}' {month_str} {year_str} from dot-separated filename")
+                return metadata
+            except ValueError:
+                logger.warning(
+                    f"Could not parse date from filename pattern1b: {filename}"
+                )
+
         # Pattern 2: "Title Periodical Month Year" (e.g., "Wired Periodical January 2024")
         pattern2 = r"(.+?)\s+([A-Za-z]+)\s+(\d{4})"
         match = re.search(pattern2, filename)

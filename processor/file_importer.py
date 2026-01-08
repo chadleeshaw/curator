@@ -257,18 +257,25 @@ class FileImporter:
                     session.delete(existing_tracking)
                     logger.debug(f"Will remove tracking record for: {standardized_title} (tracking disabled)")
 
-            # Commit all database changes in a single transaction
             session.commit()
             logger.info(f"Added to database: {standardized_title} ({category})")
 
-            # Delete the original PDF from downloads folder after successful import
-            # This happens AFTER commit so database changes are safe even if deletion fails
             if not skip_organize:
                 try:
-                    pdf_path.unlink()
-                    logger.info(f"Deleted original PDF from downloads: {pdf_path.name}")
+                    parent_dir = pdf_path.parent
+
+                    if pdf_path.exists():
+                        pdf_path.unlink()
+                        logger.info(f"Deleted original PDF from downloads: {pdf_path.name}")
+
+                    if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
+                        try:
+                            shutil.rmtree(parent_dir)
+                            logger.info(f"Deleted download folder: {parent_dir.name}")
+                        except Exception as e:
+                            logger.warning(f"Failed to delete download folder {parent_dir.name}: {e}")
                 except Exception as e:
-                    logger.warning(f"Failed to delete original PDF {pdf_path.name}: {e}")
+                    logger.warning(f"Failed to cleanup download files: {e}")
 
             return True
 
