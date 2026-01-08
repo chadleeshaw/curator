@@ -849,6 +849,9 @@ export class TrackingManager {
 // Create singleton instance
 export const tracking = new TrackingManager();
 
+// Expose tracking manager globally
+window.trackingManager = tracking;
+
 // Modal management functions
 window.closeEditTrackingModal = function () {
   document.getElementById('edit-tracking-modal').classList.add('hidden');
@@ -1224,8 +1227,17 @@ window.openMergeModal = async function() {
     const response = await APIClient.get('/api/periodicals/tracking?limit=1000');
     const data = await response.json();
     
-    if (!response.ok || !data.items || data.items.length < 2) {
-      alert('You need at least 2 tracked periodicals to merge');
+    const items = data.tracked_magazines || [];
+    
+    console.log('Merge modal check:', {
+      responseOk: response.ok,
+      itemsLength: items.length,
+      shouldShowWarning: !response.ok || items.length < 2
+    });
+    
+    if (!response.ok || items.length < 2) {
+      console.log('Showing warning status');
+      UIUtils.showStatus('tracking-status', '⚠️ You need at least 2 tracked periodicals to merge', 'warning');
       return;
     }
 
@@ -1233,7 +1245,7 @@ window.openMergeModal = async function() {
     modal.className = 'modal';
     modal.id = 'merge-selection-modal';
     
-    const trackingOptions = data.items.map(item => `
+    const trackingOptions = items.map(item => `
       <div class="merge-select-item">
         <input type="checkbox" id="merge-check-${item.id}" value="${item.id}" class="merge-selection-checkbox">
         <label for="merge-check-${item.id}">
@@ -1270,7 +1282,7 @@ window.openMergeModal = async function() {
     });
   } catch (error) {
     console.error('Error loading tracking records:', error);
-    alert('Failed to load tracking records');
+    UIUtils.showStatus('tracking-status', '✗ Failed to load tracking records', 'error');
   }
 };
 
@@ -1291,14 +1303,14 @@ window.showMergeTargetSelection = async function() {
   const selectedIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
   
   if (selectedIds.length < 2) {
-    alert('Please select at least 2 tracking records');
+    UIUtils.showStatus('tracking-status', '⚠️ Please select at least 2 tracking records', 'warning');
     return;
   }
 
   // Get the tracking data for selected items
   const response = await APIClient.get('/api/periodicals/tracking?limit=1000');
   const data = await response.json();
-  const selectedItems = data.items.filter(item => selectedIds.includes(item.id));
+  const selectedItems = (data.tracked_magazines || []).filter(item => selectedIds.includes(item.id));
   
   // Close selection modal
   window.closeMergeSelectionModal();
@@ -1351,11 +1363,7 @@ window.confirmMerge = async function() {
   const sourceIds = allSelectedIds.filter(id => id !== targetId);
   
   if (!targetId || sourceIds.length === 0) {
-    alert('Invalid selection');
-    return;
-  }
-  
-  if (!confirm(`Merge ${sourceIds.length} tracking record(s) into the selected target? This cannot be undone.`)) {
+    UIUtils.showStatus('tracking-status', '⚠️ Invalid selection', 'warning');
     return;
   }
   

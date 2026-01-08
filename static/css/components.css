@@ -497,22 +497,22 @@
   display: flex;
   gap: 8px;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: flex-end;
 }
 
 .tracked-card-buttons .btn-small {
   white-space: nowrap;
   padding: 8px 14px;
   font-size: 13px;
-  width: fit-content;
-  min-width: fit-content;
+  width: 160px;
+  text-align: center;
 }
 
 .tracked-card-buttons .btn-danger {
   padding: 8px 14px;
   font-size: 13px;
-  width: fit-content;
-  min-width: fit-content;
+  width: 160px;
+  text-align: center;
 }
 
 /* ==========================================================================

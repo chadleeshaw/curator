@@ -122,6 +122,11 @@ export class UIUtils {
       statusDiv.style.color = '#c62828';
       statusDiv.style.borderColor = '#f44336';
       statusDiv.textContent = `✗ ${message}`;
+    } else if (type === 'warning') {
+      statusDiv.style.background = '#fff3e0';
+      statusDiv.style.color = '#e65100';
+      statusDiv.style.borderColor = '#ff9800';
+      statusDiv.textContent = message;
     } else if (type === 'info') {
       statusDiv.style.background = '#e3f2fd';
       statusDiv.style.color = '#1565c0';
