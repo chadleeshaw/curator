@@ -60,6 +60,7 @@ class Magazine(Base):
     issue_date = Column(DateTime, nullable=False, index=True)
     file_path = Column(String(512), nullable=False, unique=True)
     cover_path = Column(String(512), nullable=True)
+    content_hash = Column(String(64), nullable=True, index=True)  # SHA256 hash of file content for deduplication
     extra_metadata = Column(JSON, nullable=True)  # Extra metadata from Open Library
     created_at = Column(DateTime, default=utcnow, index=True)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)

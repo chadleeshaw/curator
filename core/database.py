@@ -44,6 +44,7 @@ class DatabaseManager:
             "periodicals": [
                 ("language", "VARCHAR(50) DEFAULT 'English'"),
                 ("tracking_id", "INTEGER"),
+                ("content_hash", "VARCHAR(64)"),
             ],
             "download_submissions": [
                 # Add any future columns here

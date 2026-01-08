@@ -4,6 +4,7 @@ Utility functions for core operations.
 This module provides common utility functions used across the application.
 """
 
+import hashlib
 import re
 from pathlib import Path
 from typing import Optional
@@ -43,6 +44,41 @@ def sanitize_filename(filename: str, max_length: Optional[int] = 200) -> str:
         return sanitized[:max_length]
 
     return sanitized
+
+
+def hash_file_in_chunks(file_path: str, algorithm=hashlib.sha256, chunk_size: int = 8192) -> Optional[str]:
+    """
+    Calculate the hash of a file without loading the entire file into memory.
+
+    This function reads the file in chunks, making it memory-efficient for large files.
+    SHA256 is fast (~500 MB/s) and the chunked approach allows hashing of multi-GB files
+    without memory concerns.
+
+    Args:
+        file_path: The path to the file to hash
+        algorithm: The hash algorithm to use (default: hashlib.sha256)
+        chunk_size: The size of each chunk to read in bytes (default: 8192)
+
+    Returns:
+        The hexadecimal hash digest, or None if an error occurred
+
+    Examples:
+        >>> hash_file_in_chunks('magazine.pdf')
+        'a3b5c2d1e4f5...'
+        >>> hash_file_in_chunks('large_file.iso', chunk_size=65536)  # 64KB chunks
+        'f4e3d2c1b0a9...'
+    """
+    file_hash = algorithm()
+    try:
+        with open(file_path, 'rb') as f:
+            while chunk := f.read(chunk_size):
+                file_hash.update(chunk)
+        return file_hash.hexdigest()
+    except IOError as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error hashing file {file_path}: {e}")
+        return None
 
 
 def is_special_edition(title: str) -> bool:

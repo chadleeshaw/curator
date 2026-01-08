@@ -20,7 +20,7 @@ from core.constants import (
 from core.language_utils import detect_language, generate_language_aware_olid
 from core.matching import TitleMatcher
 from core.pdf_utils import extract_cover_from_pdf
-from core.utils import find_pdf_epub_files
+from core.utils import find_pdf_epub_files, hash_file_in_chunks
 from core.response_models import ErrorCodes, OperationResult
 from models.database import Magazine, MagazineTracking
 from processor.categorizer import FileCategorizer
@@ -223,6 +223,25 @@ class FileImporter:
             language = detect_language(str(pdf_path))
             metadata["language"] = language
 
+            # Calculate content hash for duplicate detection
+            content_hash = hash_file_in_chunks(str(pdf_path))
+            if not content_hash:
+                logger.error(f"Failed to hash file {pdf_path}, skipping import")
+                return False
+
+            # First check: hash-based duplicate detection (100% accurate)
+            existing_by_hash = (
+                session.query(Magazine)
+                .filter(Magazine.content_hash == content_hash)
+                .first()
+            )
+            if existing_by_hash:
+                logger.warning(
+                    f"Duplicate detected (identical file): '{pdf_path.name}' matches existing "
+                    f"'{existing_by_hash.title}' at {existing_by_hash.file_path}. Skipping import."
+                )
+                return False
+
             # Check if this is a special edition and determine the tracking title
             # Do this BEFORE duplicate checking so we compare tracking titles
             base_title, is_special_edition, special_name = (
@@ -292,6 +311,7 @@ class FileImporter:
                 issue_date=metadata.get("issue_date", datetime.now()),
                 file_path=str(organized_path),
                 cover_path=str(cover_path) if cover_path else None,
+                content_hash=content_hash,
                 extra_metadata=extra_metadata,
             )
 
