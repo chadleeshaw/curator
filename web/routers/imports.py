@@ -160,12 +160,12 @@ async def import_from_organize_dir(
                         auto_track=options.auto_track,
                         tracking_mode=options.tracking_mode,
                     )
-                    
+
                     # Extract counts from nested data structure
                     data = results.get('data', {})
                     imported = data.get('imported', 0)
                     failed = data.get('failed', 0)
-                    
+
                     logger.info(
                         f"Organize directory import results: {imported} imported, {failed} failed"
                     )
