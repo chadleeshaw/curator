@@ -45,6 +45,52 @@ def sanitize_filename(filename: str, max_length: Optional[int] = 200) -> str:
     return sanitized
 
 
+def is_special_edition(title: str) -> bool:
+    """
+    Detect if a magazine title represents a special edition.
+
+    Special editions are typically annual issues, holiday specials, collector's editions,
+    or other non-standard releases that should be grouped separately from regular issues.
+
+    Args:
+        title: Magazine title to check
+
+    Returns:
+        True if the title contains special edition keywords, False otherwise
+
+    Examples:
+        >>> is_special_edition("Wired - Holiday Special 2024")
+        True
+        >>> is_special_edition("National Geographic Annual Edition")
+        True
+        >>> is_special_edition("PC Gamer - June 2024")
+        False
+    """
+    if not title:
+        return False
+
+    title_lower = title.lower()
+    special_keywords = [
+        "special",
+        "annual",
+        "collector",
+        "collectors",
+        "holiday",
+        "christmas",
+        "summer special",
+        "winter special",
+        "spring special",
+        "fall special",
+        "collector's edition",
+        "commemorative",
+        "anniversary",
+        "yearbook",
+        "best of",
+    ]
+
+    return any(keyword in title_lower for keyword in special_keywords)
+
+
 def find_pdf_epub_files(directory: Path, recursive: bool = True) -> list[Path]:
     """
     Search for PDF and EPUB files in a directory.

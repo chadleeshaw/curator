@@ -31,7 +31,6 @@ def test_sanitize_filename():
     assert result == "TestFilePath"
 
     print("Testing sanitize_filename()... ✓ PASS")
-    pass
 
 
 def test_parse_filename_for_metadata():
@@ -63,7 +62,6 @@ def test_parse_filename_for_metadata():
     assert result["issue_date"].year == 2010
 
     print("Testing FileOrganizer.parse_filename_for_metadata()... ✓ PASS")
-    pass
 
 
 def test_organize_file():
@@ -89,7 +87,6 @@ def test_organize_file():
         assert not test_pdf.exists()
 
         print("Testing FileOrganizer.organize_file()... ✓ PASS")
-        pass
 
 
 def test_organize_file_with_cover():
@@ -122,7 +119,6 @@ def test_organize_file_with_cover():
         assert not test_jpg.exists()
 
         print("Testing FileOrganizer.organize_file() with cover... ✓ PASS")
-        pass
 
 
 def test_organize_file_non_pdf():
@@ -143,7 +139,6 @@ def test_organize_file_non_pdf():
         assert pdf_path == "None"
 
         print("Testing FileOrganizer.organize_file() with non-PDF... ✓ PASS")
-        pass
 
 
 def test_organize_directory_creation():
@@ -162,7 +157,6 @@ def test_organize_directory_creation():
         assert organize_path.is_dir()
 
         print("Testing FileOrganizer directory creation... ✓ PASS")
-        pass
 
 
 def test_filename_patterns():
@@ -195,7 +189,6 @@ def test_filename_patterns():
             assert Path(pdf_path).name == f"{expected_base}.pdf"
 
         print("Testing FileOrganizer filename patterns... ✓ PASS")
-        pass
 
 
 def test_parse_all_months():
@@ -226,7 +219,6 @@ def test_parse_all_months():
         assert result["issue_date"].year == 2020
 
     print("Testing FileOrganizer all month parsing... ✓ PASS")
-    pass
 
 
 def test_organize_pattern():
@@ -237,7 +229,99 @@ def test_organize_pattern():
     assert processor.ORGANIZED_PATTERN == expected_pattern
 
     print("Testing FileOrganizer pattern... ✓ PASS")
-    pass
+
+
+def test_category_prefix_default():
+    """Test that category prefix defaults to underscore"""
+    processor = FileOrganizer(tempfile.gettempdir())
+
+    # Default prefix should be underscore
+    assert processor.category_prefix == "_"
+
+    # Test with organize method
+    with tempfile.TemporaryDirectory() as tmpdir:
+        processor = FileOrganizer(tmpdir)
+        test_pdf = Path(tmpdir) / "test.pdf"
+        test_pdf.write_text("test content")
+
+        metadata = {
+            "title": "Wired",
+            "issue_date": datetime(2024, 1, 1)
+        }
+
+        result_path = processor.organize(
+            test_pdf,
+            metadata,
+            category="Magazines",
+            pattern="{category}/{title}/{year}/"
+        )
+
+        # Verify prefix was applied
+        assert "_Magazines" in str(result_path)
+
+    print("Testing FileOrganizer category_prefix default... ✓ PASS")
+
+
+def test_category_prefix_custom():
+    """Test custom category prefix"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Test with custom prefix
+        processor = FileOrganizer(tmpdir, category_prefix="PREFIX_")
+
+        assert processor.category_prefix == "PREFIX_"
+
+        test_pdf = Path(tmpdir) / "test.pdf"
+        test_pdf.write_text("test content")
+
+        metadata = {
+            "title": "National Geographic",
+            "issue_date": datetime(2024, 6, 1)
+        }
+
+        result_path = processor.organize(
+            test_pdf,
+            metadata,
+            category="Magazines",
+            pattern="{category}/{title}/{year}/"
+        )
+
+        # Verify custom prefix was applied
+        result_str = str(result_path)
+        assert "PREFIX_Magazines" in result_str
+        # Verify it doesn't start with just "_Magazines" (should have PREFIX_)
+        assert not result_str.startswith(str(tmpdir) + "/_Magazines")
+
+    print("Testing FileOrganizer custom category_prefix... ✓ PASS")
+
+
+def test_category_prefix_empty():
+    """Test empty category prefix"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Test with no prefix
+        processor = FileOrganizer(tmpdir, category_prefix="")
+
+        assert processor.category_prefix == ""
+
+        test_pdf = Path(tmpdir) / "test.pdf"
+        test_pdf.write_text("test content")
+
+        metadata = {
+            "title": "PC Gamer",
+            "issue_date": datetime(2024, 3, 1)
+        }
+
+        result_path = processor.organize(
+            test_pdf,
+            metadata,
+            category="Magazines",
+            pattern="{category}/{title}/{year}/"
+        )
+
+        # Verify no prefix (just "Magazines", not "_Magazines")
+        assert "/Magazines/" in str(result_path)
+        assert "/_Magazines/" not in str(result_path)
+
+    print("Testing FileOrganizer empty category_prefix... ✓ PASS")
 
 
 if __name__ == "__main__":
@@ -247,55 +331,64 @@ if __name__ == "__main__":
     results = {}
 
     try:
-        results["sanitize_filename"] = test_sanitize_filename()
+        test_sanitize_filename()
+        results["sanitize_filename"] = True
     except Exception as e:
         print(f"Testing FileOrganizer._sanitize_filename()... ❌ FAIL: {e}")
         results["sanitize_filename"] = False
 
     try:
-        results["parse_filename"] = test_parse_filename_for_metadata()
+        test_parse_filename_for_metadata()
+        results["parse_filename"] = True
     except Exception as e:
         print(f"Testing FileOrganizer.parse_filename_for_metadata()... ❌ FAIL: {e}")
         results["parse_filename"] = False
 
     try:
-        results["organize_file"] = test_organize_file()
+        test_organize_file()
+        results["organize_file"] = True
     except Exception as e:
         print(f"Testing FileOrganizer.organize_file()... ❌ FAIL: {e}")
         results["organize_file"] = False
 
     try:
-        results["organize_with_cover"] = test_organize_file_with_cover()
+        test_organize_file_with_cover()
+        results["organize_with_cover"] = True
     except Exception as e:
         print(f"Testing FileOrganizer.organize_file() with cover... ❌ FAIL: {e}")
         results["organize_with_cover"] = False
 
     try:
-        results["non_pdf"] = test_organize_file_non_pdf()
+        test_organize_file_non_pdf()
+        results["non_pdf"] = True
     except Exception as e:
         print(f"Testing FileOrganizer.organize_file() with non-PDF... ❌ FAIL: {e}")
         results["non_pdf"] = False
 
     try:
-        results["directory_creation"] = test_organize_directory_creation()
+        test_organize_directory_creation()
+        results["directory_creation"] = True
     except Exception as e:
         print(f"Testing FileOrganizer directory creation... ❌ FAIL: {e}")
         results["directory_creation"] = False
 
     try:
-        results["filename_patterns"] = test_filename_patterns()
+        test_filename_patterns()
+        results["filename_patterns"] = True
     except Exception as e:
         print(f"Testing FileOrganizer filename patterns... ❌ FAIL: {e}")
         results["filename_patterns"] = False
 
     try:
-        results["all_months"] = test_parse_all_months()
+        test_parse_all_months()
+        results["all_months"] = True
     except Exception as e:
         print(f"Testing FileOrganizer all month parsing... ❌ FAIL: {e}")
         results["all_months"] = False
 
     try:
-        results["organize_pattern"] = test_organize_pattern()
+        test_organize_pattern()
+        results["organize_pattern"] = True
     except Exception as e:
         print(f"Testing FileOrganizer pattern... ❌ FAIL: {e}")
         results["organize_pattern"] = False

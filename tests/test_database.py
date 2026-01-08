@@ -317,17 +317,166 @@ class TestDatabaseOperations:
         with pytest.raises(Exception):  # IntegrityError
             session.commit()
 
-    def test_unique_constraint_olid(self, session):
-        """Test unique constraint on MagazineTracking olid"""
-        tracking1 = MagazineTracking(olid="OL12345W", title="Magazine 1")
+    def test_olid_can_be_duplicate_for_languages(self, session):
+        """Test that OLID can be shared across different language editions"""
+        # Same OLID but different languages - should be allowed
+        tracking1 = MagazineTracking(
+            olid="OL12345W",
+            title="Wired Magazine",
+            language="English"
+        )
         session.add(tracking1)
         session.commit()
 
-        tracking2 = MagazineTracking(olid="OL12345W", title="Magazine 2")
+        tracking2 = MagazineTracking(
+            olid="OL12345W",
+            title="Wired Magazine",
+            language="German"
+        )
         session.add(tracking2)
+        session.commit()  # Should not raise - duplicate OLID is allowed
 
-        with pytest.raises(Exception):  # IntegrityError
-            session.commit()
+        # Verify both exist
+        all_tracking = session.query(MagazineTracking).filter(
+            MagazineTracking.olid == "OL12345W"
+        ).all()
+        assert len(all_tracking) == 2
+        assert {t.language for t in all_tracking} == {"English", "German"}
+
+
+class TestLanguageFields:
+    """Test language field functionality in Magazine and MagazineTracking"""
+
+    def test_magazine_language_default(self, session):
+        """Test that Magazine language defaults to English"""
+        mag = Magazine(
+            title="Test Magazine",
+            issue_date=datetime(2024, 1, 1),
+            file_path="/test/magazine.pdf",
+        )
+        session.add(mag)
+        session.commit()
+
+        assert mag.language == "English"
+
+    def test_magazine_language_custom(self, session):
+        """Test setting custom language on Magazine"""
+        mag = Magazine(
+            title="Wired Magazine",
+            issue_date=datetime(2024, 1, 1),
+            file_path="/test/wired_de.pdf",
+            language="German",
+        )
+        session.add(mag)
+        session.commit()
+
+        assert mag.language == "German"
+
+        # Verify it persists
+        retrieved = session.query(Magazine).filter(Magazine.id == mag.id).first()
+        assert retrieved.language == "German"
+
+    def test_tracking_language_default(self, session):
+        """Test that MagazineTracking language defaults to English"""
+        tracking = MagazineTracking(
+            olid="OL12345W",
+            title="Test Periodical",
+        )
+        session.add(tracking)
+        session.commit()
+
+        assert tracking.language == "English"
+
+    def test_tracking_language_custom(self, session):
+        """Test setting custom language on MagazineTracking"""
+        tracking = MagazineTracking(
+            olid="OL99999W",
+            title="Revista Española",
+            language="Spanish",
+        )
+        session.add(tracking)
+        session.commit()
+
+        assert tracking.language == "Spanish"
+
+        # Verify it persists
+        retrieved = session.query(MagazineTracking).filter(
+            MagazineTracking.id == tracking.id
+        ).first()
+        assert retrieved.language == "Spanish"
+
+    def test_multiple_languages_same_title(self, session):
+        """Test tracking same magazine in multiple languages"""
+        # English edition
+        tracking_en = MagazineTracking(
+            olid="wired",
+            title="Wired Magazine",
+            language="English",
+        )
+        session.add(tracking_en)
+
+        # German edition
+        tracking_de = MagazineTracking(
+            olid="wired",
+            title="Wired Magazine",
+            language="German",
+        )
+        session.add(tracking_de)
+
+        # French edition
+        tracking_fr = MagazineTracking(
+            olid="wired",
+            title="Wired Magazine",
+            language="French",
+        )
+        session.add(tracking_fr)
+
+        session.commit()
+
+        # All should persist independently
+        all_wired = session.query(MagazineTracking).filter(
+            MagazineTracking.olid == "wired"
+        ).all()
+        assert len(all_wired) == 3
+
+        languages = {t.language for t in all_wired}
+        assert languages == {"English", "German", "French"}
+
+    def test_magazine_language_query(self, session):
+        """Test querying magazines by language"""
+        # Add English magazines
+        mag_en1 = Magazine(
+            title="PC Gamer", issue_date=datetime(2024, 1, 1),
+            file_path="/test/pcgamer_en.pdf", language="English"
+        )
+        mag_en2 = Magazine(
+            title="Wired", issue_date=datetime(2024, 1, 1),
+            file_path="/test/wired_en.pdf", language="English"
+        )
+
+        # Add German magazines
+        mag_de1 = Magazine(
+            title="PC Gamer", issue_date=datetime(2024, 1, 1),
+            file_path="/test/pcgamer_de.pdf", language="German"
+        )
+        mag_de2 = Magazine(
+            title="Wired", issue_date=datetime(2024, 1, 1),
+            file_path="/test/wired_de.pdf", language="German"
+        )
+
+        session.add_all([mag_en1, mag_en2, mag_de1, mag_de2])
+        session.commit()
+
+        # Query by language
+        english_mags = session.query(Magazine).filter(
+            Magazine.language == "English"
+        ).all()
+        german_mags = session.query(Magazine).filter(
+            Magazine.language == "German"
+        ).all()
+
+        assert len(english_mags) == 2
+        assert len(german_mags) == 2
 
 
 class TestTimestampFields:

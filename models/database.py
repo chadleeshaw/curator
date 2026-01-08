@@ -56,12 +56,14 @@ class Magazine(Base):
     issn = Column(String(20), nullable=True, index=True)  # ISBN/ISSN identifier
     title = Column(String(255), nullable=False, index=True)
     publisher = Column(String(255), nullable=True)
+    language = Column(String(50), nullable=True, default="English", index=True)  # Language of the edition
     issue_date = Column(DateTime, nullable=False, index=True)
     file_path = Column(String(512), nullable=False, unique=True)
     cover_path = Column(String(512), nullable=True)
     extra_metadata = Column(JSON, nullable=True)  # Extra metadata from Open Library
     created_at = Column(DateTime, default=utcnow, index=True)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+    tracking_id = Column(Integer, ForeignKey("periodical_tracking.id"), nullable=True, index=True)  # Link to tracking record
 
 
 class MagazineTracking(Base):
@@ -71,10 +73,11 @@ class MagazineTracking(Base):
 
     id = Column(Integer, primary_key=True)
     olid = Column(
-        String(50), nullable=False, unique=True, index=True
-    )  # Open Library ID
+        String(50), nullable=False, index=True
+    )  # Open Library ID (not unique anymore - different languages can share)
     title = Column(String(255), nullable=False, index=True)
     publisher = Column(String(255), nullable=True)
+    language = Column(String(50), nullable=True, default="English", index=True)  # Language of tracked edition
     issn = Column(String(20), nullable=True, index=True)
     first_publish_year = Column(Integer, nullable=True)
     total_editions_known = Column(Integer, default=0)

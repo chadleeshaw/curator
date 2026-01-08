@@ -17,6 +17,7 @@ from core.constants import (
     DEFAULT_FUZZY_THRESHOLD,
     DUPLICATE_DATE_THRESHOLD_DAYS,
 )
+from core.language_utils import detect_language, generate_language_aware_olid
 from core.matching import TitleMatcher
 from core.pdf_utils import extract_cover_from_pdf
 from core.utils import find_pdf_epub_files
@@ -179,6 +180,10 @@ class FileImporter:
             standardized_title = self.title_matcher.standardize_title(raw_title)
             metadata["title"] = standardized_title
 
+            # Detect language from filename/path
+            language = detect_language(str(pdf_path))
+            metadata["language"] = language
+
             # Check for duplicates using fuzzy matching on standardized titles AND issue date
             # A duplicate is defined as: same title (fuzzy match) AND same issue date (within 5 days)
             existing_magazines = session.query(Magazine).all()
@@ -189,10 +194,12 @@ class FileImporter:
                 )
                 if is_match and issue_date and existing.issue_date:
                     date_diff = abs((issue_date - existing.issue_date).days)
-                    if date_diff <= DUPLICATE_DATE_THRESHOLD_DAYS:
+                    # Also check language match for duplicates
+                    same_language = (existing.language == language) or (not existing.language and language == "English")
+                    if date_diff <= DUPLICATE_DATE_THRESHOLD_DAYS and same_language:
                         logger.warning(
-                            f"Duplicate detected: '{standardized_title}' ({issue_date.strftime('%b %Y')}) matches existing "
-                            f"'{existing.title}' ({existing.issue_date.strftime('%b %Y')}) "
+                            f"Duplicate detected: '{standardized_title}' ({issue_date.strftime('%b %Y')}, {language}) matches existing "
+                            f"'{existing.title}' ({existing.issue_date.strftime('%b %Y')}, {existing.language or 'English'}) "
                             f"(title score: {score}, date diff: {date_diff} days). Skipping import."
                         )
                         return False

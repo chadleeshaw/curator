@@ -292,26 +292,32 @@ class TestTrackingUniqueness:
     """Test uniqueness constraints"""
 
     def test_olid_uniqueness(self, test_db):
-        """Test that OLID must be unique"""
+        """Test that OLID can be shared for different language editions"""
         engine, session_factory = test_db
         session = session_factory()
 
         tracking1 = MagazineTracking(
             olid="OL12345W",
-            title="Magazine 1",
+            title="Wired Magazine",
+            language="English",
         )
         session.add(tracking1)
         session.commit()
 
-        # Try to add another with same OLID
+        # Same OLID but different language - should be allowed
         tracking2 = MagazineTracking(
             olid="OL12345W",  # Same OLID
-            title="Magazine 2",
+            title="Wired Magazine",
+            language="German",
         )
         session.add(tracking2)
+        session.commit()  # Should not raise - duplicate OLID with different language is allowed
 
-        with pytest.raises(Exception):  # Should raise integrity error
-            session.commit()
+        # Verify both exist
+        all_tracking = session.query(MagazineTracking).filter(
+            MagazineTracking.olid == "OL12345W"
+        ).all()
+        assert len(all_tracking) == 2
 
         session.close()
 

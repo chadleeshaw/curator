@@ -61,6 +61,21 @@
             padding-bottom: 10px;
         }
 
+        /* Special edition section styling */
+        .special-edition-section {
+            background: linear-gradient(135deg, rgba(255, 215, 0, 0.05) 0%, rgba(255, 193, 7, 0.05) 100%);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 60px;
+            border: 2px solid rgba(255, 215, 0, 0.3);
+        }
+
+        .special-edition-title {
+            color: #ffd700;
+            border-bottom-color: #ffc107;
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+        }
+
         .issues-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -218,7 +233,7 @@
     </style>
 </head>
 <body>
-    <div class="container" id="periodical-container" data-years="{{YEARS_DATA}}">
+    <div class="container" id="periodical-container" data-years="{{YEARS_DATA}}" data-special-editions="{{SPECIAL_EDITIONS_DATA}}">
         <button onclick="goBack()" class="back-button">← Back to Library</button>
 
         <div class="periodical-header">
@@ -262,9 +277,10 @@
     </div>
 
     <script>
-        // Parse years data from data attribute
+        // Parse years data and special editions from data attributes
         const container = document.getElementById('periodical-container');
         const yearsData = container ? JSON.parse(container.getAttribute('data-years') || '[]') : [];
+        const specialEditionsData = container ? JSON.parse(container.getAttribute('data-special-editions') || '[]') : [];
         let pendingDeleteId = null;
         let pendingDeleteTitle = null;
 
@@ -315,20 +331,47 @@
         function renderIssues() {
             const container = document.getElementById('issues-container');
 
-            if (!yearsData || yearsData.length === 0) {
+            if ((!yearsData || yearsData.length === 0) && (!specialEditionsData || specialEditionsData.length === 0)) {
                 container.innerHTML = '<div class="no-issues">No issues found for this periodical.</div>';
                 return;
             }
 
             // Extract and display clean title
-            if (yearsData.length > 0 && yearsData[0].issues.length > 0) {
-                const firstIssueTitle = yearsData[0].issues[0].title;
+            const sampleIssues = (yearsData.length > 0 && yearsData[0].issues.length > 0) 
+                ? yearsData[0].issues 
+                : specialEditionsData;
+            
+            if (sampleIssues && sampleIssues.length > 0) {
+                const firstIssueTitle = sampleIssues[0].title;
                 const baseTitleElement = document.getElementById('periodical-title');
                 if (baseTitleElement && firstIssueTitle) {
                     baseTitleElement.textContent = extractBaseTitleFromMagazineTitle(firstIssueTitle);
                 }
             }
 
+            // Render special editions section first, if any exist
+            if (specialEditionsData && specialEditionsData.length > 0) {
+                const specialSection = document.createElement('div');
+                specialSection.className = 'year-section special-edition-section';
+
+                const specialTitle = document.createElement('h2');
+                specialTitle.className = 'year-title special-edition-title';
+                specialTitle.textContent = '🌟 Special Editions';
+                specialSection.appendChild(specialTitle);
+
+                const issuesGrid = document.createElement('div');
+                issuesGrid.className = 'issues-grid';
+
+                specialEditionsData.forEach((issue) => {
+                    const issueCard = createIssueCard(issue);
+                    issuesGrid.appendChild(issueCard);
+                });
+
+                specialSection.appendChild(issuesGrid);
+                container.appendChild(specialSection);
+            }
+
+            // Render regular year sections
             yearsData.forEach((yearData) => {
                 const yearSection = document.createElement('div');
                 yearSection.className = 'year-section';
@@ -342,66 +385,73 @@
                 issuesGrid.className = 'issues-grid';
 
                 yearData.issues.forEach((issue) => {
-                    const issueCard = document.createElement('div');
-                    issueCard.className = 'issue-card';
-
-                    const coverDiv = document.createElement('div');
-                    coverDiv.className = 'issue-cover';
-
-                    if (issue.cover_url) {
-                        const img = document.createElement('img');
-                        img.src = issue.cover_url;
-                        img.alt = issue.title;
-                        img.onerror = function () {
-                            this.style.display = 'none';
-                            coverDiv.innerHTML =
-                                '<div class="issue-cover-placeholder">Cover Not Available</div>';
-                        };
-                        coverDiv.appendChild(img);
-                    } else {
-                        coverDiv.innerHTML =
-                            '<div class="issue-cover-placeholder">No Cover Available</div>';
-                    }
-
-                    issueCard.appendChild(coverDiv);
-
-                    const infoDiv = document.createElement('div');
-                    infoDiv.className = 'issue-info';
-
-                    const dateP = document.createElement('p');
-                    dateP.className = 'issue-date';
-                    dateP.textContent =
-                        issue.issue_date ? new Date(issue.issue_date).toLocaleDateString() : 'Unknown Date';
-                    infoDiv.appendChild(dateP);
-
-                    // Create actions container with Open and Delete buttons
-                    const actionsDiv = document.createElement('div');
-                    actionsDiv.className = 'issue-actions';
-
-                    const openButton = document.createElement('button');
-                    openButton.className = 'open-pdf-btn';
-                    openButton.textContent = '📖 View';
-                    openButton.onclick = () => openPDF(issue.id);
-                    actionsDiv.appendChild(openButton);
-
-                    const deleteButton = document.createElement('button');
-                    deleteButton.className = 'delete-issue-btn';
-                    deleteButton.textContent = '🗑️';
-                    deleteButton.title = 'Delete this issue';
-                    deleteButton.onclick = (e) => {
-                        e.stopPropagation();
-                        deleteIssue(issue.id, issue.title);
-                    };
-                    actionsDiv.appendChild(deleteButton);
-
-                    infoDiv.appendChild(actionsDiv);
-                    issueCard.appendChild(infoDiv);
+                    const issueCard = createIssueCard(issue);
                     issuesGrid.appendChild(issueCard);
                 });
 
                 yearSection.appendChild(issuesGrid);
                 container.appendChild(yearSection);
             });
+        }
+
+        // Helper function to create an issue card
+        function createIssueCard(issue) {
+            const issueCard = document.createElement('div');
+            issueCard.className = 'issue-card';
+
+            const coverDiv = document.createElement('div');
+            coverDiv.className = 'issue-cover';
+
+            if (issue.cover_url) {
+                const img = document.createElement('img');
+                img.src = issue.cover_url;
+                img.alt = issue.title;
+                img.onerror = function () {
+                    this.style.display = 'none';
+                    coverDiv.innerHTML =
+                        '<div class="issue-cover-placeholder">Cover Not Available</div>';
+                };
+                coverDiv.appendChild(img);
+            } else {
+                coverDiv.innerHTML =
+                    '<div class="issue-cover-placeholder">No Cover Available</div>';
+            }
+
+            issueCard.appendChild(coverDiv);
+
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'issue-info';
+
+            const dateP = document.createElement('p');
+            dateP.className = 'issue-date';
+            dateP.textContent =
+                issue.issue_date ? new Date(issue.issue_date).toLocaleDateString() : 'Unknown Date';
+            infoDiv.appendChild(dateP);
+
+            // Create actions container with Open and Delete buttons
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'issue-actions';
+
+            const openButton = document.createElement('button');
+            openButton.className = 'open-pdf-btn';
+            openButton.textContent = '📖 View';
+            openButton.onclick = () => openPDF(issue.id);
+            actionsDiv.appendChild(openButton);
+
+            const deleteButton = document.createElement('button');
+            deleteButton.className = 'delete-issue-btn';
+            deleteButton.textContent = '🗑️';
+            deleteButton.title = 'Delete this issue';
+            deleteButton.onclick = (e) => {
+                e.stopPropagation();
+                deleteIssue(issue.id, issue.title);
+            };
+            actionsDiv.appendChild(deleteButton);
+
+            infoDiv.appendChild(actionsDiv);
+            issueCard.appendChild(infoDiv);
+
+            return issueCard;
         }
 
         function openPDF(magazineId) {

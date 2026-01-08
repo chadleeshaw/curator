@@ -395,7 +395,7 @@ async def get_tracking_details(tracking_id: int) -> Dict[str, Any]:
                 "application/json": {
                     "example": {
                         "success": True,
-                        "message": "Merged 2 tracking records into 'Playboy'",
+                        "message": "Merged 2 tracking records into 'Wired Magazine'",
                         "magazines_moved": 5,
                         "submissions_moved": 10,
                     }
@@ -410,40 +410,40 @@ async def get_tracking_details(tracking_id: int) -> Dict[str, Any]:
 async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Dict[str, Any]:
     """
     Merge multiple tracking records into a single target record.
-    
+
     Args:
         target_id: The tracking record to merge into (will be kept)
         source_ids: Dict with 'source_ids' key containing list of tracking IDs to merge from (will be deleted)
-    
+
     Returns:
         Dict with merge results including counts of magazines and submissions moved
     """
     try:
         if not source_ids.get("source_ids"):
             raise HTTPException(status_code=400, detail="No source tracking IDs provided")
-        
+
         source_id_list = source_ids["source_ids"]
-        
+
         if target_id in source_id_list:
             raise HTTPException(status_code=400, detail="Target tracking ID cannot be in source list")
-        
+
         db_session = _session_factory()
         try:
             from models.database import Magazine, DownloadSubmission
-            
+
             # Get target tracking record
             target = db_session.query(MagazineTracking).filter(MagazineTracking.id == target_id).first()
             if not target:
                 raise HTTPException(status_code=404, detail="Target tracking record not found")
-            
+
             # Get source tracking records
             sources = db_session.query(MagazineTracking).filter(MagazineTracking.id.in_(source_id_list)).all()
             if len(sources) != len(source_id_list):
                 raise HTTPException(status_code=404, detail="One or more source tracking records not found")
-            
+
             magazines_moved = 0
             submissions_moved = 0
-            
+
             # Move magazines from source to target
             for source in sources:
                 # Update magazines to point to target tracking
@@ -451,21 +451,21 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
                 for magazine in magazines:
                     magazine.tracking_id = target.id
                     magazines_moved += 1
-                
+
                 # Update download submissions to point to target tracking
                 submissions = db_session.query(DownloadSubmission).filter(DownloadSubmission.tracking_id == source.id).all()
                 for submission in submissions:
                     submission.tracking_id = target.id
                     submissions_moved += 1
-                
+
                 # Delete source tracking record
                 db_session.delete(source)
-            
+
             db_session.commit()
-            
+
             source_titles = [s.title for s in sources]
             logger.info(f"Merged {len(sources)} tracking records ({', '.join(source_titles)}) into '{target.title}' (ID: {target_id})")
-            
+
             return {
                 "success": True,
                 "message": f"Merged {len(sources)} tracking record{'s' if len(sources) > 1 else ''} into '{target.title}'",

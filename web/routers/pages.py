@@ -9,6 +9,7 @@ from collections import defaultdict
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse
 
+from core.utils import is_special_edition
 from models.database import Magazine
 
 router = APIRouter(tags=["pages"])
@@ -152,21 +153,27 @@ async def view_periodical(periodical_title: str):
                     detail=f"No periodicals found for '{periodical_title}'",
                 )
 
-            # Group periodicals by year
+            # Group periodicals by year and separate special editions
             periodicals_by_year = defaultdict(list)
+            special_editions = []
+
             for p in periodicals:
-                year = p.issue_date.year if p.issue_date else "Unknown"
-                periodicals_by_year[year].append(
-                    {
-                        "id": p.id,
-                        "title": p.title,
-                        "issue_date": (
-                            p.issue_date.isoformat() if p.issue_date else None
-                        ),
-                        "cover_path": p.cover_path,
-                        "file_path": p.file_path,
-                    }
-                )
+                periodical_data = {
+                    "id": p.id,
+                    "title": p.title,
+                    "issue_date": (
+                        p.issue_date.isoformat() if p.issue_date else None
+                    ),
+                    "cover_path": p.cover_path,
+                    "file_path": p.file_path,
+                }
+
+                # Check if this is a special edition
+                if is_special_edition(p.title):
+                    special_editions.append(periodical_data)
+                else:
+                    year = p.issue_date.year if p.issue_date else "Unknown"
+                    periodicals_by_year[year].append(periodical_data)
 
             # Sort years in descending order
             sorted_years = sorted(periodicals_by_year.keys(), reverse=True)
@@ -180,6 +187,19 @@ async def view_periodical(periodical_title: str):
                 raise HTTPException(
                     status_code=500, detail="Periodical template not found"
                 )
+
+            # Build special editions data
+            special_editions_data = []
+            if special_editions:
+                for p in special_editions:
+                    special_editions_data.append(
+                        {
+                            "id": p["id"],
+                            "title": p["title"],
+                            "issue_date": p["issue_date"],
+                            "cover_url": f"/api/periodicals/{p['id']}/cover",
+                        }
+                    )
 
             # Build years data JSON
             years_data = []
@@ -204,6 +224,9 @@ async def view_periodical(periodical_title: str):
             )
             html_content = html_content.replace(
                 "{{YEARS_DATA}}", html.escape(json.dumps(years_data))
+            )
+            html_content = html_content.replace(
+                "{{SPECIAL_EDITIONS_DATA}}", html.escape(json.dumps(special_editions_data))
             )
 
             return HTMLResponse(content=html_content)
