@@ -236,6 +236,19 @@ class FileImporter:
 
             cover_path = self._extract_cover(pdf_path)
 
+            # Check if this is a special edition and determine the tracking title
+            base_title, is_special_edition, special_name = (
+                self.title_matcher.extract_base_title(standardized_title)
+            )
+
+            # For non-English editions, append language to tracking title
+            # For special editions, use base title; for regular issues, use standardized title
+            tracking_title = base_title if is_special_edition else standardized_title
+            if language and language != "English":
+                # Check if language is already in the title (e.g., "Wired - German")
+                if not re.search(rf"\b{language}\b", tracking_title, re.IGNORECASE):
+                    tracking_title = f"{tracking_title} - {language}"
+
             category = self.categorizer.categorize(standardized_title)
 
             if skip_organize:
@@ -249,33 +262,28 @@ class FileImporter:
                 if not organized_path:
                     return False
 
+            # Build extra metadata, including special edition info if applicable
+            extra_metadata = {
+                "category": category,
+                "imported_from": pdf_path.name,
+                "import_date": datetime.now().isoformat(),
+            }
+            if is_special_edition:
+                extra_metadata["special_edition"] = special_name
+                extra_metadata["full_title"] = standardized_title
+
             magazine = Magazine(
-                title=standardized_title,
+                title=tracking_title,
                 publisher=metadata.get("publisher"),
                 issue_date=metadata.get("issue_date", datetime.now()),
                 file_path=str(organized_path),
                 cover_path=str(cover_path) if cover_path else None,
-                extra_metadata={
-                    "category": category,
-                    "imported_from": pdf_path.name,
-                    "import_date": datetime.now().isoformat(),
-                },
+                extra_metadata=extra_metadata,
             )
 
             session.add(magazine)
 
             # Manage tracking record based on import settings
-            # Check if this is a special edition
-            base_title, is_special_edition, special_name = (
-                self.title_matcher.extract_base_title(standardized_title)
-            )
-
-            # For non-English editions, append language to tracking title
-            tracking_title = base_title if is_special_edition else standardized_title
-            if language and language != "English":
-                # Check if language is already in the title (e.g., "Wired - German")
-                if not re.search(rf"\b{language}\b", tracking_title, re.IGNORECASE):
-                    tracking_title = f"{tracking_title} - {language}"
 
             # Generate OLID from tracking title (with language if applicable)
             olid = tracking_title.lower().replace(" ", "_").replace("-", "_")

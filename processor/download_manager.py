@@ -17,6 +17,7 @@ from core.constants import (
     PROVIDER_SEARCH_TIMEOUT,
 )
 from core.date_utils import normalize_month_name, utc_now
+from core.language_utils import LANGUAGE_INDICATORS, detect_language
 from core.matching import TitleMatcher
 from models.database import (
     DownloadSubmission,
@@ -48,26 +49,44 @@ class DownloadManager:
         self.download_client = download_client
         self.title_matcher = TitleMatcher(threshold=fuzzy_threshold)
 
-    def search_periodical_issues(self, periodical_title: str, session: Session) -> List[Dict[str, Any]]:
+    def search_periodical_issues(
+        self, periodical_title: str, session: Session
+    ) -> List[Dict[str, Any]]:
         """
         Search all providers for available issues of a periodical.
 
         Args:
-            periodical_title: Title of the periodical to search for
+            periodical_title: Title of the periodical to search for (may include language, e.g., "Playboy - German")
             session: Database session
 
         Returns:
             List of search results with deduplication grouping
         """
+        # Extract language filter if present (e.g., "Playboy - German" -> "Playboy", "German")
+        search_title = periodical_title
+        language_filter = None
+        # Build pattern from centralized language list
+        language_names = "|".join(
+            [lang.capitalize() for lang in LANGUAGE_INDICATORS.keys()]
+        )
+        language_pattern = rf"\s+-\s+({language_names})$"
+        match = re.search(language_pattern, periodical_title, re.IGNORECASE)
+        if match:
+            search_title = periodical_title[: match.start()].strip()
+            language_filter = match.group(1)
+            logger.info(
+                f"Searching for '{search_title}' with language filter: {language_filter}"
+            )
+
         all_results = []
 
         with ThreadPoolExecutor(max_workers=1) as executor:
             for provider in self.search_providers:
                 try:
-                    logger.info(f"Searching {provider.name} for: {periodical_title}")
+                    logger.info(f"Searching {provider.name} for: {search_title}")
 
                     # Execute search with timeout
-                    future = executor.submit(provider.search, periodical_title)
+                    future = executor.submit(provider.search, search_title)
                     try:
                         results = future.result(timeout=PROVIDER_SEARCH_TIMEOUT)
                     except FuturesTimeoutError:
@@ -78,6 +97,12 @@ class DownloadManager:
                         continue
 
                     for result in results:
+                        # Apply language filter if specified
+                        if language_filter:
+                            result_language = detect_language(result.title)
+                            if result_language != language_filter:
+                                continue  # Skip results that don't match the language filter
+
                         all_results.append(
                             {
                                 "title": result.title,
@@ -89,7 +114,9 @@ class DownloadManager:
                         )
 
                 except Exception as e:
-                    logger.error(f"Error searching {provider.name} for '{periodical_title}': {e}")
+                    logger.error(
+                        f"Error searching {provider.name} for '{periodical_title}': {e}"
+                    )
 
         logger.info(
             f"Found {len(all_results)} results for '{periodical_title}' across {len(self.search_providers)} providers"
@@ -204,7 +231,9 @@ class DownloadManager:
         )
 
         if existing:
-            logger.debug(f"Skipping duplicate: '{result_title}' (similar to '{existing.result_title}')")
+            logger.debug(
+                f"Skipping duplicate: '{result_title}' (similar to '{existing.result_title}')"
+            )
             return True, existing
 
         return False, None
@@ -228,7 +257,9 @@ class DownloadManager:
         Returns:
             DownloadSubmission record if submitted, None if duplicate or error
         """
-        logger.debug(f"[DownloadManager] submit_download called for: {search_result['title']}")
+        logger.debug(
+            f"[DownloadManager] submit_download called for: {search_result['title']}"
+        )
 
         # Check if this URL has failed too many times (bad file)
         previous_failures = (
@@ -249,7 +280,9 @@ class DownloadManager:
             return None
 
         # Check for duplicates
-        is_dup, existing = self.check_duplicate_submission(tracking_id, search_result["title"], session)
+        is_dup, existing = self.check_duplicate_submission(
+            tracking_id, search_result["title"], session
+        )
 
         if is_dup:
             logger.debug("[DownloadManager] Duplicate found, recording as SKIPPED")
@@ -260,16 +293,24 @@ class DownloadManager:
                 session,
                 search_result_db_id=search_result_db_id,
             )
-            logger.info(f"Skipped duplicate download: {search_result['title']} (tracking_id: {tracking_id})")
+            logger.info(
+                f"Skipped duplicate download: {search_result['title']} (tracking_id: {tracking_id})"
+            )
             return None
 
         # Submit to download client
         try:
-            logger.debug(f"[DownloadManager] Submitting to download client: {search_result['title']}")
-            job_id = self.download_client.submit(nzb_url=search_result["url"], title=search_result["title"])
+            logger.debug(
+                f"[DownloadManager] Submitting to download client: {search_result['title']}"
+            )
+            job_id = self.download_client.submit(
+                nzb_url=search_result["url"], title=search_result["title"]
+            )
 
             if not job_id:
-                logger.warning(f"Download client rejected submission: {search_result['title']}")
+                logger.warning(
+                    f"Download client rejected submission: {search_result['title']}"
+                )
                 logger.debug("[DownloadManager] Recording as FAILED - client rejected")
                 self._create_submission_record(
                     tracking_id,
@@ -293,9 +334,13 @@ class DownloadManager:
                 client_name=self.download_client.name,
                 attempt_count=1,
             )
-            logger.debug(f"[DownloadManager] Created DownloadSubmission record ID: {submission.id}")
+            logger.debug(
+                f"[DownloadManager] Created DownloadSubmission record ID: {submission.id}"
+            )
 
-            logger.info(f"Submitted download: {search_result['title']} (job_id: {job_id})")
+            logger.info(
+                f"Submitted download: {search_result['title']} (job_id: {job_id})"
+            )
             return submission
 
         except Exception as e:
@@ -314,7 +359,9 @@ class DownloadManager:
             )
             return None
 
-    def download_selected_editions(self, tracking_id: int, session: Session) -> Dict[str, Any]:
+    def download_selected_editions(
+        self, tracking_id: int, session: Session
+    ) -> Dict[str, Any]:
         """
         Download only the specific editions marked in selected_editions dict.
         Used when specific issues are individually tracked.
@@ -327,7 +374,11 @@ class DownloadManager:
             Dict with submission results
         """
         # Get tracking record
-        tracking = session.query(MagazineTracking).filter(MagazineTracking.id == tracking_id).first()
+        tracking = (
+            session.query(MagazineTracking)
+            .filter(MagazineTracking.id == tracking_id)
+            .first()
+        )
 
         if not tracking:
             logger.error(f"Tracking record not found: {tracking_id}")
@@ -335,13 +386,17 @@ class DownloadManager:
 
         # Get selected editions that are marked as True
         selected_editions = tracking.selected_editions or {}
-        editions_to_download = [olid for olid, tracked in selected_editions.items() if tracked]
+        editions_to_download = [
+            olid for olid, tracked in selected_editions.items() if tracked
+        ]
 
         if not editions_to_download:
             logger.debug(f"No selected editions to download for: {tracking.title}")
             return {"submitted": 0, "skipped": 0, "failed": 0}
 
-        logger.info(f"Downloading {len(editions_to_download)} selected editions for: {tracking.title}")
+        logger.info(
+            f"Downloading {len(editions_to_download)} selected editions for: {tracking.title}"
+        )
 
         # Search for issues
         search_results = self.search_periodical_issues(tracking.title, session)
@@ -357,13 +412,17 @@ class DownloadManager:
             # Check if metadata contains an OLID that matches selected editions
             raw_metadata = search_result.get("raw_metadata", {})
             result_olid = (
-                raw_metadata.get("olid") or raw_metadata.get("edition_id") or raw_metadata.get("open_library_id")
+                raw_metadata.get("olid")
+                or raw_metadata.get("edition_id")
+                or raw_metadata.get("open_library_id")
             )
 
             if result_olid and result_olid in editions_to_download:
                 should_download = True
                 matched_edition = result_olid
-                logger.debug(f"Matched search result to selected edition {result_olid}: {search_result['title']}")
+                logger.debug(
+                    f"Matched search result to selected edition {result_olid}: {search_result['title']}"
+                )
             else:
                 # No OLID match - try fuzzy matching against edition titles stored in metadata
                 # Check if tracking has detailed edition metadata
@@ -373,11 +432,15 @@ class DownloadManager:
                 if editions_list:
                     # Try to match by title similarity
                     for olid in editions_to_download:
-                        edition_info = next((e for e in editions_list if e.get("olid") == olid), None)
+                        edition_info = next(
+                            (e for e in editions_list if e.get("olid") == olid), None
+                        )
                         if edition_info:
                             edition_title = edition_info.get("title", "")
                             # Use fuzzy matching to compare titles
-                            is_match, score = self.title_matcher.match(search_result["title"], edition_title)
+                            is_match, score = self.title_matcher.match(
+                                search_result["title"], edition_title
+                            )
                             if is_match:
                                 should_download = True
                                 matched_edition = olid
@@ -388,7 +451,9 @@ class DownloadManager:
 
             # If we still haven't matched and there are selected editions, log and skip
             if not should_download:
-                logger.debug(f"Skipping search result (no match to selected editions): {search_result['title']}")
+                logger.debug(
+                    f"Skipping search result (no match to selected editions): {search_result['title']}"
+                )
                 results["skipped"] += 1
                 continue
 
@@ -415,17 +480,23 @@ class DownloadManager:
                 logger.warning(f"Could not create DB search result: {e}", exc_info=True)
 
             # Submit download
-            submission = self.submit_download(tracking_id, search_result, session, search_result_db_id)
+            submission = self.submit_download(
+                tracking_id, search_result, session, search_result_db_id
+            )
 
             if submission:
                 if submission.status == DownloadSubmission.StatusEnum.PENDING:
                     results["submitted"] += 1
-                    logger.info(f"Submitted selected edition {matched_edition}: {search_result['title']}")
+                    logger.info(
+                        f"Submitted selected edition {matched_edition}: {search_result['title']}"
+                    )
                 elif submission.status == DownloadSubmission.StatusEnum.SKIPPED:
                     results["skipped"] += 1
                 elif submission.status == DownloadSubmission.StatusEnum.FAILED:
                     results["failed"] += 1
-                    results["errors"].append(f"Failed: {search_result['title']} - {submission.last_error}")
+                    results["errors"].append(
+                        f"Failed: {search_result['title']} - {submission.last_error}"
+                    )
             else:
                 results["skipped"] += 1
 
@@ -436,7 +507,9 @@ class DownloadManager:
 
         return results
 
-    def download_all_periodical_issues(self, tracking_id: int, session: Session) -> Dict[str, Any]:
+    def download_all_periodical_issues(
+        self, tracking_id: int, session: Session
+    ) -> Dict[str, Any]:
         """
         Search for all issues of a tracked periodical and submit downloads.
         Called when track_all_editions is set to True.
@@ -449,13 +522,19 @@ class DownloadManager:
             Dict with submission results
         """
         # Get tracking record
-        tracking = session.query(MagazineTracking).filter(MagazineTracking.id == tracking_id).first()
+        tracking = (
+            session.query(MagazineTracking)
+            .filter(MagazineTracking.id == tracking_id)
+            .first()
+        )
 
         if not tracking:
             logger.error(f"Tracking record not found: {tracking_id}")
             return {"submitted": 0, "skipped": 0, "failed": 0}
 
-        logger.info(f"Starting download search for all issues of: {tracking.title} (tracking_id: {tracking_id})")
+        logger.info(
+            f"Starting download search for all issues of: {tracking.title} (tracking_id: {tracking_id})"
+        )
 
         # Search for issues
         search_results = self.search_periodical_issues(tracking.title, session)
@@ -464,19 +543,22 @@ class DownloadManager:
         filtered_results = []
         for search_result in search_results:
             # Check if already submitted or downloaded
-            is_duplicate, _ = self.check_duplicate_submission(tracking_id, search_result["title"], session)
+            is_duplicate, _ = self.check_duplicate_submission(
+                tracking_id, search_result["title"], session
+            )
             if not is_duplicate:
                 filtered_results.append(search_result)
 
-        logger.info(f"Found {len(filtered_results)} new issues (filtered from {len(search_results)} total results)")
+        logger.info(
+            f"Found {len(filtered_results)} new issues (filtered from {len(search_results)} total results)"
+        )
 
         # Prefer English editions and limit to 10 per batch
         # Sort results: English first, then by date (newest first)
         def sort_key(result):
             title_lower = result.get("title", "").lower()
             is_english = any(
-                lang in title_lower
-                for lang in ["english", "en", "usa", "uk", "us"]
+                lang in title_lower for lang in ["english", "en", "usa", "uk", "us"]
             )
             # Put English first (0), others after (1)
             lang_priority = 0 if is_english else 1
@@ -500,7 +582,9 @@ class DownloadManager:
                 f"English editions preferred). {len(filtered_results) - len(batch_results)} more available for next run."
             )
         elif len(filtered_results) == 0:
-            logger.info(f"No new issues to download for '{tracking.title}' - all found issues already downloaded or pending")
+            logger.info(
+                f"No new issues to download for '{tracking.title}' - all found issues already downloaded or pending"
+            )
 
         results = {"submitted": 0, "skipped": 0, "failed": 0, "errors": []}
 
@@ -524,7 +608,9 @@ class DownloadManager:
                 logger.warning(f"Could not create DB search result: {e}", exc_info=True)
 
             # Submit download
-            submission = self.submit_download(tracking_id, search_result, session, search_result_db_id)
+            submission = self.submit_download(
+                tracking_id, search_result, session, search_result_db_id
+            )
 
             if submission:
                 if submission.status == DownloadSubmission.StatusEnum.PENDING:
@@ -533,7 +619,9 @@ class DownloadManager:
                     results["skipped"] += 1
                 elif submission.status == DownloadSubmission.StatusEnum.FAILED:
                     results["failed"] += 1
-                    results["errors"].append(f"Failed: {search_result['title']} - {submission.last_error}")
+                    results["errors"].append(
+                        f"Failed: {search_result['title']} - {submission.last_error}"
+                    )
             else:
                 results["skipped"] += 1
 
@@ -558,7 +646,9 @@ class DownloadManager:
         Returns:
             DownloadSubmission record if successful
         """
-        logger.info(f"Submitting single issue download: {search_result['title']} (tracking_id: {tracking_id})")
+        logger.info(
+            f"Submitting single issue download: {search_result['title']} (tracking_id: {tracking_id})"
+        )
 
         # Create DB search result record
         search_result_db_id = None
@@ -578,11 +668,15 @@ class DownloadManager:
             logger.warning(f"Could not create DB search result: {e}", exc_info=True)
 
         # Submit download (still check for duplicates)
-        submission = self.submit_download(tracking_id, search_result, session, search_result_db_id)
+        submission = self.submit_download(
+            tracking_id, search_result, session, search_result_db_id
+        )
 
         return submission
 
-    def update_submission_status(self, job_id: str, session: Session) -> Optional[DownloadSubmission]:
+    def update_submission_status(
+        self, job_id: str, session: Session
+    ) -> Optional[DownloadSubmission]:
         """
         Update status of a submission from the download client.
 
@@ -594,7 +688,11 @@ class DownloadManager:
             Updated DownloadSubmission record
         """
         # Find submission
-        submission = session.query(DownloadSubmission).filter(DownloadSubmission.job_id == job_id).first()
+        submission = (
+            session.query(DownloadSubmission)
+            .filter(DownloadSubmission.job_id == job_id)
+            .first()
+        )
 
         if not submission:
             logger.warning(f"Submission not found for job_id: {job_id}")
@@ -603,7 +701,9 @@ class DownloadManager:
         # Get status from client
         try:
             client_status = self.download_client.get_status(job_id)
-            logger.debug(f"[DownloadManager] Client status for {job_id}: {client_status}")
+            logger.debug(
+                f"[DownloadManager] Client status for {job_id}: {client_status}"
+            )
 
             # Map client status to our status
             status_map = {
@@ -615,7 +715,9 @@ class DownloadManager:
             }
 
             client_status_value = client_status.get("status")
-            new_status = status_map.get(client_status_value, DownloadSubmission.StatusEnum.PENDING)
+            new_status = status_map.get(
+                client_status_value, DownloadSubmission.StatusEnum.PENDING
+            )
 
             # Track previous status to detect transitions
             previous_status = submission.status
@@ -626,7 +728,9 @@ class DownloadManager:
 
             if "file_path" in client_status:
                 submission.file_path = client_status["file_path"]
-                logger.debug(f"[DownloadManager] Updated file_path for {job_id}: {submission.file_path}")
+                logger.debug(
+                    f"[DownloadManager] Updated file_path for {job_id}: {submission.file_path}"
+                )
 
             if new_status == DownloadSubmission.StatusEnum.FAILED:
                 # Increment attempt count on failure
@@ -693,7 +797,11 @@ class DownloadManager:
         Returns:
             True if successful
         """
-        submission = session.query(DownloadSubmission).filter(DownloadSubmission.id == submission_id).first()
+        submission = (
+            session.query(DownloadSubmission)
+            .filter(DownloadSubmission.id == submission_id)
+            .first()
+        )
 
         if not submission:
             logger.warning(f"Submission not found: {submission_id}")
@@ -732,7 +840,9 @@ class DownloadManager:
         logger.debug(f"Found {len(pending)} pending submissions")
         return pending
 
-    def get_failed_downloads(self, session: Session, include_bad_files: bool = False) -> List[DownloadSubmission]:
+    def get_failed_downloads(
+        self, session: Session, include_bad_files: bool = False
+    ) -> List[DownloadSubmission]:
         """
         Get all failed download submissions.
 
@@ -790,7 +900,11 @@ class DownloadManager:
         Returns:
             Dict with success status and message
         """
-        submission = session.query(DownloadSubmission).filter(DownloadSubmission.id == submission_id).first()
+        submission = (
+            session.query(DownloadSubmission)
+            .filter(DownloadSubmission.id == submission_id)
+            .first()
+        )
 
         if not submission:
             logger.warning(f"Submission not found: {submission_id}")
@@ -800,7 +914,10 @@ class DownloadManager:
             DownloadSubmission.StatusEnum.FAILED,
             DownloadSubmission.StatusEnum.SKIPPED,
         ]:
-            return {"success": False, "message": f"Cannot retry submission with status: {submission.status.value}"}
+            return {
+                "success": False,
+                "message": f"Cannot retry submission with status: {submission.status.value}",
+            }
 
         # Check if this is a bad file (failed 3+ times)
         if submission.attempt_count >= 3:
@@ -815,12 +932,21 @@ class DownloadManager:
 
         try:
             # Resubmit to download client
-            logger.info(f"Retrying submission {submission_id}: {submission.result_title}")
-            job_id = self.download_client.submit(nzb_url=submission.source_url, title=submission.result_title)
+            logger.info(
+                f"Retrying submission {submission_id}: {submission.result_title}"
+            )
+            job_id = self.download_client.submit(
+                nzb_url=submission.source_url, title=submission.result_title
+            )
 
             if not job_id:
-                logger.warning(f"Download client rejected retry submission: {submission.result_title}")
-                return {"success": False, "message": "Download client rejected submission"}
+                logger.warning(
+                    f"Download client rejected retry submission: {submission.result_title}"
+                )
+                return {
+                    "success": False,
+                    "message": "Download client rejected submission",
+                }
 
             # Update submission record
             submission.job_id = job_id
@@ -830,7 +956,9 @@ class DownloadManager:
             # Note: Don't reset attempt_count, it should accumulate across retries
             session.commit()
 
-            logger.info(f"Successfully retried submission {submission_id} with new job_id: {job_id}")
+            logger.info(
+                f"Successfully retried submission {submission_id} with new job_id: {job_id}"
+            )
             return {
                 "success": True,
                 "message": f"Retry submitted (attempt {submission.attempt_count + 1})",
@@ -838,5 +966,7 @@ class DownloadManager:
             }
 
         except Exception as e:
-            logger.error(f"Error retrying submission {submission_id}: {e}", exc_info=True)
+            logger.error(
+                f"Error retrying submission {submission_id}: {e}", exc_info=True
+            )
             return {"success": False, "message": f"Error: {str(e)}"}
