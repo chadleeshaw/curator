@@ -505,11 +505,14 @@
   padding: 8px 14px;
   font-size: 13px;
   width: fit-content;
+  min-width: fit-content;
 }
 
 .tracked-card-buttons .btn-danger {
   padding: 8px 14px;
   font-size: 13px;
+  width: fit-content;
+  min-width: fit-content;
 }
 
 /* ==========================================================================

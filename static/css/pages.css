@@ -145,6 +145,7 @@
 .tracked-periodicals {
   margin-top: 0;
   padding-top: 0;
+  position: relative;
 }
 
 .tracked-header {
@@ -152,6 +153,8 @@
   flex-direction: column;
   gap: 15px;
   margin-bottom: 20px;
+  position: relative;
+  z-index: 1;
 }
 
 .tracked-header h2 {
@@ -165,6 +168,13 @@
   gap: 10px;
   align-items: center;
   flex-wrap: wrap;
+  position: relative;
+  z-index: 2;
+}
+
+.tracked-header .tracked-actions button {
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 .tracked-header .sort-controls {
@@ -172,12 +182,16 @@
   display: flex;
   gap: 10px;
   align-items: center;
+  position: relative;
+  z-index: 2;
 }
 
 #tracked-list {
   display: flex;
   flex-direction: column;
   gap: 15px;
+  position: relative;
+  z-index: 0;
 }
 
 .tracked-item {
