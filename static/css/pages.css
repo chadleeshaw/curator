@@ -148,29 +148,30 @@
 }
 
 .tracked-header {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
   margin-bottom: 20px;
 }
 
 .tracked-header h2 {
   color: var(--primary-color);
   font-size: 24px;
-  margin-bottom: 0;
-  grid-column: 1 / -1;
+  margin: 0;
 }
 
 .tracked-header .tracked-actions {
-  grid-column: 1;
   display: flex;
   gap: 10px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .tracked-header .sort-controls {
-  grid-column: 2;
+  align-self: flex-end;
+  display: flex;
+  gap: 10px;
+  align-items: center;
 }
 
 #tracked-list {

@@ -66,19 +66,21 @@
                 <div class="tracked-periodicals">
                     <div class="tracked-header">
                         <h2>Tracked Periodicals</h2>
-                        <div class="tracked-actions">
-                            <button onclick="openTrackNewPeriodicalModal()" class="btn-primary">📌 Track New Periodical</button>
-                            <button onclick="openMergeModal()" class="btn-secondary">🔀 Merge Tracking</button>
-                        </div>
-                        <div class="sort-controls">
-                            <div class="sort-buttons">
-                                <button class="sort-btn active" data-sort="title" onclick="setSortField('title')">Title</button>
-                                <button class="sort-btn" data-sort="publisher" onclick="setSortField('publisher')">Publisher</button>
-                                <button class="sort-btn" data-sort="tracking_mode" onclick="setSortField('tracking_mode')">Tracking</button>
+                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap;">
+                            <div class="tracked-actions">
+                                <button onclick="openTrackNewPeriodicalModal()" class="btn-primary">📌 Track New Periodical</button>
+                                <button onclick="openMergeModal()" class="btn-secondary">🔀 Merge Tracking</button>
                             </div>
-                            <button id="sort-toggle" class="sort-toggle-btn" onclick="toggleSortOrder()" title="Toggle ascending/descending">
-                                ↑
-                            </button>
+                            <div class="sort-controls">
+                                <div class="sort-buttons">
+                                    <button class="sort-btn active" data-sort="title" onclick="setSortField('title')">Title</button>
+                                    <button class="sort-btn" data-sort="publisher" onclick="setSortField('publisher')">Publisher</button>
+                                    <button class="sort-btn" data-sort="tracking_mode" onclick="setSortField('tracking_mode')">Tracking</button>
+                                </div>
+                                <button id="sort-toggle" class="sort-toggle-btn" onclick="toggleSortOrder()" title="Toggle ascending/descending">
+                                    ↑
+                                </button>
+                            </div>
                         </div>
                     </div>
                     <div id="tracked-list"></div>
