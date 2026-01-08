@@ -249,8 +249,8 @@ class FileImporter:
             )
 
             # For non-English editions, append language to tracking title
-            # For special editions, use base title; for regular issues, use standardized title
-            tracking_title = base_title if is_special_edition else standardized_title
+            # Always use base_title for tracking to group all issues of the same periodical
+            tracking_title = base_title
             if language and language != "English":
                 # Check if language is already in the title (e.g., "Wired - German")
                 if not re.search(rf"\b{language}\b", tracking_title, re.IGNORECASE):
