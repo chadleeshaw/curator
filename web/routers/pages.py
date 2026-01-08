@@ -141,11 +141,11 @@ async def view_periodical(periodical_title: str, language: str = Query(None)):
         try:
             # Build query for all periodicals with this title
             query = db_session.query(Magazine).filter(Magazine.title == periodical_title)
-            
+
             # Add language filter if provided
             if language:
                 query = query.filter(Magazine.language == language)
-            
+
             periodicals = query.order_by(Magazine.issue_date.desc()).all()
 
             if not periodicals:

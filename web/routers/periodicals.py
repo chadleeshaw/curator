@@ -252,7 +252,7 @@ async def delete_periodical(
             # Store title and language for potential deletion of all issues
             title = magazine.title
             language = magazine.language
-            
+
             # Determine which magazines to delete
             if delete_all_issues:
                 # Get all magazines with the same title and language
@@ -264,19 +264,19 @@ async def delete_periodical(
             else:
                 # Only delete the single specified magazine
                 magazines_to_delete = [magazine]
-            
+
             # Store file paths for potential deletion
             file_paths_to_delete = []
             for mag in magazines_to_delete:
                 pdf_path = Path(mag.file_path)
                 cover_path = Path(mag.cover_path) if mag.cover_path else None
                 file_paths_to_delete.append((pdf_path, cover_path))
-            
+
             # Delete database entries
             for mag in magazines_to_delete:
                 db_session.delete(mag)
             db_session.commit()
-            
+
             deleted_count = len(magazines_to_delete)
 
             # Remove tracking record if requested
