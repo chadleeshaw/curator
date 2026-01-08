@@ -15,6 +15,8 @@ export class TrackingManager {
     this.currentPeriodicalMetadata = null;
     this.currentEditionsData = null;
     this.selectedEditions = {};
+    this.mergeMode = false;
+    this.selectedForMerge = new Set();
   }
 
   /**
@@ -287,6 +289,7 @@ export class TrackingManager {
   createTrackedCard(tracked) {
     const card = document.createElement('div');
     card.className = 'tracked-card';
+    card.dataset.trackingId = tracked.id;
 
     // Determine tracking icon and label
     let trackingIcon = '👁️';
@@ -299,7 +302,12 @@ export class TrackingManager {
       trackingLabel = 'New Issues';
     }
 
+    const checkboxHtml = this.mergeMode 
+      ? `<input type="checkbox" class="merge-checkbox" data-tracking-id="${tracked.id}" ${this.selectedForMerge.has(tracked.id) ? 'checked' : ''}>` 
+      : '';
+
     card.innerHTML = `
+      ${checkboxHtml}
       <div class="tracked-card-info">
         <h5>${tracked.title}</h5>
         <p>Publisher: ${tracked.publisher || 'Unknown'}</p>
@@ -312,6 +320,19 @@ export class TrackingManager {
         <button onclick='deleteTracking(${tracked.id}, "${tracked.title.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}")' class="btn-small btn-danger">🗑️ Delete</button>
       </div>
     `;
+
+    // Add event listener for checkbox if in merge mode
+    if (this.mergeMode) {
+      const checkbox = card.querySelector('.merge-checkbox');
+      checkbox.addEventListener('change', (e) => {
+        if (e.target.checked) {
+          this.selectedForMerge.add(tracked.id);
+        } else {
+          this.selectedForMerge.delete(tracked.id);
+        }
+        this.updateMergeButtonState();
+      });
+    }
 
     return card;
   }
@@ -351,6 +372,17 @@ export class TrackingManager {
     const btn = document.getElementById('tracking-sort-toggle');
     if (btn) {
       btn.textContent = this.sortManager.order === 'asc' ? '↑' : '↓';
+    }
+  }
+
+  /**
+   * Update merge button state based on selection
+   */
+  updateMergeButtonState() {
+    const mergeBtn = document.getElementById('execute-merge-btn');
+    if (mergeBtn) {
+      mergeBtn.disabled = this.selectedForMerge.size < 2;
+      mergeBtn.textContent = `Merge Selected (${this.selectedForMerge.size})`;
     }
   }
 
@@ -1178,6 +1210,129 @@ window.selectIssue = async function (title, provider, url, alreadyDownloaded) {
   const shouldDownload = await UIUtils.confirm('Download Issue', confirmMessage);
   if (shouldDownload) {
     window.downloadIssue(title, url, provider);
+  }
+};
+
+/**
+ * Toggle merge mode for tracking records
+ */
+window.toggleMergeMode = function() {
+  const tracking = window.trackingManager;
+  if (!tracking) return;
+
+  tracking.mergeMode = !tracking.mergeMode;
+  tracking.selectedForMerge.clear();
+  
+  const toggleBtn = document.getElementById('merge-mode-toggle');
+  const mergeActionsDiv = document.getElementById('merge-actions');
+  
+  if (tracking.mergeMode) {
+    toggleBtn.textContent = '✖ Cancel Merge';
+    toggleBtn.classList.add('active');
+    if (mergeActionsDiv) mergeActionsDiv.classList.remove('hidden');
+  } else {
+    toggleBtn.textContent = '🔀 Merge Tracking';
+    toggleBtn.classList.remove('active');
+    if (mergeActionsDiv) mergeActionsDiv.classList.add('hidden');
+  }
+  
+  tracking.loadTrackedPeriodicals();
+};
+
+/**
+ * Execute merge of selected tracking records
+ */
+window.executeMerge = async function() {
+  const tracking = window.trackingManager;
+  if (!tracking || tracking.selectedForMerge.size < 2) {
+    alert('Please select at least 2 tracking records to merge');
+    return;
+  }
+
+  const selectedIds = Array.from(tracking.selectedForMerge);
+  
+  // Show modal to select target
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.id = 'merge-target-modal';
+  
+  const options = selectedIds.map(id => {
+    const card = document.querySelector(`[data-tracking-id="${id}"]`);
+    const title = card ? card.querySelector('h5').textContent : `ID ${id}`;
+    return `<option value="${id}">${title}</option>`;
+  }).join('');
+  
+  modal.innerHTML = `
+    <div class="modal-content">
+      <h3>Select Target Tracking Record</h3>
+      <p>Choose which tracking record to keep. All magazines and downloads from other selected records will be moved to this one.</p>
+      <select id="merge-target-select" style="width: 100%; padding: 8px; margin: 16px 0;">
+        ${options}
+      </select>
+      <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
+        <button onclick="closeMergeModal()" class="btn-secondary">Cancel</button>
+        <button onclick="confirmMerge()" class="btn-primary">Merge</button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  modal.style.display = 'flex';
+};
+
+/**
+ * Close merge target selection modal
+ */
+window.closeMergeModal = function() {
+  const modal = document.getElementById('merge-target-modal');
+  if (modal) {
+    modal.remove();
+  }
+};
+
+/**
+ * Confirm and execute the merge
+ */
+window.confirmMerge = async function() {
+  const targetId = parseInt(document.getElementById('merge-target-select').value);
+  const tracking = window.trackingManager;
+  
+  if (!tracking || !targetId) return;
+  
+  const allSelected = Array.from(tracking.selectedForMerge);
+  const sourceIds = allSelected.filter(id => id !== targetId);
+  
+  if (sourceIds.length === 0) {
+    alert('No source records to merge');
+    return;
+  }
+  
+  if (!confirm(`Merge ${sourceIds.length} tracking record(s) into the selected target? This cannot be undone.`)) {
+    return;
+  }
+  
+  try {
+    const response = await APIClient.post(`/api/periodicals/tracking/${targetId}/merge`, {
+      source_ids: sourceIds
+    });
+    
+    const data = await response.json();
+    
+    if (response.ok) {
+      UIUtils.showStatus('tracking-status', 
+        `✓ ${data.message}. Moved ${data.magazines_moved} magazines and ${data.submissions_moved} downloads.`, 
+        'success');
+      window.closeMergeModal();
+      tracking.mergeMode = false;
+      tracking.selectedForMerge.clear();
+      window.toggleMergeMode(); // Reset UI
+      tracking.loadTrackedPeriodicals();
+    } else {
+      throw new Error(data.detail || 'Merge failed');
+    }
+  } catch (error) {
+    console.error('Merge error:', error);
+    UIUtils.showStatus('tracking-status', `✗ ${error.message}`, 'error');
   }
 };
 

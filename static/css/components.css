@@ -435,7 +435,7 @@
   padding: 20px;
   margin-bottom: 15px;
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: auto 1fr auto;
   gap: 20px;
   align-items: start;
   transition: all 0.2s ease;
@@ -444,6 +444,23 @@
 .tracked-card:hover {
   border-color: var(--primary-color);
   box-shadow: 0 4px 12px rgba(99, 102, 241, 0.1);
+}
+
+.tracked-card .merge-checkbox {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  cursor: pointer;
+  accent-color: var(--primary-color);
+}
+
+.merge-controls #merge-mode-toggle.active {
+  background: var(--primary-color);
+  color: white;
+}
+
+.merge-controls .hidden {
+  display: none !important;
 }
 
 .tracked-card-info {

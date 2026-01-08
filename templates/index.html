@@ -77,6 +77,13 @@
                                 ↑
                             </button>
                         </div>
+                        <div class="merge-controls" style="margin-top: 15px;">
+                            <button id="merge-mode-toggle" class="btn-secondary" onclick="toggleMergeMode()">🔀 Merge Tracking</button>
+                            <div id="merge-actions" class="hidden" style="margin-top: 10px; display: flex; gap: 10px;">
+                                <p style="flex: 1; margin: 0; font-size: 14px; color: var(--text-secondary);">Select 2 or more tracking records to merge</p>
+                                <button id="execute-merge-btn" class="btn-primary" onclick="executeMerge()" disabled>Merge Selected (0)</button>
+                            </div>
+                        </div>
                     </div>
                     <div id="tracked-list"></div>
                 </div>

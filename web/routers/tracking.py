@@ -384,6 +384,104 @@ async def get_tracking_details(tracking_id: int) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post(
+    "/periodicals/tracking/{target_id}/merge",
+    summary="Merge tracking records",
+    description="Merge multiple tracking records into one. Magazines and download submissions from source records will be reassigned to the target record.",
+    responses={
+        200: {
+            "description": "Tracking records merged successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": True,
+                        "message": "Merged 2 tracking records into 'Playboy'",
+                        "magazines_moved": 5,
+                        "submissions_moved": 10,
+                    }
+                }
+            },
+        },
+        400: {"description": "Invalid input", "model": APIError},
+        404: {"description": "Tracking record not found", "model": APIError},
+        500: {"description": "Failed to merge tracking", "model": APIError},
+    },
+)
+async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Dict[str, Any]:
+    """
+    Merge multiple tracking records into a single target record.
+    
+    Args:
+        target_id: The tracking record to merge into (will be kept)
+        source_ids: Dict with 'source_ids' key containing list of tracking IDs to merge from (will be deleted)
+    
+    Returns:
+        Dict with merge results including counts of magazines and submissions moved
+    """
+    try:
+        if not source_ids.get("source_ids"):
+            raise HTTPException(status_code=400, detail="No source tracking IDs provided")
+        
+        source_id_list = source_ids["source_ids"]
+        
+        if target_id in source_id_list:
+            raise HTTPException(status_code=400, detail="Target tracking ID cannot be in source list")
+        
+        db_session = _session_factory()
+        try:
+            from models.database import Magazine, DownloadSubmission
+            
+            # Get target tracking record
+            target = db_session.query(MagazineTracking).filter(MagazineTracking.id == target_id).first()
+            if not target:
+                raise HTTPException(status_code=404, detail="Target tracking record not found")
+            
+            # Get source tracking records
+            sources = db_session.query(MagazineTracking).filter(MagazineTracking.id.in_(source_id_list)).all()
+            if len(sources) != len(source_id_list):
+                raise HTTPException(status_code=404, detail="One or more source tracking records not found")
+            
+            magazines_moved = 0
+            submissions_moved = 0
+            
+            # Move magazines from source to target
+            for source in sources:
+                # Update magazines to point to target tracking
+                magazines = db_session.query(Magazine).filter(Magazine.tracking_id == source.id).all()
+                for magazine in magazines:
+                    magazine.tracking_id = target.id
+                    magazines_moved += 1
+                
+                # Update download submissions to point to target tracking
+                submissions = db_session.query(DownloadSubmission).filter(DownloadSubmission.tracking_id == source.id).all()
+                for submission in submissions:
+                    submission.tracking_id = target.id
+                    submissions_moved += 1
+                
+                # Delete source tracking record
+                db_session.delete(source)
+            
+            db_session.commit()
+            
+            source_titles = [s.title for s in sources]
+            logger.info(f"Merged {len(sources)} tracking records ({', '.join(source_titles)}) into '{target.title}' (ID: {target_id})")
+            
+            return {
+                "success": True,
+                "message": f"Merged {len(sources)} tracking record{'s' if len(sources) > 1 else ''} into '{target.title}'",
+                "magazines_moved": magazines_moved,
+                "submissions_moved": submissions_moved,
+                "merged_titles": source_titles,
+            }
+        finally:
+            db_session.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error merging tracking records: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.delete(
     "/periodicals/tracking/{tracking_id}",
     summary="Stop tracking a periodical",
