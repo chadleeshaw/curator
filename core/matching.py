@@ -24,6 +24,31 @@ class TitleMatcher:
         Returns:
             Standardized title
         """
+        # Strip release group patterns common in scene releases
+        # Remove issue numbers and dates (No.XX, YYYY, YYYY-MM)
+        title = re.sub(r'\.No\.\d+', '', title, flags=re.IGNORECASE)
+        title = re.sub(r'\.Issue\.\d+', '', title, flags=re.IGNORECASE)
+        title = re.sub(r'\.\d{4}(-\d{2})?', '', title)
+
+        # Remove common release metadata keywords
+        release_keywords = [
+            'GERMAN', 'HYBRID', 'MAGAZINE', 'eBook', 'ebook', 'E-Book',
+            'PDF', 'EPUB', 'RETAIL', 'READNFO', 'REPACK',
+            'UNPACK', '_UNPACK_', 'DIRFIX'
+        ]
+        for keyword in release_keywords:
+            title = re.sub(rf'\.{keyword}\.?', '.', title, flags=re.IGNORECASE)
+            title = re.sub(rf'^{keyword}\.?', '', title, flags=re.IGNORECASE)
+            title = re.sub(rf'\s+{keyword}\s*', ' ', title, flags=re.IGNORECASE)
+
+        # Remove release group tags (e.g., "-LORENZ-xpost", "[hash]-xpost")
+        title = re.sub(r'-[A-Z][A-Za-z0-9]+-[a-z]+$', '', title)  # -LORENZ-xpost
+        title = re.sub(r'\s*\[[a-zA-Z0-9]+\]-[a-z]+$', '', title)  # [df86e9c1f]-xpost
+        title = re.sub(r'-[a-z]+$', '', title)  # -xpost
+
+        # Replace dots and underscores with spaces
+        title = title.replace('.', ' ').replace('_', ' ')
+
         # First, handle camelCase by inserting spaces before uppercase letters
         # followed by lowercase letters (e.g., "NationalGeographic" -> "National Geographic")
         title = re.sub(r"([a-z])([A-Z])", r"\1 \2", title)
