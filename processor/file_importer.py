@@ -37,6 +37,7 @@ class FileImporter:
         self,
         downloads_dir: str,
         organize_base_dir: str,
+        *,
         fuzzy_threshold: int = DEFAULT_FUZZY_THRESHOLD,
         organization_pattern: Optional[str] = None,
         category_prefix: str = "_",
