@@ -260,11 +260,19 @@ async def search_periodical_providers(query: str = Query(...)) -> Dict[str, Any]
             existing_magazines = db_session.query(Magazine).all()
             existing_titles = {m.title.lower() for m in existing_magazines}
 
-            # Search library for matching titles by query substring
-            query_lower = query.strip().lower()
-            matching_library_issues = [
-                m for m in existing_magazines if query_lower in m.title.lower()
-            ]
+            # Search library for matching titles using fuzzy matching
+            matching_library_issues = []
+            if _title_matcher:
+                for mag in existing_magazines:
+                    is_match, score = _title_matcher.match(query.strip(), mag.title)
+                    if is_match:
+                        matching_library_issues.append(mag)
+            else:
+                # Fallback to substring matching if no matcher available
+                query_lower = query.strip().lower()
+                matching_library_issues = [
+                    m for m in existing_magazines if query_lower in m.title.lower()
+                ]
 
             # Convert provider results to dictionaries
             result_dicts = [
