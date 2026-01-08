@@ -41,7 +41,7 @@ class ConfigLoader:
         if not config:
             raise ValueError("Config file is empty")
 
-        logger.info(f"Loaded config from {self.config_path}")
+        logger.debug(f"Loaded config from {self.config_path}")
         return config
 
     def get_search_providers(self) -> List[Dict[str, Any]]:
@@ -212,4 +212,4 @@ class ConfigLoader:
     def reload_config(self) -> None:
         """Reload config from file"""
         self.config = self._load_config()
-        logger.info("Reloaded config from file")
+        logger.debug("Reloaded config from file")
