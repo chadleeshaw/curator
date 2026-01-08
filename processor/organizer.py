@@ -122,15 +122,12 @@ class FileOrganizer:
             pdf_path: Original PDF path
             metadata: Extracted metadata
             category: Category name
-            pattern: Organization pattern with tags (optional)
+            pattern: Organization pattern with tags (optional, defaults to flat structure)
 
         Returns:
             Path to organized file, or None if failed
         """
         try:
-            if not pattern:
-                return pdf_path
-
             title = metadata.get("title", pdf_path.stem)
             issue_date = metadata.get("issue_date", datetime.now())
 
@@ -143,14 +140,18 @@ class FileOrganizer:
             # Apply category prefix
             category_with_prefix = f"{self.category_prefix}{category}"
 
-            target_path_str = pattern.format(
-                category=category_with_prefix, title=safe_title, year=year, month=month, day=day
-            )
-
-            if not target_path_str.startswith("/"):
-                target_dir = self.organize_dir / target_path_str
+            # If no pattern provided, use default: {category}/{title}/{year}/
+            if not pattern:
+                target_dir = self.organize_dir / category_with_prefix / safe_title / year
             else:
-                target_dir = Path(target_path_str)
+                target_path_str = pattern.format(
+                    category=category_with_prefix, title=safe_title, year=year, month=month, day=day
+                )
+
+                if not target_path_str.startswith("/"):
+                    target_dir = self.organize_dir / target_path_str
+                else:
+                    target_dir = Path(target_path_str)
 
             target_dir.mkdir(parents=True, exist_ok=True)
 

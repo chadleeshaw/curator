@@ -428,6 +428,15 @@
                 issue.issue_date ? new Date(issue.issue_date).toLocaleDateString() : 'Unknown Date';
             infoDiv.appendChild(dateP);
 
+            // Add special edition name if available
+            if (issue.special_edition_name) {
+                const specialEditionP = document.createElement('p');
+                specialEditionP.className = 'issue-title';
+                specialEditionP.textContent = issue.special_edition_name;
+                specialEditionP.title = issue.special_edition_name;
+                infoDiv.appendChild(specialEditionP);
+            }
+
             // Create actions container with Open and Delete buttons
             const actionsDiv = document.createElement('div');
             actionsDiv.className = 'issue-actions';

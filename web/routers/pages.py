@@ -161,15 +161,25 @@ async def view_periodical(periodical_title: str):
                 periodical_data = {
                     "id": p.id,
                     "title": p.title,
-                    "issue_date": (
-                        p.issue_date.isoformat() if p.issue_date else None
-                    ),
+                    "issue_date": (p.issue_date.isoformat() if p.issue_date else None),
                     "cover_path": p.cover_path,
                     "file_path": p.file_path,
+                    "extra_metadata": p.extra_metadata or {},
                 }
 
-                # Check if this is a special edition
-                if is_special_edition(p.title):
+                # Check if this is a special edition by checking metadata first, then title
+                is_special = False
+                if p.extra_metadata and isinstance(p.extra_metadata, dict):
+                    if "special_edition" in p.extra_metadata:
+                        is_special = True
+                        periodical_data["special_edition_name"] = p.extra_metadata.get(
+                            "special_edition", ""
+                        )
+
+                if not is_special and is_special_edition(p.title):
+                    is_special = True
+
+                if is_special:
                     special_editions.append(periodical_data)
                 else:
                     year = p.issue_date.year if p.issue_date else "Unknown"
@@ -192,14 +202,16 @@ async def view_periodical(periodical_title: str):
             special_editions_data = []
             if special_editions:
                 for p in special_editions:
-                    special_editions_data.append(
-                        {
-                            "id": p["id"],
-                            "title": p["title"],
-                            "issue_date": p["issue_date"],
-                            "cover_url": f"/api/periodicals/{p['id']}/cover",
-                        }
-                    )
+                    special_data = {
+                        "id": p["id"],
+                        "title": p["title"],
+                        "issue_date": p["issue_date"],
+                        "cover_url": f"/api/periodicals/{p['id']}/cover",
+                    }
+                    # Add special edition name if available
+                    if "special_edition_name" in p:
+                        special_data["special_edition_name"] = p["special_edition_name"]
+                    special_editions_data.append(special_data)
 
             # Build years data JSON
             years_data = []
@@ -226,7 +238,8 @@ async def view_periodical(periodical_title: str):
                 "{{YEARS_DATA}}", html.escape(json.dumps(years_data))
             )
             html_content = html_content.replace(
-                "{{SPECIAL_EDITIONS_DATA}}", html.escape(json.dumps(special_editions_data))
+                "{{SPECIAL_EDITIONS_DATA}}",
+                html.escape(json.dumps(special_editions_data)),
             )
 
             return HTMLResponse(content=html_content)

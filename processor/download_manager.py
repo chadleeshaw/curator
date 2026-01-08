@@ -57,13 +57,12 @@ class DownloadManager:
         Search all providers for available issues of a periodical.
 
         Args:
-            periodical_title: Title of the periodical to search for (may include language, e.g., "Playboy - German")
+            periodical_title: Title of the periodical to search for (may include language)
             session: Database session
 
         Returns:
             List of search results with deduplication grouping
         """
-        # Extract language filter if present (e.g., "Playboy - German" -> "Playboy", "German")
         search_title = periodical_title
         language_filter = None
         # Build pattern from centralized language list

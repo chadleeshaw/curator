@@ -212,31 +212,8 @@ class FileImporter:
             language = detect_language(str(pdf_path))
             metadata["language"] = language
 
-            # Check for duplicates using fuzzy matching on standardized titles AND issue date
-            # A duplicate is defined as: same title (fuzzy match) AND same issue date (within 5 days)
-            existing_magazines = session.query(Magazine).all()
-            issue_date = metadata.get("issue_date")
-            for existing in existing_magazines:
-                is_match, score = self.title_matcher.match(
-                    standardized_title, existing.title
-                )
-                if is_match and issue_date and existing.issue_date:
-                    date_diff = abs((issue_date - existing.issue_date).days)
-                    # Also check language match for duplicates
-                    same_language = (existing.language == language) or (
-                        not existing.language and language == "English"
-                    )
-                    if date_diff <= DUPLICATE_DATE_THRESHOLD_DAYS and same_language:
-                        logger.warning(
-                            f"Duplicate detected: '{standardized_title}' ({issue_date.strftime('%b %Y')}, {language}) matches existing "
-                            f"'{existing.title}' ({existing.issue_date.strftime('%b %Y')}, {existing.language or 'English'}) "
-                            f"(title score: {score}, date diff: {date_diff} days). Skipping import."
-                        )
-                        return False
-
-            cover_path = self._extract_cover(pdf_path)
-
             # Check if this is a special edition and determine the tracking title
+            # Do this BEFORE duplicate checking so we compare tracking titles
             base_title, is_special_edition, special_name = (
                 self.title_matcher.extract_base_title(standardized_title)
             )
@@ -248,6 +225,30 @@ class FileImporter:
                 # Check if language is already in the title (e.g., "Wired - German")
                 if not re.search(rf"\b{language}\b", tracking_title, re.IGNORECASE):
                     tracking_title = f"{tracking_title} - {language}"
+
+            # Check for duplicates using fuzzy matching on tracking titles AND issue date
+            # A duplicate is defined as: same tracking title (fuzzy match) AND same issue date (within 5 days)
+            existing_magazines = session.query(Magazine).all()
+            issue_date = metadata.get("issue_date")
+            for existing in existing_magazines:
+                is_match, score = self.title_matcher.match(
+                    tracking_title, existing.title
+                )
+                if is_match and issue_date and existing.issue_date:
+                    date_diff = abs((issue_date - existing.issue_date).days)
+                    # Also check language match for duplicates
+                    same_language = (existing.language == language) or (
+                        not existing.language and language == "English"
+                    )
+                    if date_diff <= DUPLICATE_DATE_THRESHOLD_DAYS and same_language:
+                        logger.warning(
+                            f"Duplicate detected: '{tracking_title}' ({issue_date.strftime('%b %Y')}, {language}) matches existing "
+                            f"'{existing.title}' ({existing.issue_date.strftime('%b %Y')}, {existing.language or 'English'}) "
+                            f"(title score: {score}, date diff: {date_diff} days). Skipping import."
+                        )
+                        return False
+
+            cover_path = self._extract_cover(pdf_path)
 
             category = self.categorizer.categorize(standardized_title)
 
