@@ -78,7 +78,7 @@ async def get_import_status() -> Dict[str, Any]:
     """Get information about available files in downloads folder (searches recursively)"""
     try:
         downloads_dir = Path(_storage_config.get("download_dir", "./downloads"))
-        
+
         logger.info(f"[ImportStatus] Checking downloads_dir: {downloads_dir.absolute()}")
         logger.info(f"[ImportStatus] Directory exists: {downloads_dir.exists()}")
 
@@ -93,7 +93,7 @@ async def get_import_status() -> Dict[str, Any]:
         pdf_files = list(downloads_dir.glob("**/*.pdf"))
         epub_files = list(downloads_dir.glob("**/*.epub"))
         all_files = pdf_files + epub_files
-        
+
         logger.info(f"[ImportStatus] Found {len(pdf_files)} PDFs, {len(epub_files)} EPUBs")
         if all_files:
             logger.info(f"[ImportStatus] Sample files: {[str(f.name) for f in all_files[:3]]}")
