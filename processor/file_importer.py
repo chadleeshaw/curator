@@ -256,6 +256,8 @@ class FileImporter:
                 organized_path = pdf_path
                 logger.info(f"Using file in place (already organized): {pdf_path}")
             else:
+                # Update metadata title to tracking_title for proper folder organization
+                metadata["title"] = tracking_title
                 organized_path = self.organizer.organize(
                     pdf_path, metadata, category, organization_pattern
                 )
