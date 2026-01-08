@@ -61,7 +61,9 @@ class FileImporter:
         # Initialize specialized helpers
         self.metadata_extractor = MetadataExtractor()
         self.categorizer = FileCategorizer()
-        self.organizer = FileOrganizer(self.organize_base_dir, category_prefix=self.category_prefix)
+        self.organizer = FileOrganizer(
+            self.organize_base_dir, category_prefix=self.category_prefix
+        )
 
         self.organize_base_dir.mkdir(parents=True, exist_ok=True)
 
@@ -89,12 +91,16 @@ class FileImporter:
 
         if not self.downloads_dir.exists():
             logger.warning(f"Downloads directory not found: {self.downloads_dir}")
-            result.add_error(ErrorCodes.FILE_NOT_FOUND, f"Downloads directory not found: {self.downloads_dir}", retryable=False)
+            result.add_error(
+                ErrorCodes.FILE_NOT_FOUND,
+                f"Downloads directory not found: {self.downloads_dir}",
+                retryable=False,
+            )
             return result.to_dict()
 
         all_files = find_pdf_epub_files(self.downloads_dir, recursive=True)
-        pdf_files = [f for f in all_files if f.suffix == '.pdf']
-        epub_files = [f for f in all_files if f.suffix == '.epub']
+        pdf_files = [f for f in all_files if f.suffix == ".pdf"]
+        epub_files = [f for f in all_files if f.suffix == ".epub"]
 
         # Filter out files that are within the organize_dir to prevent overlap
         # This prevents scanning the same files if organize_dir is somehow nested in downloads_dir
@@ -104,7 +110,10 @@ class FileImporter:
             """Check if file is within the organize directory"""
             try:
                 file_resolved = file_path.resolve()
-                return organize_dir_resolved in file_resolved.parents or file_resolved == organize_dir_resolved
+                return (
+                    organize_dir_resolved in file_resolved.parents
+                    or file_resolved == organize_dir_resolved
+                )
             except Exception:
                 return False
 
@@ -114,10 +123,14 @@ class FileImporter:
         all_files = pdf_files + epub_files
 
         if not all_files:
-            logger.info(f"No PDF or EPUB files found in downloads folder: {self.downloads_dir}")
+            logger.info(
+                f"No PDF or EPUB files found in downloads folder: {self.downloads_dir}"
+            )
             return result.to_dict()
 
-        logger.info(f"[DOWNLOADS IMPORT] Found {len(all_files)} files to process from {self.downloads_dir} ({len(pdf_files)} PDFs, {len(epub_files)} EPUBs)")
+        logger.info(
+            f"[DOWNLOADS IMPORT] Found {len(all_files)} files to process from {self.downloads_dir} ({len(pdf_files)} PDFs, {len(epub_files)} EPUBs)"
+        )
 
         for pdf_path in pdf_files:
             try:
@@ -129,11 +142,17 @@ class FileImporter:
                     logger.info(f"Successfully imported: {pdf_path.name}")
                 else:
                     result.data["failed"] += 1
-                    result.add_error(ErrorCodes.IMPORT_FAILED, f"Failed to import {pdf_path.name}", retryable=True)
+                    result.add_error(
+                        ErrorCodes.IMPORT_FAILED,
+                        f"Failed to import {pdf_path.name}",
+                        retryable=True,
+                    )
             except Exception as e:
                 result.data["failed"] += 1
                 error_msg = f"Error importing {pdf_path.name}: {str(e)}"
-                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
+                result.add_error(
+                    ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True
+                )
                 logger.error(error_msg, exc_info=True)
 
         # Process EPUB files (convert to PDF first)
@@ -141,11 +160,19 @@ class FileImporter:
             try:
                 logger.info(f"Converting EPUB to PDF: {epub_path.name}")
                 result.data["skipped"] += 1
-                result.add_error(ErrorCodes.PROCESSING_FAILED, f"EPUB support coming soon: {epub_path.name}", retryable=False)
-                logger.warning(f"EPUB files not yet supported, skipping: {epub_path.name}")
+                result.add_error(
+                    ErrorCodes.PROCESSING_FAILED,
+                    f"EPUB support coming soon: {epub_path.name}",
+                    retryable=False,
+                )
+                logger.warning(
+                    f"EPUB files not yet supported, skipping: {epub_path.name}"
+                )
             except Exception as e:
                 error_msg = f"Error processing EPUB {epub_path.name}: {str(e)}"
-                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=False)
+                result.add_error(
+                    ErrorCodes.PROCESSING_FAILED, error_msg, retryable=False
+                )
                 logger.error(error_msg, exc_info=True)
 
         return result.to_dict()
@@ -196,7 +223,9 @@ class FileImporter:
                 if is_match and issue_date and existing.issue_date:
                     date_diff = abs((issue_date - existing.issue_date).days)
                     # Also check language match for duplicates
-                    same_language = (existing.language == language) or (not existing.language and language == "English")
+                    same_language = (existing.language == language) or (
+                        not existing.language and language == "English"
+                    )
                     if date_diff <= DUPLICATE_DATE_THRESHOLD_DAYS and same_language:
                         logger.warning(
                             f"Duplicate detected: '{standardized_title}' ({issue_date.strftime('%b %Y')}, {language}) matches existing "
@@ -237,15 +266,17 @@ class FileImporter:
 
             # Manage tracking record based on import settings
             # Check if this is a special edition
-            base_title, is_special_edition, special_name = self.title_matcher.extract_base_title(standardized_title)
-            
+            base_title, is_special_edition, special_name = (
+                self.title_matcher.extract_base_title(standardized_title)
+            )
+
             # For non-English editions, append language to tracking title
             tracking_title = base_title if is_special_edition else standardized_title
             if language and language != "English":
                 # Check if language is already in the title (e.g., "Wired - German")
-                if not re.search(rf'\b{language}\b', tracking_title, re.IGNORECASE):
+                if not re.search(rf"\b{language}\b", tracking_title, re.IGNORECASE):
                     tracking_title = f"{tracking_title} - {language}"
-            
+
             # Generate OLID from tracking title (with language if applicable)
             olid = tracking_title.lower().replace(" ", "_").replace("-", "_")
             existing_tracking = (
@@ -270,17 +301,23 @@ class FileImporter:
                         last_metadata_update=datetime.now(),
                     )
                     session.add(tracking)
-                    logger.debug(f"Will create tracking record for: {tracking_title} (mode: {tracking_mode})")
-                    
+                    logger.debug(
+                        f"Will create tracking record for: {tracking_title} (mode: {tracking_mode})"
+                    )
+
                     # If this is a special edition, add it to the selected_editions
                     if is_special_edition:
-                        logger.debug(f"Detected special edition '{special_name}' for: {tracking_title}")
+                        logger.debug(
+                            f"Detected special edition '{special_name}' for: {tracking_title}"
+                        )
                 else:
                     existing_tracking.track_all_editions = tracking_mode == "all"
                     existing_tracking.track_new_only = tracking_mode == "new"
                     existing_tracking.last_metadata_update = datetime.now()
-                    logger.debug(f"Will update tracking record for: {tracking_title} (mode: {tracking_mode})")
-                    
+                    logger.debug(
+                        f"Will update tracking record for: {tracking_title} (mode: {tracking_mode})"
+                    )
+
                     # If this is a special edition, ensure it's in the selected_editions
                     if is_special_edition and special_name:
                         if existing_tracking.selected_editions is None:
@@ -288,12 +325,16 @@ class FileImporter:
                         # Add this special edition if not already tracked
                         if special_name not in existing_tracking.selected_editions:
                             existing_tracking.selected_editions[special_name] = True
-                            logger.debug(f"Added special edition '{special_name}' to tracking record: {tracking_title}")
+                            logger.debug(
+                                f"Added special edition '{special_name}' to tracking record: {tracking_title}"
+                            )
 
             else:
                 if existing_tracking:
                     session.delete(existing_tracking)
-                    logger.debug(f"Will remove tracking record for: {tracking_title} (tracking disabled)")
+                    logger.debug(
+                        f"Will remove tracking record for: {tracking_title} (tracking disabled)"
+                    )
 
             session.commit()
             logger.info(f"Added to database: {standardized_title} ({category})")
@@ -304,9 +345,13 @@ class FileImporter:
 
                     if pdf_path.exists() and pdf_path.is_file():
                         pdf_path.unlink()
-                        logger.info(f"Deleted original PDF from downloads: {pdf_path.name}")
+                        logger.info(
+                            f"Deleted original PDF from downloads: {pdf_path.name}"
+                        )
 
-                    if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
+                    if parent_dir != self.downloads_dir and parent_dir.is_relative_to(
+                        self.downloads_dir
+                    ):
                         if parent_dir.exists():
                             shutil.rmtree(parent_dir)
                             logger.info(f"Deleted download folder: {parent_dir.name}")
@@ -355,17 +400,25 @@ class FileImporter:
 
         if not self.organize_base_dir.exists():
             logger.warning(f"Organize directory not found: {self.organize_base_dir}")
-            result.add_error(ErrorCodes.FILE_NOT_FOUND, f"Organize directory not found: {self.organize_base_dir}", retryable=False)
+            result.add_error(
+                ErrorCodes.FILE_NOT_FOUND,
+                f"Organize directory not found: {self.organize_base_dir}",
+                retryable=False,
+            )
             return result.to_dict()
 
         all_files = find_pdf_epub_files(self.organize_base_dir, recursive=True)
-        pdf_files = [f for f in all_files if f.suffix == '.pdf']
+        pdf_files = [f for f in all_files if f.suffix == ".pdf"]
 
         if not pdf_files:
-            logger.info(f"No PDF files found in organized folders: {self.organize_base_dir}")
+            logger.info(
+                f"No PDF files found in organized folders: {self.organize_base_dir}"
+            )
             return result.to_dict()
 
-        logger.info(f"[DATA IMPORT] Found {len(pdf_files)} PDF files in organized folders to process from {self.organize_base_dir}")
+        logger.info(
+            f"[DATA IMPORT] Found {len(pdf_files)} PDF files in organized folders to process from {self.organize_base_dir}"
+        )
 
         for pdf_path in pdf_files:
             try:
@@ -384,11 +437,17 @@ class FileImporter:
                     )
                 else:
                     result.data["failed"] += 1
-                    result.add_error(ErrorCodes.IMPORT_FAILED, f"Failed to import {pdf_path.name}", retryable=True)
+                    result.add_error(
+                        ErrorCodes.IMPORT_FAILED,
+                        f"Failed to import {pdf_path.name}",
+                        retryable=True,
+                    )
             except Exception as e:
                 result.data["failed"] += 1
                 error_msg = f"Error importing organized file {pdf_path.name}: {str(e)}"
-                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
+                result.add_error(
+                    ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True
+                )
                 logger.error(error_msg, exc_info=True)
 
         return result.to_dict()

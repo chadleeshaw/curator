@@ -26,31 +26,46 @@ class TitleMatcher:
         """
         # Strip release group patterns common in scene releases
         # Remove issue numbers and dates (No.XX, YYYY, YYYY-MM)
-        title = re.sub(r'\.No\.\d+', '', title, flags=re.IGNORECASE)
-        title = re.sub(r'\.Issue\.\d+', '', title, flags=re.IGNORECASE)
-        title = re.sub(r'\.\d{4}(-\d{2})?', '', title)
+        title = re.sub(r"\.No\.\d+", "", title, flags=re.IGNORECASE)
+        title = re.sub(r"\.Issue\.\d+", "", title, flags=re.IGNORECASE)
+        title = re.sub(r"\.\d{4}(-\d{2})?", "", title)
 
         # Remove common release metadata keywords
         release_keywords = [
-            'GERMAN', 'HYBRID', 'MAGAZINE', 'eBook', 'ebook', 'E-Book',
-            'PDF', 'EPUB', 'RETAIL', 'READNFO', 'REPACK',
-            'UNPACK', '_UNPACK_', 'DIRFIX'
+            "GERMAN",
+            "HYBRID",
+            "MAGAZINE",
+            "eBook",
+            "ebook",
+            "E-Book",
+            "PDF",
+            "EPUB",
+            "RETAIL",
+            "READNFO",
+            "REPACK",
+            "UNPACK",
+            "_UNPACK_",
+            "DIRFIX",
         ]
         for keyword in release_keywords:
-            title = re.sub(rf'\.{keyword}\.?', '.', title, flags=re.IGNORECASE)
-            title = re.sub(rf'^{keyword}\.?', '', title, flags=re.IGNORECASE)
-            title = re.sub(rf'\s+{keyword}\s*', ' ', title, flags=re.IGNORECASE)
+            title = re.sub(rf"\.{keyword}\.?", ".", title, flags=re.IGNORECASE)
+            title = re.sub(rf"^{keyword}\.?", "", title, flags=re.IGNORECASE)
+            title = re.sub(rf"\s+{keyword}\s*", " ", title, flags=re.IGNORECASE)
 
         # Remove release group tags (e.g., "-LORENZ-xpost", "[hash]-xpost")
         # Do this BEFORE replacing dots with spaces to catch patterns like ".eBook-LORENZ [hash]-xpost"
         # First remove the pattern with brackets and everything after it
-        title = re.sub(r'[\.\s]*\[[a-zA-Z0-9]+\].*$', '', title)  # [df86e9c1f]-xpost or [hash]
+        title = re.sub(
+            r"[\.\s]*\[[a-zA-Z0-9]+\].*$", "", title
+        )  # [df86e9c1f]-xpost or [hash]
         # Then remove release group tags (with or without suffix)
-        title = re.sub(r'[\.\s]*-[A-Z][A-Za-z0-9]+(-[a-z]+)?$', '', title)  # -LORENZ-xpost or just -LORENZ
-        title = re.sub(r'[\.\s]*-[a-z]+$', '', title)  # -xpost
+        title = re.sub(
+            r"[\.\s]*-[A-Z][A-Za-z0-9]+(-[a-z]+)?$", "", title
+        )  # -LORENZ-xpost or just -LORENZ
+        title = re.sub(r"[\.\s]*-[a-z]+$", "", title)  # -xpost
 
         # Replace dots and underscores with spaces
-        title = title.replace('.', ' ').replace('_', ' ')
+        title = title.replace(".", " ").replace("_", " ")
 
         # First, handle camelCase by inserting spaces before uppercase letters
         # followed by lowercase letters (e.g., "NationalGeographic" -> "National Geographic")
@@ -84,26 +99,26 @@ class TitleMatcher:
     def extract_base_title(self, title: str) -> Tuple[str, bool, str]:
         """
         Extract the base periodical title and detect if it's a special edition.
-        
+
         Args:
             title: Standardized title
-            
+
         Returns:
             Tuple of (base_title, is_special_edition, special_edition_name)
-            
+
         Examples:
             >>> extract_base_title("National Geographic")
             ("National Geographic", False, "")
         """
         # Check for "Special Edition" pattern
-        special_pattern = r'^(.+?)\s+Special\s+Edition\s+(.+)$'
+        special_pattern = r"^(.+?)\s+Special\s+Edition\s+(.+)$"
         match = re.search(special_pattern, title, re.IGNORECASE)
-        
+
         if match:
             base_title = match.group(1).strip()
             special_name = match.group(2).strip()
             return (base_title, True, special_name)
-        
+
         return (title, False, "")
 
     def match(self, title1: str, title2: str) -> Tuple[bool, int]:
