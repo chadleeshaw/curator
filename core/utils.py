@@ -5,6 +5,7 @@ This module provides common utility functions used across the application.
 """
 
 import re
+from pathlib import Path
 from typing import Optional
 
 
@@ -42,3 +43,28 @@ def sanitize_filename(filename: str, max_length: Optional[int] = 200) -> str:
         return sanitized[:max_length]
 
     return sanitized
+
+
+def find_pdf_epub_files(directory: Path, recursive: bool = True) -> list[Path]:
+    """
+    Search for PDF and EPUB files in a directory.
+
+    Args:
+        directory: Directory to search
+        recursive: If True, search recursively with glob("**/*.ext"), else use glob("*.ext")
+
+    Returns:
+        List of Path objects for all PDF and EPUB files found
+
+    Examples:
+        >>> files = find_pdf_epub_files(Path("/downloads"))
+        >>> pdf_only = [f for f in files if f.suffix == '.pdf']
+    """
+    if not directory.exists():
+        return []
+
+    pattern = "**/*" if recursive else "*"
+    pdf_files = list(directory.glob(f"{pattern}.pdf"))
+    epub_files = list(directory.glob(f"{pattern}.epub"))
+
+    return pdf_files + epub_files

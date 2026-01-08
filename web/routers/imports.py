@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
+from core.utils import find_pdf_epub_files
 from web.schemas import ImportOptionsRequest
 
 router = APIRouter(prefix="/api/import", tags=["imports"])
@@ -87,9 +88,9 @@ async def get_import_status() -> Dict[str, Any]:
             }
 
         # Search recursively for PDF and EPUB files (matches process_downloads behavior)
-        pdf_files = list(downloads_dir.glob("**/*.pdf"))
-        epub_files = list(downloads_dir.glob("**/*.epub"))
-        all_files = pdf_files + epub_files
+        all_files = find_pdf_epub_files(downloads_dir, recursive=True)
+        pdf_files = [f for f in all_files if f.suffix == '.pdf']
+        epub_files = [f for f in all_files if f.suffix == '.epub']
 
         return {
             "ready": len(all_files) > 0,
@@ -130,7 +131,8 @@ async def import_from_organize_dir(
             )
 
         # Count PDFs available
-        pdf_files = list(organize_dir.rglob("*.pdf"))
+        all_files = find_pdf_epub_files(organize_dir, recursive=True)
+        pdf_files = [f for f in all_files if f.suffix == '.pdf']
 
         if not pdf_files:
             return {

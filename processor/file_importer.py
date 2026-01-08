@@ -19,6 +19,7 @@ from core.constants import (
 )
 from core.matching import TitleMatcher
 from core.pdf_utils import extract_cover_from_pdf
+from core.utils import find_pdf_epub_files
 from core.response_models import ErrorCodes, OperationResult
 from models.database import Magazine, MagazineTracking
 from processor.categorizer import FileCategorizer
@@ -86,8 +87,9 @@ class FileImporter:
             result.add_error(ErrorCodes.FILE_NOT_FOUND, f"Downloads directory not found: {self.downloads_dir}", retryable=False)
             return result.to_dict()
 
-        pdf_files = list(self.downloads_dir.glob("**/*.pdf"))
-        epub_files = list(self.downloads_dir.glob("**/*.epub"))
+        all_files = find_pdf_epub_files(self.downloads_dir, recursive=True)
+        pdf_files = [f for f in all_files if f.suffix == '.pdf']
+        epub_files = [f for f in all_files if f.suffix == '.epub']
 
         # Filter out files that are within the organize_dir to prevent overlap
         # This prevents scanning the same files if organize_dir is somehow nested in downloads_dir
@@ -320,7 +322,8 @@ class FileImporter:
             result.add_error(ErrorCodes.FILE_NOT_FOUND, f"Organize directory not found: {self.organize_base_dir}", retryable=False)
             return result.to_dict()
 
-        pdf_files = list(self.organize_base_dir.glob("**/*.pdf"))
+        all_files = find_pdf_epub_files(self.organize_base_dir, recursive=True)
+        pdf_files = [f for f in all_files if f.suffix == '.pdf']
 
         if not pdf_files:
             logger.info(f"No PDF files found in organized folders: {self.organize_base_dir}")

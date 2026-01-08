@@ -117,6 +117,22 @@ class DownloadMonitorTask:
         finally:
             session.close()
 
+    def _find_pdf_epub_files(self, directory: Path) -> list[Path]:
+        """
+        Find all PDF and EPUB files in a directory recursively.
+
+        Args:
+            directory: Directory to search
+
+        Returns:
+            List of Path objects for PDF/EPUB files found
+        """
+        files = []
+        if directory.exists() and directory.is_dir():
+            files.extend(directory.glob("**/*.pdf"))
+            files.extend(directory.glob("**/*.epub"))
+        return files
+
     def _find_file_in_downloads(self, file_path: str, max_depth: int = DOWNLOAD_FILE_SEARCH_DEPTH) -> Optional[Path]:
         """
         Find a file in the downloads folder, checking multiple possible locations.
@@ -135,9 +151,15 @@ class DownloadMonitorTask:
         file_path_obj = Path(file_path)
         filename = file_path_obj.name
 
-        # First try as absolute path
+        # First try as absolute path - if it's a file, return it
         if file_path_obj.is_absolute() and file_path_obj.exists():
-            return file_path_obj
+            if file_path_obj.is_file():
+                return file_path_obj
+            # If it's a directory, search for PDF/EPUB files inside it
+            if file_path_obj.is_dir():
+                found_files = self._find_pdf_epub_files(file_path_obj)
+                if found_files:
+                    return found_files[0]
 
         # Search in downloads directory up to max_depth
         # Build glob patterns for each depth level
@@ -146,13 +168,25 @@ class DownloadMonitorTask:
                 # Check root downloads dir
                 candidate = self.downloads_dir / filename
                 if candidate.exists():
-                    return candidate
+                    if candidate.is_file():
+                        return candidate
+                    # If it's a directory, search for PDF/EPUB files inside it
+                    if candidate.is_dir():
+                        found_files = self._find_pdf_epub_files(candidate)
+                        if found_files:
+                            return found_files[0]
             else:
                 # Check subdirectories at this depth
                 pattern = "/".join(["*"] * depth) + f"/{filename}"
                 for candidate in self.downloads_dir.glob(pattern):
                     if candidate.exists():
-                        return candidate
+                        if candidate.is_file():
+                            return candidate
+                        # If it's a directory, search for PDF/EPUB files inside it
+                        if candidate.is_dir():
+                            found_files = self._find_pdf_epub_files(candidate)
+                            if found_files:
+                                return found_files[0]
 
         return None
 
@@ -214,9 +248,10 @@ class DownloadMonitorTask:
                 return 0
 
             # Check for PDFs and EPUBs recursively
-            pdf_files = list(self.downloads_dir.glob("**/*.pdf"))
-            epub_files = list(self.downloads_dir.glob("**/*.epub"))
-            file_count = len(pdf_files) + len(epub_files)
+            all_files = self._find_pdf_epub_files(self.downloads_dir)
+            pdf_files = [f for f in all_files if f.suffix.lower() == '.pdf']
+            epub_files = [f for f in all_files if f.suffix.lower() == '.epub']
+            file_count = len(all_files)
 
             if file_count > 0:
                 logger.info(
