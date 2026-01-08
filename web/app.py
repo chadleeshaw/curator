@@ -147,15 +147,19 @@ async def lifespan(app: FastAPI):
 
         # Initialize other components
         fuzzy_threshold = matching_config.get("fuzzy_threshold")
+        import_config = config_loader.get_import()
+        category_prefix = import_config.get("category_prefix", "_")
         title_matcher = TitleMatcher(fuzzy_threshold)
         file_processor = FileOrganizer(
-            storage_config.get("organize_dir", "./_Magazines")
+            storage_config.get("organize_dir", "./_Magazines"),
+            category_prefix=category_prefix
         )
         file_importer = FileImporter(
             downloads_dir=storage_config.get("download_dir", "./downloads"),
             organize_base_dir=storage_config.get("organize_dir", "./_Magazines"),
             fuzzy_threshold=fuzzy_threshold,
-            organization_pattern=storage_config.get("organization_pattern"),
+            organization_pattern=import_config.get("organization_pattern"),
+            category_prefix=category_prefix,
         )
 
         # Initialize download manager (if download client is available)

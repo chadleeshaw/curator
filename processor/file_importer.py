@@ -38,6 +38,7 @@ class FileImporter:
         organize_base_dir: str,
         fuzzy_threshold: int = DEFAULT_FUZZY_THRESHOLD,
         organization_pattern: Optional[str] = None,
+        category_prefix: str = "_",
     ):
         """
         Initialize file importer.
@@ -47,21 +48,23 @@ class FileImporter:
             organize_base_dir: Base directory for organized files (_Magazines for specific magazines, _Comics, etc.)
             fuzzy_threshold: Fuzzy matching threshold (0-100) for duplicate detection
             organization_pattern: Pattern for organizing files (e.g., "_{category}/{title}/{year}/")
+            category_prefix: Prefix for category folders (e.g., "_" for "_Magazines")
         """
         self.downloads_dir = Path(downloads_dir)
         self.organize_base_dir = Path(organize_base_dir)
         self.organization_pattern = organization_pattern
+        self.category_prefix = category_prefix
         self.title_matcher = TitleMatcher(threshold=fuzzy_threshold)
 
         # Initialize specialized helpers
         self.metadata_extractor = MetadataExtractor()
         self.categorizer = FileCategorizer()
-        self.organizer = FileOrganizer(self.organize_base_dir)
+        self.organizer = FileOrganizer(self.organize_base_dir, category_prefix=self.category_prefix)
 
         self.organize_base_dir.mkdir(parents=True, exist_ok=True)
 
         for category in CATEGORY_KEYWORDS.keys():
-            category_dir = self.organize_base_dir / f"_{category}"
+            category_dir = self.organize_base_dir / f"{self.category_prefix}{category}"
             category_dir.mkdir(parents=True, exist_ok=True)
 
     def process_downloads(

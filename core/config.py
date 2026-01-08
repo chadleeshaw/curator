@@ -117,6 +117,14 @@ class ConfigLoader:
             "duplicate_date_threshold_days": DUPLICATE_DATE_THRESHOLD_DAYS
         })
 
+    def get_import(self) -> Dict[str, Any]:
+        """Get import configuration"""
+        return self.config.get("import", {
+            "organization_pattern": None,
+            "auto_track_imports": True,
+            "category_prefix": "_"
+        })
+
     def get_pdf(self) -> Dict[str, Any]:
         """Get PDF processing configuration"""
         from core.constants import (

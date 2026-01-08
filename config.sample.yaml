@@ -36,6 +36,7 @@ storage:
 import:
   organization_pattern: data/{category}/{title}/{year}/
   auto_track_imports: true
+  category_prefix: _
   category_keywords:
     Magazines:
       - magazine

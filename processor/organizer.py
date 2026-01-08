@@ -24,14 +24,16 @@ class FileOrganizer:
     # Pattern: {Title} - {MonYear} (e.g., "Wired Periodical - Dec2006")
     ORGANIZED_PATTERN = "{title} - {month}{year}"
 
-    def __init__(self, organize_dir: str):
+    def __init__(self, organize_dir: str, category_prefix: str = "_"):
         """
         Initialize file organizer.
 
         Args:
             organize_dir: Base directory for organized files
+            category_prefix: Prefix for category folders (e.g., "_" for "_Magazines")
         """
         self.organize_dir = Path(organize_dir)
+        self.category_prefix = category_prefix
         self.organize_dir.mkdir(parents=True, exist_ok=True)
 
     def organize_file(
@@ -138,8 +140,11 @@ class FileOrganizer:
             day = issue_date.strftime("%d")
             filename = f"{safe_title} - {month}{year}.pdf"
 
+            # Apply category prefix
+            category_with_prefix = f"{self.category_prefix}{category}"
+
             target_path_str = pattern.format(
-                category=category, title=safe_title, year=year, month=month, day=day
+                category=category_with_prefix, title=safe_title, year=year, month=month, day=day
             )
 
             if not target_path_str.startswith("/"):
