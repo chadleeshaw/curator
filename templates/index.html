@@ -66,7 +66,10 @@
                 <div class="tracked-periodicals">
                     <div class="tracked-header">
                         <h2>Tracked Periodicals</h2>
-                        <button onclick="openTrackNewPeriodicalModal()" class="btn-primary">📌 Track New Periodical</button>
+                        <div class="tracked-actions">
+                            <button onclick="openTrackNewPeriodicalModal()" class="btn-primary">📌 Track New Periodical</button>
+                            <button onclick="openMergeModal()" class="btn-secondary">🔀 Merge Tracking</button>
+                        </div>
                         <div class="sort-controls">
                             <div class="sort-buttons">
                                 <button class="sort-btn active" data-sort="title" onclick="setSortField('title')">Title</button>
@@ -76,13 +79,6 @@
                             <button id="sort-toggle" class="sort-toggle-btn" onclick="toggleSortOrder()" title="Toggle ascending/descending">
                                 ↑
                             </button>
-                        </div>
-                        <div class="merge-controls" style="margin-top: 15px;">
-                            <button id="merge-mode-toggle" class="btn-secondary" onclick="toggleMergeMode()">🔀 Merge Tracking</button>
-                            <div id="merge-actions" class="hidden" style="margin-top: 10px; display: flex; gap: 10px;">
-                                <p style="flex: 1; margin: 0; font-size: 14px; color: var(--text-secondary);">Select 2 or more tracking records to merge</p>
-                                <button id="execute-merge-btn" class="btn-primary" onclick="executeMerge()" disabled>Merge Selected (0)</button>
-                            </div>
                         </div>
                     </div>
                     <div id="tracked-list"></div>

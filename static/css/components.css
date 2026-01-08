@@ -497,17 +497,54 @@
   display: flex;
   gap: 8px;
   flex-direction: column;
+  align-items: flex-start;
 }
 
 .tracked-card-buttons .btn-small {
   white-space: nowrap;
   padding: 8px 14px;
   font-size: 13px;
+  width: fit-content;
 }
 
 .tracked-card-buttons .btn-danger {
   padding: 8px 14px;
   font-size: 13px;
+}
+
+/* ==========================================================================
+   Merge Selection
+   ========================================================================== */
+
+.merge-select-item {
+  background: var(--surface-variant);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 10px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  transition: all 0.2s ease;
+}
+
+.merge-select-item:hover {
+  border-color: var(--primary-color);
+  background: var(--surface);
+}
+
+.merge-select-item input[type="checkbox"] {
+  margin-top: 2px;
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--primary-color);
+}
+
+.merge-select-item label {
+  flex: 1;
+  cursor: pointer;
+  line-height: 1.5;
 }
 
 /* ==========================================================================

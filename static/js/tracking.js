@@ -1214,53 +1214,103 @@ window.selectIssue = async function (title, provider, url, alreadyDownloaded) {
 };
 
 /**
- * Toggle merge mode for tracking records
+ * Open modal to select tracking records to merge
  */
-window.toggleMergeMode = function() {
+window.openMergeModal = async function() {
   const tracking = window.trackingManager;
   if (!tracking) return;
 
-  tracking.mergeMode = !tracking.mergeMode;
-  tracking.selectedForMerge.clear();
-  
-  const toggleBtn = document.getElementById('merge-mode-toggle');
-  const mergeActionsDiv = document.getElementById('merge-actions');
-  
-  if (tracking.mergeMode) {
-    toggleBtn.textContent = '✖ Cancel Merge';
-    toggleBtn.classList.add('active');
-    if (mergeActionsDiv) mergeActionsDiv.classList.remove('hidden');
-  } else {
-    toggleBtn.textContent = '🔀 Merge Tracking';
-    toggleBtn.classList.remove('active');
-    if (mergeActionsDiv) mergeActionsDiv.classList.add('hidden');
+  try {
+    const response = await APIClient.get('/api/periodicals/tracking?limit=1000');
+    const data = await response.json();
+    
+    if (!response.ok || !data.items || data.items.length < 2) {
+      alert('You need at least 2 tracked periodicals to merge');
+      return;
+    }
+
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.id = 'merge-selection-modal';
+    
+    const trackingOptions = data.items.map(item => `
+      <div class="merge-select-item">
+        <input type="checkbox" id="merge-check-${item.id}" value="${item.id}" class="merge-selection-checkbox">
+        <label for="merge-check-${item.id}">
+          <strong>${item.title}</strong><br>
+          <span style="font-size: 12px; color: var(--text-secondary);">Publisher: ${item.publisher || 'Unknown'} | ISSN: ${item.issn || 'N/A'}</span>
+        </label>
+      </div>
+    `).join('');
+
+    modal.innerHTML = `
+      <div class="modal-content" style="max-width: 600px;">
+        <h3>🔀 Merge Tracking Records</h3>
+        <p style="color: var(--text-secondary); margin-bottom: 20px;">Select 2 or more tracking records to merge. You'll choose which one to keep in the next step.</p>
+        <div id="merge-selection-list" style="max-height: 400px; overflow-y: auto; margin-bottom: 20px;">
+          ${trackingOptions}
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+          <button onclick="closeMergeSelectionModal()" class="btn-secondary">Cancel</button>
+          <button id="continue-merge-btn" onclick="showMergeTargetSelection()" class="btn-primary" disabled>Continue</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    modal.style.display = 'flex';
+
+    // Add change listeners to checkboxes
+    const checkboxes = modal.querySelectorAll('.merge-selection-checkbox');
+    checkboxes.forEach(cb => {
+      cb.addEventListener('change', () => {
+        const checkedCount = modal.querySelectorAll('.merge-selection-checkbox:checked').length;
+        document.getElementById('continue-merge-btn').disabled = checkedCount < 2;
+      });
+    });
+  } catch (error) {
+    console.error('Error loading tracking records:', error);
+    alert('Failed to load tracking records');
   }
-  
-  tracking.loadTrackedPeriodicals();
 };
 
 /**
- * Execute merge of selected tracking records
+ * Close merge selection modal
  */
-window.executeMerge = async function() {
-  const tracking = window.trackingManager;
-  if (!tracking || tracking.selectedForMerge.size < 2) {
-    alert('Please select at least 2 tracking records to merge');
+window.closeMergeSelectionModal = function() {
+  const modal = document.getElementById('merge-selection-modal');
+  if (modal) modal.remove();
+};
+
+/**
+ * Show target selection after initial selection
+ */
+window.showMergeTargetSelection = async function() {
+  const selectionModal = document.getElementById('merge-selection-modal');
+  const checkboxes = selectionModal.querySelectorAll('.merge-selection-checkbox:checked');
+  const selectedIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+  
+  if (selectedIds.length < 2) {
+    alert('Please select at least 2 tracking records');
     return;
   }
 
-  const selectedIds = Array.from(tracking.selectedForMerge);
+  // Get the tracking data for selected items
+  const response = await APIClient.get('/api/periodicals/tracking?limit=1000');
+  const data = await response.json();
+  const selectedItems = data.items.filter(item => selectedIds.includes(item.id));
   
-  // Show modal to select target
+  // Close selection modal
+  window.closeMergeSelectionModal();
+  
+  // Show target modal
   const modal = document.createElement('div');
   modal.className = 'modal';
   modal.id = 'merge-target-modal';
   
-  const options = selectedIds.map(id => {
-    const card = document.querySelector(`[data-tracking-id="${id}"]`);
-    const title = card ? card.querySelector('h5').textContent : `ID ${id}`;
-    return `<option value="${id}">${title}</option>`;
-  }).join('');
+  const options = selectedItems.map(item => 
+    `<option value="${item.id}">${item.title} (${item.publisher || 'Unknown'})</option>`
+  ).join('');
   
   modal.innerHTML = `
     <div class="modal-content">
@@ -1269,6 +1319,7 @@ window.executeMerge = async function() {
       <select id="merge-target-select" style="width: 100%; padding: 8px; margin: 16px 0;">
         ${options}
       </select>
+      <input type="hidden" id="merge-source-ids" value="${selectedIds.join(',')}">
       <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
         <button onclick="closeMergeModal()" class="btn-secondary">Cancel</button>
         <button onclick="confirmMerge()" class="btn-primary">Merge</button>
@@ -1295,15 +1346,12 @@ window.closeMergeModal = function() {
  */
 window.confirmMerge = async function() {
   const targetId = parseInt(document.getElementById('merge-target-select').value);
-  const tracking = window.trackingManager;
+  const sourceIdsStr = document.getElementById('merge-source-ids').value;
+  const allSelectedIds = sourceIdsStr.split(',').map(id => parseInt(id));
+  const sourceIds = allSelectedIds.filter(id => id !== targetId);
   
-  if (!tracking || !targetId) return;
-  
-  const allSelected = Array.from(tracking.selectedForMerge);
-  const sourceIds = allSelected.filter(id => id !== targetId);
-  
-  if (sourceIds.length === 0) {
-    alert('No source records to merge');
+  if (!targetId || sourceIds.length === 0) {
+    alert('Invalid selection');
     return;
   }
   
@@ -1323,10 +1371,10 @@ window.confirmMerge = async function() {
         `✓ ${data.message}. Moved ${data.magazines_moved} magazines and ${data.submissions_moved} downloads.`, 
         'success');
       window.closeMergeModal();
-      tracking.mergeMode = false;
-      tracking.selectedForMerge.clear();
-      window.toggleMergeMode(); // Reset UI
-      tracking.loadTrackedPeriodicals();
+      const tracking = window.trackingManager;
+      if (tracking) {
+        tracking.loadTrackedPeriodicals();
+      }
     } else {
       throw new Error(data.detail || 'Merge failed');
     }
