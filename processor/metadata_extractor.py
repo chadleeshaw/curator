@@ -31,6 +31,7 @@ class MetadataExtractor:
             'cache',
             'config',
             'logs',
+            'app',
         }
 
     def extract_from_filename(self, pdf_path: Path) -> Dict[str, Any]:
