@@ -264,16 +264,14 @@ class FileImporter:
                 try:
                     parent_dir = pdf_path.parent
 
-                    if pdf_path.exists():
+                    if pdf_path.exists() and pdf_path.is_file():
                         pdf_path.unlink()
                         logger.info(f"Deleted original PDF from downloads: {pdf_path.name}")
 
                     if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
-                        try:
+                        if parent_dir.exists():
                             shutil.rmtree(parent_dir)
                             logger.info(f"Deleted download folder: {parent_dir.name}")
-                        except Exception as e:
-                            logger.warning(f"Failed to delete download folder {parent_dir.name}: {e}")
                 except Exception as e:
                     logger.warning(f"Failed to cleanup download files: {e}")
 
