@@ -278,8 +278,11 @@ class DownloadMonitorTask:
 
                     # Special handling when status is PENDING but client returned "unknown"
                     # This happens when job was deleted from client (e.g., due to delete_from_client_on_completion)
-                    if (result.status == DownloadSubmission.StatusEnum.PENDING and
-                        previous_status in [DownloadSubmission.StatusEnum.DOWNLOADING, DownloadSubmission.StatusEnum.COMPLETED]):
+                    if (result.status == DownloadSubmission.StatusEnum.PENDING
+                            and previous_status in [
+                                DownloadSubmission.StatusEnum.DOWNLOADING,
+                                DownloadSubmission.StatusEnum.COMPLETED
+                            ]):
                         # Job might have been deleted from client after completion
                         # Check if file exists in downloads folder
                         found_path = self._find_file_in_downloads(result.file_path)

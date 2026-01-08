@@ -33,9 +33,11 @@ from models.database import (
 def test_db():
     """Create in-memory test database"""
     # Use StaticPool to keep the same connection for all threads
-    engine = create_engine("sqlite:///:memory:",
-                          connect_args={"check_same_thread": False},
-                          poolclass=StaticPool)
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool
+    )
     Base.metadata.create_all(engine)
     session_factory = sessionmaker(bind=engine)
     return engine, session_factory
