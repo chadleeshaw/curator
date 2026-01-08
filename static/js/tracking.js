@@ -344,10 +344,10 @@ export class TrackingManager {
     this.sortManager.field = field;
     this.sortManager.order = 'asc';
 
-    document.querySelectorAll('.tracking-controls .sort-btn').forEach((btn) => {
+    document.querySelectorAll('.sort-controls .sort-btn').forEach((btn) => {
       btn.classList.remove('active');
     });
-    const activeBtn = document.querySelector(`.tracking-controls [data-track-sort="${field}"]`);
+    const activeBtn = document.querySelector(`.sort-controls [data-sort="${field}"]`);
     if (activeBtn) {
       activeBtn.classList.add('active');
     }

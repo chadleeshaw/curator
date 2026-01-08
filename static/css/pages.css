@@ -196,6 +196,8 @@
   align-items: center;
   position: relative;
   z-index: 10;
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 #tracked-list {
