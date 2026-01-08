@@ -1251,8 +1251,8 @@ window.openMergeModal = async function() {
           ${trackingOptions}
         </div>
         <div style="display: flex; gap: 10px; justify-content: flex-end;">
-          <button onclick="closeMergeSelectionModal()" class="btn-secondary">Cancel</button>
-          <button id="continue-merge-btn" onclick="showMergeTargetSelection()" class="btn-primary" disabled>Continue</button>
+          <button onclick="window.closeMergeSelectionModal()" class="btn-secondary">Cancel</button>
+          <button id="continue-merge-btn" onclick="window.showMergeTargetSelection()" class="btn-primary" disabled>Continue</button>
         </div>
       </div>
     `;
@@ -1321,8 +1321,8 @@ window.showMergeTargetSelection = async function() {
       </select>
       <input type="hidden" id="merge-source-ids" value="${selectedIds.join(',')}">
       <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
-        <button onclick="closeMergeModal()" class="btn-secondary">Cancel</button>
-        <button onclick="confirmMerge()" class="btn-primary">Merge</button>
+        <button onclick="window.closeMergeModal()" class="btn-secondary">Cancel</button>
+        <button onclick="window.confirmMerge()" class="btn-primary">Merge</button>
       </div>
     </div>
   `;
