@@ -104,8 +104,8 @@ async def get_config():
 
 
 @router.post("")
-async def update_config(config_update: Dict[str, Any]):
-    """Update configuration"""
+async def update_config(config_update: Dict[str, Any], background_tasks: BackgroundTasks):
+    """Update configuration and restart application"""
     try:
         # Reload from file to ensure we have the latest (including manual edits)
         _config_loader.reload_config()
@@ -122,10 +122,18 @@ async def update_config(config_update: Dict[str, Any]):
 
         logger.info("Configuration updated via UI")
 
+        # Schedule restart in background
+        def restart_process():
+            import time
+            time.sleep(1)  # Give time for response to be sent
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+
+        background_tasks.add_task(restart_process)
+
         return {
             "success": True,
             "status": "success",
-            "message": "Configuration updated. Please restart the application for changes to take effect.",
+            "message": "Configuration updated. Application restarting...",
             "config": safe_config,
         }
     except Exception as e:

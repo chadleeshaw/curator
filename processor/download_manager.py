@@ -22,6 +22,7 @@ from core.language_utils import LANGUAGE_INDICATORS, detect_language
 from core.matching import TitleMatcher
 from models.database import (
     DownloadSubmission,
+    Magazine,
     MagazineTracking,
 )
 from models.database import SearchResult as DBSearchResult
@@ -97,15 +98,27 @@ class DownloadManager:
                         continue
 
                     for result in results:
+                        # Validate and clean result title before processing
+                        result_title = result.title
+                        if not self.title_matcher.validate_before_parsing(result_title):
+                            logger.debug(
+                                f"Skipping invalid search result: {result_title} from {provider.name}"
+                            )
+                            continue
+
+                        # Clean the title for better matching
+                        cleaned_result_title = self.title_matcher.clean_release_title(result_title)
+
                         # Apply language filter if specified
                         if language_filter:
-                            result_language = detect_language(result.title)
+                            result_language = detect_language(cleaned_result_title)
                             if result_language != language_filter:
                                 continue  # Skip results that don't match the language filter
 
                         all_results.append(
                             {
-                                "title": result.title,
+                                "title": cleaned_result_title,  # Store cleaned title
+                                "original_title": result_title,  # Keep original for reference
                                 "url": result.url,
                                 "provider": result.provider,
                                 "publication_date": result.publication_date,
@@ -200,7 +213,7 @@ class DownloadManager:
         self, tracking_id: int, result_title: str, session: Session
     ) -> Tuple[bool, Optional[DownloadSubmission]]:
         """
-        Check if this search result was already submitted for download.
+        Check if this search result was already submitted for download or exists in library.
 
         Args:
             tracking_id: Periodical tracking ID
@@ -235,6 +248,44 @@ class DownloadManager:
                 f"Skipping duplicate: '{result_title}' (similar to '{existing.result_title}')"
             )
             return True, existing
+
+        # Also check if already in library (Magazine table)
+        # Use TitleMatcher to standardize the result title and compute tracking_title
+        matcher = TitleMatcher()
+
+        # Step 1: Validate title (Readarr-inspired)
+        if not matcher.validate_before_parsing(result_title):
+            logger.debug(f"Skipping invalid result title: {result_title}")
+            return True, None
+
+        # Step 2: Clean the title (now includes formatting)
+        standardized = matcher.clean_release_title(result_title)
+        logger.debug(f"Cleaned result title: '{result_title}' -> '{standardized}'")
+
+        # Detect language from result title
+        result_language = detect_language(result_title)
+
+        # Compute tracking_title the same way file_importer does
+        base_title, is_special, special_name = matcher.extract_base_title(standardized)
+        tracking_title = base_title if is_special else standardized
+        if result_language != "English":
+            tracking_title = f"{tracking_title} - {result_language}"
+
+        # Check if this tracking_title with this tracking_id already exists in library
+        in_library = (
+            session.query(Magazine)
+            .filter(
+                Magazine.tracking_id == tracking_id,
+                Magazine.title == tracking_title,
+            )
+            .first()
+        )
+
+        if in_library:
+            logger.debug(
+                f"Skipping duplicate: '{result_title}' already in library as '{in_library.title}'"
+            )
+            return True, None
 
         return False, None
 

@@ -205,7 +205,18 @@ class FileImporter:
             metadata = self.metadata_extractor.extract_from_filename(pdf_path)
 
             raw_title = metadata.get("title", "")
-            standardized_title = self.title_matcher.standardize_title(raw_title)
+
+            # Step 1: Validate title before processing (Readarr-inspired)
+            if not self.title_matcher.validate_before_parsing(raw_title):
+                logger.warning(
+                    f"Skipping invalid release title: {raw_title} (from {pdf_path.name})"
+                )
+                return False
+
+            # Step 2: Clean release title (now includes formatting)
+            standardized_title = self.title_matcher.clean_release_title(raw_title)
+            logger.debug(f"Cleaned and formatted title: '{raw_title}' -> '{standardized_title}'")
+
             metadata["title"] = standardized_title
 
             # Detect language from filename/path
