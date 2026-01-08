@@ -69,6 +69,9 @@ MAX_DOWNLOAD_RETRIES = 3
 MAX_DOWNLOADS_PER_BATCH = 10
 """Maximum number of downloads to submit per batch"""
 
+DOWNLOAD_FILE_SEARCH_DEPTH = 2
+"""Maximum directory depth to search for downloaded files"""
+
 PROVIDER_SEARCH_TIMEOUT = 30
 """Timeout in seconds for provider search operations"""
 

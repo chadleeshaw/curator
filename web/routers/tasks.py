@@ -156,7 +156,10 @@ async def run_task_manually(task_id: str):
                     and (not m.cover_path or not Path(m.cover_path).exists())
                 ]
 
-                db_cover_paths = {m.cover_path for m in periodicals_with_covers}
+                db_cover_paths = {
+                    str(Path(m.cover_path).resolve())
+                    for m in periodicals_with_covers
+                }
 
                 # Find all cover files on disk
                 covers_dir = (
@@ -168,7 +171,8 @@ async def run_task_manually(task_id: str):
                 # Part 1: Delete orphaned covers
                 deleted_count = 0
                 if covers_dir.exists():
-                    cover_files = set(str(f) for f in covers_dir.glob("*.jpg"))
+                    # Get absolute paths of all cover files on disk
+                    cover_files = set(str(f.resolve()) for f in covers_dir.glob("*.jpg"))
                     orphaned_covers = cover_files - db_cover_paths
 
                     for orphan_path in orphaned_covers:

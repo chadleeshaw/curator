@@ -11,6 +11,7 @@ from typing import Callable, Optional
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from core.constants import DOWNLOAD_FILE_SEARCH_DEPTH
 from models.database import DownloadSubmission, MagazineTracking
 from processor.download_manager import DownloadManager
 from processor.file_importer import FileImporter
@@ -115,6 +116,45 @@ class DownloadMonitorTask:
             self.last_status = "failed"
         finally:
             session.close()
+
+    def _find_file_in_downloads(self, file_path: str, max_depth: int = DOWNLOAD_FILE_SEARCH_DEPTH) -> Optional[Path]:
+        """
+        Find a file in the downloads folder, checking multiple possible locations.
+        Searches recursively up to max_depth subdirectories.
+
+        Args:
+            file_path: File path from download client (may be absolute or relative)
+            max_depth: Maximum directory depth to search (default from DOWNLOAD_FILE_SEARCH_DEPTH)
+
+        Returns:
+            Path object if file exists, None otherwise
+        """
+        if not file_path:
+            return None
+
+        file_path_obj = Path(file_path)
+        filename = file_path_obj.name
+
+        # First try as absolute path
+        if file_path_obj.is_absolute() and file_path_obj.exists():
+            return file_path_obj
+
+        # Search in downloads directory up to max_depth
+        # Build glob patterns for each depth level
+        for depth in range(max_depth + 1):
+            if depth == 0:
+                # Check root downloads dir
+                candidate = self.downloads_dir / filename
+                if candidate.exists():
+                    return candidate
+            else:
+                # Check subdirectories at this depth
+                pattern = "/".join(["*"] * depth) + f"/{filename}"
+                for candidate in self.downloads_dir.glob(pattern):
+                    if candidate.exists():
+                        return candidate
+
+        return None
 
     def _monitor_download_client(self, session: Session) -> tuple[int, int]:
         """
@@ -235,6 +275,22 @@ class DownloadMonitorTask:
                 result = self.download_manager.update_submission_status(submission.job_id, session)
                 if result:
                     logger.debug(f"[DownloadMonitor] Status updated: {result.status.value}")
+
+                    # Special handling when status is PENDING but client returned "unknown"
+                    # This happens when job was deleted from client (e.g., due to delete_from_client_on_completion)
+                    if (result.status == DownloadSubmission.StatusEnum.PENDING and
+                        previous_status in [DownloadSubmission.StatusEnum.DOWNLOADING, DownloadSubmission.StatusEnum.COMPLETED]):
+                        # Job might have been deleted from client after completion
+                        # Check if file exists in downloads folder
+                        found_path = self._find_file_in_downloads(result.file_path)
+                        if found_path:
+                            logger.info(
+                                f"[DownloadMonitor] Job {submission.job_id} not found in client, but file exists at {found_path} - "
+                                f"marking as completed (likely deleted from client after completion)"
+                            )
+                            result.status = DownloadSubmission.StatusEnum.COMPLETED
+                            session.commit()
+
                     # Track if it transitioned to failed
                     if (
                         result.status == DownloadSubmission.StatusEnum.FAILED
@@ -295,19 +351,16 @@ class DownloadMonitorTask:
             # Map the client path to Curator's download directory
             # The client returns a path like "/downloads/Books/Magazine.Name" which is the client's view
             # We need to look for it in our configured downloads_dir
-            client_path = Path(submission.file_path)
-            relative_path = client_path.name  # Get just the final component (filename/folder)
-            file_path = self.downloads_dir / relative_path
+            file_path = self._find_file_in_downloads(submission.file_path)
 
-            logger.debug(f"[DownloadMonitor] Mapped client path '{submission.file_path}' to local path '{file_path}'")
-
-            # Check if file exists in our downloads directory
-            if not file_path.exists():
-                logger.warning(f"Downloaded file not found in downloads directory: {file_path}")
+            if not file_path:
+                logger.warning(f"Downloaded file not found in downloads directory: {submission.file_path}")
                 submission.status = DownloadSubmission.StatusEnum.FAILED
-                submission.last_error = f"File not found in downloads directory: {relative_path}"
+                submission.last_error = f"File not found in downloads directory: {Path(submission.file_path).name}"
                 session.commit()
                 continue
+
+            logger.debug(f"[DownloadMonitor] Found file at: {file_path}")
 
             try:
                 logger.debug(f"[DownloadMonitor] Importing file from client download: {file_path}")

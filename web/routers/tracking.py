@@ -364,6 +364,8 @@ async def get_tracking_details(tracking_id: int) -> Dict[str, Any]:
                     "first_publish_year": tracking.first_publish_year,
                     "total_editions_known": tracking.total_editions_known,
                     "track_all_editions": tracking.track_all_editions,
+                    "track_new_only": tracking.track_new_only,
+                    "delete_from_client_on_completion": tracking.delete_from_client_on_completion,
                     "selected_editions": tracking.selected_editions,
                     "selected_years": tracking.selected_years,
                     "metadata": tracking.periodical_metadata,

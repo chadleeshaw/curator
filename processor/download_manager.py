@@ -614,7 +614,8 @@ class DownloadManager:
                 "error": DownloadSubmission.StatusEnum.FAILED,
             }
 
-            new_status = status_map.get(client_status.get("status"), DownloadSubmission.StatusEnum.PENDING)
+            client_status_value = client_status.get("status")
+            new_status = status_map.get(client_status_value, DownloadSubmission.StatusEnum.PENDING)
 
             # Track previous status to detect transitions
             previous_status = submission.status
