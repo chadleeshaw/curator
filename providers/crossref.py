@@ -112,9 +112,15 @@ class CrossRefProvider(SearchProvider):
             if not url:
                 url = f"https://www.crossref.org/search?q={title.replace(' ', '+')}"
 
-            # Extract publication dates
+            # Extract all available metadata fields
             coverage = item.get("coverage", {})
-            coverage.get("coverageSince") if coverage else None
+            subjects = item.get("subjects", [])
+            counts = item.get("counts", {})
+            breakdowns = item.get("breakdowns", {})
+            coverage_type = item.get("coverage-type", {})
+            flags = item.get("flags", {})
+            issn_types = item.get("issn-type", [])
+            last_check = item.get("last-status-check-time")
 
             if title and issn:
                 result = SearchResult(
@@ -126,9 +132,15 @@ class CrossRefProvider(SearchProvider):
                         "issn": issn,
                         "publisher": publisher,
                         "issn_list": issn_list,
+                        "issn_types": issn_types,
+                        "subjects": subjects,
                         "coverage": coverage,
+                        "coverage_type": coverage_type,
+                        "counts": counts,
+                        "breakdowns": breakdowns,
+                        "flags": flags,
+                        "last_status_check_time": last_check,
                         "source": "CrossRef API",
-                        "crossref_id": item.get("ISSN-type"),
                     },
                 )
                 logger.debug(f"Added CrossRef result: {title} (ISSN: {issn})")

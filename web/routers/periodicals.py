@@ -116,11 +116,20 @@ async def list_periodicals(
                         "title": m.title,
                         "language": m.language or "English",
                         "publisher": m.publisher,
+                        "issn": m.issn,
                         "issue_date": (
                             m.issue_date.isoformat() if m.issue_date else None
                         ),
                         "file_path": m.file_path,
                         "cover_path": m.cover_path,
+                        "content_hash": m.content_hash,
+                        "tracking_id": m.tracking_id,
+                        "created_at": (
+                            m.created_at.isoformat() if m.created_at else None
+                        ),
+                        "updated_at": (
+                            m.updated_at.isoformat() if m.updated_at else None
+                        ),
                         "metadata": m.extra_metadata,
                         "issue_count": issue_counts.get((m.title, m.language or 'English'), 1),
                     }
@@ -156,11 +165,20 @@ async def get_magazine(magazine_id: int) -> MagazineResponse:
                 "title": magazine.title,
                 "publisher": magazine.publisher,
                 "language": magazine.language,
+                "issn": magazine.issn,
                 "issue_date": (
                     magazine.issue_date.isoformat() if magazine.issue_date else None
                 ),
                 "file_path": magazine.file_path,
                 "cover_path": magazine.cover_path,
+                "content_hash": magazine.content_hash,
+                "tracking_id": magazine.tracking_id,
+                "created_at": (
+                    magazine.created_at.isoformat() if magazine.created_at else None
+                ),
+                "updated_at": (
+                    magazine.updated_at.isoformat() if magazine.updated_at else None
+                ),
                 "metadata": magazine.extra_metadata,
             }
         finally:

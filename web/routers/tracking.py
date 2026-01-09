@@ -463,10 +463,12 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
 
             # Move magazines from source to target
             for source in sources:
-                # Update magazines to point to target tracking
+                # Update magazines to point to target tracking and normalize title
                 magazines = db_session.query(Magazine).filter(Magazine.tracking_id == source.id).all()
                 for magazine in magazines:
                     magazine.tracking_id = target.id
+                    # Update title to match target tracking record for library grouping
+                    magazine.title = target.title
                     magazines_moved += 1
 
                 # Update download submissions to point to target tracking

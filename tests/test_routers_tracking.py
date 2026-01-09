@@ -322,5 +322,194 @@ class TestTrackingUniqueness:
         session.close()
 
 
+class TestTrackingMerge:
+    """Test merging tracking records and library items"""
+
+    def test_merge_tracking_updates_magazine_titles(self, test_db):
+        """Test that merging tracking records also updates magazine titles for library grouping"""
+        engine, session_factory = test_db
+        session = session_factory()
+
+        from models.database import Magazine
+        from web.routers.tracking import merge_tracking, set_dependencies
+
+        # Set up dependencies
+        set_dependencies(session_factory, None, None)
+
+        # Create two tracking records with different titles
+        tracking1 = MagazineTracking(
+            olid="OL12345W",
+            title="Wired",
+            publisher="Condé Nast",
+            track_all_editions=True,
+            last_metadata_update=datetime.now(UTC),
+        )
+        tracking2 = MagazineTracking(
+            olid="OL67890W",
+            title="Wired Magazine",
+            publisher="Condé Nast",
+            track_all_editions=True,
+            last_metadata_update=datetime.now(UTC),
+        )
+        session.add_all([tracking1, tracking2])
+        session.commit()
+
+        # Create magazines linked to each tracking record
+        mag1 = Magazine(
+            title="Wired",
+            language="English",
+            publisher="Condé Nast",
+            issue_date=datetime(2024, 1, 1),
+            file_path="/test/wired-jan2024.pdf",
+            tracking_id=tracking1.id,
+        )
+        mag2 = Magazine(
+            title="Wired Magazine",
+            language="English",
+            publisher="Condé Nast",
+            issue_date=datetime(2024, 2, 1),
+            file_path="/test/wired-feb2024.pdf",
+            tracking_id=tracking2.id,
+        )
+        mag3 = Magazine(
+            title="Wired Magazine",
+            language="English",
+            publisher="Condé Nast",
+            issue_date=datetime(2024, 3, 1),
+            file_path="/test/wired-mar2024.pdf",
+            tracking_id=tracking2.id,
+        )
+        session.add_all([mag1, mag2, mag3])
+        session.commit()
+
+        # Verify we have 2 distinct titles before merge
+        distinct_titles = session.query(Magazine.title).distinct().all()
+        assert len(distinct_titles) == 2
+        title_set = {t[0] for t in distinct_titles}
+        assert "Wired" in title_set
+        assert "Wired Magazine" in title_set
+
+        # Save IDs before merge (tracking2 will be deleted)
+        target_id = tracking1.id
+        source_id = tracking2.id
+
+        # Merge tracking2 into tracking1 (keep "Wired" as the target)
+        import asyncio
+        result = asyncio.run(merge_tracking(
+            target_id=target_id,
+            source_ids={"source_ids": [source_id]}
+        ))
+
+        # Verify merge results
+        assert result["success"] is True
+        assert result["magazines_moved"] == 2
+        assert "Wired Magazine" in result["merged_titles"]
+
+        # Refresh session to see updated data
+        session.expire_all()
+
+        # Verify all magazines now have the same title
+        all_magazines = session.query(Magazine).all()
+        assert len(all_magazines) == 3
+        for mag in all_magazines:
+            assert mag.title == "Wired", f"Magazine title should be 'Wired', got '{mag.title}'"
+            assert mag.tracking_id == target_id
+
+        # Verify library grouping would work (only 1 distinct title now)
+        distinct_titles_after = session.query(Magazine.title).distinct().all()
+        assert len(distinct_titles_after) == 1
+        assert distinct_titles_after[0][0] == "Wired"
+
+        # Verify source tracking record was deleted
+        deleted_tracking = session.query(MagazineTracking).filter(
+            MagazineTracking.id == source_id
+        ).first()
+        assert deleted_tracking is None
+
+        # Verify target tracking record still exists
+        target_tracking = session.query(MagazineTracking).filter(
+            MagazineTracking.id == target_id
+        ).first()
+        assert target_tracking is not None
+        assert target_tracking.title == "Wired"
+
+        session.close()
+
+    def test_merge_tracking_with_different_languages(self, test_db):
+        """Test that merging preserves language differences while normalizing titles"""
+        engine, session_factory = test_db
+        session = session_factory()
+
+        from models.database import Magazine
+        from web.routers.tracking import merge_tracking, set_dependencies
+
+        set_dependencies(session_factory, None, None)
+
+        # Create tracking records
+        tracking1 = MagazineTracking(
+            olid="OL111W",
+            title="National Geographic",
+            publisher="NatGeo",
+            track_all_editions=True,
+            last_metadata_update=datetime.now(UTC),
+        )
+        tracking2 = MagazineTracking(
+            olid="OL222W",
+            title="NatGeo Magazine",
+            publisher="NatGeo",
+            track_all_editions=True,
+            last_metadata_update=datetime.now(UTC),
+        )
+        session.add_all([tracking1, tracking2])
+        session.commit()
+
+        # Create magazines in different languages
+        mag1_en = Magazine(
+            title="National Geographic",
+            language="English",
+            issue_date=datetime(2024, 1, 1),
+            file_path="/test/natgeo-en-jan.pdf",
+            tracking_id=tracking1.id,
+        )
+        mag2_de = Magazine(
+            title="NatGeo Magazine",
+            language="German",
+            issue_date=datetime(2024, 1, 1),
+            file_path="/test/natgeo-de-jan.pdf",
+            tracking_id=tracking2.id,
+        )
+        session.add_all([mag1_en, mag2_de])
+        session.commit()
+
+        # Save IDs before merge
+        target_id = tracking1.id
+        source_id = tracking2.id
+
+        # Merge
+        import asyncio
+        asyncio.run(merge_tracking(
+            target_id=target_id,
+            source_ids={"source_ids": [source_id]}
+        ))
+
+        session.expire_all()
+
+        # Both magazines should have same title but different languages
+        all_magazines = session.query(Magazine).all()
+        assert len(all_magazines) == 2
+        for mag in all_magazines:
+            assert mag.title == "National Geographic"
+
+        # Should have 2 groups in library view (by title+language)
+        from sqlalchemy import func
+        title_lang_groups = session.query(
+            Magazine.title,
+            Magazine.language
+        ).distinct().all()
+        assert len(title_lang_groups) == 2
+
+        session.close()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])
