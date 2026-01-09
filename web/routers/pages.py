@@ -43,7 +43,9 @@ async def view_periodical_by_id(id: int = Query(...)):
     try:
         db_session = _session_factory()
         try:
-            # Query the periodical to get its title
+            from models.database import MagazineTracking
+
+            # Query the periodical to get its title and tracking info
             periodical = db_session.query(Magazine).filter(Magazine.id == id).first()
 
             if not periodical:
@@ -51,16 +53,30 @@ async def view_periodical_by_id(id: int = Query(...)):
                     status_code=404, detail=f"Periodical with ID {id} not found"
                 )
 
-            # Redirect to the title-based route
-            periodical_title = periodical.title
+            # Determine the title to display and how to query
+            if periodical.tracking_id:
+                # Use tracking title for display and query by tracking_id
+                tracking = db_session.query(MagazineTracking).filter(
+                    MagazineTracking.id == periodical.tracking_id
+                ).first()
+                periodical_title = tracking.title if tracking else periodical.title
 
-            # Query all periodicals with this title
-            periodicals = (
-                db_session.query(Magazine)
-                .filter(Magazine.title == periodical_title)
-                .order_by(Magazine.issue_date.desc())
-                .all()
-            )
+                # Query all magazines with same tracking_id (includes special editions)
+                periodicals = (
+                    db_session.query(Magazine)
+                    .filter(Magazine.tracking_id == periodical.tracking_id)
+                    .order_by(Magazine.issue_date.desc())
+                    .all()
+                )
+            else:
+                # No tracking - query by title
+                periodical_title = periodical.title
+                periodicals = (
+                    db_session.query(Magazine)
+                    .filter(Magazine.title == periodical_title)
+                    .order_by(Magazine.issue_date.desc())
+                    .all()
+                )
 
             if not periodicals:
                 raise HTTPException(
@@ -134,13 +150,28 @@ async def view_periodical_by_id(id: int = Query(...)):
 
 
 @router.get("/periodicals/{periodical_title}")
-async def view_periodical(periodical_title: str, language: str = Query(None)):
+async def view_periodical(periodical_title: str, language: str = Query(None), tracking_id: int = Query(None)):
     """View all published issues of a periodical organized by year"""
     try:
         db_session = _session_factory()
         try:
-            # Build query for all periodicals with this title
-            query = db_session.query(Magazine).filter(Magazine.title == periodical_title)
+            from models.database import MagazineTracking
+
+            # If tracking_id is provided, query by that (includes merged items)
+            if tracking_id:
+                query = db_session.query(Magazine).filter(Magazine.tracking_id == tracking_id)
+            else:
+                # Try to find a tracking record by title first
+                tracking = db_session.query(MagazineTracking).filter(
+                    MagazineTracking.title == periodical_title
+                ).first()
+
+                if tracking:
+                    # Query all magazines with this tracking_id
+                    query = db_session.query(Magazine).filter(Magazine.tracking_id == tracking.id)
+                else:
+                    # No tracking - query by title
+                    query = db_session.query(Magazine).filter(Magazine.title == periodical_title)
 
             # Add language filter if provided
             if language:
