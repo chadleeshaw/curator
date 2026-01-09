@@ -510,6 +510,86 @@ class TestTrackingMerge:
 
         session.close()
 
+    def test_merge_preserves_special_editions(self, test_db):
+        """Test that merging preserves special edition titles and metadata"""
+        engine, session_factory = test_db
+        session = session_factory()
+
+        from models.database import Magazine
+        from web.routers.tracking import merge_tracking, set_dependencies
+
+        set_dependencies(session_factory, None, None)
+
+        # Create two tracking records
+        tracking1 = MagazineTracking(
+            olid="OL_MAIN",
+            title="National Geographic",
+            publisher="National Geographic Society",
+            track_all_editions=True,
+            last_metadata_update=datetime.now(UTC),
+        )
+        tracking2 = MagazineTracking(
+            olid="OL_SPECIAL",
+            title="National Geographic Special Edition",
+            publisher="National Geographic Society",
+            track_all_editions=True,
+            last_metadata_update=datetime.now(UTC),
+        )
+        session.add_all([tracking1, tracking2])
+        session.commit()
+
+        # Create regular and special edition magazines
+        regular_mag = Magazine(
+            title="National Geographic",
+            language="English",
+            issue_date=datetime(2024, 1, 1),
+            file_path="/lib/natgeo-jan2024.pdf",
+            tracking_id=tracking1.id,
+        )
+        special_mag = Magazine(
+            title="National Geographic Special Edition",
+            language="English",
+            issue_date=datetime(2024, 1, 1),
+            file_path="/lib/natgeo-special-jan2024.pdf",
+            tracking_id=tracking2.id,
+            extra_metadata={"special_edition": "Special Edition"},
+        )
+        session.add_all([regular_mag, special_mag])
+        session.commit()
+
+        target_id = tracking1.id
+        source_id = tracking2.id
+
+        # Merge tracking2 into tracking1
+        import asyncio
+        asyncio.run(merge_tracking(
+            target_id=target_id,
+            source_ids={"source_ids": [source_id]}
+        ))
+
+        session.expire_all()
+
+        # Both should now link to target tracking
+        all_mags = session.query(Magazine).all()
+        assert len(all_mags) == 2
+        for mag in all_mags:
+            assert mag.tracking_id == target_id
+
+        # Regular edition should have normalized title
+        regular = session.query(Magazine).filter(
+            Magazine.file_path == "/lib/natgeo-jan2024.pdf"
+        ).first()
+        assert regular.title == "National Geographic"
+
+        # Special edition should KEEP its special title
+        special = session.query(Magazine).filter(
+            Magazine.file_path == "/lib/natgeo-special-jan2024.pdf"
+        ).first()
+        assert special.title == "National Geographic Special Edition", "Special edition title should be preserved"
+        assert special.extra_metadata.get("special_edition") == "Special Edition"
+
+        session.close()
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])

@@ -467,8 +467,21 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
                 magazines = db_session.query(Magazine).filter(Magazine.tracking_id == source.id).all()
                 for magazine in magazines:
                     magazine.tracking_id = target.id
-                    # Update title to match target tracking record for library grouping
-                    magazine.title = target.title
+
+                    # Only update title if this is NOT a special edition
+                    # Special editions need to keep their distinct title to be grouped separately
+                    is_special = False
+                    if magazine.extra_metadata and isinstance(magazine.extra_metadata, dict):
+                        is_special = magazine.extra_metadata.get("special_edition") is not None
+
+                    # Also check if "special edition" is in the title
+                    if not is_special and "special edition" in magazine.title.lower():
+                        is_special = True
+
+                    # Only normalize title for regular editions
+                    if not is_special:
+                        magazine.title = target.title
+
                     magazines_moved += 1
 
                 # Update download submissions to point to target tracking
