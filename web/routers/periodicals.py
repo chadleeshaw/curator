@@ -155,6 +155,7 @@ async def get_magazine(magazine_id: int) -> MagazineResponse:
                 "id": magazine.id,
                 "title": magazine.title,
                 "publisher": magazine.publisher,
+                "language": magazine.language,
                 "issue_date": (
                     magazine.issue_date.isoformat() if magazine.issue_date else None
                 ),

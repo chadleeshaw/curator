@@ -659,6 +659,7 @@
             // Display basic metadata
             addMetadataItem('Title', data.title);
             addMetadataItem('Publisher', data.publisher);
+            addMetadataItem('Language', data.language);
             addMetadataItem('Issue Date', data.issue_date ? new Date(data.issue_date).toLocaleDateString() : null);
             addMetadataItem('File Path', data.file_path);
             addMetadataItem('Cover Path', data.cover_path);
@@ -667,13 +668,13 @@
             if (data.metadata) {
                 if (data.metadata.issn) addMetadataItem('ISSN', data.metadata.issn);
                 if (data.metadata.isbn) addMetadataItem('ISBN', data.metadata.isbn);
-                if (data.metadata.language) addMetadataItem('Language', data.metadata.language);
+                if (data.metadata.special_edition) addMetadataItem('Special Edition', data.metadata.special_edition);
                 if (data.metadata.number_of_pages) addMetadataItem('Pages', data.metadata.number_of_pages);
                 if (data.metadata.physical_format) addMetadataItem('Format', data.metadata.physical_format);
                 if (data.metadata.description) addMetadataItem('Description', data.metadata.description);
                 
                 // Show full metadata object if there are additional fields
-                const displayedKeys = ['issn', 'isbn', 'language', 'number_of_pages', 'physical_format', 'description'];
+                const displayedKeys = ['issn', 'isbn', 'language', 'special_edition', 'full_title', 'number_of_pages', 'physical_format', 'description'];
                 const remainingMetadata = Object.keys(data.metadata).filter(key => !displayedKeys.includes(key));
                 if (remainingMetadata.length > 0) {
                     const remaining = {};

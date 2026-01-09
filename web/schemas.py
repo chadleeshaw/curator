@@ -122,6 +122,7 @@ class MagazineResponse(BaseModel):
     id: int
     title: str
     publisher: Optional[str]
+    language: Optional[str]
     issue_date: str
     file_path: str
     cover_path: Optional[str]

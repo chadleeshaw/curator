@@ -5,6 +5,8 @@ from typing import Dict, List, Tuple, Optional
 
 from fuzzywuzzy import fuzz
 
+from core.language_utils import LANGUAGE_INDICATORS
+
 logger = logging.getLogger(__name__)
 
 
@@ -120,6 +122,15 @@ class TitleMatcher:
         # Remove common download/unpack prefixes
         title = re.sub(r'^(?:Unpack|Download|Get|Read)\s+', '', title, flags=re.IGNORECASE)
 
+        # Remove language indicators (German, French, etc.) that appear as words
+        # Pattern matches language names/codes with word boundaries (spaces, dots, etc.)
+        language_pattern = r'[\s\.](?:' + '|'.join([
+            re.escape(indicator)  # Escape special regex chars in indicators
+            for indicators in LANGUAGE_INDICATORS.values()
+            for indicator in indicators
+        ]) + r')(?:[\s\.]|$)'
+        title = re.sub(language_pattern, ' ', title, flags=re.IGNORECASE)
+
         # Remove release group tags (e.g., "-LORENZ-xpost", "[hash]-xpost") - BEFORE quality removal
         title = re.sub(r'-[A-Z][A-Za-z0-9]+(?:-[a-z]+)?\[[\w]+\].*$', '', title)  # -LORENZ[hash]
         title = re.sub(r'\[[\w]+\](?:-[a-z]+)?$', '', title)  # [hash]-xpost or [hash]
@@ -164,6 +175,9 @@ class TitleMatcher:
         # Remove magazine type suffixes (often redundant metadata like "Hybrid Magazine", "Digital Magazine")
         title = re.sub(r"\s+(?:Hybrid|Digital|PDF|eMag|True|HQ)\s+(?:Magazine|Mag)", "", title, flags=re.IGNORECASE)
         title = re.sub(r"\s+(magazine|mag|mag\.)$", "", title, flags=re.IGNORECASE)
+
+        # Remove standalone format indicators (E Book, eBook, Digital, PDF, etc.)
+        title = re.sub(r"\s+(?:E\s*Book|eBook|Digital|PDF|ePub)(?:\s+|$)", " ", title, flags=re.IGNORECASE)
 
         # Clean up multiple spaces again after replacements
         title = re.sub(r"\s+", " ", title).strip()
