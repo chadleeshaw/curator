@@ -18,13 +18,15 @@ logger = logging.getLogger(__name__)
 # Global state (injected from main app)
 _session_factory = None
 _search_providers = None
+_auto_download_task_func = None
 
 
-def set_dependencies(session_factory, search_providers):
+def set_dependencies(session_factory, search_providers, auto_download_task=None):
     """Set dependencies from main app"""
-    global _session_factory, _search_providers
+    global _session_factory, _search_providers, _auto_download_task_func
     _session_factory = session_factory
     _search_providers = search_providers
+    _auto_download_task_func = auto_download_task
 
 
 @router.post(
@@ -265,6 +267,21 @@ async def save_tracking_preferences(
                 db_session.add(tracking)
 
             db_session.commit()
+
+            # Trigger immediate auto-download check if tracking settings enabled
+            if _auto_download_task_func and (
+                tracking.track_all_editions
+                or tracking.track_new_only
+                or (tracking.selected_editions and any(tracking.selected_editions.values()))
+            ):
+                import asyncio
+
+                try:
+                    asyncio.create_task(_auto_download_task_func())
+                    logger.info(f"Triggered immediate auto-download check after saving tracking for '{tracking.title}'")
+                except Exception as e:
+                    logger.warning(f"Could not trigger immediate auto-download: {e}")
+
             return {
                 "success": True,
                 "tracking_id": tracking.id,
@@ -453,7 +470,9 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
                     magazines_moved += 1
 
                 # Update download submissions to point to target tracking
-                submissions = db_session.query(DownloadSubmission).filter(DownloadSubmission.tracking_id == source.id).all()
+                submissions = (
+                    db_session.query(DownloadSubmission).filter(DownloadSubmission.tracking_id == source.id).all()
+                )
                 for submission in submissions:
                     submission.tracking_id = target.id
                     submissions_moved += 1
@@ -464,7 +483,9 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
             db_session.commit()
 
             source_titles = [s.title for s in sources]
-            logger.info(f"Merged {len(sources)} tracking records ({', '.join(source_titles)}) into '{target.title}' (ID: {target_id})")
+            logger.info(
+                f"Merged {len(sources)} tracking records ({', '.join(source_titles)}) into '{target.title}' (ID: {target_id})"
+            )
 
             return {
                 "success": True,
@@ -543,6 +564,19 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
                 tracking.delete_from_client_on_completion = updates["delete_from_client_on_completion"]
 
             db_session.commit()
+
+            # Trigger immediate auto-download check if tracking settings changed
+            if _auto_download_task_func and any(k in updates for k in ["track_all_editions", "track_new_only"]):
+                import asyncio
+
+                try:
+                    asyncio.create_task(_auto_download_task_func())
+                    logger.info(
+                        f"Triggered immediate auto-download check after updating tracking for '{tracking.title}'"
+                    )
+                except Exception as e:
+                    logger.warning(f"Could not trigger immediate auto-download: {e}")
+
             return {
                 "success": True,
                 "message": "Tracking updated successfully",
@@ -609,6 +643,16 @@ async def track_single_issue(tracking_id: int, edition_id: str, track: bool = Qu
             flag_modified(tracking, "selected_editions")
 
             db_session.commit()
+
+            # Trigger immediate auto-download check if an edition was marked for tracking
+            if track and _auto_download_task_func:
+                import asyncio
+
+                try:
+                    asyncio.create_task(_auto_download_task_func())
+                    logger.info(f"Triggered immediate auto-download check after tracking edition {edition_id}")
+                except Exception as e:
+                    logger.warning(f"Could not trigger immediate auto-download: {e}")
 
             action = "marked for tracking" if track else "unmarked from tracking"
             logger.info(f"Issue {edition_id} {action} for periodical '{tracking.title}'")

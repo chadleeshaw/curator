@@ -142,6 +142,112 @@ class MetadataExtractor:
             except ValueError:
                 logger.warning(f"Could not parse year-month from filename: {filename}")
 
+        # Pattern 3b: "Title.No.XX.YYYY" or "Title No XX YYYY" (issue number format)
+        # Match issue number pattern: no./no/number/issue followed by digits and year, with optional text after
+        pattern3b = r"^(.+?)[\.\s]+(?:no\.?|number|issue)[\.\s]*(\d{1,3})[\.\s]+(\d{4})(?:[\.\s]+(.+))?$"
+        match = re.search(pattern3b, filename, re.IGNORECASE)
+        if match:
+            title_part = match.group(1)
+            issue_num = match.group(2)
+            year_str = match.group(3)
+            suffix = match.group(4) if match.group(4) else ""
+
+            # Clean special edition markers from suffix only
+            suffix_clean = re.sub(r'\b(?:special[\.\s]+edition|hybrid|magazine|digital|print)\b', '', suffix, flags=re.IGNORECASE).strip()
+
+            # Build title from title part and cleaned suffix
+            title = f"{title_part} {suffix_clean}".strip() if suffix_clean else title_part
+
+            # Remove language codes (but not country codes like UK when part of title)
+            title_clean = re.sub(r'[\.\s]+(?:de|en|fr|es|it|pt|ru|nl|pl|sv|no|fi|da|ja|ko|zh|ar)(?:[\.\s]|$)', ' ', title, flags=re.IGNORECASE)
+
+            # Replace dots and underscores with spaces
+            title_clean = title_clean.replace('.', ' ').replace('_', ' ')
+
+            # Remove release group tags
+            title_clean = re.sub(r'\[.*?\]|\(.*?\)', '', title_clean)
+
+            # Clean trailing dashes and extra spaces
+            title_clean = re.sub(r'\s*-\s*$', '', title_clean)
+            title_clean = re.sub(r'\s+', ' ', title_clean).strip()
+
+            metadata['title'] = title_clean
+            metadata['publication_date'] = f"{year_str}-01-01"  # Generic Jan 1st date for issue numbers
+            metadata['year'] = int(year_str)
+            metadata['month_name'] = 'Jan'
+            metadata['edition_number'] = int(issue_num)
+            metadata['is_special_edition'] = 'special' in filename.lower() and 'edition' in filename.lower()
+            logger.debug("Pattern 3b match - Issue number format")
+            return metadata
+
+        # Pattern 3c: "Title Vol.XX No.YY Season YYYY" (volume and number format)
+        # Handles formats like "2600.Magazine.Vol.41.No.1.Spring.2024"
+        pattern3c = r"^(.+?)[\.\s]+vol\.?[\.\s]*(\d{1,3})[\.\s]+no\.?[\.\s]*(\d{1,3})[\.\s]+(?:.+?[\.\s]+)?(\d{4})"
+        match = re.search(pattern3c, filename, re.IGNORECASE)
+        if match:
+            title_part = match.group(1)
+            volume_num = match.group(2)
+            issue_num = match.group(3)
+            year_str = match.group(4)
+
+            # Clean the title
+            title_clean = title_part.replace('.', ' ').replace('_', ' ')
+            title_clean = re.sub(r'\s+', ' ', title_clean).strip()
+
+            metadata['title'] = title_clean
+            metadata['publication_date'] = f"{year_str}-01-01"  # Generic Jan 1st date
+            metadata['year'] = int(year_str)
+            metadata['month_name'] = 'Jan'
+            metadata['volume'] = int(volume_num)
+            metadata['edition_number'] = int(issue_num)
+            metadata['is_special_edition'] = False
+            logger.debug("Pattern 3c match - Volume and issue number format")
+            return metadata
+
+        # Pattern 3d: "Title Season YYYY" (seasonal magazines)
+        # Handles formats like "2600.The.Hacker.Quarterly.Winter.2024"
+        pattern3d = r"^(.+?)[\.\s]+(spring|summer|fall|autumn|winter)[\.\s]+(\d{4})(?:[\.\s]+(.+))?$"
+        match = re.search(pattern3d, filename, re.IGNORECASE)
+        if match:
+            title_part = match.group(1)
+            season = match.group(2)
+            year_str = match.group(3)
+            suffix = match.group(4) if match.group(4) else ""
+
+            # Clean the title and suffix
+            title_clean = title_part.replace('.', ' ').replace('_', ' ')
+
+            # Remove common descriptors
+            title_clean = re.sub(r'\b(?:quarterly|monthly|weekly|magazine|the|hacker)\b', ' ', title_clean, flags=re.IGNORECASE)
+
+            # Clean suffix if present
+            suffix_clean = re.sub(r'\b(?:hybrid|magazine|digital|print|quarterly|monthly)\b', '', suffix, flags=re.IGNORECASE).strip() if suffix else ""
+
+            # Combine title and cleaned suffix
+            if suffix_clean:
+                title_clean = f"{title_clean} {suffix_clean}"
+
+            # Clean up spaces
+            title_clean = re.sub(r'\s+', ' ', title_clean).strip()
+
+            # Map season to approximate month
+            season_months = {
+                'spring': '03',
+                'summer': '06',
+                'fall': '09',
+                'autumn': '09',
+                'winter': '12'
+            }
+            month = season_months.get(season.lower(), '01')
+
+            metadata['title'] = title_clean
+            metadata['publication_date'] = f"{year_str}-{month}-01"
+            metadata['year'] = int(year_str)
+            metadata['month_name'] = season.capitalize()
+            metadata['is_special_edition'] = False
+            logger.debug("Pattern 3d match - Seasonal format")
+            return metadata
+
         # Pattern 4: Filename is just a date (e.g., "Apr2001", "January2015")
         date_only_pattern1 = r"^([A-Za-z]+)(\d{4})$"  # "Apr2001"
         date_only_pattern2 = r"^([A-Za-z]+)\s+(\d{4})$"  # "April 2001"
@@ -207,6 +313,7 @@ class MetadataExtractor:
         Walk up the directory tree to find a suitable magazine name.
 
         Skips year folders (4-digit numbers) and system folders.
+        Cleans the folder name to remove common prefixes like "Unpack", "Download", etc.
 
         Args:
             pdf_path: Path to the PDF file
@@ -229,6 +336,8 @@ class MetadataExtractor:
                     current = current.parent
                     continue
 
-            return folder_name
+            # Clean the folder name to remove common download/unpack prefixes
+            cleaned_name = re.sub(r'^(?:Unpack|Download|Get|Read)\s+', '', folder_name, flags=re.IGNORECASE)
+            return cleaned_name
 
         return None

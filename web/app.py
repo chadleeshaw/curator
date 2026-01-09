@@ -386,7 +386,7 @@ async def lifespan(app: FastAPI):
             search_providers, metadata_providers, title_matcher, session_factory
         )
         periodicals.set_dependencies(session_factory)
-        tracking.set_dependencies(session_factory, search_providers)
+        tracking.set_dependencies(session_factory, search_providers, auto_download_task)
         downloads.set_dependencies(session_factory, download_manager, download_client)
         imports.set_dependencies(session_factory, file_importer, storage_config)
         tasks.set_dependencies(

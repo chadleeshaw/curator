@@ -127,21 +127,17 @@ class TestTitleNormalization:
         )
 
         # Import multiple issues with different filenames but same periodical
+        # Use month-based filenames so they have different dates
         test_files = [
-            ("Wired No 1 2024 UK.pdf", datetime(2024, 1, 1)),
-            ("Wired Issue 2 2024 UK Hybrid Magazine.pdf", datetime(2024, 2, 1)),
-            ("Unpack Wired No 3 2024 UK.pdf", datetime(2024, 3, 1)),
+            ("Wired UK - Jan2024.pdf", datetime(2024, 1, 1)),
+            ("Wired UK - Feb2024.pdf", datetime(2024, 2, 1)),
+            ("Wired UK - Mar2024.pdf", datetime(2024, 3, 1)),
         ]
 
-        for filename, issue_date in test_files:
+        for idx, (filename, expected_date) in enumerate(test_files):
             test_file = temp_dirs["download_dir"] / filename
-            test_file.write_text("test content")
-
-            # Manually set issue_date via metadata
-            from processor.metadata_extractor import MetadataExtractor
-            extractor = MetadataExtractor()
-            metadata = extractor.extract_from_filename(test_file)
-            metadata["issue_date"] = issue_date
+            # Create unique content for each file to avoid hash collisions
+            test_file.write_text(f"test content for issue {idx + 1}")
 
             importer.import_pdf(test_file, session, auto_track=True)
 
@@ -277,9 +273,9 @@ class TestTitleNormalization:
             "2600.The.Hacker.Quarterly.Winter.2024.pdf",
         ]
 
-        for filename in test_files:
+        for idx, filename in enumerate(test_files):
             test_file = temp_dirs["download_dir"] / filename
-            test_file.write_text("test content")
+            test_file.write_text(f"test content {idx}")
             importer.import_pdf(test_file, session, auto_track=True)
 
         session.commit()

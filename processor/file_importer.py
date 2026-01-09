@@ -250,9 +250,20 @@ class FileImporter:
 
             # Check if this is a special edition and determine the tracking title
             # Do this BEFORE duplicate checking so we compare tracking titles
-            base_title, is_special_edition, special_name = (
-                self.title_matcher.extract_base_title(standardized_title)
-            )
+
+            # First check if metadata already indicates special edition (from Pattern 3b in metadata extractor)
+            if metadata.get("is_special_edition"):
+                # Special edition was detected in filename pattern
+                base_title = standardized_title
+                is_special_edition = True
+                special_name = "Special Edition"
+                if metadata.get("issue_number"):
+                    special_name = f"No {metadata['issue_number']}"
+            else:
+                # Use standard extraction from title
+                base_title, is_special_edition, special_name = (
+                    self.title_matcher.extract_base_title(standardized_title)
+                )
 
             # Use base_title for tracking - language is stored separately in the language field
             # This keeps titles clean and allows proper filtering by language
@@ -345,6 +356,9 @@ class FileImporter:
                         last_metadata_update=datetime.now(),
                     )
                     session.add(tracking)
+                    # Flush to get the tracking ID before linking to magazine
+                    session.flush()
+                    magazine.tracking_id = tracking.id
                     logger.debug(
                         f"Will create tracking record for: {tracking_title} (mode: {tracking_mode})"
                     )
@@ -355,6 +369,8 @@ class FileImporter:
                             f"Detected special edition '{special_name}' for: {tracking_title}"
                         )
                 else:
+                    # Link magazine to existing tracking record
+                    magazine.tracking_id = existing_tracking.id
                     existing_tracking.track_all_editions = tracking_mode == "all"
                     existing_tracking.track_new_only = tracking_mode == "new"
                     existing_tracking.last_metadata_update = datetime.now()

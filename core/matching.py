@@ -311,7 +311,7 @@ class TitleMatcher:
             >>> extract_base_title("Time Magazine Person Of The Year")
             ("Time", True, "Person Of The Year")
         """
-        # Pattern 1: Explicit "Special Edition" pattern
+        # Pattern 1: Explicit "Special Edition" pattern with specific name
         special_pattern = r"^(.+?)\s+Special\s+Edition\s+(.+)$"
         match = re.search(special_pattern, title, re.IGNORECASE)
 
@@ -319,6 +319,14 @@ class TitleMatcher:
             base_title = match.group(1).strip()
             special_name = match.group(2).strip()
             return (base_title, True, special_name)
+
+        # Pattern 1b: "Special Edition" without a specific name
+        special_pattern_no_name = r"^(.+?)\s+Special\s+Edition$"
+        match = re.search(special_pattern_no_name, title, re.IGNORECASE)
+
+        if match:
+            base_title = match.group(1).strip()
+            return (base_title, True, "Special Edition")
 
         # Pattern 2: Generic detection of titles with identifying suffixes
         # Strategy: Look for 2+ words at the end that appear to be proper names
