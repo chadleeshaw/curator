@@ -658,16 +658,16 @@
 
             // Display basic metadata
             addMetadataItem('Title', data.title);
-            addMetadataItem('Publisher', data.publisher);
-            addMetadataItem('Language', data.language);
-            addMetadataItem('ISSN', data.issn);
-            addMetadataItem('Issue Date', data.issue_date ? new Date(data.issue_date).toLocaleDateString() : null);
+            addMetadataItem('Publisher', data.publisher || '(not set)');
+            addMetadataItem('Language', data.language || '(not set)');
+            addMetadataItem('ISSN', data.issn || '(not set)');
+            addMetadataItem('Issue Date', data.issue_date ? new Date(data.issue_date).toLocaleDateString() : '(not set)');
             addMetadataItem('File Path', data.file_path);
-            addMetadataItem('Cover Path', data.cover_path);
-            addMetadataItem('Content Hash', data.content_hash);
-            addMetadataItem('Tracking ID', data.tracking_id);
-            addMetadataItem('Created At', data.created_at ? new Date(data.created_at).toLocaleString() : null);
-            addMetadataItem('Updated At', data.updated_at ? new Date(data.updated_at).toLocaleString() : null);
+            addMetadataItem('Cover Path', data.cover_path || '(not set)');
+            addMetadataItem('Content Hash', data.content_hash || '(not set)');
+            addMetadataItem('Tracking ID', data.tracking_id !== null && data.tracking_id !== undefined ? data.tracking_id : '(not set)');
+            addMetadataItem('Created At', data.created_at ? new Date(data.created_at).toLocaleString() : '(not set)');
+            addMetadataItem('Updated At', data.updated_at ? new Date(data.updated_at).toLocaleString() : '(not set)');
 
             // Display extra metadata if available
             if (data.metadata) {
