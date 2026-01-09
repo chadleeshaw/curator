@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
+from core.utils import is_special_edition
 from models.database import MagazineTracking
 from models.database import SearchResult as DBSearchResult
 from web.schemas import APIError, TrackingPreferencesRequest
@@ -474,9 +475,9 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
                     if magazine.extra_metadata and isinstance(magazine.extra_metadata, dict):
                         is_special = magazine.extra_metadata.get("special_edition") is not None
 
-                    # Also check if "special edition" is in the title
-                    if not is_special and "special edition" in magazine.title.lower():
-                        is_special = True
+                    # Also check title using the is_special_edition function
+                    if not is_special:
+                        is_special = is_special_edition(magazine.title)
 
                     # Only normalize title for regular editions
                     if not is_special:
