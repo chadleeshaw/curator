@@ -12,8 +12,6 @@ class ProviderFactory:
     PROVIDERS = {
         "newsnab": "providers.newsnab:NewsnabProvider",
         "rss": "providers.rss:RSSProvider",
-        "crossref": "providers.crossref:CrossRefProvider",
-        "wikipedia": "providers.wikipedia:WikipediaProvider",
     }
 
     @staticmethod

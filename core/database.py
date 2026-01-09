@@ -32,37 +32,53 @@ class DatabaseManager:
         Base.metadata.create_all(self.engine)
 
     def run_migrations(self):
-        """Run database migrations to ensure schema is up to date"""
-        inspector = inspect(self.engine)
+        """
+        Run database migrations to ensure schema is up to date.
+        Creates missing tables and adds missing columns.
+        """
+        from models.database import Base
 
-        # Define expected schema for each table
+        inspector = inspect(self.engine)
+        existing_tables = set(inspector.get_table_names())
+
+        # Get all tables defined in models
+        metadata_tables = set(Base.metadata.tables.keys())
+
+        # Check for missing tables
+        missing_tables = metadata_tables - existing_tables
+        if missing_tables:
+            logger.info(f"Creating missing tables: {', '.join(sorted(missing_tables))}")
+            # Create only the missing tables
+            Base.metadata.create_all(self.engine, tables=[
+                Base.metadata.tables[table_name] for table_name in missing_tables
+            ])
+            logger.info(f"✓ Created {len(missing_tables)} missing table(s)")
+            # Refresh inspector after creating tables
+            inspector = inspect(self.engine)
+
+        # Define expected schema for column additions/migrations
         expected_schemas = {
             "periodical_tracking": [
                 ("delete_from_client_on_completion", "BOOLEAN DEFAULT 0"),
                 ("language", "VARCHAR(50) DEFAULT 'English'"),
+                ("category", "VARCHAR(100)"),
+                ("download_category", "VARCHAR(100)"),
             ],
             "periodicals": [
                 ("language", "VARCHAR(50) DEFAULT 'English'"),
                 ("tracking_id", "INTEGER"),
                 ("content_hash", "VARCHAR(64)"),
-            ],
-            "download_submissions": [
-                # Add any future columns here
-            ],
-            "search_results": [
-                # Add any future columns here
-            ],
-            "magazines": [
-                # Add any future columns here
+                ("created_at", "DATETIME"),
+                ("updated_at", "DATETIME"),
             ],
         }
 
         migrations_applied = 0
 
         for table_name, columns_to_add in expected_schemas.items():
-            # Check if table exists
+            # Check if table exists (should exist now after create_all above)
             if not inspector.has_table(table_name):
-                logger.debug(f"Table {table_name} doesn't exist yet, skipping migration check")
+                logger.warning(f"Table {table_name} still doesn't exist after migration attempt")
                 continue
 
             # Get existing columns
@@ -85,7 +101,7 @@ class DatabaseManager:
 
         if migrations_applied > 0:
             logger.info(f"Schema migrations complete: {migrations_applied} column(s) added")
-        else:
+        elif not missing_tables:
             logger.debug("Schema is up to date, no migrations needed")
 
     @contextmanager

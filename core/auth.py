@@ -8,7 +8,7 @@ from typing import Optional, Tuple
 import jwt
 
 from core.constants import TOKEN_EXPIRATION_HOURS
-from core.date_utils import utc_now
+from core.parsers import utc_now
 from core.db_utils import get_db_session
 from models.database import Credentials
 

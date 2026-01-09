@@ -44,21 +44,18 @@ class TestTrackingMergeIntegration:
         tracking_wired = MagazineTracking(
             olid="OL123W",
             title="Wired",
-            publisher="Condé Nast",
             track_all_editions=True,
             last_metadata_update=datetime.now(UTC),
         )
         tracking_wired_mag = MagazineTracking(
             olid="OL456W",
             title="Wired Magazine",
-            publisher="Condé Nast",
             track_all_editions=True,
             last_metadata_update=datetime.now(UTC),
         )
         tracking_wired_uk = MagazineTracking(
             olid="OL789W",
             title="Wired UK",
-            publisher="Condé Nast",
             track_all_editions=True,
             last_metadata_update=datetime.now(UTC),
         )

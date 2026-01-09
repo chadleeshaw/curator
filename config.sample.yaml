@@ -7,25 +7,14 @@ search_providers:
     api_url: https://your-newsnab-server.com/api
     api_key: your-api-key-here
     enabled: true
-    # Optional: Newznab categories to search (comma-separated)
-    # Default: 7000,7010,7020,7030 (All books, magazines, ebooks, comics)
-    # Common categories: 7000=Books (all), 7010=Magazines, 7020=Ebooks, 7030=Comics
-    # Leave empty or omit to search all categories
     categories: "7000,7010,7020,7030"
-
-metadata_providers:
-  - type: crossref
-    name: CrossRef
-    enabled: true
-  - type: wikipedia
-    name: Wikipedia
-    enabled: true
 
 download_client:
   type: sabnzbd
   name: SABnzbd
   api_url: http://localhost:8080
   api_key: your-sabnzbd-api-key
+  default_category: books
 
 storage:
   db_path: ./local/config/periodicals.db
@@ -34,7 +23,7 @@ storage:
   cache_dir: ./local/cache
 
 import:
-  organization_pattern: data/{category}/{title}/{year}/
+  organization_pattern: "{category}/{title}/{year}/"
   auto_track_imports: true
   category_prefix: _
   category_keywords:

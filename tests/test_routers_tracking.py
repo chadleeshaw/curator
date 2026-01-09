@@ -35,8 +35,6 @@ class TestTrackingCreation:
         tracking = MagazineTracking(
             olid="OL12345W",
             title="National Geographic",
-            publisher="National Geographic Society",
-            issn="0027-9358",
             first_publish_year=1888,
             track_all_editions=True,
             last_metadata_update=datetime.now(UTC),
@@ -49,7 +47,6 @@ class TestTrackingCreation:
         assert retrieved is not None
         assert retrieved.title == "National Geographic"
         assert retrieved.track_all_editions is True
-        assert retrieved.issn == "0027-9358"
 
         session.close()
 
@@ -340,14 +337,12 @@ class TestTrackingMerge:
         tracking1 = MagazineTracking(
             olid="OL12345W",
             title="Wired",
-            publisher="Condé Nast",
             track_all_editions=True,
             last_metadata_update=datetime.now(UTC),
         )
         tracking2 = MagazineTracking(
             olid="OL67890W",
             title="Wired Magazine",
-            publisher="Condé Nast",
             track_all_editions=True,
             last_metadata_update=datetime.now(UTC),
         )
@@ -358,7 +353,6 @@ class TestTrackingMerge:
         mag1 = Magazine(
             title="Wired",
             language="English",
-            publisher="Condé Nast",
             issue_date=datetime(2024, 1, 1),
             file_path="/test/wired-jan2024.pdf",
             tracking_id=tracking1.id,
@@ -366,7 +360,6 @@ class TestTrackingMerge:
         mag2 = Magazine(
             title="Wired Magazine",
             language="English",
-            publisher="Condé Nast",
             issue_date=datetime(2024, 2, 1),
             file_path="/test/wired-feb2024.pdf",
             tracking_id=tracking2.id,
@@ -374,7 +367,6 @@ class TestTrackingMerge:
         mag3 = Magazine(
             title="Wired Magazine",
             language="English",
-            publisher="Condé Nast",
             issue_date=datetime(2024, 3, 1),
             file_path="/test/wired-mar2024.pdf",
             tracking_id=tracking2.id,
@@ -449,14 +441,12 @@ class TestTrackingMerge:
         tracking1 = MagazineTracking(
             olid="OL111W",
             title="National Geographic",
-            publisher="NatGeo",
             track_all_editions=True,
             last_metadata_update=datetime.now(UTC),
         )
         tracking2 = MagazineTracking(
             olid="OL222W",
             title="NatGeo Magazine",
-            publisher="NatGeo",
             track_all_editions=True,
             last_metadata_update=datetime.now(UTC),
         )
@@ -524,14 +514,12 @@ class TestTrackingMerge:
         tracking1 = MagazineTracking(
             olid="OL_MAIN",
             title="National Geographic",
-            publisher="National Geographic Society",
             track_all_editions=True,
             last_metadata_update=datetime.now(UTC),
         )
         tracking2 = MagazineTracking(
             olid="OL_SPECIAL",
             title="National Geographic Special Edition",
-            publisher="National Geographic Society",
             track_all_editions=True,
             last_metadata_update=datetime.now(UTC),
         )

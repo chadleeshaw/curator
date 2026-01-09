@@ -36,7 +36,7 @@ async def list_periodicals(
     Args:
         skip: Number of records to skip for pagination
         limit: Maximum number of records to return
-        sort_by: Sort field - "title", "publisher", or "issue_date" (default: "title")
+        sort_by: Sort field - "title", "category", or "issue_date" (default: "title")
         sort_order: Sort direction - "asc" or "desc" (default: "asc")
 
     Returns:
@@ -87,11 +87,12 @@ async def list_periodicals(
             query = query.outerjoin(MagazineTracking, Magazine.tracking_id == MagazineTracking.id)
 
             # Apply sorting - use tracking title when available
-            if sort_by == "publisher":
+            if sort_by == "category":
+                # Sort by category from tracking if available, otherwise fall back to magazine category
                 sort_expr = (
-                    Magazine.publisher.desc()
+                    func.coalesce(MagazineTracking.category, Magazine.extra_metadata['category'].astext).desc()
                     if is_descending
-                    else Magazine.publisher.asc()
+                    else func.coalesce(MagazineTracking.category, Magazine.extra_metadata['category'].astext).asc()
                 )
                 query = query.order_by(sort_expr, func.coalesce(MagazineTracking.title, Magazine.title).asc())
             elif sort_by == "issue_date":
@@ -163,8 +164,6 @@ async def list_periodicals(
                         "id": m.id,
                         "title": tracking_titles.get(m.tracking_id, m.title) if m.tracking_id else m.title,
                         "language": m.language or "English",
-                        "publisher": m.publisher,
-                        "issn": m.issn,
                         "issue_date": (
                             m.issue_date.isoformat() if m.issue_date else None
                         ),
@@ -215,9 +214,7 @@ async def get_magazine(magazine_id: int) -> MagazineResponse:
             return {
                 "id": magazine.id,
                 "title": magazine.title,
-                "publisher": magazine.publisher,
                 "language": magazine.language,
-                "issn": magazine.issn,
                 "issue_date": (
                     magazine.issue_date.isoformat() if magazine.issue_date else None
                 ),

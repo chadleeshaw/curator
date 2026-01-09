@@ -18,9 +18,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from core.auth import AuthManager
 from core.database import DatabaseManager
 from models.database import Base, DownloadSubmission, Magazine, MagazineTracking
-from processor.download_manager import DownloadManager
-from processor.file_importer import FileImporter
-from processor.organizer import FileOrganizer
+from services import DownloadManager
+from services import FileImporter
+from services import FileOrganizer
 
 
 @pytest.fixture
@@ -162,8 +162,6 @@ class TestPeriodicalTrackingWorkflow:
         tracking = MagazineTracking(
             olid="OL12345W",
             title="Wired Magazine",
-            publisher="Condé Nast",
-            issn="1059-1028",
             track_all_editions=True,
         )
         session.add(tracking)
@@ -375,7 +373,6 @@ class TestEndToEndJourney:
         # Step 5: Create magazine entry
         magazine = Magazine(
             title="Wired",
-            publisher="Condé Nast",
             issue_date=datetime(2024, 1, 1),
             file_path=updated.file_path or "/test/wired.pdf",
         )

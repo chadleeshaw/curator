@@ -5,7 +5,7 @@ from typing import Dict, List, Tuple, Optional
 
 from fuzzywuzzy import fuzz
 
-from core.language_utils import LANGUAGE_INDICATORS
+from core.parsers.language import LANGUAGE_INDICATORS
 
 logger = logging.getLogger(__name__)
 

@@ -41,13 +41,14 @@ class SABnzbdClient(DownloadClient):
             logger.error(f"SABnzbd API error: {e}")
             return {}
 
-    def submit(self, nzb_url: str, title: str = None) -> str:
+    def submit(self, nzb_url: str, title: str = None, category: str = None) -> str:
         """
         Submit an NZB URL to SABnzbd.
 
         Args:
             nzb_url: URL to NZB file
-            title: Optional title for the job
+            title: Optional title for the job (sanitized to prevent subfolder issues)
+            category: Optional category (determines download folder)
 
         Returns:
             Job ID (NZO ID)
@@ -59,7 +60,14 @@ class SABnzbdClient(DownloadClient):
             }
 
             if title:
-                params["nzbname"] = title
+                # Sanitize title: replace path separators and limit length
+                sanitized_title = title.replace("/", "-").replace("\\", "-").strip()
+                if len(sanitized_title) > 100:
+                    sanitized_title = sanitized_title[:100].strip()
+                params["nzbname"] = sanitized_title
+
+            if category:
+                params["cat"] = category
 
             response = self._api_call("add", params)
 

@@ -23,7 +23,7 @@ storage:
   organize_dir: ./test_data
   cache_dir: ./test_cache
 import:
-  organization_pattern: data/{category}/{title}/{year}/
+  organization_pattern: "{category}/{title}/{year}/"
   auto_track_imports: true
   category_keywords:
     Magazines:

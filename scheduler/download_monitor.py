@@ -13,8 +13,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from core.constants import DOWNLOAD_FILE_SEARCH_DEPTH
 from models.database import DownloadSubmission, MagazineTracking
-from processor.download_manager import DownloadManager
-from processor.file_importer import FileImporter
+from services import DownloadManager
+from services import FileImporter
 
 logger = logging.getLogger(__name__)
 

@@ -11,9 +11,9 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 from core.constants import PDF_COVER_DPI_HIGH, PDF_COVER_QUALITY_HIGH
-from core.date_utils import month_abbr_to_number
+from core.parsers import month_abbr_to_number
 from core.pdf_utils import extract_cover_from_pdf as extract_cover_util
-from core.utils import sanitize_filename
+from core.parsers import sanitize_filename
 
 logger = logging.getLogger(__name__)
 
@@ -204,38 +204,3 @@ class FileOrganizer:
                 result.rename(output_path_obj)
             return True
         return False
-
-    def parse_filename_for_metadata(self, filename: str) -> Dict[str, Any]:
-        """
-        Try to extract metadata from filename.
-
-        Expected format: {Magazine Title} - {Abbr}{Year}
-        Examples:
-          - "Wired Magazine - Dec2006"
-          - "National Geographic - Mar2023"
-
-        Args:
-            filename: Filename without extension
-
-        Returns:
-            Dict with extracted metadata (title, month, year)
-        """
-        pattern = r"^(.+?)\s*-\s*([A-Za-z]{3})(\d{4})$"
-        match = re.match(pattern, filename)
-
-        if match:
-            title, month_abbr, year = match.groups()
-
-            month = month_abbr_to_number(month_abbr.capitalize())
-            if month:
-                try:
-                    issue_date = datetime(int(year), month, 1)
-                    return {
-                        "title": title.strip(),
-                        "issue_date": issue_date,
-                        "confidence": "high",
-                    }
-                except ValueError:
-                    pass
-
-        return {"confidence": "low"}

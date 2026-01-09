@@ -3,6 +3,7 @@ Task management routes
 """
 
 import logging
+import os
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -105,6 +106,7 @@ async def get_tasks_status():
         return {
             "success": True,
             "tasks": tasks,
+            "timezone": os.environ.get("TZ", "UTC"),
         }
 
     except Exception as e:

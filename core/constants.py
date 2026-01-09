@@ -67,7 +67,7 @@ MAX_DOWNLOAD_RETRIES = 3
 """Maximum number of retry attempts for failed downloads"""
 
 MAX_DOWNLOADS_PER_BATCH = 10
-"""Maximum number of downloads to submit per batch"""
+"""Maximum number of downloads to submit globally across all tracked periodicals"""
 
 DOWNLOAD_FILE_SEARCH_DEPTH = 2
 """Maximum directory depth to search for downloaded files"""
@@ -169,3 +169,104 @@ CATEGORY_KEYWORDS = {
 
 ORGANIZED_FILENAME_PATTERN = "{title} - {month}{year}"
 """Pattern for organized filenames: e.g., 'Wired - Dec2006'"""
+
+
+# ==============================================================================
+# Supported Languages
+# ==============================================================================
+
+SUPPORTED_LANGUAGES = [
+    "English",
+    "German",
+    "French",
+    "Spanish",
+    "Italian",
+    "Portuguese",
+    "Dutch",
+    "Polish",
+    "Russian",
+    "Japanese",
+    "Chinese",
+    "Korean",
+]
+"""List of supported languages for periodical tracking and parsing"""
+
+
+# ==============================================================================
+# ISO Country Codes
+# ==============================================================================
+
+ISO_COUNTRIES = {
+    # North America
+    "US": "United States",
+    "CA": "Canada",
+    "MX": "Mexico",
+    # Europe
+    "GB": "United Kingdom",
+    "UK": "United Kingdom",  # Common alias
+    "DE": "Germany",
+    "FR": "France",
+    "IT": "Italy",
+    "ES": "Spain",
+    "PT": "Portugal",
+    "NL": "Netherlands",
+    "BE": "Belgium",
+    "CH": "Switzerland",
+    "AT": "Austria",
+    "SE": "Sweden",
+    "NO": "Norway",
+    "DK": "Denmark",
+    "FI": "Finland",
+    "PL": "Poland",
+    "CZ": "Czech Republic",
+    "HU": "Hungary",
+    "RO": "Romania",
+    "BG": "Bulgaria",
+    "GR": "Greece",
+    "IE": "Ireland",
+    "SK": "Slovakia",
+    "HR": "Croatia",
+    "SI": "Slovenia",
+    "LT": "Lithuania",
+    "LV": "Latvia",
+    "EE": "Estonia",
+    "IS": "Iceland",
+    "LU": "Luxembourg",
+    "MT": "Malta",
+    "CY": "Cyprus",
+    # Asia
+    "JP": "Japan",
+    "CN": "China",
+    "KR": "South Korea",
+    "IN": "India",
+    "ID": "Indonesia",
+    "TH": "Thailand",
+    "MY": "Malaysia",
+    "SG": "Singapore",
+    "PH": "Philippines",
+    "VN": "Vietnam",
+    "TW": "Taiwan",
+    "HK": "Hong Kong",
+    # Oceania
+    "AU": "Australia",
+    "NZ": "New Zealand",
+    # South America
+    "BR": "Brazil",
+    "AR": "Argentina",
+    "CL": "Chile",
+    "CO": "Colombia",
+    "PE": "Peru",
+    "VE": "Venezuela",
+    # Africa
+    "ZA": "South Africa",
+    "EG": "Egypt",
+    "NG": "Nigeria",
+    "KE": "Kenya",
+    # Middle East
+    "RU": "Russia",
+    "TR": "Turkey",
+    "SA": "Saudi Arabia",
+    "AE": "United Arab Emirates",
+    "IL": "Israel",
+}
+"""ISO 3166-1 alpha-2 country codes for region-specific editions"""

@@ -28,13 +28,14 @@
             <button class="nav-btn active" onclick="showTab('library', event)">📚 Library</button>
             <button class="nav-btn" onclick="showTab('tracking', event)">📌 Track Periodicals</button>
             <button class="nav-btn" onclick="showTab('tasks', event)">⚙️ Tasks</button>
+            <button class="nav-btn" onclick="showTab('queue', event)">📥 Queue</button>
             <button class="nav-btn" onclick="showTab('settings', event)">🔧 Settings</button>
         </nav>
 
         <!-- Library Tab -->
         <div id="library-tab" class="tab active">
             <div class="library-container">
-                <h2>Your PDF Library</h2>
+                <h2>📚 Library</h2>
                 <div class="library-header flex justify-between items-center gap-30 mb-40 flex-wrap">
                     <div class="flex gap-10 flex-wrap">
                         <button onclick="checkAndImportDownloads()" class="btn-primary import-button-group">
@@ -47,7 +48,7 @@
                     <div class="library-controls flex gap-15">
                         <div class="sort-buttons">
                             <button class="sort-btn active" data-lib-sort="title" onclick="setLibrarySortField('title')">Title</button>
-                            <button class="sort-btn" data-lib-sort="publisher" onclick="setLibrarySortField('publisher')">Publisher</button>
+                            <button class="sort-btn" data-lib-sort="category" onclick="setLibrarySortField('category')">Category</button>
                             <button class="sort-btn" data-lib-sort="issue_date" onclick="setLibrarySortField('issue_date')">Issue Date</button>
                         </div>
                         <button id="library-sort-toggle" class="sort-toggle-btn" onclick="toggleLibrarySortOrder()" title="Toggle ascending/descending">
@@ -65,7 +66,7 @@
             <div class="tracking-container">
                 <div class="tracked-periodicals">
                     <div class="tracked-header">
-                        <h2>Tracked Periodicals</h2>
+                        <h2>📌 Track Periodicals</h2>
                         <div class="tracked-header-row">
                             <div class="tracked-actions">
                                 <button onclick="openTrackNewPeriodicalModal()" class="btn-primary">📌 Track New Periodical</button>
@@ -74,7 +75,7 @@
                             <div class="sort-controls">
                                 <div class="sort-buttons">
                                     <button class="sort-btn active" data-sort="title" onclick="setSortField('title')">Title</button>
-                                    <button class="sort-btn" data-sort="publisher" onclick="setSortField('publisher')">Publisher</button>
+                                    <button class="sort-btn" data-sort="category" onclick="setSortField('category')">Category</button>
                                     <button class="sort-btn" data-sort="tracking_mode" onclick="setSortField('tracking_mode')">Tracking</button>
                                 </div>
                                 <button id="sort-toggle" class="sort-toggle-btn" onclick="toggleSortOrder()" title="Toggle ascending/descending">
@@ -101,38 +102,50 @@
                         <!-- Will be populated by JavaScript -->
                     </div>
                 </div>
+            </div>
+        </div>
 
+        <!-- Queue Tab -->
+        <div id="queue-tab" class="tab">
+            <div class="tasks-container">
                 <!-- Download Queue Section -->
                 <div class="download-queue-section">
-                    <h2>⬇️ Download Queue</h2>
-                <p>Monitor and manage your periodical downloads. See what's downloading, pending, completed, or failed. Auto-refreshes every 10 seconds.</p>
-                <div id="downloads-status" class="hidden"></div>
+                    <h2>📥 Download Queue</h2>
+                    <p style="color: var(--text-secondary); margin-bottom: 25px;">Monitor and manage your periodical downloads. Auto-refreshes every 10 seconds.</p>
+                    <div id="downloads-status" class="hidden"></div>
 
-                <div class="queue-stats flex gap-20 mb-30 p-15 bg-surface-variant rounded-lg flex-wrap" id="queue-stats">
-                    <!-- Will be populated by JavaScript -->
-                </div>
+                    <div id="queue-stats" style="margin-bottom: 30px;">
+                        <!-- Will be populated by JavaScript -->
+                    </div>
 
-                <div id="queue-empty" class="hidden queue-empty-state">
-                    <p>No downloads in queue</p>
-                    <p class="text-base mt-10">💡 Tip: Use "Track Periodicals" tab → Find Issues → Download button to submit downloads for tracking</p>
-                </div>
+                    <div id="queue-empty" class="hidden" style="text-align: center; padding: 60px 20px; background: var(--surface-variant); border-radius: 8px; border: 1px solid var(--border);">
+                        <div style="font-size: 4em; margin-bottom: 15px; opacity: 0.3;">📭</div>
+                        <p style="font-size: 1.2em; color: var(--text-primary); margin-bottom: 10px;">No downloads in queue</p>
+                        <p style="color: var(--text-secondary); font-size: 0.95em;">
+                            💡 Tip: Go to <strong>Track Periodicals</strong> → Find Issues → Click Download to submit downloads
+                        </p>
+                    </div>
 
-                <div id="queue-table-container" class="hidden">
-                    <table class="queue-table w-full border-collapse mt-20">
-                        <tbody id="queue-body">
-                            <!-- Will be populated by JavaScript with grouped periodical rows -->
-                        </tbody>
-                    </table>
-                </div>
+                    <div id="queue-table-container" class="hidden">
+                        <table class="queue-table w-full border-collapse mt-20">
+                            <tbody id="queue-body">
+                                <!-- Will be populated by JavaScript with grouped periodical rows -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
                 <!-- Failed Downloads Section -->
-                <div class="download-queue-section mt-40">
+                <div class="download-queue-section mt-40" style="padding-top: 40px; border-top: 2px solid var(--border);">
                     <h2>⚠️ Failed Downloads</h2>
-                    <p>View and manage downloads that have failed, including files marked as bad (3+ failures).</p>
+                    <p style="color: var(--text-secondary); margin-bottom: 20px;">View and manage downloads that have failed, including files marked as bad (3+ failures).</p>
                     <div id="failed-downloads-container">
                         <!-- Will be populated by JavaScript -->
-                        <p style="text-align: center; color: var(--text-secondary); padding: 40px;">Loading failed downloads...</p>
+                        <div style="text-align: center; padding: 60px 20px; background: var(--surface-variant); border-radius: 8px; border: 1px solid var(--border);">
+                            <div style="font-size: 4em; margin-bottom: 15px; opacity: 0.3;">✅</div>
+                            <p style="font-size: 1.2em; color: var(--text-primary); margin-bottom: 10px;">No failed downloads</p>
+                            <p style="color: var(--text-secondary); font-size: 0.95em;">All downloads completed successfully</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -142,7 +155,7 @@
         <div id="settings-tab" class="tab">
             <div class="settings-container">
                 <div class="flex justify-between items-center mb-20">
-                    <h2>Configuration Settings</h2>
+                    <h2>⚙️ Configuration Settings</h2>
                     <button onclick="restartApplication()" class="btn-danger">🔄 Restart Application</button>
                 </div>
 
@@ -388,16 +401,38 @@
             </div>
             
             <div class="settings-field">
-                <label>Publisher:</label>
-                <div class="flex gap-10">
-                    <input type="text" id="edit-tracking-publisher" placeholder="Enter publisher" class="flex-1">
-                    <button onclick="searchPublisherMetadata()" class="save-btn">Search Metadata</button>
-                </div>
+                <label>Category:</label>
+                <select id="edit-tracking-category" class="w-full">
+                    <option value="">Auto-detect from title</option>
+                    <option value="Magazines">Magazines</option>
+                    <option value="Comics">Comics</option>
+                    <option value="Articles">Articles</option>
+                    <option value="News">News</option>
+                </select>
             </div>
             
             <div class="settings-field">
-                <label>ISSN:</label>
-                <input type="text" id="edit-tracking-issn" placeholder="Enter ISSN">
+                <label>Language:</label>
+                <select id="edit-tracking-language" class="w-full">
+                    <option value="English">English</option>
+                    <option value="German">German</option>
+                    <option value="French">French</option>
+                    <option value="Spanish">Spanish</option>
+                    <option value="Italian">Italian</option>
+                    <option value="Portuguese">Portuguese</option>
+                    <option value="Dutch">Dutch</option>
+                    <option value="Polish">Polish</option>
+                    <option value="Russian">Russian</option>
+                    <option value="Japanese">Japanese</option>
+                    <option value="Chinese">Chinese</option>
+                    <option value="Korean">Korean</option>
+                </select>
+            </div>
+            
+            <div class="settings-field">
+                <label for="edit-tracking-download-category">Download Client Category:</label>
+                <input type="text" id="edit-tracking-download-category" placeholder="Leave empty to use global default" class="w-full">
+                <p class="text-sm text-hint mt-8">Category to use in your download client (e.g., "books", "magazines"). Separate from content category.</p>
             </div>
             
             <div class="settings-field">
@@ -420,7 +455,7 @@
             <div class="settings-field">
                 <label for="edit-tracking-org-pattern">File Organization Pattern:</label>
                 <input type="text" id="edit-tracking-org-pattern" placeholder="Leave empty to use global default" class="w-full">
-                <p class="text-sm text-hint mt-8">Available tags: {category}, {title}, {year}, {month}, {day}. Example: data/{category}/{title}/{year}/</p>
+                <p class="text-sm text-hint mt-8">Available tags: {category}, {title}, {year}, {month}, {day}. Example: "{category}/{title}/{year}/"</p>
             </div>
 
             <div class="flex gap-10 mt-20">
@@ -478,7 +513,7 @@
             <div class="settings-field">
                 <label for="import-modal-organize-pattern">File Organization Pattern:</label>
                 <input type="text" id="import-modal-organize-pattern" placeholder="Leave empty to use global default" class="w-full">
-                <p class="text-sm text-hint mt-8">Available tags: {category}, {title}, {year}, {month}, {day}. Example: data/{category}/{title}/{year}/</p>
+                <p class="text-sm text-hint mt-8">Available tags: {category}, {title}, {year}, {month}, {day}. Example: "{category}/{title}/{year}/"</p>
             </div>
             
             <div class="flex gap-10 mt-20">
@@ -493,48 +528,82 @@
         <div class="modal-content" style="max-width: 800px;">
             <span class="close" onclick="closeTrackNewPeriodicalModal()">&times;</span>
             <h2>Track New Periodical</h2>
-            <p style="color: var(--text-secondary); margin-bottom: 20px;">Search for a periodical to track</p>
+            <p style="color: var(--text-secondary); margin-bottom: 20px;">Search providers for periodicals to track</p>
 
             <div id="tracking-status" class="hidden"></div>
 
-            <!-- Step 1: Search -->
-            <div class="tracking-step">
-                <h3>Step 1: Find Periodical</h3>
-                <div class="tracking-search">
-                    <input type="text" id="tracking-search-query" placeholder="Enter periodical title..."
-                        onkeyup="event.key === 'Enter' && searchPeriodicalMetadata()">
-                    <button onclick="searchPeriodicalMetadata()">Search</button>
+            <!-- Search Section -->
+            <div class="settings-field">
+                <label>Search for Periodical:</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="tracking-search-query" placeholder="Enter periodical title..." style="flex: 1;" onkeypress="if(event.key==='Enter') trackingManager.searchPeriodicalMetadata()">
+                    <button onclick="trackingManager.searchPeriodicalMetadata()" class="btn-primary">Search</button>
                 </div>
-                <div id="tracking-search-loading" class="hidden">Searching...</div>
-                <div id="tracking-search-result" class="tracking-result hidden">
-                    <div id="periodical-info-card"></div>
-                </div>
-                <div id="tracking-search-error" class="error hidden"></div>
             </div>
 
-            <!-- Step 2: Configure Tracking -->
-            <div class="tracking-step hidden" id="save-step">
-                <h3>Step 2: Configure Tracking</h3>
-                <div id="save-info"></div>
-                <div class="save-controls">
-                    <div class="tracking-mode-options">
-                        <label class="radio-label">
-                            <input type="radio" name="tracking-mode" value="all" checked onchange="updateTrackingMode()">
-                            <span><strong>Track All Issues</strong> - Download all past and future issues</span>
-                        </label>
-                        <label class="radio-label">
-                            <input type="radio" name="tracking-mode" value="new" onchange="updateTrackingMode()">
-                            <span><strong>Track New Issues</strong> - Only download issues published after today</span>
-                        </label>
-                        <label class="radio-label">
-                            <input type="radio" name="tracking-mode" value="none" onchange="updateTrackingMode()">
-                            <span><strong>Track Nothing</strong> - Monitor but don't auto-download</span>
-                        </label>
-                    </div>
-                    <div class="flex gap-10 mt-20">
-                        <button class="btn-primary flex-1" onclick="saveTrackingPreferences()">Save & Start Tracking</button>
-                        <button class="btn-secondary flex-1" onclick="closeTrackNewPeriodicalModal()">Cancel</button>
-                    </div>
+            <!-- Loading indicator -->
+            <div id="tracking-search-loading" class="hidden" style="text-align: center; padding: 20px; color: var(--text-secondary);">
+                <div class="spinner"></div>
+                <p>Searching providers...</p>
+            </div>
+
+            <!-- Error display -->
+            <div id="tracking-search-error" class="hidden" style="padding: 15px; background: var(--error-bg); color: var(--error); border-radius: 6px; margin: 15px 0;"></div>
+
+            <!-- Search results -->
+            <div id="tracking-search-result" class="hidden" style="margin: 20px 0;"></div>
+
+            <!-- Manual Entry Section -->
+            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--border);">
+                <h3 style="margin-bottom: 15px;">Or Enter Manually</h3>
+
+                <div class="settings-field">
+                    <label>Periodical Title:</label>
+                    <input type="text" id="new-tracking-title" placeholder="Enter periodical title...">
+                </div>
+
+                <div class="settings-field">
+                    <label>Category:</label>
+                    <select id="new-tracking-category" class="w-full">
+                        <option value="">Auto-detect from title</option>
+                        <option value="Magazines">Magazines</option>
+                        <option value="Comics">Comics</option>
+                        <option value="Articles">Articles</option>
+                        <option value="News">News</option>
+                    </select>
+                </div>
+
+                <div class="settings-field">
+                    <label>Language:</label>
+                    <select id="new-tracking-language" class="w-full">
+                    </select>
+                </div>
+
+                <div class="settings-field">
+                    <label>Country:</label>
+                    <select id="new-tracking-country" class="w-full">
+                        <option value="">None (International)</option>
+                    </select>
+                </div>
+
+                <div class="settings-field">
+                    <label>Download Category:</label>
+                    <input type="text" id="new-tracking-download-category" placeholder="e.g., books, magazines (optional)">
+                    <small style="color: var(--text-secondary); display: block; margin-top: 5px;">Category to use in download client (SABnzbd/NZBGet)</small>
+                </div>
+
+                <div class="settings-field">
+                    <label>Tracking Mode:</label>
+                    <select id="new-tracking-mode" class="w-full">
+                        <option value="none">Track Nothing - Monitor but don't auto-download</option>
+                        <option value="new">Track New Issues - Only download issues published after today</option>
+                        <option value="all">Track All Issues - Download all past and future issues</option>
+                    </select>
+                </div>
+
+                <div class="flex gap-10 mt-20">
+                    <button class="btn-primary flex-1" onclick="saveNewTracking()">Start Tracking</button>
+                    <button class="btn-secondary flex-1" onclick="closeTrackNewPeriodicalModal()">Cancel</button>
                 </div>
             </div>
         </div>

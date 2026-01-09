@@ -51,9 +51,7 @@ class TestMagazineModel:
     def test_magazine_creation_with_all_fields(self):
         """Test Magazine model creation with all fields"""
         mag = Magazine(
-            issn="1234-5678",
             title="National Geographic",
-            publisher="National Geographic Society",
             issue_date=datetime(2023, 3, 15),
             file_path="/data/National Geographic - Mar2023.pdf",
             cover_path="/data/National Geographic - Mar2023.jpg",
@@ -61,8 +59,6 @@ class TestMagazineModel:
         )
 
         assert mag.title == "National Geographic"
-        assert mag.issn == "1234-5678"
-        assert mag.publisher == "National Geographic Society"
         assert mag.file_path == "/data/National Geographic - Mar2023.pdf"
         assert mag.cover_path == "/data/National Geographic - Mar2023.jpg"
         assert mag.extra_metadata["keywords"] == ["nature", "wildlife"]
@@ -78,8 +74,6 @@ class TestMagazineModel:
         assert mag.title == "Wired"
         assert mag.issue_date == datetime(2020, 1, 1)
         assert mag.file_path == "/data/wired.pdf"
-        assert mag.issn is None
-        assert mag.publisher is None
         assert mag.cover_path is None
         assert mag.extra_metadata is None
 
@@ -109,8 +103,6 @@ class TestMagazineTracking:
         tracking = MagazineTracking(
             olid="OL1234567W",
             title="Time Magazine",
-            publisher="Time Inc.",
-            issn="0040-781X",
             first_publish_year=1923,
             total_editions_known=5200,
             track_all_editions=True,
@@ -119,7 +111,6 @@ class TestMagazineTracking:
 
         assert tracking.olid == "OL1234567W"
         assert tracking.title == "Time Magazine"
-        assert tracking.issn == "0040-781X"
         assert tracking.first_publish_year == 1923
         assert tracking.total_editions_known == 5200
         assert tracking.track_all_editions is True
@@ -512,7 +503,6 @@ class TestIndexing:
 
     def test_magazine_indexed_fields(self):
         """Test Magazine indexed columns"""
-        assert hasattr(Magazine, "issn")
         assert hasattr(Magazine, "title")
         assert hasattr(Magazine, "issue_date")
         assert hasattr(Magazine, "created_at")
@@ -521,7 +511,6 @@ class TestIndexing:
         """Test MagazineTracking indexed columns"""
         assert hasattr(MagazineTracking, "olid")
         assert hasattr(MagazineTracking, "title")
-        assert hasattr(MagazineTracking, "issn")
         assert hasattr(MagazineTracking, "created_at")
 
 

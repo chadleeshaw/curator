@@ -41,32 +41,67 @@ export class DownloadsManager {
     let html = '';
 
     if (grouped.length === 0) {
-      html = '<p style="text-align: center; color: var(--text-secondary); padding: 40px;">No failed downloads</p>';
+      html = `
+        <div style="text-align: center; padding: 60px 20px; background: var(--surface-variant); border-radius: 8px; border: 1px solid var(--border);">
+          <div style="font-size: 4em; margin-bottom: 15px; opacity: 0.3;">✅</div>
+          <p style="font-size: 1.2em; color: var(--text-primary); margin-bottom: 10px;">No failed downloads</p>
+          <p style="color: var(--text-secondary); font-size: 0.95em;">All downloads completed successfully</p>
+        </div>
+      `;
       container.innerHTML = html;
       return;
     }
 
+    // Display stats summary
+    const totalFailed = grouped.reduce((sum, g) => sum + g.failedCount, 0);
+    const totalBad = grouped.reduce((sum, g) => sum + g.badCount, 0);
+    
+    html += `
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px;">
+        <div style="background: var(--surface); padding: 20px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <div style="font-size: 2.5em; font-weight: bold; color: orange;">${totalFailed}</div>
+          <div style="font-size: 0.9em; color: var(--text-secondary); margin-top: 5px;">Failed Downloads</div>
+          <div style="font-size: 0.8em; color: var(--text-secondary); margin-top: 3px;">Can be retried</div>
+        </div>
+        <div style="background: var(--surface); padding: 20px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <div style="font-size: 2.5em; font-weight: bold; color: var(--status-failed);">${totalBad}</div>
+          <div style="font-size: 0.9em; color: var(--text-secondary); margin-top: 5px;">Bad Files</div>
+          <div style="font-size: 0.8em; color: var(--text-secondary); margin-top: 3px;">3+ failures, marked as bad</div>
+        </div>
+        <div style="background: var(--surface); padding: 20px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <div style="font-size: 2.5em; font-weight: bold; color: var(--primary);">${grouped.length}</div>
+          <div style="font-size: 0.9em; color: var(--text-secondary); margin-top: 5px;">Affected Periodicals</div>
+          <div style="font-size: 0.8em; color: var(--text-secondary); margin-top: 3px;">Click below to manage</div>
+        </div>
+      </div>
+    `;
+
     // Display grouped by periodical
-    html += '<div style="display: flex; flex-direction: column; gap: 15px;">';
+    html += '<div style="display: flex; flex-direction: column; gap: 12px;">';
 
     grouped.forEach((group) => {
       const hasBadFiles = group.badCount > 0;
       const icon = hasBadFiles ? '🚫' : '⚠️';
 
       html += `
-        <div style="background: var(--surface); border-radius: 8px; padding: 12px; cursor: pointer; border-bottom: 2px solid var(--border-color);"
-             onclick="downloads.openManageFailedModal('${group.periodical}', ${JSON.stringify(group.items).replace(/"/g, '&quot;')})">
+        <div style="background: var(--surface-variant); border-radius: 8px; padding: 18px; cursor: pointer; border: 1px solid var(--border); transition: all 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.1);"
+             onclick="downloads.openManageFailedModal('${group.periodical}', ${JSON.stringify(group.items).replace(/"/g, '&quot;')})"
+             onmouseover="this.style.borderColor='var(--primary)'; this.style.transform='translateY(-2px)'"
+             onmouseout="this.style.borderColor='var(--border)'; this.style.transform='translateY(0)'">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <div style="flex: 1;">
-              <div style="display: flex; align-items: center; gap: 10px;">
-                <span style="font-size: 1.1em;">${icon} ${group.periodical}</span>
-                <span style="font-size: 0.9em; color: var(--text-secondary);">${group.totalCount} issues</span>
+              <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                <span style="font-size: 1.3em;">${icon}</span>
+                <span style="font-size: 1.1em; font-weight: 600; color: var(--text-primary);">${group.periodical}</span>
+              </div>
+              <div style="font-size: 0.9em; color: var(--text-secondary);">
+                ${group.totalCount} issue${group.totalCount !== 1 ? 's' : ''} need${group.totalCount === 1 ? 's' : ''} attention
               </div>
             </div>
-            <div style="display: flex; gap: 10px; align-items: center;">
-              ${group.failedCount > 0 ? `<span style="background: orange; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.85em;">${group.failedCount} failed</span>` : ''}
-              ${hasBadFiles ? `<span style="background: var(--status-failed); color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.85em;">${group.badCount} bad</span>` : ''}
-              <span style="font-size: 1.2em; color: var(--text-secondary);">→</span>
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: flex-end;">
+              ${group.failedCount > 0 ? `<span style="background: orange; color: white; padding: 6px 12px; border-radius: 16px; font-size: 0.85em; font-weight: 600;">${group.failedCount} Failed</span>` : ''}
+              ${hasBadFiles ? `<span style="background: var(--status-failed); color: white; padding: 6px 12px; border-radius: 16px; font-size: 0.85em; font-weight: 600;">${group.badCount} Bad</span>` : ''}
+              <span style="font-size: 1.5em; color: var(--primary);">→</span>
             </div>
           </div>
         </div>
@@ -202,12 +237,27 @@ export class DownloadsManager {
     // Display status counts
     if (data.status_counts) {
       statsDiv.innerHTML = `
-        <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-          <div><span style="font-weight: bold; color: ${colors.pending};">${data.status_counts.pending || 0}</span> Pending</div>
-          <div><span style="font-weight: bold; color: ${colors.downloading};">${data.status_counts.downloading || 0}</span> Downloading</div>
-          <div><span style="font-weight: bold; color: ${colors.completed};">${data.status_counts.completed || 0}</span> Completed</div>
-          <div><span style="font-weight: bold; color: ${colors.failed};">${data.status_counts.failed || 0}</span> Failed</div>
-          <div><span style="font-weight: bold; color: ${colors.skipped};">${data.status_counts.skipped || 0}</span> Skipped</div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px;">
+          <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <div style="font-size: 2em; font-weight: bold; color: ${colors.pending};">${data.status_counts.pending || 0}</div>
+            <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Pending</div>
+          </div>
+          <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <div style="font-size: 2em; font-weight: bold; color: ${colors.downloading};">${data.status_counts.downloading || 0}</div>
+            <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Downloading</div>
+          </div>
+          <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <div style="font-size: 2em; font-weight: bold; color: ${colors.completed};">${data.status_counts.completed || 0}</div>
+            <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Completed</div>
+          </div>
+          <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <div style="font-size: 2em; font-weight: bold; color: ${colors.failed};">${data.status_counts.failed || 0}</div>
+            <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Failed</div>
+          </div>
+          <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <div style="font-size: 2em; font-weight: bold; color: ${colors.skipped};">${data.status_counts.skipped || 0}</div>
+            <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Skipped</div>
+          </div>
         </div>
       `;
     }

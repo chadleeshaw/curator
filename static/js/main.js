@@ -27,9 +27,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Initialize theme from localStorage
   UIUtils.initTheme();
 
+  // Initialize tracking manager (loads constants from API)
+  await tracking.init();
+
   // Check if there's a tab in the URL hash
   const hash = window.location.hash.substring(1);
-  if (hash && ['library', 'tracking', 'tasks', 'settings'].includes(hash)) {
+  if (hash && ['library', 'tracking', 'tasks', 'queue', 'settings'].includes(hash)) {
     // Show the tab from the hash
     const tabName = UIUtils.showTab(hash, null);
 
@@ -42,6 +45,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       settings.loadSettings();
     } else if (tabName === 'tasks') {
       tasks.loadScheduledTasks();
+    } else if (tabName === 'queue') {
       downloads.loadDownloadQueue();
       downloads.loadFailedDownloads();
       downloads.startAutoRefresh();

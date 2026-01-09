@@ -106,9 +106,7 @@ class MagazineSearchResponse(BaseModel):
 
     olid: str
     title: str
-    publisher: Optional[str]
     first_publish_year: Optional[int]
-    issn: Optional[str]
     isbn: Optional[str]
     edition_count: int
 
@@ -121,11 +119,14 @@ class MagazineSearchResponse(BaseModel):
 class MagazineResponse(BaseModel):
     id: int
     title: str
-    publisher: Optional[str]
     language: Optional[str]
     issue_date: str
     file_path: str
     cover_path: Optional[str]
+    content_hash: Optional[str]
+    tracking_id: Optional[int]
+    created_at: Optional[str]
+    updated_at: Optional[str]
     metadata: Optional[Dict[str, Any]]
 
 
@@ -137,7 +138,6 @@ class EditionInfo(BaseModel):
     publish_date: str
     publishers: List[str]
     isbn: Optional[str]
-    issn: Optional[str]
     number_of_pages: Optional[int]
     physical_format: str
     language: str
@@ -164,8 +164,6 @@ class TrackingPreferencesRequest(BaseModel):
 
     olid: str
     title: str
-    publisher: Optional[str] = None
-    issn: Optional[str] = None
     first_publish_year: Optional[int] = None
     track_all_editions: bool = False
     track_new_only: bool = False

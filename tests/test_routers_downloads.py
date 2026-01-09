@@ -13,7 +13,7 @@ from sqlalchemy.orm import sessionmaker
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from models.database import Base, DownloadSubmission, MagazineTracking
-from processor.download_manager import DownloadManager
+from services import DownloadManager
 
 
 @pytest.fixture

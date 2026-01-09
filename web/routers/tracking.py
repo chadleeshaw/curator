@@ -53,8 +53,9 @@ def set_dependencies(session_factory, search_providers, auto_download_task=None)
 )
 async def start_tracking_periodical(
     title: str = Query(...),
-    publisher: Optional[str] = Query(None),
-    issn: Optional[str] = Query(None),
+    category: Optional[str] = Query(None),
+    country: Optional[str] = Query(None),
+    language: Optional[str] = Query("English"),
 ) -> Dict[str, Any]:
     """Start tracking a periodical"""
     try:
@@ -75,8 +76,8 @@ async def start_tracking_periodical(
             tracking = MagazineTracking(
                 olid=olid,
                 title=title.strip(),
-                publisher=publisher.strip() if publisher else None,
-                issn=issn.strip() if issn else None,
+                category=category.strip() if category else None,
+                language=language.strip() if language else "English",
                 track_all_editions=False,
                 selected_editions={},
                 selected_years=[],
@@ -136,8 +137,8 @@ async def list_tracked_periodicals(skip: int = 0, limit: int = 50) -> Dict[str, 
                         "id": m.id,
                         "olid": m.olid,
                         "title": m.title,
-                        "publisher": m.publisher,
-                        "issn": m.issn,
+                        "category": m.category,
+                        "language": m.language,
                         "track_all_editions": m.track_all_editions,
                         "created_at": (m.created_at.isoformat() if m.created_at else None),
                     }
@@ -241,8 +242,8 @@ async def save_tracking_preferences(
 
             if existing:
                 existing.title = request.title
-                existing.publisher = request.publisher
-                existing.issn = request.issn
+                existing.category = getattr(request, 'category', None)
+                existing.language = getattr(request, 'language', 'English')
                 existing.first_publish_year = request.first_publish_year
                 existing.track_all_editions = request.track_all_editions
                 existing.track_new_only = request.track_new_only
@@ -255,8 +256,8 @@ async def save_tracking_preferences(
                 tracking = MagazineTracking(
                     olid=olid,
                     title=request.title,
-                    publisher=request.publisher,
-                    issn=request.issn,
+                    category=getattr(request, 'category', None),
+                    language=getattr(request, 'language', 'English'),
                     first_publish_year=request.first_publish_year,
                     track_all_editions=request.track_all_editions,
                     track_new_only=request.track_new_only,
@@ -308,8 +309,8 @@ async def list_tracked_magazines(
             is_descending = sort_order.lower() == "desc"
             query = db_session.query(MagazineTracking)
 
-            if sort_by == "publisher":
-                sort_expr = MagazineTracking.publisher.desc() if is_descending else MagazineTracking.publisher.asc()
+            if sort_by == "category":
+                sort_expr = MagazineTracking.category.desc() if is_descending else MagazineTracking.category.asc()
                 query = query.order_by(sort_expr, MagazineTracking.title.asc())
             elif sort_by == "tracking_mode":
                 if is_descending:
@@ -338,8 +339,8 @@ async def list_tracked_magazines(
                         "id": t.id,
                         "olid": t.olid,
                         "title": t.title,
-                        "publisher": t.publisher,
-                        "issn": t.issn,
+                        "category": t.category,
+                        "language": t.language,
                         "track_all_editions": t.track_all_editions,
                         "track_new_only": t.track_new_only,
                         "selected_count": (
@@ -377,8 +378,9 @@ async def get_tracking_details(tracking_id: int) -> Dict[str, Any]:
                     "id": tracking.id,
                     "olid": tracking.olid,
                     "title": tracking.title,
-                    "publisher": tracking.publisher,
-                    "issn": tracking.issn,
+                    "category": tracking.category,
+                    "language": tracking.language,
+                    "download_category": tracking.download_category,
                     "first_publish_year": tracking.first_publish_year,
                     "total_editions_known": tracking.total_editions_known,
                     "track_all_editions": tracking.track_all_editions,
@@ -568,10 +570,12 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
 
             if "title" in updates:
                 tracking.title = updates["title"]
-            if "publisher" in updates:
-                tracking.publisher = updates["publisher"]
-            if "issn" in updates:
-                tracking.issn = updates["issn"]
+            if "category" in updates:
+                tracking.category = updates["category"]
+            if "language" in updates:
+                tracking.language = updates["language"]
+            if "download_category" in updates:
+                tracking.download_category = updates["download_category"]
             if "track_all_editions" in updates:
                 tracking.track_all_editions = updates["track_all_editions"]
             if "track_new_only" in updates:
@@ -599,8 +603,6 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
                 "tracking": {
                     "id": tracking.id,
                     "title": tracking.title,
-                    "publisher": tracking.publisher,
-                    "issn": tracking.issn,
                     "track_all_editions": tracking.track_all_editions,
                     "track_new_only": tracking.track_new_only,
                     "delete_from_client_on_completion": tracking.delete_from_client_on_completion,

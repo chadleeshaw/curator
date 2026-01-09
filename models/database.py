@@ -13,7 +13,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.declarative import declarative_base
 
-from core.date_utils import utc_now
+from core.parsers import utc_now
 
 Base = declarative_base()
 
@@ -53,9 +53,7 @@ class Magazine(Base):
     __tablename__ = "periodicals"
 
     id = Column(Integer, primary_key=True)
-    issn = Column(String(20), nullable=True, index=True)  # ISBN/ISSN identifier
     title = Column(String(255), nullable=False, index=True)
-    publisher = Column(String(255), nullable=True)
     language = Column(String(50), nullable=True, default="English", index=True)  # Language of the edition
     issue_date = Column(DateTime, nullable=False, index=True)
     file_path = Column(String(512), nullable=False, unique=True)
@@ -77,9 +75,7 @@ class MagazineTracking(Base):
         String(50), nullable=False, index=True
     )  # Open Library ID (not unique anymore - different languages can share)
     title = Column(String(255), nullable=False, index=True)
-    publisher = Column(String(255), nullable=True)
     language = Column(String(50), nullable=True, default="English", index=True)  # Language of tracked edition
-    issn = Column(String(20), nullable=True, index=True)
     first_publish_year = Column(Integer, nullable=True)
     total_editions_known = Column(Integer, default=0)
 
@@ -95,6 +91,12 @@ class MagazineTracking(Base):
     delete_from_client_on_completion = Column(
         Boolean, default=False
     )  # Delete from download client after completion or failure
+    category = Column(
+        String(100), nullable=True
+    )  # Content category: Magazines, Comics, Articles, News
+    download_category = Column(
+        String(100), nullable=True
+    )  # Download client category (e.g., "books", "magazines")
 
     # Metadata
     periodical_metadata = Column(JSON, nullable=True)  # Full metadata from Open Library

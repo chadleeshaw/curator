@@ -2,6 +2,48 @@
 /* Buttons, Forms, Cards, Modals, Tables, and Other Reusable Components */
 
 /* ==========================================================================
+   Stats Grid
+   ========================================================================== */
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  background: var(--surface);
+  padding: 20px;
+  border-radius: 12px;
+  border: 2px solid var(--border-color);
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.stat-card:hover {
+  border-color: var(--primary-color);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+}
+
+.stat-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--primary-color);
+  margin-bottom: 8px;
+  line-height: 1;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ==========================================================================
    Buttons
    ========================================================================== */
 
@@ -262,61 +304,92 @@
 
 .periodical-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 24px;
   margin-top: 20px;
 }
 
 .periodical-card {
-  background: var(--surface-variant);
-  border-radius: 8px;
+  background: var(--surface);
+  border: 2px solid var(--border-color);
+  border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
-  transition:
-    transform 0.3s ease,
-    box-shadow 0.3s ease;
+  transition: all 0.2s ease;
 }
 
 .periodical-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-4px);
+  border-color: var(--primary-color);
+  box-shadow: 0 8px 16px rgba(99, 102, 241, 0.2);
 }
 
 .periodical-cover {
   width: 100%;
-  height: 200px;
+  height: 220px;
   background: linear-gradient(135deg, var(--primary-color) 0%, #764ba2 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 600;
   text-align: center;
-  padding: 10px;
+  padding: 16px;
+  position: relative;
+  overflow: hidden;
 }
 
 .periodical-cover img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  border-radius: 0;
 }
 
 .periodical-info {
-  padding: 12px;
+  padding: 16px;
 }
 
 .periodical-info h4 {
   color: var(--text-primary);
-  font-size: 14px;
-  margin-bottom: 5px;
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 8px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.3;
 }
 
 .periodical-info p {
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.periodical-info p:last-of-type {
+  margin-bottom: 12px;
+}
+
+.periodical-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.language-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  margin-top: 6px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--primary-color);
+  border-radius: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .info-card {
@@ -427,13 +500,18 @@
   margin: 3px 0;
 }
 
+/* Tracked Periodicals Stats */
+#tracking-stats {
+  margin: 24px 0;
+}
+
 /* Tracked Periodicals Card */
 .tracked-card {
   background: var(--surface);
   border: 2px solid var(--border-color);
-  border-radius: 8px;
-  padding: 20px;
-  margin-bottom: 15px;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 16px;
   display: grid;
   grid-template-columns: auto 1fr auto;
   gap: 20px;
@@ -443,7 +521,8 @@
 
 .tracked-card:hover {
   border-color: var(--primary-color);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.1);
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.15);
+  transform: translateY(-2px);
 }
 
 .tracked-card .merge-checkbox {
@@ -463,56 +542,149 @@
   display: none !important;
 }
 
-.tracked-card-info {
+.tracked-card-main {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
+  min-width: 0;
+}
+
+.tracked-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .tracked-card h5 {
   color: var(--text-primary);
   margin: 0;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  line-height: 1.3;
 }
 
-.tracked-card p {
+.tracking-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge-download-all {
+  background: rgba(34, 197, 94, 0.15);
+  color: rgb(34, 197, 94);
+}
+
+.badge-download-new {
+  background: rgba(59, 130, 246, 0.15);
+  color: rgb(59, 130, 246);
+}
+
+.badge-watch {
+  background: rgba(168, 162, 158, 0.15);
+  color: rgb(168, 162, 158);
+}
+
+.tracked-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
   color: var(--text-secondary);
   font-size: 13px;
-  margin: 0;
-  padding: 0;
+  line-height: 1.5;
 }
 
-.tracking-mode {
+.meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.issue-count {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.selected-count {
   color: var(--primary-color);
   font-weight: 500;
-  font-size: 14px;
-  margin-top: 8px;
+}
+
+.text-muted {
+  opacity: 0.6;
 }
 
 .tracked-card-buttons {
   display: flex;
   gap: 8px;
-  flex-direction: column;
-  align-items: flex-end;
+  flex-direction: row;
+  align-items: center;
+  justify-self: end;
 }
 
-.tracked-card-buttons .btn-small {
-  white-space: nowrap;
-  padding: 8px 14px;
-  font-size: 13px;
-  width: 160px;
-  text-align: center;
+.btn-icon {
+  padding: 10px;
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 18px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
 }
 
-.tracked-card-buttons .btn-danger {
-  padding: 8px 14px;
-  font-size: 13px;
-  width: 160px;
+.btn-icon:hover {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  transform: scale(1.1);
+}
+
+.btn-icon.btn-danger {
+  border-color: var(--border-color);
+  background: var(--surface);
+}
+
+.btn-icon.btn-danger:hover {
+  background: #dc3545;
+  border-color: #dc3545;
+}
+
+/* Empty State */
+.empty-state {
   text-align: center;
+  padding: 60px 20px;
+  color: var(--text-secondary);
+}
+
+.empty-state-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.empty-state h3 {
+  color: var(--text-primary);
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+}
+
+.empty-state p {
+  font-size: 14px;
+  max-width: 400px;
+  margin: 0 auto;
+  line-height: 1.6;
 }
 
 /* ==========================================================================

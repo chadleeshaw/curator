@@ -13,7 +13,7 @@ from unittest.mock import Mock
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from processor.download_manager import DownloadManager
+from services import DownloadManager
 from models.database import Base, MagazineTracking, DownloadSubmission, SearchResult as DBSearchResult
 from core.bases import DownloadClient
 

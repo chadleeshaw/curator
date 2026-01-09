@@ -17,15 +17,13 @@ from core.constants import (
     DEFAULT_FUZZY_THRESHOLD,
     DUPLICATE_DATE_THRESHOLD_DAYS,
 )
-from core.language_utils import detect_language, generate_language_aware_olid
-from core.matching import TitleMatcher
+from core.parsers import generate_language_aware_olid
+from core.parsers import TitleMatcher, FileCategorizer, UnifiedParser
 from core.pdf_utils import extract_cover_from_pdf
 from core.utils import find_pdf_epub_files, hash_file_in_chunks
 from core.response_models import ErrorCodes, OperationResult
 from models.database import Magazine, MagazineTracking
-from processor.categorizer import FileCategorizer
-from processor.metadata_extractor import MetadataExtractor
-from processor.organizer import FileOrganizer
+from services.file_organizer import FileOrganizer
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +57,7 @@ class FileImporter:
         self.title_matcher = TitleMatcher(threshold=fuzzy_threshold)
 
         # Initialize specialized helpers
-        self.metadata_extractor = MetadataExtractor()
+        self.parser = UnifiedParser(fuzzy_threshold=fuzzy_threshold)
         self.categorizer = FileCategorizer()
         self.organizer = FileOrganizer(
             self.organize_base_dir, category_prefix=self.category_prefix
@@ -202,26 +200,17 @@ class FileImporter:
             True if successful, False otherwise
         """
         try:
-            metadata = self.metadata_extractor.extract_from_filename(pdf_path)
+            # Parse file using unified parser - combines filename and filepath parsing
+            parsed = self.parser.parse_file(pdf_path)
 
-            raw_title = metadata.get("title", "")
-
-            # Step 1: Validate title before processing (Readarr-inspired)
-            if not self.title_matcher.validate_before_parsing(raw_title):
+            # Step 1: Validate title before processing (already done in parser for search results)
+            if not self.title_matcher.validate_before_parsing(parsed.title):
                 logger.warning(
-                    f"Skipping invalid release title: {raw_title} (from {pdf_path.name})"
+                    f"Skipping invalid release title: {parsed.title} (from {pdf_path.name})"
                 )
                 return False
 
-            # Step 2: Clean release title (now includes formatting)
-            standardized_title = self.title_matcher.clean_release_title(raw_title)
-            logger.debug(f"Cleaned and formatted title: '{raw_title}' -> '{standardized_title}'")
-
-            metadata["title"] = standardized_title
-
-            # Detect language from filename/path
-            language = detect_language(str(pdf_path))
-            metadata["language"] = language
+            logger.debug(f"Parsed metadata: '{parsed.title}' (confidence: {parsed.confidence})")
 
             # Calculate content hash for duplicate detection
             content_hash = hash_file_in_chunks(str(pdf_path))
@@ -248,22 +237,10 @@ class FileImporter:
                 )
                 return False
 
-            # Check if this is a special edition and determine the tracking title
-            # Do this BEFORE duplicate checking so we compare tracking titles
-
-            # First check if metadata already indicates special edition (from Pattern 3b in metadata extractor)
-            if metadata.get("is_special_edition"):
-                # Special edition was detected in filename pattern
-                base_title = standardized_title
-                is_special_edition = True
-                special_name = "Special Edition"
-                if metadata.get("issue_number"):
-                    special_name = f"No {metadata['issue_number']}"
-            else:
-                # Use standard extraction from title
-                base_title, is_special_edition, special_name = (
-                    self.title_matcher.extract_base_title(standardized_title)
-                )
+            # Extract special edition info from parsed data
+            base_title = parsed.base_title
+            is_special_edition = parsed.is_special_edition
+            special_name = parsed.special_edition_name
 
             # Use base_title for tracking - language is stored separately in the language field
             # This keeps titles clean and allows proper filtering by language
@@ -272,20 +249,19 @@ class FileImporter:
             # Check for duplicates using fuzzy matching on tracking titles AND issue date
             # A duplicate is defined as: same tracking title (fuzzy match) AND same issue date (within 5 days)
             existing_magazines = session.query(Magazine).all()
-            issue_date = metadata.get("issue_date")
             for existing in existing_magazines:
                 is_match, score = self.title_matcher.match(
                     tracking_title, existing.title
                 )
-                if is_match and issue_date and existing.issue_date:
-                    date_diff = abs((issue_date - existing.issue_date).days)
+                if is_match and parsed.issue_date and existing.issue_date:
+                    date_diff = abs((parsed.issue_date - existing.issue_date).days)
                     # Also check language match for duplicates
-                    same_language = (existing.language == language) or (
-                        not existing.language and language == "English"
+                    same_language = (existing.language == parsed.language) or (
+                        not existing.language and parsed.language == "English"
                     )
                     if date_diff <= DUPLICATE_DATE_THRESHOLD_DAYS and same_language:
                         logger.warning(
-                            f"Duplicate detected: '{tracking_title}' ({issue_date.strftime('%b %Y')}, {language}) matches existing "
+                            f"Duplicate detected: '{tracking_title}' ({parsed.issue_date.strftime('%b %Y')}, {parsed.language}) matches existing "
                             f"'{existing.title}' ({existing.issue_date.strftime('%b %Y')}, {existing.language or 'English'}) "
                             f"(title score: {score}, date diff: {date_diff} days). Skipping import."
                         )
@@ -293,14 +269,20 @@ class FileImporter:
 
             cover_path = self._extract_cover(pdf_path)
 
-            category = self.categorizer.categorize(standardized_title)
+            category = self.categorizer.categorize(parsed.title)
 
             if skip_organize:
                 organized_path = pdf_path
                 logger.info(f"Using file in place (already organized): {pdf_path}")
             else:
-                # Update metadata title to tracking_title for proper folder organization
-                metadata["title"] = tracking_title
+                # Convert parsed data to metadata dict for organizer
+                metadata = {
+                    "title": tracking_title,
+                    "issue_date": parsed.issue_date,
+                    "year": parsed.year,
+                    "month_name": parsed.month_name,
+                    "language": parsed.language,
+                }
                 organized_path = self.organizer.organize(
                     pdf_path, metadata, category, organization_pattern
                 )
@@ -313,15 +295,22 @@ class FileImporter:
                 "category": category,
                 "imported_from": pdf_path.name,
                 "import_date": datetime.now().isoformat(),
+                "confidence": parsed.confidence,
+                "parse_source": parsed.parse_source,
             }
+            if parsed.country:
+                extra_metadata["country"] = parsed.country
+            if parsed.issue_number:
+                extra_metadata["issue_number"] = parsed.issue_number
+            if parsed.volume:
+                extra_metadata["volume"] = parsed.volume
             if is_special_edition:
                 extra_metadata["special_edition"] = special_name
-                extra_metadata["full_title"] = standardized_title
+                extra_metadata["full_title"] = parsed.title
 
             magazine = Magazine(
                 title=tracking_title,
-                publisher=metadata.get("publisher"),
-                issue_date=metadata.get("issue_date", datetime.now()),
+                issue_date=parsed.issue_date or datetime.now(),
                 file_path=str(organized_path),
                 cover_path=str(cover_path) if cover_path else None,
                 content_hash=content_hash,
@@ -348,7 +337,6 @@ class FileImporter:
                     tracking = MagazineTracking(
                         olid=olid,
                         title=tracking_title,
-                        publisher=metadata.get("publisher"),
                         track_all_editions=track_all_editions,
                         track_new_only=track_new_only,
                         selected_editions={},
@@ -397,7 +385,7 @@ class FileImporter:
                     )
 
             session.commit()
-            logger.info(f"Added to database: {standardized_title} ({category})")
+            logger.info(f"Added to database: {parsed.title} ({category})")
 
             if not skip_organize:
                 try:

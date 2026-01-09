@@ -14,9 +14,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from processor.download_monitor import DownloadMonitorTask
-from processor.download_manager import DownloadManager
-from processor.file_importer import FileImporter
+from scheduler import DownloadMonitorTask
+from services import DownloadManager
+from services import FileImporter
 from core.bases import DownloadClient
 from models.database import (
     Base,

@@ -57,13 +57,14 @@ class NZBGetClient(DownloadClient):
             logger.error(f"NZBGet API error: {e}")
             return {}
 
-    def submit(self, nzb_url: str, title: str = None) -> str:
+    def submit(self, nzb_url: str, title: str = None, category: str = None) -> str:
         """
         Submit an NZB URL to NZBGet.
 
         Args:
             nzb_url: URL to NZB file
-            title: Optional title for the job
+            title: Optional title for the job (sanitized to prevent subfolder issues)
+            category: Optional category (determines download folder)
 
         Returns:
             Job ID (NZBID)
@@ -72,7 +73,12 @@ class NZBGetClient(DownloadClient):
             # NZBGet uses AddUrl method to add NZB from URL
             nzb_name = title or nzb_url.split("/")[-1]
 
-            params = [nzb_url, nzb_name, 50, False]  # url, name, priority, addToTop
+            # Sanitize title: replace path separators and limit length
+            nzb_name = nzb_name.replace("/", "-").replace("\\", "-").strip()
+            if len(nzb_name) > 100:
+                nzb_name = nzb_name[:100].strip()
+
+            params = [nzb_url, nzb_name, category or "", 50, False, False]  # url, name, category, priority, addToTop, addPaused
             result = self._api_call("append", params)
 
             if isinstance(result, (int, float)) and result > 0:

@@ -4,9 +4,8 @@ A modular system for discovering, downloading, and organizing periodicals (magaz
 
 ## Features
 
-- **Multi-Provider Search**: Newsnab (Prowlarr), RSS feeds, CrossRef, Wikipedia
+- **Multi-Provider Search**: Newsnab and RSS feeds
 - **Smart Deduplication**: Fuzzy matching prevents duplicate downloads
-- **Metadata Enrichment**: Open Library integration for covers and metadata
 - **Download Management**: SABnzbd and NZBGet support
 - **Web Interface**: Modern UI for searching, browsing, and viewing
 - **Organized Storage**: Automatic file organization with consistent naming
@@ -108,7 +107,7 @@ python main.py
 
 The application follows a modular design:
 
-- **Providers**: Pluggable search providers (Newsnab, RSS, CrossRef, Wikipedia)
+- **Providers**: Pluggable search providers (Newsnab, RSS)
 - **Clients**: Download client implementations (SABnzbd, NZBGet)
 - **Processor**: Download monitoring, file import, organization, scheduling
 - **Web**: FastAPI backend with modern frontend

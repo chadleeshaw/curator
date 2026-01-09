@@ -4,7 +4,7 @@ Tests for language detection and processing utilities
 
 import pytest
 
-from core.language_utils import (
+from core.parsers import (
     detect_language,
     generate_language_aware_olid,
     normalize_language_name,

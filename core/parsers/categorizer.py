@@ -1,12 +1,7 @@
 """
 File categorization based on title keywords.
-Maps periodical titles to categories like Magazines, Comics, Articles, or News.
 """
-import logging
-
 from core.constants import CATEGORY_KEYWORDS
-
-logger = logging.getLogger(__name__)
 
 
 class FileCategorizer:
@@ -14,19 +9,21 @@ class FileCategorizer:
 
     def categorize(self, title: str) -> str:
         """
-        Categorize file based on title keywords.
+        Determine category based on title.
 
         Args:
-            title: File or periodical title
+            title: Title to categorize
 
         Returns:
-            Category name (default: "Magazines")
+            Category name (Magazines, Comics, Articles, News, etc.)
         """
+        if not title:
+            return "Magazines"
+
         title_lower = title.lower()
 
         for category, keywords in CATEGORY_KEYWORDS.items():
-            for keyword in keywords:
-                if keyword in title_lower:
-                    return category
+            if any(keyword.lower() in title_lower for keyword in keywords):
+                return category
 
         return "Magazines"

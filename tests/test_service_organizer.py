@@ -12,8 +12,8 @@ from datetime import datetime  # noqa: E402
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from processor.organizer import FileOrganizer  # noqa: E402
-from core.utils import sanitize_filename  # noqa: E402
+from services import FileOrganizer  # noqa: E402
+from core.parsers import sanitize_filename, parse_filename_for_metadata  # noqa: E402
 
 
 def test_sanitize_filename():
@@ -35,33 +35,32 @@ def test_sanitize_filename():
 
 def test_parse_filename_for_metadata():
     """Test parsing metadata from filenames"""
-    processor = FileOrganizer(tempfile.gettempdir())
-
+    # Use the centralized parser function instead of a method on FileOrganizer
     # Valid format: "Title - MonYear"
-    result = processor.parse_filename_for_metadata("Wired Magazine - Dec2006")
+    result = parse_filename_for_metadata("Wired Magazine - Dec2006")
     assert result["title"] == "Wired Magazine"
     assert result["issue_date"].month == 12
     assert result["issue_date"].year == 2006
     assert result["confidence"] == "high"
 
     # Another valid format
-    result = processor.parse_filename_for_metadata("National Geographic - Mar2023")
+    result = parse_filename_for_metadata("National Geographic - Mar2023")
     assert result["title"] == "National Geographic"
     assert result["issue_date"].month == 3
     assert result["issue_date"].year == 2023
     assert result["confidence"] == "high"
 
     # Invalid format
-    result = processor.parse_filename_for_metadata("InvalidFilename")
+    result = parse_filename_for_metadata("InvalidFilename")
     assert result["confidence"] == "low"
 
     # Test with extra spaces
-    result = processor.parse_filename_for_metadata("Time Magazine  -  Jan2010")
+    result = parse_filename_for_metadata("Time Magazine  -  Jan2010")
     assert result["title"] == "Time Magazine"
     assert result["issue_date"].month == 1
     assert result["issue_date"].year == 2010
 
-    print("Testing FileOrganizer.parse_filename_for_metadata()... ✓ PASS")
+    print("Testing parse_filename_for_metadata()... ✓ PASS")
 
 
 def test_organize_file():
@@ -193,7 +192,7 @@ def test_filename_patterns():
 
 def test_parse_all_months():
     """Test parsing all month abbreviations"""
-    processor = FileOrganizer(tempfile.gettempdir())
+    # Use centralized parser instead of method on FileOrganizer
 
     months = [
         "Jan",
@@ -212,13 +211,13 @@ def test_parse_all_months():
 
     for month_num, month_abbr in enumerate(months, 1):
         filename = f"Test Magazine - {month_abbr}2020"
-        result = processor.parse_filename_for_metadata(filename)
+        result = parse_filename_for_metadata(filename)
 
         assert result["confidence"] == "high"
         assert result["issue_date"].month == month_num
         assert result["issue_date"].year == 2020
 
-    print("Testing FileOrganizer all month parsing... ✓ PASS")
+    print("Testing parse_filename_for_metadata() all month parsing... ✓ PASS")
 
 
 def test_organize_pattern():

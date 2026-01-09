@@ -2,6 +2,7 @@
 Download manager for handling periodical downloads.
 Manages search, deduplication, submission, and status tracking.
 """
+# pylint: disable=too-many-lines
 
 import logging
 import re
@@ -17,9 +18,10 @@ from core.constants import (
     MAX_DOWNLOADS_PER_BATCH,
     PROVIDER_SEARCH_TIMEOUT,
 )
-from core.date_utils import normalize_month_name, utc_now
-from core.language_utils import LANGUAGE_INDICATORS, detect_language
-from core.matching import TitleMatcher
+from core.parsers import normalize_month_name, utc_now
+from core.parsers import LANGUAGE_INDICATORS
+from core.parsers import TitleMatcher, UnifiedParser
+from core.parsers.categorizer import FileCategorizer
 from models.database import (
     DownloadSubmission,
     Magazine,
@@ -49,7 +51,12 @@ class DownloadManager:
         """
         self.search_providers = search_providers
         self.download_client = download_client
+        # Get default category from client config (handles mocks gracefully)
+        client_config = getattr(download_client, "config", {})
+        self.default_category = client_config.get("default_category", "Magazines") if isinstance(client_config, dict) else "Magazines"
         self.title_matcher = TitleMatcher(threshold=fuzzy_threshold)
+        self.parser = UnifiedParser(fuzzy_threshold=fuzzy_threshold)
+        self.categorizer = FileCategorizer()
 
     def search_periodical_issues(
         self, periodical_title: str, session: Session
@@ -98,31 +105,27 @@ class DownloadManager:
                         continue
 
                     for result in results:
-                        # Validate and clean result title before processing
-                        result_title = result.title
-                        if not self.title_matcher.validate_before_parsing(result_title):
-                            logger.debug(
-                                f"Skipping invalid search result: {result_title} from {provider.name}"
-                            )
-                            continue
-
-                        # Clean the title for better matching
-                        cleaned_result_title = self.title_matcher.clean_release_title(result_title)
+                        # Parse search result using unified parser
+                        parsed = self.parser.parse_search_result(
+                            title=result.title,
+                            url=result.url,
+                            provider=result.provider,
+                            publication_date=result.publication_date,
+                            raw_metadata=result.raw_metadata,
+                        )
 
                         # Apply language filter if specified
-                        if language_filter:
-                            result_language = detect_language(cleaned_result_title)
-                            if result_language != language_filter:
-                                continue  # Skip results that don't match the language filter
+                        if language_filter and parsed.language != language_filter:
+                            continue  # Skip results that don't match the language filter
 
                         all_results.append(
                             {
-                                "title": cleaned_result_title,  # Store cleaned title
-                                "original_title": result_title,  # Keep original for reference
-                                "url": result.url,
-                                "provider": result.provider,
-                                "publication_date": result.publication_date,
-                                "raw_metadata": result.raw_metadata or {},
+                                "title": parsed.title,
+                                "original_title": parsed.original_title,
+                                "url": parsed.url,
+                                "provider": parsed.provider,
+                                "publication_date": parsed.publication_date,
+                                "raw_metadata": parsed.raw_metadata,
                             }
                         )
 
@@ -250,25 +253,18 @@ class DownloadManager:
             return True, existing
 
         # Also check if already in library (Magazine table)
-        # Use TitleMatcher to standardize the result title and compute tracking_title
-        matcher = TitleMatcher()
+        # Parse search result to get standardized fields
+        parsed = self.parser.parse_search_result(
+            title=result_title,
+            url="",  # Not needed for duplicate check
+            provider="",  # Not needed for duplicate check
+        )
 
-        # Step 1: Validate title (Readarr-inspired)
-        if not matcher.validate_before_parsing(result_title):
-            logger.debug(f"Skipping invalid result title: {result_title}")
-            return True, None
-
-        # Step 2: Clean the title (now includes formatting)
-        standardized = matcher.clean_release_title(result_title)
-        logger.debug(f"Cleaned result title: '{result_title}' -> '{standardized}'")
-
-        # Detect language from result title
-        result_language = detect_language(result_title)
+        logger.debug(f"Parsed result title: '{result_title}' -> '{parsed.title}'")
 
         # Compute tracking_title the same way file_importer does
-        base_title, is_special, special_name = matcher.extract_base_title(standardized)
-        tracking_title = base_title if is_special else standardized
-        # Language is stored separately in the language field, not appended to title
+        tracking_title = parsed.base_title
+        result_language = parsed.language
 
         # Check if this tracking_title with this language already exists in library
         in_library = (
@@ -351,11 +347,23 @@ class DownloadManager:
 
         # Submit to download client
         try:
+            # Determine download client category: tracked item download_category > config default
+            tracking = session.query(MagazineTracking).filter(MagazineTracking.id == tracking_id).first()
+            download_category = None
+            if tracking and tracking.download_category:
+                download_category = tracking.download_category
+                logger.debug(f"[DownloadManager] Using tracked item download_category: {download_category}")
+            elif self.default_category:
+                download_category = self.default_category
+                logger.debug(f"[DownloadManager] Using default download_category: {download_category}")
+
             logger.debug(
-                f"[DownloadManager] Submitting to download client: {search_result['title']}"
+                f"[DownloadManager] Submitting to download client: {search_result['title']} (download_category: {download_category})"
             )
             job_id = self.download_client.submit(
-                nzb_url=search_result["url"], title=search_result["title"]
+                nzb_url=search_result["url"],
+                title=search_result["title"],
+                category=download_category
             )
 
             if not job_id:
@@ -986,8 +994,18 @@ class DownloadManager:
             logger.info(
                 f"Retrying submission {submission_id}: {submission.result_title}"
             )
+            # Determine download client category: tracked item download_category > config default
+            tracking = session.query(MagazineTracking).filter(MagazineTracking.id == submission.tracking_id).first()
+            download_category = None
+            if tracking and tracking.download_category:
+                download_category = tracking.download_category
+            elif self.default_category:
+                download_category = self.default_category
+
             job_id = self.download_client.submit(
-                nzb_url=submission.source_url, title=submission.result_title
+                nzb_url=submission.source_url,
+                title=submission.result_title,
+                category=download_category
             )
 
             if not job_id:

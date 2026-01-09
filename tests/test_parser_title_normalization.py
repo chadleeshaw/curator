@@ -14,9 +14,9 @@ from sqlalchemy.orm import sessionmaker
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.matching import TitleMatcher
+from core.parsers import TitleMatcher
 from models.database import Base, Magazine, MagazineTracking
-from processor.file_importer import FileImporter
+from services import FileImporter
 
 
 @pytest.fixture

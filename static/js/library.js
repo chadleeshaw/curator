@@ -116,74 +116,47 @@ export class LibraryManager {
       const langBadge = document.createElement('span');
       langBadge.className = 'language-badge';
       langBadge.textContent = periodical.language;
-      langBadge.style.display = 'inline-block';
-      langBadge.style.padding = '2px 8px';
-      langBadge.style.marginTop = '4px';
-      langBadge.style.fontSize = '0.75em';
-      langBadge.style.fontWeight = '500';
-      langBadge.style.backgroundColor = 'var(--accent-color, #6366f1)';
-      langBadge.style.color = 'white';
-      langBadge.style.borderRadius = '12px';
       info.appendChild(langBadge);
     }
 
     const dateP = document.createElement('p');
     const dateText = new Date(periodical.issue_date).toLocaleDateString();
+    dateP.textContent = `Latest: ${dateText}`;
+    info.appendChild(dateP);
+
+    const issueP = document.createElement('p');
     const issueCount = periodical.issue_count || 1;
     const issueText = issueCount === 1 ? '1 issue' : `${issueCount} issues`;
-    dateP.textContent = `Latest: ${dateText} • ${issueText}`;
-    dateP.style.fontSize = '0.9em';
-    dateP.style.color = 'var(--text-secondary)';
-    info.appendChild(dateP);
+    issueP.textContent = issueText;
+    info.appendChild(issueP);
 
     // Add action buttons container
     const actionsDiv = document.createElement('div');
     actionsDiv.className = 'periodical-actions';
-    actionsDiv.style.display = 'flex';
-    actionsDiv.style.gap = '8px';
-    actionsDiv.style.marginTop = '10px';
 
     // View button
     const viewBtn = document.createElement('button');
-    viewBtn.className = 'btn-action btn-view';
+    viewBtn.className = 'btn-primary';
     viewBtn.textContent = 'Open';
     viewBtn.style.flex = '1';
-    viewBtn.style.padding = '6px 12px';
-    viewBtn.style.backgroundColor = 'var(--primary-color)';
-    viewBtn.style.color = 'white';
-    viewBtn.style.border = 'none';
-    viewBtn.style.borderRadius = '4px';
-    viewBtn.style.cursor = 'pointer';
-    viewBtn.style.fontSize = '0.85em';
+    viewBtn.style.padding = '8px 14px';
+    viewBtn.style.fontSize = '13px';
     viewBtn.style.fontWeight = '600';
-    viewBtn.style.transition = 'background 0.3s';
     viewBtn.onclick = (e) => {
       e.stopPropagation();
       this.viewPeriodical(periodical.title, periodical.language);
     };
-    viewBtn.onmouseover = () => (viewBtn.style.backgroundColor = 'var(--primary-dark)');
-    viewBtn.onmouseout = () => (viewBtn.style.backgroundColor = 'var(--primary-color)');
     actionsDiv.appendChild(viewBtn);
 
     // Delete button
     const deleteBtn = document.createElement('button');
-    deleteBtn.className = 'btn-action btn-delete';
+    deleteBtn.className = 'btn-icon btn-danger';
     deleteBtn.textContent = '🗑️';
-    deleteBtn.style.padding = '6px 10px';
-    deleteBtn.style.backgroundColor = '#f44336';
-    deleteBtn.style.color = 'white';
-    deleteBtn.style.border = 'none';
-    deleteBtn.style.borderRadius = '4px';
-    deleteBtn.style.cursor = 'pointer';
-    deleteBtn.style.fontSize = '1em';
-    deleteBtn.style.transition = 'background 0.3s';
     deleteBtn.title = 'Delete this periodical';
     deleteBtn.onclick = (e) => {
       e.stopPropagation();
       window.deletePeriodical(periodical.id, periodical.title, periodical.issue_count);
     };
-    deleteBtn.onmouseover = () => (deleteBtn.style.backgroundColor = '#d32f2f');
-    deleteBtn.onmouseout = () => (deleteBtn.style.backgroundColor = '#f44336');
     actionsDiv.appendChild(deleteBtn);
 
     info.appendChild(actionsDiv);

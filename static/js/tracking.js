@@ -9,6 +9,10 @@
 import { APIClient } from './api.js';
 import { UIUtils, SortManager } from './ui-utils.js';
 
+// Constants loaded from backend API
+let SUPPORTED_LANGUAGES = [];
+let ISO_COUNTRIES = {};
+
 export class TrackingManager {
   constructor() {
     this.sortManager = new SortManager('title', 'asc', () => this.loadTrackedPeriodicals());
@@ -17,6 +21,79 @@ export class TrackingManager {
     this.selectedEditions = {};
     this.mergeMode = false;
     this.selectedForMerge = new Set();
+  }
+
+  /**
+   * Initialize the tracking manager
+   */
+  async init() {
+    await this.loadConstants();
+    this.populateFormDropdowns();
+  }
+
+  /**
+   * Load constants from backend API
+   */
+  async loadConstants() {
+    try {
+      const response = await APIClient.get('/api/constants');
+      const data = await response.json();
+      if (data.success) {
+        SUPPORTED_LANGUAGES = data.languages;
+        ISO_COUNTRIES = data.countries;
+      }
+    } catch (error) {
+      console.error('Failed to load constants:', error);
+      UIUtils.showStatus('tracking-status', 'Failed to load form options', 'error');
+    }
+  }
+
+  /**
+   * Populate form dropdowns with constants
+   */
+  populateFormDropdowns() {
+    // Populate language dropdown
+    const languageSelect = document.getElementById('new-tracking-language');
+    if (languageSelect && SUPPORTED_LANGUAGES.length > 0) {
+      languageSelect.innerHTML = '';
+      SUPPORTED_LANGUAGES.forEach(lang => {
+        const option = document.createElement('option');
+        option.value = lang;
+        option.textContent = lang;
+        if (lang === 'English') option.selected = true;
+        languageSelect.appendChild(option);
+      });
+    }
+
+    // Populate country dropdown
+    const countrySelect = document.getElementById('new-tracking-country');
+    if (countrySelect && Object.keys(ISO_COUNTRIES).length > 0) {
+      // Keep the default "None (International)" option
+      const defaultOption = countrySelect.querySelector('option[value=""]');
+      countrySelect.innerHTML = '';
+      if (defaultOption) {
+        countrySelect.appendChild(defaultOption);
+      }
+
+      // Get unique countries (removes duplicates like UK/GB)
+      const uniqueCountries = new Map();
+      Object.entries(ISO_COUNTRIES).forEach(([code, name]) => {
+        if (!uniqueCountries.has(name)) {
+          uniqueCountries.set(name, code);
+        }
+      });
+
+      // Sort by country name and add options
+      Array.from(uniqueCountries.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .forEach(([name, code]) => {
+          const option = document.createElement('option');
+          option.value = code;
+          option.textContent = `${name} (${code})`;
+          if (code === 'US') option.selected = true;
+          countrySelect.appendChild(option);
+        });
+    }
   }
 
   /**
@@ -266,12 +343,23 @@ export class TrackingManager {
       );
       const data = await response.json();
 
+      const tracked = data.tracked_magazines || data.tracked || [];
+      
+      // Update statistics
+      this.updateTrackingStatistics(tracked);
+
       const container = document.getElementById('tracked-list');
       container.innerHTML = '';
 
-      const tracked = data.tracked_magazines || data.tracked || [];
       if (tracked.length === 0) {
-        container.innerHTML = '<p>No tracked periodicals yet</p>';
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">📚</div>
+            <h3>No Tracked Periodicals</h3>
+            <p>Start tracking magazines, comics, or news publications to automatically monitor and download new issues.</p>
+            <button onclick="openTrackNewPeriodicalModal()" class="btn-primary" style="margin-top: 16px;">📌 Track Your First Periodical</button>
+          </div>
+        `;
         return;
       }
 
@@ -284,6 +372,50 @@ export class TrackingManager {
   }
 
   /**
+   * Update tracking statistics display
+   */
+  updateTrackingStatistics(tracked) {
+    const statsContainer = document.getElementById('tracking-stats');
+    if (!statsContainer) return;
+
+    const stats = {
+      total: tracked.length,
+      watching: tracked.filter(t => !t.track_all_editions && !t.track_new_only).length,
+      trackingNew: tracked.filter(t => t.track_new_only).length,
+      trackingAll: tracked.filter(t => t.track_all_editions).length,
+      totalKnown: tracked.reduce((sum, t) => sum + (t.total_known || 0), 0),
+      totalSelected: tracked.reduce((sum, t) => sum + (t.selected_count || 0), 0)
+    };
+
+    statsContainer.innerHTML = `
+      <div class="stat-card">
+        <div class="stat-value">${stats.total}</div>
+        <div class="stat-label">Total Tracked</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${stats.trackingAll}</div>
+        <div class="stat-label">All Issues</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${stats.trackingNew}</div>
+        <div class="stat-label">New Issues</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${stats.watching}</div>
+        <div class="stat-label">Watch Only</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${stats.totalKnown}</div>
+        <div class="stat-label">Issues Found</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${stats.totalSelected}</div>
+        <div class="stat-label">Selected</div>
+      </div>
+    `;
+  }
+
+  /**
    * Create a tracked periodical card
    */
   createTrackedCard(tracked) {
@@ -291,16 +423,26 @@ export class TrackingManager {
     card.className = 'tracked-card';
     card.dataset.trackingId = tracked.id;
 
-    // Determine tracking icon and label
-    let trackingIcon = '👁️';
-    let trackingLabel = 'Watched';
+    // Determine tracking badge
+    let trackingBadge = '';
     if (tracked.track_all_editions) {
-      trackingIcon = '⬇️';
-      trackingLabel = 'All Issues';
+      trackingBadge = '<span class="tracking-badge badge-download-all">⬇️ All Issues</span>';
     } else if (tracked.track_new_only) {
-      trackingIcon = '⬇️';
-      trackingLabel = 'New Issues';
+      trackingBadge = '<span class="tracking-badge badge-download-new">⬇️ New Issues</span>';
+    } else {
+      trackingBadge = '<span class="tracking-badge badge-watch">👁️ Watch Only</span>';
     }
+
+    // Build issue stats
+    const totalKnown = tracked.total_known || 0;
+    const selectedCount = tracked.selected_count || 0;
+    const issueStats = totalKnown > 0 
+      ? `<span class="issue-count">${totalKnown} issues found</span>` 
+      : '<span class="issue-count text-muted">No issues found yet</span>';
+    
+    const selectedStats = selectedCount > 0
+      ? `<span class="selected-count">• ${selectedCount} selected</span>`
+      : '';
 
     const checkboxHtml = this.mergeMode 
       ? `<input type="checkbox" class="merge-checkbox" data-tracking-id="${tracked.id}" ${this.selectedForMerge.has(tracked.id) ? 'checked' : ''}>` 
@@ -308,16 +450,22 @@ export class TrackingManager {
 
     card.innerHTML = `
       ${checkboxHtml}
-      <div class="tracked-card-info">
-        <h5>${tracked.title}</h5>
-        <p>Publisher: ${tracked.publisher || 'Unknown'}</p>
-        <p>ISSN: ${tracked.issn || 'N/A'}</p>
-        <p class="tracking-mode">${trackingIcon} ${trackingLabel}</p>
+      <div class="tracked-card-main">
+        <div class="tracked-card-header">
+          <h5>${tracked.title}</h5>
+          ${trackingBadge}
+        </div>
+        <div class="tracked-card-meta">
+          <span class="meta-item">📁 ${tracked.category || 'Auto-detect'}</span>
+          <span class="meta-item">🌐 ${tracked.language || 'English'}</span>
+          ${issueStats}
+          ${selectedStats}
+        </div>
       </div>
       <div class="tracked-card-buttons">
-        <button onclick="editTracking(${tracked.id})" class="btn-small">✏️ Edit</button>
-        <button onclick='searchForIssues(${tracked.id}, "${tracked.title.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}")' class="btn-small">🔍 Search Issues</button>
-        <button onclick='deleteTracking(${tracked.id}, "${tracked.title.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}")' class="btn-small btn-danger">🗑️ Delete</button>
+        <button onclick="editTracking(${tracked.id})" class="btn-icon" title="Edit">✏️</button>
+        <button onclick='searchForIssues(${tracked.id}, "${tracked.title.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}")' class="btn-icon" title="Search Issues">🔍</button>
+        <button onclick='deleteTracking(${tracked.id}, "${tracked.title.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}")' class="btn-icon btn-danger" title="Delete">🗑️</button>
       </div>
     `;
 
@@ -402,8 +550,9 @@ export class TrackingManager {
         // Populate modal with tracking data
         document.getElementById('edit-tracking-id').value = trackingId;
         document.getElementById('edit-tracking-title').value = t.title || '';
-        document.getElementById('edit-tracking-publisher').value = t.publisher || '';
-        document.getElementById('edit-tracking-issn').value = t.issn || '';
+        document.getElementById('edit-tracking-category').value = t.category || '';
+        document.getElementById('edit-tracking-language').value = t.language || 'English';
+        document.getElementById('edit-tracking-download-category').value = t.download_category || '';
 
         // Set tracking mode
         let mode = 'none';
@@ -815,10 +964,18 @@ export class TrackingManager {
    */
   resetTracking() {
     this.currentPeriodicalMetadata = null;
-    document.getElementById('tracking-search-query').value = '';
-    document.getElementById('tracking-search-result').classList.add('hidden');
-    document.getElementById('tracking-search-error').classList.add('hidden');
-    document.getElementById('save-step').classList.add('hidden');
+    const titleInput = document.getElementById('new-tracking-title');
+    if (titleInput) titleInput.value = '';
+    
+    // Clear search query and results
+    const searchQuery = document.getElementById('tracking-search-query');
+    if (searchQuery) searchQuery.value = '';
+    
+    const searchResult = document.getElementById('tracking-search-result');
+    if (searchResult) searchResult.classList.add('hidden');
+    
+    const searchError = document.getElementById('tracking-search-error');
+    if (searchError) searchError.classList.add('hidden');
   }
 
   /**
@@ -865,8 +1022,9 @@ window.closeSearchIssuesModal = function () {
 window.saveEditedTracking = async function () {
   const trackingId = document.getElementById('edit-tracking-id').value;
   const title = document.getElementById('edit-tracking-title').value;
-  const publisher = document.getElementById('edit-tracking-publisher').value;
-  const issn = document.getElementById('edit-tracking-issn').value;
+  const category = document.getElementById('edit-tracking-category').value;
+  const language = document.getElementById('edit-tracking-language').value;
+  const downloadCategory = document.getElementById('edit-tracking-download-category').value.trim();
   const mode = document.getElementById('edit-tracking-mode').value;
   const deleteFromClient = document.getElementById('edit-delete-from-client').checked;
   const orgPattern = document.getElementById('edit-tracking-org-pattern').value.trim();
@@ -874,8 +1032,9 @@ window.saveEditedTracking = async function () {
   try {
     const response = await APIClient.put(`/api/periodicals/tracking/${trackingId}`, {
       title,
-      publisher,
-      issn,
+      category,
+      language,
+      download_category: downloadCategory || null,
       track_all_editions: mode === 'all',
       track_new_only: mode === 'new',
       delete_from_client_on_completion: deleteFromClient,
@@ -897,7 +1056,9 @@ window.saveEditedTracking = async function () {
   }
 };
 
+// DEPRECATED: Metadata search functionality removed - backend no longer supports metadata providers
 // Search for publisher metadata (from edit modal)
+/*
 window.searchPublisherMetadata = async function () {
   const title = document.getElementById('edit-tracking-title').value;
   if (!title) {
@@ -951,7 +1112,10 @@ window.searchPublisherMetadata = async function () {
     UIUtils.showStatus('tracking-status', 'Failed to search metadata', 'error');
   }
 };
+*/
 
+// DEPRECATED: Metadata modal and results functions no longer needed
+/*
 // Show metadata search results modal
 window.showMetadataSearchResults = function (results, title) {
   // Create a modal to display search results
@@ -1087,14 +1251,6 @@ window.selectMetadataResult = function (result) {
     document.getElementById('edit-tracking-title').value = result.title;
   }
 
-  if (result.publisher) {
-    document.getElementById('edit-tracking-publisher').value = result.publisher;
-  }
-
-  if (result.issn) {
-    document.getElementById('edit-tracking-issn').value = result.issn;
-  }
-
   window.closeMetadataModal();
 };
 
@@ -1105,6 +1261,8 @@ window.closeMetadataModal = function () {
     modal.remove();
   }
 };
+*/
+// END DEPRECATED metadata search functions
 
 // Select and download issue with language variant selection
 window.selectIssueWithVariants = function (issueKey, alreadyDownloaded) {
@@ -1426,7 +1584,60 @@ window.downloadIssue = async function (title, url, provider) {
 // Expose functions globally for onclick handlers
 window.openTrackNewPeriodicalModal = () => tracking.openTrackNewPeriodicalModal();
 window.closeTrackNewPeriodicalModal = () => tracking.closeTrackNewPeriodicalModal();
-window.searchPeriodicalMetadata = () => tracking.searchPeriodicalMetadata();
+window.saveNewTracking = async () => {
+  const title = document.getElementById('new-tracking-title').value.trim();
+  const category = document.getElementById('new-tracking-category').value;
+  const language = document.getElementById('new-tracking-language').value || 'English';
+  const country = document.getElementById('new-tracking-country').value;
+  const downloadCategory = document.getElementById('new-tracking-download-category').value.trim();
+  
+  if (!title) {
+    UIUtils.showStatus('tracking-status', 'Please enter a title', 'error');
+    return;
+  }
+
+  const trackingMode = document.getElementById('new-tracking-mode').value || 'all';
+
+  try {
+    // Build query string for the POST request
+    const params = new URLSearchParams({
+      title: title,
+      language: language
+    });
+    if (category) {
+      params.append('category', category);
+    }
+    if (country) {
+      params.append('country', country);
+    }
+
+    const response = await APIClient.post(`/api/periodicals/track?${params.toString()}`, {});
+
+    const data = await response.json();
+
+    if (data.success) {
+      // Now update with the tracking mode and download category
+      const updateData = {
+        track_all_editions: trackingMode === 'all',
+        track_new_only: trackingMode === 'new',
+      };
+      if (downloadCategory) {
+        updateData.download_category = downloadCategory;
+      }
+      await APIClient.put(`/api/periodicals/tracking/${data.tracking_id}`, updateData);
+
+      UIUtils.showStatus('tracking-status', 'Tracking started successfully', 'success');
+      tracking.closeTrackNewPeriodicalModal();
+      tracking.loadTrackedPeriodicals();
+      setTimeout(() => UIUtils.hideStatus('tracking-status'), 2000);
+    } else {
+      UIUtils.showStatus('tracking-status', data.message || 'Failed to start tracking', 'error');
+    }
+  } catch (error) {
+    console.error('Error starting tracking:', error);
+    UIUtils.showStatus('tracking-status', `Error: ${error.message}`, 'error');
+  }
+};
 window.saveTrackingPreferences = () => tracking.saveTrackingPreferences();
 window.resetTracking = () => tracking.resetTracking();
 window.updateTrackingMode = () => tracking.updateTrackingMode();

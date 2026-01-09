@@ -1,7 +1,6 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,15 +9,13 @@ from sqlalchemy import text
 
 from core.auth import AuthManager
 from core.config import ConfigLoader
+from core.constants import MAX_DOWNLOADS_PER_BATCH
 from core.database import DatabaseManager
 from core.factory import ClientFactory, ProviderFactory
-from core.matching import TitleMatcher
-from models.database import Magazine, MagazineTracking
-from processor.download_manager import DownloadManager
-from processor.download_monitor import DownloadMonitorTask
-from processor.file_importer import FileImporter
-from processor.organizer import FileOrganizer
-from processor.task_scheduler import TaskScheduler
+from core.parsers import TitleMatcher
+from models.database import MagazineTracking
+from services import DownloadManager, FileImporter, FileOrganizer
+from scheduler import TaskScheduler, DownloadMonitorTask, CoverCleanupTask
 
 # Import all routers
 from web.routers import (
@@ -26,6 +23,7 @@ from web.routers import (
     config,
     downloads,
     imports,
+    metadata,
     pages,
     periodicals,
     search,
@@ -61,6 +59,7 @@ metadata_providers = []
 download_client = None
 download_manager = None
 download_monitor_task = None
+cover_cleanup_task = None
 title_matcher = None
 file_processor = None
 file_importer = None
@@ -71,7 +70,7 @@ scheduler_task = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown"""
-    global download_client, download_manager, download_monitor_task, title_matcher, file_processor, file_importer, task_scheduler, scheduler_task
+    global download_client, download_manager, download_monitor_task, cover_cleanup_task, title_matcher, file_processor, file_importer, task_scheduler, scheduler_task
 
     # Startup
     try:
@@ -103,28 +102,6 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 logger.error(
                     f"Failed to load search provider {provider_config.get('name')}: {e}",
-                    exc_info=True,
-                )
-
-        # Initialize metadata providers (CrossRef, Wikipedia)
-        metadata_provider_configs = config_loader.get_metadata_providers()
-        for provider_config in metadata_provider_configs:
-            try:
-                if not provider_config.get("type"):
-                    logger.warning(
-                        f"Skipping metadata provider with no type: {provider_config.get('name')}"
-                    )
-                    continue
-
-                logger.debug(
-                    f"Creating metadata provider: {provider_config.get('name')} (type: {provider_config.get('type')})"
-                )
-                provider = ProviderFactory.create(provider_config)
-                metadata_providers.append(provider)
-                logger.info(f"Loaded metadata provider: {provider.name}")
-            except Exception as e:
-                logger.error(
-                    f"Failed to load metadata provider {provider_config.get('name')}: {e}",
                     exc_info=True,
                 )
 
@@ -184,6 +161,14 @@ async def lifespan(app: FastAPI):
                 "Download manager not initialized: missing download client or search providers"
             )
 
+        # Initialize cover cleanup task
+        cover_cleanup_task = CoverCleanupTask(
+            session_factory=session_factory,
+            organize_base_dir=storage_config.get("organize_dir", "./_Magazines"),
+            file_importer=file_importer,
+        )
+        logger.info("Cover cleanup task initialized")
+
         # Initialize task scheduler
         task_scheduler = TaskScheduler()
 
@@ -196,6 +181,30 @@ async def lifespan(app: FastAPI):
                     if download_manager:
                         logger.debug(
                             "Auto-download: Checking tracked periodicals for new issues"
+                        )
+
+                        # Check how many downloads are currently pending or downloading
+                        from models.database import Download
+                        pending_count = (
+                            db_session.query(Download)
+                            .filter(
+                                Download.status.in_([
+                                    Download.StatusEnum.PENDING,
+                                    Download.StatusEnum.DOWNLOADING
+                                ])
+                            )
+                            .count()
+                        )
+
+                        if pending_count >= MAX_DOWNLOADS_PER_BATCH:
+                            logger.info(
+                                f"Auto-download: Skipping - already at max downloads ({pending_count}/{MAX_DOWNLOADS_PER_BATCH})"
+                            )
+                            return
+
+                        remaining_slots = MAX_DOWNLOADS_PER_BATCH - pending_count
+                        logger.info(
+                            f"Auto-download: {remaining_slots} download slots available ({pending_count} already queued)"
                         )
 
                         # Get all tracked periodicals with any form of tracking enabled
@@ -277,86 +286,10 @@ async def lifespan(app: FastAPI):
                 except Exception as e:
                     logger.error(f"Download monitoring error: {e}", exc_info=True)
 
-        # Define cover cleanup task
+        # Define cover cleanup task wrapper
         async def cleanup_orphaned_covers_task():
             """Clean up cover files that aren't tied to any periodical and generate missing covers (runs every 24 hours)"""
-            try:
-                db_session = session_factory()
-                try:
-                    # Get all periodicals
-                    all_periodicals = db_session.query(Magazine).all()
-                    periodicals_with_covers = [
-                        m
-                        for m in all_periodicals
-                        if m.cover_path and Path(m.cover_path).exists()
-                    ]
-                    periodicals_without_covers = [
-                        m
-                        for m in all_periodicals
-                        if m.file_path
-                        and (not m.cover_path or not Path(m.cover_path).exists())
-                    ]
-
-                    db_cover_paths = {
-                        str(Path(m.cover_path).resolve())
-                        for m in periodicals_with_covers
-                    }
-
-                    # Find all cover files on disk
-                    covers_dir = (
-                        Path(storage_config.get("organize_base_dir", "./local/data"))
-                        / ".covers"
-                    )
-                    covers_dir.mkdir(parents=True, exist_ok=True)
-
-                    # Part 1: Delete orphaned covers
-                    deleted_count = 0
-                    if covers_dir.exists():
-                        # Get absolute paths of all cover files on disk
-                        cover_files = set(str(f.resolve()) for f in covers_dir.glob("*.jpg"))
-                        orphaned_covers = cover_files - db_cover_paths
-
-                        for orphan_path in orphaned_covers:
-                            try:
-                                Path(orphan_path).unlink()
-                                deleted_count += 1
-                                logger.debug(f"Deleted orphaned cover: {orphan_path}")
-                            except Exception as e:
-                                logger.error(
-                                    f"Error deleting orphaned cover {orphan_path}: {e}"
-                                )
-
-                        if deleted_count > 0:
-                            logger.info(
-                                f"Cleanup covers: Deleted {deleted_count} orphaned cover files"
-                            )
-
-                    # Part 2: Generate missing covers
-                    generated_count = 0
-                    for magazine in periodicals_without_covers:
-                        pdf_path = Path(magazine.file_path)
-                        if not pdf_path.exists():
-                            continue
-
-                        # Extract cover from PDF
-                        cover_path = file_importer._extract_cover(pdf_path)
-                        if cover_path:
-                            magazine.cover_path = str(cover_path)
-                            generated_count += 1
-                            logger.debug(
-                                f"Generated missing cover for: {magazine.title}"
-                            )
-
-                    if generated_count > 0:
-                        db_session.commit()
-                        logger.info(
-                            f"Cleanup covers: Generated {generated_count} missing covers"
-                        )
-
-                finally:
-                    db_session.close()
-            except Exception as e:
-                logger.error(f"Cover cleanup error: {e}", exc_info=True)
+            await cover_cleanup_task.run()
 
         # Schedule tasks with intervals from config
         task_scheduler.schedule_periodic(
@@ -571,6 +504,7 @@ async def get_status():
 # Note: tracking must come before periodicals to avoid route conflicts
 # (/periodicals/tracking must match before /periodicals/{magazine_id})
 app.include_router(auth.router)
+app.include_router(metadata.router)
 app.include_router(search.router)
 app.include_router(tracking.router)
 app.include_router(periodicals.router)

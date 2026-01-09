@@ -57,13 +57,14 @@ class DownloadClient(ABC):
         self.type = config.get("type", "unknown")
 
     @abstractmethod
-    def submit(self, nzb_url: str, title: str = None) -> str:
+    def submit(self, nzb_url: str, title: str = None, category: str = None) -> str:
         """
         Submit an NZB URL to download.
 
         Args:
             nzb_url: URL to NZB file
             title: Optional title for the job
+            category: Optional category for download client (determines download folder)
 
         Returns:
             Job ID returned by the client

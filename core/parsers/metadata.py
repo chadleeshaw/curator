@@ -60,14 +60,13 @@ class MetadataExtractor:
             pdf_path: Path object to the PDF file
 
         Returns:
-            Dict with extracted metadata (title, publisher, issue_date)
+            Dict with extracted metadata (title, issue_date)
         """
         filename = pdf_path.stem
         magazine_name = self.get_title_from_path(pdf_path)
 
         metadata = {
             "title": filename,
-            "publisher": None,
             "issue_date": datetime.now(),
         }
 
