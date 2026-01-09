@@ -48,36 +48,52 @@ async def list_periodicals(
             # Validate sort_order
             is_descending = sort_order.lower() == "desc"
 
-            # Group by title AND language to get unique periodical editions
-            from sqlalchemy import func
+            # Group by tracking_id (when present) OR title+language (for untracked items)
+            # This allows merged tracking records to show as one entry while preserving
+            # separate entries for untracked items
+            from sqlalchemy import func, case
+            from models.database import MagazineTracking
 
-            # Subquery to find the max issue_date for each (title, language) combination
+            # For grouping, use tracking.title when tracking_id exists, otherwise use magazine.title
+            # This ensures merged items show under the primary tracking title
+            # Subquery to find the max issue_date for each group
             subquery = (
                 db_session.query(
-                    Magazine.title,
+                    case(
+                        (Magazine.tracking_id.isnot(None), Magazine.tracking_id),
+                        else_=Magazine.id
+                    ).label("group_key"),
                     Magazine.language,
                     func.max(Magazine.issue_date).label("max_date")
                 )
-                .group_by(Magazine.title, Magazine.language)
+                .group_by("group_key", Magazine.language)
                 .subquery()
             )
 
-            # Join to get full magazine record for each title+language's latest issue
+            # Join to get full magazine record for each group's latest issue
             query = db_session.query(Magazine).join(
                 subquery,
-                (Magazine.title == subquery.c.title)
+                (
+                    case(
+                        (Magazine.tracking_id.isnot(None), Magazine.tracking_id),
+                        else_=Magazine.id
+                    ) == subquery.c.group_key
+                )
                 & (Magazine.language == subquery.c.language)
                 & (Magazine.issue_date == subquery.c.max_date)
             )
 
-            # Apply sorting
+            # Left join with tracking to get the primary title for display
+            query = query.outerjoin(MagazineTracking, Magazine.tracking_id == MagazineTracking.id)
+
+            # Apply sorting - use tracking title when available
             if sort_by == "publisher":
                 sort_expr = (
                     Magazine.publisher.desc()
                     if is_descending
                     else Magazine.publisher.asc()
                 )
-                query = query.order_by(sort_expr, Magazine.title.asc())
+                query = query.order_by(sort_expr, func.coalesce(MagazineTracking.title, Magazine.title).asc())
             elif sort_by == "issue_date":
                 sort_expr = (
                     Magazine.issue_date.desc()
@@ -87,33 +103,65 @@ async def list_periodicals(
                 query = query.order_by(sort_expr)
             else:  # Default to title
                 sort_expr = (
-                    Magazine.title.desc() if is_descending else Magazine.title.asc()
+                    func.coalesce(MagazineTracking.title, Magazine.title).desc()
+                    if is_descending
+                    else func.coalesce(MagazineTracking.title, Magazine.title).asc()
                 )
                 query = query.order_by(sort_expr)
 
             magazines = query.offset(skip).limit(limit).all()
 
-            # Get total count of unique (title, language) combinations
-            total_titles = db_session.query(
-                func.count(func.distinct(Magazine.title + '_' + func.coalesce(Magazine.language, 'English')))
-            ).scalar()  # pylint: disable=not-callable
+            # Get total count of unique groups
+            total_query = db_session.query(
+                func.count(func.distinct(
+                    case(
+                        (Magazine.tracking_id.isnot(None), Magazine.tracking_id),
+                        else_=Magazine.id
+                    ).concat('_').concat(func.coalesce(Magazine.language, 'English'))
+                ))
+            )
+            total_titles = total_query.scalar()  # pylint: disable=not-callable
 
-            # Get issue counts for each (title, language) combination
+            # Get issue counts for each group
+            # For tracked items, count all issues with same tracking_id + language
+            # For untracked items, count by title + language
             issue_counts = {}
             for mag in magazines:
-                key = (mag.title, mag.language or 'English')
-                if key not in issue_counts:
-                    count = db_session.query(Magazine).filter(
-                        Magazine.title == mag.title,
-                        Magazine.language == mag.language
-                    ).count()
-                    issue_counts[key] = count
+                if mag.tracking_id:
+                    # Count all magazines with same tracking_id and language
+                    key = (mag.tracking_id, mag.language or 'English')
+                    if key not in issue_counts:
+                        count = db_session.query(Magazine).filter(
+                            Magazine.tracking_id == mag.tracking_id,
+                            Magazine.language == mag.language
+                        ).count()
+                        issue_counts[key] = count
+                else:
+                    # Count by title and language for untracked items
+                    key = (mag.title, mag.language or 'English', None)
+                    if key not in issue_counts:
+                        count = db_session.query(Magazine).filter(
+                            Magazine.title == mag.title,
+                            Magazine.language == mag.language,
+                            Magazine.tracking_id.is_(None)
+                        ).count()
+                        issue_counts[key] = count
+
+            # Fetch tracking record for each magazine to get display title
+            tracking_titles = {}
+            for mag in magazines:
+                if mag.tracking_id and mag.tracking_id not in tracking_titles:
+                    tracking = db_session.query(MagazineTracking).filter(
+                        MagazineTracking.id == mag.tracking_id
+                    ).first()
+                    if tracking:
+                        tracking_titles[mag.tracking_id] = tracking.title
 
             return {
                 "periodicals": [
                     {
                         "id": m.id,
-                        "title": m.title,
+                        "title": tracking_titles.get(m.tracking_id, m.title) if m.tracking_id else m.title,
                         "language": m.language or "English",
                         "publisher": m.publisher,
                         "issn": m.issn,
@@ -131,7 +179,11 @@ async def list_periodicals(
                             m.updated_at.isoformat() if m.updated_at else None
                         ),
                         "metadata": m.extra_metadata,
-                        "issue_count": issue_counts.get((m.title, m.language or 'English'), 1),
+                        "issue_count": issue_counts.get(
+                            (m.tracking_id, m.language or 'English') if m.tracking_id
+                            else (m.title, m.language or 'English', None),
+                            1
+                        ),
                     }
                     for m in magazines
                 ],
