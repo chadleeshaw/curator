@@ -230,15 +230,21 @@ class FileImporter:
                 return False
 
             # First check: hash-based duplicate detection (100% accurate)
+            # Only check if we have a valid hash (skip NULL hashes from older imports)
             existing_by_hash = (
                 session.query(Magazine)
-                .filter(Magazine.content_hash == content_hash)
+                .filter(
+                    Magazine.content_hash == content_hash,
+                    Magazine.content_hash.isnot(None)
+                )
                 .first()
             )
             if existing_by_hash:
                 logger.warning(
-                    f"Duplicate detected (identical file): '{pdf_path.name}' matches existing "
-                    f"'{existing_by_hash.title}' at {existing_by_hash.file_path}. Skipping import."
+                    f"Duplicate detected (identical file content): '{pdf_path.name}' has same SHA256 hash "
+                    f"as existing '{existing_by_hash.title}' at {existing_by_hash.file_path}. "
+                    f"Hash: {content_hash[:16]}... "
+                    f"If these are truly different files, one may be corrupted or mislabeled. Skipping import."
                 )
                 return False
 
