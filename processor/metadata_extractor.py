@@ -32,6 +32,18 @@ class MetadataExtractor:
             'config',
             'logs',
             'app',
+            # Language folders (should be skipped when extracting periodical names)
+            'english',
+            'spanish',
+            'french',
+            'german',
+            'italian',
+            'portuguese',
+            'dutch',
+            'russian',
+            'chinese',
+            'japanese',
+            'korean',
         }
 
     def extract_from_filename(self, pdf_path: Path) -> Dict[str, Any]:
