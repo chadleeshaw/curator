@@ -114,7 +114,7 @@ async def list_periodicals(
 
             # Get total count of unique groups
             total_query = db_session.query(
-                func.count(func.distinct(
+                func.count(func.distinct(  # pylint: disable=not-callable
                     case(
                         (Magazine.tracking_id.isnot(None), Magazine.tracking_id),
                         else_=Magazine.id

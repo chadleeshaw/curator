@@ -39,9 +39,9 @@ jobs:
 
       - name: Run linting
         run: |
-          python -m pylint core/ models/ processor/ providers/ clients/ web/ --disable=C0114,C0115,C0116 || true
-          python -m flake8 --max-line-length=120 core/ models/ processor/ providers/ clients/ web/
-          python -m black --check core/ models/ processor/ providers/ clients/ web/ || true
+          python -m pylint core/ models/ providers/ clients/ web/ scheduler/ services/ --disable=C0114,C0115,C0116 || true
+          python -m flake8 --max-line-length=120 core/ models/ providers/ clients/ web/ scheduler/ services/
+          python -m black --check core/ models/ providers/ clients/ web/ scheduler/ services/ || true
 
       - name: Run tests
         run: |
