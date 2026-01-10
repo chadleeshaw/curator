@@ -455,7 +455,6 @@ def _reorganize_magazine_files(
 
         # Handle filename conflicts by appending timestamp
         if new_pdf_path.exists() and new_pdf_path != old_pdf_path:
-            from datetime import datetime
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename_base_with_ts = f"{safe_title} - {month}{year} ({timestamp})"
             new_pdf_path = target_dir / f"{filename_base_with_ts}.pdf"

@@ -36,11 +36,11 @@ class NewsnabProvider(SearchProvider):
         # Allow configurable categories (comma-separated) or default to all book-related categories
         # Common Newznab categories: 7000=Books (all), 7010=Magazines, 7020=Ebooks, 7030=Comics
         self.categories = config.get("categories", "7000,7010,7020,7030")  # All books including magazines
-        
+
         # Category name to Newznab ID mapping
         self.category_map = {
             "Magazines": "7010",
-            "Comics": "7030", 
+            "Comics": "7030",
             "Articles": "7020",  # Ebooks
             "News": "7010",  # Same as magazines
         }
@@ -79,12 +79,12 @@ class NewsnabProvider(SearchProvider):
         try:
             # Determine which categories to search
             cat_ids = self.categories  # Default: all configured categories
-            
+
             if category and category in self.category_map:
                 # If specific category requested, use its ID
                 cat_ids = self.category_map[category]
                 logger.debug(f"Using category filter: {category} -> {cat_ids}")
-            
+
             url = f"{self.api_url}/api"
             params = {
                 "apikey": self.api_key,

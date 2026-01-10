@@ -101,31 +101,31 @@ def _filter_edition_variants(
 
 
 def _filter_by_language_and_country(
-    results: List[Dict[str, Any]], 
-    language: str = None, 
+    results: List[Dict[str, Any]],
+    language: str = None,
     country: str = None
 ) -> List[Dict[str, Any]]:
     """
     Filter search results by language and/or country.
-    
+
     Looks for language and country indicators in titles (e.g., "UK", "DE", "German").
     Makes smart assumptions: German → DE, FR → French, etc.
     If no indicators found in title, assumes US/English (most common default).
-    
+
     Args:
         results: List of search result dictionaries
         language: Language to filter by (e.g., "English", "German")
         country: Country code to filter by (e.g., "US", "UK", "DE")
-    
+
     Returns:
         Filtered list matching the specified language/country
     """
     if not results or (not language and not country):
         return results
-    
+
     # Import country detection
     from core.parsers.country import detect_country
-    
+
     # Common language indicators in titles
     language_indicators = {
         'English': ['english', 'en'],
@@ -142,7 +142,7 @@ def _filter_by_language_and_country(
         'Chinese': ['chinese', 'cn', '中文'],
         'Korean': ['korean', 'kr', '한국어'],
     }
-    
+
     # Language to country mappings (smart assumptions)
     language_to_country = {
         'German': 'DE',
@@ -158,7 +158,7 @@ def _filter_by_language_and_country(
         'Chinese': 'CN',
         'Korean': 'KR',
     }
-    
+
     # Country to language mappings (reverse assumptions)
     country_to_language = {
         'DE': 'German',
@@ -181,15 +181,15 @@ def _filter_by_language_and_country(
         'NZ': 'English',
         'IE': 'English',
     }
-    
+
     filtered = []
-    
+
     for result in results:
         title = result.get("title", "").lower()
-        
+
         # Detect country in title
         detected_country = detect_country(title)
-        
+
         # Detect language in title
         detected_language = None
         for lang, indicators in language_indicators.items():
@@ -199,7 +199,7 @@ def _filter_by_language_and_country(
                     break
             if detected_language:
                 break
-        
+
         # Smart assumptions:
         # If we detected a language but no country, infer country from language
         if detected_language and not detected_country:
@@ -209,7 +209,7 @@ def _filter_by_language_and_country(
                     f"Inferred country {detected_country} from language {detected_language}: "
                     f"{result['title'][:50]}"
                 )
-        
+
         # If we detected a country but no language, infer language from country
         if detected_country and not detected_language:
             if detected_country in country_to_language:
@@ -218,23 +218,23 @@ def _filter_by_language_and_country(
                     f"Inferred language {detected_language} from country {detected_country}: "
                     f"{result['title'][:50]}"
                 )
-        
+
         # Default to US/English if no indicators found (most common)
         if not detected_country:
             detected_country = 'US'
         if not detected_language:
             detected_language = 'English'
-        
+
         # Apply filters
         language_match = True
         country_match = True
-        
+
         if language:
             language_match = detected_language == language
-        
+
         if country:
             country_match = detected_country == country
-        
+
         # Keep result if it matches all specified filters
         if language_match and country_match:
             filtered.append(result)
@@ -248,7 +248,7 @@ def _filter_by_language_and_country(
                 f"Detected: {detected_language}/{detected_country}, "
                 f"Wanted: {language}/{country}"
             )
-    
+
     return filtered
 
 
@@ -412,7 +412,7 @@ async def search_periodical_providers(
                         error_msg = f"{provider.__class__.__name__}: {str(e)}"
                         logger.warning(f"Error searching provider: {error_msg}")
                         provider_errors.append(error_msg)
-                        
+
                 # If category filter was used but no results found, try again without category
                 if category and len(all_results) == 0:
                     logger.info(f"No results with category '{category}', expanding search to all categories")

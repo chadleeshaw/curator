@@ -116,7 +116,7 @@ class FileOrganizer:
         Move and rename PDF to organized location based on pattern.
 
         Pattern-based organization with support for subdirectories and tags.
-        Available pattern tags: 
+        Available pattern tags:
           {category}, {title}, {year}, {month}, {day}, {language}
           {issue} - Issue number (if available)
           {volume} - Volume number (if available)
@@ -141,21 +141,21 @@ class FileOrganizer:
             month = issue_date.strftime("%b")
             year = issue_date.strftime("%Y")
             day = issue_date.strftime("%d")
-            
+
             # Build filename with optional issue/volume info
             filename_parts = [safe_title]
-            
+
             # Add volume if present
             if volume:
                 filename_parts.append(f"Vol{volume}")
-            
+
             # Add issue number if present
             if issue_number:
                 filename_parts.append(f"No{issue_number}")
-            
+
             # Add date
             filename_parts.append(f"{month}{year}")
-            
+
             filename = f"{' - '.join(filename_parts)}.pdf"
 
             # Apply category prefix
@@ -165,12 +165,12 @@ class FileOrganizer:
             if not pattern:
                 # Build path: {category}/{title}/{year}/ or {category}/{title}/{volume}/{year}/ if volume present
                 path_parts = [category_with_prefix, safe_title]
-                
+
                 if volume:
                     path_parts.append(f"Vol{volume}")
-                
+
                 path_parts.append(year)
-                
+
                 target_dir = self.organize_dir / Path(*path_parts)
             else:
                 # Format pattern with all available tags
@@ -184,7 +184,7 @@ class FileOrganizer:
                     "issue": str(issue_number) if issue_number else "",
                     "volume": str(volume) if volume else "",
                 }
-                
+
                 target_path_str = pattern.format(**format_dict)
 
                 if not target_path_str.startswith("/"):
