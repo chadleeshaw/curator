@@ -415,6 +415,37 @@
             <div class="metadata-body" id="metadata-body">
                 <!-- Will be populated by JavaScript -->
             </div>
+            <div style="padding: 20px; border-top: 2px solid var(--border-color); background: var(--surface-variant); display: flex; flex-direction: column; gap: 10px;">
+                <button onclick="toggleSpecialEdition()" class="btn-secondary" id="toggle-special-btn" style="width: 100%;">
+                    ⭐ Toggle Special Edition
+                </button>
+                <button onclick="openMoveIssueModal()" class="btn-secondary" style="width: 100%;">
+                    🔀 Move to Different Tracking
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Move Issue Modal -->
+    <div id="move-issue-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 600px;">
+            <h3>🔀 Move Issue to Different Tracking</h3>
+            <p style="color: var(--text-secondary); margin-bottom: 20px;">
+                Select which tracking record this issue should belong to. This is useful for correcting misplaced issues.
+            </p>
+            <div id="move-issue-loading" style="text-align: center; padding: 20px;">
+                <div class="loading-spinner"></div>
+                <p>Loading tracking options...</p>
+            </div>
+            <div id="move-issue-options" class="hidden">
+                <select id="target-tracking-select" style="width: 100%; padding: 12px; margin-bottom: 20px; font-size: 14px; border-radius: 5px; border: 2px solid var(--border-color); background: var(--surface);">
+                    <option value="">Select a tracking record...</option>
+                </select>
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button onclick="closeMoveIssueModal()" class="btn-secondary">Cancel</button>
+                    <button onclick="confirmMoveIssue()" class="btn-primary" id="confirm-move-btn" disabled>Move Issue</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -425,6 +456,8 @@
         const specialEditionsData = container ? JSON.parse(container.getAttribute('data-special-editions') || '[]') : [];
         let pendingDeleteId = null;
         let pendingDeleteTitle = null;
+        let currentMagazineId = null;
+        let currentMagazineData = null;
 
         // Initialize theme from localStorage
         function initializeTheme() {
@@ -642,6 +675,23 @@
             const metadataBody = document.getElementById('metadata-body');
             metadataBody.innerHTML = '';
 
+            // Store current magazine data globally
+            currentMagazineId = data.id;
+            currentMagazineData = data;
+
+            // Update special edition button text based on current status
+            const isSpecialEdition = data.metadata && data.metadata.special_edition;
+            const toggleBtn = document.getElementById('toggle-special-btn');
+            if (toggleBtn) {
+                if (isSpecialEdition) {
+                    toggleBtn.textContent = '⭐ Unmark Special Edition';
+                    toggleBtn.title = 'Remove special edition status';
+                } else {
+                    toggleBtn.textContent = '⭐ Mark as Special Edition';
+                    toggleBtn.title = 'Mark this issue as a special edition';
+                }
+            }
+
             // Helper function to create metadata item
             function addMetadataItem(label, value) {
                 if (value === null || value === undefined || value === '') return;
@@ -793,6 +843,175 @@
         function goBack() {
             // Navigate to main page with library hash
             window.location.href = '/#library';
+        }
+
+        // Move issue modal functions
+        async function openMoveIssueModal() {
+            if (!currentMagazineId) {
+                alert('No magazine selected');
+                return;
+            }
+
+            const modal = document.getElementById('move-issue-modal');
+            const loading = document.getElementById('move-issue-loading');
+            const options = document.getElementById('move-issue-options');
+            const select = document.getElementById('target-tracking-select');
+
+            modal.classList.remove('hidden');
+            loading.classList.remove('hidden');
+            options.classList.add('hidden');
+
+            try {
+                // Fetch all tracking records
+                const response = await fetch('/api/periodicals/tracking?limit=1000');
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error('Failed to load tracking records');
+                }
+
+                const trackingRecords = data.tracked_magazines || [];
+                
+                // Clear and populate select
+                select.innerHTML = '<option value="">Select a tracking record...</option>';
+                
+                trackingRecords.forEach(tracking => {
+                    // Don't show current tracking as an option
+                    if (tracking.id === currentMagazineData.tracking_id) {
+                        return;
+                    }
+                    
+                    const option = document.createElement('option');
+                    option.value = tracking.id;
+                    option.textContent = `${tracking.title} (${tracking.category || 'Auto-detect'} - ${tracking.language || 'English'})`;
+                    select.appendChild(option);
+                });
+
+                // Show options
+                loading.classList.add('hidden');
+                options.classList.remove('hidden');
+
+                // Add change listener to enable/disable move button
+                select.onchange = function() {
+                    document.getElementById('confirm-move-btn').disabled = !this.value;
+                };
+
+            } catch (error) {
+                console.error('Error loading tracking records:', error);
+                alert('Failed to load tracking options: ' + error.message);
+                closeMoveIssueModal();
+            }
+        }
+
+        function closeMoveIssueModal() {
+            document.getElementById('move-issue-modal').classList.add('hidden');
+        }
+
+        async function confirmMoveIssue() {
+            const targetTrackingId = document.getElementById('target-tracking-select').value;
+            
+            if (!targetTrackingId || !currentMagazineId) {
+                alert('Please select a tracking record');
+                return;
+            }
+
+            const confirmBtn = document.getElementById('confirm-move-btn');
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Moving...';
+
+            try {
+                // Count total issues before moving to detect if this is the last one
+                const issueCards = document.querySelectorAll('.issue-card');
+                const isLastIssue = issueCards.length === 1;
+
+                const response = await fetch(
+                    `/api/periodicals/${currentMagazineId}/move-to-tracking?target_tracking_id=${targetTrackingId}`,
+                    { method: 'POST' }
+                );
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.detail || 'Failed to move issue');
+                }
+
+                // Show success message
+                const statusDiv = document.getElementById('status-message');
+                statusDiv.className = 'status-success mt-20 p-15 rounded';
+                statusDiv.textContent = `✓ ${result.message}`;
+                statusDiv.style.display = 'block';
+
+                // Close modals
+                closeMoveIssueModal();
+                closeMetadataModal();
+
+                // If this was the last issue, redirect to library instead of reloading
+                if (isLastIssue) {
+                    statusDiv.textContent = '✓ Last issue moved. Returning to library...';
+                    setTimeout(() => {
+                        window.location.href = '/#library';
+                    }, 1500);
+                } else {
+                    // Otherwise just reload to show updated list
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1500);
+                }
+
+            } catch (error) {
+                console.error('Error moving issue:', error);
+                alert('Failed to move issue: ' + error.message);
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = 'Move Issue';
+            }
+        }
+
+        // Toggle special edition status
+        async function toggleSpecialEdition() {
+            if (!currentMagazineId || !currentMagazineData) {
+                alert('No magazine selected');
+                return;
+            }
+
+            const isCurrentlySpecial = currentMagazineData.metadata && currentMagazineData.metadata.special_edition;
+
+            const toggleBtn = document.getElementById('toggle-special-btn');
+            const originalText = toggleBtn.textContent;
+            toggleBtn.disabled = true;
+            toggleBtn.textContent = 'Updating...';
+
+            try {
+                const response = await fetch(
+                    `/api/periodicals/${currentMagazineId}/toggle-special-edition?is_special=${!isCurrentlySpecial}`,
+                    { method: 'POST' }
+                );
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.detail || 'Failed to update special edition status');
+                }
+
+                // Show success message
+                const statusDiv = document.getElementById('status-message');
+                statusDiv.className = 'status-success mt-20 p-15 rounded';
+                statusDiv.textContent = `✓ ${result.message}`;
+                statusDiv.style.display = 'block';
+
+                // Close modal
+                closeMetadataModal();
+
+                // Reload page after a delay
+                setTimeout(() => {
+                    location.reload();
+                }, 1500);
+
+            } catch (error) {
+                console.error('Error toggling special edition:', error);
+                alert('Failed to update special edition status: ' + error.message);
+                toggleBtn.disabled = false;
+                toggleBtn.textContent = originalText;
+            }
         }
 
         // Initialize theme on page load

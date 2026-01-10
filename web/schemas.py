@@ -165,6 +165,7 @@ class TrackingPreferencesRequest(BaseModel):
     olid: str
     title: str
     first_publish_year: Optional[int] = None
+    country: Optional[str] = None
     track_all_editions: bool = False
     track_new_only: bool = False
     selected_editions: Dict[str, bool] = {}
@@ -178,6 +179,7 @@ class TrackingPreferencesResponse(BaseModel):
     id: int
     olid: str
     title: str
+    country: Optional[str] = None
     track_all_editions: bool
     selected_editions: Dict[str, bool]
     selected_years: List[int]

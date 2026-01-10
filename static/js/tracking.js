@@ -53,48 +53,59 @@ export class TrackingManager {
    */
   populateFormDropdowns() {
     // Populate language dropdown
-    const languageSelect = document.getElementById('new-tracking-language');
-    if (languageSelect && SUPPORTED_LANGUAGES.length > 0) {
-      languageSelect.innerHTML = '';
-      SUPPORTED_LANGUAGES.forEach(lang => {
-        const option = document.createElement('option');
-        option.value = lang;
-        option.textContent = lang;
-        if (lang === 'English') option.selected = true;
-        languageSelect.appendChild(option);
-      });
-    }
+        // Populate language dropdowns (new and edit modals)
+        const languageSelects = [
+          document.getElementById('new-tracking-language'),
+          document.getElementById('edit-tracking-language')
+        ];
+        languageSelects.forEach(languageSelect => {
+          if (languageSelect && SUPPORTED_LANGUAGES.length > 0) {
+            languageSelect.innerHTML = '';
+            SUPPORTED_LANGUAGES.forEach(lang => {
+              const option = document.createElement('option');
+              option.value = lang;
+              option.textContent = lang;
+              if (lang === 'English') option.selected = true;
+              languageSelect.appendChild(option);
+            });
+          }
+        });
 
-    // Populate country dropdown
-    const countrySelect = document.getElementById('new-tracking-country');
-    if (countrySelect && Object.keys(ISO_COUNTRIES).length > 0) {
-      // Keep the default "None (International)" option
-      const defaultOption = countrySelect.querySelector('option[value=""]');
-      countrySelect.innerHTML = '';
-      if (defaultOption) {
-        countrySelect.appendChild(defaultOption);
-      }
+        // Populate country dropdowns (new and edit modals)
+        const countrySelects = [
+          document.getElementById('new-tracking-country'),
+          document.getElementById('edit-tracking-country')
+        ];
+        countrySelects.forEach(countrySelect => {
+          if (countrySelect && Object.keys(ISO_COUNTRIES).length > 0) {
+            // Keep the default "None (International)" option
+            const defaultOption = countrySelect.querySelector('option[value=""]');
+            countrySelect.innerHTML = '';
+            if (defaultOption) {
+              countrySelect.appendChild(defaultOption);
+            }
 
-      // Get unique countries (removes duplicates like UK/GB)
-      const uniqueCountries = new Map();
-      Object.entries(ISO_COUNTRIES).forEach(([code, name]) => {
-        if (!uniqueCountries.has(name)) {
-          uniqueCountries.set(name, code);
-        }
-      });
+            // Get unique countries (removes duplicates like UK/GB)
+            const uniqueCountries = new Map();
+            Object.entries(ISO_COUNTRIES).forEach(([code, name]) => {
+              if (!uniqueCountries.has(name)) {
+                uniqueCountries.set(name, code);
+              }
+            });
 
-      // Sort by country name and add options
-      Array.from(uniqueCountries.entries())
-        .sort((a, b) => a[0].localeCompare(b[0]))
-        .forEach(([name, code]) => {
-          const option = document.createElement('option');
-          option.value = code;
-          option.textContent = `${name} (${code})`;
-          if (code === 'US') option.selected = true;
-          countrySelect.appendChild(option);
+            // Sort by country name and add options
+            Array.from(uniqueCountries.entries())
+              .sort((a, b) => a[0].localeCompare(b[0]))
+              .forEach(([name, code]) => {
+                const option = document.createElement('option');
+                option.value = code;
+                option.textContent = `${name} (${code})`;
+                if (code === 'US') option.selected = true;
+                countrySelect.appendChild(option);
+              });
+          }
         });
     }
-  }
 
   /**
    * Search for periodical metadata
@@ -433,13 +444,17 @@ export class TrackingManager {
       trackingBadge = '<span class="tracking-badge badge-watch">👁️ Watch Only</span>';
     }
 
+
     // Build issue stats
     const totalKnown = tracked.total_known || 0;
     const selectedCount = tracked.selected_count || 0;
+    const libraryCount = tracked.library_count || 0;
+    const country = tracked.country || '';
+    const countryStats = country ? `<span class="country">🌍 ${country}</span>` : '';
     const issueStats = totalKnown > 0 
       ? `<span class="issue-count">${totalKnown} issues found</span>` 
-      : '<span class="issue-count text-muted">No issues found yet</span>';
-    
+      : '';
+    const libraryStats = `<span class="library-count">📚 ${libraryCount} in library</span>`;
     const selectedStats = selectedCount > 0
       ? `<span class="selected-count">• ${selectedCount} selected</span>`
       : '';
@@ -458,14 +473,16 @@ export class TrackingManager {
         <div class="tracked-card-meta">
           <span class="meta-item">📁 ${tracked.category || 'Auto-detect'}</span>
           <span class="meta-item">🌐 ${tracked.language || 'English'}</span>
+          ${countryStats}
           ${issueStats}
+          ${libraryStats}
           ${selectedStats}
         </div>
       </div>
       <div class="tracked-card-buttons">
         <button onclick="editTracking(${tracked.id})" class="btn-icon" title="Edit">✏️</button>
-        <button onclick='searchForIssues(${tracked.id}, "${tracked.title.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}")' class="btn-icon" title="Search Issues">🔍</button>
-        <button onclick='deleteTracking(${tracked.id}, "${tracked.title.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}")' class="btn-icon btn-danger" title="Delete">🗑️</button>
+        <button onclick='searchForIssues(${tracked.id}, "${tracked.title.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}')' class="btn-icon" title="Search Issues">🔍</button>
+        <button onclick='deleteTracking(${tracked.id}, "${tracked.title.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}')' class="btn-icon btn-danger" title="Delete">🗑️</button>
       </div>
     `;
 
@@ -552,6 +569,7 @@ export class TrackingManager {
         document.getElementById('edit-tracking-title').value = t.title || '';
         document.getElementById('edit-tracking-category').value = t.category || '';
         document.getElementById('edit-tracking-language').value = t.language || 'English';
+        document.getElementById('edit-tracking-country').value = t.country || '';
         document.getElementById('edit-tracking-download-category').value = t.download_category || '';
 
         // Set tracking mode
@@ -1025,6 +1043,7 @@ window.saveEditedTracking = async function () {
   const category = document.getElementById('edit-tracking-category').value;
   const language = document.getElementById('edit-tracking-language').value;
   const downloadCategory = document.getElementById('edit-tracking-download-category').value.trim();
+  const country = document.getElementById('edit-tracking-country').value;
   const mode = document.getElementById('edit-tracking-mode').value;
   const deleteFromClient = document.getElementById('edit-delete-from-client').checked;
   const orgPattern = document.getElementById('edit-tracking-org-pattern').value.trim();
@@ -1034,6 +1053,7 @@ window.saveEditedTracking = async function () {
       title,
       category,
       language,
+      country,
       download_category: downloadCategory || null,
       track_all_editions: mode === 'all',
       track_new_only: mode === 'new',
@@ -1056,213 +1076,6 @@ window.saveEditedTracking = async function () {
   }
 };
 
-// DEPRECATED: Metadata search functionality removed - backend no longer supports metadata providers
-// Search for publisher metadata (from edit modal)
-/*
-window.searchPublisherMetadata = async function () {
-  const title = document.getElementById('edit-tracking-title').value;
-  if (!title) {
-    UIUtils.showStatus('tracking-status', 'Please enter a title', 'error');
-    return;
-  }
-
-  // Show loading modal
-  const loadingHTML = `
-    <div id="metadata-search-loading" class="modal" style="display: flex;">
-      <div class="modal-content" style="max-width: 400px; text-align: center;">
-        <div style="padding: 60px 40px;">
-          <p style="font-size: 18px; margin-bottom: 20px;">🔍 Searching for metadata...</p>
-          <p style="color: var(--text-secondary); margin-bottom: 20px;">Checking Wikipedia and CrossRef</p>
-          <div style="display: inline-block; width: 40px; height: 40px; border: 4px solid var(--border-color); border-top-color: var(--primary-color); border-radius: 50%; animation: spin 1s linear infinite;"></div>
-        </div>
-      </div>
-    </div>
-  `;
-
-  document.body.insertAdjacentHTML('beforeend', loadingHTML);
-
-  try {
-    const response = await APIClient.authenticatedFetch(
-      `/api/periodicals/search-metadata?query=${encodeURIComponent(title)}`,
-      { method: 'POST' }
-    );
-    const data = await response.json();
-
-    // Remove loading modal
-    const loadingModal = document.getElementById('metadata-search-loading');
-    if (loadingModal) {
-      loadingModal.remove();
-    }
-
-    if (data.found && data.results && data.results.length > 0) {
-      // Show results in a modal for user selection
-      window.showMetadataSearchResults(data.results, title);
-    } else {
-      UIUtils.showStatus('tracking-status', 'No metadata found for this title', 'error');
-    }
-  } catch (err) {
-    console.error('Error searching metadata:', err);
-
-    // Remove loading modal
-    const loadingModal = document.getElementById('metadata-search-loading');
-    if (loadingModal) {
-      loadingModal.remove();
-    }
-
-    UIUtils.showStatus('tracking-status', 'Failed to search metadata', 'error');
-  }
-};
-*/
-
-// DEPRECATED: Metadata modal and results functions no longer needed
-/*
-// Show metadata search results modal
-window.showMetadataSearchResults = function (results, title) {
-  // Create a modal to display search results
-  const modalHTML = `
-    <div id="metadata-results-modal" class="modal" style="display: flex;">
-      <div class="modal-content" style="max-width: 600px; max-height: 70vh; overflow-y: auto;">
-        <span class="close" onclick="closeMetadataModal()">&times;</span>
-        <h2>Metadata Search Results for "${title}"</h2>
-        <p style="color: var(--text-secondary); margin-bottom: 20px;">Click on a result to populate the form:</p>
-        <div id="metadata-results-list"></div>
-      </div>
-    </div>
-  `;
-
-  // Remove any existing metadata modal
-  const existingModal = document.getElementById('metadata-results-modal');
-  if (existingModal) {
-    existingModal.remove();
-  }
-
-  document.body.insertAdjacentHTML('beforeend', modalHTML);
-
-  const resultsList = document.getElementById('metadata-results-list');
-
-  // Merge results by title, combining publisher and ISSN from different sources
-  const mergedResults = window.mergeMetadataResults(results);
-
-  // Display results
-  mergedResults.forEach((result) => {
-    const resultDiv = document.createElement('div');
-    resultDiv.style.cssText = `
-      padding: 15px;
-      border: 1px solid var(--border-color);
-      border-radius: 5px;
-      margin-bottom: 10px;
-      cursor: pointer;
-      transition: background 0.2s;
-    `;
-    resultDiv.onmouseover = () => (resultDiv.style.background = 'var(--surface-variant)');
-    resultDiv.onmouseout = () => (resultDiv.style.background = 'transparent');
-
-    const titleP = document.createElement('p');
-    titleP.style.cssText = 'margin: 0 0 8px 0; font-weight: 600; font-size: 15px;';
-    titleP.textContent = result.title;
-    resultDiv.appendChild(titleP);
-
-    const sourcesP = document.createElement('p');
-    sourcesP.style.cssText = 'margin: 0 0 8px 0; font-size: 12px; color: var(--text-secondary);';
-    sourcesP.textContent = `Sources: ${result.sources.join(', ')}`;
-    resultDiv.appendChild(sourcesP);
-
-    if (result.publisher) {
-      const pubP = document.createElement('p');
-      pubP.style.cssText = 'margin: 0 0 5px 0; font-size: 13px;';
-      pubP.textContent = `Publisher: ${result.publisher}`;
-      resultDiv.appendChild(pubP);
-    }
-
-    if (result.issn) {
-      const issnP = document.createElement('p');
-      issnP.style.cssText =
-        'margin: 0 0 5px 0; font-size: 13px; font-weight: 500; color: var(--primary-color);';
-      issnP.textContent = `ISSN: ${result.issn}`;
-      resultDiv.appendChild(issnP);
-    }
-
-    if (result.publication_date) {
-      const dateP = document.createElement('p');
-      dateP.style.cssText = 'margin: 0; font-size: 12px; color: var(--text-tertiary);';
-      dateP.textContent = `Date: ${result.publication_date}`;
-      resultDiv.appendChild(dateP);
-    }
-
-    resultDiv.onclick = () => window.selectMetadataResult(result);
-    resultsList.appendChild(resultDiv);
-  });
-};
-
-// Merge metadata results from different sources
-window.mergeMetadataResults = function (results) {
-  // Group results by title (case-insensitive)
-  const grouped = new Map();
-
-  results.forEach((result) => {
-    const titleKey = result.title.toLowerCase().trim();
-
-    if (!grouped.has(titleKey)) {
-      grouped.set(titleKey, {
-        title: result.title,
-        publisher: null,
-        issn: null,
-        sources: [],
-        publication_date: result.publication_date,
-        url: result.url,
-        raw_metadata: result.raw_metadata || {},
-      });
-    }
-
-    const merged = grouped.get(titleKey);
-
-    // Combine data from different sources
-    if (!merged.publisher && (result.raw_metadata?.publisher || result.metadata?.publisher)) {
-      merged.publisher = result.raw_metadata?.publisher || result.metadata?.publisher;
-    }
-
-    if (!merged.issn && (result.raw_metadata?.issn || result.metadata?.issn)) {
-      merged.issn = result.raw_metadata?.issn || result.metadata?.issn;
-    }
-
-    // Track sources
-    if (!merged.sources.includes(result.provider)) {
-      merged.sources.push(result.provider);
-    }
-  });
-
-  // Convert to array and sort by number of sources (prefer results with more metadata)
-  return Array.from(grouped.values()).sort((a, b) => {
-    // Prioritize results with both publisher and ISSN
-    const aComplete = (a.publisher ? 1 : 0) + (a.issn ? 1 : 0);
-    const bComplete = (b.publisher ? 1 : 0) + (b.issn ? 1 : 0);
-
-    if (aComplete !== bComplete) return bComplete - aComplete;
-
-    // Then prioritize by number of sources
-    return b.sources.length - a.sources.length;
-  });
-};
-
-// Select a metadata result and populate form
-window.selectMetadataResult = function (result) {
-  // Populate the form fields with the selected result
-  if (result.title) {
-    document.getElementById('edit-tracking-title').value = result.title;
-  }
-
-  window.closeMetadataModal();
-};
-
-// Close metadata results modal
-window.closeMetadataModal = function () {
-  const modal = document.getElementById('metadata-results-modal');
-  if (modal) {
-    modal.remove();
-  }
-};
-*/
-// END DEPRECATED metadata search functions
 
 // Select and download issue with language variant selection
 window.selectIssueWithVariants = function (issueKey, alreadyDownloaded) {
@@ -1619,10 +1432,11 @@ window.saveNewTracking = async () => {
     const data = await response.json();
 
     if (data.success) {
-      // Now update with the tracking mode and download category
+      // Now update with the tracking mode, download category, and country
       const updateData = {
         track_all_editions: trackingMode === 'all',
         track_new_only: trackingMode === 'new',
+        country: country || null,
       };
       if (downloadCategory) {
         updateData.download_category = downloadCategory;

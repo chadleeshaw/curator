@@ -63,6 +63,7 @@ class DatabaseManager:
                 ("language", "VARCHAR(50) DEFAULT 'English'"),
                 ("category", "VARCHAR(100)"),
                 ("download_category", "VARCHAR(100)"),
+                ("country", "VARCHAR(50)"),
             ],
             "periodicals": [
                 ("language", "VARCHAR(50) DEFAULT 'English'"),

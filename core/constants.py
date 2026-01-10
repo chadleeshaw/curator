@@ -202,8 +202,7 @@ ISO_COUNTRIES = {
     "CA": "Canada",
     "MX": "Mexico",
     # Europe
-    "GB": "United Kingdom",
-    "UK": "United Kingdom",  # Common alias
+    "UK": "United Kingdom",
     "DE": "Germany",
     "FR": "France",
     "IT": "Italy",

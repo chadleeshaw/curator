@@ -13,8 +13,7 @@ ISO_COUNTRIES: Dict[str, str] = {
     "MX": "Mexico",
 
     # Europe
-    "GB": "United Kingdom",
-    "UK": "United Kingdom",  # Common alias for GB
+    "UK": "United Kingdom",
     "DE": "Germany",
     "FR": "France",
     "IT": "Italy",
@@ -326,7 +325,7 @@ def detect_country(text: str, default: Optional[str] = None) -> Optional[str]:
             country_name = find_country(match)
             if country_name:
                 # Return the matched code, not the first code for the name
-                # This preserves UK vs GB preference
+                # This preserves the original code format (e.g., UK, US)
                 return match if len(match) == 2 else match[:2]
 
     # Also try matching full country names

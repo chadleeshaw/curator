@@ -70,7 +70,7 @@ class TestDetectCountry:
         assert detect_country("Magazine UK") == "UK"
         assert detect_country("[UK]") == "UK"
         # Full name
-        assert detect_country("United Kingdom") == "GB"
+        assert detect_country("United Kingdom") == "UK"
         # AU code
         assert detect_country("Magazine AU") == "AU"
         assert detect_country("Australia") == "AU"
@@ -109,7 +109,7 @@ class TestISOCountries:
     def test_iso_countries_has_common_codes(self):
         """Test that common country codes are present."""
         # Should have major English-speaking countries
-        assert "UK" in ISO_COUNTRIES or "GB" in ISO_COUNTRIES
+        assert "UK" in ISO_COUNTRIES
         assert "US" in ISO_COUNTRIES
         assert "AU" in ISO_COUNTRIES
         assert "CA" in ISO_COUNTRIES

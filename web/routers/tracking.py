@@ -81,6 +81,7 @@ async def start_tracking_periodical(
                 title=title.strip(),
                 category=category.strip() if category else None,
                 language=language.strip() if language else "English",
+                country=country.strip() if country else None,
                 track_all_editions=False,
                 selected_editions={},
                 selected_years=[],
@@ -247,6 +248,7 @@ async def save_tracking_preferences(
                 existing.title = request.title
                 existing.category = getattr(request, 'category', None)
                 existing.language = getattr(request, 'language', 'English')
+                existing.country = getattr(request, 'country', None)
                 existing.first_publish_year = request.first_publish_year
                 existing.track_all_editions = request.track_all_editions
                 existing.track_new_only = request.track_new_only
@@ -261,6 +263,7 @@ async def save_tracking_preferences(
                     title=request.title,
                     category=getattr(request, 'category', None),
                     language=getattr(request, 'language', 'English'),
+                    country=getattr(request, 'country', None),
                     first_publish_year=request.first_publish_year,
                     track_all_editions=request.track_all_editions,
                     track_new_only=request.track_new_only,
@@ -335,25 +338,28 @@ async def list_tracked_magazines(
             tracked = query.offset(skip).limit(limit).all()
             total = db_session.query(MagazineTracking).count()
 
+            # Compute library count for each tracked periodical
+            from models.database import Magazine
+            tracked_list = []
+            for t in tracked:
+                library_count = db_session.query(Magazine).filter(Magazine.tracking_id == t.id).count()
+                tracked_list.append({
+                    "id": t.id,
+                    "olid": t.olid,
+                    "title": t.title,
+                    "category": t.category,
+                    "language": t.language,
+                    "country": t.country,
+                    "track_all_editions": t.track_all_editions,
+                    "track_new_only": t.track_new_only,
+                    "selected_count": (len([v for v in t.selected_editions.values() if v]) if t.selected_editions else 0),
+                    "total_known": t.total_editions_known,
+                    "library_count": library_count,
+                    "created_at": (t.created_at.isoformat() if t.created_at else None),
+                })
             return {
                 "success": True,
-                "tracked_magazines": [
-                    {
-                        "id": t.id,
-                        "olid": t.olid,
-                        "title": t.title,
-                        "category": t.category,
-                        "language": t.language,
-                        "track_all_editions": t.track_all_editions,
-                        "track_new_only": t.track_new_only,
-                        "selected_count": (
-                            len([v for v in t.selected_editions.values() if v]) if t.selected_editions else 0
-                        ),
-                        "total_known": t.total_editions_known,
-                        "created_at": (t.created_at.isoformat() if t.created_at else None),
-                    }
-                    for t in tracked
-                ],
+                "tracked_magazines": tracked_list,
                 "total": total,
                 "skip": skip,
                 "limit": limit,
@@ -711,6 +717,8 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
                 tracking.category = updates["category"]
             if "language" in updates:
                 tracking.language = updates["language"]
+            if "country" in updates:
+                tracking.country = updates["country"]
             if "download_category" in updates:
                 tracking.download_category = updates["download_category"]
             if "track_all_editions" in updates:

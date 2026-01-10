@@ -294,6 +294,227 @@ async def get_pdf(magazine_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/periodicals/{magazine_id}/move-to-tracking")
+async def move_issue_to_tracking(
+    magazine_id: int, target_tracking_id: int
+) -> Dict[str, Any]:
+    """
+    Move a single issue to a different tracking record.
+    Useful for correcting misplaced issues.
+
+    Args:
+        magazine_id: ID of the issue to move
+        target_tracking_id: ID of the tracking record to move the issue to
+    """
+    try:
+        db_session = _session_factory()
+        try:
+            from models.database import MagazineTracking
+            import shutil
+            from core.parsers import sanitize_filename
+            from core.utils import is_special_edition
+
+            # Get the magazine to move
+            magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+            if not magazine:
+                raise HTTPException(status_code=404, detail="Magazine not found")
+
+            # Get the target tracking record
+            target_tracking = db_session.query(MagazineTracking).filter(
+                MagazineTracking.id == target_tracking_id
+            ).first()
+            if not target_tracking:
+                raise HTTPException(status_code=404, detail="Target tracking record not found")
+
+            old_title = magazine.title
+            old_tracking_id = magazine.tracking_id
+
+            # Update the magazine's tracking_id
+            magazine.tracking_id = target_tracking_id
+
+            # Check if this is a special edition
+            is_special = False
+            if magazine.extra_metadata and isinstance(magazine.extra_metadata, dict):
+                is_special = magazine.extra_metadata.get("special_edition") is not None
+            if not is_special:
+                is_special = is_special_edition(magazine.title)
+
+            # Only update title and reorganize files for regular editions
+            files_reorganized = False
+            if not is_special:
+                # Store old paths
+                old_pdf_path = Path(magazine.file_path)
+                old_cover_path = Path(magazine.cover_path) if magazine.cover_path else None
+
+                # Get organize directory from config or use default
+                organize_base_dir = Path("./local/data").resolve()
+                category_prefix = "_"
+
+                # Reorganize files to match new title structure
+                try:
+                    # Extract metadata from current path structure
+                    category = magazine.extra_metadata.get("category", "Magazines") if magazine.extra_metadata else "Magazines"
+                    language = magazine.language or "English"
+                    issue_date = magazine.issue_date
+
+                    # Build new path structure
+                    safe_title = sanitize_filename(target_tracking.title)
+                    month = issue_date.strftime("%b")
+                    year = issue_date.strftime("%Y")
+                    filename_base = f"{safe_title} - {month}{year}"
+
+                    category_with_prefix = f"{category_prefix}{category}"
+                    target_dir = organize_base_dir / category_with_prefix / safe_title / language / year
+                    target_dir.mkdir(parents=True, exist_ok=True)
+
+                    new_pdf_path = target_dir / f"{filename_base}.pdf"
+                    new_cover_path = target_dir / f"{filename_base}.jpg" if old_cover_path else None
+
+                    # Handle filename conflicts by appending timestamp
+                    if new_pdf_path.exists() and new_pdf_path != old_pdf_path:
+                        from datetime import datetime
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        filename_base_with_ts = f"{safe_title} - {month}{year} ({timestamp})"
+                        new_pdf_path = target_dir / f"{filename_base_with_ts}.pdf"
+                        if old_cover_path:
+                            new_cover_path = target_dir / f"{filename_base_with_ts}.jpg"
+
+                    # Move PDF file
+                    if old_pdf_path.exists() and new_pdf_path != old_pdf_path:
+                        shutil.move(str(old_pdf_path), str(new_pdf_path))
+                        logger.info(f"Moved PDF: {old_pdf_path} -> {new_pdf_path}")
+                        magazine.file_path = str(new_pdf_path)
+                        files_reorganized = True
+                    elif new_pdf_path == old_pdf_path:
+                        # File is already in correct location
+                        magazine.file_path = str(new_pdf_path)
+                    else:
+                        logger.warning(f"PDF file not found: {old_pdf_path}")
+
+                    # Move cover file if it exists
+                    if old_cover_path and old_cover_path.exists() and new_cover_path and new_cover_path != old_cover_path:
+                        shutil.move(str(old_cover_path), str(new_cover_path))
+                        logger.info(f"Moved cover: {old_cover_path} -> {new_cover_path}")
+                        magazine.cover_path = str(new_cover_path)
+                    elif new_cover_path:
+                        magazine.cover_path = str(new_cover_path)
+
+                    # Update title after file operations
+                    magazine.title = target_tracking.title
+
+                    # Clean up old directory if empty
+                    if old_pdf_path.exists():
+                        old_dir = old_pdf_path.parent
+                        _cleanup_empty_directories(old_dir, organize_base_dir)
+
+                except Exception as e:
+                    logger.error(f"Error reorganizing magazine files: {e}", exc_info=True)
+                    # Still update the tracking_id and title even if file move failed
+                    magazine.title = target_tracking.title
+
+            db_session.commit()
+
+            msg = f"Moved issue from '{old_title}' to '{target_tracking.title}'"
+            if files_reorganized:
+                msg += " and reorganized files"
+
+            logger.info(msg)
+            return {
+                "success": True,
+                "message": msg,
+                "old_tracking_id": old_tracking_id,
+                "new_tracking_id": target_tracking_id,
+                "files_reorganized": files_reorganized
+            }
+        finally:
+            db_session.close()
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Move issue to tracking error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def _cleanup_empty_directories(start_path: Path, organize_base_dir: Path):
+    """
+    Remove empty directories from a path up to the organize base directory.
+
+    Args:
+        start_path: Starting directory to check
+        organize_base_dir: Base directory (won't delete this)
+    """
+    try:
+        current = start_path
+        while current != organize_base_dir and current.exists():
+            # Only delete if directory is empty
+            if current.is_dir() and not any(current.iterdir()):
+                logger.info(f"Removing empty directory: {current}")
+                current.rmdir()
+                current = current.parent
+            else:
+                # Stop if we find a non-empty directory
+                break
+    except Exception as e:
+        logger.warning(f"Error cleaning up empty directories: {e}")
+
+
+@router.post("/periodicals/{magazine_id}/toggle-special-edition")
+async def toggle_special_edition(
+    magazine_id: int, is_special: bool
+) -> Dict[str, Any]:
+    """
+    Mark or unmark an issue as a special edition.
+
+    Args:
+        magazine_id: ID of the issue to update
+        is_special: True to mark as special edition, False to unmark
+    """
+    try:
+        db_session = _session_factory()
+        try:
+            magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+            if not magazine:
+                raise HTTPException(status_code=404, detail="Magazine not found")
+
+            # Initialize extra_metadata if needed
+            if magazine.extra_metadata is None:
+                magazine.extra_metadata = {}
+
+            # Update special edition status
+            if is_special:
+                # Mark as special edition - store the current title as special edition name
+                magazine.extra_metadata["special_edition"] = magazine.title
+                logger.info(f"Marked issue as special edition: {magazine.title}")
+                message = f"Marked '{magazine.title}' as a special edition"
+            else:
+                # Unmark as special edition
+                if "special_edition" in magazine.extra_metadata:
+                    del magazine.extra_metadata["special_edition"]
+                logger.info(f"Unmarked special edition: {magazine.title}")
+                message = f"Unmarked '{magazine.title}' as special edition"
+
+            # Mark the column as modified for SQLAlchemy to detect the change
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(magazine, "extra_metadata")
+
+            db_session.commit()
+
+            return {
+                "success": True,
+                "message": message,
+                "is_special_edition": is_special
+            }
+        finally:
+            db_session.close()
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Toggle special edition error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.delete("/periodicals/{magazine_id}")
 async def delete_periodical(
     magazine_id: int, delete_files: bool = False, remove_tracking: bool = False, delete_all_issues: bool = False

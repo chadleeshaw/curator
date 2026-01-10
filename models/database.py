@@ -76,6 +76,7 @@ class MagazineTracking(Base):
     )  # Open Library ID (not unique anymore - different languages can share)
     title = Column(String(255), nullable=False, index=True)
     language = Column(String(50), nullable=True, default="English", index=True)  # Language of tracked edition
+    country = Column(String(50), nullable=True, index=True)  # Country code (ISO)
     first_publish_year = Column(Integer, nullable=True)
     total_editions_known = Column(Integer, default=0)
 
