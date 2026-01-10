@@ -361,112 +361,112 @@ async def search_periodical_providers(query: str = Query(...)) -> Dict[str, Any]
         raise HTTPException(status_code=500, detail=f"Search error: {str(e)}")
 
 
-@router.post(
-    "/periodicals/search-metadata",
-    summary="Search for periodical metadata",
-    description="Query metadata providers (CrossRef, Wikipedia) for periodical information. Does not search for downloadable issues.",
-    responses={
-        200: {
-            "description": "Metadata retrieved successfully",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "query": "Wired",
-                        "results": [
-                            {
-                                "title": "Wired Magazine",
-                                "publisher": "Condé Nast",
-                                "issn": "1059-1028",
-                            }
-                        ],
-                        "total": 1,
-                    }
-                }
-            },
-        },
-        400: {"description": "Invalid query parameter", "model": APIError},
-        500: {"description": "Metadata search failed", "model": APIError},
-    },
-)
-async def search_periodical_metadata(query: str = Query(...)) -> Dict[str, Any]:
-    """
-    Search for periodical metadata using only METADATA providers (CrossRef, Wikipedia).
-    This does NOT include search providers like Newsnab or RSS.
+# @router.post(
+#     "/periodicals/search-metadata",
+#     summary="Search for periodical metadata",
+#     description="Query metadata providers (CrossRef, Wikipedia) for periodical information. Does not search for downloadable issues.",
+#     responses={
+#         200: {
+#             "description": "Metadata retrieved successfully",
+#             "content": {
+#                 "application/json": {
+#                     "example": {
+#                         "query": "Wired",
+#                         "results": [
+#                             {
+#                                 "title": "Wired Magazine",
+#                                 "publisher": "Condé Nast",
+#                                 "issn": "1059-1028",
+#                             }
+#                         ],
+#                         "total": 1,
+#                     }
+#                 }
+#             },
+#         },
+#         400: {"description": "Invalid query parameter", "model": APIError},
+#         500: {"description": "Metadata search failed", "model": APIError},
+#     },
+# )
+# async def search_periodical_metadata(query: str = Query(...)) -> Dict[str, Any]:
+#     """
+#     Search for periodical metadata using only METADATA providers (CrossRef, Wikipedia).
+#     This does NOT include search providers like Newsnab or RSS.
 
-    Args:
-        query: Periodical title to search for (as query parameter)
+#     Args:
+#         query: Periodical title to search for (as query parameter)
 
-    Returns:
-        Periodical metadata from metadata sources
-    """
-    try:
-        if not query or len(query.strip()) < 2:
-            raise HTTPException(
-                status_code=400, detail="Query must be at least 2 characters"
-            )
+#     Returns:
+#         Periodical metadata from metadata sources
+#     """
+#     try:
+#         if not query or len(query.strip()) < 2:
+#             raise HTTPException(
+#                 status_code=400, detail="Query must be at least 2 characters"
+#             )
 
-        logger.debug(f"Searching for metadata: {query}")
+#         logger.debug(f"Searching for metadata: {query}")
 
-        if not _metadata_providers:
-            logger.warning("No metadata providers configured")
-            return {
-                "found": False,
-                "message": "No metadata providers available",
-                "results": [],
-            }
+#         if not _metadata_providers:
+#             logger.warning("No metadata providers configured")
+#             return {
+#                 "found": False,
+#                 "message": "No metadata providers available",
+#                 "results": [],
+#             }
 
-        all_results = []
-        for provider in _metadata_providers:
-            try:
-                logger.debug(
-                    f"Searching metadata provider: {provider.name} (type: {provider.type})"
-                )
-                provider_results = provider.search(query.strip())
-                logger.debug(
-                    f"Provider {provider.name} returned {len(provider_results)} results"
-                )
-                all_results.extend(provider_results)
-            except Exception as e:
-                logger.warning(
-                    f"Error searching metadata provider {provider.__class__.__name__}: {e}",
-                    exc_info=True,
-                )
+#         all_results = []
+#         for provider in _metadata_providers:
+#             try:
+#                 logger.debug(
+#                     f"Searching metadata provider: {provider.name} (type: {provider.type})"
+#                 )
+#                 provider_results = provider.search(query.strip())
+#                 logger.debug(
+#                     f"Provider {provider.name} returned {len(provider_results)} results"
+#                 )
+#                 all_results.extend(provider_results)
+#             except Exception as e:
+#                 logger.warning(
+#                     f"Error searching metadata provider {provider.__class__.__name__}: {e}",
+#                     exc_info=True,
+#                 )
 
-        if all_results:
-            logger.debug(f"Found {len(all_results)} metadata results for: {query}")
-            # Convert SearchResult objects to dictionaries
-            result_dicts = [
-                {
-                    "title": result.title,
-                    "url": result.url,
-                    "provider": result.provider,
-                    "publication_date": (
-                        result.publication_date.isoformat()
-                        if result.publication_date
-                        else None
-                    ),
-                    "raw_metadata": result.raw_metadata or {},
-                }
-                for result in all_results[:50]  # Limit to 50 results
-            ]
-            return {
-                "found": True,
-                "results": result_dicts,
-                "message": f"Found {len(all_results)} metadata results for '{query}'",
-            }
-        else:
-            logger.debug(f"No metadata results found for query: {query}")
-            return {
-                "found": False,
-                "message": f"No metadata found for '{query}'",
-                "results": [],
-            }
+#         if all_results:
+#             logger.debug(f"Found {len(all_results)} metadata results for: {query}")
+#             # Convert SearchResult objects to dictionaries
+#             result_dicts = [
+#                 {
+#                     "title": result.title,
+#                     "url": result.url,
+#                     "provider": result.provider,
+#                     "publication_date": (
+#                         result.publication_date.isoformat()
+#                         if result.publication_date
+#                         else None
+#                     ),
+#                     "raw_metadata": result.raw_metadata or {},
+#                 }
+#                 for result in all_results[:50]  # Limit to 50 results
+#             ]
+#             return {
+#                 "found": True,
+#                 "results": result_dicts,
+#                 "message": f"Found {len(all_results)} metadata results for '{query}'",
+#             }
+#         else:
+#             logger.debug(f"No metadata results found for query: {query}")
+#             return {
+#                 "found": False,
+#                 "message": f"No metadata found for '{query}'",
+#                 "results": [],
+#             }
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Metadata search error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Search error: {str(e)}")
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         logger.error(f"Metadata search error: {e}", exc_info=True)
+#         raise HTTPException(status_code=500, detail=f"Search error: {str(e)}")
 
 
 @router.get(

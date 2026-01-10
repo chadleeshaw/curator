@@ -3,6 +3,7 @@ Integration test for tracking merge functionality with library view grouping
 """
 
 import sys
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -241,6 +242,185 @@ class TestTrackingMergeIntegration:
         assert languages == {"English", "French"}
 
         session.close()
+
+    def test_merge_reorganizes_files_on_disk(self, test_db):
+        """
+        Test that merging tracking records actually moves files on disk
+        and updates database paths accordingly.
+        """
+        engine, session_factory = test_db
+        session = session_factory()
+
+        set_dependencies(session_factory, None, None)
+
+        # Create temporary directory structure for testing
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            # Create source folder structures
+            wired_dir = tmpdir_path / "_Magazines" / "Wired" / "English" / "2024"
+            wired_mag_dir = tmpdir_path / "_Magazines" / "Wired Magazine" / "English" / "2024"
+            wired_dir.mkdir(parents=True, exist_ok=True)
+            wired_mag_dir.mkdir(parents=True, exist_ok=True)
+
+            # Create actual test files
+            wired_jan_pdf = wired_dir / "Wired - Jan2024.pdf"
+            wired_jan_jpg = wired_dir / "Wired - Jan2024.jpg"
+            wired_mag_feb_pdf = wired_mag_dir / "Wired Magazine - Feb2024.pdf"
+            wired_mag_feb_jpg = wired_mag_dir / "Wired Magazine - Feb2024.jpg"
+
+            wired_jan_pdf.write_text("fake pdf content 1")
+            wired_jan_jpg.write_text("fake jpg content 1")
+            wired_mag_feb_pdf.write_text("fake pdf content 2")
+            wired_mag_feb_jpg.write_text("fake jpg content 2")
+
+            # Create tracking records
+            tracking_wired = MagazineTracking(
+                olid="OL123W",
+                title="Wired",
+                track_all_editions=True,
+                last_metadata_update=datetime.now(UTC),
+            )
+            tracking_wired_mag = MagazineTracking(
+                olid="OL456W",
+                title="Wired Magazine",
+                track_all_editions=True,
+                last_metadata_update=datetime.now(UTC),
+            )
+            session.add_all([tracking_wired, tracking_wired_mag])
+            session.commit()
+
+            # Create magazine records with proper metadata
+            mag1 = Magazine(
+                title="Wired",
+                language="English",
+                issue_date=datetime(2024, 1, 1),
+                file_path=str(wired_jan_pdf),
+                cover_path=str(wired_jan_jpg),
+                tracking_id=tracking_wired.id,
+                extra_metadata={"category": "Magazines"}
+            )
+            mag2 = Magazine(
+                title="Wired Magazine",
+                language="English",
+                issue_date=datetime(2024, 2, 1),
+                file_path=str(wired_mag_feb_pdf),
+                cover_path=str(wired_mag_feb_jpg),
+                tracking_id=tracking_wired_mag.id,
+                extra_metadata={"category": "Magazines"}
+            )
+            session.add_all([mag1, mag2])
+            session.commit()
+
+            # Verify files exist in source locations
+            assert wired_jan_pdf.exists()
+            assert wired_mag_feb_pdf.exists()
+            assert wired_mag_feb_jpg.exists()
+
+            # Mock the organize_base_dir to use our temp directory
+            import web.routers.tracking as tracking_module
+            original_merge = tracking_module.merge_tracking
+
+            async def patched_merge(target_id, source_ids):
+                # Temporarily patch the organize_base_dir
+                db_session = session_factory()
+                try:
+                    from models.database import Magazine as Mag, DownloadSubmission
+
+                    # Get target tracking record
+                    target = db_session.query(MagazineTracking).filter(MagazineTracking.id == target_id).first()
+                    sources = db_session.query(MagazineTracking).filter(
+                        MagazineTracking.id.in_(source_ids["source_ids"])
+                    ).all()
+
+                    magazines_moved = 0
+                    files_reorganized = 0
+                    directories_to_cleanup = set()
+                    organize_base_dir = tmpdir_path  # Use temp dir
+                    category_prefix = "_"
+
+                    # Import helper functions
+                    from web.routers.tracking import _reorganize_magazine_files, _cleanup_empty_directories
+
+                    for source in sources:
+                        magazines = db_session.query(Mag).filter(Mag.tracking_id == source.id).all()
+                        for magazine in magazines:
+                            magazine.tracking_id = target.id
+
+                            # Store old directory for cleanup
+                            old_pdf_path = Path(magazine.file_path)
+                            if old_pdf_path.exists():
+                                directories_to_cleanup.add(old_pdf_path.parent)
+
+                            # Reorganize files
+                            new_pdf_path, new_cover_path = _reorganize_magazine_files(
+                                magazine,
+                                target.title,
+                                organize_base_dir,
+                                category_prefix
+                            )
+
+                            if new_pdf_path:
+                                magazine.file_path = new_pdf_path
+                                if new_cover_path:
+                                    magazine.cover_path = new_cover_path
+                                files_reorganized += 1
+
+                            magazine.title = target.title
+                            magazines_moved += 1
+
+                        db_session.delete(source)
+
+                    db_session.commit()
+
+                    # Clean up empty directories
+                    for directory in directories_to_cleanup:
+                        if directory.exists():
+                            _cleanup_empty_directories(directory, organize_base_dir)
+
+                    return {
+                        "success": True,
+                        "magazines_moved": magazines_moved,
+                        "files_reorganized": files_reorganized,
+                        "merged_titles": [s.title for s in sources],
+                    }
+                finally:
+                    db_session.close()
+
+            # Perform merge
+            import asyncio
+            result = asyncio.run(patched_merge(
+                target_id=tracking_wired.id,
+                source_ids={"source_ids": [tracking_wired_mag.id]}
+            ))
+
+            session.expire_all()
+
+            # Verify merge succeeded
+            assert result["success"] is True
+            assert result["files_reorganized"] == 1
+
+            # Verify files were moved to new location
+            expected_new_pdf = tmpdir_path / "_Magazines" / "Wired" / "English" / "2024" / "Wired - Feb2024.pdf"
+            expected_new_jpg = tmpdir_path / "_Magazines" / "Wired" / "English" / "2024" / "Wired - Feb2024.jpg"
+
+            assert expected_new_pdf.exists(), f"File should exist at {expected_new_pdf}"
+            assert expected_new_jpg.exists(), f"Cover should exist at {expected_new_jpg}"
+
+            # Verify old files no longer exist
+            assert not wired_mag_feb_pdf.exists(), "Old PDF should be moved"
+            assert not wired_mag_feb_jpg.exists(), "Old cover should be moved"
+
+            # Verify database paths were updated
+            mag2_updated = session.query(Magazine).filter(Magazine.id == mag2.id).first()
+            assert mag2_updated.file_path == str(expected_new_pdf)
+            assert mag2_updated.cover_path == str(expected_new_jpg)
+            assert mag2_updated.title == "Wired"
+
+            # Verify empty source directory was cleaned up
+            assert not wired_mag_dir.exists(), "Empty source directory should be removed"
+
+            session.close()
 
 
 if __name__ == "__main__":

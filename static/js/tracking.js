@@ -1533,8 +1533,11 @@ window.confirmMerge = async function() {
     const data = await response.json();
     
     if (response.ok) {
+      const filesMsg = data.files_reorganized > 0 
+        ? `, reorganized ${data.files_reorganized} files` 
+        : '';
       UIUtils.showStatus('tracking-status', 
-        `✓ ${data.message}. Moved ${data.magazines_moved} magazines and ${data.submissions_moved} downloads.`, 
+        `✓ ${data.message}. Moved ${data.magazines_moved} magazines and ${data.submissions_moved} downloads${filesMsg}.`, 
         'success');
       window.closeMergeModal();
       const tracking = window.trackingManager;

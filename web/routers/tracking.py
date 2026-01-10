@@ -3,11 +3,14 @@ Periodical tracking routes
 """
 
 import logging
+import shutil
 from datetime import UTC, datetime
-from typing import Any, Dict, Optional
+from pathlib import Path
+from typing import Any, Dict, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException, Query
 
+from core.parsers import sanitize_filename
 from core.utils import is_special_edition
 from models.database import MagazineTracking
 from models.database import SearchResult as DBSearchResult
@@ -404,10 +407,105 @@ async def get_tracking_details(tracking_id: int) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _reorganize_magazine_files(
+    magazine,
+    new_title: str,
+    organize_base_dir: Path,
+    category_prefix: str = "_"
+) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Reorganize magazine files to match new title structure.
+
+    Args:
+        magazine: Magazine database object
+        new_title: New title to use for folder organization
+        organize_base_dir: Base directory for organized files
+        category_prefix: Prefix for category folders (default: "_")
+
+    Returns:
+        Tuple of (new_pdf_path, new_cover_path) or (None, None) if failed
+    """
+    try:
+        old_pdf_path = Path(magazine.file_path)
+        old_cover_path = Path(magazine.cover_path) if magazine.cover_path else None
+
+        # Extract metadata from current path structure
+        category = magazine.extra_metadata.get("category", "Magazines") if magazine.extra_metadata else "Magazines"
+        language = magazine.language or "English"
+        issue_date = magazine.issue_date
+
+        # Build new path structure
+        safe_title = sanitize_filename(new_title)
+        month = issue_date.strftime("%b")
+        year = issue_date.strftime("%Y")
+        filename_base = f"{safe_title} - {month}{year}"
+
+        category_with_prefix = f"{category_prefix}{category}"
+        target_dir = organize_base_dir / category_with_prefix / safe_title / language / year
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        new_pdf_path = target_dir / f"{filename_base}.pdf"
+        new_cover_path = target_dir / f"{filename_base}.jpg" if old_cover_path else None
+
+        # Handle filename conflicts by appending timestamp
+        if new_pdf_path.exists() and new_pdf_path != old_pdf_path:
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename_base_with_ts = f"{safe_title} - {month}{year} ({timestamp})"
+            new_pdf_path = target_dir / f"{filename_base_with_ts}.pdf"
+            if old_cover_path:
+                new_cover_path = target_dir / f"{filename_base_with_ts}.jpg"
+
+        # Move PDF file
+        if old_pdf_path.exists() and new_pdf_path != old_pdf_path:
+            shutil.move(str(old_pdf_path), str(new_pdf_path))
+            logger.info(f"Moved PDF: {old_pdf_path} -> {new_pdf_path}")
+        elif new_pdf_path == old_pdf_path:
+            # File is already in correct location
+            pass
+        else:
+            logger.warning(f"PDF file not found: {old_pdf_path}")
+            return None, None
+
+        # Move cover file if it exists
+        if old_cover_path and old_cover_path.exists() and new_cover_path and new_cover_path != old_cover_path:
+            shutil.move(str(old_cover_path), str(new_cover_path))
+            logger.info(f"Moved cover: {old_cover_path} -> {new_cover_path}")
+
+        return str(new_pdf_path), str(new_cover_path) if new_cover_path else None
+
+    except Exception as e:
+        logger.error(f"Error reorganizing magazine files: {e}", exc_info=True)
+        return None, None
+
+
+def _cleanup_empty_directories(start_path: Path, organize_base_dir: Path):
+    """
+    Remove empty directories from a path up to the organize base directory.
+
+    Args:
+        start_path: Starting directory to check
+        organize_base_dir: Base directory (won't delete this)
+    """
+    try:
+        current = start_path
+        while current != organize_base_dir and current.exists():
+            # Only delete if directory is empty
+            if current.is_dir() and not any(current.iterdir()):
+                logger.info(f"Removing empty directory: {current}")
+                current.rmdir()
+                current = current.parent
+            else:
+                # Stop if we find a non-empty directory
+                break
+    except Exception as e:
+        logger.warning(f"Error cleaning up empty directories: {e}")
+
+
 @router.post(
     "/periodicals/tracking/{target_id}/merge",
     summary="Merge tracking records",
-    description="Merge multiple tracking records into one. Magazines and download submissions from source records will be reassigned to the target record.",
+    description="Merge multiple tracking records into one. Magazines and download submissions from source records will be reassigned to the target record. Files will be reorganized to match the target title structure.",
     responses={
         200: {
             "description": "Tracking records merged successfully",
@@ -418,6 +516,7 @@ async def get_tracking_details(tracking_id: int) -> Dict[str, Any]:
                         "message": "Merged 2 tracking records into 'Wired Magazine'",
                         "magazines_moved": 5,
                         "submissions_moved": 10,
+                        "files_reorganized": 5,
                     }
                 }
             },
@@ -463,6 +562,13 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
 
             magazines_moved = 0
             submissions_moved = 0
+            files_reorganized = 0
+            directories_to_cleanup = set()
+
+            # Get organize directory from config or use default
+            # This should match the structure used by FileOrganizer
+            organize_base_dir = Path("./local/data").resolve()
+            category_prefix = "_"
 
             # Move magazines from source to target
             for source in sources:
@@ -481,8 +587,32 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
                     if not is_special:
                         is_special = is_special_edition(magazine.title)
 
-                    # Only normalize title for regular editions
+                    # Only normalize title and reorganize files for regular editions
                     if not is_special:
+                        # Store old directory for cleanup
+                        old_pdf_path = Path(magazine.file_path)
+                        if old_pdf_path.exists():
+                            directories_to_cleanup.add(old_pdf_path.parent)
+
+                        # Reorganize files to match new title structure
+                        new_pdf_path, new_cover_path = _reorganize_magazine_files(
+                            magazine,
+                            target.title,
+                            organize_base_dir,
+                            category_prefix
+                        )
+
+                        # Update database paths if reorganization succeeded
+                        if new_pdf_path:
+                            magazine.file_path = new_pdf_path
+                            if new_cover_path:
+                                magazine.cover_path = new_cover_path
+                            files_reorganized += 1
+                            logger.info(f"Reorganized files for: {magazine.title} ({magazine.issue_date.strftime('%b %Y')})")
+                        else:
+                            logger.warning(f"Failed to reorganize files for magazine ID {magazine.id}, keeping original paths")
+
+                        # Update title after file operations
                         magazine.title = target.title
 
                     magazines_moved += 1
@@ -500,9 +630,15 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
 
             db_session.commit()
 
+            # Clean up empty directories after successful commit
+            for directory in directories_to_cleanup:
+                if directory.exists():
+                    _cleanup_empty_directories(directory, organize_base_dir)
+
             source_titles = [s.title for s in sources]
             logger.info(
-                f"Merged {len(sources)} tracking records ({', '.join(source_titles)}) into '{target.title}' (ID: {target_id})"
+                f"Merged {len(sources)} tracking records ({', '.join(source_titles)}) into '{target.title}' (ID: {target_id}). "
+                f"Moved {magazines_moved} magazines, reorganized {files_reorganized} files."
             )
 
             return {
@@ -510,6 +646,7 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
                 "message": f"Merged {len(sources)} tracking record{'s' if len(sources) > 1 else ''} into '{target.title}'",
                 "magazines_moved": magazines_moved,
                 "submissions_moved": submissions_moved,
+                "files_reorganized": files_reorganized,
                 "merged_titles": source_titles,
             }
         finally:

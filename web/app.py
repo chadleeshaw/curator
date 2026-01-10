@@ -367,7 +367,7 @@ magazines, comics, and newspapers.
 
 ### Features
 
-* 🔍 **Multi-Provider Search** - Integrates with Newsnab APIs, RSS feeds, CrossRef, and Wikipedia
+* 🔍 **Multi-Provider Search** - Integrates with Newsnab APIs, and RSS feeds
 * 📥 **Download Management** - Supports SABnzbd and NZBGet download clients
 * 📚 **Smart Organization** - Automatic file organization with metadata enrichment
 * 🎯 **Tracking System** - Monitor and automatically download specific periodicals
