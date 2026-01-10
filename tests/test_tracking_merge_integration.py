@@ -400,9 +400,9 @@ class TestTrackingMergeIntegration:
             assert result["success"] is True
             assert result["files_reorganized"] == 1
 
-            # Verify files were moved to new location
-            expected_new_pdf = tmpdir_path / "_Magazines" / "Wired" / "English" / "2024" / "Wired - Feb2024.pdf"
-            expected_new_jpg = tmpdir_path / "_Magazines" / "Wired" / "English" / "2024" / "Wired - Feb2024.jpg"
+            # Verify files were moved to new location (without language folder)
+            expected_new_pdf = tmpdir_path / "_Magazines" / "Wired" / "2024" / "Wired - Feb2024.pdf"
+            expected_new_jpg = tmpdir_path / "_Magazines" / "Wired" / "2024" / "Wired - Feb2024.jpg"
 
             assert expected_new_pdf.exists(), f"File should exist at {expected_new_pdf}"
             assert expected_new_jpg.exists(), f"Cover should exist at {expected_new_jpg}"

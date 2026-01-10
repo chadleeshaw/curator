@@ -351,11 +351,10 @@ async def move_issue_to_tracking(
                 old_pdf_path = Path(magazine.file_path)
                 old_cover_path = Path(magazine.cover_path) if magazine.cover_path else None
 
-                # Reorganize files to match new title structure
+                # Reorganize files to match new title structure (without language folder)
                 try:
                     # Extract metadata from current path structure
                     category = magazine.extra_metadata.get("category", "Magazines") if magazine.extra_metadata else "Magazines"
-                    language = magazine.language or "English"
                     issue_date = magazine.issue_date
 
                     # Build new path structure
@@ -365,7 +364,7 @@ async def move_issue_to_tracking(
                     filename_base = f"{safe_title} - {month}{year}"
 
                     category_with_prefix = f"{category_prefix}{category}"
-                    target_dir = organize_base_dir / category_with_prefix / safe_title / language / year
+                    target_dir = organize_base_dir / category_with_prefix / safe_title / year
                     target_dir.mkdir(parents=True, exist_ok=True)
 
                     new_pdf_path = target_dir / f"{filename_base}.pdf"

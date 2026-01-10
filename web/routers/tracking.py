@@ -438,17 +438,16 @@ def _reorganize_magazine_files(
 
         # Extract metadata from current path structure
         category = magazine.extra_metadata.get("category", "Magazines") if magazine.extra_metadata else "Magazines"
-        language = magazine.language or "English"
         issue_date = magazine.issue_date
 
-        # Build new path structure
+        # Build new path structure (without language folder)
         safe_title = sanitize_filename(new_title)
         month = issue_date.strftime("%b")
         year = issue_date.strftime("%Y")
         filename_base = f"{safe_title} - {month}{year}"
 
         category_with_prefix = f"{category_prefix}{category}"
-        target_dir = organize_base_dir / category_with_prefix / safe_title / language / year
+        target_dir = organize_base_dir / category_with_prefix / safe_title / year
         target_dir.mkdir(parents=True, exist_ok=True)
 
         new_pdf_path = target_dir / f"{filename_base}.pdf"

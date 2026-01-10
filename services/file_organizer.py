@@ -125,7 +125,7 @@ class FileOrganizer:
             pdf_path: Original PDF path
             metadata: Extracted metadata
             category: Category name
-            pattern: Organization pattern with tags (optional, defaults to: {category}/{title}/{language}/{year}/)
+            pattern: Organization pattern with tags (optional, defaults to: {category}/{title}/{year}/)
 
         Returns:
             Path to organized file, or None if failed
