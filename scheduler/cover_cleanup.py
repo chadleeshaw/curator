@@ -140,8 +140,8 @@ class CoverCleanupTask:
                 if OCRService.is_available():
                     for magazine in periodicals_with_covers:
                         # Check if magazine already has OCR metadata
-                        if (magazine.extra_metadata and
-                            magazine.extra_metadata.get('ocr_metadata')):
+                        if (magazine.extra_metadata
+                                and magazine.extra_metadata.get('ocr_metadata')):
                             continue
 
                         # Run OCR on existing cover
