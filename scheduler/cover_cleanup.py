@@ -48,6 +48,7 @@ class CoverCleanupTask:
         Returns:
             Dict with deleted_count and generated_count
         """
+        logger.info(f"Starting cover cleanup task. OCR available: {OCRService.is_available()}")
         try:
             db_session = self.session_factory()
             try:
@@ -138,16 +139,19 @@ class CoverCleanupTask:
                 # Part 3: Run OCR on existing covers that don't have OCR metadata
                 ocr_scanned_count = 0
                 if OCRService.is_available():
+                    logger.info(f"OCR is available, scanning {len(periodicals_with_covers)} periodicals with covers")
                     for magazine in periodicals_with_covers:
                         # Check if magazine already has OCR metadata
                         if (magazine.extra_metadata
                                 and magazine.extra_metadata.get('ocr_metadata')):
+                            logger.debug(f"Skipping {magazine.title} - already has OCR metadata")
                             continue
 
                         # Run OCR on existing cover
                         try:
-                            logger.debug(f"Running OCR on existing cover: {magazine.cover_path}")
+                            logger.info(f"Running OCR on existing cover for: {magazine.title}")
                             ocr_metadata = OCRService.analyze_cover(str(magazine.cover_path))
+                            logger.debug(f"OCR result: {ocr_metadata}")
                             if ocr_metadata.get('text_found'):
                                 # Update extra_metadata with OCR findings
                                 if magazine.extra_metadata is None:

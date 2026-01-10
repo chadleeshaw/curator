@@ -7,7 +7,7 @@ import re
 try:
     import pytesseract
     from PIL import Image
-    import cv2
+    import cv2  # pylint: disable=import-error
     import numpy as np
     OCR_AVAILABLE = True
 except ImportError:
@@ -15,6 +15,9 @@ except ImportError:
     np = None  # type: ignore
 
 logger = logging.getLogger(__name__)
+
+# Track if we've already warned about Tesseract not being installed
+_TESSERACT_WARNING_LOGGED = False
 
 
 class OCRService:
@@ -38,22 +41,22 @@ class OCRService:
         """
         try:
             # Read image
-            img = cv2.imread(image_path)
+            img = cv2.imread(image_path)  # pylint: disable=no-member
             if img is None:
                 logger.error(f"Failed to read image: {image_path}")
                 return None
 
             # Convert to grayscale
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # pylint: disable=no-member
 
             # Apply adaptive thresholding to improve text detection
-            thresh = cv2.adaptiveThreshold(
-                gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                cv2.THRESH_BINARY, 11, 2
+            thresh = cv2.adaptiveThreshold(  # pylint: disable=no-member
+                gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,  # pylint: disable=no-member
+                cv2.THRESH_BINARY, 11, 2  # pylint: disable=no-member
             )
 
             # Denoise
-            denoised = cv2.fastNlMeansDenoising(thresh)
+            denoised = cv2.fastNlMeansDenoising(thresh)  # pylint: disable=no-member
 
             return denoised
         except Exception as e:
@@ -90,9 +93,19 @@ class OCRService:
                 img = Image.open(image_path)
 
             # Extract text using Tesseract
-            text = pytesseract.image_to_string(img, config='--psm 6')
-
-            return text.strip()
+            try:
+                text = pytesseract.image_to_string(img, config='--psm 6')
+                return text.strip()
+            except pytesseract.TesseractNotFoundError:
+                global _TESSERACT_WARNING_LOGGED
+                if not _TESSERACT_WARNING_LOGGED:
+                    logger.error(
+                        "Tesseract OCR engine not found. Please install tesseract: "
+                        "brew install tesseract (macOS), apt-get install tesseract-ocr (Ubuntu), "
+                        "or download from https://github.com/tesseract-ocr/tesseract"
+                    )
+                    _TESSERACT_WARNING_LOGGED = True
+                return ""
         except Exception as e:
             logger.error(f"Error extracting text from {image_path}: {e}")
             return ""
