@@ -329,6 +329,10 @@ async def move_issue_to_tracking(
             old_title = magazine.title
             old_tracking_id = magazine.tracking_id
 
+            # Get organize directory from config or use default
+            organize_base_dir = Path("./local/data").resolve()
+            category_prefix = "_"
+
             # Update the magazine's tracking_id
             magazine.tracking_id = target_tracking_id
 
@@ -341,14 +345,11 @@ async def move_issue_to_tracking(
 
             # Only update title and reorganize files for regular editions
             files_reorganized = False
+            old_dir_to_cleanup = None
             if not is_special:
                 # Store old paths
                 old_pdf_path = Path(magazine.file_path)
                 old_cover_path = Path(magazine.cover_path) if magazine.cover_path else None
-
-                # Get organize directory from config or use default
-                organize_base_dir = Path("./local/data").resolve()
-                category_prefix = "_"
 
                 # Reorganize files to match new title structure
                 try:
@@ -381,6 +382,8 @@ async def move_issue_to_tracking(
 
                     # Move PDF file
                     if old_pdf_path.exists() and new_pdf_path != old_pdf_path:
+                        # Store directory for cleanup before moving files
+                        old_dir_to_cleanup = old_pdf_path.parent
                         shutil.move(str(old_pdf_path), str(new_pdf_path))
                         logger.info(f"Moved PDF: {old_pdf_path} -> {new_pdf_path}")
                         magazine.file_path = str(new_pdf_path)
@@ -402,17 +405,16 @@ async def move_issue_to_tracking(
                     # Update title after file operations
                     magazine.title = target_tracking.title
 
-                    # Clean up old directory if empty
-                    if old_pdf_path.exists():
-                        old_dir = old_pdf_path.parent
-                        _cleanup_empty_directories(old_dir, organize_base_dir)
-
                 except Exception as e:
                     logger.error(f"Error reorganizing magazine files: {e}", exc_info=True)
                     # Still update the tracking_id and title even if file move failed
                     magazine.title = target_tracking.title
 
             db_session.commit()
+
+            # Clean up old directory after successful commit
+            if old_dir_to_cleanup and old_dir_to_cleanup.exists():
+                _cleanup_empty_directories(old_dir_to_cleanup, organize_base_dir)
 
             msg = f"Moved issue from '{old_title}' to '{target_tracking.title}'"
             if files_reorganized:

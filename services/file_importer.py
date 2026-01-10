@@ -236,6 +236,9 @@ class FileImporter:
                     f"Hash: {content_hash[:16]}... "
                     f"If these are truly different files, one may be corrupted or mislabeled. Skipping import."
                 )
+                # Cleanup duplicate file from downloads if not already organized
+                if not skip_organize:
+                    self._cleanup_download_file(pdf_path)
                 return False
 
             # Extract special edition info from parsed data
@@ -266,6 +269,9 @@ class FileImporter:
                             f"'{existing.title}' ({existing.issue_date.strftime('%b %Y')}, {existing.language or 'English'}) "
                             f"(title score: {score}, date diff: {date_diff} days). Skipping import."
                         )
+                        # Cleanup duplicate file from downloads if not already organized
+                        if not skip_organize:
+                            self._cleanup_download_file(pdf_path)
                         return False
 
             cover_path = self._extract_cover(pdf_path)
@@ -430,23 +436,7 @@ class FileImporter:
             logger.info(f"Added to database: {parsed.title} ({category})")
 
             if not skip_organize:
-                try:
-                    parent_dir = pdf_path.parent
-
-                    if pdf_path.exists() and pdf_path.is_file():
-                        pdf_path.unlink()
-                        logger.info(
-                            f"Deleted original PDF from downloads: {pdf_path.name}"
-                        )
-
-                    if parent_dir != self.downloads_dir and parent_dir.is_relative_to(
-                        self.downloads_dir
-                    ):
-                        if parent_dir.exists():
-                            shutil.rmtree(parent_dir)
-                            logger.info(f"Deleted download folder: {parent_dir.name}")
-                except Exception as e:
-                    logger.warning(f"Failed to cleanup download files: {e}")
+                self._cleanup_download_file(pdf_path)
 
             return True
 
@@ -454,6 +444,27 @@ class FileImporter:
             session.rollback()
             logger.error(f"Error importing PDF {pdf_path}: {e}", exc_info=True)
             return False
+
+    def _cleanup_download_file(self, pdf_path: Path) -> None:
+        """
+        Clean up a file from downloads folder and its parent directory if empty.
+
+        Args:
+            pdf_path: Path to PDF file in downloads folder
+        """
+        try:
+            if pdf_path.exists() and pdf_path.is_file():
+                pdf_path.unlink()
+                logger.info(f"Deleted file from downloads: {pdf_path.name}")
+
+            # Also cleanup parent directory if it's empty and within downloads
+            parent_dir = pdf_path.parent
+            if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
+                if parent_dir.exists() and not any(parent_dir.iterdir()):
+                    parent_dir.rmdir()
+                    logger.info(f"Deleted empty download folder: {parent_dir.name}")
+        except Exception as e:
+            logger.warning(f"Failed to cleanup download file: {e}")
 
     def _extract_cover(self, pdf_path: Path) -> Optional[Path]:
         """
