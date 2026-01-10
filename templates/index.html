@@ -542,10 +542,27 @@
             <!-- Search Section -->
             <div class="settings-field">
                 <label>Search for Periodical:</label>
-                <div style="display: flex; gap: 10px;">
+                <div style="display: flex; gap: 10px; margin-bottom: 10px;">
                     <input type="text" id="tracking-search-query" placeholder="Enter periodical title..." style="flex: 1;" onkeypress="if(event.key==='Enter') trackingManager.searchPeriodicalMetadata()">
                     <button onclick="trackingManager.searchPeriodicalMetadata()" class="btn-primary">Search</button>
                 </div>
+                <div style="display: flex; gap: 10px;">
+                    <div style="flex: 1;">
+                        <label style="font-size: 0.9em; color: var(--text-secondary);">Filter by Language:</label>
+                        <select id="search-filter-language" class="w-full">
+                            <option value="">Any Language</option>
+                        </select>
+                    </div>
+                    <div style="flex: 1;">
+                        <label style="font-size: 0.9em; color: var(--text-secondary);">Filter by Country:</label>
+                        <select id="search-filter-country" class="w-full">
+                            <option value="">Any Country</option>
+                        </select>
+                    </div>
+                </div>
+                <small style="color: var(--text-secondary); display: block; margin-top: 5px;">
+                    💡 Tip: Select category below to narrow search results (expands automatically if nothing found)
+                </small>
             </div>
 
             <!-- Loading indicator -->

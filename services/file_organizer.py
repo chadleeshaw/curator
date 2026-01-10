@@ -116,7 +116,10 @@ class FileOrganizer:
         Move and rename PDF to organized location based on pattern.
 
         Pattern-based organization with support for subdirectories and tags.
-        Available pattern tags: {category}, {title}, {year}, {month}, {day}, {language}
+        Available pattern tags: 
+          {category}, {title}, {year}, {month}, {day}, {language}
+          {issue} - Issue number (if available)
+          {volume} - Volume number (if available)
 
         Args:
             pdf_path: Original PDF path
@@ -131,28 +134,63 @@ class FileOrganizer:
             title = metadata.get("title", pdf_path.stem)
             issue_date = metadata.get("issue_date", datetime.now())
             language = metadata.get("language", "English")
+            issue_number = metadata.get("issue_number")
+            volume = metadata.get("volume")
 
             safe_title = sanitize_filename(title)
             month = issue_date.strftime("%b")
             year = issue_date.strftime("%Y")
             day = issue_date.strftime("%d")
-            filename = f"{safe_title} - {month}{year}.pdf"
+            
+            # Build filename with optional issue/volume info
+            filename_parts = [safe_title]
+            
+            # Add volume if present
+            if volume:
+                filename_parts.append(f"Vol{volume}")
+            
+            # Add issue number if present
+            if issue_number:
+                filename_parts.append(f"No{issue_number}")
+            
+            # Add date
+            filename_parts.append(f"{month}{year}")
+            
+            filename = f"{' - '.join(filename_parts)}.pdf"
 
             # Apply category prefix
             category_with_prefix = f"{self.category_prefix}{category}"
 
-            # If no pattern provided, use default with language: {category}/{title}/{language}/{year}/
+            # If no pattern provided, use enhanced default with issue/volume support
             if not pattern:
-                target_dir = self.organize_dir / category_with_prefix / safe_title / language / year
+                # Build path: {category}/{title}/{year}/ or {category}/{title}/{volume}/{year}/ if volume present
+                path_parts = [category_with_prefix, safe_title]
+                
+                if volume:
+                    path_parts.append(f"Vol{volume}")
+                
+                path_parts.append(year)
+                
+                target_dir = self.organize_dir / Path(*path_parts)
             else:
-                target_path_str = pattern.format(
-                    category=category_with_prefix,
-                    title=safe_title,
-                    language=language,
-                    year=year,
-                    month=month,
-                    day=day
-                )
+                # Format pattern with all available tags
+                format_dict = {
+                    "category": category_with_prefix,
+                    "title": safe_title,
+                    "language": language,
+                    "year": year,
+                    "month": month,
+                    "day": day,
+                    "issue": str(issue_number) if issue_number else "",
+                    "volume": str(volume) if volume else "",
+                }
+                
+                target_path_str = pattern.format(**format_dict)
+
+                if not target_path_str.startswith("/"):
+                    target_dir = self.organize_dir / target_path_str
+                else:
+                    target_dir = Path(target_path_str)
 
                 if not target_path_str.startswith("/"):
                     target_dir = self.organize_dir / target_path_str

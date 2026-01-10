@@ -100,6 +100,158 @@ def _filter_edition_variants(
     return filtered_results
 
 
+def _filter_by_language_and_country(
+    results: List[Dict[str, Any]], 
+    language: str = None, 
+    country: str = None
+) -> List[Dict[str, Any]]:
+    """
+    Filter search results by language and/or country.
+    
+    Looks for language and country indicators in titles (e.g., "UK", "DE", "German").
+    Makes smart assumptions: German → DE, FR → French, etc.
+    If no indicators found in title, assumes US/English (most common default).
+    
+    Args:
+        results: List of search result dictionaries
+        language: Language to filter by (e.g., "English", "German")
+        country: Country code to filter by (e.g., "US", "UK", "DE")
+    
+    Returns:
+        Filtered list matching the specified language/country
+    """
+    if not results or (not language and not country):
+        return results
+    
+    # Import country detection
+    from core.parsers.country import detect_country
+    
+    # Common language indicators in titles
+    language_indicators = {
+        'English': ['english', 'en'],
+        'German': ['german', 'de', 'deutsch'],
+        'French': ['french', 'fr', 'français'],
+        'Spanish': ['spanish', 'es', 'español'],
+        'Italian': ['italian', 'it', 'italiano'],
+        'Portuguese': ['portuguese', 'pt', 'português'],
+        'Dutch': ['dutch', 'nl', 'nederlands'],
+        'Polish': ['polish', 'pl', 'polski'],
+        'Russian': ['russian', 'ru', 'русский'],
+        'Ukrainian': ['ukrainian', 'ua', 'український'],  # Removed 'uk' - conflicts with UK country code
+        'Japanese': ['japanese', 'jp', '日本語'],
+        'Chinese': ['chinese', 'cn', '中文'],
+        'Korean': ['korean', 'kr', '한국어'],
+    }
+    
+    # Language to country mappings (smart assumptions)
+    language_to_country = {
+        'German': 'DE',
+        'French': 'FR',
+        'Spanish': 'ES',
+        'Italian': 'IT',
+        'Portuguese': 'PT',
+        'Dutch': 'NL',
+        'Polish': 'PL',
+        'Russian': 'RU',
+        'Ukrainian': 'UA',
+        'Japanese': 'JP',
+        'Chinese': 'CN',
+        'Korean': 'KR',
+    }
+    
+    # Country to language mappings (reverse assumptions)
+    country_to_language = {
+        'DE': 'German',
+        'FR': 'French',
+        'ES': 'Spanish',
+        'IT': 'Italian',
+        'PT': 'Portuguese',
+        'NL': 'Dutch',
+        'PL': 'Polish',
+        'RU': 'Russian',
+        'UA': 'Ukrainian',
+        'JP': 'Japanese',
+        'CN': 'Chinese',
+        'KR': 'Korean',
+        # English-speaking countries
+        'US': 'English',
+        'UK': 'English',
+        'CA': 'English',
+        'AU': 'English',
+        'NZ': 'English',
+        'IE': 'English',
+    }
+    
+    filtered = []
+    
+    for result in results:
+        title = result.get("title", "").lower()
+        
+        # Detect country in title
+        detected_country = detect_country(title)
+        
+        # Detect language in title
+        detected_language = None
+        for lang, indicators in language_indicators.items():
+            for indicator in indicators:
+                if re.search(rf'\b{re.escape(indicator)}\b', title, re.IGNORECASE):
+                    detected_language = lang
+                    break
+            if detected_language:
+                break
+        
+        # Smart assumptions:
+        # If we detected a language but no country, infer country from language
+        if detected_language and not detected_country:
+            if detected_language in language_to_country:
+                detected_country = language_to_country[detected_language]
+                logger.debug(
+                    f"Inferred country {detected_country} from language {detected_language}: "
+                    f"{result['title'][:50]}"
+                )
+        
+        # If we detected a country but no language, infer language from country
+        if detected_country and not detected_language:
+            if detected_country in country_to_language:
+                detected_language = country_to_language[detected_country]
+                logger.debug(
+                    f"Inferred language {detected_language} from country {detected_country}: "
+                    f"{result['title'][:50]}"
+                )
+        
+        # Default to US/English if no indicators found (most common)
+        if not detected_country:
+            detected_country = 'US'
+        if not detected_language:
+            detected_language = 'English'
+        
+        # Apply filters
+        language_match = True
+        country_match = True
+        
+        if language:
+            language_match = detected_language == language
+        
+        if country:
+            country_match = detected_country == country
+        
+        # Keep result if it matches all specified filters
+        if language_match and country_match:
+            filtered.append(result)
+            logger.debug(
+                f"Match: '{result['title'][:50]}' - "
+                f"Detected: {detected_language}/{detected_country}"
+            )
+        else:
+            logger.debug(
+                f"Filtered out: '{result['title'][:50]}' - "
+                f"Detected: {detected_language}/{detected_country}, "
+                f"Wanted: {language}/{country}"
+            )
+    
+    return filtered
+
+
 @router.post(
     "/search",
     summary="Search for periodicals",
@@ -217,16 +369,24 @@ async def search(request: SearchRequest) -> Dict[str, Any]:
         500: {"description": "Search failed", "model": APIError},
     },
 )
-async def search_periodical_providers(query: str = Query(...)) -> Dict[str, Any]:
+async def search_periodical_providers(
+    query: str = Query(...),
+    language: str = Query(None, description="Filter by language (e.g., English, German)"),
+    country: str = Query(None, description="Filter by country code (e.g., US, UK, DE)"),
+    category: str = Query(None, description="Filter by category (e.g., Magazines, Comics)")
+) -> Dict[str, Any]:
     """
     Search for periodical issues by querying SEARCH providers only (Newsnab, RSS).
     Does NOT query metadata providers - use /api/periodicals/search-metadata for that.
 
     Args:
         query: Periodical title to search for (as query parameter)
+        language: Optional language filter to match specific editions
+        country: Optional country code filter to match specific editions
+        category: Optional category filter for provider search (narrows results)
 
     Returns:
-        Issue search results from search providers
+        Issue search results from search providers, filtered by language/country/category if specified
     """
     try:
         if not query or len(query.strip()) < 2:
@@ -245,12 +405,23 @@ async def search_periodical_providers(query: str = Query(...)) -> Dict[str, Any]
             if _search_providers:
                 for provider in _search_providers:
                     try:
-                        provider_results = provider.search(query.strip())
+                        # Pass category to provider if specified
+                        provider_results = provider.search(query.strip(), category=category)
                         all_results.extend(provider_results)
                     except Exception as e:
                         error_msg = f"{provider.__class__.__name__}: {str(e)}"
                         logger.warning(f"Error searching provider: {error_msg}")
                         provider_errors.append(error_msg)
+                        
+                # If category filter was used but no results found, try again without category
+                if category and len(all_results) == 0:
+                    logger.info(f"No results with category '{category}', expanding search to all categories")
+                    for provider in _search_providers:
+                        try:
+                            provider_results = provider.search(query.strip(), category=None)
+                            all_results.extend(provider_results)
+                        except Exception as e:
+                            pass  # Already logged above
             else:
                 error_msg = "No search providers configured"
                 logger.warning(error_msg)
@@ -295,6 +466,16 @@ async def search_periodical_providers(query: str = Query(...)) -> Dict[str, Any]
             # Filter out edition variants (kids, traveller, etc.)
             result_dicts = _filter_edition_variants(result_dicts, query)
             result_dicts = result_dicts[:100]  # Limit to 100 after filtering
+
+            # Apply language and country filters if specified
+            if language or country:
+                result_dicts = _filter_by_language_and_country(
+                    result_dicts, language, country
+                )
+                logger.debug(
+                    f"After language/country filter: {len(result_dicts)} results "
+                    f"(language={language}, country={country})"
+                )
 
             # Apply fuzzy matching to get best matches
             # Score results and sort by relevance

@@ -28,12 +28,13 @@ class SearchProvider(ABC):
         self.type = config.get("type", "unknown")
 
     @abstractmethod
-    def search(self, query: str) -> List[SearchResult]:
+    def search(self, query: str, category: str = None) -> List[SearchResult]:
         """
         Search for periodicals matching query.
 
         Args:
             query: Periodical title or search term
+            category: Optional category filter (e.g., "Magazines", "Comics")
 
         Returns:
             List of SearchResult objects

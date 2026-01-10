@@ -185,6 +185,7 @@ SUPPORTED_LANGUAGES = [
     "Dutch",
     "Polish",
     "Russian",
+    "Ukrainian",
     "Japanese",
     "Chinese",
     "Korean",
@@ -261,8 +262,9 @@ ISO_COUNTRIES = {
     "EG": "Egypt",
     "NG": "Nigeria",
     "KE": "Kenya",
-    # Middle East
+    # Middle East & Eastern Europe
     "RU": "Russia",
+    "UA": "Ukraine",
     "TR": "Turkey",
     "SA": "Saudi Arabia",
     "AE": "United Arab Emirates",

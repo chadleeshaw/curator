@@ -36,16 +36,25 @@ class NewsnabProvider(SearchProvider):
         # Allow configurable categories (comma-separated) or default to all book-related categories
         # Common Newznab categories: 7000=Books (all), 7010=Magazines, 7020=Ebooks, 7030=Comics
         self.categories = config.get("categories", "7000,7010,7020,7030")  # All books including magazines
+        
+        # Category name to Newznab ID mapping
+        self.category_map = {
+            "Magazines": "7010",
+            "Comics": "7030", 
+            "Articles": "7020",  # Ebooks
+            "News": "7010",  # Same as magazines
+        }
 
         if not self.api_key:
             raise ValueError("Newsnab provider requires api_key")
 
-    def search(self, query: str) -> List[SearchResult]:
+    def search(self, query: str, category: str = None) -> List[SearchResult]:
         """
         Search Newsnab-compatible service for NZBs.
 
         Args:
             query: Magazine title to search for
+            category: Optional category filter ("Magazines", "Comics", etc.)
 
         Returns:
             List of SearchResult objects
@@ -55,7 +64,7 @@ class NewsnabProvider(SearchProvider):
         try:
             # Use XML API - it's more reliable and well-supported
             # (v1 JSON API often has issues with Prowlarr aggregators)
-            results = self._search_xml_api(query)
+            results = self._search_xml_api(query, category)
             return results
 
         except Exception as e:
@@ -63,20 +72,28 @@ class NewsnabProvider(SearchProvider):
 
         return results
 
-    def _search_xml_api(self, query: str) -> List[SearchResult]:
+    def _search_xml_api(self, query: str, category: str = None) -> List[SearchResult]:
         """Search using the legacy /api XML endpoint"""
         results = []
 
         try:
+            # Determine which categories to search
+            cat_ids = self.categories  # Default: all configured categories
+            
+            if category and category in self.category_map:
+                # If specific category requested, use its ID
+                cat_ids = self.category_map[category]
+                logger.debug(f"Using category filter: {category} -> {cat_ids}")
+            
             url = f"{self.api_url}/api"
             params = {
                 "apikey": self.api_key,
                 "t": "search",
                 "q": query,
-                "cat": self.categories,  # Configurable categories
+                "cat": cat_ids,
             }
 
-            logger.debug(f"Newsnab searching: query='{query}', categories={self.categories}, url={url}")
+            logger.debug(f"Newsnab searching: query='{query}', categories={cat_ids}, url={url}")
 
             response = requests.get(url, params=params, timeout=10)
             response.raise_for_status()

@@ -19,12 +19,13 @@ class RSSProvider(SearchProvider):
         if not self.feed_url:
             raise ValueError("RSS provider requires feed_url")
 
-    def search(self, query: str) -> List[SearchResult]:
+    def search(self, query: str, category: str = None) -> List[SearchResult]:
         """
         Search RSS feed for matching magazine titles.
 
         Args:
             query: Magazine title to search for (used to filter feed)
+            category: Optional category filter (not used for RSS feeds)
 
         Returns:
             List of SearchResult objects

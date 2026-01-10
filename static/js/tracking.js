@@ -53,37 +53,46 @@ export class TrackingManager {
    */
   populateFormDropdowns() {
     // Populate language dropdown
-        // Populate language dropdowns (new and edit modals)
+        // Populate language dropdowns (new, edit, and search filter)
         const languageSelects = [
           document.getElementById('new-tracking-language'),
-          document.getElementById('edit-tracking-language')
+          document.getElementById('edit-tracking-language'),
+          document.getElementById('search-filter-language')
         ];
         languageSelects.forEach(languageSelect => {
           if (languageSelect && SUPPORTED_LANGUAGES.length > 0) {
-            languageSelect.innerHTML = '';
+            // Keep existing options for search filter
+            const existingOptions = languageSelect.id === 'search-filter-language' 
+              ? languageSelect.innerHTML 
+              : '';
+            
+            languageSelect.innerHTML = existingOptions || '';
+            
             SUPPORTED_LANGUAGES.forEach(lang => {
               const option = document.createElement('option');
               option.value = lang;
               option.textContent = lang;
-              if (lang === 'English') option.selected = true;
+              if (lang === 'English' && languageSelect.id !== 'search-filter-language') {
+                option.selected = true;
+              }
               languageSelect.appendChild(option);
             });
           }
         });
 
-        // Populate country dropdowns (new and edit modals)
+        // Populate country dropdowns (new, edit, and search filter)
         const countrySelects = [
           document.getElementById('new-tracking-country'),
-          document.getElementById('edit-tracking-country')
+          document.getElementById('edit-tracking-country'),
+          document.getElementById('search-filter-country')
         ];
         countrySelects.forEach(countrySelect => {
           if (countrySelect && Object.keys(ISO_COUNTRIES).length > 0) {
-            // Keep the default "None (International)" option
+            // Keep the default option
             const defaultOption = countrySelect.querySelector('option[value=""]');
-            countrySelect.innerHTML = '';
-            if (defaultOption) {
-              countrySelect.appendChild(defaultOption);
-            }
+            const existingDefault = defaultOption ? defaultOption.outerHTML : '';
+            
+            countrySelect.innerHTML = existingDefault || '';
 
             // Get unique countries (removes duplicates like UK/GB)
             const uniqueCountries = new Map();
@@ -100,7 +109,9 @@ export class TrackingManager {
                 const option = document.createElement('option');
                 option.value = code;
                 option.textContent = `${name} (${code})`;
-                if (code === 'US') option.selected = true;
+                if (code === 'US' && countrySelect.id !== 'search-filter-country') {
+                  option.selected = true;
+                }
                 countrySelect.appendChild(option);
               });
           }
@@ -112,6 +123,9 @@ export class TrackingManager {
    */
   async searchPeriodicalMetadata() {
     const query = document.getElementById('tracking-search-query').value.trim();
+    const filterLanguage = document.getElementById('search-filter-language')?.value || '';
+    const filterCountry = document.getElementById('search-filter-country')?.value || '';
+    const filterCategory = document.getElementById('new-tracking-category')?.value || '';
 
     if (!query) {
       UIUtils.showStatus('tracking-status', 'Please enter a periodical title', 'error');
@@ -127,8 +141,25 @@ export class TrackingManager {
     error.classList.add('hidden');
 
     try {
+      // Build query parameters
+      const params = new URLSearchParams({
+        query: query
+      });
+      
+      if (filterLanguage) {
+        params.append('language', filterLanguage);
+      }
+      
+      if (filterCountry) {
+        params.append('country', filterCountry);
+      }
+      
+      if (filterCategory) {
+        params.append('category', filterCategory);
+      }
+
       const response = await APIClient.authenticatedFetch(
-        `/api/periodicals/search-providers?query=${encodeURIComponent(query)}`,
+        `/api/periodicals/search-providers?${params.toString()}`,
         { method: 'POST' }
       );
       const data = await response.json();
@@ -143,7 +174,12 @@ export class TrackingManager {
         this.displaySearchResultsGrouped(data.results);
         result.classList.remove('hidden');
       } else {
-        error.textContent = data.message || 'Periodical not found';
+        const filterInfo = [];
+        if (filterLanguage) filterInfo.push(`Language: ${filterLanguage}`);
+        if (filterCountry) filterInfo.push(`Country: ${filterCountry}`);
+        if (filterCategory) filterInfo.push(`Category: ${filterCategory}`);
+        const filterText = filterInfo.length > 0 ? ` (Filters: ${filterInfo.join(', ')})` : '';
+        error.textContent = `${data.message || 'Periodical not found'}${filterText}`;
         error.classList.remove('hidden');
       }
     } catch (err) {
