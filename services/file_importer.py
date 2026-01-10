@@ -20,6 +20,7 @@ from core.constants import (
 from core.parsers import generate_language_aware_olid
 from core.parsers import TitleMatcher, FileCategorizer, UnifiedParser
 from core.pdf_utils import extract_cover_from_pdf
+from core.epub_utils import extract_cover_from_epub
 from core.utils import find_pdf_epub_files, hash_file_in_chunks
 from core.response_models import ErrorCodes, OperationResult
 from models.database import Magazine, MagazineTracking
@@ -184,7 +185,7 @@ class FileImporter:
         organization_pattern: Optional[str] = None,
         auto_track: bool = True,
         skip_organize: bool = False,
-        tracking_mode: str = "all",
+        tracking_mode: str = "watch",
     ) -> bool:
         """
         Import a single PDF file.
@@ -466,18 +467,24 @@ class FileImporter:
         except Exception as e:
             logger.warning(f"Failed to cleanup download file: {e}")
 
-    def _extract_cover(self, pdf_path: Path) -> Optional[Path]:
+    def _extract_cover(self, file_path: Path) -> Optional[Path]:
         """
-        Extract first page of PDF as cover image.
+        Extract cover image from PDF or EPUB file.
 
         Args:
-            pdf_path: Path to PDF file
+            file_path: Path to PDF or EPUB file
 
         Returns:
             Path to extracted cover image, or None if failed
         """
         cover_dir = self.organize_base_dir / ".covers"
-        return extract_cover_from_pdf(pdf_path, cover_dir)
+        if file_path.suffix.lower() == '.pdf':
+            return extract_cover_from_pdf(file_path, cover_dir)
+        elif file_path.suffix.lower() == '.epub':
+            return extract_cover_from_epub(file_path, cover_dir)
+        else:
+            logger.warning(f"Unsupported file type for cover extraction: {file_path.suffix}")
+            return None
 
     def process_organized_files(
         self, session: Session, auto_track: bool = True, tracking_mode: str = "all"

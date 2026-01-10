@@ -100,12 +100,12 @@ class CoverCleanupTask:
                 generated_count = 0
                 ocr_updated_count = 0
                 for magazine in periodicals_without_covers:
-                    pdf_path = Path(magazine.file_path)
-                    if not pdf_path.exists():
+                    file_path = Path(magazine.file_path)
+                    if not file_path.exists():
                         continue
 
-                    # Extract cover from PDF
-                    cover_path = self.file_importer._extract_cover(pdf_path)
+                    # Extract cover from PDF or EPUB
+                    cover_path = self.file_importer._extract_cover(file_path)
                     if cover_path:
                         magazine.cover_path = str(cover_path)
                         generated_count += 1
