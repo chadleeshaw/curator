@@ -271,3 +271,75 @@ ISO_COUNTRIES = {
     "IL": "Israel",
 }
 """ISO 3166-1 alpha-2 country codes for region-specific editions"""
+
+
+# ==============================================================================
+# Language to Country Mappings
+# ==============================================================================
+
+LANGUAGE_TO_COUNTRY = {
+    "English": "US",
+    "German": "DE",
+    "French": "FR",
+    "Spanish": "ES",
+    "Italian": "IT",
+    "Portuguese": "PT",
+    "Dutch": "NL",
+    "Polish": "PL",
+    "Russian": "RU",
+    "Ukrainian": "UA",
+    "Japanese": "JP",
+    "Chinese": "CN",
+    "Korean": "KR",
+}
+"""Default country mapping for each supported language"""
+
+
+# ==============================================================================
+# Country Detection Indicators
+# ==============================================================================
+
+COUNTRY_INDICATORS = {
+    "UK": ["[UK]", " UK ", ".UK.", "British", "Britain"],
+    "US": ["[US]", " US ", ".US.", "American", "USA"],
+    "DE": ["[DE]", " DE ", ".DE.", "German", "Deutschland", "Germany"],
+    "FR": ["[FR]", " FR ", ".FR.", "French", "France"],
+    "ES": ["[ES]", " ES ", ".ES.", "Spain", "Spanish", "España"],
+    "IT": ["[IT]", " IT ", ".IT.", "Italy", "Italian", "Italia"],
+    "PT": ["[PT]", " PT ", ".PT.", "Portugal", "Portuguese"],
+    "NL": ["[NL]", " NL ", ".NL.", "Netherlands", "Dutch", "Holland"],
+    "PL": ["[PL]", " PL ", ".PL.", "Poland", "Polish", "Polska"],
+    "RU": ["[RU]", " RU ", ".RU.", "Russia", "Russian"],
+    "UA": ["[UA]", " UA ", ".UA.", "Ukraine", "Ukrainian"],
+    "JP": ["[JP]", " JP ", ".JP.", "Japan", "Japanese"],
+    "CN": ["[CN]", " CN ", ".CN.", "China", "Chinese"],
+    "KR": ["[KR]", " KR ", ".KR.", "Korea", "Korean"],
+    "CA": ["[CA]", " CA ", ".CA.", "Canada", "Canadian"],
+    "MX": ["[MX]", " MX ", ".MX.", "Mexico", "Mexican"],
+    "AU": ["[AU]", " AU ", ".AU.", "Australia", "Australian"],
+    "NZ": ["[NZ]", " NZ ", ".NZ.", "New Zealand"],
+    "BR": ["[BR]", " BR ", ".BR.", "Brazil", "Brazilian"],
+    "AR": ["[AR]", " AR ", ".AR.", "Argentina", "Argentine"],
+}
+"""Keywords and patterns used to detect country from periodical titles"""
+
+
+# ==============================================================================
+# Language Detection Keywords
+# ==============================================================================
+
+LANGUAGE_KEYWORDS = {
+    "German": ["German", "Deutsch", "Deutschland"],
+    "French": ["French", "Français", "France"],
+    "Spanish": ["Spanish", "Español", "España"],
+    "Italian": ["Italian", "Italiano", "Italia"],
+    "Portuguese": ["Portuguese", "Português"],
+    "Dutch": ["Dutch", "Nederlands", "Holland"],
+    "Polish": ["Polish", "Polski", "Polska"],
+    "Russian": ["Russian", "Русский"],
+    "Ukrainian": ["Ukrainian", "Українська"],
+    "Japanese": ["Japanese", "日本語", "Japan"],
+    "Chinese": ["Chinese", "中文", "China"],
+    "Korean": ["Korean", "한국어", "Korea"],
+}
+"""Keywords used to detect language from periodical titles"""

@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from models.database import Magazine
 from web.schemas import APIError, SearchRequest
+from core.constants import LANGUAGE_TO_COUNTRY, LANGUAGE_KEYWORDS, COUNTRY_INDICATORS
 
 router = APIRouter(prefix="/api", tags=["search"])
 logger = logging.getLogger(__name__)
@@ -126,61 +127,20 @@ def _filter_by_language_and_country(
     # Import country detection
     from core.parsers.country import detect_country
 
-    # Common language indicators in titles
-    language_indicators = {
-        'English': ['english', 'en'],
-        'German': ['german', 'de', 'deutsch'],
-        'French': ['french', 'fr', 'français'],
-        'Spanish': ['spanish', 'es', 'español'],
-        'Italian': ['italian', 'it', 'italiano'],
-        'Portuguese': ['portuguese', 'pt', 'português'],
-        'Dutch': ['dutch', 'nl', 'nederlands'],
-        'Polish': ['polish', 'pl', 'polski'],
-        'Russian': ['russian', 'ru', 'русский'],
-        'Ukrainian': ['ukrainian', 'ua', 'український'],  # Removed 'uk' - conflicts with UK country code
-        'Japanese': ['japanese', 'jp', '日本語'],
-        'Chinese': ['chinese', 'cn', '中文'],
-        'Korean': ['korean', 'kr', '한국어'],
-    }
+    # Build language indicators from centralized LANGUAGE_KEYWORDS
+    language_indicators = {}
+    for lang, keywords in LANGUAGE_KEYWORDS.items():
+        # Convert keywords to lowercase for matching
+        language_indicators[lang] = [kw.lower() for kw in keywords]
 
-    # Language to country mappings (smart assumptions)
-    language_to_country = {
-        'German': 'DE',
-        'French': 'FR',
-        'Spanish': 'ES',
-        'Italian': 'IT',
-        'Portuguese': 'PT',
-        'Dutch': 'NL',
-        'Polish': 'PL',
-        'Russian': 'RU',
-        'Ukrainian': 'UA',
-        'Japanese': 'JP',
-        'Chinese': 'CN',
-        'Korean': 'KR',
-    }
-
-    # Country to language mappings (reverse assumptions)
-    country_to_language = {
-        'DE': 'German',
-        'FR': 'French',
-        'ES': 'Spanish',
-        'IT': 'Italian',
-        'PT': 'Portuguese',
-        'NL': 'Dutch',
-        'PL': 'Polish',
-        'RU': 'Russian',
-        'UA': 'Ukrainian',
-        'JP': 'Japanese',
-        'CN': 'Chinese',
-        'KR': 'Korean',
-        # English-speaking countries
-        'US': 'English',
-        'UK': 'English',
-        'CA': 'English',
-        'AU': 'English',
-        'NZ': 'English',
-        'IE': 'English',
-    }
+    # Build reverse mapping: Country to Language
+    country_to_language = {}
+    for lang, country_code in LANGUAGE_TO_COUNTRY.items():
+        country_to_language[country_code] = lang
+    # Add English-speaking countries
+    for code in ['US', 'UK', 'CA', 'AU', 'NZ', 'IE']:
+        if code not in country_to_language:
+            country_to_language[code] = 'English'
 
     filtered = []
 
@@ -190,7 +150,7 @@ def _filter_by_language_and_country(
         # Detect country in title
         detected_country = detect_country(title)
 
-        # Detect language in title
+        # Detect language in title using centralized LANGUAGE_KEYWORDS
         detected_language = None
         for lang, indicators in language_indicators.items():
             for indicator in indicators:
@@ -203,8 +163,8 @@ def _filter_by_language_and_country(
         # Smart assumptions:
         # If we detected a language but no country, infer country from language
         if detected_language and not detected_country:
-            if detected_language in language_to_country:
-                detected_country = language_to_country[detected_language]
+            if detected_language in LANGUAGE_TO_COUNTRY:
+                detected_country = LANGUAGE_TO_COUNTRY[detected_language]
                 logger.debug(
                     f"Inferred country {detected_country} from language {detected_language}: "
                     f"{result['title'][:50]}"
@@ -373,7 +333,8 @@ async def search_periodical_providers(
     query: str = Query(...),
     language: str = Query(None, description="Filter by language (e.g., English, German)"),
     country: str = Query(None, description="Filter by country code (e.g., US, UK, DE)"),
-    category: str = Query(None, description="Filter by category (e.g., Magazines, Comics)")
+    category: str = Query(None, description="Filter by category (e.g., Magazines, Comics)"),
+    tracking_id: int = Query(None, description="Scope library status to specific tracking ID")
 ) -> Dict[str, Any]:
     """
     Search for periodical issues by querying SEARCH providers only (Newsnab, RSS).
@@ -384,6 +345,7 @@ async def search_periodical_providers(
         language: Optional language filter to match specific editions
         country: Optional country code filter to match specific editions
         category: Optional category filter for provider search (narrows results)
+        tracking_id: Optional tracking ID to scope library status checks (shows only if in this tracking)
 
     Returns:
         Issue search results from search providers, filtered by language/country/category if specified
@@ -428,13 +390,26 @@ async def search_periodical_providers(
                 provider_errors.append(error_msg)
 
             # Get all existing magazines from database
-            existing_magazines = db_session.query(Magazine).all()
-            existing_titles = {m.title.lower() for m in existing_magazines}
+            all_magazines_in_db = db_session.query(Magazine).all()
 
-            # Search library for matching titles using fuzzy matching
+            # For "in library" detection: scope to tracking_id if specified
+            if tracking_id:
+                scoped_magazines = [m for m in all_magazines_in_db if m.tracking_id == tracking_id]
+            else:
+                scoped_magazines = all_magazines_in_db
+
+            # Create a more specific set: title + date for exact matching (scoped to tracking)
+            existing_title_dates = {
+                (m.title.lower(), m.issue_date.strftime("%Y-%m") if m.issue_date else "")
+                for m in scoped_magazines
+            }
+            # Also keep simple title set for backward compatibility (scoped to tracking)
+            existing_titles = {m.title.lower() for m in scoped_magazines}
+
+            # Search library for matching titles using fuzzy matching (scoped to tracking)
             matching_library_issues = []
             if _title_matcher:
-                for mag in existing_magazines:
+                for mag in scoped_magazines:
                     is_match, score = _title_matcher.match(query.strip(), mag.title)
                     if is_match:
                         matching_library_issues.append(mag)
@@ -442,12 +417,22 @@ async def search_periodical_providers(
                 # Fallback to substring matching if no matcher available
                 query_lower = query.strip().lower()
                 matching_library_issues = [
-                    m for m in existing_magazines if query_lower in m.title.lower()
+                    m for m in scoped_magazines if query_lower in m.title.lower()
                 ]
 
             # Convert provider results to dictionaries
-            result_dicts = [
-                {
+            result_dicts = []
+            for result in all_results[:200]:  # Increase limit before filtering
+                # Extract date for more precise "already downloaded" check
+                pub_date_str = ""
+                if result.publication_date:
+                    pub_date_str = result.publication_date.strftime("%Y-%m")
+
+                # Check if this specific issue (title + date) already exists
+                title_lower = result.title.lower()
+                is_downloaded = (title_lower, pub_date_str) in existing_title_dates
+
+                result_dicts.append({
                     "title": result.title,
                     "url": result.url,
                     "provider": result.provider,
@@ -457,17 +442,12 @@ async def search_periodical_providers(
                         else None
                     ),
                     "metadata": result.raw_metadata or {},
-                    "already_downloaded": result.title.lower() in existing_titles,
+                    "already_downloaded": is_downloaded,
                     "from_provider": True,
-                }
-                for result in all_results[:200]  # Increase limit before filtering
-            ]
+                })
 
-            # Filter out edition variants (kids, traveller, etc.)
-            result_dicts = _filter_edition_variants(result_dicts, query)
-            result_dicts = result_dicts[:100]  # Limit to 100 after filtering
 
-            # Apply language and country filters if specified
+            # Apply language and country filters EARLY (before expensive operations)
             if language or country:
                 result_dicts = _filter_by_language_and_country(
                     result_dicts, language, country
@@ -476,6 +456,9 @@ async def search_periodical_providers(
                     f"After language/country filter: {len(result_dicts)} results "
                     f"(language={language}, country={country})"
                 )
+
+            # Filter out edition variants (kids, traveller, etc.)
+            result_dicts = _filter_edition_variants(result_dicts, query)
 
             # Apply fuzzy matching to get best matches
             # Score results and sort by relevance

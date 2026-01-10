@@ -12,6 +12,9 @@ import { UIUtils, SortManager } from './ui-utils.js';
 // Constants loaded from backend API
 let SUPPORTED_LANGUAGES = [];
 let ISO_COUNTRIES = {};
+let LANGUAGE_TO_COUNTRY = {};
+let COUNTRY_INDICATORS = {};
+let LANGUAGE_KEYWORDS = {};
 
 export class TrackingManager {
   constructor() {
@@ -41,6 +44,9 @@ export class TrackingManager {
       if (data.success) {
         SUPPORTED_LANGUAGES = data.languages;
         ISO_COUNTRIES = data.countries;
+        LANGUAGE_TO_COUNTRY = data.language_to_country || {};
+        COUNTRY_INDICATORS = data.country_indicators || {};
+        LANGUAGE_KEYWORDS = data.language_keywords || {};
       }
     } catch (error) {
       console.error('Failed to load constants:', error);
@@ -300,26 +306,85 @@ export class TrackingManager {
   async chooseSearchResult(result) {
     this.currentPeriodicalMetadata = result;
 
+    // Auto-populate the manual form fields with search result data
+    const titleInput = document.getElementById('new-tracking-title');
+    const categorySelect = document.getElementById('new-tracking-category');
+    const languageSelect = document.getElementById('new-tracking-language');
+    const countrySelect = document.getElementById('new-tracking-country');
+
+    // Set title
+    titleInput.value = result.title;
+
+    // Try to detect category from title or metadata
+    const titleLower = result.title.toLowerCase();
+    if (titleLower.includes('comic') || titleLower.includes('manga')) {
+      categorySelect.value = 'Comics';
+    } else if (titleLower.includes('magazine') || titleLower.includes('journal')) {
+      categorySelect.value = 'Magazines';
+    } else if (result.metadata?.category) {
+      categorySelect.value = result.metadata.category;
+    } else {
+      // Default to auto-detect
+      categorySelect.value = '';
+    }
+
+    // Set language (from filters or detect from title using centralized keywords)
+    const currentFilterLanguage = document.getElementById('search-filter-language')?.value;
+    if (currentFilterLanguage && currentFilterLanguage !== '') {
+      languageSelect.value = currentFilterLanguage;
+    } else {
+      // Try to detect from title using centralized LANGUAGE_KEYWORDS
+      let detectedLanguage = 'English'; // Default
+      for (const [language, keywords] of Object.entries(LANGUAGE_KEYWORDS)) {
+        if (keywords.some(keyword => result.title.includes(keyword))) {
+          detectedLanguage = language;
+          break;
+        }
+      }
+      languageSelect.value = detectedLanguage;
+    }
+
+    // Set country (from filters or detect from title using centralized indicators)
+    const currentFilterCountry = document.getElementById('search-filter-country')?.value;
+    if (currentFilterCountry && currentFilterCountry !== '') {
+      countrySelect.value = currentFilterCountry;
+    } else {
+      // Try to detect from title using centralized COUNTRY_INDICATORS
+      let detectedCountry = '';
+      for (const [code, indicators] of Object.entries(COUNTRY_INDICATORS)) {
+        if (indicators.some(ind => result.title.includes(ind))) {
+          detectedCountry = code;
+          break;
+        }
+      }
+      
+      // If no country detected, try to infer from detected language
+      if (!detectedCountry && languageSelect.value && LANGUAGE_TO_COUNTRY[languageSelect.value]) {
+        detectedCountry = LANGUAGE_TO_COUNTRY[languageSelect.value];
+      }
+      
+      countrySelect.value = detectedCountry || 'US'; // Default to US
+    }
+
     // Hide the search results
     document.getElementById('tracking-search-result').classList.add('hidden');
 
-    // Show Step 3 (Save Preferences)
-    const saveStep = document.getElementById('save-step');
-    const saveInfo = document.getElementById('save-info');
+    // Show a success message and scroll to the form
+    UIUtils.showStatus('tracking-status', 
+      `✓ Selected: ${result.title}. Review the fields below and click "Start Tracking".`, 
+      'success');
 
-    saveInfo.innerHTML = `
-      <div style="padding: 15px; background: var(--surface); border-radius: 8px; border: 1px solid var(--border-color);">
-        <h4 style="margin: 0 0 8px 0;">${result.title}</h4>
-        <p style="margin: 4px 0; color: var(--text-secondary);">
-          <strong>Publisher:</strong> ${result.publisher || 'Unknown'}
-        </p>
-      </div>
-    `;
+    // Scroll to the manual form
+    const manualSection = titleInput.closest('div[style*="margin-top: 30px"]');
+    if (manualSection) {
+      manualSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
 
-    saveStep.classList.remove('hidden');
-
-    // Scroll to the save step
-    saveStep.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    // Highlight the title field briefly to draw attention
+    titleInput.style.background = 'var(--success-bg)';
+    setTimeout(() => {
+      titleInput.style.background = '';
+    }, 2000);
   }
 
   /**
@@ -525,7 +590,13 @@ export class TrackingManager {
     // Add event listeners for search and delete buttons
     const searchBtn = card.querySelector('.search-issues-btn');
     if (searchBtn) {
-      searchBtn.addEventListener('click', () => this.searchForIssues(tracked.id, tracked.title));
+      searchBtn.addEventListener('click', () => this.searchForIssues(
+        tracked.id,
+        tracked.title,
+        tracked.language,
+        tracked.country,
+        tracked.category
+      ));
     }
 
     const deleteBtn = card.querySelector('.delete-tracking-btn');
@@ -644,7 +715,7 @@ export class TrackingManager {
   /**
    * Search for issues of a tracked periodical
    */
-  async searchForIssues(trackingId, title) {
+  async searchForIssues(trackingId, title, language = null, country = null, category = null) {
     try {
       // Show loading spinner
       const issuesContent = document.getElementById('search-issues-content');
@@ -658,8 +729,16 @@ export class TrackingManager {
       // Store tracking_id for later use in downloadIssue
       window.currentTrackingId = trackingId;
 
+      // Build query parameters
+      const params = new URLSearchParams();
+      params.append('query', title);
+      params.append('tracking_id', trackingId);
+      if (language) params.append('language', language);
+      if (country) params.append('country', country);
+      if (category) params.append('category', category);
+
       const response = await APIClient.authenticatedFetch(
-        `/api/periodicals/search-providers?query=${encodeURIComponent(title)}`,
+        `/api/periodicals/search-providers?${params.toString()}`,
         { method: 'POST' }
       );
       const data = await response.json();
@@ -1161,11 +1240,27 @@ window.selectIssueWithVariants = function (issueKey, alreadyDownloaded) {
 
   const optionsDiv = document.getElementById('variant-options');
   variants.forEach((variant, index) => {
-    // Detect language
-    const langMatch = variant.title.match(
-      /\b(German|Dutch|French|Spanish|Italian|English|DE|NL|FR|ES|IT|EN|USA|UK)\b/i
-    );
-    const lang = langMatch ? langMatch[0].toUpperCase() : '';
+    // Detect language using centralized constants
+    let detectedLang = '';
+    let detectedCountry = '';
+    
+    if (window.appConstants?.language_keywords) {
+      for (const [lang, keywords] of Object.entries(window.appConstants.language_keywords)) {
+        if (keywords.some(kw => variant.title.toLowerCase().includes(kw.toLowerCase()))) {
+          detectedLang = lang;
+          break;
+        }
+      }
+    }
+    
+    if (window.appConstants?.country_indicators) {
+      for (const [country, indicators] of Object.entries(window.appConstants.country_indicators)) {
+        if (indicators.some(ind => variant.title.toLowerCase().includes(ind.toLowerCase()))) {
+          detectedCountry = country;
+          break;
+        }
+      }
+    }
 
     // Detect special editions (Traveler, Kids, etc.)
     const editionMatch = variant.title.match(
@@ -1174,9 +1269,9 @@ window.selectIssueWithVariants = function (issueKey, alreadyDownloaded) {
     const edition = editionMatch ? editionMatch[0] : '';
 
     // Build display label
-    let displayLabel = lang || `Edition ${index + 1}`;
+    let displayLabel = detectedCountry || detectedLang || `Edition ${index + 1}`;
     if (edition) {
-      displayLabel = lang ? `${lang} - ${edition}` : edition;
+      displayLabel = displayLabel !== `Edition ${index + 1}` ? `${displayLabel} - ${edition}` : edition;
     }
 
     const isDownloaded = variant.already_downloaded || alreadyDownloaded;
@@ -1508,5 +1603,5 @@ window.updateTrackingMode = () => tracking.updateTrackingMode();
 window.setSortField = (field) => tracking.setSortField(field);
 window.toggleSortOrder = () => tracking.toggleSortOrder();
 window.editTracking = (id) => tracking.editTracking(id);
-window.searchForIssues = (id, title) => tracking.searchForIssues(id, title);
+window.searchForIssues = (id, title, language, country, category) => tracking.searchForIssues(id, title, language, country, category);
 window.deleteTracking = (id, title) => tracking.deleteTracking(id, title);

@@ -7,7 +7,13 @@ from typing import Any, Dict
 
 from fastapi import APIRouter
 
-from core.constants import SUPPORTED_LANGUAGES, ISO_COUNTRIES
+from core.constants import (
+    SUPPORTED_LANGUAGES,
+    ISO_COUNTRIES,
+    LANGUAGE_TO_COUNTRY,
+    COUNTRY_INDICATORS,
+    LANGUAGE_KEYWORDS
+)
 
 router = APIRouter(prefix="/api", tags=["metadata"])
 logger = logging.getLogger(__name__)
@@ -37,7 +43,10 @@ async def get_all_constants() -> Dict[str, Any]:
     return {
         "success": True,
         "languages": SUPPORTED_LANGUAGES,
-        "countries": ISO_COUNTRIES
+        "countries": ISO_COUNTRIES,
+        "language_to_country": LANGUAGE_TO_COUNTRY,
+        "country_indicators": COUNTRY_INDICATORS,
+        "language_keywords": LANGUAGE_KEYWORDS
     }
 
 

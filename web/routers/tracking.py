@@ -389,6 +389,7 @@ async def get_tracking_details(tracking_id: int) -> Dict[str, Any]:
                     "title": tracking.title,
                     "category": tracking.category,
                     "language": tracking.language,
+                    "country": tracking.country,
                     "download_category": tracking.download_category,
                     "first_publish_year": tracking.first_publish_year,
                     "total_editions_known": tracking.total_editions_known,

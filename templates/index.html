@@ -551,17 +551,19 @@
                         <label style="font-size: 0.9em; color: var(--text-secondary);">Filter by Language:</label>
                         <select id="search-filter-language" class="w-full">
                             <option value="">Any Language</option>
+                            <option value="English" selected>English</option>
                         </select>
                     </div>
                     <div style="flex: 1;">
                         <label style="font-size: 0.9em; color: var(--text-secondary);">Filter by Country:</label>
                         <select id="search-filter-country" class="w-full">
                             <option value="">Any Country</option>
+                            <option value="US" selected>United States (US)</option>
                         </select>
                     </div>
                 </div>
                 <small style="color: var(--text-secondary); display: block; margin-top: 5px;">
-                    💡 Tip: Select category below to narrow search results (expands automatically if nothing found)
+                    💡 Tip: Defaults to English/US. Select "Any" to see all editions including foreign languages.
                 </small>
             </div>
 
@@ -579,7 +581,10 @@
 
             <!-- Manual Entry Section -->
             <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--border);">
-                <h3 style="margin-bottom: 15px;">Or Enter Manually</h3>
+                <h3 style="margin-bottom: 5px;">Tracking Details</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 0.95em;">
+                    Review and adjust the information below, then click "Start Tracking"
+                </p>
 
                 <div class="settings-field">
                     <label>Periodical Title:</label>
