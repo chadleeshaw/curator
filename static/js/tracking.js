@@ -481,10 +481,21 @@ export class TrackingManager {
       </div>
       <div class="tracked-card-buttons">
         <button onclick="editTracking(${tracked.id})" class="btn-icon" title="Edit">✏️</button>
-        <button onclick='searchForIssues(${tracked.id}, "${tracked.title.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}')' class="btn-icon" title="Search Issues">🔍</button>
-        <button onclick='deleteTracking(${tracked.id}, "${tracked.title.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}')' class="btn-icon btn-danger" title="Delete">🗑️</button>
+        <button class="btn-icon search-issues-btn" data-tracking-id="${tracked.id}" title="Search Issues">🔍</button>
+        <button class="btn-icon btn-danger delete-tracking-btn" data-tracking-id="${tracked.id}" title="Delete">🗑️</button>
       </div>
     `;
+
+    // Add event listeners for search and delete buttons
+    const searchBtn = card.querySelector('.search-issues-btn');
+    if (searchBtn) {
+      searchBtn.addEventListener('click', () => this.searchForIssues(tracked.id, tracked.title));
+    }
+
+    const deleteBtn = card.querySelector('.delete-tracking-btn');
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', () => this.deleteTracking(tracked.id, tracked.title));
+    }
 
     // Add event listener for checkbox if in merge mode
     if (this.mergeMode) {
