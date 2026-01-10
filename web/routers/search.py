@@ -446,7 +446,6 @@ async def search_periodical_providers(
                     "from_provider": True,
                 })
 
-
             # Apply language and country filters EARLY (before expensive operations)
             if language or country:
                 result_dicts = _filter_by_language_and_country(
