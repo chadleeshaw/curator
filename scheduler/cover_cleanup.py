@@ -135,21 +135,62 @@ class CoverCleanupTask:
                             except Exception as ocr_error:
                                 logger.warning(f"OCR failed for {magazine.title}: {ocr_error}")
 
-                if generated_count > 0:
+                # Part 3: Run OCR on existing covers that don't have OCR metadata
+                ocr_scanned_count = 0
+                if OCRService.is_available():
+                    for magazine in periodicals_with_covers:
+                        # Check if magazine already has OCR metadata
+                        if (magazine.extra_metadata and
+                            magazine.extra_metadata.get('ocr_metadata')):
+                            continue
+
+                        # Run OCR on existing cover
+                        try:
+                            logger.debug(f"Running OCR on existing cover: {magazine.cover_path}")
+                            ocr_metadata = OCRService.analyze_cover(str(magazine.cover_path))
+                            if ocr_metadata.get('text_found'):
+                                # Update extra_metadata with OCR findings
+                                if magazine.extra_metadata is None:
+                                    magazine.extra_metadata = {}
+                                magazine.extra_metadata["ocr_metadata"] = {
+                                    "detected_text": ocr_metadata.get('detected_text', '')[:500],
+                                    "ocr_issue_number": ocr_metadata.get('issue_number'),
+                                    "ocr_year": ocr_metadata.get('year'),
+                                    "ocr_month": ocr_metadata.get('month'),
+                                    "ocr_volume": ocr_metadata.get('volume'),
+                                    "ocr_special_edition": ocr_metadata.get('special_edition', False)
+                                }
+                                ocr_scanned_count += 1
+                                logger.info(f"OCR metadata added to existing cover: {magazine.title}")
+                        except Exception as ocr_error:
+                            logger.warning(f"OCR failed for existing cover {magazine.title}: {ocr_error}")
+
+                if generated_count > 0 or ocr_scanned_count > 0:
                     db_session.commit()
-                    msg = f"Cleanup covers: Generated {generated_count} missing covers"
+                    msg_parts = []
+                    if generated_count > 0:
+                        msg_parts.append(f"Generated {generated_count} missing covers")
                     if ocr_updated_count > 0:
-                        msg += f", added OCR metadata to {ocr_updated_count} covers"
-                    logger.info(msg)
+                        msg_parts.append(f"added OCR to {ocr_updated_count} new covers")
+                    if ocr_scanned_count > 0:
+                        msg_parts.append(f"scanned {ocr_scanned_count} existing covers")
+                    logger.info(f"Cleanup covers: {', '.join(msg_parts)}")
 
                 return {
                     "deleted_count": deleted_count,
                     "generated_count": generated_count,
-                    "ocr_updated_count": ocr_updated_count
+                    "ocr_updated_count": ocr_updated_count,
+                    "ocr_scanned_count": ocr_scanned_count
                 }
 
             finally:
                 db_session.close()
         except Exception as e:
             logger.error(f"Cover cleanup error: {e}", exc_info=True)
-            return {"deleted_count": 0, "generated_count": 0, "ocr_updated_count": 0, "error": str(e)}
+            return {
+                "deleted_count": 0,
+                "generated_count": 0,
+                "ocr_updated_count": 0,
+                "ocr_scanned_count": 0,
+                "error": str(e)
+            }

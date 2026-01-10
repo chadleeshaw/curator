@@ -346,12 +346,16 @@ def detect_country(text: str, default: Optional[str] = None) -> Optional[str]:
     # Check for "South Africa" first (more specific)
     if re.search(r'\bSouth[\s\.]Africa\b', text, re.IGNORECASE):
         return 'ZA'  # South Africa
-    # Then check for generic "Africa" - treat as ZA for filtering purposes
-    if re.search(r'\bAfrica\b', text, re.IGNORECASE):
-        return 'ZA'  # Treat Africa as South Africa for filtering
+    # Then check for generic "Africa" or "Afrika" - treat as ZA for filtering purposes
+    if re.search(r'\b(Africa|Afrika)\b', text, re.IGNORECASE):
+        return 'ZA'  # Treat Africa/Afrika as South Africa for filtering
 
     # Special handling for "Nederland" (Dutch for Netherlands)
     if re.search(r'\bNederland', text, re.IGNORECASE):
         return 'NL'  # Netherlands
+
+    # Special handling for "Slovenija" (Slovenian for Slovenia)
+    if re.search(r'\bSlovenija\b', text, re.IGNORECASE):
+        return 'SI'  # Slovenia
 
     return default
