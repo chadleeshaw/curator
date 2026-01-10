@@ -447,14 +447,16 @@ async def search_periodical_providers(
                 })
 
             # Apply language and country filters EARLY (before expensive operations)
-            if language or country:
-                result_dicts = _filter_by_language_and_country(
-                    result_dicts, language, country
-                )
-                logger.debug(
-                    f"After language/country filter: {len(result_dicts)} results "
-                    f"(language={language}, country={country})"
-                )
+            # Default to US/English if not specified
+            filter_language = language if language else 'English'
+            filter_country = country if country else 'US'
+            result_dicts = _filter_by_language_and_country(
+                result_dicts, filter_language, filter_country
+            )
+            logger.debug(
+                f"After language/country filter: {len(result_dicts)} results "
+                f"(language={filter_language}, country={filter_country})"
+            )
 
             # Filter out edition variants (kids, traveller, etc.)
             result_dicts = _filter_edition_variants(result_dicts, query)

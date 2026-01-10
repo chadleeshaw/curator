@@ -161,7 +161,7 @@ export const languageIndicators = {
   'pt': ['Portuguese', 'Português', '[PT]', ' PT ', '.PT.'],
   'ru': ['Russian', 'Русский', '[RU]', ' RU ', '.RU.'],
   'zh': ['Chinese', '中文', '[CN]', ' CN ', '.CN.'],
-  'nl': ['Dutch', 'Nederlands', '[NL]', ' NL ', '.NL.'],
+  'nl': ['Dutch', 'Nederlands', 'nederlands', '[NL]', ' NL ', '.NL.'],
   'pl': ['Polish', 'Polski', '[PL]', ' PL ', '.PL.'],
   'uk': ['Ukrainian', 'Українська', '[UA]', ' UA ', '.UA.'],
   'sv': ['Swedish', 'Svenska', '[SE]', ' SE ', '.SE.'],

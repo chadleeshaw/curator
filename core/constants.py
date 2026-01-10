@@ -334,7 +334,7 @@ LANGUAGE_KEYWORDS = {
     "Spanish": ["Spanish", "Español", "España"],
     "Italian": ["Italian", "Italiano", "Italia"],
     "Portuguese": ["Portuguese", "Português"],
-    "Dutch": ["Dutch", "Nederlands", "Holland"],
+    "Dutch": ["Dutch", "Nederlands", "nederlands", "Holland"],
     "Polish": ["Polish", "Polski", "Polska"],
     "Russian": ["Russian", "Русский"],
     "Ukrainian": ["Ukrainian", "Українська"],
