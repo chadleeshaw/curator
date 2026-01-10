@@ -475,14 +475,16 @@ async def search_periodical_providers(
             ]  # Keep top 50 by fuzzy score
 
             # Add library issues that aren't in provider results
+            # Also filter library items by language/country
             provider_titles = {r["title"].lower() for r in result_dicts}
+            library_items_to_add = []
             for mag in matching_library_issues:
                 if mag.title.lower() not in provider_titles:
                     # For library-only items, append year to title so frontend parser can extract it
                     year = mag.issue_date.year if mag.issue_date else None
                     title_with_year = f"{mag.title} {year}" if year else mag.title
 
-                    result_dicts.append(
+                    library_items_to_add.append(
                         {
                             "title": title_with_year,
                             "url": "",  # No URL for library-only items
@@ -495,6 +497,12 @@ async def search_periodical_providers(
                             "from_provider": False,
                         }
                     )
+
+            # Apply same language/country filter to library items
+            library_items_to_add = _filter_by_language_and_country(
+                library_items_to_add, filter_language, filter_country
+            )
+            result_dicts.extend(library_items_to_add)
 
             if result_dicts:
                 logger.debug(f"Found {len(result_dicts)} results for: {query}")

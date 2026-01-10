@@ -291,6 +291,9 @@ def detect_country(text: str, default: Optional[str] = None) -> Optional[str]:
     # Convert to uppercase for pattern matching
     text_upper = text.upper()
 
+    # Common English words that look like country codes but should be ignored
+    common_words = {'IS', 'IN', 'IT', 'OR', 'TO', 'BY', 'AT', 'AS', 'IF', 'NO', 'SO', 'DO', 'GO'}
+
     # Patterns to match country codes in various contexts
     # Order matters - more specific patterns first
     patterns = [
@@ -307,11 +310,16 @@ def detect_country(text: str, default: Optional[str] = None) -> Optional[str]:
         r'\s([A-Z]{2,3})\s+\w+\s+EDITION',      # UK Special Edition (word between)
         r'\s([A-Z]{2,3})\s+[ÉéÈèÊê]DITION',     # UK Édition (unicode)
         r'\s([A-Z]{2,3})\)',                    # UK) in text
+        r'\s([A-Z]{2,3})\s',                    # US  or UK  surrounded by spaces
     ]
 
     for pattern in patterns:
         matches = re.findall(pattern, text_upper)
         for match in matches:
+            # Skip common English words that look like country codes
+            if match in common_words:
+                continue
+
             # Check if it's a valid country code
             if match in ISO_COUNTRIES:
                 # Direct match - return it as-is
@@ -333,5 +341,17 @@ def detect_country(text: str, default: Optional[str] = None) -> Optional[str]:
         # Match full country name with word boundaries
         if re.search(rf'\b{re.escape(name)}\b', text, re.IGNORECASE):
             return code
+
+    # Special handling for "Africa" patterns (not a country, but used in periodical names)
+    # Check for "South Africa" first (more specific)
+    if re.search(r'\bSouth[\s\.]Africa\b', text, re.IGNORECASE):
+        return 'ZA'  # South Africa
+    # Then check for generic "Africa" - treat as ZA for filtering purposes
+    if re.search(r'\bAfrica\b', text, re.IGNORECASE):
+        return 'ZA'  # Treat Africa as South Africa for filtering
+
+    # Special handling for "Nederland" (Dutch for Netherlands)
+    if re.search(r'\bNederland', text, re.IGNORECASE):
+        return 'NL'  # Netherlands
 
     return default

@@ -9,6 +9,7 @@ A modular system for discovering, downloading, and organizing periodicals (magaz
 - **Download Management**: SABnzbd and NZBGet support
 - **Web Interface**: Modern UI for searching, browsing, and viewing
 - **Organized Storage**: Automatic file organization with consistent naming
+- **OCR Metadata Extraction**: Automatically extracts issue numbers, dates, and other metadata from cover art
 
 ## Quick Start
 
@@ -112,6 +113,27 @@ The application follows a modular design:
 - **Processor**: Download monitoring, file import, organization, scheduling
 - **Web**: FastAPI backend with modern frontend
 - **Core**: Configuration, authentication, database, matching logic
+- **Services**: OCR service for cover art analysis and metadata extraction
+
+### OCR Metadata Extraction
+
+The OCR service uses Tesseract OCR and OpenCV to automatically extract metadata from cover art during file import. This helps identify:
+
+- **Issue Numbers**: Patterns like "#123", "Issue 123", "No. 123"
+- **Dates**: Years (1900-2099), month names (full and abbreviated)
+- **Volume Numbers**: "Vol. 1", "Volume 1", "V. 1"
+- **Special Editions**: Detects indicators like "Special Edition", "Limited Edition", "Anniversary", "Collector"
+
+OCR metadata supplements filename-based parsing and is stored in the database for reference. When OCR detects metadata that wasn't found in the filename, it automatically enhances the imported record.
+
+**Requirements**: The Docker image includes all necessary OCR dependencies (tesseract-ocr, tesseract-ocr-eng). For local development, install:
+```bash
+# Ubuntu/Debian
+sudo apt-get install tesseract-ocr tesseract-ocr-eng libtesseract-dev
+
+# macOS
+brew install tesseract
+```
 
 ## License
 

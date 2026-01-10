@@ -9,6 +9,7 @@ from pathlib import Path
 from sqlalchemy.orm import sessionmaker
 
 from models.database import Magazine
+from services.ocr_service import OCRService
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +98,7 @@ class CoverCleanupTask:
 
                 # Part 2: Generate missing covers
                 generated_count = 0
+                ocr_updated_count = 0
                 for magazine in periodicals_without_covers:
                     pdf_path = Path(magazine.file_path)
                     if not pdf_path.exists():
@@ -111,19 +113,43 @@ class CoverCleanupTask:
                             f"Generated missing cover for: {magazine.title}"
                         )
 
+                        # Run OCR on the newly generated cover
+                        if OCRService.is_available():
+                            try:
+                                logger.debug(f"Running OCR on newly generated cover: {cover_path}")
+                                ocr_metadata = OCRService.analyze_cover(str(cover_path))
+                                if ocr_metadata.get('text_found'):
+                                    # Update extra_metadata with OCR findings
+                                    if magazine.extra_metadata is None:
+                                        magazine.extra_metadata = {}
+                                    magazine.extra_metadata["ocr_metadata"] = {
+                                        "detected_text": ocr_metadata.get('detected_text', '')[:500],
+                                        "ocr_issue_number": ocr_metadata.get('issue_number'),
+                                        "ocr_year": ocr_metadata.get('year'),
+                                        "ocr_month": ocr_metadata.get('month'),
+                                        "ocr_volume": ocr_metadata.get('volume'),
+                                        "ocr_special_edition": ocr_metadata.get('special_edition', False)
+                                    }
+                                    ocr_updated_count += 1
+                                    logger.info(f"OCR metadata added for: {magazine.title}")
+                            except Exception as ocr_error:
+                                logger.warning(f"OCR failed for {magazine.title}: {ocr_error}")
+
                 if generated_count > 0:
                     db_session.commit()
-                    logger.info(
-                        f"Cleanup covers: Generated {generated_count} missing covers"
-                    )
+                    msg = f"Cleanup covers: Generated {generated_count} missing covers"
+                    if ocr_updated_count > 0:
+                        msg += f", added OCR metadata to {ocr_updated_count} covers"
+                    logger.info(msg)
 
                 return {
                     "deleted_count": deleted_count,
-                    "generated_count": generated_count
+                    "generated_count": generated_count,
+                    "ocr_updated_count": ocr_updated_count
                 }
 
             finally:
                 db_session.close()
         except Exception as e:
             logger.error(f"Cover cleanup error: {e}", exc_info=True)
-            return {"deleted_count": 0, "generated_count": 0, "error": str(e)}
+            return {"deleted_count": 0, "generated_count": 0, "ocr_updated_count": 0, "error": str(e)}

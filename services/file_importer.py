@@ -24,6 +24,7 @@ from core.utils import find_pdf_epub_files, hash_file_in_chunks
 from core.response_models import ErrorCodes, OperationResult
 from models.database import Magazine, MagazineTracking
 from services.file_organizer import FileOrganizer
+from services.ocr_service import OCRService
 
 logger = logging.getLogger(__name__)
 
@@ -269,6 +270,37 @@ class FileImporter:
 
             cover_path = self._extract_cover(pdf_path)
 
+            # Use OCR to extract metadata from cover if available
+            ocr_metadata = {}
+            if cover_path and OCRService.is_available():
+                try:
+                    logger.debug(f"Attempting OCR analysis on cover: {cover_path}")
+                    ocr_metadata = OCRService.analyze_cover(str(cover_path))
+                    if ocr_metadata.get('text_found'):
+                        logger.info(f"OCR extracted metadata: {ocr_metadata}")
+                        # Enhance parsed data with OCR findings if they're more specific
+                        if ocr_metadata.get('issue_number') and not parsed.issue_number:
+                            parsed.issue_number = ocr_metadata['issue_number']
+                            logger.info(f"OCR detected issue number: {ocr_metadata['issue_number']}")
+                        if ocr_metadata.get('year') and not parsed.year:
+                            parsed.year = ocr_metadata['year']
+                            logger.info(f"OCR detected year: {ocr_metadata['year']}")
+                        if ocr_metadata.get('month') and not parsed.month_name:
+                            months = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+                                      'July', 'August', 'September', 'October', 'November',
+                                      'December']
+                            parsed.month_name = months[ocr_metadata['month']]
+                            logger.info(f"OCR detected month: {parsed.month_name}")
+                        if ocr_metadata.get('volume') and not parsed.volume:
+                            parsed.volume = ocr_metadata['volume']
+                            logger.info(f"OCR detected volume: {ocr_metadata['volume']}")
+                        if ocr_metadata.get('special_edition') and not is_special_edition:
+                            is_special_edition = True
+                            special_name = "Special Edition"
+                            logger.info("OCR detected special edition")
+                except Exception as e:
+                    logger.warning(f"OCR analysis failed for {cover_path}: {e}")
+
             category = self.categorizer.categorize(parsed.title)
 
             if skip_organize:
@@ -307,6 +339,16 @@ class FileImporter:
             if is_special_edition:
                 extra_metadata["special_edition"] = special_name
                 extra_metadata["full_title"] = parsed.title
+            # Add OCR metadata if available
+            if ocr_metadata.get('text_found'):
+                extra_metadata["ocr_metadata"] = {
+                    "detected_text": ocr_metadata.get('detected_text', '')[:500],  # Limit text length
+                    "ocr_issue_number": ocr_metadata.get('issue_number'),
+                    "ocr_year": ocr_metadata.get('year'),
+                    "ocr_month": ocr_metadata.get('month'),
+                    "ocr_volume": ocr_metadata.get('volume'),
+                    "ocr_special_edition": ocr_metadata.get('special_edition', False)
+                }
 
             magazine = Magazine(
                 title=tracking_title,

@@ -307,7 +307,7 @@ COUNTRY_INDICATORS = {
     "ES": ["[ES]", " ES ", ".ES.", "Spain", "Spanish", "España"],
     "IT": ["[IT]", " IT ", ".IT.", "Italy", "Italian", "Italia"],
     "PT": ["[PT]", " PT ", ".PT.", "Portugal", "Portuguese"],
-    "NL": ["[NL]", " NL ", ".NL.", "Netherlands", "Dutch", "Holland"],
+    "NL": ["[NL]", " NL ", ".NL.", "Netherlands", "Dutch", "Holland", "Nederland"],
     "PL": ["[PL]", " PL ", ".PL.", "Poland", "Polish", "Polska"],
     "RU": ["[RU]", " RU ", ".RU.", "Russia", "Russian"],
     "UA": ["[UA]", " UA ", ".UA.", "Ukraine", "Ukrainian"],
@@ -320,6 +320,7 @@ COUNTRY_INDICATORS = {
     "NZ": ["[NZ]", " NZ ", ".NZ.", "New Zealand"],
     "BR": ["[BR]", " BR ", ".BR.", "Brazil", "Brazilian"],
     "AR": ["[AR]", " AR ", ".AR.", "Argentina", "Argentine"],
+    "ZA": ["[ZA]", " ZA ", ".ZA.", "South Africa", "Africa"],
 }
 """Keywords and patterns used to detect country from periodical titles"""
 
