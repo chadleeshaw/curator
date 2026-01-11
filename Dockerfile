@@ -3,8 +3,12 @@ FROM python:3.13-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies in a single layer
+# Install system dependencies and build tools in a single layer
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Build dependencies for Python packages
+    gcc \
+    g++ \
+    # Runtime dependencies
     poppler-utils \
     libglib2.0-0 \
     libgomp1 \
@@ -16,6 +20,9 @@ COPY requirements-prod.txt requirements.txt
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Remove build dependencies to reduce image size
+RUN apt-get purge -y --auto-remove gcc g++
 
 # Copy application code
 COPY . .
