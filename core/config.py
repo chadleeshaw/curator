@@ -8,6 +8,7 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
+
 class ConfigLoader:
     """Load, validate, and save configuration from YAML"""
 

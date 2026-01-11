@@ -18,17 +18,14 @@ except ImportError:
     OCR_AVAILABLE = False
     np = None  # type: ignore
 
+logger = logging.getLogger(__name__)
+
 try:
     from pypdf import PdfReader
     PDF_TEXT_AVAILABLE = True
 except ImportError:
-    try:
-        from PyPDF2 import PdfReader
-        PDF_TEXT_AVAILABLE = True
-    except ImportError:
-        PDF_TEXT_AVAILABLE = False
-
-logger = logging.getLogger(__name__)
+    PDF_TEXT_AVAILABLE = False
+    logger.debug("pypdf not available for PDF text extraction")
 
 # Track if we've already warned about Tesseract not being installed
 _TESSERACT_WARNING_LOGGED = False
@@ -55,7 +52,7 @@ class OCRService:
             denoise_h = config.get("denoise_h", 30)
             sharpen_kernel = np.array(config.get("sharpen_kernel", [[0, -1, 0], [-1, 5, -1], [0, -1, 0]]))
 
-            img = cv2.imread(image_path)
+            img = cv2.imread(image_path)  # pylint: disable=no-member
             if img is None:
                 logger.error(f"Failed to read image: {image_path}")
                 return None
@@ -64,25 +61,25 @@ class OCRService:
             height, width = img.shape[:2]
             if width < 1000 or width > 2500:
                 scale = resize_width / width
-                img = cv2.resize(img, (int(width * scale), int(height * scale)), interpolation=cv2.INTER_CUBIC)
+                img = cv2.resize(img, (int(width * scale), int(height * scale)), interpolation=cv2.INTER_CUBIC)  # pylint: disable=no-member
 
             # Convert to grayscale
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # pylint: disable=no-member
 
             # Histogram equalization for contrast
-            gray = cv2.equalizeHist(gray)
+            gray = cv2.equalizeHist(gray)  # pylint: disable=no-member
 
             # Adaptive thresholding
             thresh = cv2.adaptiveThreshold(
-                gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                cv2.THRESH_BINARY, 15, 11
+                gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,  # pylint: disable=no-member
+                cv2.THRESH_BINARY, 15, 11  # pylint: disable=no-member
             )
 
             # Denoise
-            denoised = cv2.fastNlMeansDenoising(thresh, h=denoise_h)
+            denoised = cv2.fastNlMeansDenoising(thresh, h=denoise_h)  # pylint: disable=no-member
 
             # Sharpen
-            sharpened = cv2.filter2D(denoised, -1, sharpen_kernel)
+            sharpened = cv2.filter2D(denoised, -1, sharpen_kernel)  # pylint: disable=no-member
 
             return sharpened
         except Exception as e:

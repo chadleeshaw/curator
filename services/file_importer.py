@@ -478,7 +478,6 @@ class FileImporter:
         Returns:
             Path to extracted cover image, or None if failed
         """
-        from services.ocr_service import OCRService
         from core.constants import PDF_COVER_DPI_OCR, PDF_COVER_QUALITY_HIGH
 
         cover_dir = self.organize_base_dir / ".covers"

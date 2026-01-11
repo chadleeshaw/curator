@@ -22,7 +22,6 @@ Application constants and configuration values
 # ==============================================================================
 
 DEFAULT_FUZZY_THRESHOLD = 80
-"""Default fuzzy matching threshold (0-100) for title deduplication"""
 
 TITLE_MATCH_THRESHOLD = 85
 """Higher threshold for strict title matching"""
