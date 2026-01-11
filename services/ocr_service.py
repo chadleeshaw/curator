@@ -1,11 +1,15 @@
 """OCR service for extracting text from cover art images."""
 
 import logging
+import warnings
 from pathlib import Path
 from typing import Optional, Dict, List, Any
 import re
 
 from PIL import Image
+
+# Suppress PyTorch DataLoader pin_memory warning when running on CPU
+warnings.filterwarnings("ignore", message=".*pin_memory.*", category=UserWarning)
 
 # Increase Pillow's decompression bomb limit for high-res images (300 DPI)
 # Default is ~89 MP, we need ~130 MP for magazine covers at 300 DPI
@@ -94,6 +98,7 @@ def _get_easyocr_reader(language: Optional[str] = None):
             [lang_code],
             gpu=False,  # Use CPU (can be configured later)
             verbose=False,
+            download_enabled=True,  # Allow model downloads
         )
         _easyocr_cache[lang_code] = reader
         return reader

@@ -49,6 +49,7 @@ RUN mkdir -p \
     /app/local/data \
     /app/local/downloads \
     /app/local/cache \
+    /app/local/cache/easyocr \
     /app/local/logs
 
 # Make entrypoint executable
@@ -63,7 +64,8 @@ ENV CURATOR_CONFIG_PATH=/app/local/config/config.yaml \
     CURATOR_LOG_FILE=/app/local/logs/periodical_manager.log \
     CURATOR_LOG_LEVEL=INFO \
     CURATOR_PORT=8000 \
-    CURATOR_HOST=0.0.0.0
+    CURATOR_HOST=0.0.0.0 \
+    EASYOCR_MODULE_PATH=/app/local/cache/easyocr
 
 # Volumes
 VOLUME ["/app/local/config", "/app/local/data", "/app/local/downloads", "/app/local/cache", "/app/local/logs"]

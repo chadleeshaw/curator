@@ -6,6 +6,7 @@ Extracts cover art, categorizes files, and adds them to the database.
 import logging
 import re
 import shutil
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -63,11 +64,19 @@ class FileImporter:
         self.categorizer = FileCategorizer()
         self.organizer = FileOrganizer(self.organize_base_dir, category_prefix=self.category_prefix)
 
+        # Thread pool for CPU-intensive OCR tasks
+        self._ocr_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ocr")
+
         self.organize_base_dir.mkdir(parents=True, exist_ok=True)
 
         for category in CATEGORY_KEYWORDS.keys():
             category_dir = self.organize_base_dir / f"{self.category_prefix}{category}"
             category_dir.mkdir(parents=True, exist_ok=True)
+
+    def __del__(self):
+        """Cleanup thread pool executor on deletion"""
+        if hasattr(self, '_ocr_executor'):
+            self._ocr_executor.shutdown(wait=False)
 
     def process_downloads(self, session: Session, organization_pattern: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -257,8 +266,15 @@ class FileImporter:
             ocr_metadata = {}
             if cover_path and OCRService.is_available():
                 try:
-                    logger.debug(f"Attempting OCR analysis on cover: {cover_path} (language: {parsed.language})")
-                    ocr_metadata = OCRService.analyze_cover(str(cover_path), language=parsed.language)
+                    logger.info(f"Starting OCR analysis on cover: {cover_path} (language: {parsed.language})")
+                    # Run OCR in thread pool with timeout to prevent blocking
+                    future = self._ocr_executor.submit(
+                        OCRService.analyze_cover, str(cover_path), language=parsed.language
+                    )
+                    # Wait up to 30 seconds for OCR to complete
+                    logger.debug("Waiting for OCR to complete (max 30s)...")
+                    ocr_metadata = future.result(timeout=30)
+                    logger.info("OCR analysis completed successfully")
                     if ocr_metadata.get("text_found"):
                         logger.info(f"OCR extracted metadata: {ocr_metadata}")
                         # Enhance parsed data with OCR findings if they're more specific
@@ -293,6 +309,11 @@ class FileImporter:
                             is_special_edition = True
                             special_name = "Special Edition"
                             logger.info("OCR detected special edition")
+                except FuturesTimeoutError:
+                    logger.warning(
+                        f"OCR analysis timed out after 30 seconds for {cover_path}. "
+                        "Continuing without OCR metadata."
+                    )
                 except Exception as e:
                     logger.warning(f"OCR analysis failed for {cover_path}: {e}")
 
