@@ -5,7 +5,7 @@
 FROM python:3.13-slim AS builder
 
 # Install build dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     && rm -rf /var/lib/apt/lists/*
@@ -24,7 +24,7 @@ WORKDIR /app
 
 # Install runtime dependencies (without cache mount to avoid lock issues)
 # EasyOCR requires OpenCV which needs these graphics/X11 libraries
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     poppler-utils \
     libglib2.0-0 \
     libgomp1 \
