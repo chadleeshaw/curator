@@ -14,14 +14,15 @@ Image.MAX_IMAGE_PIXELS = 200000000  # 200 megapixels
 logger = logging.getLogger(__name__)
 
 try:
-    from paddleocr import PaddleOCR
+    import easyocr
 
     OCR_AVAILABLE = True
-    # Cache for PaddleOCR instances by language
-    _paddle_ocr_cache = {}  # {lang_code: PaddleOCR instance}
-except ImportError:
+    # Cache for EasyOCR reader instances by language
+    _easyocr_cache = {}  # {lang_code: Reader instance}
+except (ImportError, OSError, RuntimeError) as e:
+    logger.warning(f"EasyOCR not available: {e}")
     OCR_AVAILABLE = False
-    _paddle_ocr_cache = {}
+    _easyocr_cache = {}
 
 try:
     from pypdf import PdfReader
@@ -31,8 +32,8 @@ except ImportError:
     PDF_TEXT_AVAILABLE = False
     logger.debug("pypdf not available for PDF text extraction")
 
-# Mapping from common language names to PaddleOCR language codes
-LANGUAGE_TO_PADDLE = {
+# Mapping from common language names to EasyOCR language codes
+LANGUAGE_TO_EASYOCR = {
     "english": "en",
     "en": "en",
     "french": "fr",
@@ -47,23 +48,23 @@ LANGUAGE_TO_PADDLE = {
     "pt": "pt",
     "russian": "ru",
     "ru": "ru",
-    "chinese": "ch",
-    "ch": "ch",
-    "zh": "ch",
+    "chinese": "ch_sim",
+    "ch": "ch_sim",
+    "zh": "ch_sim",
     "japanese": "ja",
     "ja": "ja",
     "korean": "ko",
     "ko": "ko",
-    "arabic": "arabic",
-    "ar": "arabic",
-    "latin": "latin",
-    "la": "latin",
+    "arabic": "ar",
+    "ar": "ar",
+    "latin": "la",
+    "la": "la",
 }
 
 
-def _get_paddle_ocr(language: Optional[str] = None):
+def _get_easyocr_reader(language: Optional[str] = None):
     """
-    Get or create PaddleOCR instance for specified language.
+    Get or create EasyOCR reader instance for specified language.
     Instances are cached to avoid reloading models.
 
     Args:
@@ -71,43 +72,42 @@ def _get_paddle_ocr(language: Optional[str] = None):
                  If None or not recognized, defaults to English.
 
     Returns:
-        PaddleOCR instance or None if not available
+        EasyOCR Reader instance or None if not available
     """
     if not OCR_AVAILABLE:
         return None
 
-    # Normalize language to PaddleOCR code
+    # Normalize language to EasyOCR code
     if language:
-        lang_code = LANGUAGE_TO_PADDLE.get(language.lower(), "en")
+        lang_code = LANGUAGE_TO_EASYOCR.get(language.lower(), "en")
     else:
         lang_code = "en"
 
     # Return cached instance if available
-    if lang_code in _paddle_ocr_cache:
-        return _paddle_ocr_cache[lang_code]
+    if lang_code in _easyocr_cache:
+        return _easyocr_cache[lang_code]
 
     # Create new instance
     try:
-        logger.info(f"Initializing PaddleOCR for language: {lang_code}")
-        ocr = PaddleOCR(
-            use_angle_cls=True,  # Enable text angle classification
-            lang=lang_code,  # Language code
-            show_log=False,  # Reduce verbosity
-            use_gpu=False,  # Use CPU by default (can be configured later)
+        logger.info(f"Initializing EasyOCR for language: {lang_code}")
+        reader = easyocr.Reader(
+            [lang_code],
+            gpu=False,  # Use CPU (can be configured later)
+            verbose=False,
         )
-        _paddle_ocr_cache[lang_code] = ocr
-        return ocr
+        _easyocr_cache[lang_code] = reader
+        return reader
     except Exception as e:
-        logger.error(f"Failed to initialize PaddleOCR for language {lang_code}: {e}")
+        logger.error(f"Failed to initialize EasyOCR for language {lang_code}: {e}")
         # Fallback to English
         if lang_code != "en":
             logger.info("Falling back to English OCR")
-            return _get_paddle_ocr("en")
+            return _get_easyocr_reader("en")
         return None
 
 
-# Track if we've already warned about PaddleOCR not being installed
-_PADDLEOCR_WARNING_LOGGED = False
+# Track if we've already warned about EasyOCR not being installed
+_EASYOCR_WARNING_LOGGED = False
 
 
 class OCRService:
@@ -121,11 +121,11 @@ class OCRService:
     @staticmethod
     def extract_text_from_image(image_path: str, preprocess: bool = False, language: Optional[str] = None) -> str:
         """
-        Extract text from an image file using PaddleOCR.
+        Extract text from an image file using EasyOCR.
 
         Args:
             image_path: Path to the image file (preferably PNG or TIFF for lossless quality)
-            preprocess: Deprecated parameter kept for backward compatibility, not used with PaddleOCR
+            preprocess: Deprecated parameter kept for backward compatibility, not used with EasyOCR
             language: Language name or code (e.g., "English", "French", "de", "es")
                      If None, defaults to English
 
@@ -133,34 +133,34 @@ class OCRService:
             Extracted text as string
         """
         if not OCR_AVAILABLE:
-            global _PADDLEOCR_WARNING_LOGGED
-            if not _PADDLEOCR_WARNING_LOGGED:
-                logger.warning("PaddleOCR not available. Install with: pip install paddleocr paddlepaddle")
-                _PADDLEOCR_WARNING_LOGGED = True
+            global _EASYOCR_WARNING_LOGGED
+            if not _EASYOCR_WARNING_LOGGED:
+                logger.warning("EasyOCR not available. Install with: pip install easyocr")
+                _EASYOCR_WARNING_LOGGED = True
             return ""
 
         try:
-            ocr = _get_paddle_ocr(language)
-            if ocr is None:
+            reader = _get_easyocr_reader(language)
+            if reader is None:
                 return ""
 
             # Run OCR on the image
-            result = ocr.ocr(image_path, cls=True)
+            result = reader.readtext(image_path)
 
-            if not result or not result[0]:
+            if not result:
                 logger.debug(f"No text detected in image: {image_path}")
                 return ""
 
             # Extract text from results
-            # PaddleOCR returns: [[[bbox], (text, confidence)], ...]
+            # EasyOCR returns: [(bbox, text, confidence), ...]
             text_parts = []
-            for line in result[0]:
-                if line and len(line) >= 2:
-                    text = line[1][0] if isinstance(line[1], tuple) else line[1]
+            for detection in result:
+                if len(detection) >= 2:
+                    text = detection[1]  # Get the text (second element)
                     text_parts.append(text)
 
             full_text = "\n".join(text_parts)
-            logger.debug(f"PaddleOCR extracted {len(text_parts)} text lines from {image_path}")
+            logger.debug(f"EasyOCR extracted {len(text_parts)} text lines from {image_path}")
             return full_text.strip()
 
         except Exception as e:

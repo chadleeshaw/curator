@@ -57,8 +57,7 @@ ENV CURATOR_CONFIG_PATH=/app/local/config/config.yaml \
     CURATOR_LOG_FILE=/app/local/logs/periodical_manager.log \
     CURATOR_LOG_LEVEL=INFO \
     CURATOR_PORT=8000 \
-    CURATOR_HOST=0.0.0.0 \
-    DISABLE_MODEL_SOURCE_CHECK=True
+    CURATOR_HOST=0.0.0.0
 
 # Volumes
 VOLUME ["/app/local/config", "/app/local/data", "/app/local/downloads", "/app/local/cache", "/app/local/logs"]
