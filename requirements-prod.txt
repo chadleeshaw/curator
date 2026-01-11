@@ -15,7 +15,10 @@ pdf2image>=1.17.0
 bcrypt>=4.1.0
 PyJWT>=2.8.0
 easyocr>=1.7.0
+# CPU-only PyTorch to avoid CUDA dependencies (reduces image size from ~5GB to ~500MB)
+--extra-index-url https://download.pytorch.org/whl/cpu
 torch>=2.0.0
+torchvision>=0.15.0
 ebooklib>=0.18
 beautifulsoup4>=4.12.0
 lxml>=6.0.0
