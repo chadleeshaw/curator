@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm.attributes import flag_modified
 
 from models.database import Magazine
 from services.ocr_service import OCRService
@@ -131,6 +132,7 @@ class CoverCleanupTask:
                                         "ocr_volume": ocr_metadata.get('volume'),
                                         "ocr_special_edition": ocr_metadata.get('special_edition', False)
                                     }
+                                    flag_modified(magazine, "extra_metadata")
                                     ocr_updated_count += 1
                                     logger.info(f"OCR metadata added for: {magazine.title}")
                             except Exception as ocr_error:
@@ -164,6 +166,7 @@ class CoverCleanupTask:
                                     "ocr_volume": ocr_metadata.get('volume'),
                                     "ocr_special_edition": ocr_metadata.get('special_edition', False)
                                 }
+                                flag_modified(magazine, "extra_metadata")
                                 ocr_scanned_count += 1
                                 logger.info(f"OCR metadata added to existing cover: {magazine.title}")
                         except Exception as ocr_error:
