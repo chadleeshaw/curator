@@ -2,6 +2,7 @@
 Data models for parsed metadata from various sources.
 Provides type-safe, consistent structures for parsed data.
 """
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -16,6 +17,7 @@ class ParsedMetadata:
 
     This is the unified return type for all parsers.
     """
+
     # Core fields (always attempted to extract)
     title: str
     language: str = "English"
@@ -64,6 +66,7 @@ class ParsedMetadata:
 @dataclass
 class ParsedFilename:
     """Result of filename parsing specifically"""
+
     title: str
     issue_date: Optional[datetime] = None
     issue_number: Optional[int] = None
@@ -79,6 +82,7 @@ class ParsedFilename:
 @dataclass
 class ParsedFilepath:
     """Result of filepath/directory parsing"""
+
     title_from_path: Optional[str] = None
     language_from_path: Optional[str] = None
     year_from_path: Optional[int] = None
@@ -88,6 +92,7 @@ class ParsedFilepath:
 @dataclass
 class ParsedSearchResult:
     """Result of search result parsing (from download providers)"""
+
     title: str
     original_title: str
     cleaned_title: str
@@ -105,6 +110,7 @@ class ParsedSearchResult:
 @dataclass
 class ParsedDownloadFile:
     """Result of parsing download client file data"""
+
     file_path: Path
     title: str
     cleaned_title: str

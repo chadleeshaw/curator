@@ -2,6 +2,7 @@
 PDF processing utilities.
 Centralized PDF cover extraction logic.
 """
+
 import logging
 from pathlib import Path
 from typing import Optional
@@ -19,10 +20,7 @@ Image.MAX_IMAGE_PIXELS = 200000000  # 200 megapixels
 
 
 def extract_cover_from_pdf(
-    pdf_path: Path,
-    output_dir: Path,
-    dpi: int = PDF_COVER_DPI_LOW,
-    quality: int = PDF_COVER_QUALITY
+    pdf_path: Path, output_dir: Path, dpi: int = PDF_COVER_DPI_LOW, quality: int = PDF_COVER_QUALITY
 ) -> Optional[Path]:
     """
     Extract first page of PDF as cover image.
@@ -40,9 +38,7 @@ def extract_cover_from_pdf(
         output_dir.mkdir(parents=True, exist_ok=True)
         cover_path = output_dir / f"{pdf_path.stem}.jpg"
 
-        images = convert_from_path(
-            str(pdf_path), first_page=1, last_page=1, dpi=dpi
-        )
+        images = convert_from_path(str(pdf_path), first_page=1, last_page=1, dpi=dpi)
         if not images:
             logger.warning(f"Could not extract images from PDF: {pdf_path}")
             return None

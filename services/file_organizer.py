@@ -2,6 +2,7 @@
 File organization utilities for moving and renaming PDFs.
 Handles both simple and pattern-based organization with metadata extraction.
 """
+
 import logging
 import os
 import re
@@ -230,12 +231,7 @@ class FileOrganizer:
         output_path_obj = Path(output_path)
         output_dir = output_path_obj.parent
 
-        result = extract_cover_util(
-            pdf_path_obj,
-            output_dir,
-            dpi=PDF_COVER_DPI_HIGH,
-            quality=PDF_COVER_QUALITY_HIGH
-        )
+        result = extract_cover_util(pdf_path_obj, output_dir, dpi=PDF_COVER_DPI_HIGH, quality=PDF_COVER_QUALITY_HIGH)
 
         if result:
             if result != output_path_obj:

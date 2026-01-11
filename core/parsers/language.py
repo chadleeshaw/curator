@@ -50,7 +50,7 @@ def detect_language(text: str, default: str = "English") -> str:
     for language, indicators in LANGUAGE_INDICATORS.items():
         for indicator in indicators:
             # Look for whole word matches or as part of compound words
-            if re.search(rf'\b{re.escape(indicator)}\b', text_upper):
+            if re.search(rf"\b{re.escape(indicator)}\b", text_upper):
                 return language.capitalize()
 
     # Default to English if no language indicator found

@@ -2,6 +2,7 @@
 Thumbnail generation utilities.
 Creates optimized thumbnails for web UI display.
 """
+
 import logging
 from pathlib import Path
 from typing import Optional
@@ -24,7 +25,7 @@ def generate_thumbnail(
     output_dir: Path,
     max_width: int = THUMBNAIL_MAX_WIDTH,
     max_height: int = THUMBNAIL_MAX_HEIGHT,
-    quality: int = THUMBNAIL_QUALITY
+    quality: int = THUMBNAIL_QUALITY,
 ) -> Optional[Path]:
     """
     Generate a thumbnail from an image file.
@@ -57,14 +58,14 @@ def generate_thumbnail(
         img.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
 
         # Convert RGBA to RGB if necessary
-        if img.mode in ('RGBA', 'LA', 'P'):
-            background = Image.new('RGB', img.size, (255, 255, 255))
-            if img.mode == 'P':
-                img = img.convert('RGBA')
-            background.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
+        if img.mode in ("RGBA", "LA", "P"):
+            background = Image.new("RGB", img.size, (255, 255, 255))
+            if img.mode == "P":
+                img = img.convert("RGBA")
+            background.paste(img, mask=img.split()[-1] if img.mode in ("RGBA", "LA") else None)
             img = background
-        elif img.mode != 'RGB':
-            img = img.convert('RGB')
+        elif img.mode != "RGB":
+            img = img.convert("RGB")
 
         # Save thumbnail
         img.save(str(thumbnail_path), "JPEG", quality=quality, optimize=True)
@@ -93,7 +94,7 @@ def get_or_create_thumbnail(cover_path: Path) -> Path:
     thumbnail_dir = cover_path.parent
 
     # Check if this is already a thumbnail
-    if '_thumb' in cover_path.stem:
+    if "_thumb" in cover_path.stem:
         return cover_path
 
     # Try to get or create thumbnail

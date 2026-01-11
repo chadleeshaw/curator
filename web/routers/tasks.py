@@ -22,9 +22,7 @@ _file_importer = None
 _storage_config = None
 
 
-def set_dependencies(
-    session_factory, download_monitor_task, file_importer, storage_config
-):
+def set_dependencies(session_factory, download_monitor_task, file_importer, storage_config):
     """Set dependencies from main app"""
     global _session_factory, _download_monitor_task, _file_importer, _storage_config
     _session_factory = session_factory
@@ -44,9 +42,7 @@ async def get_tasks_status():
             dm_last_run = getattr(_download_monitor_task, "last_run_time", None)
             dm_status = getattr(_download_monitor_task, "last_status", None)
             dm_stats = getattr(_download_monitor_task, "stats", {})
-            logger.debug(
-                f"Tasks Status - Download Monitor: last_run={dm_last_run}, status={dm_status}"
-            )
+            logger.debug(f"Tasks Status - Download Monitor: last_run={dm_last_run}, status={dm_status}")
 
             tasks.append(
                 {
@@ -59,15 +55,9 @@ async def get_tasks_status():
                     "last_status": dm_status,
                     "stats": {
                         "total_runs": dm_stats.get("total_runs", 0),
-                        "client_downloads_processed": dm_stats.get(
-                            "client_downloads_processed", 0
-                        ),
-                        "client_downloads_failed": dm_stats.get(
-                            "client_downloads_failed", 0
-                        ),
-                        "folder_files_imported": dm_stats.get(
-                            "folder_files_imported", 0
-                        ),
+                        "client_downloads_processed": dm_stats.get("client_downloads_processed", 0),
+                        "client_downloads_failed": dm_stats.get("client_downloads_failed", 0),
+                        "folder_files_imported": dm_stats.get("folder_files_imported", 0),
                         "bad_files_detected": dm_stats.get("bad_files_detected", 0),
                         "last_client_check": dm_stats.get("last_client_check"),
                         "last_folder_scan": dm_stats.get("last_folder_scan"),
@@ -113,9 +103,7 @@ async def get_tasks_status():
 
     except Exception as e:
         logger.error(f"Error getting task status: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500, detail=f"Error getting task status: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error getting task status: {str(e)}")
 
 
 @router.post("/run/{task_id}")
@@ -148,28 +136,15 @@ async def run_task_manually(task_id: str):
             try:
                 # Get all periodicals
                 all_periodicals = db_session.query(Magazine).all()
-                periodicals_with_covers = [
-                    m
-                    for m in all_periodicals
-                    if m.cover_path and Path(m.cover_path).exists()
-                ]
+                periodicals_with_covers = [m for m in all_periodicals if m.cover_path and Path(m.cover_path).exists()]
                 periodicals_without_covers = [
-                    m
-                    for m in all_periodicals
-                    if m.file_path
-                    and (not m.cover_path or not Path(m.cover_path).exists())
+                    m for m in all_periodicals if m.file_path and (not m.cover_path or not Path(m.cover_path).exists())
                 ]
 
-                db_cover_paths = {
-                    str(Path(m.cover_path).resolve())
-                    for m in periodicals_with_covers
-                }
+                db_cover_paths = {str(Path(m.cover_path).resolve()) for m in periodicals_with_covers}
 
                 # Find all cover files on disk
-                covers_dir = (
-                    Path(_storage_config.get("organize_base_dir", "./local/data"))
-                    / ".covers"
-                )
+                covers_dir = Path(_storage_config.get("organize_base_dir", "./local/data")) / ".covers"
                 covers_dir.mkdir(parents=True, exist_ok=True)
 
                 # Part 1: Delete orphaned covers
@@ -184,9 +159,7 @@ async def run_task_manually(task_id: str):
                             Path(orphan_path).unlink()
                             deleted_count += 1
                         except Exception as e:
-                            logger.error(
-                                f"Error deleting orphaned cover {orphan_path}: {e}"
-                            )
+                            logger.error(f"Error deleting orphaned cover {orphan_path}: {e}")
 
                 # Part 2: Generate missing covers
                 generated_count = 0
@@ -197,11 +170,7 @@ async def run_task_manually(task_id: str):
 
                     # Extract cover from PDF (run in thread pool to avoid blocking)
                     loop = asyncio.get_event_loop()
-                    cover_path = await loop.run_in_executor(
-                        None,
-                        _file_importer._extract_cover,
-                        pdf_path
-                    )
+                    cover_path = await loop.run_in_executor(None, _file_importer._extract_cover, pdf_path)
                     if cover_path:
                         magazine.cover_path = str(cover_path)
                         generated_count += 1
@@ -212,20 +181,14 @@ async def run_task_manually(task_id: str):
                 # Build result message
                 messages = []
                 if deleted_count > 0:
-                    messages.append(
-                        f"Deleted {deleted_count} orphaned cover file{'s' if deleted_count != 1 else ''}"
-                    )
+                    messages.append(f"Deleted {deleted_count} orphaned cover file{'s' if deleted_count != 1 else ''}")
                 if generated_count > 0:
-                    messages.append(
-                        f"Generated {generated_count} missing cover{'s' if generated_count != 1 else ''}"
-                    )
+                    messages.append(f"Generated {generated_count} missing cover{'s' if generated_count != 1 else ''}")
 
                 if messages:
                     message = "Cleanup executed. " + ", ".join(messages) + "."
                 else:
-                    message = (
-                        "No orphaned covers found and all periodicals have covers."
-                    )
+                    message = "No orphaned covers found and all periodicals have covers."
 
                 return {
                     "success": True,

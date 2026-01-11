@@ -35,9 +35,7 @@ def _mask_sensitive_config(config: Dict[str, Any]) -> Dict[str, Any]:
 
     # Mask download client API key
     if "download_client" in masked and "api_key" in masked["download_client"]:
-        masked["download_client"]["api_key"] = (
-            "***" if masked["download_client"].get("api_key") else ""
-        )
+        masked["download_client"]["api_key"] = "***" if masked["download_client"].get("api_key") else ""
 
     return masked
 
@@ -74,14 +72,9 @@ def _deep_merge(base: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, Any]:
             result[key] = value
 
     # Preserve download client API key if masked
-    if (
-        "download_client" in update
-        and update["download_client"].get("api_key") == "***"
-    ):
+    if "download_client" in update and update["download_client"].get("api_key") == "***":
         if "download_client" in base:
-            result["download_client"]["api_key"] = base["download_client"].get(
-                "api_key", ""
-            )
+            result["download_client"]["api_key"] = base["download_client"].get("api_key", "")
 
     return result
 
@@ -125,6 +118,7 @@ async def update_config(config_update: Dict[str, Any], background_tasks: Backgro
         # Schedule restart in background
         def restart_process():
             import time
+
             time.sleep(1)  # Give time for response to be sent
             os.execv(sys.executable, [sys.executable] + sys.argv)
 

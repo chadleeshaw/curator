@@ -89,8 +89,8 @@ async def get_import_status() -> Dict[str, Any]:
 
         # Search recursively for PDF and EPUB files (matches process_downloads behavior)
         all_files = find_pdf_epub_files(downloads_dir, recursive=True)
-        pdf_files = [f for f in all_files if f.suffix == '.pdf']
-        epub_files = [f for f in all_files if f.suffix == '.epub']
+        pdf_files = [f for f in all_files if f.suffix == ".pdf"]
+        epub_files = [f for f in all_files if f.suffix == ".epub"]
 
         return {
             "ready": len(all_files) > 0,
@@ -126,13 +126,11 @@ async def import_from_organize_dir(
         organize_dir = Path(_storage_config.get("organize_dir", "./local/data"))
 
         if not organize_dir.exists():
-            raise HTTPException(
-                status_code=400, detail=f"Organize directory not found: {organize_dir}"
-            )
+            raise HTTPException(status_code=400, detail=f"Organize directory not found: {organize_dir}")
 
         # Count PDFs available
         all_files = find_pdf_epub_files(organize_dir, recursive=True)
-        pdf_files = [f for f in all_files if f.suffix == '.pdf']
+        pdf_files = [f for f in all_files if f.suffix == ".pdf"]
 
         if not pdf_files:
             return {
@@ -145,8 +143,7 @@ async def import_from_organize_dir(
             """Background task to process imports from organize directory"""
             try:
                 logger.info(
-                    f"Import settings: auto_track={options.auto_track}, "
-                    f"tracking_mode={options.tracking_mode}"
+                    f"Import settings: auto_track={options.auto_track}, " f"tracking_mode={options.tracking_mode}"
                 )
                 db_session = _session_factory()
                 try:
@@ -162,22 +159,18 @@ async def import_from_organize_dir(
                     )
 
                     # Extract counts from nested data structure
-                    data = results.get('data', {})
-                    imported = data.get('imported', 0)
-                    failed = data.get('failed', 0)
+                    data = results.get("data", {})
+                    imported = data.get("imported", 0)
+                    failed = data.get("failed", 0)
 
-                    logger.info(
-                        f"Organize directory import results: {imported} imported, {failed} failed"
-                    )
+                    logger.info(f"Organize directory import results: {imported} imported, {failed} failed")
 
                     # Restore original pattern
                     _file_importer.organization_pattern = original_pattern
                 finally:
                     db_session.close()
             except Exception as e:
-                logger.error(
-                    f"Error processing organize directory imports: {e}", exc_info=True
-                )
+                logger.error(f"Error processing organize directory imports: {e}", exc_info=True)
 
         background_tasks.add_task(process_organize_dir_imports)
 

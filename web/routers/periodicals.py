@@ -60,12 +60,11 @@ async def list_periodicals(
             # Subquery to find the max issue_date for each group
             subquery = (
                 db_session.query(
-                    case(
-                        (Magazine.tracking_id.isnot(None), Magazine.tracking_id),
-                        else_=Magazine.id
-                    ).label("group_key"),
+                    case((Magazine.tracking_id.isnot(None), Magazine.tracking_id), else_=Magazine.id).label(
+                        "group_key"
+                    ),
                     Magazine.language,
-                    func.max(Magazine.issue_date).label("max_date")
+                    func.max(Magazine.issue_date).label("max_date"),
                 )
                 .group_by("group_key", Magazine.language)
                 .subquery()
@@ -75,13 +74,11 @@ async def list_periodicals(
             query = db_session.query(Magazine).join(
                 subquery,
                 (
-                    case(
-                        (Magazine.tracking_id.isnot(None), Magazine.tracking_id),
-                        else_=Magazine.id
-                    ) == subquery.c.group_key
+                    case((Magazine.tracking_id.isnot(None), Magazine.tracking_id), else_=Magazine.id)
+                    == subquery.c.group_key
                 )
                 & (Magazine.language == subquery.c.language)
-                & (Magazine.issue_date == subquery.c.max_date)
+                & (Magazine.issue_date == subquery.c.max_date),
             )
 
             # Left join with tracking to get the primary title for display
@@ -91,17 +88,13 @@ async def list_periodicals(
             if sort_by == "category":
                 # Sort by category from tracking if available, otherwise fall back to magazine category
                 sort_expr = (
-                    func.coalesce(MagazineTracking.category, Magazine.extra_metadata['category'].astext).desc()
+                    func.coalesce(MagazineTracking.category, Magazine.extra_metadata["category"].astext).desc()
                     if is_descending
-                    else func.coalesce(MagazineTracking.category, Magazine.extra_metadata['category'].astext).asc()
+                    else func.coalesce(MagazineTracking.category, Magazine.extra_metadata["category"].astext).asc()
                 )
                 query = query.order_by(sort_expr, func.coalesce(MagazineTracking.title, Magazine.title).asc())
             elif sort_by == "issue_date":
-                sort_expr = (
-                    Magazine.issue_date.desc()
-                    if is_descending
-                    else Magazine.issue_date.asc()
-                )
+                sort_expr = Magazine.issue_date.desc() if is_descending else Magazine.issue_date.asc()
                 query = query.order_by(sort_expr)
             else:  # Default to title
                 sort_expr = (
@@ -115,12 +108,13 @@ async def list_periodicals(
 
             # Get total count of unique groups
             total_query = db_session.query(
-                func.count(func.distinct(  # pylint: disable=not-callable
-                    case(
-                        (Magazine.tracking_id.isnot(None), Magazine.tracking_id),
-                        else_=Magazine.id
-                    ).concat('_').concat(func.coalesce(Magazine.language, 'English'))
-                ))
+                func.count(
+                    func.distinct(  # pylint: disable=not-callable
+                        case((Magazine.tracking_id.isnot(None), Magazine.tracking_id), else_=Magazine.id)
+                        .concat("_")
+                        .concat(func.coalesce(Magazine.language, "English"))
+                    )
+                )
             )
             total_titles = total_query.scalar()  # pylint: disable=not-callable
 
@@ -131,31 +125,34 @@ async def list_periodicals(
             for mag in magazines:
                 if mag.tracking_id:
                     # Count all magazines with same tracking_id and language
-                    key = (mag.tracking_id, mag.language or 'English')
+                    key = (mag.tracking_id, mag.language or "English")
                     if key not in issue_counts:
-                        count = db_session.query(Magazine).filter(
-                            Magazine.tracking_id == mag.tracking_id,
-                            Magazine.language == mag.language
-                        ).count()
+                        count = (
+                            db_session.query(Magazine)
+                            .filter(Magazine.tracking_id == mag.tracking_id, Magazine.language == mag.language)
+                            .count()
+                        )
                         issue_counts[key] = count
                 else:
                     # Count by title and language for untracked items
-                    key = (mag.title, mag.language or 'English', None)
+                    key = (mag.title, mag.language or "English", None)
                     if key not in issue_counts:
-                        count = db_session.query(Magazine).filter(
-                            Magazine.title == mag.title,
-                            Magazine.language == mag.language,
-                            Magazine.tracking_id.is_(None)
-                        ).count()
+                        count = (
+                            db_session.query(Magazine)
+                            .filter(
+                                Magazine.title == mag.title,
+                                Magazine.language == mag.language,
+                                Magazine.tracking_id.is_(None),
+                            )
+                            .count()
+                        )
                         issue_counts[key] = count
 
             # Fetch tracking record for each magazine to get display title
             tracking_titles = {}
             for mag in magazines:
                 if mag.tracking_id and mag.tracking_id not in tracking_titles:
-                    tracking = db_session.query(MagazineTracking).filter(
-                        MagazineTracking.id == mag.tracking_id
-                    ).first()
+                    tracking = db_session.query(MagazineTracking).filter(MagazineTracking.id == mag.tracking_id).first()
                     if tracking:
                         tracking_titles[mag.tracking_id] = tracking.title
 
@@ -165,24 +162,21 @@ async def list_periodicals(
                         "id": m.id,
                         "title": tracking_titles.get(m.tracking_id, m.title) if m.tracking_id else m.title,
                         "language": m.language or "English",
-                        "issue_date": (
-                            m.issue_date.isoformat() if m.issue_date else None
-                        ),
+                        "issue_date": (m.issue_date.isoformat() if m.issue_date else None),
                         "file_path": m.file_path,
                         "cover_path": m.cover_path,
                         "content_hash": m.content_hash,
                         "tracking_id": m.tracking_id,
-                        "created_at": (
-                            m.created_at.isoformat() if m.created_at else None
-                        ),
-                        "updated_at": (
-                            m.updated_at.isoformat() if m.updated_at else None
-                        ),
+                        "created_at": (m.created_at.isoformat() if m.created_at else None),
+                        "updated_at": (m.updated_at.isoformat() if m.updated_at else None),
                         "metadata": m.extra_metadata,
                         "issue_count": issue_counts.get(
-                            (m.tracking_id, m.language or 'English') if m.tracking_id
-                            else (m.title, m.language or 'English', None),
-                            1
+                            (
+                                (m.tracking_id, m.language or "English")
+                                if m.tracking_id
+                                else (m.title, m.language or "English", None)
+                            ),
+                            1,
                         ),
                     }
                     for m in magazines
@@ -205,9 +199,7 @@ async def get_magazine(magazine_id: int) -> MagazineResponse:
     try:
         db_session = _session_factory()
         try:
-            magazine = (
-                db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
-            )
+            magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
 
             if not magazine:
                 raise HTTPException(status_code=404, detail="Magazine not found")
@@ -216,19 +208,13 @@ async def get_magazine(magazine_id: int) -> MagazineResponse:
                 "id": magazine.id,
                 "title": magazine.title,
                 "language": magazine.language,
-                "issue_date": (
-                    magazine.issue_date.isoformat() if magazine.issue_date else None
-                ),
+                "issue_date": (magazine.issue_date.isoformat() if magazine.issue_date else None),
                 "file_path": magazine.file_path,
                 "cover_path": magazine.cover_path,
                 "content_hash": magazine.content_hash,
                 "tracking_id": magazine.tracking_id,
-                "created_at": (
-                    magazine.created_at.isoformat() if magazine.created_at else None
-                ),
-                "updated_at": (
-                    magazine.updated_at.isoformat() if magazine.updated_at else None
-                ),
+                "created_at": (magazine.created_at.isoformat() if magazine.created_at else None),
+                "updated_at": (magazine.updated_at.isoformat() if magazine.updated_at else None),
                 "metadata": magazine.extra_metadata,
             }
         finally:
@@ -251,9 +237,7 @@ async def get_cover(magazine_id: int, thumbnail: bool = Query(default=True, desc
     try:
         db_session = _session_factory()
         try:
-            magazine = (
-                db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
-            )
+            magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
 
             if not magazine or not magazine.cover_path:
                 raise HTTPException(status_code=404, detail="Cover not found")
@@ -265,12 +249,9 @@ async def get_cover(magazine_id: int, thumbnail: bool = Query(default=True, desc
             # Return thumbnail for UI (fast loading)
             if thumbnail:
                 from core.thumbnail_utils import get_or_create_thumbnail
+
                 loop = asyncio.get_event_loop()
-                thumbnail_path = await loop.run_in_executor(
-                    None,
-                    get_or_create_thumbnail,
-                    cover_path
-                )
+                thumbnail_path = await loop.run_in_executor(None, get_or_create_thumbnail, cover_path)
                 return FileResponse(thumbnail_path, media_type="image/jpeg")
 
             # Return full resolution (for downloads/printing)
@@ -291,9 +272,7 @@ async def get_pdf(magazine_id: int):
     try:
         db_session = _session_factory()
         try:
-            magazine = (
-                db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
-            )
+            magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
 
             if not magazine:
                 raise HTTPException(status_code=404, detail="Magazine not found")
@@ -314,9 +293,7 @@ async def get_pdf(magazine_id: int):
 
 
 @router.post("/periodicals/{magazine_id}/move-to-tracking")
-async def move_issue_to_tracking(
-    magazine_id: int, target_tracking_id: int
-) -> Dict[str, Any]:
+async def move_issue_to_tracking(magazine_id: int, target_tracking_id: int) -> Dict[str, Any]:
     """
     Move a single issue to a different tracking record.
     Useful for correcting misplaced issues.
@@ -339,9 +316,9 @@ async def move_issue_to_tracking(
                 raise HTTPException(status_code=404, detail="Magazine not found")
 
             # Get the target tracking record
-            target_tracking = db_session.query(MagazineTracking).filter(
-                MagazineTracking.id == target_tracking_id
-            ).first()
+            target_tracking = (
+                db_session.query(MagazineTracking).filter(MagazineTracking.id == target_tracking_id).first()
+            )
             if not target_tracking:
                 raise HTTPException(status_code=404, detail="Target tracking record not found")
 
@@ -373,7 +350,9 @@ async def move_issue_to_tracking(
                 # Reorganize files to match new title structure (without language folder)
                 try:
                     # Extract metadata from current path structure
-                    category = magazine.extra_metadata.get("category", "Magazines") if magazine.extra_metadata else "Magazines"
+                    category = (
+                        magazine.extra_metadata.get("category", "Magazines") if magazine.extra_metadata else "Magazines"
+                    )
                     issue_date = magazine.issue_date
 
                     # Build new path structure
@@ -392,6 +371,7 @@ async def move_issue_to_tracking(
                     # Handle filename conflicts by appending timestamp
                     if new_pdf_path.exists() and new_pdf_path != old_pdf_path:
                         from datetime import datetime
+
                         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                         filename_base_with_ts = f"{safe_title} - {month}{year} ({timestamp})"
                         new_pdf_path = target_dir / f"{filename_base_with_ts}.pdf"
@@ -413,7 +393,12 @@ async def move_issue_to_tracking(
                         logger.warning(f"PDF file not found: {old_pdf_path}")
 
                     # Move cover file if it exists
-                    if old_cover_path and old_cover_path.exists() and new_cover_path and new_cover_path != old_cover_path:
+                    if (
+                        old_cover_path
+                        and old_cover_path.exists()
+                        and new_cover_path
+                        and new_cover_path != old_cover_path
+                    ):
                         shutil.move(str(old_cover_path), str(new_cover_path))
                         logger.info(f"Moved cover: {old_cover_path} -> {new_cover_path}")
                         magazine.cover_path = str(new_cover_path)
@@ -444,7 +429,7 @@ async def move_issue_to_tracking(
                 "message": msg,
                 "old_tracking_id": old_tracking_id,
                 "new_tracking_id": target_tracking_id,
-                "files_reorganized": files_reorganized
+                "files_reorganized": files_reorganized,
             }
         finally:
             db_session.close()
@@ -480,9 +465,7 @@ def _cleanup_empty_directories(start_path: Path, organize_base_dir: Path):
 
 
 @router.post("/periodicals/{magazine_id}/toggle-special-edition")
-async def toggle_special_edition(
-    magazine_id: int, is_special: bool
-) -> Dict[str, Any]:
+async def toggle_special_edition(magazine_id: int, is_special: bool) -> Dict[str, Any]:
     """
     Mark or unmark an issue as a special edition.
 
@@ -516,15 +499,12 @@ async def toggle_special_edition(
 
             # Mark the column as modified for SQLAlchemy to detect the change
             from sqlalchemy.orm.attributes import flag_modified
+
             flag_modified(magazine, "extra_metadata")
 
             db_session.commit()
 
-            return {
-                "success": True,
-                "message": message,
-                "is_special_edition": is_special
-            }
+            return {"success": True, "message": message, "is_special_edition": is_special}
         finally:
             db_session.close()
 
@@ -551,9 +531,7 @@ async def delete_periodical(
     try:
         db_session = _session_factory()
         try:
-            magazine = (
-                db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
-            )
+            magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
 
             if not magazine:
                 raise HTTPException(status_code=404, detail="Magazine not found")
@@ -566,9 +544,7 @@ async def delete_periodical(
             if delete_all_issues:
                 # Get all magazines with the same title and language
                 magazines_to_delete = (
-                    db_session.query(Magazine)
-                    .filter(Magazine.title == title, Magazine.language == language)
-                    .all()
+                    db_session.query(Magazine).filter(Magazine.title == title, Magazine.language == language).all()
                 )
             else:
                 # Only delete the single specified magazine
@@ -593,11 +569,7 @@ async def delete_periodical(
                 from models.database import MagazineTracking
 
                 olid = title.lower().replace(" ", "_").replace("-", "_")
-                tracking = (
-                    db_session.query(MagazineTracking)
-                    .filter(MagazineTracking.olid == olid)
-                    .first()
-                )
+                tracking = db_session.query(MagazineTracking).filter(MagazineTracking.olid == olid).first()
                 if tracking:
                     db_session.delete(tracking)
                     db_session.commit()
@@ -694,13 +666,13 @@ async def purge_database() -> Dict[str, Any]:
             return {
                 "success": True,
                 "message": f"Database purged successfully. Removed {magazine_count} library entries, "
-                           f"{tracking_count} tracking records, and {download_count} downloads. "
-                           f"Files on disk remain untouched.",
+                f"{tracking_count} tracking records, and {download_count} downloads. "
+                f"Files on disk remain untouched.",
                 "counts": {
                     "magazines": magazine_count,
                     "tracking": tracking_count,
                     "downloads": download_count,
-                }
+                },
             }
 
         finally:

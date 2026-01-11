@@ -456,7 +456,9 @@ class FileImporter:
         if file_path.suffix.lower() == ".pdf":
             # Use higher DPI for OCR if available
             if OCRService.is_available():
-                return extract_cover_from_pdf(file_path, cover_dir, dpi=PDF_COVER_DPI_OCR, quality=PDF_COVER_QUALITY_HIGH)
+                return extract_cover_from_pdf(
+                    file_path, cover_dir, dpi=PDF_COVER_DPI_OCR, quality=PDF_COVER_QUALITY_HIGH
+                )
             return extract_cover_from_pdf(file_path, cover_dir)
         elif file_path.suffix.lower() == ".epub":
             return extract_cover_from_epub(file_path, cover_dir)
@@ -464,7 +466,9 @@ class FileImporter:
             logger.warning(f"Unsupported file type for cover extraction: {file_path.suffix}")
             return None
 
-    def process_organized_files(self, session: Session, auto_track: bool = True, tracking_mode: str = "all") -> Dict[str, Any]:
+    def process_organized_files(
+        self, session: Session, auto_track: bool = True, tracking_mode: str = "all"
+    ) -> Dict[str, Any]:
         """
         Process PDF files from organized folders (e.g., _Magazines, _Comics, _Articles, _News).
         These are files that have been manually placed or previously organized.

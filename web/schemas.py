@@ -25,9 +25,7 @@ class APIError(BaseModel):
     success: bool = False
     error: str = Field(..., description="Error type or category")
     message: str = Field(..., description="Human-readable error message")
-    details: Optional[Dict[str, Any]] = Field(
-        None, description="Additional error details"
-    )
+    details: Optional[Dict[str, Any]] = Field(None, description="Additional error details")
 
 
 class ValidationErrorDetail(BaseModel):
@@ -242,9 +240,7 @@ class ImportOptionsRequest(BaseModel):
     """Request with import options"""
 
     category: Optional[str] = None  # None for auto-detect
-    organization_pattern: Optional[str] = (
-        "data/{category}/{title}/{year}/"  # File organization pattern with tags
-    )
+    organization_pattern: Optional[str] = "data/{category}/{title}/{year}/"  # File organization pattern with tags
     auto_track: bool = True
     tracking_mode: str = "all"  # "all", "new", "watch", or "none"
     scan_nested: bool = True

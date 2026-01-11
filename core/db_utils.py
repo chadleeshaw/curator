@@ -2,6 +2,7 @@
 Database utilities.
 Provides consistent session management patterns.
 """
+
 from contextlib import contextmanager
 from typing import Generator
 

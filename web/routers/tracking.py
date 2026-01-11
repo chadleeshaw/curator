@@ -246,9 +246,9 @@ async def save_tracking_preferences(
 
             if existing:
                 existing.title = request.title
-                existing.category = getattr(request, 'category', None)
-                existing.language = getattr(request, 'language', 'English')
-                existing.country = getattr(request, 'country', None)
+                existing.category = getattr(request, "category", None)
+                existing.language = getattr(request, "language", "English")
+                existing.country = getattr(request, "country", None)
                 existing.first_publish_year = request.first_publish_year
                 existing.track_all_editions = request.track_all_editions
                 existing.track_new_only = request.track_new_only
@@ -261,9 +261,9 @@ async def save_tracking_preferences(
                 tracking = MagazineTracking(
                     olid=olid,
                     title=request.title,
-                    category=getattr(request, 'category', None),
-                    language=getattr(request, 'language', 'English'),
-                    country=getattr(request, 'country', None),
+                    category=getattr(request, "category", None),
+                    language=getattr(request, "language", "English"),
+                    country=getattr(request, "country", None),
                     first_publish_year=request.first_publish_year,
                     track_all_editions=request.track_all_editions,
                     track_new_only=request.track_new_only,
@@ -340,23 +340,28 @@ async def list_tracked_magazines(
 
             # Compute library count for each tracked periodical
             from models.database import Magazine
+
             tracked_list = []
             for t in tracked:
                 library_count = db_session.query(Magazine).filter(Magazine.tracking_id == t.id).count()
-                tracked_list.append({
-                    "id": t.id,
-                    "olid": t.olid,
-                    "title": t.title,
-                    "category": t.category,
-                    "language": t.language,
-                    "country": t.country,
-                    "track_all_editions": t.track_all_editions,
-                    "track_new_only": t.track_new_only,
-                    "selected_count": (len([v for v in t.selected_editions.values() if v]) if t.selected_editions else 0),
-                    "total_known": t.total_editions_known,
-                    "library_count": library_count,
-                    "created_at": (t.created_at.isoformat() if t.created_at else None),
-                })
+                tracked_list.append(
+                    {
+                        "id": t.id,
+                        "olid": t.olid,
+                        "title": t.title,
+                        "category": t.category,
+                        "language": t.language,
+                        "country": t.country,
+                        "track_all_editions": t.track_all_editions,
+                        "track_new_only": t.track_new_only,
+                        "selected_count": (
+                            len([v for v in t.selected_editions.values() if v]) if t.selected_editions else 0
+                        ),
+                        "total_known": t.total_editions_known,
+                        "library_count": library_count,
+                        "created_at": (t.created_at.isoformat() if t.created_at else None),
+                    }
+                )
             return {
                 "success": True,
                 "tracked_magazines": tracked_list,
@@ -415,10 +420,7 @@ async def get_tracking_details(tracking_id: int) -> Dict[str, Any]:
 
 
 def _reorganize_magazine_files(
-    magazine,
-    new_title: str,
-    organize_base_dir: Path,
-    category_prefix: str = "_"
+    magazine, new_title: str, organize_base_dir: Path, category_prefix: str = "_"
 ) -> Tuple[Optional[str], Optional[str]]:
     """
     Reorganize magazine files to match new title structure.
@@ -601,10 +603,7 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
 
                         # Reorganize files to match new title structure
                         new_pdf_path, new_cover_path = _reorganize_magazine_files(
-                            magazine,
-                            target.title,
-                            organize_base_dir,
-                            category_prefix
+                            magazine, target.title, organize_base_dir, category_prefix
                         )
 
                         # Update database paths if reorganization succeeded
@@ -613,9 +612,13 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
                             if new_cover_path:
                                 magazine.cover_path = new_cover_path
                             files_reorganized += 1
-                            logger.info(f"Reorganized files for: {magazine.title} ({magazine.issue_date.strftime('%b %Y')})")
+                            logger.info(
+                                f"Reorganized files for: {magazine.title} ({magazine.issue_date.strftime('%b %Y')})"
+                            )
                         else:
-                            logger.warning(f"Failed to reorganize files for magazine ID {magazine.id}, keeping original paths")
+                            logger.warning(
+                                f"Failed to reorganize files for magazine ID {magazine.id}, keeping original paths"
+                            )
 
                         # Update title after file operations
                         magazine.title = target.title

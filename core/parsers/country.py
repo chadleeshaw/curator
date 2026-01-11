@@ -2,6 +2,7 @@
 Country detection from filenames and titles.
 Based on Readarr's IsoCountries implementation.
 """
+
 import re
 from typing import Dict, Optional
 
@@ -11,7 +12,6 @@ ISO_COUNTRIES: Dict[str, str] = {
     "US": "United States",
     "CA": "Canada",
     "MX": "Mexico",
-
     # Europe
     "UK": "United Kingdom",
     "DE": "Germany",
@@ -44,7 +44,6 @@ ISO_COUNTRIES: Dict[str, str] = {
     "LU": "Luxembourg",
     "MT": "Malta",
     "CY": "Cyprus",
-
     # Asia
     "JP": "Japan",
     "CN": "China",
@@ -68,7 +67,6 @@ ISO_COUNTRIES: Dict[str, str] = {
     "MN": "Mongolia",
     "BT": "Bhutan",
     "MO": "Macao",
-
     # Middle East
     "TR": "Turkey",
     "SA": "Saudi Arabia",
@@ -88,7 +86,6 @@ ISO_COUNTRIES: Dict[str, str] = {
     "AM": "Armenia",
     "AZ": "Azerbaijan",
     "GE": "Georgia",
-
     # Oceania
     "AU": "Australia",
     "NZ": "New Zealand",
@@ -101,7 +98,6 @@ ISO_COUNTRIES: Dict[str, str] = {
     "VU": "Vanuatu",
     "SB": "Solomon Islands",
     "KI": "Kiribati",
-
     # South America
     "BR": "Brazil",
     "AR": "Argentina",
@@ -116,7 +112,6 @@ ISO_COUNTRIES: Dict[str, str] = {
     "GY": "Guyana",
     "SR": "Suriname",
     "GF": "French Guiana",
-
     # Central America & Caribbean
     "GT": "Guatemala",
     "HN": "Honduras",
@@ -133,7 +128,6 @@ ISO_COUNTRIES: Dict[str, str] = {
     "BB": "Barbados",
     "BS": "Bahamas",
     "PR": "Puerto Rico",
-
     # Africa
     "ZA": "South Africa",
     "EG": "Egypt",
@@ -182,7 +176,6 @@ ISO_COUNTRIES: Dict[str, str] = {
     "SC": "Seychelles",
     "CV": "Cape Verde",
     "ST": "Sao Tome and Principe",
-
     # Former Soviet Union
     "RU": "Russia",
     "UA": "Ukraine",
@@ -193,18 +186,15 @@ ISO_COUNTRIES: Dict[str, str] = {
     "KG": "Kyrgyzstan",
     "TJ": "Tajikistan",
     "MD": "Moldova",
-
     # Historical entities
     "SU": "Soviet Union",
     "YU": "Yugoslavia",
     "CS": "Czechoslovakia",
-
     # Regional designations
     "XE": "Europe",
     "XW": "Worldwide",
     "XU": "Unknown Country",
     "EU": "European Union",
-
     # Additional countries
     "AF": "Afghanistan",
     "AL": "Albania",
@@ -292,25 +282,25 @@ def detect_country(text: str, default: Optional[str] = None) -> Optional[str]:
     text_upper = text.upper()
 
     # Common English words that look like country codes but should be ignored
-    common_words = {'IS', 'IN', 'IT', 'OR', 'TO', 'BY', 'AT', 'AS', 'IF', 'NO', 'SO', 'DO', 'GO'}
+    common_words = {"IS", "IN", "IT", "OR", "TO", "BY", "AT", "AS", "IF", "NO", "SO", "DO", "GO"}
 
     # Patterns to match country codes in various contexts
     # Order matters - more specific patterns first
     patterns = [
-        r'\[([A-Z]{2,3})\]',                    # [UK], [USA] in brackets
-        r'\(([A-Z]{2,3})\s+EDITION\)',          # (UK Edition) in parentheses
-        r'\(([A-Z]{2,3})\)',                    # (UK), (USA) in parentheses
-        r'\.([A-Z]{2,3})\.',                    # .UK., .USA. with dots
-        r'-([A-Z]{2,3})-',                      # -UK-, -USA- with dashes
-        r'/([A-Z]{2,3})/',                      # /UK/, /USA/ in paths
-        r'\s([A-Z]{2,3})\s+[-–—]',              # UK - or UK – with dash after space
-        r'[-\s]([A-Z]{2,3})$',                  # - UK or  UK at end
-        r'^([A-Z]{2,3})[-\s]',                  # UK- or UK  at start
-        r'\b([A-Z]{2,3})\s+EDITION\b',          # Word boundary UK Edition
-        r'\s([A-Z]{2,3})\s+\w+\s+EDITION',      # UK Special Edition (word between)
-        r'\s([A-Z]{2,3})\s+[ÉéÈèÊê]DITION',     # UK Édition (unicode)
-        r'\s([A-Z]{2,3})\)',                    # UK) in text
-        r'\s([A-Z]{2,3})\s',                    # US  or UK  surrounded by spaces
+        r"\[([A-Z]{2,3})\]",  # [UK], [USA] in brackets
+        r"\(([A-Z]{2,3})\s+EDITION\)",  # (UK Edition) in parentheses
+        r"\(([A-Z]{2,3})\)",  # (UK), (USA) in parentheses
+        r"\.([A-Z]{2,3})\.",  # .UK., .USA. with dots
+        r"-([A-Z]{2,3})-",  # -UK-, -USA- with dashes
+        r"/([A-Z]{2,3})/",  # /UK/, /USA/ in paths
+        r"\s([A-Z]{2,3})\s+[-–—]",  # UK - or UK – with dash after space
+        r"[-\s]([A-Z]{2,3})$",  # - UK or  UK at end
+        r"^([A-Z]{2,3})[-\s]",  # UK- or UK  at start
+        r"\b([A-Z]{2,3})\s+EDITION\b",  # Word boundary UK Edition
+        r"\s([A-Z]{2,3})\s+\w+\s+EDITION",  # UK Special Edition (word between)
+        r"\s([A-Z]{2,3})\s+[ÉéÈèÊê]DITION",  # UK Édition (unicode)
+        r"\s([A-Z]{2,3})\)",  # UK) in text
+        r"\s([A-Z]{2,3})\s",  # US  or UK  surrounded by spaces
     ]
 
     for pattern in patterns:
@@ -339,23 +329,23 @@ def detect_country(text: str, default: Optional[str] = None) -> Optional[str]:
     # Also try matching full country names
     for code, name in ISO_COUNTRIES.items():
         # Match full country name with word boundaries
-        if re.search(rf'\b{re.escape(name)}\b', text, re.IGNORECASE):
+        if re.search(rf"\b{re.escape(name)}\b", text, re.IGNORECASE):
             return code
 
     # Special handling for "Africa" patterns (not a country, but used in periodical names)
     # Check for "South Africa" first (more specific)
-    if re.search(r'\bSouth[\s\.]Africa\b', text, re.IGNORECASE):
-        return 'ZA'  # South Africa
+    if re.search(r"\bSouth[\s\.]Africa\b", text, re.IGNORECASE):
+        return "ZA"  # South Africa
     # Then check for generic "Africa" or "Afrika" - treat as ZA for filtering purposes
-    if re.search(r'\b(Africa|Afrika)\b', text, re.IGNORECASE):
-        return 'ZA'  # Treat Africa/Afrika as South Africa for filtering
+    if re.search(r"\b(Africa|Afrika)\b", text, re.IGNORECASE):
+        return "ZA"  # Treat Africa/Afrika as South Africa for filtering
 
     # Special handling for "Nederland" (Dutch for Netherlands)
-    if re.search(r'\bNederland', text, re.IGNORECASE):
-        return 'NL'  # Netherlands
+    if re.search(r"\bNederland", text, re.IGNORECASE):
+        return "NL"  # Netherlands
 
     # Special handling for "Slovenija" (Slovenian for Slovenia)
-    if re.search(r'\bSlovenija\b', text, re.IGNORECASE):
-        return 'SI'  # Slovenia
+    if re.search(r"\bSlovenija\b", text, re.IGNORECASE):
+        return "SI"  # Slovenia
 
     return default

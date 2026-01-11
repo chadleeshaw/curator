@@ -14,25 +14,22 @@ class ConfigLoader:
 
     def get_ocr(self) -> Dict[str, Any]:
         """Get OCR/image preprocessing configuration"""
-        from core.constants import (
-            OCR_RESIZE_WIDTH,
-            OCR_CONTRAST_ENHANCE,
-            OCR_DENOISE_H,
-            OCR_SHARPEN_KERNEL
+        from core.constants import OCR_RESIZE_WIDTH, OCR_CONTRAST_ENHANCE, OCR_DENOISE_H, OCR_SHARPEN_KERNEL
+
+        return self.config.get(
+            "ocr",
+            {
+                "resize_width": OCR_RESIZE_WIDTH,
+                "contrast_enhance": OCR_CONTRAST_ENHANCE,
+                "denoise_h": OCR_DENOISE_H,
+                "sharpen_kernel": OCR_SHARPEN_KERNEL,
+            },
         )
-        return self.config.get("ocr", {
-            "resize_width": OCR_RESIZE_WIDTH,
-            "contrast_enhance": OCR_CONTRAST_ENHANCE,
-            "denoise_h": OCR_DENOISE_H,
-            "sharpen_kernel": OCR_SHARPEN_KERNEL
-        })
 
     def __init__(self, config_path: str = None):
         # Allow environment variable to override, fall back to local dev path
         if config_path is None:
-            config_path = os.environ.get(
-                "CURATOR_CONFIG_PATH", "local/config/config.yaml"
-            )
+            config_path = os.environ.get("CURATOR_CONFIG_PATH", "local/config/config.yaml")
         self.config_path = Path(config_path)
         self.config = self._load_config()
 
@@ -43,8 +40,7 @@ class ConfigLoader:
             test_config_path = Path("tests/config.test.yaml")
             if test_config_path.exists():
                 logger.warning(
-                    f"Config file not found at {self.config_path}, "
-                    f"using test config: {test_config_path}"
+                    f"Config file not found at {self.config_path}, " f"using test config: {test_config_path}"
                 )
                 self.config_path = test_config_path
             else:
@@ -97,16 +93,12 @@ class ConfigLoader:
                 try:
                     dir_path.mkdir(parents=True, exist_ok=True)
                     if not dir_path.is_dir():
-                        raise ValueError(
-                            f"{key} path exists but is not a directory: {dir_path}"
-                        )
+                        raise ValueError(f"{key} path exists but is not a directory: {dir_path}")
                     if not os.access(dir_path, os.W_OK):
                         raise ValueError(f"{key} directory is not writable: {dir_path}")
                     logger.debug(f"Validated {key}: {dir_path}")
                 except PermissionError as e:
-                    raise ValueError(
-                        f"Permission denied creating {key} directory: {dir_path}"
-                    ) from e
+                    raise ValueError(f"Permission denied creating {key} directory: {dir_path}") from e
 
         # Validate database path
         if "db_path" in storage:
@@ -118,63 +110,62 @@ class ConfigLoader:
                     raise ValueError(f"Database directory is not writable: {db_dir}")
                 logger.debug(f"Validated db_path: {db_path}")
             except PermissionError as e:
-                raise ValueError(
-                    f"Permission denied creating database directory: {db_dir}"
-                ) from e
+                raise ValueError(f"Permission denied creating database directory: {db_dir}") from e
 
         return storage
 
     def get_matching(self) -> Dict[str, Any]:
         """Get matching configuration"""
         from core.constants import DEFAULT_FUZZY_THRESHOLD, DUPLICATE_DATE_THRESHOLD_DAYS
-        return self.config.get("matching", {
-            "fuzzy_threshold": DEFAULT_FUZZY_THRESHOLD,
-            "duplicate_date_threshold_days": DUPLICATE_DATE_THRESHOLD_DAYS
-        })
+
+        return self.config.get(
+            "matching",
+            {
+                "fuzzy_threshold": DEFAULT_FUZZY_THRESHOLD,
+                "duplicate_date_threshold_days": DUPLICATE_DATE_THRESHOLD_DAYS,
+            },
+        )
 
     def get_import(self) -> Dict[str, Any]:
         """Get import configuration"""
-        return self.config.get("import", {
-            "organization_pattern": None,
-            "auto_track_imports": True,
-            "category_prefix": "_"
-        })
+        return self.config.get(
+            "import", {"organization_pattern": None, "auto_track_imports": True, "category_prefix": "_"}
+        )
 
     def get_pdf(self) -> Dict[str, Any]:
         """Get PDF processing configuration"""
-        from core.constants import (
-            PDF_COVER_DPI_LOW,
-            PDF_COVER_DPI_HIGH,
-            PDF_COVER_QUALITY,
-            PDF_COVER_QUALITY_HIGH
+        from core.constants import PDF_COVER_DPI_LOW, PDF_COVER_DPI_HIGH, PDF_COVER_QUALITY, PDF_COVER_QUALITY_HIGH
+
+        return self.config.get(
+            "pdf",
+            {
+                "cover_dpi_low": PDF_COVER_DPI_LOW,
+                "cover_dpi_high": PDF_COVER_DPI_HIGH,
+                "cover_quality_low": PDF_COVER_QUALITY,
+                "cover_quality_high": PDF_COVER_QUALITY_HIGH,
+            },
         )
-        return self.config.get("pdf", {
-            "cover_dpi_low": PDF_COVER_DPI_LOW,
-            "cover_dpi_high": PDF_COVER_DPI_HIGH,
-            "cover_quality_low": PDF_COVER_QUALITY,
-            "cover_quality_high": PDF_COVER_QUALITY_HIGH
-        })
 
     def get_downloads(self) -> Dict[str, Any]:
         """Get downloads configuration"""
         from core.constants import MAX_DOWNLOAD_RETRIES, MAX_DOWNLOADS_PER_BATCH
-        return self.config.get("downloads", {
-            "max_retries": MAX_DOWNLOAD_RETRIES,
-            "max_per_batch": MAX_DOWNLOADS_PER_BATCH
-        })
+
+        return self.config.get(
+            "downloads", {"max_retries": MAX_DOWNLOAD_RETRIES, "max_per_batch": MAX_DOWNLOADS_PER_BATCH}
+        )
 
     def get_tasks(self) -> Dict[str, Any]:
         """Get task scheduling configuration"""
-        from core.constants import (
-            AUTO_DOWNLOAD_INTERVAL,
-            DOWNLOAD_MONITOR_INTERVAL,
-            CLEANUP_COVERS_INTERVAL
+        from core.constants import AUTO_DOWNLOAD_INTERVAL, DOWNLOAD_MONITOR_INTERVAL, CLEANUP_COVERS_INTERVAL
+
+        return self.config.get(
+            "tasks",
+            {
+                "auto_download_interval": AUTO_DOWNLOAD_INTERVAL,
+                "download_monitor_interval": DOWNLOAD_MONITOR_INTERVAL,
+                "cleanup_covers_interval": CLEANUP_COVERS_INTERVAL,
+            },
         )
-        return self.config.get("tasks", {
-            "auto_download_interval": AUTO_DOWNLOAD_INTERVAL,
-            "download_monitor_interval": DOWNLOAD_MONITOR_INTERVAL,
-            "cleanup_covers_interval": CLEANUP_COVERS_INTERVAL
-        })
 
     def get_logging(self) -> Dict[str, Any]:
         """Get logging configuration with environment variable overrides"""

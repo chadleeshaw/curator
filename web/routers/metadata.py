@@ -12,7 +12,7 @@ from core.constants import (
     ISO_COUNTRIES,
     LANGUAGE_TO_COUNTRY,
     COUNTRY_INDICATORS,
-    LANGUAGE_KEYWORDS
+    LANGUAGE_KEYWORDS,
 )
 
 router = APIRouter(prefix="/api", tags=["metadata"])
@@ -22,19 +22,13 @@ logger = logging.getLogger(__name__)
 @router.get("/constants/languages")
 async def get_supported_languages() -> Dict[str, Any]:
     """Get list of supported languages"""
-    return {
-        "success": True,
-        "languages": SUPPORTED_LANGUAGES
-    }
+    return {"success": True, "languages": SUPPORTED_LANGUAGES}
 
 
 @router.get("/constants/countries")
 async def get_iso_countries() -> Dict[str, Any]:
     """Get ISO country codes and names"""
-    return {
-        "success": True,
-        "countries": ISO_COUNTRIES
-    }
+    return {"success": True, "countries": ISO_COUNTRIES}
 
 
 @router.get("/constants")
@@ -46,7 +40,7 @@ async def get_all_constants() -> Dict[str, Any]:
         "countries": ISO_COUNTRIES,
         "language_to_country": LANGUAGE_TO_COUNTRY,
         "country_indicators": COUNTRY_INDICATORS,
-        "language_keywords": LANGUAGE_KEYWORDS
+        "language_keywords": LANGUAGE_KEYWORDS,
     }
 
 
@@ -60,15 +54,9 @@ async def get_supported_languages_legacy() -> Dict[str, Any]:
 @router.get("/metadata/countries")
 async def get_supported_countries() -> Dict[str, Any]:
     """Get list of supported countries with ISO codes (legacy)"""
-    countries = [
-        {"code": code, "name": name}
-        for code, name in ISO_COUNTRIES.items()
-    ]
+    countries = [{"code": code, "name": name} for code, name in ISO_COUNTRIES.items()]
 
     # Sort by name
     countries.sort(key=lambda x: x["name"])
 
-    return {
-        "success": True,
-        "countries": countries
-    }
+    return {"success": True, "countries": countries}

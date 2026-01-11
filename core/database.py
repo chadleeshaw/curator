@@ -49,9 +49,9 @@ class DatabaseManager:
         if missing_tables:
             logger.info(f"Creating missing tables: {', '.join(sorted(missing_tables))}")
             # Create only the missing tables
-            Base.metadata.create_all(self.engine, tables=[
-                Base.metadata.tables[table_name] for table_name in missing_tables
-            ])
+            Base.metadata.create_all(
+                self.engine, tables=[Base.metadata.tables[table_name] for table_name in missing_tables]
+            )
             logger.info(f"✓ Created {len(missing_tables)} missing table(s)")
             # Refresh inspector after creating tables
             inspector = inspect(self.engine)
@@ -91,9 +91,7 @@ class DatabaseManager:
                     logger.info(f"Adding missing column '{column_name}' to {table_name}")
                     try:
                         with self.engine.connect() as conn:
-                            conn.execute(
-                                text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}")
-                            )
+                            conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}"))
                             conn.commit()
                         migrations_applied += 1
                         logger.info(f"✓ Added column {table_name}.{column_name}")

@@ -2,6 +2,7 @@
 Unified parser entry point for all parsing operations.
 Delegates to specialized parsers and returns standardized dataclasses.
 """
+
 from pathlib import Path
 from typing import Optional, Dict, Any
 from datetime import datetime

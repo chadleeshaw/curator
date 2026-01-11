@@ -249,8 +249,8 @@ class DownloadMonitorTask:
 
             # Check for PDFs and EPUBs recursively
             all_files = self._find_pdf_epub_files(self.downloads_dir)
-            pdf_files = [f for f in all_files if f.suffix.lower() == '.pdf']
-            epub_files = [f for f in all_files if f.suffix.lower() == '.epub']
+            pdf_files = [f for f in all_files if f.suffix.lower() == ".pdf"]
+            epub_files = [f for f in all_files if f.suffix.lower() == ".epub"]
             file_count = len(all_files)
 
             if file_count > 0:
@@ -269,8 +269,7 @@ class DownloadMonitorTask:
                     errors = results.get("errors", [])
                     error_messages = [e.get("message", str(e)) for e in errors] if errors else []
                     logger.warning(
-                        f"[DownloadMonitor] Failed to import {data['failed']} files. "
-                        f"Errors: {error_messages}"
+                        f"[DownloadMonitor] Failed to import {data['failed']} files. " f"Errors: {error_messages}"
                     )
             else:
                 logger.debug("[DownloadMonitor] No files found in downloads folder")
@@ -313,11 +312,10 @@ class DownloadMonitorTask:
 
                     # Special handling when status is PENDING but client returned "unknown"
                     # This happens when job was deleted from client (e.g., due to delete_from_client_on_completion)
-                    if (result.status == DownloadSubmission.StatusEnum.PENDING
-                            and previous_status in [
-                                DownloadSubmission.StatusEnum.DOWNLOADING,
-                                DownloadSubmission.StatusEnum.COMPLETED
-                            ]):
+                    if result.status == DownloadSubmission.StatusEnum.PENDING and previous_status in [
+                        DownloadSubmission.StatusEnum.DOWNLOADING,
+                        DownloadSubmission.StatusEnum.COMPLETED,
+                    ]:
                         # Job might have been deleted from client after completion
                         # Check if file exists in downloads folder
                         found_path = self._find_file_in_downloads(result.file_path)

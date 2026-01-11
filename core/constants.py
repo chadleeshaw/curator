@@ -13,9 +13,10 @@ OCR_DENOISE_H = 30
 
 OCR_SHARPEN_KERNEL = [[0, -1, 0], [-1, 5, -1], [0, -1, 0]]
 """Default sharpening kernel for OCR (2D list)"""
-"""
-Application constants and configuration values
-"""
+
+# ==============================================================================
+# Application Constants
+# ==============================================================================
 
 # ==============================================================================
 # Matching and Deduplication

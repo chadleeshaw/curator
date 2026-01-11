@@ -127,9 +127,7 @@ class AuthManager:
         except jwt.InvalidTokenError:
             return False, None
 
-    def update_credentials(
-        self, username: str, old_password: str, new_password: str
-    ) -> Tuple[bool, str]:
+    def update_credentials(self, username: str, old_password: str, new_password: str) -> Tuple[bool, str]:
         """
         Update the password.
 
@@ -178,9 +176,7 @@ class AuthManager:
                 return False, "User not found"
 
             # Check if new username already exists
-            existing = (
-                session.query(Credentials).filter_by(username=new_username).first()
-            )
+            existing = session.query(Credentials).filter_by(username=new_username).first()
             if existing:
                 return False, "Username already exists"
 

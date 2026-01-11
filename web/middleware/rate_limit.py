@@ -78,9 +78,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 # Remove timestamps older than max period
                 max_period = max(self.period, self.auth_period)
                 self.clients[client_id][endpoint] = [
-                    ts
-                    for ts in self.clients[client_id][endpoint]
-                    if current_time - ts < max_period
+                    ts for ts in self.clients[client_id][endpoint] if current_time - ts < max_period
                 ]
 
                 # Remove empty endpoint lists
@@ -103,9 +101,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         ]
         return any(path.startswith(auth_path) for auth_path in auth_paths)
 
-    def _check_rate_limit(
-        self, client_id: str, endpoint: str, is_auth: bool
-    ) -> tuple[bool, dict]:
+    def _check_rate_limit(self, client_id: str, endpoint: str, is_auth: bool) -> tuple[bool, dict]:
         """
         Check if request exceeds rate limit
 

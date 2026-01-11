@@ -49,16 +49,14 @@ async def view_periodical_by_id(id: int = Query(...)):
             periodical = db_session.query(Magazine).filter(Magazine.id == id).first()
 
             if not periodical:
-                raise HTTPException(
-                    status_code=404, detail=f"Periodical with ID {id} not found"
-                )
+                raise HTTPException(status_code=404, detail=f"Periodical with ID {id} not found")
 
             # Determine the title to display and how to query
             if periodical.tracking_id:
                 # Use tracking title for display and query by tracking_id
-                tracking = db_session.query(MagazineTracking).filter(
-                    MagazineTracking.id == periodical.tracking_id
-                ).first()
+                tracking = (
+                    db_session.query(MagazineTracking).filter(MagazineTracking.id == periodical.tracking_id).first()
+                )
                 periodical_title = tracking.title if tracking else periodical.title
 
                 # Query all magazines with same tracking_id (includes special editions)
@@ -92,9 +90,7 @@ async def view_periodical_by_id(id: int = Query(...)):
                     {
                         "id": p.id,
                         "title": p.title,
-                        "issue_date": (
-                            p.issue_date.isoformat() if p.issue_date else None
-                        ),
+                        "issue_date": (p.issue_date.isoformat() if p.issue_date else None),
                         "cover_path": p.cover_path,
                         "file_path": p.file_path,
                     }
@@ -109,9 +105,7 @@ async def view_periodical_by_id(id: int = Query(...)):
                     template_content = f.read()
             except FileNotFoundError:
                 logger.error("periodical.html template not found")
-                raise HTTPException(
-                    status_code=500, detail="Periodical template not found"
-                )
+                raise HTTPException(status_code=500, detail="Periodical template not found")
 
             # Build years data JSON
             years_data = []
@@ -133,9 +127,9 @@ async def view_periodical_by_id(id: int = Query(...)):
             # Replace template variables
             import html
 
-            html_content = template_content.replace(
-                "{{PERIODICAL_TITLE}}", periodical_title
-            ).replace("{{YEARS_DATA}}", html.escape(json.dumps(years_data)))
+            html_content = template_content.replace("{{PERIODICAL_TITLE}}", periodical_title).replace(
+                "{{YEARS_DATA}}", html.escape(json.dumps(years_data))
+            )
 
             return HTMLResponse(content=html_content)
 
@@ -162,9 +156,7 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
                 query = db_session.query(Magazine).filter(Magazine.tracking_id == tracking_id)
             else:
                 # Try to find a tracking record by title first
-                tracking = db_session.query(MagazineTracking).filter(
-                    MagazineTracking.title == periodical_title
-                ).first()
+                tracking = db_session.query(MagazineTracking).filter(MagazineTracking.title == periodical_title).first()
 
                 if tracking:
                     # Query all magazines with this tracking_id
@@ -204,9 +196,7 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
                 if p.extra_metadata and isinstance(p.extra_metadata, dict):
                     if "special_edition" in p.extra_metadata:
                         is_special = True
-                        periodical_data["special_edition_name"] = p.extra_metadata.get(
-                            "special_edition", ""
-                        )
+                        periodical_data["special_edition_name"] = p.extra_metadata.get("special_edition", "")
 
                 if not is_special and is_special_edition(p.title):
                     is_special = True
@@ -226,9 +216,7 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
                     template_content = f.read()
             except FileNotFoundError:
                 logger.error("periodical.html template not found")
-                raise HTTPException(
-                    status_code=500, detail="Periodical template not found"
-                )
+                raise HTTPException(status_code=500, detail="Periodical template not found")
 
             # Build special editions data
             special_editions_data = []
@@ -263,12 +251,8 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
             # Replace template variables
             import html
 
-            html_content = template_content.replace(
-                "{{PERIODICAL_TITLE}}", periodical_title
-            )
-            html_content = html_content.replace(
-                "{{YEARS_DATA}}", html.escape(json.dumps(years_data))
-            )
+            html_content = template_content.replace("{{PERIODICAL_TITLE}}", periodical_title)
+            html_content = html_content.replace("{{YEARS_DATA}}", html.escape(json.dumps(years_data)))
             html_content = html_content.replace(
                 "{{SPECIAL_EDITIONS_DATA}}",
                 html.escape(json.dumps(special_editions_data)),

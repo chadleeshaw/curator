@@ -142,7 +142,9 @@ class CoverCleanupTask:
                                 # For other formats: Just use OCR on the cover image
                                 else:
                                     logger.info(f"Running OCR on cover image for: {magazine.title}")
-                                    ocr_metadata = await loop.run_in_executor(None, OCRService.analyze_cover, str(cover_path))
+                                    ocr_metadata = await loop.run_in_executor(
+                                        None, OCRService.analyze_cover, str(cover_path)
+                                    )
 
                                 if ocr_metadata.get("text_found"):
                                     # Update extra_metadata with OCR findings
@@ -248,4 +250,10 @@ class CoverCleanupTask:
                 db_session.close()
         except Exception as e:
             logger.error(f"Cover cleanup error: {e}", exc_info=True)
-            return {"deleted_count": 0, "generated_count": 0, "ocr_updated_count": 0, "ocr_scanned_count": 0, "error": str(e)}
+            return {
+                "deleted_count": 0,
+                "generated_count": 0,
+                "ocr_updated_count": 0,
+                "ocr_scanned_count": 0,
+                "error": str(e),
+            }

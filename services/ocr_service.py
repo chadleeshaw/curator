@@ -73,7 +73,6 @@ def _get_paddle_ocr(language: Optional[str] = None):
     Returns:
         PaddleOCR instance or None if not available
     """
-    global _paddle_ocr_cache
     if not OCR_AVAILABLE:
         return None
 
@@ -258,7 +257,14 @@ class OCRService:
                 break
 
         # Detect special edition indicators
-        special_indicators = ["SPECIAL EDITION", "SPECIAL ISSUE", "LIMITED EDITION", "COLLECTOR", "ANNIVERSARY", "EXCLUSIVE"]
+        special_indicators = [
+            "SPECIAL EDITION",
+            "SPECIAL ISSUE",
+            "LIMITED EDITION",
+            "COLLECTOR",
+            "ANNIVERSARY",
+            "EXCLUSIVE",
+        ]
 
         for indicator in special_indicators:
             if indicator in text_upper:
@@ -314,7 +320,9 @@ class OCRService:
         Returns:
             True if metadata has year/month/volume, False otherwise
         """
-        return metadata.get("year") is not None or metadata.get("month") is not None or metadata.get("volume") is not None
+        return (
+            metadata.get("year") is not None or metadata.get("month") is not None or metadata.get("volume") is not None
+        )
 
     @staticmethod
     def analyze_cover(cover_path: str, language: Optional[str] = None) -> Dict[str, any]:

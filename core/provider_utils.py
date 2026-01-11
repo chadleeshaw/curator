@@ -2,6 +2,7 @@
 Provider utilities.
 Common error handling for search providers.
 """
+
 import logging
 from functools import wraps
 from typing import Callable, List
@@ -28,6 +29,7 @@ def handle_provider_errors(func: Callable) -> Callable:
     Returns:
         Wrapped function with error handling
     """
+
     @wraps(func)
     def wrapper(self, query: str) -> List[SearchResult]:
         try:
@@ -37,4 +39,5 @@ def handle_provider_errors(func: Callable) -> Callable:
         except Exception as e:
             logger.error(f"{self.name} search error for '{query}': {e}")
             return []
+
     return wrapper

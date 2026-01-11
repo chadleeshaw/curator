@@ -2,6 +2,7 @@
 EPUB processing utilities.
 Centralized EPUB cover extraction and text extraction logic.
 """
+
 import logging
 from pathlib import Path
 from typing import Optional
@@ -14,10 +15,7 @@ logger = logging.getLogger(__name__)
 Image.MAX_IMAGE_PIXELS = 200000000  # 200 megapixels
 
 
-def extract_text_from_epub(
-    epub_path: Path,
-    max_items: int = 3
-) -> str:
+def extract_text_from_epub(epub_path: Path, max_items: int = 3) -> str:
     """
     Extract text from EPUB file (from first few content items).
 
@@ -46,8 +44,8 @@ def extract_text_from_epub(
             try:
                 content = item.get_content()
                 # Parse HTML and extract text
-                soup = BeautifulSoup(content, 'html.parser')
-                text = soup.get_text(separator=' ', strip=True)
+                soup = BeautifulSoup(content, "html.parser")
+                text = soup.get_text(separator=" ", strip=True)
                 if text:
                     text_parts.append(text)
                     items_processed += 1
@@ -66,11 +64,7 @@ def extract_text_from_epub(
         return ""
 
 
-def extract_cover_from_epub(
-    epub_path: Path,
-    output_dir: Path,
-    quality: int = 85
-) -> Optional[Path]:
+def extract_cover_from_epub(epub_path: Path, output_dir: Path, quality: int = 85) -> Optional[Path]:
     """
     Extract cover image from EPUB file.
 
@@ -110,15 +104,15 @@ def extract_cover_from_epub(
         # Method 3: Search for cover by name
         if not cover_item:
             for item in book.get_items():
-                if item.get_type() == 9 or 'cover' in item.get_name().lower():
-                    if item.media_type and item.media_type.startswith('image/'):
+                if item.get_type() == 9 or "cover" in item.get_name().lower():
+                    if item.media_type and item.media_type.startswith("image/"):
                         cover_item = item
                         break
 
         # Method 4: Try first image in the book
         if not cover_item:
             for item in book.get_items():
-                if item.media_type and item.media_type.startswith('image/'):
+                if item.media_type and item.media_type.startswith("image/"):
                     cover_item = item
                     break
 
@@ -131,14 +125,15 @@ def extract_cover_from_epub(
 
         # Convert to JPEG if needed
         from io import BytesIO
+
         img = Image.open(BytesIO(cover_image_data))
 
         # Convert RGBA to RGB if necessary
-        if img.mode in ('RGBA', 'LA', 'P'):
-            background = Image.new('RGB', img.size, (255, 255, 255))
-            if img.mode == 'P':
-                img = img.convert('RGBA')
-            background.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
+        if img.mode in ("RGBA", "LA", "P"):
+            background = Image.new("RGB", img.size, (255, 255, 255))
+            if img.mode == "P":
+                img = img.convert("RGBA")
+            background.paste(img, mask=img.split()[-1] if img.mode in ("RGBA", "LA") else None)
             img = background
 
         img.save(str(cover_path), "JPEG", quality=quality)

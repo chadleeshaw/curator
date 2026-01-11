@@ -1,4 +1,5 @@
 """Title matching and deduplication."""
+
 import logging
 import re
 from typing import Dict, List, Tuple, Optional
@@ -14,35 +15,33 @@ class TitleMatcher:
     """Fuzzy title matching for deduplication"""
 
     # Word delimiters for fuzzy matching
-    WORD_DELIMITERS = {' ', '.', ',', '_', '-', '=', '(', ')', '[', ']', '|', '"', "'", '`'}
+    WORD_DELIMITERS = {" ", ".", ",", "_", "-", "=", "(", ")", "[", "]", "|", '"', "'", "`"}
 
     # Hashed release patterns to reject
     HASHED_RELEASE_PATTERNS = [
-        r'^[0-9a-zA-Z]{32}',  # MD5-like hash
-        r'^[a-z0-9]{24}$',     # Short hash
-        r'^[A-Z]{11}\d{3}$',   # NZBGeek format
-        r'^[a-z]{12}\d{3}$',   # Alternative format
-        r'^Backup_\d{5,}S\d{2}-\d{2}$',  # Backup filename
+        r"^[0-9a-zA-Z]{32}",  # MD5-like hash
+        r"^[a-z0-9]{24}$",  # Short hash
+        r"^[A-Z]{11}\d{3}$",  # NZBGeek format
+        r"^[a-z]{12}\d{3}$",  # Alternative format
+        r"^Backup_\d{5,}S\d{2}-\d{2}$",  # Backup filename
     ]
 
     # Ordered title patterns
     TITLE_PATTERNS = [
         # Pattern 1: Title - Issue No.XX - Date
-        (r'^(?P<title>.+?)\s*[-.]\s*(?:Issue|No\.|Number)\s*(?P<issue>\d+)'
-         r'\s*[-.]\s*(?P<date>.+?)(?:\s*[-.]\s*(?P<extra>.*))?$', 'issue_date'),
-
+        (
+            r"^(?P<title>.+?)\s*[-.]\s*(?:Issue|No\.|Number)\s*(?P<issue>\d+)"
+            r"\s*[-.]\s*(?P<date>.+?)(?:\s*[-.]\s*(?P<extra>.*))?$",
+            "issue_date",
+        ),
         # Pattern 2: Title.YYYY.MM or Title YYYY MM
-        (r'^(?P<title>.+?)[.\s](?P<year>\d{4})[.\s](?P<month>\d{2})(?:[.\s](?P<day>\d{2}))?',
-         'date_standard'),
-
+        (r"^(?P<title>.+?)[.\s](?P<year>\d{4})[.\s](?P<month>\d{2})(?:[.\s](?P<day>\d{2}))?", "date_standard"),
         # Pattern 3: Title Special Edition Name
-        (r'^(?P<title>.+?)\s+Special\s+Edition\s+(?P<special>.+)$', 'special_edition'),
-
+        (r"^(?P<title>.+?)\s+Special\s+Edition\s+(?P<special>.+)$", "special_edition"),
         # Pattern 4: Title - Name (for special editions like "Time - Person Of The Year")
-        (r'^(?P<title>.+?)\s*[-:]\s*(?P<special>[A-Z][^-:]+)$', 'title_dash_special'),
-
+        (r"^(?P<title>.+?)\s*[-:]\s*(?P<special>[A-Z][^-:]+)$", "title_dash_special"),
         # Pattern 5: Generic title only
-        (r'^(?P<title>.+?)$', 'generic'),
+        (r"^(?P<title>.+?)$", "generic"),
     ]
 
     def __init__(self, threshold: int = 80):
@@ -67,7 +66,7 @@ class TitleMatcher:
         title_lower = title.lower()
 
         # Reject password-protected releases
-        if 'password' in title_lower and 'yenc' in title_lower:
+        if "password" in title_lower and "yenc" in title_lower:
             logger.debug(f"Rejected password-protected release: {title}")
             return False
 
@@ -77,7 +76,7 @@ class TitleMatcher:
             return False
 
         # Remove extension for hash checking
-        title_no_ext = re.sub(r'\.[a-z0-9]{2,4}$', '', title, flags=re.IGNORECASE)
+        title_no_ext = re.sub(r"\.[a-z0-9]{2,4}$", "", title, flags=re.IGNORECASE)
 
         # Reject hashed releases
         for pattern in self._compiled_hash_patterns:
@@ -101,61 +100,68 @@ class TitleMatcher:
             return title
 
         # Remove file extension
-        title = re.sub(r'\.[a-z0-9]{2,4}$', '', title, flags=re.IGNORECASE)
+        title = re.sub(r"\.[a-z0-9]{2,4}$", "", title, flags=re.IGNORECASE)
 
         # Remove website prefixes: [www.site.com] or www.site.com -
         title = re.sub(
-            r'^(?:\[\s*)?(?:www\.)?[-a-z0-9-]{1,256}\.'
-            r'(?:[a-z]{2,6}(?:\.[a-z]{2,6})?|xn--[a-z0-9-]{4,})\b(?:\s*\]|[-\s]{1,})',
-            '', title, flags=re.IGNORECASE
+            r"^(?:\[\s*)?(?:www\.)?[-a-z0-9-]{1,256}\."
+            r"(?:[a-z]{2,6}(?:\.[a-z]{2,6})?|xn--[a-z0-9-]{4,})\b(?:\s*\]|[-\s]{1,})",
+            "",
+            title,
+            flags=re.IGNORECASE,
         )
 
         # Remove website postfixes: www.site.com] at end
         title = re.sub(
-            r'(?:\[\s*)?(?:www\.)?[-a-z0-9-]{1,256}\.(?:xn--[a-z0-9-]{4,}|[a-z]{2,6})(?:\s*\])?$',
-            '', title, flags=re.IGNORECASE
+            r"(?:\[\s*)?(?:www\.)?[-a-z0-9-]{1,256}\.(?:xn--[a-z0-9-]{4,}|[a-z]{2,6})(?:\s*\])?$",
+            "",
+            title,
+            flags=re.IGNORECASE,
         )
 
         # Remove torrent tracker suffixes like [ettv], [rartv], [rarbg]
-        title = re.sub(r'\[(?:ettv|rartv|rarbg|cttv|eztv)\]$', '', title, flags=re.IGNORECASE)
+        title = re.sub(r"\[(?:ettv|rartv|rarbg|cttv|eztv)\]$", "", title, flags=re.IGNORECASE)
 
         # Remove common download/unpack prefixes
-        title = re.sub(r'^(?:Unpack|Download|Get|Read)\s+', '', title, flags=re.IGNORECASE)
+        title = re.sub(r"^(?:Unpack|Download|Get|Read)\s+", "", title, flags=re.IGNORECASE)
 
         # Remove language indicators (German, French, etc.) that appear as words
         # Pattern matches language names/codes with word boundaries (spaces, dots, etc.)
-        language_pattern = r'[\s\.](?:' + '|'.join([
-            re.escape(indicator)  # Escape special regex chars in indicators
-            for indicators in LANGUAGE_INDICATORS.values()
-            for indicator in indicators
-        ]) + r')(?:[\s\.]|$)'
-        title = re.sub(language_pattern, ' ', title, flags=re.IGNORECASE)
+        language_pattern = (
+            r"[\s\.](?:"
+            + "|".join(
+                [
+                    re.escape(indicator)  # Escape special regex chars in indicators
+                    for indicators in LANGUAGE_INDICATORS.values()
+                    for indicator in indicators
+                ]
+            )
+            + r")(?:[\s\.]|$)"
+        )
+        title = re.sub(language_pattern, " ", title, flags=re.IGNORECASE)
 
         # Remove release group tags (e.g., "-LORENZ-xpost", "[hash]-xpost") - BEFORE quality removal
-        title = re.sub(r'-[A-Z][A-Za-z0-9]+(?:-[a-z]+)?\[[\w]+\].*$', '', title)  # -LORENZ[hash]
-        title = re.sub(r'\[[\w]+\](?:-[a-z]+)?$', '', title)  # [hash]-xpost or [hash]
-        title = re.sub(r'-[A-Z][A-Za-z0-9]+(?:-[a-z]+)?$', '', title)  # -LORENZ-xpost or -LORENZ
+        title = re.sub(r"-[A-Z][A-Za-z0-9]+(?:-[a-z]+)?\[[\w]+\].*$", "", title)  # -LORENZ[hash]
+        title = re.sub(r"\[[\w]+\](?:-[a-z]+)?$", "", title)  # [hash]-xpost or [hash]
+        title = re.sub(r"-[A-Z][A-Za-z0-9]+(?:-[a-z]+)?$", "", title)  # -LORENZ-xpost or -LORENZ
 
         # Remove quality indicators (480p, 720p, 1080p, 2160p, x264, x265, h264, h265, DD5.1, 10bit, etc.)
-        title = re.sub(
-            r'[\.\s]*(480|720|1080|2160|320)[ip]',
-            '', title, flags=re.IGNORECASE
-        )
-        title = re.sub(r'[\.\s]*[xh][\W_]?26[45]', '', title, flags=re.IGNORECASE)
-        title = re.sub(r'[\.\s]*DD[\W_]?5[\W_]?1', '', title, flags=re.IGNORECASE)
-        title = re.sub(r'[\.\s]*(8|10)bit', '', title, flags=re.IGNORECASE)
+        title = re.sub(r"[\.\s]*(480|720|1080|2160|320)[ip]", "", title, flags=re.IGNORECASE)
+        title = re.sub(r"[\.\s]*[xh][\W_]?26[45]", "", title, flags=re.IGNORECASE)
+        title = re.sub(r"[\.\s]*DD[\W_]?5[\W_]?1", "", title, flags=re.IGNORECASE)
+        title = re.sub(r"[\.\s]*(8|10)bit", "", title, flags=re.IGNORECASE)
 
         # Remove common scene release tags
-        release_tags = ['READNFO', 'REPACK', 'PROPER', 'REAL', 'RETAIL', 'EXTENDED', 'UNRATED']
+        release_tags = ["READNFO", "REPACK", "PROPER", "REAL", "RETAIL", "EXTENDED", "UNRATED"]
         for tag in release_tags:
-            title = re.sub(rf'[\.\s]*{tag}', '', title, flags=re.IGNORECASE)
+            title = re.sub(rf"[\.\s]*{tag}", "", title, flags=re.IGNORECASE)
 
         # Remove percentages (95%, etc.)
-        title = re.sub(r'(\d+)%', r'\1', title)
+        title = re.sub(r"(\d+)%", r"\1", title)
 
         # Clean up multiple dots or spaces
-        title = re.sub(r'\.{2,}', '.', title)
-        title = re.sub(r'\s{2,}', ' ', title)
+        title = re.sub(r"\.{2,}", ".", title)
+        title = re.sub(r"\s{2,}", " ", title)
 
         # === Formatting (formerly in standardize_title) ===
 
@@ -168,9 +174,14 @@ class TitleMatcher:
 
         # Remove issue numbers that appear as metadata: "No 123", "Issue 456", "No.789", "#42", "Vol 5", "Vol.5"
         # Must do this AFTER replacing dots with spaces
-        title = re.sub(r'\s+(?:No|Issue|Vol|Volume|Edition)\s+\d+\s+(?:(?:19|20)\d{2}|German|Hybrid|Digital|PDF)', '', title, flags=re.IGNORECASE)
-        title = re.sub(r'\s+(?:No|Issue|Vol|Volume|Edition)\s+\d+', '', title, flags=re.IGNORECASE)  # Remove remaining
-        title = re.sub(r'\s+#\d+(?:\s+(?:19|20)\d{2})?$', '', title, flags=re.IGNORECASE)
+        title = re.sub(
+            r"\s+(?:No|Issue|Vol|Volume|Edition)\s+\d+\s+(?:(?:19|20)\d{2}|German|Hybrid|Digital|PDF)",
+            "",
+            title,
+            flags=re.IGNORECASE,
+        )
+        title = re.sub(r"\s+(?:No|Issue|Vol|Volume|Edition)\s+\d+", "", title, flags=re.IGNORECASE)  # Remove remaining
+        title = re.sub(r"\s+#\d+(?:\s+(?:19|20)\d{2})?$", "", title, flags=re.IGNORECASE)
 
         # Remove magazine type suffixes (often redundant metadata like "Hybrid Magazine", "Digital Magazine")
         title = re.sub(r"\s+(?:Hybrid|Digital|PDF|eMag|True|HQ)\s+(?:Magazine|Mag)", "", title, flags=re.IGNORECASE)
@@ -215,15 +226,13 @@ class TitleMatcher:
             match = pattern.match(title)
             if match:
                 result = match.groupdict()
-                result['pattern_type'] = pattern_name
+                result["pattern_type"] = pattern_name
                 logger.debug(f"Matched pattern '{pattern_name}' for title: {title}")
                 return result
 
         return None
 
-    def fuzzy_match_with_delimiters(
-            self, text: str, pattern: str,
-            threshold: float = 0.6) -> Tuple[int, int, float]:
+    def fuzzy_match_with_delimiters(self, text: str, pattern: str, threshold: float = 0.6) -> Tuple[int, int, float]:
         """
         Fuzzy match that respects word delimiters
         Args:
@@ -261,7 +270,7 @@ class TitleMatcher:
 
             for i, word in enumerate(words_text):
                 # Check if this word starts a potential match
-                candidate = ' '.join(words_text[i:i + len(words_pattern)])
+                candidate = " ".join(words_text[i : i + len(words_pattern)])
                 score = fuzz.ratio(candidate.lower(), pattern_lower) / 100.0
 
                 if score > best_score:
@@ -283,13 +292,13 @@ class TitleMatcher:
         for char in text:
             if char in self.WORD_DELIMITERS:
                 if current_word:
-                    words.append(''.join(current_word))
+                    words.append("".join(current_word))
                     current_word = []
             else:
                 current_word.append(char)
 
         if current_word:
-            words.append(''.join(current_word))
+            words.append("".join(current_word))
 
         return words
 
@@ -334,10 +343,27 @@ class TitleMatcher:
         #
         # Common periodical words that are part of the base title:
         common_periodical_words = {
-            "magazine", "monthly", "weekly", "daily", "quarterly",
-            "journal", "review", "digest", "times", "post", "news",
-            "illustrated", "geographic", "swimsuit", "beauty", "style",
-            "edition", "issue", "international", "world", "today"
+            "magazine",
+            "monthly",
+            "weekly",
+            "daily",
+            "quarterly",
+            "journal",
+            "review",
+            "digest",
+            "times",
+            "post",
+            "news",
+            "illustrated",
+            "geographic",
+            "swimsuit",
+            "beauty",
+            "style",
+            "edition",
+            "issue",
+            "international",
+            "world",
+            "today",
         }
 
         words = title.split()
@@ -393,9 +419,7 @@ class TitleMatcher:
             Tuple of (is_match, score) where score is 0-100
         """
         if use_delimiters:
-            _, _, fuzzy_score = self.fuzzy_match_with_delimiters(
-                title1, title2, threshold=self.threshold / 100.0
-            )
+            _, _, fuzzy_score = self.fuzzy_match_with_delimiters(title1, title2, threshold=self.threshold / 100.0)
             score = int(fuzzy_score * 100)
             is_match = fuzzy_score >= (self.threshold / 100.0)
         else:

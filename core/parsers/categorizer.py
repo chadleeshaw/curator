@@ -1,6 +1,7 @@
 """
 File categorization based on title keywords.
 """
+
 from core.constants import CATEGORY_KEYWORDS
 
 

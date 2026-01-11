@@ -2,6 +2,7 @@
 NZBGet download client implementation.
 Handles NZB submissions and status tracking for NZBGet via JSON-RPC API.
 """
+
 import logging
 from typing import Any, Dict, List
 
@@ -78,7 +79,14 @@ class NZBGetClient(DownloadClient):
             if len(nzb_name) > 100:
                 nzb_name = nzb_name[:100].strip()
 
-            params = [nzb_url, nzb_name, category or "", 50, False, False]  # url, name, category, priority, addToTop, addPaused
+            params = [
+                nzb_url,
+                nzb_name,
+                category or "",
+                50,
+                False,
+                False,
+            ]  # url, name, category, priority, addToTop, addPaused
             result = self._api_call("append", params)
 
             if isinstance(result, (int, float)) and result > 0:

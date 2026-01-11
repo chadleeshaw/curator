@@ -88,9 +88,7 @@ async def setup_credentials(request: CreateCredentialsRequest):
     if _auth_manager.credentials_exist():
         raise HTTPException(status_code=400, detail="Credentials already exist")
 
-    success, message = _auth_manager.create_credentials(
-        request.username, request.password
-    )
+    success, message = _auth_manager.create_credentials(request.username, request.password)
     if not success:
         raise HTTPException(status_code=400, detail=message)
 
@@ -100,9 +98,7 @@ async def setup_credentials(request: CreateCredentialsRequest):
 @router.post("/login")
 async def login(request: LoginRequest):
     """Authenticate user and return JWT token"""
-    success, message = _auth_manager.verify_credentials(
-        request.username, request.password
-    )
+    success, message = _auth_manager.verify_credentials(request.username, request.password)
 
     if not success:
         raise HTTPException(status_code=401, detail=message)
@@ -112,13 +108,9 @@ async def login(request: LoginRequest):
 
 
 @router.post("/change-password")
-async def change_password(
-    request: ChangePasswordRequest, username: str = Depends(verify_token)
-):
+async def change_password(request: ChangePasswordRequest, username: str = Depends(verify_token)):
     """Change password for authenticated user"""
-    success, message = _auth_manager.update_credentials(
-        username, request.old_password, request.new_password
-    )
+    success, message = _auth_manager.update_credentials(username, request.old_password, request.new_password)
 
     if not success:
         raise HTTPException(status_code=400, detail=message)
@@ -137,22 +129,16 @@ async def get_user_info(username: str = Depends(verify_token)):
 
 
 @router.post("/user/update")
-async def update_user(
-    request: UpdateUserRequest, current_username: str = Depends(verify_token)
-):
+async def update_user(request: UpdateUserRequest, current_username: str = Depends(verify_token)):
     """Update username and/or password for authenticated user"""
     # Verify current password first
-    success, message = _auth_manager.verify_credentials(
-        current_username, request.current_password
-    )
+    success, message = _auth_manager.verify_credentials(current_username, request.current_password)
     if not success:
         raise HTTPException(status_code=401, detail="Current password is incorrect")
 
     # Update username if provided
     if request.username and request.username != current_username:
-        success, message = _auth_manager.update_username(
-            current_username, request.username
-        )
+        success, message = _auth_manager.update_username(current_username, request.username)
         if not success:
             raise HTTPException(status_code=400, detail=message)
         current_username = request.username  # Update for password change if needed
