@@ -82,11 +82,23 @@ jobs:
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
 
+      - name: Determine platforms
+        id: platforms
+        run: |
+          # Build ARM64 only on tags or if commit message contains [build-arm]
+          if [[ "${{ github.ref }}" == refs/tags/* ]] || [[ "${{ github.event.head_commit.message }}" == *"[build-arm]"* ]]; then
+            echo "platforms=linux/amd64,linux/arm64" >> $GITHUB_OUTPUT
+            echo "Building for AMD64 + ARM64 (release or explicit request)"
+          else
+            echo "platforms=linux/amd64" >> $GITHUB_OUTPUT
+            echo "Building for AMD64 only (faster builds)"
+          fi
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ steps.platforms.outputs.platforms }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
