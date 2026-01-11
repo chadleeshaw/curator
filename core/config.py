@@ -10,6 +10,20 @@ logger = logging.getLogger(__name__)
 
 
 class ConfigLoader:
+        def get_ocr(self) -> Dict[str, Any]:
+            """Get OCR/image preprocessing configuration"""
+            from core.constants import (
+                OCR_RESIZE_WIDTH,
+                OCR_CONTRAST_ENHANCE,
+                OCR_DENOISE_H,
+                OCR_SHARPEN_KERNEL
+            )
+            return self.config.get("ocr", {
+                "resize_width": OCR_RESIZE_WIDTH,
+                "contrast_enhance": OCR_CONTRAST_ENHANCE,
+                "denoise_h": OCR_DENOISE_H,
+                "sharpen_kernel": OCR_SHARPEN_KERNEL
+            })
     """Load, validate, and save configuration from YAML"""
 
     def __init__(self, config_path: str = None):

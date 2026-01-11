@@ -1,3 +1,18 @@
+# ==============================================================================
+# OCR/Image Preprocessing Defaults
+# ==============================================================================
+
+OCR_RESIZE_WIDTH = 2000
+"""Default width to resize images for OCR (pixels)"""
+
+OCR_CONTRAST_ENHANCE = 2.0
+"""Default contrast enhancement factor for OCR (float)"""
+
+OCR_DENOISE_H = 30
+"""Default denoising strength for OCR (int)"""
+
+OCR_SHARPEN_KERNEL = [[0, -1, 0], [-1, 5, -1], [0, -1, 0]]
+"""Default sharpening kernel for OCR (2D list)"""
 """
 Application constants and configuration values
 """

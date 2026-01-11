@@ -45,34 +45,46 @@ class OCRService:
     @staticmethod
     def preprocess_image(image_path: str) -> Optional[Any]:
         """
-        Preprocess image for better OCR results.
-
-        Args:
-            image_path: Path to the image file
-
-        Returns:
-            Preprocessed image as numpy array, or None if failed
+        Enhanced preprocessing for better OCR results, using config values.
         """
         try:
-            # Read image
-            img = cv2.imread(image_path)  # pylint: disable=no-member
+            from core.config import ConfigLoader
+            config = ConfigLoader().get_ocr()
+            resize_width = config.get("resize_width", 2000)
+            contrast_enhance = config.get("contrast_enhance", 2.0)
+            denoise_h = config.get("denoise_h", 30)
+            sharpen_kernel = np.array(config.get("sharpen_kernel", [[0, -1, 0], [-1, 5, -1], [0, -1, 0]]))
+
+            img = cv2.imread(image_path)
             if img is None:
                 logger.error(f"Failed to read image: {image_path}")
                 return None
 
-            # Convert to grayscale
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # pylint: disable=no-member
+            # Resize to standard width if needed
+            height, width = img.shape[:2]
+            if width < 1000 or width > 2500:
+                scale = resize_width / width
+                img = cv2.resize(img, (int(width * scale), int(height * scale)), interpolation=cv2.INTER_CUBIC)
 
-            # Apply adaptive thresholding to improve text detection
-            thresh = cv2.adaptiveThreshold(  # pylint: disable=no-member
-                gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,  # pylint: disable=no-member
-                cv2.THRESH_BINARY, 11, 2  # pylint: disable=no-member
+            # Convert to grayscale
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+            # Histogram equalization for contrast
+            gray = cv2.equalizeHist(gray)
+
+            # Adaptive thresholding
+            thresh = cv2.adaptiveThreshold(
+                gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                cv2.THRESH_BINARY, 15, 11
             )
 
             # Denoise
-            denoised = cv2.fastNlMeansDenoising(thresh)  # pylint: disable=no-member
+            denoised = cv2.fastNlMeansDenoising(thresh, h=denoise_h)
 
-            return denoised
+            # Sharpen
+            sharpened = cv2.filter2D(denoised, -1, sharpen_kernel)
+
+            return sharpened
         except Exception as e:
             logger.error(f"Error preprocessing image {image_path}: {e}")
             return None
@@ -80,35 +92,36 @@ class OCRService:
     @staticmethod
     def extract_text_from_image(image_path: str, preprocess: bool = True) -> str:
         """
-        Extract text from an image file.
-
-        Args:
-            image_path: Path to the image file
-            preprocess: Whether to preprocess the image for better OCR
-
-        Returns:
-            Extracted text as string
+        Extract text from an image file with improved preprocessing and Tesseract config, using config values.
         """
         if not OCR_AVAILABLE:
             logger.warning("OCR libraries not available")
             return ""
 
         try:
+            from core.config import ConfigLoader
+            config = ConfigLoader().get_ocr()
+            contrast_enhance = config.get("contrast_enhance", 2.0)
+
             if preprocess:
-                # Use preprocessed image
                 img_array = OCRService.preprocess_image(image_path)
                 if img_array is None:
                     return ""
-
-                # Convert numpy array to PIL Image
                 img = Image.fromarray(img_array)
             else:
-                # Use original image
                 img = Image.open(image_path)
 
-            # Extract text using Tesseract
+            # Optional: Enhance contrast with PIL
+            from PIL import ImageEnhance
+            enhancer = ImageEnhance.Contrast(img)
+            img = enhancer.enhance(contrast_enhance)
+
+            # Tesseract config: LSTM engine, sparse text mode
+            custom_config = r'--oem 1 --psm 4'
             try:
-                text = pytesseract.image_to_string(img, config='--psm 6')
+                text = pytesseract.image_to_string(img, config=custom_config)
+                # Clean up text: remove non-printable chars except newlines
+                text = ''.join([c if 32 <= ord(c) <= 126 or c == '\n' else ' ' for c in text])
                 return text.strip()
             except pytesseract.TesseractNotFoundError:
                 global _TESSERACT_WARNING_LOGGED
