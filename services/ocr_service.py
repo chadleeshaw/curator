@@ -1,6 +1,7 @@
 """OCR service for extracting text from cover art images."""
 
 import logging
+import os
 import warnings
 from pathlib import Path
 from typing import Optional, Dict, List, Any
@@ -10,6 +11,9 @@ from PIL import Image
 
 # Suppress PyTorch DataLoader pin_memory warning when running on CPU
 warnings.filterwarnings("ignore", message=".*pin_memory.*", category=UserWarning)
+
+# EasyOCR model storage directory (set via environment variable or default)
+EASYOCR_MODEL_DIR = os.getenv("EASYOCR_MODULE_PATH", None)
 
 # Increase Pillow's decompression bomb limit for high-res images (300 DPI)
 # Default is ~89 MP, we need ~130 MP for magazine covers at 300 DPI
@@ -94,12 +98,18 @@ def _get_easyocr_reader(language: Optional[str] = None):
     # Create new instance
     try:
         logger.info(f"Initializing EasyOCR for language: {lang_code}")
-        reader = easyocr.Reader(
-            [lang_code],
-            gpu=False,  # Use CPU (can be configured later)
-            verbose=False,
-            download_enabled=True,  # Allow model downloads
-        )
+        reader_kwargs = {
+            "lang_list": [lang_code],
+            "gpu": False,  # Use CPU (can be configured later)
+            "verbose": False,
+            "download_enabled": True,  # Allow model downloads
+        }
+        # Use custom model directory if specified
+        if EASYOCR_MODEL_DIR:
+            reader_kwargs["model_storage_directory"] = os.path.join(EASYOCR_MODEL_DIR, "model")
+            logger.debug(f"Using EasyOCR model directory: {reader_kwargs['model_storage_directory']}")
+
+        reader = easyocr.Reader(**reader_kwargs)
         _easyocr_cache[lang_code] = reader
         return reader
     except Exception as e:

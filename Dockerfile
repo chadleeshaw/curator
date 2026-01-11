@@ -40,6 +40,13 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
 COPY --from=builder /root/.local /root/.local
 ENV PATH=/root/.local/bin:$PATH
 
+# Set EasyOCR model path before downloading
+ENV EASYOCR_MODULE_PATH=/root/.EasyOCR
+
+# Pre-download EasyOCR models during build (adds ~150MB but eliminates first-run delay)
+RUN mkdir -p /root/.EasyOCR && \
+    python3 -c "import easyocr; reader = easyocr.Reader(['en'], gpu=False, verbose=False, model_storage_directory='/root/.EasyOCR/model'); print('EasyOCR models downloaded to /root/.EasyOCR/model')"
+
 # Copy application code
 COPY . .
 
@@ -49,7 +56,6 @@ RUN mkdir -p \
     /app/local/data \
     /app/local/downloads \
     /app/local/cache \
-    /app/local/cache/easyocr \
     /app/local/logs
 
 # Make entrypoint executable
@@ -64,8 +70,7 @@ ENV CURATOR_CONFIG_PATH=/app/local/config/config.yaml \
     CURATOR_LOG_FILE=/app/local/logs/periodical_manager.log \
     CURATOR_LOG_LEVEL=INFO \
     CURATOR_PORT=8000 \
-    CURATOR_HOST=0.0.0.0 \
-    EASYOCR_MODULE_PATH=/app/local/cache/easyocr
+    CURATOR_HOST=0.0.0.0
 
 # Volumes
 VOLUME ["/app/local/config", "/app/local/data", "/app/local/downloads", "/app/local/cache", "/app/local/logs"]
