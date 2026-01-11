@@ -3,6 +3,7 @@ Scheduled task for cleaning up orphaned covers and generating missing ones.
 Runs periodically to maintain cover image consistency.
 """
 
+import asyncio
 import logging
 from pathlib import Path
 
@@ -101,13 +102,19 @@ class CoverCleanupTask:
                 # Part 2: Generate missing covers
                 generated_count = 0
                 ocr_updated_count = 0
+                loop = asyncio.get_event_loop()
+
                 for magazine in periodicals_without_covers:
                     file_path = Path(magazine.file_path)
                     if not file_path.exists():
                         continue
 
-                    # Extract cover from PDF or EPUB
-                    cover_path = self.file_importer._extract_cover(file_path)
+                    # Extract cover from PDF or EPUB (run in thread pool)
+                    cover_path = await loop.run_in_executor(
+                        None,
+                        self.file_importer._extract_cover,
+                        file_path
+                    )
                     if cover_path:
                         magazine.cover_path = str(cover_path)
                         generated_count += 1
@@ -115,11 +122,15 @@ class CoverCleanupTask:
                             f"Generated missing cover for: {magazine.title}"
                         )
 
-                        # Run OCR on the newly generated cover
+                        # Run OCR on the newly generated cover (run in thread pool)
                         if OCRService.is_available():
                             try:
                                 logger.debug(f"Running OCR on newly generated cover: {cover_path}")
-                                ocr_metadata = OCRService.analyze_cover(str(cover_path))
+                                ocr_metadata = await loop.run_in_executor(
+                                    None,
+                                    OCRService.analyze_cover,
+                                    str(cover_path)
+                                )
                                 if ocr_metadata.get('text_found'):
                                     # Update extra_metadata with OCR findings
                                     if magazine.extra_metadata is None:
@@ -149,10 +160,14 @@ class CoverCleanupTask:
                             logger.debug(f"Skipping {magazine.title} - already has OCR metadata")
                             continue
 
-                        # Run OCR on existing cover
+                        # Run OCR on existing cover (run in thread pool)
                         try:
                             logger.info(f"Running OCR on existing cover for: {magazine.title}")
-                            ocr_metadata = OCRService.analyze_cover(str(magazine.cover_path))
+                            ocr_metadata = await loop.run_in_executor(
+                                None,
+                                OCRService.analyze_cover,
+                                str(magazine.cover_path)
+                            )
                             logger.debug(f"OCR result: {ocr_metadata}")
                             if ocr_metadata.get('text_found'):
                                 # Update extra_metadata with OCR findings

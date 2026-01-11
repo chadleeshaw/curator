@@ -470,6 +470,7 @@ class FileImporter:
     def _extract_cover(self, file_path: Path) -> Optional[Path]:
         """
         Extract cover image from PDF or EPUB file.
+        Uses higher DPI when OCR is available for better text extraction.
 
         Args:
             file_path: Path to PDF or EPUB file
@@ -477,8 +478,18 @@ class FileImporter:
         Returns:
             Path to extracted cover image, or None if failed
         """
+        from services.ocr_service import OCRService
+        from core.constants import PDF_COVER_DPI_OCR, PDF_COVER_QUALITY_HIGH
+
         cover_dir = self.organize_base_dir / ".covers"
         if file_path.suffix.lower() == '.pdf':
+            # Use higher DPI for OCR if available
+            if OCRService.is_available():
+                return extract_cover_from_pdf(
+                    file_path, cover_dir,
+                    dpi=PDF_COVER_DPI_OCR,
+                    quality=PDF_COVER_QUALITY_HIGH
+                )
             return extract_cover_from_pdf(file_path, cover_dir)
         elif file_path.suffix.lower() == '.epub':
             return extract_cover_from_epub(file_path, cover_dir)

@@ -26,6 +26,9 @@ PDF_COVER_DPI_LOW = 60
 PDF_COVER_DPI_HIGH = 200
 """High DPI setting for quality cover images"""
 
+PDF_COVER_DPI_OCR = 300
+"""Optimal DPI for OCR text extraction (industry standard)"""
+
 PDF_COVER_QUALITY = 50
 """JPEG quality for low resolution covers (1-100)"""
 

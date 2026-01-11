@@ -2,9 +2,11 @@
 Task management routes
 """
 
+import asyncio
 import logging
 import os
 from pathlib import Path
+from functools import partial
 
 from fastapi import APIRouter, HTTPException
 
@@ -193,8 +195,13 @@ async def run_task_manually(task_id: str):
                     if not pdf_path.exists():
                         continue
 
-                    # Extract cover from PDF
-                    cover_path = _file_importer._extract_cover(pdf_path)
+                    # Extract cover from PDF (run in thread pool to avoid blocking)
+                    loop = asyncio.get_event_loop()
+                    cover_path = await loop.run_in_executor(
+                        None,
+                        _file_importer._extract_cover,
+                        pdf_path
+                    )
                     if cover_path:
                         magazine.cover_path = str(cover_path)
                         generated_count += 1
