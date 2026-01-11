@@ -1,28 +1,40 @@
-FROM python:3.13-slim
+# Optimized multi-stage build with BuildKit cache mounts
+# Works for both local builds and GitHub Actions
 
-# Set working directory
-WORKDIR /app
+# Stage 1: Builder
+FROM python:3.13-slim AS builder
 
-# Install system dependencies and build tools in a single layer
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    # Build dependencies for Python packages
+# Install build dependencies
+RUN --mount=type=cache,target=/var/cache/apt \
+    apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
-    # Runtime dependencies
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements-prod.txt /tmp/requirements.txt
+
+# Install Python packages with pip cache
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --user -r /tmp/requirements.txt
+
+# Stage 2: Runtime
+FROM python:3.13-slim
+
+WORKDIR /app
+
+# Install runtime dependencies with apt cache
+RUN --mount=type=cache,target=/var/cache/apt \
+    apt-get update && apt-get install -y --no-install-recommends \
     poppler-utils \
     libglib2.0-0 \
     libgomp1 \
     libgl1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy production requirements only
-COPY requirements-prod.txt requirements.txt
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Remove build dependencies to reduce image size
-RUN apt-get purge -y --auto-remove gcc g++
+# Copy Python packages from builder
+COPY --from=builder /root/.local /root/.local
+ENV PATH=/root/.local/bin:$PATH
 
 # Copy application code
 COPY . .
@@ -35,10 +47,10 @@ RUN mkdir -p \
     /app/local/cache \
     /app/local/logs
 
-# Make entrypoint script executable
+# Make entrypoint executable
 RUN chmod +x /app/docker-entrypoint.sh
 
-# Environment variables with defaults
+# Environment variables
 ENV CURATOR_CONFIG_PATH=/app/local/config/config.yaml \
     CURATOR_DB_PATH=/app/local/config/periodicals.db \
     CURATOR_DOWNLOAD_DIR=/app/local/downloads \
@@ -50,7 +62,7 @@ ENV CURATOR_CONFIG_PATH=/app/local/config/config.yaml \
     CURATOR_HOST=0.0.0.0 \
     DISABLE_MODEL_SOURCE_CHECK=True
 
-# Volumes for persistent data
+# Volumes
 VOLUME ["/app/local/config", "/app/local/data", "/app/local/downloads", "/app/local/cache", "/app/local/logs"]
 
 # Expose port
@@ -60,8 +72,6 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8000/api/health')" || exit 1
 
-# Set entrypoint
+# Entrypoint
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
-
-# Run the application
 CMD ["python", "main.py"]
