@@ -7,10 +7,15 @@ from pathlib import Path
 from typing import Optional
 
 from pdf2image import convert_from_path
+from PIL import Image
 
 from core.constants import PDF_COVER_DPI_LOW, PDF_COVER_QUALITY
 
 logger = logging.getLogger(__name__)
+
+# Increase Pillow's decompression bomb limit for high-res PDFs
+# Needed for 300 DPI magazine covers which can be ~130 MP
+Image.MAX_IMAGE_PIXELS = 200000000  # 200 megapixels
 
 
 def extract_cover_from_pdf(

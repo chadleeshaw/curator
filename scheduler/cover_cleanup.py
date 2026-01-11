@@ -122,14 +122,30 @@ class CoverCleanupTask:
                             f"Generated missing cover for: {magazine.title}"
                         )
 
+                        # Generate thumbnail for UI performance
+                        try:
+                            from core.thumbnail_utils import generate_thumbnail
+                            thumbnail_dir = cover_path.parent
+                            await loop.run_in_executor(
+                                None,
+                                generate_thumbnail,
+                                cover_path,
+                                thumbnail_dir
+                            )
+                        except Exception as thumb_error:
+                            logger.debug(f"Thumbnail generation failed (non-critical): {thumb_error}")
+
                         # Run OCR on the newly generated cover (run in thread pool)
+                        # Try direct text extraction first (faster for PDF/EPUB)
                         if OCRService.is_available():
                             try:
-                                logger.debug(f"Running OCR on newly generated cover: {cover_path}")
+                                # Use original file if it's PDF or EPUB (faster text extraction)
+                                ocr_source = str(file_path) if file_path.suffix.lower() in ['.pdf', '.epub'] else str(cover_path)
+                                logger.debug(f"Running OCR/text extraction on: {ocr_source}")
                                 ocr_metadata = await loop.run_in_executor(
                                     None,
                                     OCRService.analyze_cover,
-                                    str(cover_path)
+                                    ocr_source
                                 )
                                 if ocr_metadata.get('text_found'):
                                     # Update extra_metadata with OCR findings
@@ -161,12 +177,16 @@ class CoverCleanupTask:
                             continue
 
                         # Run OCR on existing cover (run in thread pool)
+                        # Try direct text extraction first if source is PDF or EPUB
                         try:
-                            logger.info(f"Running OCR on existing cover for: {magazine.title}")
+                            # Prefer original file for faster text extraction
+                            file_path = Path(magazine.file_path)
+                            ocr_source = str(file_path) if file_path.exists() and file_path.suffix.lower() in ['.pdf', '.epub'] else str(magazine.cover_path)
+                            logger.info(f"Running OCR/text extraction for: {magazine.title} (source: {Path(ocr_source).suffix})")
                             ocr_metadata = await loop.run_in_executor(
                                 None,
                                 OCRService.analyze_cover,
-                                str(magazine.cover_path)
+                                ocr_source
                             )
                             logger.debug(f"OCR result: {ocr_metadata}")
                             if ocr_metadata.get('text_found'):

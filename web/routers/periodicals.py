@@ -2,11 +2,12 @@
 Periodicals/Library management routes
 """
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import Any, Dict
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 
 from models.database import Magazine
@@ -239,8 +240,14 @@ async def get_magazine(magazine_id: int) -> MagazineResponse:
 
 
 @router.get("/periodicals/{magazine_id}/cover")
-async def get_cover(magazine_id: int):
-    """Get magazine cover image"""
+async def get_cover(magazine_id: int, thumbnail: bool = Query(default=True, description="Return thumbnail for UI")):
+    """
+    Get magazine cover image.
+
+    Args:
+        magazine_id: Magazine ID
+        thumbnail: If True (default), returns optimized thumbnail for UI. If False, returns full resolution.
+    """
     try:
         db_session = _session_factory()
         try:
@@ -255,6 +262,18 @@ async def get_cover(magazine_id: int):
             if not cover_path.exists():
                 raise HTTPException(status_code=404, detail="Cover file not found")
 
+            # Return thumbnail for UI (fast loading)
+            if thumbnail:
+                from core.thumbnail_utils import get_or_create_thumbnail
+                loop = asyncio.get_event_loop()
+                thumbnail_path = await loop.run_in_executor(
+                    None,
+                    get_or_create_thumbnail,
+                    cover_path
+                )
+                return FileResponse(thumbnail_path, media_type="image/jpeg")
+
+            # Return full resolution (for downloads/printing)
             return FileResponse(cover_path, media_type="image/jpeg")
         finally:
             db_session.close()

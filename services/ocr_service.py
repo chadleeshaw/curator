@@ -10,9 +10,23 @@ try:
     import cv2  # pylint: disable=import-error
     import numpy as np
     OCR_AVAILABLE = True
+
+    # Increase Pillow's decompression bomb limit for high-res images (300 DPI)
+    # Default is ~89 MP, we need ~130 MP for magazine covers at 300 DPI
+    Image.MAX_IMAGE_PIXELS = 200000000  # 200 megapixels
 except ImportError:
     OCR_AVAILABLE = False
     np = None  # type: ignore
+
+try:
+    from pypdf import PdfReader
+    PDF_TEXT_AVAILABLE = True
+except ImportError:
+    try:
+        from PyPDF2 import PdfReader
+        PDF_TEXT_AVAILABLE = True
+    except ImportError:
+        PDF_TEXT_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -195,12 +209,50 @@ class OCRService:
         return metadata
 
     @staticmethod
-    def analyze_cover(cover_path: str) -> Dict[str, any]:
+    def extract_text_from_pdf(pdf_path: str, max_pages: int = 3) -> str:
         """
-        Analyze a cover image and extract metadata.
+        Extract text directly from PDF (for PDFs with embedded text).
+        Much faster than OCR for text-based PDFs.
 
         Args:
-            cover_path: Path to the cover image
+            pdf_path: Path to the PDF file
+            max_pages: Maximum number of pages to extract (default: first 3 pages)
+
+        Returns:
+            Extracted text as string
+        """
+        if not PDF_TEXT_AVAILABLE:
+            logger.debug("PyPDF2 not available for PDF text extraction")
+            return ""
+
+        try:
+            reader = PdfReader(pdf_path)
+            text_parts = []
+
+            # Extract text from first few pages
+            for i, page in enumerate(reader.pages[:max_pages]):
+                try:
+                    page_text = page.extract_text()
+                    if page_text:
+                        text_parts.append(page_text)
+                except Exception as e:
+                    logger.debug(f"Could not extract text from page {i}: {e}")
+
+            full_text = "\n".join(text_parts)
+            return full_text.strip()
+        except Exception as e:
+            logger.debug(f"Could not extract text from PDF {pdf_path}: {e}")
+            return ""
+
+    @staticmethod
+    def analyze_cover(cover_path: str) -> Dict[str, any]:
+        """
+        Analyze a cover image, PDF, or EPUB and extract metadata.
+        For PDFs/EPUBs, tries direct text extraction first (faster), falls back to OCR.
+        For images, uses OCR.
+
+        Args:
+            cover_path: Path to the cover image, PDF, or EPUB
 
         Returns:
             Dictionary containing extracted metadata
@@ -210,9 +262,37 @@ class OCRService:
             return {'ocr_available': False}
 
         logger.info(f"Analyzing cover: {cover_path}")
+        path = Path(cover_path)
+        text = ""
 
-        # Extract text
-        text = OCRService.extract_text_from_image(cover_path)
+        # Try direct PDF text extraction first (much faster)
+        if path.suffix.lower() == '.pdf' and PDF_TEXT_AVAILABLE:
+            logger.debug("Attempting direct PDF text extraction")
+            text = OCRService.extract_text_from_pdf(cover_path, max_pages=1)
+            if text:
+                logger.info("Successfully extracted text from PDF without OCR")
+
+        # Try direct EPUB text extraction
+        elif path.suffix.lower() == '.epub':
+            logger.debug("Attempting direct EPUB text extraction")
+            from core.epub_utils import extract_text_from_epub
+            text = extract_text_from_epub(path, max_items=2)
+            if text:
+                logger.info("Successfully extracted text from EPUB without OCR")
+
+        # Fall back to OCR if no text found or if it's an image
+        if not text:
+            logger.debug("Using OCR for text extraction")
+            text = OCRService.extract_text_from_image(cover_path)
+
+        if not text:
+            logger.warning(f"No text extracted from {cover_path}")
+            return {'ocr_available': True, 'text_found': False}
+
+        logger.debug(f"Extracted text: {text[:200]}...")  # Log first 200 chars
+
+        # Extract metadata from text
+        metadata = OCRService.extract_metadata_from_text(text)
 
         if not text:
             logger.warning(f"No text extracted from {cover_path}")
