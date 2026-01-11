@@ -56,22 +56,12 @@ class CoverCleanupTask:
             try:
                 # Get all periodicals
                 all_periodicals = db_session.query(Magazine).all()
-                periodicals_with_covers = [
-                    m
-                    for m in all_periodicals
-                    if m.cover_path and Path(m.cover_path).exists()
-                ]
+                periodicals_with_covers = [m for m in all_periodicals if m.cover_path and Path(m.cover_path).exists()]
                 periodicals_without_covers = [
-                    m
-                    for m in all_periodicals
-                    if m.file_path
-                    and (not m.cover_path or not Path(m.cover_path).exists())
+                    m for m in all_periodicals if m.file_path and (not m.cover_path or not Path(m.cover_path).exists())
                 ]
 
-                db_cover_paths = {
-                    str(Path(m.cover_path).resolve())
-                    for m in periodicals_with_covers
-                }
+                db_cover_paths = {str(Path(m.cover_path).resolve()) for m in periodicals_with_covers}
 
                 # Find all cover files on disk
                 covers_dir = self.organize_base_dir / ".covers"
@@ -90,14 +80,10 @@ class CoverCleanupTask:
                             deleted_count += 1
                             logger.debug(f"Deleted orphaned cover: {orphan_path}")
                         except Exception as e:
-                            logger.error(
-                                f"Error deleting orphaned cover {orphan_path}: {e}"
-                            )
+                            logger.error(f"Error deleting orphaned cover {orphan_path}: {e}")
 
                     if deleted_count > 0:
-                        logger.info(
-                            f"Cleanup covers: Deleted {deleted_count} orphaned cover files"
-                        )
+                        logger.info(f"Cleanup covers: Deleted {deleted_count} orphaned cover files")
 
                 # Part 2: Generate missing covers
                 generated_count = 0
@@ -110,28 +96,18 @@ class CoverCleanupTask:
                         continue
 
                     # Extract cover from PDF or EPUB (run in thread pool)
-                    cover_path = await loop.run_in_executor(
-                        None,
-                        self.file_importer._extract_cover,
-                        file_path
-                    )
+                    cover_path = await loop.run_in_executor(None, self.file_importer._extract_cover, file_path)
                     if cover_path:
                         magazine.cover_path = str(cover_path)
                         generated_count += 1
-                        logger.debug(
-                            f"Generated missing cover for: {magazine.title}"
-                        )
+                        logger.debug(f"Generated missing cover for: {magazine.title}")
 
                         # Generate thumbnail for UI performance
                         try:
                             from core.thumbnail_utils import generate_thumbnail
+
                             thumbnail_dir = cover_path.parent
-                            await loop.run_in_executor(
-                                None,
-                                generate_thumbnail,
-                                cover_path,
-                                thumbnail_dir
-                            )
+                            await loop.run_in_executor(None, generate_thumbnail, cover_path, thumbnail_dir)
                         except Exception as thumb_error:
                             logger.debug(f"Thumbnail generation failed (non-critical): {thumb_error}")
 
@@ -140,57 +116,45 @@ class CoverCleanupTask:
                         if OCRService.is_available():
                             try:
                                 # For PDFs: Try direct text extraction first
-                                if file_path.suffix.lower() == '.pdf':
+                                if file_path.suffix.lower() == ".pdf":
                                     logger.info(f"Trying PDF text extraction for: {magazine.title}")
                                     ocr_metadata = await loop.run_in_executor(
-                                        None,
-                                        OCRService.analyze_cover,
-                                        str(file_path)
+                                        None, OCRService.analyze_cover, str(file_path), magazine.language
                                     )
                                     # If PDF text extraction failed, try OCR on the JPEG cover
-                                    if not ocr_metadata.get('text_found'):
+                                    if not ocr_metadata.get("text_found"):
                                         logger.debug("PDF text extraction failed, trying OCR on JPEG cover")
                                         ocr_metadata = await loop.run_in_executor(
-                                            None,
-                                            OCRService.analyze_cover,
-                                            str(cover_path)
+                                            None, OCRService.analyze_cover, str(cover_path), magazine.language
                                         )
                                 # For EPUBs: Try direct text extraction
-                                elif file_path.suffix.lower() == '.epub':
+                                elif file_path.suffix.lower() == ".epub":
                                     logger.info(f"Trying EPUB text extraction for: {magazine.title}")
                                     ocr_metadata = await loop.run_in_executor(
-                                        None,
-                                        OCRService.analyze_cover,
-                                        str(file_path)
+                                        None, OCRService.analyze_cover, str(file_path), magazine.language
                                     )
                                     # If EPUB text extraction failed, try OCR on the JPEG cover
-                                    if not ocr_metadata.get('text_found'):
+                                    if not ocr_metadata.get("text_found"):
                                         logger.debug("EPUB text extraction failed, trying OCR on JPEG cover")
                                         ocr_metadata = await loop.run_in_executor(
-                                            None,
-                                            OCRService.analyze_cover,
-                                            str(cover_path)
+                                            None, OCRService.analyze_cover, str(cover_path), magazine.language
                                         )
                                 # For other formats: Just use OCR on the cover image
                                 else:
                                     logger.info(f"Running OCR on cover image for: {magazine.title}")
-                                    ocr_metadata = await loop.run_in_executor(
-                                        None,
-                                        OCRService.analyze_cover,
-                                        str(cover_path)
-                                    )
+                                    ocr_metadata = await loop.run_in_executor(None, OCRService.analyze_cover, str(cover_path))
 
-                                if ocr_metadata.get('text_found'):
+                                if ocr_metadata.get("text_found"):
                                     # Update extra_metadata with OCR findings
                                     if magazine.extra_metadata is None:
                                         magazine.extra_metadata = {}
                                     magazine.extra_metadata["ocr_metadata"] = {
-                                        "detected_text": ocr_metadata.get('detected_text', '')[:500],
-                                        "ocr_issue_number": ocr_metadata.get('issue_number'),
-                                        "ocr_year": ocr_metadata.get('year'),
-                                        "ocr_month": ocr_metadata.get('month'),
-                                        "ocr_volume": ocr_metadata.get('volume'),
-                                        "ocr_special_edition": ocr_metadata.get('special_edition', False)
+                                        "detected_text": ocr_metadata.get("detected_text", "")[:500],
+                                        "ocr_issue_number": ocr_metadata.get("issue_number"),
+                                        "ocr_year": ocr_metadata.get("year"),
+                                        "ocr_month": ocr_metadata.get("month"),
+                                        "ocr_volume": ocr_metadata.get("volume"),
+                                        "ocr_special_edition": ocr_metadata.get("special_edition", False),
                                     }
                                     flag_modified(magazine, "extra_metadata")
                                     ocr_updated_count += 1
@@ -204,8 +168,7 @@ class CoverCleanupTask:
                     logger.info(f"OCR is available, scanning {len(periodicals_with_covers)} periodicals with covers")
                     for magazine in periodicals_with_covers:
                         # Check if magazine already has OCR metadata
-                        if (magazine.extra_metadata
-                                and magazine.extra_metadata.get('ocr_metadata')):
+                        if magazine.extra_metadata and magazine.extra_metadata.get("ocr_metadata"):
                             logger.debug(f"Skipping {magazine.title} - already has OCR metadata")
                             continue
 
@@ -215,57 +178,47 @@ class CoverCleanupTask:
                             file_path = Path(magazine.file_path)
 
                             # For PDFs: Try direct text extraction first, fallback to OCR on cover
-                            if file_path.exists() and file_path.suffix.lower() == '.pdf':
+                            if file_path.exists() and file_path.suffix.lower() == ".pdf":
                                 logger.info(f"Trying PDF text extraction for: {magazine.title}")
                                 ocr_metadata = await loop.run_in_executor(
-                                    None,
-                                    OCRService.analyze_cover,
-                                    str(file_path)
+                                    None, OCRService.analyze_cover, str(file_path), magazine.language
                                 )
                                 # If PDF text extraction failed, try OCR on the JPEG cover
-                                if not ocr_metadata.get('text_found'):
+                                if not ocr_metadata.get("text_found"):
                                     logger.debug("PDF text extraction failed, trying OCR on JPEG cover")
                                     ocr_metadata = await loop.run_in_executor(
-                                        None,
-                                        OCRService.analyze_cover,
-                                        str(magazine.cover_path)
+                                        None, OCRService.analyze_cover, str(magazine.cover_path), magazine.language
                                     )
                             # For EPUBs: Try direct text extraction first, fallback to OCR on cover
-                            elif file_path.exists() and file_path.suffix.lower() == '.epub':
+                            elif file_path.exists() and file_path.suffix.lower() == ".epub":
                                 logger.info(f"Trying EPUB text extraction for: {magazine.title}")
                                 ocr_metadata = await loop.run_in_executor(
-                                    None,
-                                    OCRService.analyze_cover,
-                                    str(file_path)
+                                    None, OCRService.analyze_cover, str(file_path), magazine.language
                                 )
                                 # If EPUB text extraction failed, try OCR on the JPEG cover
-                                if not ocr_metadata.get('text_found'):
+                                if not ocr_metadata.get("text_found"):
                                     logger.debug("EPUB text extraction failed, trying OCR on JPEG cover")
                                     ocr_metadata = await loop.run_in_executor(
-                                        None,
-                                        OCRService.analyze_cover,
-                                        str(magazine.cover_path)
+                                        None, OCRService.analyze_cover, str(magazine.cover_path), magazine.language
                                     )
                             # For other formats or if source doesn't exist: OCR on cover image
                             else:
                                 logger.info(f"Running OCR on cover image for: {magazine.title}")
                                 ocr_metadata = await loop.run_in_executor(
-                                    None,
-                                    OCRService.analyze_cover,
-                                    str(magazine.cover_path)
+                                    None, OCRService.analyze_cover, str(magazine.cover_path)
                                 )
                             logger.debug(f"OCR result: {ocr_metadata}")
-                            if ocr_metadata.get('text_found'):
+                            if ocr_metadata.get("text_found"):
                                 # Update extra_metadata with OCR findings
                                 if magazine.extra_metadata is None:
                                     magazine.extra_metadata = {}
                                 magazine.extra_metadata["ocr_metadata"] = {
-                                    "detected_text": ocr_metadata.get('detected_text', '')[:500],
-                                    "ocr_issue_number": ocr_metadata.get('issue_number'),
-                                    "ocr_year": ocr_metadata.get('year'),
-                                    "ocr_month": ocr_metadata.get('month'),
-                                    "ocr_volume": ocr_metadata.get('volume'),
-                                    "ocr_special_edition": ocr_metadata.get('special_edition', False)
+                                    "detected_text": ocr_metadata.get("detected_text", "")[:500],
+                                    "ocr_issue_number": ocr_metadata.get("issue_number"),
+                                    "ocr_year": ocr_metadata.get("year"),
+                                    "ocr_month": ocr_metadata.get("month"),
+                                    "ocr_volume": ocr_metadata.get("volume"),
+                                    "ocr_special_edition": ocr_metadata.get("special_edition", False),
                                 }
                                 flag_modified(magazine, "extra_metadata")
                                 ocr_scanned_count += 1
@@ -288,17 +241,11 @@ class CoverCleanupTask:
                     "deleted_count": deleted_count,
                     "generated_count": generated_count,
                     "ocr_updated_count": ocr_updated_count,
-                    "ocr_scanned_count": ocr_scanned_count
+                    "ocr_scanned_count": ocr_scanned_count,
                 }
 
             finally:
                 db_session.close()
         except Exception as e:
             logger.error(f"Cover cleanup error: {e}", exc_info=True)
-            return {
-                "deleted_count": 0,
-                "generated_count": 0,
-                "ocr_updated_count": 0,
-                "ocr_scanned_count": 0,
-                "error": str(e)
-            }
+            return {"deleted_count": 0, "generated_count": 0, "ocr_updated_count": 0, "ocr_scanned_count": 0, "error": str(e)}

@@ -6,10 +6,10 @@ WORKDIR /app
 # Install system dependencies in a single layer
 RUN apt-get update && apt-get install -y --no-install-recommends \
     poppler-utils \
-    tesseract-ocr \
-    tesseract-ocr-eng \
-    libtesseract-dev \
     libglib2.0-0 \
+    libgomp1 \
+    libgl1-mesa-glx \
+    libgthread-2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy production requirements only
@@ -41,7 +41,8 @@ ENV CURATOR_CONFIG_PATH=/app/local/config/config.yaml \
     CURATOR_LOG_FILE=/app/local/logs/periodical_manager.log \
     CURATOR_LOG_LEVEL=INFO \
     CURATOR_PORT=8000 \
-    CURATOR_HOST=0.0.0.0
+    CURATOR_HOST=0.0.0.0 \
+    DISABLE_MODEL_SOURCE_CHECK=True
 
 # Volumes for persistent data
 VOLUME ["/app/local/config", "/app/local/data", "/app/local/downloads", "/app/local/cache", "/app/local/logs"]

@@ -61,9 +61,7 @@ class FileImporter:
         # Initialize specialized helpers
         self.parser = UnifiedParser(fuzzy_threshold=fuzzy_threshold)
         self.categorizer = FileCategorizer()
-        self.organizer = FileOrganizer(
-            self.organize_base_dir, category_prefix=self.category_prefix
-        )
+        self.organizer = FileOrganizer(self.organize_base_dir, category_prefix=self.category_prefix)
 
         self.organize_base_dir.mkdir(parents=True, exist_ok=True)
 
@@ -71,9 +69,7 @@ class FileImporter:
             category_dir = self.organize_base_dir / f"{self.category_prefix}{category}"
             category_dir.mkdir(parents=True, exist_ok=True)
 
-    def process_downloads(
-        self, session: Session, organization_pattern: Optional[str] = None
-    ) -> Dict[str, Any]:
+    def process_downloads(self, session: Session, organization_pattern: Optional[str] = None) -> Dict[str, Any]:
         """
         Scan downloads folder and process any PDFs found.
 
@@ -110,10 +106,7 @@ class FileImporter:
             """Check if file is within the organize directory"""
             try:
                 file_resolved = file_path.resolve()
-                return (
-                    organize_dir_resolved in file_resolved.parents
-                    or file_resolved == organize_dir_resolved
-                )
+                return organize_dir_resolved in file_resolved.parents or file_resolved == organize_dir_resolved
             except Exception:
                 return False
 
@@ -123,9 +116,7 @@ class FileImporter:
         all_files = pdf_files + epub_files
 
         if not all_files:
-            logger.info(
-                f"No PDF or EPUB files found in downloads folder: {self.downloads_dir}"
-            )
+            logger.info(f"No PDF or EPUB files found in downloads folder: {self.downloads_dir}")
             return result.to_dict()
 
         logger.info(
@@ -134,9 +125,7 @@ class FileImporter:
 
         for pdf_path in pdf_files:
             try:
-                import_result = self.import_pdf(
-                    pdf_path, session, organization_pattern=organization_pattern
-                )
+                import_result = self.import_pdf(pdf_path, session, organization_pattern=organization_pattern)
                 if import_result:
                     result.data["imported"] += 1
                     logger.info(f"Successfully imported: {pdf_path.name}")
@@ -150,9 +139,7 @@ class FileImporter:
             except Exception as e:
                 result.data["failed"] += 1
                 error_msg = f"Error importing {pdf_path.name}: {str(e)}"
-                result.add_error(
-                    ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True
-                )
+                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
                 logger.error(error_msg, exc_info=True)
 
         # Process EPUB files (convert to PDF first)
@@ -165,14 +152,10 @@ class FileImporter:
                     f"EPUB support coming soon: {epub_path.name}",
                     retryable=False,
                 )
-                logger.warning(
-                    f"EPUB files not yet supported, skipping: {epub_path.name}"
-                )
+                logger.warning(f"EPUB files not yet supported, skipping: {epub_path.name}")
             except Exception as e:
                 error_msg = f"Error processing EPUB {epub_path.name}: {str(e)}"
-                result.add_error(
-                    ErrorCodes.PROCESSING_FAILED, error_msg, retryable=False
-                )
+                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=False)
                 logger.error(error_msg, exc_info=True)
 
         return result.to_dict()
@@ -207,9 +190,7 @@ class FileImporter:
 
             # Step 1: Validate title before processing (already done in parser for search results)
             if not self.title_matcher.validate_before_parsing(parsed.title):
-                logger.warning(
-                    f"Skipping invalid release title: {parsed.title} (from {pdf_path.name})"
-                )
+                logger.warning(f"Skipping invalid release title: {parsed.title} (from {pdf_path.name})")
                 return False
 
             logger.debug(f"Parsed metadata: '{parsed.title}' (confidence: {parsed.confidence})")
@@ -224,10 +205,7 @@ class FileImporter:
             # Only check if we have a valid hash (skip NULL hashes from older imports)
             existing_by_hash = (
                 session.query(Magazine)
-                .filter(
-                    Magazine.content_hash == content_hash,
-                    Magazine.content_hash.isnot(None)
-                )
+                .filter(Magazine.content_hash == content_hash, Magazine.content_hash.isnot(None))
                 .first()
             )
             if existing_by_hash:
@@ -255,9 +233,7 @@ class FileImporter:
             # A duplicate is defined as: same tracking title (fuzzy match) AND same issue date (within 5 days)
             existing_magazines = session.query(Magazine).all()
             for existing in existing_magazines:
-                is_match, score = self.title_matcher.match(
-                    tracking_title, existing.title
-                )
+                is_match, score = self.title_matcher.match(tracking_title, existing.title)
                 if is_match and parsed.issue_date and existing.issue_date:
                     date_diff = abs((parsed.issue_date - existing.issue_date).days)
                     # Also check language match for duplicates
@@ -281,27 +257,39 @@ class FileImporter:
             ocr_metadata = {}
             if cover_path and OCRService.is_available():
                 try:
-                    logger.debug(f"Attempting OCR analysis on cover: {cover_path}")
-                    ocr_metadata = OCRService.analyze_cover(str(cover_path))
-                    if ocr_metadata.get('text_found'):
+                    logger.debug(f"Attempting OCR analysis on cover: {cover_path} (language: {parsed.language})")
+                    ocr_metadata = OCRService.analyze_cover(str(cover_path), language=parsed.language)
+                    if ocr_metadata.get("text_found"):
                         logger.info(f"OCR extracted metadata: {ocr_metadata}")
                         # Enhance parsed data with OCR findings if they're more specific
-                        if ocr_metadata.get('issue_number') and not parsed.issue_number:
-                            parsed.issue_number = ocr_metadata['issue_number']
+                        if ocr_metadata.get("issue_number") and not parsed.issue_number:
+                            parsed.issue_number = ocr_metadata["issue_number"]
                             logger.info(f"OCR detected issue number: {ocr_metadata['issue_number']}")
-                        if ocr_metadata.get('year') and not parsed.year:
-                            parsed.year = ocr_metadata['year']
+                        if ocr_metadata.get("year") and not parsed.year:
+                            parsed.year = ocr_metadata["year"]
                             logger.info(f"OCR detected year: {ocr_metadata['year']}")
-                        if ocr_metadata.get('month') and not parsed.month_name:
-                            months = ['', 'January', 'February', 'March', 'April', 'May', 'June',
-                                      'July', 'August', 'September', 'October', 'November',
-                                      'December']
-                            parsed.month_name = months[ocr_metadata['month']]
+                        if ocr_metadata.get("month") and not parsed.month_name:
+                            months = [
+                                "",
+                                "January",
+                                "February",
+                                "March",
+                                "April",
+                                "May",
+                                "June",
+                                "July",
+                                "August",
+                                "September",
+                                "October",
+                                "November",
+                                "December",
+                            ]
+                            parsed.month_name = months[ocr_metadata["month"]]
                             logger.info(f"OCR detected month: {parsed.month_name}")
-                        if ocr_metadata.get('volume') and not parsed.volume:
-                            parsed.volume = ocr_metadata['volume']
+                        if ocr_metadata.get("volume") and not parsed.volume:
+                            parsed.volume = ocr_metadata["volume"]
                             logger.info(f"OCR detected volume: {ocr_metadata['volume']}")
-                        if ocr_metadata.get('special_edition') and not is_special_edition:
+                        if ocr_metadata.get("special_edition") and not is_special_edition:
                             is_special_edition = True
                             special_name = "Special Edition"
                             logger.info("OCR detected special edition")
@@ -322,9 +310,7 @@ class FileImporter:
                     "month_name": parsed.month_name,
                     "language": parsed.language,
                 }
-                organized_path = self.organizer.organize(
-                    pdf_path, metadata, category, organization_pattern
-                )
+                organized_path = self.organizer.organize(pdf_path, metadata, category, organization_pattern)
 
                 if not organized_path:
                     return False
@@ -347,14 +333,14 @@ class FileImporter:
                 extra_metadata["special_edition"] = special_name
                 extra_metadata["full_title"] = parsed.title
             # Add OCR metadata if available
-            if ocr_metadata.get('text_found'):
+            if ocr_metadata.get("text_found"):
                 extra_metadata["ocr_metadata"] = {
-                    "detected_text": ocr_metadata.get('detected_text', '')[:500],  # Limit text length
-                    "ocr_issue_number": ocr_metadata.get('issue_number'),
-                    "ocr_year": ocr_metadata.get('year'),
-                    "ocr_month": ocr_metadata.get('month'),
-                    "ocr_volume": ocr_metadata.get('volume'),
-                    "ocr_special_edition": ocr_metadata.get('special_edition', False)
+                    "detected_text": ocr_metadata.get("detected_text", "")[:500],  # Limit text length
+                    "ocr_issue_number": ocr_metadata.get("issue_number"),
+                    "ocr_year": ocr_metadata.get("year"),
+                    "ocr_month": ocr_metadata.get("month"),
+                    "ocr_volume": ocr_metadata.get("volume"),
+                    "ocr_special_edition": ocr_metadata.get("special_edition", False),
                 }
 
             magazine = Magazine(
@@ -372,11 +358,7 @@ class FileImporter:
 
             # Generate OLID from tracking title (with language if applicable)
             olid = tracking_title.lower().replace(" ", "_").replace("-", "_")
-            existing_tracking = (
-                session.query(MagazineTracking)
-                .filter(MagazineTracking.olid == olid)
-                .first()
-            )
+            existing_tracking = session.query(MagazineTracking).filter(MagazineTracking.olid == olid).first()
 
             if auto_track:
                 if not existing_tracking:
@@ -396,24 +378,18 @@ class FileImporter:
                     # Flush to get the tracking ID before linking to magazine
                     session.flush()
                     magazine.tracking_id = tracking.id
-                    logger.debug(
-                        f"Will create tracking record for: {tracking_title} (mode: {tracking_mode})"
-                    )
+                    logger.debug(f"Will create tracking record for: {tracking_title} (mode: {tracking_mode})")
 
                     # If this is a special edition, add it to the selected_editions
                     if is_special_edition:
-                        logger.debug(
-                            f"Detected special edition '{special_name}' for: {tracking_title}"
-                        )
+                        logger.debug(f"Detected special edition '{special_name}' for: {tracking_title}")
                 else:
                     # Link magazine to existing tracking record
                     magazine.tracking_id = existing_tracking.id
                     existing_tracking.track_all_editions = tracking_mode == "all"
                     existing_tracking.track_new_only = tracking_mode == "new"
                     existing_tracking.last_metadata_update = datetime.now()
-                    logger.debug(
-                        f"Will update tracking record for: {tracking_title} (mode: {tracking_mode})"
-                    )
+                    logger.debug(f"Will update tracking record for: {tracking_title} (mode: {tracking_mode})")
 
                     # If this is a special edition, ensure it's in the selected_editions
                     if is_special_edition and special_name:
@@ -422,16 +398,12 @@ class FileImporter:
                         # Add this special edition if not already tracked
                         if special_name not in existing_tracking.selected_editions:
                             existing_tracking.selected_editions[special_name] = True
-                            logger.debug(
-                                f"Added special edition '{special_name}' to tracking record: {tracking_title}"
-                            )
+                            logger.debug(f"Added special edition '{special_name}' to tracking record: {tracking_title}")
 
             else:
                 if existing_tracking:
                     session.delete(existing_tracking)
-                    logger.debug(
-                        f"Will remove tracking record for: {tracking_title} (tracking disabled)"
-                    )
+                    logger.debug(f"Will remove tracking record for: {tracking_title} (tracking disabled)")
 
             session.commit()
             logger.info(f"Added to database: {parsed.title} ({category})")
@@ -481,24 +453,18 @@ class FileImporter:
         from core.constants import PDF_COVER_DPI_OCR, PDF_COVER_QUALITY_HIGH
 
         cover_dir = self.organize_base_dir / ".covers"
-        if file_path.suffix.lower() == '.pdf':
+        if file_path.suffix.lower() == ".pdf":
             # Use higher DPI for OCR if available
             if OCRService.is_available():
-                return extract_cover_from_pdf(
-                    file_path, cover_dir,
-                    dpi=PDF_COVER_DPI_OCR,
-                    quality=PDF_COVER_QUALITY_HIGH
-                )
+                return extract_cover_from_pdf(file_path, cover_dir, dpi=PDF_COVER_DPI_OCR, quality=PDF_COVER_QUALITY_HIGH)
             return extract_cover_from_pdf(file_path, cover_dir)
-        elif file_path.suffix.lower() == '.epub':
+        elif file_path.suffix.lower() == ".epub":
             return extract_cover_from_epub(file_path, cover_dir)
         else:
             logger.warning(f"Unsupported file type for cover extraction: {file_path.suffix}")
             return None
 
-    def process_organized_files(
-        self, session: Session, auto_track: bool = True, tracking_mode: str = "all"
-    ) -> Dict[str, Any]:
+    def process_organized_files(self, session: Session, auto_track: bool = True, tracking_mode: str = "all") -> Dict[str, Any]:
         """
         Process PDF files from organized folders (e.g., _Magazines, _Comics, _Articles, _News).
         These are files that have been manually placed or previously organized.
@@ -529,9 +495,7 @@ class FileImporter:
         pdf_files = [f for f in all_files if f.suffix == ".pdf"]
 
         if not pdf_files:
-            logger.info(
-                f"No PDF files found in organized folders: {self.organize_base_dir}"
-            )
+            logger.info(f"No PDF files found in organized folders: {self.organize_base_dir}")
             return result.to_dict()
 
         logger.info(
@@ -550,9 +514,7 @@ class FileImporter:
                 )
                 if import_result:
                     result.data["imported"] += 1
-                    logger.info(
-                        f"Successfully imported organized file: {pdf_path.name}"
-                    )
+                    logger.info(f"Successfully imported organized file: {pdf_path.name}")
                 else:
                     result.data["failed"] += 1
                     result.add_error(
@@ -563,9 +525,7 @@ class FileImporter:
             except Exception as e:
                 result.data["failed"] += 1
                 error_msg = f"Error importing organized file {pdf_path.name}: {str(e)}"
-                result.add_error(
-                    ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True
-                )
+                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
                 logger.error(error_msg, exc_info=True)
 
         return result.to_dict()
