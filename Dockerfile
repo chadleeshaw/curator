@@ -23,11 +23,17 @@ FROM python:3.13-slim
 WORKDIR /app
 
 # Install runtime dependencies (without cache mount to avoid lock issues)
+# EasyOCR requires OpenCV which needs these graphics/X11 libraries
 RUN apt-get update && apt-get install -y --no-install-recommends \
     poppler-utils \
     libglib2.0-0 \
     libgomp1 \
     libgl1 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    libfontconfig1 \
+    libice6 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Python packages from builder
