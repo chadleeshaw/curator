@@ -280,19 +280,11 @@ class OCRService:
             if text:
                 logger.info("Successfully extracted text from EPUB without OCR")
 
-        # Fall back to OCR if no text found or if it's an image
-        if not text:
-            logger.debug("Using OCR for text extraction")
+        # Fall back to OCR only for image files (not PDF/EPUB)
+        # PDFs and EPUBs can't be read by cv2.imread(), they need the extracted cover image
+        if not text and path.suffix.lower() not in ['.pdf', '.epub']:
+            logger.debug("Using OCR for text extraction on image file")
             text = OCRService.extract_text_from_image(cover_path)
-
-        if not text:
-            logger.warning(f"No text extracted from {cover_path}")
-            return {'ocr_available': True, 'text_found': False}
-
-        logger.debug(f"Extracted text: {text[:200]}...")  # Log first 200 chars
-
-        # Extract metadata from text
-        metadata = OCRService.extract_metadata_from_text(text)
 
         if not text:
             logger.warning(f"No text extracted from {cover_path}")

@@ -136,17 +136,50 @@ class CoverCleanupTask:
                             logger.debug(f"Thumbnail generation failed (non-critical): {thumb_error}")
 
                         # Run OCR on the newly generated cover (run in thread pool)
-                        # Try direct text extraction first (faster for PDF/EPUB)
+                        # Strategy: Try PDF text extraction first, then OCR on JPEG cover
                         if OCRService.is_available():
                             try:
-                                # Use original file if it's PDF or EPUB (faster text extraction)
-                                ocr_source = str(file_path) if file_path.suffix.lower() in ['.pdf', '.epub'] else str(cover_path)
-                                logger.debug(f"Running OCR/text extraction on: {ocr_source}")
-                                ocr_metadata = await loop.run_in_executor(
-                                    None,
-                                    OCRService.analyze_cover,
-                                    ocr_source
-                                )
+                                # For PDFs: Try direct text extraction first
+                                if file_path.suffix.lower() == '.pdf':
+                                    logger.info(f"Trying PDF text extraction for: {magazine.title}")
+                                    ocr_metadata = await loop.run_in_executor(
+                                        None,
+                                        OCRService.analyze_cover,
+                                        str(file_path)
+                                    )
+                                    # If PDF text extraction failed, try OCR on the JPEG cover
+                                    if not ocr_metadata.get('text_found'):
+                                        logger.debug("PDF text extraction failed, trying OCR on JPEG cover")
+                                        ocr_metadata = await loop.run_in_executor(
+                                            None,
+                                            OCRService.analyze_cover,
+                                            str(cover_path)
+                                        )
+                                # For EPUBs: Try direct text extraction
+                                elif file_path.suffix.lower() == '.epub':
+                                    logger.info(f"Trying EPUB text extraction for: {magazine.title}")
+                                    ocr_metadata = await loop.run_in_executor(
+                                        None,
+                                        OCRService.analyze_cover,
+                                        str(file_path)
+                                    )
+                                    # If EPUB text extraction failed, try OCR on the JPEG cover
+                                    if not ocr_metadata.get('text_found'):
+                                        logger.debug("EPUB text extraction failed, trying OCR on JPEG cover")
+                                        ocr_metadata = await loop.run_in_executor(
+                                            None,
+                                            OCRService.analyze_cover,
+                                            str(cover_path)
+                                        )
+                                # For other formats: Just use OCR on the cover image
+                                else:
+                                    logger.info(f"Running OCR on cover image for: {magazine.title}")
+                                    ocr_metadata = await loop.run_in_executor(
+                                        None,
+                                        OCRService.analyze_cover,
+                                        str(cover_path)
+                                    )
+
                                 if ocr_metadata.get('text_found'):
                                     # Update extra_metadata with OCR findings
                                     if magazine.extra_metadata is None:
@@ -177,17 +210,50 @@ class CoverCleanupTask:
                             continue
 
                         # Run OCR on existing cover (run in thread pool)
-                        # Try direct text extraction first if source is PDF or EPUB
+                        # Strategy: Try source file text extraction first, then OCR on cover JPEG
                         try:
-                            # Prefer original file for faster text extraction
                             file_path = Path(magazine.file_path)
-                            ocr_source = str(file_path) if file_path.exists() and file_path.suffix.lower() in ['.pdf', '.epub'] else str(magazine.cover_path)
-                            logger.info(f"Running OCR/text extraction for: {magazine.title} (source: {Path(ocr_source).suffix})")
-                            ocr_metadata = await loop.run_in_executor(
-                                None,
-                                OCRService.analyze_cover,
-                                ocr_source
-                            )
+
+                            # For PDFs: Try direct text extraction first, fallback to OCR on cover
+                            if file_path.exists() and file_path.suffix.lower() == '.pdf':
+                                logger.info(f"Trying PDF text extraction for: {magazine.title}")
+                                ocr_metadata = await loop.run_in_executor(
+                                    None,
+                                    OCRService.analyze_cover,
+                                    str(file_path)
+                                )
+                                # If PDF text extraction failed, try OCR on the JPEG cover
+                                if not ocr_metadata.get('text_found'):
+                                    logger.debug("PDF text extraction failed, trying OCR on JPEG cover")
+                                    ocr_metadata = await loop.run_in_executor(
+                                        None,
+                                        OCRService.analyze_cover,
+                                        str(magazine.cover_path)
+                                    )
+                            # For EPUBs: Try direct text extraction first, fallback to OCR on cover
+                            elif file_path.exists() and file_path.suffix.lower() == '.epub':
+                                logger.info(f"Trying EPUB text extraction for: {magazine.title}")
+                                ocr_metadata = await loop.run_in_executor(
+                                    None,
+                                    OCRService.analyze_cover,
+                                    str(file_path)
+                                )
+                                # If EPUB text extraction failed, try OCR on the JPEG cover
+                                if not ocr_metadata.get('text_found'):
+                                    logger.debug("EPUB text extraction failed, trying OCR on JPEG cover")
+                                    ocr_metadata = await loop.run_in_executor(
+                                        None,
+                                        OCRService.analyze_cover,
+                                        str(magazine.cover_path)
+                                    )
+                            # For other formats or if source doesn't exist: OCR on cover image
+                            else:
+                                logger.info(f"Running OCR on cover image for: {magazine.title}")
+                                ocr_metadata = await loop.run_in_executor(
+                                    None,
+                                    OCRService.analyze_cover,
+                                    str(magazine.cover_path)
+                                )
                             logger.debug(f"OCR result: {ocr_metadata}")
                             if ocr_metadata.get('text_found'):
                                 # Update extra_metadata with OCR findings
