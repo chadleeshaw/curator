@@ -23,7 +23,7 @@ FROM python:3.13-slim
 WORKDIR /app
 
 # Install runtime dependencies (without cache mount to avoid lock issues)
-# EasyOCR requires OpenCV which needs these graphics/X11 libraries
+# PaddleOCR requires OpenCV which needs these graphics/X11 libraries
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     poppler-utils \
     libglib2.0-0 \
@@ -40,12 +40,15 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
 COPY --from=builder /root/.local /root/.local
 ENV PATH=/root/.local/bin:$PATH
 
-# Set EasyOCR model path before downloading
-ENV EASYOCR_MODULE_PATH=/root/.EasyOCR
+# Set PaddleOCR model cache directory
+ENV HOME=/root
 
-# Pre-download EasyOCR models during build (adds ~150MB but eliminates first-run delay)
-RUN mkdir -p /root/.EasyOCR && \
-    python3 -c "import easyocr; reader = easyocr.Reader(['en'], gpu=False, verbose=False, model_storage_directory='/root/.EasyOCR/model'); print('EasyOCR models downloaded to /root/.EasyOCR/model')"
+# Pre-download PaddleOCR models during build (eliminates first-run delay)
+# Models are cached in /root/.paddlex/official_models
+RUN USE_GPU=False DISABLE_MODEL_SOURCE_CHECK=True python3 -c "\
+from paddleocr import PaddleOCR; \
+ocr = PaddleOCR(use_textline_orientation=True, lang='en'); \
+print('PaddleOCR models downloaded successfully')"
 
 # Copy application code
 COPY . .

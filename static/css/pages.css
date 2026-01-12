@@ -461,4 +461,10 @@
   .task-actions button {
     width: 100%;
   }
+
+  /* Queue Stats - Smaller numbers on mobile */
+  .ocr-stat-number,
+  .queue-stat-number {
+    font-size: 1.2em !important;
+  }
 }

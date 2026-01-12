@@ -79,6 +79,14 @@ class UpdateUserRequest(BaseModel):
     new_password: Optional[str] = None
 
 
+class APITokenResponse(BaseModel):
+    """Response containing the API token"""
+
+    success: bool
+    api_token: Optional[str] = None
+    message: str
+
+
 # ==============================================================================
 # Search
 # ==============================================================================

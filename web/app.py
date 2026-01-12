@@ -9,13 +9,13 @@ from sqlalchemy import text
 
 from core.auth import AuthManager
 from core.config import ConfigLoader
-from core.constants import MAX_DOWNLOADS_PER_BATCH
+from core import constants
 from core.database import DatabaseManager
 from core.factory import ClientFactory, ProviderFactory
 from core.parsers import TitleMatcher
 from models.database import MagazineTracking
 from services import DownloadManager, FileImporter, FileOrganizer
-from scheduler import TaskScheduler, DownloadMonitorTask, CoverCleanupTask
+from scheduler import TaskScheduler, DownloadMonitorTask, CoverCleanupTask, OCRProcessorTask, OCRCoverGeneratorTask
 
 # Import all routers
 from web.routers import (
@@ -24,12 +24,16 @@ from web.routers import (
     downloads,
     imports,
     metadata,
+    ocr_queue,
     pages,
     periodicals,
     search,
     tasks,
     tracking,
 )
+
+# Import documentation configuration
+from web.docs import OPENAPI_METADATA, OPENAPI_TAGS, DOCS_URLS
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -60,6 +64,7 @@ download_client = None
 download_manager = None
 download_monitor_task = None
 cover_cleanup_task = None
+ocr_cover_generator_task = None
 title_matcher = None
 file_processor = None
 file_importer = None
@@ -70,7 +75,7 @@ scheduler_task = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown"""
-    global download_client, download_manager, download_monitor_task, cover_cleanup_task, title_matcher, file_processor, file_importer, task_scheduler, scheduler_task
+    global download_client, download_manager, download_monitor_task, cover_cleanup_task, ocr_cover_generator_task, title_matcher, file_processor, file_importer, task_scheduler, scheduler_task
 
     # Startup
     try:
@@ -128,6 +133,7 @@ async def lifespan(app: FastAPI):
             fuzzy_threshold=fuzzy_threshold,
             organization_pattern=import_config.get("organization_pattern"),
             category_prefix=category_prefix,
+            enable_text_scan=import_config.get("enable_text_scan", True),
         )
 
         # Initialize download manager (if download client is available)
@@ -158,6 +164,23 @@ async def lifespan(app: FastAPI):
         )
         logger.info("Cover cleanup task initialized")
 
+        # Initialize OCR cover generator task
+        ocr_cover_generator_task = OCRCoverGeneratorTask(
+            session_factory=session_factory,
+            organize_base_dir=storage_config.get("organize_dir", "./_Magazines"),
+            config_loader=config_loader,
+        )
+        logger.info("OCR cover generator task initialized")
+
+        # Initialize OCR processor task
+        ocr_processor_task = OCRProcessorTask(
+            session_factory=session_factory,
+            config_loader=config_loader,
+            max_workers=tasks_config.get("ocr_max_workers", 3),
+            batch_size=tasks_config.get("ocr_batch_size", 10)
+        )
+        logger.info("OCR processor task initialized")
+
         # Initialize task scheduler
         task_scheduler = TaskScheduler()
 
@@ -179,13 +202,13 @@ async def lifespan(app: FastAPI):
                             .count()
                         )
 
-                        if pending_count >= MAX_DOWNLOADS_PER_BATCH:
+                        if pending_count >= constants.MAX_DOWNLOADS_PER_BATCH:
                             logger.info(
-                                f"Auto-download: Skipping - already at max downloads ({pending_count}/{MAX_DOWNLOADS_PER_BATCH})"
+                                f"Auto-download: Skipping - already at max downloads ({pending_count}/{constants.MAX_DOWNLOADS_PER_BATCH})"
                             )
                             return
 
-                        remaining_slots = MAX_DOWNLOADS_PER_BATCH - pending_count
+                        remaining_slots = constants.MAX_DOWNLOADS_PER_BATCH - pending_count
                         logger.info(
                             f"Auto-download: {remaining_slots} download slots available ({pending_count} already queued)"
                         )
@@ -250,26 +273,66 @@ async def lifespan(app: FastAPI):
             """Monitor download client and scan downloads folder for files to import (runs every 30 seconds)"""
             if download_monitor_task:
                 try:
+                    from datetime import datetime, timedelta
+                    
+                    # Update next run time before execution
+                    interval = tasks_config.get("download_monitor_interval", constants.DOWNLOAD_MONITOR_INTERVAL)
+                    download_monitor_task.next_run_time = datetime.now() + timedelta(seconds=interval)
+                    
                     await download_monitor_task.run()
                 except Exception as e:
                     logger.error(f"Download monitoring error: {e}", exc_info=True)
 
         # Define cover cleanup task wrapper
         async def cleanup_orphaned_covers_task():
-            """Clean up cover files that aren't tied to any periodical and generate missing covers (runs every 24 hours)"""
+            """Clean up cover files that aren't tied to any periodical and generate missing covers (runs every hour)"""
             await cover_cleanup_task.run()
+
+        # Define OCR cover generator task wrapper
+        async def ocr_cover_generator_task_wrapper():
+            """Generate high-res PNG covers for OCR and clean up orphaned files (runs every 5 minutes)"""
+            try:
+                stats = await ocr_cover_generator_task.run()
+                if stats.get("generated_count", 0) > 0 or stats.get("deleted_orphaned", 0) > 0 or stats.get("deleted_completed", 0) > 0:
+                    logger.info(f"OCR cover generator: {stats}")
+            except Exception as e:
+                logger.error(f"OCR cover generator error: {e}", exc_info=True)
+
+        # Define OCR processor task wrapper
+        async def ocr_processing_task():
+            """Process queued OCR jobs with process pool (runs every hour)"""
+            try:
+                from datetime import datetime, timedelta
+                
+                # Update next run time before execution
+                interval = tasks_config.get("ocr_processor_interval", constants.OCR_PROCESSOR_INTERVAL)
+                ocr_processor_task.next_run_time = datetime.now() + timedelta(seconds=interval)
+                
+                stats = await ocr_processor_task.run()
+                if stats.get("processed", 0) > 0:
+                    logger.info(f"OCR processor: {stats}")
+            except Exception as e:
+                logger.error(f"OCR processor error: {e}", exc_info=True)
 
         # Schedule tasks with intervals from config
         task_scheduler.schedule_periodic(
-            "auto_download", auto_download_task, tasks_config.get("auto_download_interval")
+            "auto_download", auto_download_task, tasks_config.get("auto_download_interval", constants.AUTO_DOWNLOAD_INTERVAL)
         )
 
         task_scheduler.schedule_periodic(
-            "download_monitor", download_monitoring_task, tasks_config.get("download_monitor_interval")
+            "download_monitor", download_monitoring_task, tasks_config.get("download_monitor_interval", constants.DOWNLOAD_MONITOR_INTERVAL)
         )
 
         task_scheduler.schedule_periodic(
-            "cleanup_orphaned_covers", cleanup_orphaned_covers_task, tasks_config.get("cleanup_covers_interval")
+            "cleanup_orphaned_covers", cleanup_orphaned_covers_task, tasks_config.get("cleanup_covers_interval", constants.CLEANUP_COVERS_INTERVAL)
+        )
+
+        task_scheduler.schedule_periodic(
+            "ocr_cover_generator", ocr_cover_generator_task_wrapper, tasks_config.get("ocr_cover_generator_interval", constants.OCR_COVER_GENERATOR_INTERVAL)
+        )
+
+        task_scheduler.schedule_periodic(
+            "ocr_processor", ocr_processing_task, tasks_config.get("ocr_processor_interval", constants.OCR_PROCESSOR_INTERVAL)
         )
 
         # Start scheduler in background
@@ -282,9 +345,10 @@ async def lifespan(app: FastAPI):
         tracking.set_dependencies(session_factory, search_providers, auto_download_task)
         downloads.set_dependencies(session_factory, download_manager, download_client)
         imports.set_dependencies(session_factory, file_importer, storage_config)
-        tasks.set_dependencies(session_factory, download_monitor_task, file_importer, storage_config)
+        tasks.set_dependencies(session_factory, download_monitor_task, file_importer, storage_config, ocr_processor_task, task_scheduler)
         config.set_dependencies(config_loader)
         pages.set_dependencies(session_factory)
+        ocr_queue.set_dependencies(session_factory)
 
         logger.info("Curator initialized successfully with auto-import and download monitoring enabled")
 
@@ -307,6 +371,11 @@ async def lifespan(app: FastAPI):
             except asyncio.CancelledError:
                 pass
 
+        # Shutdown OCR processor
+        if ocr_processor_task:
+            ocr_processor_task.shutdown()
+            logger.info("OCR processor shutdown complete")
+
         logger.info("Curator shutdown complete")
     except Exception as e:
         logger.error(f"Shutdown error: {e}")
@@ -314,85 +383,10 @@ async def lifespan(app: FastAPI):
 
 # Initialize FastAPI app with comprehensive documentation
 app = FastAPI(
-    title="Curator - Periodical Management System",
-    description="""
-## Curator API
-
-A comprehensive periodical management system for discovering, downloading, and organizing
-magazines, comics, and newspapers.
-
-### Features
-
-* 🔍 **Multi-Provider Search** - Integrates with Newsnab APIs, and RSS feeds
-* 📥 **Download Management** - Supports SABnzbd and NZBGet download clients
-* 📚 **Smart Organization** - Automatic file organization with metadata enrichment
-* 🎯 **Tracking System** - Monitor and automatically download specific periodicals
-* 🔐 **Secure Authentication** - JWT-based authentication with secure password hashing
-* 🚀 **Automated Tasks** - Background tasks for monitoring downloads and imports
-
-### Authentication
-
-Most endpoints require authentication. To get started:
-
-1. Create initial credentials: `POST /api/auth/setup`
-2. Login to get JWT token: `POST /api/auth/login`
-3. Include token in requests: `Authorization: Bearer <token>`
-
-### Quick Start
-
-1. Set up credentials
-2. Search for periodicals: `GET /api/search/periodicals`
-3. Start tracking: `POST /api/tracking/start`
-4. Download issues: `POST /api/downloads/all-issues`
-5. Monitor progress: `GET /api/downloads/status/{tracking_id}`
-    """,
-    version="1.0.0",
-    contact={
-        "name": "Curator Support",
-        "url": "https://github.com/chadleeshaw/curator",
-    },
-    license_info={
-        "name": "MIT License",
-        "url": "https://opensource.org/licenses/MIT",
-    },
-    openapi_tags=[
-        {
-            "name": "authentication",
-            "description": "User authentication and credential management",
-        },
-        {
-            "name": "search",
-            "description": "Search for periodicals across multiple providers",
-        },
-        {
-            "name": "tracking",
-            "description": "Track periodicals for automatic downloads",
-        },
-        {
-            "name": "downloads",
-            "description": "Manage download submissions and monitor progress",
-        },
-        {
-            "name": "periodicals",
-            "description": "View and manage organized periodicals",
-        },
-        {
-            "name": "imports",
-            "description": "Import and organize downloaded files",
-        },
-        {
-            "name": "config",
-            "description": "Application configuration and settings",
-        },
-        {
-            "name": "tasks",
-            "description": "Background task management and monitoring",
-        },
-    ],
+    **OPENAPI_METADATA,
+    openapi_tags=OPENAPI_TAGS,
     lifespan=lifespan,
-    docs_url="/api/docs",  # Swagger UI
-    redoc_url="/api/redoc",  # ReDoc
-    openapi_url="/api/openapi.json",
+    **DOCS_URLS,
 )
 
 # Add CORS middleware
@@ -467,6 +461,7 @@ app.include_router(imports.router)
 app.include_router(tasks.router)
 app.include_router(config.router)
 app.include_router(pages.router)
+app.include_router(ocr_queue.router)
 
 # Mount static files
 try:

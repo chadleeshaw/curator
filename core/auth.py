@@ -52,8 +52,8 @@ class AuthManager:
             if existing:
                 return False, "Credentials already exist"
 
-            # Create new credentials
-            creds = Credentials(username=username)
+            # Create new credentials with lowercase username
+            creds = Credentials(username=username.lower())
             creds.set_password(password)
             session.add(creds)
             session.commit()
@@ -77,7 +77,8 @@ class AuthManager:
         """
         session = self.session_factory()
         try:
-            creds = session.query(Credentials).filter_by(username=username).first()
+            # Query using lowercase username for case-insensitive comparison
+            creds = session.query(Credentials).filter_by(username=username.lower()).first()
             if not creds:
                 return False, "Invalid username or password"
 
@@ -171,21 +172,82 @@ class AuthManager:
         """
         session = self.session_factory()
         try:
-            creds = session.query(Credentials).filter_by(username=old_username).first()
+            # Query using lowercase username for case-insensitive comparison
+            creds = session.query(Credentials).filter_by(username=old_username.lower()).first()
             if not creds:
                 return False, "User not found"
 
-            # Check if new username already exists
-            existing = session.query(Credentials).filter_by(username=new_username).first()
+            # Check if new username already exists (case-insensitive)
+            existing = session.query(Credentials).filter_by(username=new_username.lower()).first()
             if existing:
                 return False, "Username already exists"
 
-            creds.username = new_username
+            creds.username = new_username.lower()
             creds.updated_at = utc_now()
             session.commit()
             return True, "Username updated successfully"
         except Exception as e:
             session.rollback()
             return False, f"Error updating username: {str(e)}"
+        finally:
+            session.close()
+    def get_api_token(self) -> Tuple[bool, Optional[str]]:
+        """
+        Get the current API token.
+
+        Returns:
+            Tuple of (success, api_token) where api_token is None if doesn't exist
+        """
+        session = self.session_factory()
+        try:
+            creds = session.query(Credentials).first()
+            if not creds:
+                return False, None
+            return True, creds.api_token
+        except Exception as e:
+            return False, None
+        finally:
+            session.close()
+
+    def regenerate_api_token(self) -> Tuple[bool, Optional[str]]:
+        """
+        Regenerate and return a new API token.
+
+        Returns:
+            Tuple of (success, new_api_token) where new_api_token is the generated token
+        """
+        session = self.session_factory()
+        try:
+            creds = session.query(Credentials).first()
+            if not creds:
+                return False, None
+            
+            new_token = creds.generate_api_token()
+            session.commit()
+            return True, new_token
+        except Exception as e:
+            session.rollback()
+            return False, None
+        finally:
+            session.close()
+
+    def verify_api_token(self, token: str) -> Tuple[bool, Optional[str]]:
+        """
+        Verify an API token and return the username if valid.
+
+        Args:
+            token: API token to verify
+
+        Returns:
+            Tuple of (is_valid, username) where username is None if token is invalid
+        """
+        session = self.session_factory()
+        try:
+            creds = session.query(Credentials).filter_by(api_token=token).first()
+            if not creds:
+                return False, None
+            return True, creds.username
+        except Exception as e:
+            return False, None
         finally:
             session.close()

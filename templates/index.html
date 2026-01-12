@@ -108,8 +108,18 @@
         <!-- Queue Tab -->
         <div id="queue-tab" class="tab">
             <div class="tasks-container">
+                <!-- Queue Switcher Buttons -->
+                <div class="queue-switcher" style="margin-bottom: 30px; display: flex; gap: 10px; border-bottom: 2px solid var(--border); padding-bottom: 10px;">
+                    <button id="switch-download-queue" class="queue-switch-btn active" data-queue="download">
+                        📥 Downloads <span id="download-queue-badge" class="queue-badge">0</span>
+                    </button>
+                    <button id="switch-ocr-queue" class="queue-switch-btn" data-queue="ocr">
+                        🔍 OCR Processing <span id="ocr-queue-badge" class="queue-badge">0</span>
+                    </button>
+                </div>
+
                 <!-- Download Queue Section -->
-                <div class="download-queue-section">
+                <div id="download-queue-view" class="queue-view">
                     <h2>📥 Download Queue</h2>
                     <p style="color: var(--text-secondary); margin-bottom: 25px;">Monitor and manage your periodical downloads. Auto-refreshes every 10 seconds.</p>
                     <div id="downloads-status" class="hidden"></div>
@@ -126,8 +136,8 @@
                         </p>
                     </div>
 
-                    <div id="queue-table-container" class="hidden">
-                        <table class="queue-table w-full border-collapse mt-20">
+                    <div id="queue-table-container" class="hidden" style="background: var(--surface-variant); border-radius: 8px; border: 1px solid var(--border); padding: 20px;">
+                        <table class="queue-table w-full border-collapse">
                             <tbody id="queue-body">
                                 <!-- Will be populated by JavaScript with grouped periodical rows -->
                             </tbody>
@@ -135,17 +145,35 @@
                     </div>
                 </div>
 
-                <!-- Failed Downloads Section -->
-                <div class="download-queue-section mt-40" style="padding-top: 40px; border-top: 2px solid var(--border);">
-                    <h2>⚠️ Failed Downloads</h2>
-                    <p style="color: var(--text-secondary); margin-bottom: 20px;">View and manage downloads that have failed, including files marked as bad (3+ failures).</p>
-                    <div id="failed-downloads-container">
+                <!-- OCR Queue Section -->
+                <div id="ocr-queue-view" class="queue-view hidden">
+                    <h2>🔍 OCR Processing Queue</h2>
+                    <p style="color: var(--text-secondary); margin-bottom: 25px;">Monitor OCR text extraction jobs. Auto-refreshes every 10 seconds.</p>
+
+                    <div id="ocr-queue-stats" style="margin-bottom: 30px;">
                         <!-- Will be populated by JavaScript -->
-                        <div style="text-align: center; padding: 60px 20px; background: var(--surface-variant); border-radius: 8px; border: 1px solid var(--border);">
-                            <div style="font-size: 4em; margin-bottom: 15px; opacity: 0.3;">✅</div>
-                            <p style="font-size: 1.2em; color: var(--text-primary); margin-bottom: 10px;">No failed downloads</p>
-                            <p style="color: var(--text-secondary); font-size: 0.95em;">All downloads completed successfully</p>
-                        </div>
+                    </div>
+
+                    <div id="ocr-queue-empty" class="hidden" style="text-align: center; padding: 60px 20px; background: var(--surface-variant); border-radius: 8px; border: 1px solid var(--border);">
+                        <div style="font-size: 4em; margin-bottom: 15px; opacity: 0.3;">📋</div>
+                        <p style="font-size: 1.2em; color: var(--text-primary); margin-bottom: 10px;">No OCR jobs in queue</p>
+                        <p style="color: var(--text-secondary); font-size: 0.95em;">💡 Tip: High-res PNG covers are generated every 5 minutes and queued for OCR processing</p>
+                    </div>
+
+                    <div id="ocr-queue-table-container" class="hidden" style="background: var(--surface-variant); border-radius: 8px; border: 1px solid var(--border); padding: 20px;">
+                        <table class="queue-table w-full border-collapse">
+                            <thead>
+                                <tr style="border-bottom: 2px solid var(--border);">
+                                    <th style="text-align: left; padding: 12px; color: var(--text-secondary); font-weight: 500; font-size: 0.9em;">Periodical</th>
+                                    <th style="text-align: center; padding: 12px; color: var(--text-secondary); font-weight: 500; font-size: 0.9em;">Status</th>
+                                    <th style="text-align: center; padding: 12px; color: var(--text-secondary); font-weight: 500; font-size: 0.9em;">Priority</th>
+                                    <th style="text-align: right; padding: 12px; color: var(--text-secondary); font-weight: 500; font-size: 0.9em;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ocr-queue-body">
+                                <!-- Will be populated by JavaScript -->
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -169,6 +197,7 @@
                     <button class="settings-nav-btn" onclick="scrollToSection('theme-section')">🎨 Theme</button>
                     <button class="settings-nav-btn" onclick="scrollToSection('import-section')">📁 Import</button>
                     <button class="settings-nav-btn" onclick="scrollToSection('user-account-section')">👤 Account</button>
+                    <button class="settings-nav-btn" onclick="scrollToSection('api-token-section')">🔑 API Token</button>
                     <button class="settings-nav-btn" onclick="scrollToSection('database-section')" style="color: #f44336;">🗑️ Database</button>
                 </div>
 
@@ -285,6 +314,20 @@
                         <input type="text" id="import-organize-pattern" placeholder="data/{category}/{title}/{year}/" class="w-full mt-8">
                         <p class="text-sm text-hint mt-8">Available tags: {category}, {title}, {year}, {month}, {day}. Leave empty to disable organization.</p>
                     </div>
+                    <div class="settings-field">
+                        <label>
+                            <input type="checkbox" id="import-enable-text-scan">
+                            Enable Text Scanning (PDF/EPUB)
+                        </label>
+                        <p class="text-sm text-hint mt-8">Extract text directly from PDF/EPUB files during import (fast, synchronous).</p>
+                    </div>
+                    <div class="settings-field">
+                        <label>
+                            <input type="checkbox" id="import-enable-ocr">
+                            Enable OCR Text Extraction
+                        </label>
+                        <p class="text-sm text-hint mt-8">Use OCR on cover images for text extraction (slower, runs in background queue).</p>
+                    </div>
                     <p class="text-base text-muted mt-10">Nested folder scanning in Downloads is always enabled.</p>
                     <button onclick="saveImportSettings()" class="save-btn">Save Import Settings</button>
                     <div id="import-message" class="hidden"></div>
@@ -311,6 +354,27 @@
                         <input type="password" id="account-confirm-password" placeholder="Confirm new password">
                     </div>
                     <button onclick="saveAccountSettings()" class="save-btn">Save Account Settings</button>
+                </div>
+
+                <!-- API Token Management -->
+                <div id="api-token-section" class="settings-section">
+                    <h3>🔑 API Token</h3>
+                    <p class="text-base text-muted mb-15">Use this token to authenticate API requests. Treat it like a password and keep it secret.</p>
+                    <div class="settings-field">
+                        <label for="api-token-display">Your API Token:</label>
+                        <div class="flex gap-10 items-center">
+                            <input type="password" id="api-token-display" placeholder="Loading token..." readonly style="flex: 1;">
+                            <button id="api-token-toggle-btn" onclick="toggleAPITokenVisibility()" class="btn-secondary" title="Show/hide token">👁️</button>
+                            <button onclick="copyAPIToken()" class="btn-secondary" title="Copy to clipboard">📋</button>
+                        </div>
+                    </div>
+                    <div class="text-sm text-hint mb-15">
+                        <strong>Usage:</strong> Include in API calls as: <code>Authorization: Bearer &lt;token&gt;</code>
+                    </div>
+                    <button onclick="regenerateAPIToken()" class="save-btn" style="background: #ff9800;">
+                        🔄 Regenerate Token
+                    </button>
+                    <div id="api-token-message" class="hidden mt-10"></div>
                 </div>
 
                 <!-- Database Management -->

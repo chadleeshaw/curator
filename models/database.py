@@ -1,4 +1,5 @@
 import enum
+import secrets
 
 import bcrypt
 from sqlalchemy import (
@@ -31,6 +32,7 @@ class Credentials(Base):
     id = Column(Integer, primary_key=True)
     username = Column(String(255), nullable=False, unique=True, index=True)
     password_hash = Column(String(255), nullable=False)
+    api_token = Column(String(255), nullable=True, unique=True, index=True)  # For API access
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
@@ -41,6 +43,12 @@ class Credentials(Base):
     def verify_password(self, password: str) -> bool:
         """Verify a password against the stored hash"""
         return bcrypt.checkpw(password.encode("utf-8"), self.password_hash.encode("utf-8"))
+    
+    def generate_api_token(self) -> str:
+        """Generate a new API token"""
+        self.api_token = secrets.token_urlsafe(32)
+        self.updated_at = utc_now()
+        return self.api_token
 
 
 class Magazine(Base):
@@ -163,4 +171,35 @@ class Download(Base):
     magazine_id = Column(Integer, ForeignKey("periodicals.id"), nullable=True)
     search_result_id = Column(Integer, ForeignKey("search_results.id"), nullable=True)
     created_at = Column(DateTime, default=utcnow, index=True)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class OCRJob(Base):
+    """Track OCR processing jobs for background processing with process pool"""
+
+    __tablename__ = "ocr_jobs"
+
+    class StatusEnum(enum.Enum):
+        PENDING = "pending"
+        PROCESSING = "processing"
+        COMPLETED = "completed"
+        FAILED = "failed"
+
+    class PriorityEnum(enum.Enum):
+        LOW = 1  # Bulk processing
+        NORMAL = 5  # Regular imports
+        HIGH = 10  # User-requested
+
+    id = Column(Integer, primary_key=True)
+    magazine_id = Column(Integer, ForeignKey("periodicals.id"), nullable=False, index=True)
+    status = Column(Enum(StatusEnum), default=StatusEnum.PENDING, index=True)
+    priority = Column(Integer, default=PriorityEnum.NORMAL.value, index=True)
+    language = Column(String(50), nullable=True)  # OCR language hint
+    attempt_count = Column(Integer, default=0)  # Number of processing attempts
+    last_error = Column(String(512), nullable=True)  # Last error message
+    ocr_metadata = Column(JSON, nullable=True)  # Extracted OCR metadata
+    processing_time_seconds = Column(Integer, nullable=True)  # Time taken to process
+    created_at = Column(DateTime, default=utcnow, index=True)
+    started_at = Column(DateTime, nullable=True)  # When processing started
+    completed_at = Column(DateTime, nullable=True)  # When processing completed
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)

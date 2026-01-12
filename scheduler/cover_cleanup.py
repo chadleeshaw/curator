@@ -8,10 +8,8 @@ import logging
 from pathlib import Path
 
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.orm.attributes import flag_modified
 
 from models.database import Magazine
-from services.ocr_service import OCRService
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +18,10 @@ class CoverCleanupTask:
     """
     Clean up orphaned cover files and generate missing covers.
 
-    This task performs two main functions:
+    This task performs three main functions:
     1. Deletes orphaned covers (cover files on disk not tied to any periodical)
     2. Generates missing covers (extracts covers for periodicals that don't have one)
+    3. Generates thumbnails for fast page loads (60 DPI, JPEG quality 50)
     """
 
     def __init__(
@@ -48,9 +47,9 @@ class CoverCleanupTask:
         Execute cover cleanup task.
 
         Returns:
-            Dict with deleted_count and generated_count
+            Dict with deleted_count, generated_count, and thumbnail_count
         """
-        logger.info(f"Starting cover cleanup task. OCR available: {OCRService.is_available()}")
+        logger.info("Starting cover cleanup task")
         try:
             db_session = self.session_factory()
             try:
@@ -85,9 +84,9 @@ class CoverCleanupTask:
                     if deleted_count > 0:
                         logger.info(f"Cleanup covers: Deleted {deleted_count} orphaned cover files")
 
-                # Part 2: Generate missing covers
+                # Part 2: Generate missing covers and thumbnails
                 generated_count = 0
-                ocr_updated_count = 0
+                thumbnail_count = 0
                 loop = asyncio.get_event_loop()
 
                 for magazine in periodicals_without_covers:
@@ -108,142 +107,18 @@ class CoverCleanupTask:
 
                             thumbnail_dir = cover_path.parent
                             await loop.run_in_executor(None, generate_thumbnail, cover_path, thumbnail_dir)
+                            thumbnail_count += 1
                         except Exception as thumb_error:
                             logger.debug(f"Thumbnail generation failed (non-critical): {thumb_error}")
 
-                        # Run OCR on the newly generated cover (run in thread pool)
-                        # Strategy: Try PDF text extraction first, then OCR on JPEG cover
-                        if OCRService.is_available():
-                            try:
-                                # For PDFs: Try direct text extraction first
-                                if file_path.suffix.lower() == ".pdf":
-                                    logger.info(f"Trying PDF text extraction for: {magazine.title}")
-                                    ocr_metadata = await loop.run_in_executor(
-                                        None, OCRService.analyze_cover, str(file_path), magazine.language
-                                    )
-                                    # If PDF text extraction failed, try OCR on the JPEG cover
-                                    if not ocr_metadata.get("text_found"):
-                                        logger.debug("PDF text extraction failed, trying OCR on JPEG cover")
-                                        ocr_metadata = await loop.run_in_executor(
-                                            None, OCRService.analyze_cover, str(cover_path), magazine.language
-                                        )
-                                # For EPUBs: Try direct text extraction
-                                elif file_path.suffix.lower() == ".epub":
-                                    logger.info(f"Trying EPUB text extraction for: {magazine.title}")
-                                    ocr_metadata = await loop.run_in_executor(
-                                        None, OCRService.analyze_cover, str(file_path), magazine.language
-                                    )
-                                    # If EPUB text extraction failed, try OCR on the JPEG cover
-                                    if not ocr_metadata.get("text_found"):
-                                        logger.debug("EPUB text extraction failed, trying OCR on JPEG cover")
-                                        ocr_metadata = await loop.run_in_executor(
-                                            None, OCRService.analyze_cover, str(cover_path), magazine.language
-                                        )
-                                # For other formats: Just use OCR on the cover image
-                                else:
-                                    logger.info(f"Running OCR on cover image for: {magazine.title}")
-                                    ocr_metadata = await loop.run_in_executor(
-                                        None, OCRService.analyze_cover, str(cover_path)
-                                    )
-
-                                if ocr_metadata.get("text_found"):
-                                    # Update extra_metadata with OCR findings
-                                    if magazine.extra_metadata is None:
-                                        magazine.extra_metadata = {}
-                                    magazine.extra_metadata["ocr_metadata"] = {
-                                        "detected_text": ocr_metadata.get("detected_text", "")[:500],
-                                        "ocr_issue_number": ocr_metadata.get("issue_number"),
-                                        "ocr_year": ocr_metadata.get("year"),
-                                        "ocr_month": ocr_metadata.get("month"),
-                                        "ocr_volume": ocr_metadata.get("volume"),
-                                        "ocr_special_edition": ocr_metadata.get("special_edition", False),
-                                    }
-                                    flag_modified(magazine, "extra_metadata")
-                                    ocr_updated_count += 1
-                                    logger.info(f"OCR metadata added for: {magazine.title}")
-                            except Exception as ocr_error:
-                                logger.warning(f"OCR failed for {magazine.title}: {ocr_error}")
-
-                # Part 3: Run OCR on existing covers that don't have OCR metadata
-                ocr_scanned_count = 0
-                if OCRService.is_available():
-                    logger.info(f"OCR is available, scanning {len(periodicals_with_covers)} periodicals with covers")
-                    for magazine in periodicals_with_covers:
-                        # Check if magazine already has OCR metadata
-                        if magazine.extra_metadata and magazine.extra_metadata.get("ocr_metadata"):
-                            logger.debug(f"Skipping {magazine.title} - already has OCR metadata")
-                            continue
-
-                        # Run OCR on existing cover (run in thread pool)
-                        # Strategy: Try source file text extraction first, then OCR on cover JPEG
-                        try:
-                            file_path = Path(magazine.file_path)
-
-                            # For PDFs: Try direct text extraction first, fallback to OCR on cover
-                            if file_path.exists() and file_path.suffix.lower() == ".pdf":
-                                logger.info(f"Trying PDF text extraction for: {magazine.title}")
-                                ocr_metadata = await loop.run_in_executor(
-                                    None, OCRService.analyze_cover, str(file_path), magazine.language
-                                )
-                                # If PDF text extraction failed, try OCR on the JPEG cover
-                                if not ocr_metadata.get("text_found"):
-                                    logger.debug("PDF text extraction failed, trying OCR on JPEG cover")
-                                    ocr_metadata = await loop.run_in_executor(
-                                        None, OCRService.analyze_cover, str(magazine.cover_path), magazine.language
-                                    )
-                            # For EPUBs: Try direct text extraction first, fallback to OCR on cover
-                            elif file_path.exists() and file_path.suffix.lower() == ".epub":
-                                logger.info(f"Trying EPUB text extraction for: {magazine.title}")
-                                ocr_metadata = await loop.run_in_executor(
-                                    None, OCRService.analyze_cover, str(file_path), magazine.language
-                                )
-                                # If EPUB text extraction failed, try OCR on the JPEG cover
-                                if not ocr_metadata.get("text_found"):
-                                    logger.debug("EPUB text extraction failed, trying OCR on JPEG cover")
-                                    ocr_metadata = await loop.run_in_executor(
-                                        None, OCRService.analyze_cover, str(magazine.cover_path), magazine.language
-                                    )
-                            # For other formats or if source doesn't exist: OCR on cover image
-                            else:
-                                logger.info(f"Running OCR on cover image for: {magazine.title}")
-                                ocr_metadata = await loop.run_in_executor(
-                                    None, OCRService.analyze_cover, str(magazine.cover_path)
-                                )
-                            logger.debug(f"OCR result: {ocr_metadata}")
-                            if ocr_metadata.get("text_found"):
-                                # Update extra_metadata with OCR findings
-                                if magazine.extra_metadata is None:
-                                    magazine.extra_metadata = {}
-                                magazine.extra_metadata["ocr_metadata"] = {
-                                    "detected_text": ocr_metadata.get("detected_text", "")[:500],
-                                    "ocr_issue_number": ocr_metadata.get("issue_number"),
-                                    "ocr_year": ocr_metadata.get("year"),
-                                    "ocr_month": ocr_metadata.get("month"),
-                                    "ocr_volume": ocr_metadata.get("volume"),
-                                    "ocr_special_edition": ocr_metadata.get("special_edition", False),
-                                }
-                                flag_modified(magazine, "extra_metadata")
-                                ocr_scanned_count += 1
-                                logger.info(f"OCR metadata added to existing cover: {magazine.title}")
-                        except Exception as ocr_error:
-                            logger.warning(f"OCR failed for existing cover {magazine.title}: {ocr_error}")
-
-                if generated_count > 0 or ocr_scanned_count > 0:
+                if generated_count > 0:
                     db_session.commit()
-                    msg_parts = []
-                    if generated_count > 0:
-                        msg_parts.append(f"Generated {generated_count} missing covers")
-                    if ocr_updated_count > 0:
-                        msg_parts.append(f"added OCR to {ocr_updated_count} new covers")
-                    if ocr_scanned_count > 0:
-                        msg_parts.append(f"scanned {ocr_scanned_count} existing covers")
-                    logger.info(f"Cleanup covers: {', '.join(msg_parts)}")
+                    logger.info(f"Cleanup covers: Generated {generated_count} missing covers, {thumbnail_count} thumbnails")
 
                 return {
                     "deleted_count": deleted_count,
                     "generated_count": generated_count,
-                    "ocr_updated_count": ocr_updated_count,
-                    "ocr_scanned_count": ocr_scanned_count,
+                    "thumbnail_count": thumbnail_count,
                 }
 
             finally:
@@ -253,7 +128,6 @@ class CoverCleanupTask:
             return {
                 "deleted_count": 0,
                 "generated_count": 0,
-                "ocr_updated_count": 0,
-                "ocr_scanned_count": 0,
+                "thumbnail_count": 0,
                 "error": str(e),
             }

@@ -239,30 +239,35 @@ export class DownloadsManager {
       statsDiv.innerHTML = `
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px;">
           <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <div style="font-size: 2em; font-weight: bold; color: ${colors.pending};">${data.status_counts.pending || 0}</div>
+            <div class="queue-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.pending};">${data.status_counts.pending || 0}</div>
             <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Pending</div>
           </div>
           <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <div style="font-size: 2em; font-weight: bold; color: ${colors.downloading};">${data.status_counts.downloading || 0}</div>
+            <div class="queue-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.downloading};">${data.status_counts.downloading || 0}</div>
             <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Downloading</div>
           </div>
           <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <div style="font-size: 2em; font-weight: bold; color: ${colors.completed};">${data.status_counts.completed || 0}</div>
+            <div class="queue-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.completed};">${data.status_counts.completed || 0}</div>
             <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Completed</div>
           </div>
           <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <div style="font-size: 2em; font-weight: bold; color: ${colors.failed};">${data.status_counts.failed || 0}</div>
+            <div class="queue-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.failed};">${data.status_counts.failed || 0}</div>
             <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Failed</div>
           </div>
           <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <div style="font-size: 2em; font-weight: bold; color: ${colors.skipped};">${data.status_counts.skipped || 0}</div>
+            <div class="queue-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.skipped};">${data.status_counts.skipped || 0}</div>
             <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Skipped</div>
           </div>
         </div>
       `;
     }
 
-    if (data.queue.length === 0) {
+    // Filter to show only active downloads (pending and downloading)
+    const activeDownloads = data.queue.filter(item =>
+      item.status === 'pending' || item.status === 'downloading'
+    );
+
+    if (activeDownloads.length === 0) {
       emptyDiv.classList.remove('hidden');
       tableContainer.classList.add('hidden');
       return;
@@ -272,7 +277,7 @@ export class DownloadsManager {
     tableContainer.classList.remove('hidden');
 
     // Group by periodical
-    const grouped = this.groupQueueByPeriodical(data.queue);
+    const grouped = this.groupQueueByPeriodical(activeDownloads);
     
     tbody.innerHTML = '';
     grouped.forEach((group) => {

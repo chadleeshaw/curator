@@ -129,7 +129,7 @@ class ConfigLoader:
     def get_import(self) -> Dict[str, Any]:
         """Get import configuration"""
         return self.config.get(
-            "import", {"organization_pattern": None, "auto_track_imports": True, "category_prefix": "_"}
+            "import", {"organization_pattern": None, "auto_track_imports": True, "category_prefix": "_", "enable_text_scan": True, "enable_ocr": True}
         )
 
     def get_pdf(self) -> Dict[str, Any]:

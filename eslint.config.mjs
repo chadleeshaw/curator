@@ -23,6 +23,7 @@ export default [
         clearInterval: 'readonly',
         clearTimeout: 'readonly',
         getComputedStyle: 'readonly',
+        navigator: 'readonly',
       },
     },
     rules: {

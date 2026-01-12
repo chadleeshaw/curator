@@ -968,3 +968,74 @@
   color: white;
   border-color: var(--primary-color);
 }
+
+/* ==========================================================================
+   Queue Switcher
+   ========================================================================== */
+
+.queue-switcher {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 30px;
+}
+
+.queue-switch-btn {
+  padding: 12px 24px;
+  background: rgba(60, 60, 60, 0.5);
+  color: var(--text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.queue-switch-btn:hover {
+  background: rgba(80, 80, 80, 0.6);
+  border-color: var(--primary-color);
+  transform: translateY(-1px);
+}
+
+.queue-switch-btn.active {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.queue-badge {
+  display: inline-block;
+  min-width: 22px;
+  padding: 2px 8px;
+  background: rgba(0, 0, 0, 0.3);
+  color: rgba(255, 255, 255, 0.7);
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.queue-switch-btn.active .queue-badge {
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+}
+
+.queue-view {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

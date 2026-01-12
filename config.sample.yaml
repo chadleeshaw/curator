@@ -25,6 +25,8 @@ storage:
 import:
   organization_pattern: "{category}/{title}/{year}/"
   auto_track_imports: true
+  enable_text_scan: true  # Enable direct text extraction from PDF/EPUB during import (fast)
+  enable_ocr: true  # Enable OCR for image-based text extraction (slower, queued)
   category_prefix: _
   category_keywords:
     Magazines:
@@ -70,8 +72,8 @@ downloads:
   # Maximum number of retry attempts for failed downloads
   max_retries: 3
 
-  # Maximum number of downloads to submit per batch
-  # Larger batches = faster but more resource intensive
+  # Maximum number of concurrent downloads allowed system-wide
+  # This is the total limit across all tracked periodicals, not per batch
   max_per_batch: 10
 
 tasks:
@@ -86,6 +88,12 @@ tasks:
 
   # Cover cleanup: Remove orphaned covers and generate missing ones
   cleanup_covers_interval: 86400  # 24 hours
+
+  # OCR cover generator: Generate high-res cover PNGs for OCR processing
+  ocr_cover_generator_interval: 300  # 5 minutes
+
+  # OCR processor: Run OCR text extraction on queued covers
+  ocr_processor_interval: 10    # 10 seconds
 
 logging:
   level: INFO

@@ -338,12 +338,19 @@ async def list_tracked_magazines(
             tracked = query.offset(skip).limit(limit).all()
             total = db_session.query(MagazineTracking).count()
 
-            # Compute library count for each tracked periodical
-            from models.database import Magazine
+            # Compute library count and failed download count for each tracked periodical
+            from models.database import Magazine, DownloadSubmission
 
             tracked_list = []
             for t in tracked:
                 library_count = db_session.query(Magazine).filter(Magazine.tracking_id == t.id).count()
+                
+                # Count failed downloads (status='failed' and attempt_count < 3) and bad files (attempt_count >= 3)
+                failed_count = db_session.query(DownloadSubmission).filter(
+                    DownloadSubmission.tracking_id == t.id,
+                    DownloadSubmission.status == DownloadSubmission.StatusEnum.FAILED
+                ).count()
+                
                 tracked_list.append(
                     {
                         "id": t.id,
@@ -359,6 +366,7 @@ async def list_tracked_magazines(
                         ),
                         "total_known": t.total_editions_known,
                         "library_count": library_count,
+                        "failed_count": failed_count,
                         "created_at": (t.created_at.isoformat() if t.created_at else None),
                     }
                 )

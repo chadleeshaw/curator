@@ -550,6 +550,7 @@ export class TrackingManager {
     const totalKnown = tracked.total_known || 0;
     const selectedCount = tracked.selected_count || 0;
     const libraryCount = tracked.library_count || 0;
+    const failedCount = tracked.failed_count || 0;
     const country = tracked.country || '';
     const countryStats = country ? `<span class="country">🌍 ${country}</span>` : '';
     const issueStats = totalKnown > 0 
@@ -558,6 +559,9 @@ export class TrackingManager {
     const libraryStats = `<span class="library-count">📚 ${libraryCount} in library</span>`;
     const selectedStats = selectedCount > 0
       ? `<span class="selected-count">• ${selectedCount} selected</span>`
+      : '';
+    const failedStats = failedCount > 0
+      ? `<span class="failed-count" style="color: var(--status-pending); cursor: pointer;" data-tracking-id="${tracked.id}" title="Click to view failed downloads">⚠️ ${failedCount} failed</span>`
       : '';
 
     const checkboxHtml = this.mergeMode 
@@ -577,6 +581,7 @@ export class TrackingManager {
           ${countryStats}
           ${issueStats}
           ${libraryStats}
+          ${failedStats}
           ${selectedStats}
         </div>
       </div>
@@ -604,6 +609,12 @@ export class TrackingManager {
       deleteBtn.addEventListener('click', () => this.deleteTracking(tracked.id, tracked.title));
     }
 
+    // Add event listener for failed count to open failed downloads modal
+    const failedCountSpan = card.querySelector('.failed-count');
+    if (failedCountSpan) {
+      failedCountSpan.addEventListener('click', () => this.showFailedDownloadsForTracking(tracked.id, tracked.title));
+    }
+
     // Add event listener for checkbox if in merge mode
     if (this.mergeMode) {
       const checkbox = card.querySelector('.merge-checkbox');
@@ -618,6 +629,54 @@ export class TrackingManager {
     }
 
     return card;
+  }
+
+  /**
+   * Show failed downloads modal for a specific tracking ID
+   */
+  async showFailedDownloadsForTracking(trackingId, periodicalTitle) {
+    try {
+      // Fetch all failed downloads
+      const response = await APIClient.authenticatedFetch('/api/downloads/failed?include_bad=true');
+      const data = await response.json();
+
+      // Filter items for this tracking ID
+      const failedItems = data.failed_downloads
+        .filter(item => item.tracking_id === trackingId)
+        .map(item => ({
+          id: item.id,
+          title: item.title,
+          attempt_count: item.attempt_count,
+          last_error: item.last_error,
+          status: 'failed',
+          isBad: false
+        }));
+
+      const badItems = data.bad_files
+        .filter(item => item.tracking_id === trackingId)
+        .map(item => ({
+          id: item.id,
+          title: item.title,
+          attempt_count: item.attempt_count,
+          last_error: item.last_error,
+          status: 'failed',
+          isBad: true
+        }));
+
+      const allItems = [...failedItems, ...badItems];
+
+      if (allItems.length === 0) {
+        UIUtils.showToast('No failed downloads found', 'info');
+        return;
+      }
+
+      // Import downloads module and open modal
+      const { downloads } = await import('./downloads.js?v=1767733177');
+      downloads.openManageFailedModal(periodicalTitle, allItems);
+    } catch (error) {
+      console.error('[Tracking] Error loading failed downloads:', error);
+      UIUtils.showToast('Error loading failed downloads', 'error');
+    }
   }
 
   /**

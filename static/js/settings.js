@@ -8,6 +8,7 @@
 
 import { APIClient } from './api.js';
 import { UIUtils } from './ui-utils.js';
+import { AuthManager } from './auth.js';
 
 export class SettingsManager {
   constructor() {
@@ -34,6 +35,13 @@ export class SettingsManager {
   }
 
   /**
+   * Load settings specific to the settings tab being displayed
+   */
+  async loadSettingsTab() {
+    await this.loadAPIToken();
+  }
+
+  /**
    * Load current user account information
    */
   async loadUserAccount() {
@@ -49,12 +57,24 @@ export class SettingsManager {
 
       if (data.success) {
         // Store current username for comparison
-        this.currentUsername = data.username;
+        // Handle case where username might be an object (extract string value)
+        let username = data.username;
+        
+        // If username is somehow an object, try to extract the actual username
+        if (typeof username === 'object' && username !== null) {
+          console.warn('Username is an object:', username);
+          // Try common property names
+          username = username.username || username.name || username.value || JSON.stringify(username);
+        } else if (typeof username !== 'string') {
+          username = String(username || '');
+        }
+        
+        this.currentUsername = username;
 
         // Pre-populate username
         const usernameInput = document.getElementById('account-username');
         if (usernameInput) {
-          usernameInput.value = data.username;
+          usernameInput.value = username;
         }
       }
     } catch (error) {
@@ -209,8 +229,15 @@ export class SettingsManager {
    */
   displayImportSettings(importConfig) {
     const pattern = document.getElementById('import-organize-pattern');
+    const enableTextScan = document.getElementById('import-enable-text-scan');
+    const enableOcr = document.getElementById('import-enable-ocr');
+    
     if (pattern)
       pattern.value = importConfig.organization_pattern || 'data/{category}/{title}/{year}/';
+    if (enableTextScan)
+      enableTextScan.checked = importConfig.enable_text_scan ?? true;
+    if (enableOcr)
+      enableOcr.checked = importConfig.enable_ocr ?? true;
   }
 
   /**
@@ -744,6 +771,99 @@ export class SettingsManager {
   }
 
   /**
+   * Load and display the current API token
+   */
+  async loadAPIToken() {
+    try {
+      const response = await fetch('/api/auth/api-token', {
+        headers: {
+          'Authorization': `Bearer ${AuthManager.getToken()}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const tokenDisplay = document.getElementById('api-token-display');
+        if (tokenDisplay && data.api_token) {
+          tokenDisplay.value = data.api_token;
+          tokenDisplay.type = 'password'; // Start as hidden
+        }
+      }
+    } catch (error) {
+      console.error('Error loading API token:', error);
+    }
+  }
+
+  /**
+   * Toggle API token visibility (show/hide)
+   */
+  toggleAPITokenVisibility() {
+    const tokenDisplay = document.getElementById('api-token-display');
+    const toggleBtn = document.getElementById('api-token-toggle-btn');
+    
+    if (tokenDisplay.type === 'password') {
+      tokenDisplay.type = 'text';
+      toggleBtn.textContent = '🙈';
+      toggleBtn.title = 'Hide token';
+    } else {
+      tokenDisplay.type = 'password';
+      toggleBtn.textContent = '👁️';
+      toggleBtn.title = 'Show token';
+    }
+  }
+
+  /**
+   * Copy API token to clipboard
+   */
+  async copyAPIToken() {
+    const tokenDisplay = document.getElementById('api-token-display');
+    if (tokenDisplay.value) {
+      try {
+        await navigator.clipboard.writeText(tokenDisplay.value);
+        UIUtils.showStatus('api-token-message', 'API token copied to clipboard!', 'success');
+        setTimeout(() => {
+          document.getElementById('api-token-message').classList.add('hidden');
+        }, 3000);
+      } catch (error) {
+        UIUtils.showStatus('api-token-message', 'Failed to copy token', 'error');
+      }
+    }
+  }
+
+  /**
+   * Regenerate a new API token
+   */
+  async regenerateAPIToken() {
+    const confirmed = confirm('Are you sure you want to regenerate your API token? This will invalidate the old token.');
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch('/api/auth/api-token/regenerate', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${AuthManager.getToken()}`
+        }
+      });
+
+      const result = await response.json();
+      if (response.ok && result.success) {
+        const tokenDisplay = document.getElementById('api-token-display');
+        tokenDisplay.value = result.api_token;
+        tokenDisplay.type = 'password';
+        UIUtils.showStatus('api-token-message', 'API token regenerated successfully!', 'success');
+        setTimeout(() => {
+          document.getElementById('api-token-message').classList.add('hidden');
+        }, 3000);
+      } else {
+        UIUtils.showStatus('api-token-message', result.message || 'Failed to regenerate token', 'error');
+      }
+    } catch (error) {
+      console.error('Error regenerating API token:', error);
+      UIUtils.showStatus('api-token-message', `Error: ${error.message}`, 'error');
+    }
+  }
+
+  /**
    * Open purge database confirmation modal
    */
   openPurgeModal() {
@@ -833,3 +953,7 @@ window.closeRestartModal = () => settings.closeRestartModal();
 window.openPurgeModal = () => settings.openPurgeModal();
 window.closePurgeModal = () => settings.closePurgeModal();
 window.confirmPurgeDatabase = () => settings.confirmPurgeDatabase();
+window.loadSettingsTab = () => settings.loadSettingsTab();
+window.toggleAPITokenVisibility = () => settings.toggleAPITokenVisibility();
+window.copyAPIToken = () => settings.copyAPIToken();
+window.regenerateAPIToken = () => settings.regenerateAPIToken();

@@ -54,13 +54,18 @@ export class TasksManager {
 
         // Build additional timestamps section if available
         let timestampsHtml = '';
-        const hasDetailedTimestamps = task.stats && (task.stats.last_client_check || task.stats.last_folder_scan);
+        const hasDetailedTimestamps = task.stats && (
+          task.stats.last_client_check || 
+          task.stats.last_folder_scan || 
+          task.stats.last_process_time
+        );
         if (hasDetailedTimestamps) {
           const stats = task.stats;
           timestampsHtml = `
           <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 0.85em; color: var(--text-secondary); display: grid; gap: 6px;">
             ${stats.last_client_check ? `<div>🕐 Last client check: <strong>${new Date(stats.last_client_check).toLocaleString()}</strong></div>` : ''}
             ${stats.last_folder_scan ? `<div>🕐 Last folder scan: <strong>${new Date(stats.last_folder_scan).toLocaleString()}</strong></div>` : ''}
+            ${stats.last_process_time ? `<div>🕐 Last OCR process: <strong>${new Date(stats.last_process_time).toLocaleString()}</strong></div>` : ''}
           </div>
         `;
         }

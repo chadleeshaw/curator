@@ -24,9 +24,11 @@ from core.pdf_utils import extract_cover_from_pdf
 from core.epub_utils import extract_cover_from_epub
 from core.utils import find_pdf_epub_files, hash_file_in_chunks
 from core.response_models import ErrorCodes, OperationResult
-from models.database import Magazine, MagazineTracking
+from models.database import Magazine, MagazineTracking, OCRJob
 from services.file_organizer import FileOrganizer
 from services.ocr_service import OCRService
+from services.ocr_queue import OCRQueueService
+from services.text_scan_service import TextScanService
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +44,7 @@ class FileImporter:
         fuzzy_threshold: int = DEFAULT_FUZZY_THRESHOLD,
         organization_pattern: Optional[str] = None,
         category_prefix: str = "_",
+        enable_text_scan: bool = True,
     ):
         """
         Initialize file importer.
@@ -52,11 +55,13 @@ class FileImporter:
             fuzzy_threshold: Fuzzy matching threshold (0-100) for duplicate detection
             organization_pattern: Pattern for organizing files (e.g., "_{category}/{title}/{year}/")
             category_prefix: Prefix for category folders (e.g., "_" for "_Magazines")
+            enable_text_scan: Enable direct text extraction from PDF/EPUB during import
         """
         self.downloads_dir = Path(downloads_dir)
         self.organize_base_dir = Path(organize_base_dir)
         self.organization_pattern = organization_pattern
         self.category_prefix = category_prefix
+        self._enable_text_scan = enable_text_scan
         self.title_matcher = TitleMatcher(threshold=fuzzy_threshold)
 
         # Initialize specialized helpers
@@ -131,10 +136,13 @@ class FileImporter:
         logger.info(
             f"[DOWNLOADS IMPORT] Found {len(all_files)} files to process from {self.downloads_dir} ({len(pdf_files)} PDFs, {len(epub_files)} EPUBs)"
         )
+        logger.info("[DOWNLOADS IMPORT] Text extraction enabled, OCR queued only for image-based files")
 
         for pdf_path in pdf_files:
             try:
-                import_result = self.import_pdf(pdf_path, session, organization_pattern=organization_pattern)
+                import_result = self.import_pdf(
+                    pdf_path, session, organization_pattern=organization_pattern, use_ocr=True
+                )
                 if import_result:
                     result.data["imported"] += 1
                     logger.info(f"Successfully imported: {pdf_path.name}")
@@ -178,6 +186,7 @@ class FileImporter:
         auto_track: bool = True,
         skip_organize: bool = False,
         tracking_mode: str = "watch",
+        use_ocr: bool = True,
     ) -> bool:
         """
         Import a single PDF file.
@@ -189,6 +198,7 @@ class FileImporter:
             auto_track: Whether to auto-create tracking records for imported periodicals
             skip_organize: If True, skip file organization and use file in place (for already-organized files)
             tracking_mode: Tracking mode - "all" (track all editions), "new" (track new only), "watch" (watch only), "none" (no tracking)
+            use_ocr: Whether to use OCR for metadata extraction (default: True, set False for faster batch imports)
 
         Returns:
             True if successful, False otherwise
@@ -262,60 +272,9 @@ class FileImporter:
 
             cover_path = self._extract_cover(pdf_path)
 
-            # Use OCR to extract metadata from cover if available
-            ocr_metadata = {}
-            if cover_path and OCRService.is_available():
-                try:
-                    logger.info(f"Starting OCR analysis on cover: {cover_path} (language: {parsed.language})")
-                    # Run OCR in thread pool with timeout to prevent blocking
-                    future = self._ocr_executor.submit(
-                        OCRService.analyze_cover, str(cover_path), language=parsed.language
-                    )
-                    # Wait up to 30 seconds for OCR to complete
-                    logger.debug("Waiting for OCR to complete (max 30s)...")
-                    ocr_metadata = future.result(timeout=30)
-                    logger.info("OCR analysis completed successfully")
-                    if ocr_metadata.get("text_found"):
-                        logger.info(f"OCR extracted metadata: {ocr_metadata}")
-                        # Enhance parsed data with OCR findings if they're more specific
-                        if ocr_metadata.get("issue_number") and not parsed.issue_number:
-                            parsed.issue_number = ocr_metadata["issue_number"]
-                            logger.info(f"OCR detected issue number: {ocr_metadata['issue_number']}")
-                        if ocr_metadata.get("year") and not parsed.year:
-                            parsed.year = ocr_metadata["year"]
-                            logger.info(f"OCR detected year: {ocr_metadata['year']}")
-                        if ocr_metadata.get("month") and not parsed.month_name:
-                            months = [
-                                "",
-                                "January",
-                                "February",
-                                "March",
-                                "April",
-                                "May",
-                                "June",
-                                "July",
-                                "August",
-                                "September",
-                                "October",
-                                "November",
-                                "December",
-                            ]
-                            parsed.month_name = months[ocr_metadata["month"]]
-                            logger.info(f"OCR detected month: {parsed.month_name}")
-                        if ocr_metadata.get("volume") and not parsed.volume:
-                            parsed.volume = ocr_metadata["volume"]
-                            logger.info(f"OCR detected volume: {ocr_metadata['volume']}")
-                        if ocr_metadata.get("special_edition") and not is_special_edition:
-                            is_special_edition = True
-                            special_name = "Special Edition"
-                            logger.info("OCR detected special edition")
-                except FuturesTimeoutError:
-                    logger.warning(
-                        f"OCR analysis timed out after 30 seconds for {cover_path}. "
-                        "Continuing without OCR metadata."
-                    )
-                except Exception as e:
-                    logger.warning(f"OCR analysis failed for {cover_path}: {e}")
+            # OCR will be queued for background processing instead of running inline
+            # This improves import speed and allows concurrent OCR processing
+            should_queue_ocr = use_ocr and (cover_path or pdf_path) and OCRService.is_available()
 
             category = self.categorizer.categorize(parsed.title)
 
@@ -353,16 +312,6 @@ class FileImporter:
             if is_special_edition:
                 extra_metadata["special_edition"] = special_name
                 extra_metadata["full_title"] = parsed.title
-            # Add OCR metadata if available
-            if ocr_metadata.get("text_found"):
-                extra_metadata["ocr_metadata"] = {
-                    "detected_text": ocr_metadata.get("detected_text", "")[:500],  # Limit text length
-                    "ocr_issue_number": ocr_metadata.get("issue_number"),
-                    "ocr_year": ocr_metadata.get("year"),
-                    "ocr_month": ocr_metadata.get("month"),
-                    "ocr_volume": ocr_metadata.get("volume"),
-                    "ocr_special_edition": ocr_metadata.get("special_edition", False),
-                }
 
             magazine = Magazine(
                 title=tracking_title,
@@ -428,6 +377,73 @@ class FileImporter:
 
             session.commit()
             logger.info(f"Added to database: {parsed.title} ({category})")
+
+            # Run direct text scanning on PDF/EPUB files (fast, synchronous)
+            text_extracted = False
+            if organized_path.suffix.lower() in ['.pdf', '.epub']:
+                try:
+                    # Check if text scanning is enabled
+                    enable_text_scan = getattr(self, '_enable_text_scan', True)
+                    if enable_text_scan:
+                        logger.debug(f"Attempting direct text extraction for {magazine.id}")
+                        
+                        # Use TextScanService for direct text extraction
+                        scan_result = TextScanService.scan_document(str(organized_path), language=parsed.language)
+                        
+                        # Always store text scan metadata (even if no text found)
+                        if not magazine.extra_metadata:
+                            magazine.extra_metadata = {}
+                        magazine.extra_metadata["text_scan"] = scan_result
+                        
+                        from sqlalchemy.orm.attributes import flag_modified
+                        flag_modified(magazine, "extra_metadata")
+                        session.commit()
+                        
+                        if scan_result.get("text_found"):
+                            text_extracted = True
+                            has_sufficient = scan_result.get("has_sufficient_metadata", False)
+                            logger.info(
+                                f"Successfully extracted text metadata for {magazine.title} "
+                                f"(sufficient: {has_sufficient})"
+                            )
+                        else:
+                            logger.debug(f"No text found in {organized_path.name}")
+                    else:
+                        logger.debug("Text scanning disabled in config")
+                
+                except Exception as e:
+                    logger.debug(f"Direct text extraction failed for {magazine.id}: {e}")
+            
+            # Queue OCR job if:
+            # 1. OCR is enabled (should_queue_ocr), AND
+            # 2. Either text extraction failed/wasn't attempted OR text extraction didn't yield sufficient metadata
+            if should_queue_ocr:
+                should_queue_for_ocr = False
+                
+                if not text_extracted:
+                    # No text was extracted at all
+                    should_queue_for_ocr = True
+                    logger.debug(f"Queueing OCR for {magazine.id}: no text extracted")
+                else:
+                    # Text was extracted, but check if it has sufficient metadata
+                    text_scan_metadata = magazine.extra_metadata.get("text_scan", {})
+                    if not text_scan_metadata.get("has_sufficient_metadata", False):
+                        should_queue_for_ocr = True
+                        logger.debug(f"Queueing OCR for {magazine.id}: insufficient metadata from text scan")
+                
+                if should_queue_for_ocr:
+                    try:
+                        priority = OCRJob.PriorityEnum.HIGH.value if not skip_organize else OCRJob.PriorityEnum.NORMAL.value
+                        ocr_job = OCRQueueService.queue_ocr_job(
+                            db=session,
+                            magazine_id=magazine.id,
+                            priority=priority,
+                            language=parsed.language
+                        )
+                        if ocr_job:
+                            logger.info(f"Queued OCR job {ocr_job.id} for magazine {magazine.id}")
+                    except Exception as e:
+                        logger.warning(f"Failed to queue OCR job for magazine {magazine.id}: {e}")
 
             if not skip_organize:
                 self._cleanup_download_file(pdf_path)
@@ -526,6 +542,7 @@ class FileImporter:
         logger.info(
             f"[DATA IMPORT] Found {len(pdf_files)} PDF files in organized folders to process from {self.organize_base_dir}"
         )
+        logger.info("[DATA IMPORT] Text extraction enabled, OCR queued only for image-based files")
 
         for pdf_path in pdf_files:
             try:
@@ -536,6 +553,7 @@ class FileImporter:
                     auto_track=auto_track,
                     skip_organize=True,
                     tracking_mode=tracking_mode,
+                    use_ocr=True,  # Enable text extraction, OCR queued only if needed
                 )
                 if import_result:
                     result.data["imported"] += 1

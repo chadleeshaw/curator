@@ -18,17 +18,21 @@ logger = logging.getLogger(__name__)
 # Global state (injected from main app)
 _session_factory = None
 _download_monitor_task = None
+_ocr_processor_task = None
 _file_importer = None
 _storage_config = None
+_task_scheduler = None
 
 
-def set_dependencies(session_factory, download_monitor_task, file_importer, storage_config):
+def set_dependencies(session_factory, download_monitor_task, file_importer, storage_config, ocr_processor_task=None, task_scheduler=None):
     """Set dependencies from main app"""
-    global _session_factory, _download_monitor_task, _file_importer, _storage_config
+    global _session_factory, _download_monitor_task, _file_importer, _storage_config, _ocr_processor_task, _task_scheduler
     _session_factory = session_factory
     _download_monitor_task = download_monitor_task
     _file_importer = file_importer
     _storage_config = storage_config
+    _ocr_processor_task = ocr_processor_task
+    _task_scheduler = task_scheduler
 
 
 @router.get("/status")
@@ -43,13 +47,20 @@ async def get_tasks_status():
             dm_status = getattr(_download_monitor_task, "last_status", None)
             dm_stats = getattr(_download_monitor_task, "stats", {})
             logger.debug(f"Tasks Status - Download Monitor: last_run={dm_last_run}, status={dm_status}")
+            
+            # Get interval from scheduler
+            dm_interval = 30
+            if _task_scheduler:
+                scheduler_status = _task_scheduler.get_status()
+                if "download_monitor" in scheduler_status.get("tasks", {}):
+                    dm_interval = scheduler_status["tasks"]["download_monitor"]["interval"]
 
             tasks.append(
                 {
                     "id": "download_monitor",
                     "name": "Download Monitor",
                     "description": "Monitors download client status and scans download folder recursively for PDF/EPUB files to organize",
-                    "interval": 30,
+                    "interval": dm_interval,
                     "last_run": dm_last_run,
                     "next_run": getattr(_download_monitor_task, "next_run_time", None),
                     "last_status": dm_status,
@@ -66,6 +77,40 @@ async def get_tasks_status():
             )
         else:
             logger.debug("Tasks Status - Download Monitor task not available")
+
+        # OCR processor task
+        if _ocr_processor_task:
+            ocr_last_run = getattr(_ocr_processor_task, "last_run_time", None)
+            ocr_status = getattr(_ocr_processor_task, "last_status", None)
+            ocr_stats = getattr(_ocr_processor_task, "stats", {})
+            logger.debug(f"Tasks Status - OCR Processor: last_run={ocr_last_run}, status={ocr_status}")
+            
+            # Get interval from scheduler
+            ocr_interval = 3600
+            if _task_scheduler:
+                scheduler_status = _task_scheduler.get_status()
+                if "ocr_processor" in scheduler_status.get("tasks", {}):
+                    ocr_interval = scheduler_status["tasks"]["ocr_processor"]["interval"]
+
+            tasks.append(
+                {
+                    "id": "ocr_processor",
+                    "name": "OCR Processor",
+                    "description": "Processes queued OCR jobs to extract text from periodical PDFs",
+                    "interval": ocr_interval,
+                    "last_run": ocr_last_run,
+                    "next_run": getattr(_ocr_processor_task, "next_run_time", None),
+                    "last_status": ocr_status,
+                    "stats": {
+                        "total_runs": ocr_stats.get("total_runs", 0),
+                        "jobs_processed": ocr_stats.get("jobs_processed", 0),
+                        "jobs_failed": ocr_stats.get("jobs_failed", 0),
+                        "last_process_time": ocr_stats.get("last_process_time"),
+                    },
+                }
+            )
+        else:
+            logger.debug("Tasks Status - OCR Processor task not available")
 
         # Auto-download task (from task scheduler if available)
         tasks.append(
@@ -120,6 +165,18 @@ async def run_task_manually(task_id: str):
                 }
             else:
                 return {"success": False, "message": "Download monitor not available"}
+
+        elif task_id == "ocr_processor":
+            if _ocr_processor_task:
+                stats = await _ocr_processor_task.run()
+                message = f"OCR processor executed. Processed: {stats.get('processed', 0)}, Failed: {stats.get('failed', 0)}"
+                return {
+                    "success": True,
+                    "task_name": "OCR Processor",
+                    "message": message,
+                }
+            else:
+                return {"success": False, "message": "OCR processor not available"}
 
         elif task_id == "auto_download":
             # Note: This manual trigger should be handled by the task scheduler

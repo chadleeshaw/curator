@@ -58,6 +58,9 @@ class DatabaseManager:
 
         # Define expected schema for column additions/migrations
         expected_schemas = {
+            "credentials": [
+                ("api_token", "VARCHAR(255)"),
+            ],
             "periodical_tracking": [
                 ("delete_from_client_on_completion", "BOOLEAN DEFAULT 0"),
                 ("language", "VARCHAR(50) DEFAULT 'English'"),

@@ -8,6 +8,7 @@ import { UIUtils } from './ui-utils.js?v=1767733177';
 import { library } from './library.js?v=1767733177';
 import { tracking } from './tracking.js?v=1767733177';
 import { downloads } from './downloads.js?v=1767733177';
+import { ocrQueue } from './ocr-queue.js?v=1767733177';
 import { settings } from './settings.js?v=1767733177';
 import { tasks } from './tasks.js?v=1767733177';
 import { imports } from './imports.js?v=1767733177';
@@ -43,12 +44,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       tracking.loadTrackedPeriodicals();
     } else if (tabName === 'settings') {
       settings.loadSettings();
+      settings.loadSettingsTab();
     } else if (tabName === 'tasks') {
       tasks.loadScheduledTasks();
     } else if (tabName === 'queue') {
-      downloads.loadDownloadQueue();
-      downloads.loadFailedDownloads();
-      downloads.startAutoRefresh();
+      initQueueSwitcher();
+      // Restore last active queue view or default to download
+      const lastQueueView = localStorage.getItem('lastQueueView') || 'download';
+      showQueueView(lastQueueView);
     }
   } else {
     // Default to library tab
@@ -87,6 +90,7 @@ window.addEventListener('hashchange', () => {
   if (hash) {
     // Stop any running auto-refresh when changing tabs
     downloads.stopAutoRefresh();
+    ocrQueue.stopAutoRefresh();
 
     const tabName = UIUtils.showTab(hash, null);
 
@@ -97,19 +101,105 @@ window.addEventListener('hashchange', () => {
       tracking.loadTrackedPeriodicals();
     } else if (tabName === 'settings') {
       settings.loadSettings();
+      settings.loadSettingsTab();
     } else if (tabName === 'tasks') {
       tasks.loadScheduledTasks();
-      downloads.loadDownloadQueue();
-      downloads.loadFailedDownloads();
+    } else if (tabName === 'queue') {
+      initQueueSwitcher();
+      // Restore last active queue view or default to download
+      const lastQueueView = localStorage.getItem('lastQueueView') || 'download';
+      showQueueView(lastQueueView);
     }
   }
 });
+
+/**
+ * Initialize queue switcher buttons
+ */
+function initQueueSwitcher() {
+  const switchButtons = document.querySelectorAll('.queue-switch-btn');
+  switchButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const queueType = btn.dataset.queue;
+      showQueueView(queueType);
+    });
+  });
+}
+
+/**
+ * Show specific queue view and hide others
+ */
+function showQueueView(queueType) {
+  // Save current queue view to localStorage
+  localStorage.setItem('lastQueueView', queueType);
+
+  // Update button active states
+  document.querySelectorAll('.queue-switch-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.queue === queueType);
+  });
+
+  // Show/hide queue views
+  document.getElementById('download-queue-view')?.classList.toggle('hidden', queueType !== 'download');
+  document.getElementById('ocr-queue-view')?.classList.toggle('hidden', queueType !== 'ocr');
+
+  // Stop all auto-refresh
+  downloads.stopAutoRefresh();
+  ocrQueue.stopAutoRefresh();
+
+  // Load data and start refresh for active queue
+  if (queueType === 'download') {
+    downloads.loadDownloadQueue();
+    downloads.startAutoRefresh();
+  } else if (queueType === 'ocr') {
+    ocrQueue.loadQueue();
+    ocrQueue.startAutoRefresh();
+  }
+
+  // Update all badge counts
+  updateQueueBadges();
+}
+
+/**
+ * Update badge counts for all queues
+ */
+async function updateQueueBadges() {
+  try {
+    // Get download queue stats
+    const downloadResponse = await fetch('/api/downloads/queue', {
+      headers: { 'Authorization': `Bearer ${AuthManager.getToken()}` }
+    });
+    const downloadData = await downloadResponse.json();
+    const activeDownloads = downloadData.queue?.filter(d =>
+      d.status === 'pending' || d.status === 'downloading'
+    ).length || 0;
+    document.getElementById('download-queue-badge').textContent = activeDownloads;
+
+    // Get OCR queue stats
+    const ocrResponse = await fetch('/api/ocr/queue/stats', {
+      headers: { 'Authorization': `Bearer ${AuthManager.getToken()}` }
+    });
+    const ocrData = await ocrResponse.json();
+    const activeOcr = (ocrData.pending || 0) + (ocrData.processing || 0);
+    document.getElementById('ocr-queue-badge').textContent = activeOcr;
+  } catch (error) {
+    console.error('[Main] Error updating queue badges:', error);
+  }
+}
+
+// Make functions globally available
+window.showQueueView = showQueueView;
+window.updateQueueBadges = updateQueueBadges;
+
+// Make module instances globally available for inline event handlers
+window.ocrQueue = ocrQueue;
+window.downloads = downloads;
 
 // Export modules for debugging in console
 window.__modules = {
   library,
   tracking,
   downloads,
+  ocrQueue,
   settings,
   tasks,
   imports,

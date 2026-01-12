@@ -41,8 +41,11 @@ PDF_COVER_DPI_LOW = 60
 PDF_COVER_DPI_HIGH = 200
 """High DPI setting for quality cover images"""
 
-PDF_COVER_DPI_OCR = 300
-"""Optimal DPI for OCR text extraction (industry standard)"""
+PDF_COVER_DPI_OCR = 180
+"""Optimal DPI for OCR text extraction (balances quality and performance, ~1360x1760 for 8.5x11")"""
+
+OCR_IMAGE_MAX_DIMENSION = 1200
+"""Maximum dimension (width or height) for OCR processing images in pixels"""
 
 PDF_COVER_QUALITY = 50
 """JPEG quality for low resolution covers (1-100)"""
@@ -85,7 +88,7 @@ MAX_DOWNLOAD_RETRIES = 3
 """Maximum number of retry attempts for failed downloads"""
 
 MAX_DOWNLOADS_PER_BATCH = 10
-"""Maximum number of downloads to submit globally across all tracked periodicals"""
+"""Maximum number of concurrent downloads allowed system-wide (not per batch, but total)"""
 
 DOWNLOAD_FILE_SEARCH_DEPTH = 2
 """Maximum directory depth to search for downloaded files"""
@@ -109,6 +112,12 @@ DOWNLOAD_MONITOR_INTERVAL = 30
 
 CLEANUP_COVERS_INTERVAL = 86400
 """Interval for cleaning up orphaned covers (24 hours)"""
+
+OCR_COVER_GENERATOR_INTERVAL = 300
+"""Interval for generating high-res cover PNGs for OCR (5 minutes)"""
+
+OCR_PROCESSOR_INTERVAL = 10
+"""Interval for running OCR text extraction on queued covers (10 seconds)"""
 
 TASK_SCHEDULER_CHECK_INTERVAL = 60
 """Interval for task scheduler checking (1 minute)"""

@@ -720,6 +720,21 @@
             if (data.metadata && data.metadata.issue_number) addMetadataItem('Issue Number', data.metadata.issue_number);
             if (data.metadata && data.metadata.volume) addMetadataItem('Volume', data.metadata.volume);
             addMetadataItem('Tracking ID', data.tracking_id !== null && data.tracking_id !== undefined ? data.tracking_id : '(not set)');
+            
+            // Add text scan information if available
+            if (data.extra_metadata && data.extra_metadata.text_scan) {
+                const textScan = data.extra_metadata.text_scan;
+                if (textScan.scanned) {
+                    const scanStatus = textScan.text_found ? '✓ Text Found' : '✗ No Text Found';
+                    addMetadataItem('Text Scan', scanStatus);
+                    if (textScan.extraction_method) {
+                        addMetadataItem('Extraction Method', textScan.extraction_method);
+                    }
+                    if (textScan.has_sufficient_metadata !== undefined) {
+                        addMetadataItem('Sufficient Metadata', textScan.has_sufficient_metadata ? 'Yes' : 'No');
+                    }
+                }
+            }
 
             // Create collapsible full metadata section
             const metadataSection = document.createElement('div');

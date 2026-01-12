@@ -90,7 +90,7 @@ async def view_periodical_by_id(id: int = Query(...)):
                     {
                         "id": p.id,
                         "title": p.title,
-                        "issue_date": (p.issue_date.isoformat() if p.issue_date else None),
+                        "issue_date": (p.issue_date.date().isoformat() if p.issue_date else None),
                         "cover_path": p.cover_path,
                         "file_path": p.file_path,
                     }
@@ -185,7 +185,7 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
                 periodical_data = {
                     "id": p.id,
                     "title": p.title,
-                    "issue_date": (p.issue_date.isoformat() if p.issue_date else None),
+                    "issue_date": (p.issue_date.date().isoformat() if p.issue_date else None),
                     "cover_path": p.cover_path,
                     "file_path": p.file_path,
                     "extra_metadata": p.extra_metadata or {},

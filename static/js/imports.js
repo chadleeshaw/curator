@@ -22,6 +22,8 @@ export class ImportsManager {
   async saveImportSettings() {
     const pattern =
       document.getElementById('import-organize-pattern').value || 'data/{category}/{title}/{year}/';
+    const enableTextScan = document.getElementById('import-enable-text-scan')?.checked ?? true;
+    const enableOcr = document.getElementById('import-enable-ocr')?.checked ?? true;
     const messageDiv = document.getElementById('import-message');
 
     try {
@@ -31,6 +33,8 @@ export class ImportsManager {
         body: JSON.stringify({
           import: {
             organization_pattern: pattern,
+            enable_text_scan: enableTextScan,
+            enable_ocr: enableOcr,
           },
         }),
       });
