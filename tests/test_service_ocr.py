@@ -95,7 +95,8 @@ def test_ocr_on_image(image_name):
     """Test OCR on a single image using OCRService (pytest parameterized)"""
 
     # Check if OCR is available
-    assert OCRService.is_available(), "OCR service not available. Install with: pip install easyocr"
+    if not OCRService.is_available():
+        pytest.skip("OCR service not available. Install with: pip install paddleocr")
 
     # Get test image path
     test_dir = Path(__file__).parent / "png"
@@ -115,7 +116,7 @@ def run_all_tests():
 
     # Check if OCR is available
     if not OCRService.is_available():
-        print("❌ OCR service not available. Install with: pip install easyocr")
+        print("❌ OCR service not available. Install with: pip install paddleocr")
         return False
 
     print("✓ OCR service is available")
