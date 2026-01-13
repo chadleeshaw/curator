@@ -129,7 +129,7 @@ class OCRQueueService:
         logger.info(f"Queued OCR job {job.id} for magazine {magazine_id} (priority={priority})")
         return job
 
-    def process_queue(self, db: Session, batch_size: int = 10, max_retries: int = 3) -> Dict[str, int]:
+    def process_queue(self, db: Session, batch_size: int = 1, max_retries: int = 1) -> Dict[str, int]:
         """
         Process pending OCR jobs from the queue in batches.
 
