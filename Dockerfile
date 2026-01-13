@@ -40,15 +40,19 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
 COPY --from=builder /root/.local /root/.local
 ENV PATH=/root/.local/bin:$PATH
 
-# Set PaddleOCR model cache directory
-ENV HOME=/root
+# Set PaddleOCR environment variables for CPU compatibility
+ENV HOME=/root \
+    USE_GPU=False \
+    DISABLE_MODEL_SOURCE_CHECK=True \
+    FLAGS_cpu_deterministic=true
 
-# Pre-download PaddleOCR models during build (eliminates first-run delay)
-# Models are cached in /root/.paddlex/official_models
-RUN USE_GPU=False DISABLE_MODEL_SOURCE_CHECK=True python3 -c "\
-from paddleocr import PaddleOCR; \
-ocr = PaddleOCR(use_textline_orientation=True, lang='en'); \
-print('PaddleOCR models downloaded successfully')"
+# Note: PaddleOCR models will be downloaded on first use to avoid build-time
+# CPU instruction compatibility issues. Models are cached in /root/.paddleocr
+# If you want to pre-download models during build (only if your build and runtime
+# CPUs are compatible), uncomment the following:
+# RUN python3 -c "from paddleocr import PaddleOCR; \
+#     ocr = PaddleOCR(use_angle_cls=True, lang='en'); \
+#     print('PaddleOCR models downloaded')"
 
 # Copy application code
 COPY . .
@@ -73,7 +77,9 @@ ENV CURATOR_CONFIG_PATH=/app/local/config/config.yaml \
     CURATOR_LOG_FILE=/app/local/logs/periodical_manager.log \
     CURATOR_LOG_LEVEL=INFO \
     CURATOR_PORT=8000 \
-    CURATOR_HOST=0.0.0.0
+    CURATOR_HOST=0.0.0.0 \
+    USE_GPU=False \
+    DISABLE_MODEL_SOURCE_CHECK=True
 
 # Volumes
 VOLUME ["/app/local/config", "/app/local/data", "/app/local/downloads", "/app/local/cache", "/app/local/logs"]
