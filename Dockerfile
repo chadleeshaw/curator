@@ -13,7 +13,15 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
 # Copy requirements
 COPY requirements-prod.txt /tmp/requirements.txt
 
-# Install Python packages with pip cache
+# Install PaddlePaddle from CPU-optimized Chinese mirror for better compatibility
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install --user paddlepaddle==3.2.2 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
+
+# Install PaddleOCR separately
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install --user paddleocr
+
+# Install remaining Python packages with pip cache
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --user -r /tmp/requirements.txt
 
@@ -50,9 +58,9 @@ ENV HOME=/root \
 # CPU instruction compatibility issues. Models are cached in /root/.paddleocr
 # If you want to pre-download models during build (only if your build and runtime
 # CPUs are compatible), uncomment the following:
-# RUN python3 -c "from paddleocr import PaddleOCR; \
-#     ocr = PaddleOCR(use_angle_cls=True, lang='en'); \
-#     print('PaddleOCR models downloaded')"
+RUN python3 -c "from paddleocr import PaddleOCR; \
+    ocr = PaddleOCR(use_angle_cls=True, lang='en'); \
+    print('PaddleOCR models downloaded')"
 
 # Copy application code
 COPY . .
