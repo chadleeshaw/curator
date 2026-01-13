@@ -56,7 +56,7 @@ def _ocr_worker(cover_path: str, language: Optional[str] = None) -> Dict[str, An
 class OCRQueueService:
     """Service for managing background OCR processing with process pool."""
 
-    def __init__(self, max_workers: int = 3):
+    def __init__(self, max_workers: int = 1):
         """
         Initialize OCR queue service.
 

@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class OCRProcessorTask:
     """Background task for processing queued OCR jobs."""
 
-    def __init__(self, session_factory: sessionmaker, config_loader=None, max_workers: int = 3, batch_size: int = 10):
+    def __init__(self, session_factory: sessionmaker, config_loader=None, max_workers: int = 1, batch_size: int = 10):
         """
         Initialize OCR processor task.
 

@@ -95,6 +95,10 @@ tasks:
   # OCR processor: Run OCR text extraction on queued covers
   ocr_processor_interval: 10    # 10 seconds
 
+  # OCR worker settings
+  ocr_max_workers: 1         # Number of parallel OCR processes
+  ocr_batch_size: 10         # Max jobs to process per batch
+
 logging:
   level: INFO
   log_file: ./local/logs/periodical_manager.log
