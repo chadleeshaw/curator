@@ -176,8 +176,8 @@ async def lifespan(app: FastAPI):
         ocr_processor_task = OCRProcessorTask(
             session_factory=session_factory,
             config_loader=config_loader,
-            max_workers=tasks_config.get("ocr_max_workers", 1),
-            batch_size=tasks_config.get("ocr_batch_size", 1)
+            max_workers=tasks_config.get("ocr_max_workers", constants.OCR_MAX_WORKERS),
+            batch_size=tasks_config.get("ocr_batch_size", constants.OCR_BATCH_SIZE)
         )
         logger.info("OCR processor task initialized")
 

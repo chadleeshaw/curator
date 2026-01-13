@@ -119,6 +119,12 @@ OCR_COVER_GENERATOR_INTERVAL = 300
 OCR_PROCESSOR_INTERVAL = 10
 """Interval for running OCR text extraction on queued covers (10 seconds)"""
 
+OCR_MAX_WORKERS = 1
+"""Default number of parallel OCR processes"""
+
+OCR_BATCH_SIZE = 1
+"""Default maximum number of OCR jobs to process per batch"""
+
 TASK_SCHEDULER_CHECK_INTERVAL = 60
 """Interval for task scheduler checking (1 minute)"""
 

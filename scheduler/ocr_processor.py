@@ -6,6 +6,7 @@ from typing import Dict, Any
 
 from sqlalchemy.orm import sessionmaker
 
+from core import constants
 from services.ocr_queue import OCRQueueService
 
 logger = logging.getLogger(__name__)
@@ -14,15 +15,15 @@ logger = logging.getLogger(__name__)
 class OCRProcessorTask:
     """Background task for processing queued OCR jobs."""
 
-    def __init__(self, session_factory: sessionmaker, config_loader=None, max_workers: int = 1, batch_size: int = 1):
+    def __init__(self, session_factory: sessionmaker, config_loader=None, max_workers: int = constants.OCR_MAX_WORKERS, batch_size: int = constants.OCR_BATCH_SIZE):
         """
         Initialize OCR processor task.
 
         Args:
             session_factory: SQLAlchemy session factory
             config_loader: ConfigLoader instance for checking OCR enabled setting
-            max_workers: Number of concurrent OCR processes (default: 3)
-            batch_size: Maximum number of jobs to process per run (default: 10)
+            max_workers: Number of concurrent OCR processes (default: OCR_MAX_WORKERS from constants)
+            batch_size: Maximum number of jobs to process per run (default: OCR_BATCH_SIZE from constants)
         """
         self.session_factory = session_factory
         self.config_loader = config_loader

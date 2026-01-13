@@ -1,12 +1,20 @@
 """Background OCR queue service with process pool for concurrent processing."""
 
 import logging
+import multiprocessing
+import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
 
+# Set environment variables before importing PaddleOCR-dependent modules
+# This ensures they're set when child processes start with spawn context
+os.environ['USE_GPU'] = '0'
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+
+from core import constants
 from models.database import OCRJob, Magazine
 from services.ocr_service import OCRService
 
@@ -31,10 +39,6 @@ def _ocr_worker(cover_path: str, language: Optional[str] = None) -> Dict[str, An
     """
     # Each process gets its own OCRService instance
     try:
-        # Set environment variable to ensure CPU-only mode
-        import os
-        os.environ.setdefault('USE_GPU', '0')
-
         result = OCRService.analyze_cover(cover_path, language=language)
         return {"success": True, "metadata": result}
     except (RuntimeError, OSError, SystemError) as e:
@@ -56,12 +60,12 @@ def _ocr_worker(cover_path: str, language: Optional[str] = None) -> Dict[str, An
 class OCRQueueService:
     """Service for managing background OCR processing with process pool."""
 
-    def __init__(self, max_workers: int = 1):
+    def __init__(self, max_workers: int = constants.OCR_MAX_WORKERS):
         """
         Initialize OCR queue service.
 
         Args:
-            max_workers: Number of concurrent OCR processes (default: 3)
+            max_workers: Number of concurrent OCR processes (default: OCR_MAX_WORKERS from constants)
         """
         self.max_workers = max_workers
         self._ensure_pool()
@@ -80,9 +84,12 @@ class OCRQueueService:
                     logger.warning(f"Error shutting down old pool: {e}")
 
             logger.info(f"Initializing OCR process pool with {self.max_workers} workers")
+            # Use 'spawn' context for better compatibility with libraries like PaddleOCR
+            # 'fork' can cause issues on macOS and with certain C extensions
+            mp_context = multiprocessing.get_context('spawn')
             _process_pool = ProcessPoolExecutor(
                 max_workers=self.max_workers,
-                mp_context=None  # Use default (fork on Unix, spawn on Windows)
+                mp_context=mp_context
             )
             _pool_size = self.max_workers
 
@@ -402,15 +409,30 @@ class OCRQueueService:
                     stats["failed"] += 1
 
             except Exception as e:
-                # Processing exception - use stored job_id
-                logger.error(f"Error processing OCR job {job_id}: {e}")
+                # Processing exception (including BrokenProcessPool from crashed worker)
+                error_type = type(e).__name__
+                error_msg = str(e)
+
+                # Check if this is a process pool crash
+                if "BrokenProcessPool" in error_type or "terminated abruptly" in error_msg:
+                    logger.error(f"OCR worker process crashed for job {job_id}: {error_msg}")
+                    logger.warning("This may indicate PaddleOCR compatibility issues. Recreating process pool...")
+                    # Recreate the pool for subsequent jobs
+                    try:
+                        self._ensure_pool(force_recreate=True)
+                    except Exception as pool_error:
+                        logger.error(f"Failed to recreate process pool: {pool_error}")
+                else:
+                    logger.error(f"Error processing OCR job {job_id}: {e}", exc_info=True)
+
+                # Try to update job status
                 try:
-                    # Try to update job status
                     db.expire_all()
                     job = db.query(OCRJob).filter(OCRJob.id == job_id).first()
                     if job:
                         job.status = OCRJob.StatusEnum.FAILED
-                        job.last_error = str(e)[:512]
+                        job.last_error = f"{error_type}: {error_msg[:500]}"
+                        job.completed_at = datetime.now(UTC)
                 except Exception as update_error:
                     logger.error(f"Failed to update job status for {job_id}: {update_error}")
                 stats["failed"] += 1
