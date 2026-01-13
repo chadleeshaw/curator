@@ -31,10 +31,21 @@ def _ocr_worker(cover_path: str, language: Optional[str] = None) -> Dict[str, An
     """
     # Each process gets its own OCRService instance
     try:
+        # Set environment variable to ensure CPU-only mode
+        import os
+        os.environ.setdefault('USE_GPU', '0')
+        
         result = OCRService.analyze_cover(cover_path, language=language)
         return {"success": True, "metadata": result}
+    except (RuntimeError, OSError, SystemError) as e:
+        # Catch CPU instruction errors (SIGILL manifests as these)
+        import traceback
+        error_msg = f"OCR worker runtime error for {cover_path}: {e} (possible CPU instruction incompatibility)"
+        error_trace = traceback.format_exc()
+        logger.error(f"{error_msg}\n{error_trace}")
+        return {"success": False, "error": f"Runtime error: {str(e)} (check CPU compatibility)"}
     except Exception as e:
-        # Catch all exceptions to prevent process crash
+        # Catch all other exceptions to prevent process crash
         import traceback
         error_msg = f"OCR worker error for {cover_path}: {e}"
         error_trace = traceback.format_exc()

@@ -24,7 +24,7 @@ try:
     OCR_AVAILABLE = True
     # Cache for PaddleOCR instances by language
     _paddleocr_cache = {}  # {lang_code: PaddleOCR instance}
-except (ImportError, OSError, RuntimeError) as e:
+except (ImportError, OSError, RuntimeError, Exception) as e:
     logger.warning(f"PaddleOCR not available: {e}")
     OCR_AVAILABLE = False
     _paddleocr_cache = {}
@@ -97,8 +97,16 @@ def _get_paddleocr_reader(language: Optional[str] = None):
         )
         _paddleocr_cache[lang_code] = ocr
         return ocr
-    except Exception as e:
+    except (RuntimeError, OSError) as e:
         logger.error(f"Failed to initialize PaddleOCR for language {lang_code}: {e}")
+        logger.error("This may be due to CPU instruction set incompatibility (e.g., AVX/AVX2 requirements)")
+        # Fallback to English
+        if lang_code != "en":
+            logger.info("Falling back to English OCR")
+            return _get_paddleocr_reader("en")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error initializing PaddleOCR for language {lang_code}: {e}", exc_info=True)
         # Fallback to English
         if lang_code != "en":
             logger.info("Falling back to English OCR")
@@ -136,8 +144,13 @@ class OCRService:
             global _OCR_WARNING_LOGGED
             if not _OCR_WARNING_LOGGED:
                 logger.warning("PaddleOCR not available. Install with: pip install paddleocr")
-                _OCR_WARNING_LOGGED = True
-            return ""
+                _OCR_WARNING_LOGGE - wrap in try/catch for runtime errors
+            try:
+                result = ocr.predict(image_path)
+            except (RuntimeError, OSError, SystemError) as e:
+                logger.error(f"PaddleOCR prediction failed (possible CPU instruction incompatibility): {e}")
+                logger.warning("Consider installing a CPU-compatible version or using Docker with proper architecture")
+                return ""
 
         try:
             ocr = _get_paddleocr_reader(language)

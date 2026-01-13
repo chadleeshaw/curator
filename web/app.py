@@ -472,4 +472,5 @@ except Exception as e:
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000, access_log=False)
+    server_config = config_loader.get_server()
+    uvicorn.run(app, host=server_config["host"], port=server_config["port"], access_log=False)
