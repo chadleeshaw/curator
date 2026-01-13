@@ -18,6 +18,9 @@ Image.MAX_IMAGE_PIXELS = 200000000  # 200 megapixels
 
 logger = logging.getLogger(__name__)
 
+# Global flag to track if PaddleOCR had a fatal CPU compatibility error
+_PADDLEOCR_CPU_INCOMPATIBLE = False
+
 try:
     from paddleocr import PaddleOCR
 
@@ -71,7 +74,9 @@ def _get_paddleocr_reader(language: Optional[str] = None):
     Returns:
         PaddleOCR instance or None if not available
     """
-    if not OCR_AVAILABLE:
+    global _PADDLEOCR_CPU_INCOMPATIBLE
+
+    if not OCR_AVAILABLE or _PADDLEOCR_CPU_INCOMPATIBLE:
         return None
 
     # Normalize language to PaddleOCR code
@@ -97,7 +102,16 @@ def _get_paddleocr_reader(language: Optional[str] = None):
         )
         _paddleocr_cache[lang_code] = ocr
         return ocr
-    except (RuntimeError, OSError) as e:
+    except (RuntimeError, OSError, SystemError) as e:
+        error_msg = str(e).lower()
+        # Check for CPU instruction errors (SIGILL indicators)
+        if "illegal instruction" in error_msg or "sigill" in error_msg or "avx" in error_msg:
+            logger.error(f"PaddleOCR CPU incompatibility detected: {e}")
+            logger.error("CPU does not support required instruction sets (AVX/AVX2/AVX512)")
+            logger.error("OCR functionality will be disabled to prevent crashes")
+            _PADDLEOCR_CPU_INCOMPATIBLE = True
+            return None
+
         logger.error(f"Failed to initialize PaddleOCR for language {lang_code}: {e}")
         logger.error("This may be due to CPU instruction set incompatibility (e.g., AVX/AVX2 requirements)")
         # Fallback to English
@@ -118,13 +132,47 @@ def _get_paddleocr_reader(language: Optional[str] = None):
 _OCR_WARNING_LOGGED = False
 
 
+def test_paddleocr_compatibility() -> bool:
+    """
+    Test if PaddleOCR can be initialized without CPU errors.
+    This should be called at startup to detect CPU incompatibilities early.
+
+    Returns:
+        True if PaddleOCR is compatible, False otherwise
+    """
+    global _PADDLEOCR_CPU_INCOMPATIBLE
+
+    if not OCR_AVAILABLE:
+        logger.info("PaddleOCR not available - OCR features will be disabled")
+        return False
+
+    if _PADDLEOCR_CPU_INCOMPATIBLE:
+        return False
+
+    try:
+        logger.info("Testing PaddleOCR CPU compatibility...")
+        # Try to initialize with minimal settings - this will catch SIGILL
+        test_reader = _get_paddleocr_reader("en")
+        if test_reader is None:
+            logger.warning("PaddleOCR initialization returned None - OCR will be disabled")
+            _PADDLEOCR_CPU_INCOMPATIBLE = True
+            return False
+        logger.info("PaddleOCR CPU compatibility test passed")
+        return True
+    except Exception as e:
+        logger.error(f"PaddleOCR compatibility test failed: {e}")
+        logger.error("OCR functionality will be disabled")
+        _PADDLEOCR_CPU_INCOMPATIBLE = True
+        return False
+
+
 class OCRService:
     """Service for extracting text from images using OCR."""
 
     @staticmethod
     def is_available() -> bool:
-        """Check if OCR is available."""
-        return OCR_AVAILABLE
+        """Check if OCR is available and CPU compatible."""
+        return OCR_AVAILABLE and not _PADDLEOCR_CPU_INCOMPATIBLE
 
     @staticmethod
     def extract_text_from_image(image_path: str, preprocess: bool = False, language: Optional[str] = None) -> str:
