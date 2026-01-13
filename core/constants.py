@@ -125,6 +125,9 @@ OCR_MAX_WORKERS = 1
 OCR_BATCH_SIZE = 1
 """Default maximum number of OCR jobs to process per batch"""
 
+OCR_MIN_MEMORY_MB = 4096
+"""Minimum available memory in MB required for PaddleOCR initialization (4GB)"""
+
 TASK_SCHEDULER_CHECK_INTERVAL = 60
 """Interval for task scheduler checking (1 minute)"""
 

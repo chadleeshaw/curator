@@ -19,7 +19,7 @@ A modular system for discovering, downloading, and organizing periodicals (magaz
 # Build the image
 docker build -t curator .
 
-# Run the container
+# Run the container (minimum 4GB RAM recommended for OCR)
 docker run -d \
   --name curator \
   -p 8000:8000 \
@@ -28,6 +28,15 @@ docker run -d \
   -v $(pwd)/local/downloads:/app/local/downloads \
   curator
 
+# Run with OCR disabled (for low-memory environments)
+docker run -d \
+  --name curator \
+  -p 8000:8000 \
+  -e DISABLE_OCR=true \
+  -v $(pwd)/local/config:/app/local/config \
+  -v $(pwd)/local/data:/app/local/data \
+  -v $(pwd)/local/downloads:/app/local/downloads \
+  curator
 ```
 
 ### Python
@@ -96,6 +105,12 @@ You can override the config file location:
 export CURATOR_CONFIG_PATH=/path/to/custom/config.yaml
 python main.py
 ```
+
+**OCR Configuration:**
+- `DISABLE_OCR=true` - Completely disable OCR to reduce memory usage (~4GB saved)
+- `USE_GPU=0` - Ensure CPU-only mode for PaddleOCR (default)
+
+**Note**: PaddleOCR requires ~4GB RAM and CPUs with AVX2 support. If your container crashes with exit code 137 (OOM) or 132 (SIGILL), set `DISABLE_OCR=true` in your Docker environment.
 
 ## Usage
 

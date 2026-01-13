@@ -17,4 +17,5 @@ PyJWT>=2.8.0
 setuptools>=75.0.0
 ebooklib>=0.18
 beautifulsoup4>=4.12.0
-lxml>=6.0.0
+lxml>=6.0.0 
+psutil>=5.9.0

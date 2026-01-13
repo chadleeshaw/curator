@@ -1,6 +1,7 @@
 """OCR service for extracting text from cover art images."""
 
 import logging
+import os
 import signal
 import warnings
 from pathlib import Path
@@ -22,6 +23,11 @@ logger = logging.getLogger(__name__)
 # Global flag to track if PaddleOCR had a fatal CPU compatibility error
 _PADDLEOCR_CPU_INCOMPATIBLE = False
 
+# Check if OCR is explicitly disabled via environment variable
+_OCR_DISABLED = os.environ.get('DISABLE_OCR', '').lower() in ('true', '1', 'yes')
+if _OCR_DISABLED:
+    logger.info("OCR is disabled via DISABLE_OCR environment variable")
+
 
 def _sigill_handler(signum, frame):
     """Handle SIGILL to prevent container crashes from CPU incompatibility."""
@@ -37,17 +43,23 @@ def _sigill_handler(signum, frame):
 # Install SIGILL handler before importing PaddleOCR
 signal.signal(signal.SIGILL, _sigill_handler)
 
-try:
-    from paddleocr import PaddleOCR
+# Only import PaddleOCR if not explicitly disabled
+if not _OCR_DISABLED:
+    try:
+        from paddleocr import PaddleOCR
 
-    OCR_AVAILABLE = True
-    # Cache for PaddleOCR instances by language
-    _paddleocr_cache = {}  # {lang_code: PaddleOCR instance}
-except (ImportError, OSError, RuntimeError, Exception) as e:
-    logger.warning(f"PaddleOCR not available: {e}")
+        OCR_AVAILABLE = True
+        # Cache for PaddleOCR instances by language
+        _paddleocr_cache = {}  # {lang_code: PaddleOCR instance}
+    except (ImportError, OSError, RuntimeError, Exception) as e:
+        logger.warning(f"PaddleOCR not available: {e}")
+        OCR_AVAILABLE = False
+        _paddleocr_cache = {}
+        PaddleOCR = None  # type: ignore
+else:
     OCR_AVAILABLE = False
     _paddleocr_cache = {}
-
+    PaddleOCR = None  # type: ignore
 # Mapping from common language names to PaddleOCR language codes
 LANGUAGE_TO_PADDLEOCR = {
     "english": "en",
@@ -104,6 +116,22 @@ def _get_paddleocr_reader(language: Optional[str] = None):
     # Return cached instance if available
     if lang_code in _paddleocr_cache:
         return _paddleocr_cache[lang_code]
+
+    # Check available memory before initializing
+    try:
+        import psutil
+        from core.constants import OCR_MIN_MEMORY_MB
+        available_mb = psutil.virtual_memory().available / (1024 * 1024)
+        if available_mb < OCR_MIN_MEMORY_MB:
+            logger.error(f"Insufficient memory for PaddleOCR: {available_mb:.0f}MB available, need ~{OCR_MIN_MEMORY_MB}MB")
+            logger.error("OCR functionality will be disabled to prevent OOM crashes")
+            _PADDLEOCR_CPU_INCOMPATIBLE = True
+            return None
+        logger.debug(f"Available memory: {available_mb:.0f}MB - sufficient for PaddleOCR")
+    except ImportError:
+        logger.warning("psutil not available - cannot check memory before PaddleOCR initialization")
+    except Exception as e:
+        logger.warning(f"Could not check available memory: {e}")
 
     # Create new instance
     try:
