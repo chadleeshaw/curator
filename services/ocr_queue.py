@@ -1,16 +1,13 @@
-"""Background OCR queue service with process pool for concurrent processing."""
+"""Background OCR queue service for sequential processing."""
 
 import logging
-import multiprocessing
 import os
-from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
 
 # Set environment variables before importing PaddleOCR-dependent modules
-# This ensures they're set when child processes start with spawn context
 os.environ['USE_GPU'] = '0'
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
@@ -20,15 +17,10 @@ from services.ocr_service import OCRService
 
 logger = logging.getLogger(__name__)
 
-# Global process pool - initialized once and reused
-_process_pool: Optional[ProcessPoolExecutor] = None
-_pool_size = 0
-
 
 def _ocr_worker(cover_path: str, language: Optional[str] = None) -> Dict[str, Any]:
     """
-    Worker function that runs in a separate process.
-    This function must be at module level to be picklable.
+    Worker function that processes OCR synchronously.
 
     Args:
         cover_path: Path to cover image/PDF/EPUB
@@ -37,7 +29,6 @@ def _ocr_worker(cover_path: str, language: Optional[str] = None) -> Dict[str, An
     Returns:
         Dictionary with OCR metadata
     """
-    # Each process gets its own OCRService instance
     try:
         result = OCRService.analyze_cover(cover_path, language=language)
         return {"success": True, "metadata": result}
@@ -49,7 +40,7 @@ def _ocr_worker(cover_path: str, language: Optional[str] = None) -> Dict[str, An
         logger.error(f"{error_msg}\n{error_trace}")
         return {"success": False, "error": f"Runtime error: {str(e)} (check CPU compatibility)"}
     except Exception as e:
-        # Catch all other exceptions to prevent process crash
+        # Catch all other exceptions
         import traceback
         error_msg = f"OCR worker error for {cover_path}: {e}"
         error_trace = traceback.format_exc()
@@ -58,40 +49,16 @@ def _ocr_worker(cover_path: str, language: Optional[str] = None) -> Dict[str, An
 
 
 class OCRQueueService:
-    """Service for managing background OCR processing with process pool."""
+    """Service for managing background OCR processing sequentially."""
 
     def __init__(self, max_workers: int = constants.OCR_MAX_WORKERS):
         """
         Initialize OCR queue service.
 
         Args:
-            max_workers: Number of concurrent OCR processes (default: OCR_MAX_WORKERS from constants)
+            max_workers: Deprecated parameter (kept for compatibility)
         """
-        self.max_workers = max_workers
-        self._ensure_pool()
-
-    def _ensure_pool(self, force_recreate: bool = False):
-        """Ensure process pool is initialized and healthy."""
-        global _process_pool, _pool_size
-
-        # Recreate pool if forced or if pool is broken/None or size changed
-        if force_recreate or _process_pool is None or _pool_size != self.max_workers:
-            if _process_pool is not None:
-                logger.info("Shutting down old process pool")
-                try:
-                    _process_pool.shutdown(wait=False)
-                except Exception as e:
-                    logger.warning(f"Error shutting down old pool: {e}")
-
-            logger.info(f"Initializing OCR process pool with {self.max_workers} workers")
-            # Use 'spawn' context for better compatibility with libraries like PaddleOCR
-            # 'fork' can cause issues on macOS and with certain C extensions
-            mp_context = multiprocessing.get_context('spawn')
-            _process_pool = ProcessPoolExecutor(
-                max_workers=self.max_workers,
-                mp_context=mp_context
-            )
-            _pool_size = self.max_workers
+        # max_workers is now ignored since we process sequentially
 
     @staticmethod
     def queue_ocr_job(
@@ -279,60 +246,19 @@ class OCRQueueService:
             logger.info("No valid jobs to process")
             return stats
 
-        # Process jobs concurrently using process pool
-        futures = {}
+        # Process jobs sequentially
         for data in job_data:
-            try:
-                future = _process_pool.submit(
-                    _ocr_worker,
-                    data["cover_path"],
-                    data["language"]
-                )
-                futures[future] = data
-            except Exception as e:
-                # If pool is broken, recreate it and retry once
-                if "BrokenProcessPool" in str(type(e).__name__) or "not usable" in str(e):
-                    logger.warning(f"Process pool is broken, recreating: {e}")
-                    self._ensure_pool(force_recreate=True)
-                    try:
-                        future = _process_pool.submit(
-                            _ocr_worker,
-                            data["cover_path"],
-                            data["language"]
-                        )
-                        futures[future] = data
-                    except Exception as retry_e:
-                        logger.error(f"Failed to submit job after pool recreation: {retry_e}")
-                        # Mark job as failed
-                        job = data["job"]
-                        job.status = OCRJob.StatusEnum.FAILED
-                        job.last_error = f"Process pool error: {str(retry_e)[:500]}"
-                        job.completed_at = datetime.now(UTC)
-                        stats["failed"] += 1
-                else:
-                    logger.error(f"Failed to submit OCR job: {e}")
-                    job = data["job"]
-                    job.status = OCRJob.StatusEnum.FAILED
-                    job.last_error = f"Submit error: {str(e)[:500]}"
-                    job.completed_at = datetime.now(UTC)
-                    stats["failed"] += 1
-
-        db.commit()
-
-        if not futures:
-            logger.warning("No jobs were successfully submitted to process pool")
-            return stats
-
-        # Collect results as they complete
-        for future in as_completed(futures):
-            data = futures[future]
             job = data["job"]
             magazine = data["magazine"]
-            job_id = job.id  # Store ID before any processing
+            job_id = job.id
             magazine_id = magazine.id
 
             try:
-                result = future.result(timeout=120)  # 2 minute timeout per job
+                # Call the worker function directly (no multiprocessing)
+                result = _ocr_worker(
+                    data["cover_path"],
+                    data["language"]
+                )
 
                 # Refresh objects from DB to avoid stale state
                 db.expire_all()
@@ -342,6 +268,7 @@ class OCRQueueService:
                 if not job or not magazine:
                     logger.error(f"Job or magazine not found after processing: job={job_id}, magazine={magazine_id}")
                     stats["failed"] += 1
+                    stats["processed"] += 1
                     continue
 
                 # Ensure started_at is timezone-aware (SQLite stores naive datetimes)
@@ -392,6 +319,7 @@ class OCRQueueService:
                     error_msg = result.get("error", "Unknown error")
                     job.status = OCRJob.StatusEnum.FAILED
                     job.last_error = error_msg[:512]  # Truncate if too long
+                    job.completed_at = datetime.now(UTC)
 
                     # Clean up OCR PNG file after failed processing too
                     try:
@@ -409,21 +337,10 @@ class OCRQueueService:
                     stats["failed"] += 1
 
             except Exception as e:
-                # Processing exception (including BrokenProcessPool from crashed worker)
+                # Processing exception
                 error_type = type(e).__name__
                 error_msg = str(e)
-
-                # Check if this is a process pool crash
-                if "BrokenProcessPool" in error_type or "terminated abruptly" in error_msg:
-                    logger.error(f"OCR worker process crashed for job {job_id}: {error_msg}")
-                    logger.warning("This may indicate PaddleOCR compatibility issues. Recreating process pool...")
-                    # Recreate the pool for subsequent jobs
-                    try:
-                        self._ensure_pool(force_recreate=True)
-                    except Exception as pool_error:
-                        logger.error(f"Failed to recreate process pool: {pool_error}")
-                else:
-                    logger.error(f"Error processing OCR job {job_id}: {e}", exc_info=True)
+                logger.error(f"Error processing OCR job {job_id}: {e}", exc_info=True)
 
                 # Try to update job status
                 try:
@@ -438,8 +355,7 @@ class OCRQueueService:
                 stats["failed"] += 1
 
             stats["processed"] += 1
-
-        db.commit()
+            db.commit()  # Commit after each job
 
         logger.info(f"OCR batch complete: {stats['processed']} processed, "
                     f"{stats['succeeded']} succeeded, {stats['failed']} failed")
@@ -534,14 +450,4 @@ class OCRQueueService:
         return deleted
 
     def shutdown(self):
-        """Shutdown the process pool gracefully."""
-        global _process_pool
-        if _process_pool is not None:
-            logger.info("Shutting down OCR process pool")
-            try:
-                # Don't wait for pending jobs, cancel them
-                _process_pool.shutdown(wait=False, cancel_futures=True)
-            except Exception as e:
-                logger.warning(f"Error during process pool shutdown: {e}")
-            finally:
-                _process_pool = None
+        """Shutdown method (no longer needed for sequential processing)."""
