@@ -344,13 +344,13 @@ async def list_tracked_magazines(
             tracked_list = []
             for t in tracked:
                 library_count = db_session.query(Magazine).filter(Magazine.tracking_id == t.id).count()
-                
+
                 # Count failed downloads (status='failed' and attempt_count < 3) and bad files (attempt_count >= 3)
                 failed_count = db_session.query(DownloadSubmission).filter(
                     DownloadSubmission.tracking_id == t.id,
                     DownloadSubmission.status == DownloadSubmission.StatusEnum.FAILED
                 ).count()
-                
+
                 tracked_list.append(
                     {
                         "id": t.id,

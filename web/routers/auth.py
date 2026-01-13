@@ -38,13 +38,13 @@ def set_auth_manager(auth_manager: "AuthManager") -> None:
 async def get_verify_token(authorization: Optional[str] = Header(None)) -> str:
     """
     Dependency function to verify token and return username.
-    
+
     Args:
         authorization: Authorization header value (injected by FastAPI)
-        
+
     Returns:
         Username from verified token
-        
+
     Raises:
         HTTPException: If token is invalid or missing
     """
@@ -157,17 +157,18 @@ async def update_user(request: UpdateUserRequest, current_username: str = Depend
 
     return {"success": True, "message": "Account updated successfully"}
 
+
 @router.get("/api-token")
 async def get_api_token(username: str = Depends(get_verify_token)):
     """Get the current API token for the authenticated user"""
     success, api_token = _auth_manager.get_api_token()
-    
+
     if not success or not api_token:
         # If no token exists, generate one
         success, api_token = _auth_manager.regenerate_api_token()
         if not success:
             raise HTTPException(status_code=500, detail="Failed to generate API token")
-    
+
     return {"success": True, "api_token": api_token, "message": "API token retrieved successfully"}
 
 
@@ -175,8 +176,8 @@ async def get_api_token(username: str = Depends(get_verify_token)):
 async def regenerate_api_token(username: str = Depends(get_verify_token)):
     """Regenerate a new API token for the authenticated user"""
     success, new_token = _auth_manager.regenerate_api_token()
-    
+
     if not success:
         raise HTTPException(status_code=500, detail="Failed to generate new API token")
-    
+
     return {"success": True, "api_token": new_token, "message": "API token regenerated successfully"}

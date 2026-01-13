@@ -17,7 +17,7 @@ class AuthMiddleware:
     async def verify_token(self, authorization: Optional[str]) -> str:
         """
         Verify JWT token from Authorization header.
-        
+
         This method is designed to be used as a FastAPI dependency.
 
         Args:
@@ -38,23 +38,23 @@ class AuthMiddleware:
             raise HTTPException(status_code=401, detail="Invalid authorization header")
 
         token = parts[1]
-        
+
         # Try JWT token first
         is_valid, username = self.auth_manager.verify_token(token)
         if is_valid and username:
             return username
-        
+
         # Fall back to API token
         is_valid, username = self.auth_manager.verify_api_token(token)
         if is_valid and username:
             return username
-        
+
         raise HTTPException(status_code=401, detail="Invalid or expired token")
-    
+
     def get_verify_token_dependency(self) -> Callable:
         """
         Get a dependency function for token verification.
-        
+
         Returns a callable that can be used with FastAPI's Depends()
         """
         return self.verify_token

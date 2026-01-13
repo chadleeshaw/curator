@@ -43,7 +43,7 @@ class Credentials(Base):
     def verify_password(self, password: str) -> bool:
         """Verify a password against the stored hash"""
         return bcrypt.checkpw(password.encode("utf-8"), self.password_hash.encode("utf-8"))
-    
+
     def generate_api_token(self) -> str:
         """Generate a new API token"""
         self.api_token = secrets.token_urlsafe(32)

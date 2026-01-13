@@ -195,7 +195,7 @@ async def delete_ocr_job(job_id: int):
 
         # Log appropriate message based on status
         action = "cancelled" if job.status == OCRJob.StatusEnum.PROCESSING else "deleted"
-        
+
         db.delete(job)
         db.commit()
 

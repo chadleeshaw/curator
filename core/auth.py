@@ -191,6 +191,7 @@ class AuthManager:
             return False, f"Error updating username: {str(e)}"
         finally:
             session.close()
+
     def get_api_token(self) -> Tuple[bool, Optional[str]]:
         """
         Get the current API token.
@@ -221,7 +222,7 @@ class AuthManager:
             creds = session.query(Credentials).first()
             if not creds:
                 return False, None
-            
+
             new_token = creds.generate_api_token()
             session.commit()
             return True, new_token

@@ -386,19 +386,19 @@ class FileImporter:
                     enable_text_scan = getattr(self, '_enable_text_scan', True)
                     if enable_text_scan:
                         logger.debug(f"Attempting direct text extraction for {magazine.id}")
-                        
+
                         # Use TextScanService for direct text extraction
                         scan_result = TextScanService.scan_document(str(organized_path), language=parsed.language)
-                        
+
                         # Always store text scan metadata (even if no text found)
                         if not magazine.extra_metadata:
                             magazine.extra_metadata = {}
                         magazine.extra_metadata["text_scan"] = scan_result
-                        
+
                         from sqlalchemy.orm.attributes import flag_modified
                         flag_modified(magazine, "extra_metadata")
                         session.commit()
-                        
+
                         if scan_result.get("text_found"):
                             text_extracted = True
                             has_sufficient = scan_result.get("has_sufficient_metadata", False)
@@ -410,16 +410,16 @@ class FileImporter:
                             logger.debug(f"No text found in {organized_path.name}")
                     else:
                         logger.debug("Text scanning disabled in config")
-                
+
                 except Exception as e:
                     logger.debug(f"Direct text extraction failed for {magazine.id}: {e}")
-            
+
             # Queue OCR job if:
             # 1. OCR is enabled (should_queue_ocr), AND
             # 2. Either text extraction failed/wasn't attempted OR text extraction didn't yield sufficient metadata
             if should_queue_ocr:
                 should_queue_for_ocr = False
-                
+
                 if not text_extracted:
                     # No text was extracted at all
                     should_queue_for_ocr = True
@@ -430,7 +430,7 @@ class FileImporter:
                     if not text_scan_metadata.get("has_sufficient_metadata", False):
                         should_queue_for_ocr = True
                         logger.debug(f"Queueing OCR for {magazine.id}: insufficient metadata from text scan")
-                
+
                 if should_queue_for_ocr:
                     try:
                         priority = OCRJob.PriorityEnum.HIGH.value if not skip_organize else OCRJob.PriorityEnum.NORMAL.value

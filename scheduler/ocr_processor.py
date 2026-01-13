@@ -29,7 +29,7 @@ class OCRProcessorTask:
         self.max_workers = max_workers
         self.batch_size = batch_size
         self.ocr_service = OCRQueueService(max_workers=max_workers)
-        
+
         # Task tracking attributes (for API status)
         self.last_run_time = None
         self.next_run_time = None
@@ -40,7 +40,7 @@ class OCRProcessorTask:
             "jobs_failed": 0,
             "last_process_time": None,
         }
-        
+
         logger.info(f"OCR processor initialized with {max_workers} workers, batch size {batch_size}")
 
     async def run(self) -> Dict[str, Any]:
@@ -55,31 +55,31 @@ class OCRProcessorTask:
         """
         try:
             from datetime import datetime
-            
+
             # Check if OCR is enabled in config
             if self.config_loader:
                 import_config = self.config_loader.get_import()
                 if not import_config.get("enable_ocr", True):
                     logger.debug("OCR is disabled in config, skipping OCR processing")
                     return {"skipped": True, "reason": "OCR disabled in config"}
-            
+
             self.last_run_time = datetime.now()
             self.stats["total_runs"] += 1
-            
+
             # Run the synchronous processing in a thread executor
             # This prevents blocking the event loop during model downloads or OCR processing
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(None, self._process_sync)
-            
+
             # Update stats
             if "processed" in result:
                 self.stats["jobs_processed"] += result["processed"]
             if "failed" in result:
                 self.stats["jobs_failed"] += result["failed"]
-            
+
             self.stats["last_process_time"] = datetime.now()
             self.last_status = "success"
-            
+
             return result
 
         except Exception as e:

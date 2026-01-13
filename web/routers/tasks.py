@@ -24,7 +24,7 @@ _storage_config = None
 _task_scheduler = None
 
 
-def set_dependencies(session_factory, download_monitor_task, file_importer, storage_config, ocr_processor_task=None, task_scheduler=None):
+def set_dependencies(session_factory, download_monitor_task, file_importer, storage_config, ocr_processor_task=None, task_scheduler=None):  # pylint: disable=too-many-positional-arguments
     """Set dependencies from main app"""
     global _session_factory, _download_monitor_task, _file_importer, _storage_config, _ocr_processor_task, _task_scheduler
     _session_factory = session_factory
@@ -47,7 +47,7 @@ async def get_tasks_status():
             dm_status = getattr(_download_monitor_task, "last_status", None)
             dm_stats = getattr(_download_monitor_task, "stats", {})
             logger.debug(f"Tasks Status - Download Monitor: last_run={dm_last_run}, status={dm_status}")
-            
+
             # Get interval from scheduler
             dm_interval = 30
             if _task_scheduler:
@@ -84,7 +84,7 @@ async def get_tasks_status():
             ocr_status = getattr(_ocr_processor_task, "last_status", None)
             ocr_stats = getattr(_ocr_processor_task, "stats", {})
             logger.debug(f"Tasks Status - OCR Processor: last_run={ocr_last_run}, status={ocr_status}")
-            
+
             # Get interval from scheduler
             ocr_interval = 3600
             if _task_scheduler:

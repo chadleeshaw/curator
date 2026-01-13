@@ -274,11 +274,11 @@ async def lifespan(app: FastAPI):
             if download_monitor_task:
                 try:
                     from datetime import datetime, timedelta
-                    
+
                     # Update next run time before execution
                     interval = tasks_config.get("download_monitor_interval", constants.DOWNLOAD_MONITOR_INTERVAL)
                     download_monitor_task.next_run_time = datetime.now() + timedelta(seconds=interval)
-                    
+
                     await download_monitor_task.run()
                 except Exception as e:
                     logger.error(f"Download monitoring error: {e}", exc_info=True)
@@ -303,11 +303,11 @@ async def lifespan(app: FastAPI):
             """Process queued OCR jobs with process pool (runs every hour)"""
             try:
                 from datetime import datetime, timedelta
-                
+
                 # Update next run time before execution
                 interval = tasks_config.get("ocr_processor_interval", constants.OCR_PROCESSOR_INTERVAL)
                 ocr_processor_task.next_run_time = datetime.now() + timedelta(seconds=interval)
-                
+
                 stats = await ocr_processor_task.run()
                 if stats.get("processed", 0) > 0:
                     logger.info(f"OCR processor: {stats}")
