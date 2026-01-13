@@ -515,6 +515,75 @@ async def toggle_special_edition(magazine_id: int, is_special: bool) -> Dict[str
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.put("/periodicals/{magazine_id}")
+async def update_periodical(magazine_id: int, updates: Dict[str, Any]) -> Dict[str, Any]:
+    """Update periodical metadata"""
+    try:
+        db_session = _session_factory()
+        try:
+            magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+            if not magazine:
+                raise HTTPException(status_code=404, detail="Periodical not found")
+
+            # Check if this magazine is linked to tracking
+            has_tracking = magazine.tracking_id is not None
+
+            # Update allowed fields
+            # Language can only be updated if NOT linked to tracking
+            if "language" in updates and not has_tracking:
+                magazine.language = updates["language"]
+
+            if "issue_date" in updates:
+                from datetime import datetime
+                # Parse ISO date string
+                if isinstance(updates["issue_date"], str):
+                    magazine.issue_date = datetime.fromisoformat(updates["issue_date"].replace('Z', '+00:00'))
+                else:
+                    magazine.issue_date = updates["issue_date"]
+
+            # Update extra_metadata fields
+            if magazine.extra_metadata is None:
+                magazine.extra_metadata = {}
+
+            # Country can only be updated if NOT linked to tracking
+            if "country" in updates and not has_tracking:
+                magazine.extra_metadata["country"] = updates["country"]
+
+            if "issue_number" in updates:
+                magazine.extra_metadata["issue_number"] = updates["issue_number"]
+
+            if "volume" in updates:
+                magazine.extra_metadata["volume"] = updates["volume"]
+
+            if "special_edition" in updates:
+                if updates["special_edition"]:
+                    magazine.extra_metadata["special_edition"] = updates["special_edition"]
+                elif "special_edition" in magazine.extra_metadata:
+                    del magazine.extra_metadata["special_edition"]
+
+            db_session.commit()
+            db_session.refresh(magazine)
+
+            return {
+                "success": True,
+                "message": "Metadata updated successfully",
+                "periodical": {
+                    "id": magazine.id,
+                    "title": magazine.title,
+                    "language": magazine.language,
+                    "issue_date": magazine.issue_date.isoformat() if magazine.issue_date else None,
+                    "metadata": magazine.extra_metadata,
+                },
+            }
+        finally:
+            db_session.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating periodical: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.delete("/periodicals/{magazine_id}")
 async def delete_periodical(
     magazine_id: int, delete_files: bool = False, remove_tracking: bool = False, delete_all_issues: bool = False

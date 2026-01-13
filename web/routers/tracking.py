@@ -23,14 +23,18 @@ logger = logging.getLogger(__name__)
 _session_factory = None
 _search_providers = None
 _auto_download_task_func = None
+_storage_config = None
+_import_config = None
 
 
-def set_dependencies(session_factory, search_providers, auto_download_task=None):
+def set_dependencies(session_factory, search_providers, auto_download_task=None, storage_config=None, import_config=None):
     """Set dependencies from main app"""
-    global _session_factory, _search_providers, _auto_download_task_func
+    global _session_factory, _search_providers, _auto_download_task_func, _storage_config, _import_config
     _session_factory = session_factory
     _search_providers = search_providers
     _auto_download_task_func = auto_download_task
+    _storage_config = storage_config or {}
+    _import_config = import_config or {}
 
 
 @router.post(
@@ -721,6 +725,10 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
             if not tracking:
                 raise HTTPException(status_code=404, detail="Tracking record not found")
 
+            # Store old title for file reorganization if title is being changed
+            old_title = tracking.title
+            title_changed = "title" in updates and updates["title"] != old_title
+
             if "title" in updates:
                 tracking.title = updates["title"]
             if "category" in updates:
@@ -738,7 +746,66 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
             if "delete_from_client_on_completion" in updates:
                 tracking.delete_from_client_on_completion = updates["delete_from_client_on_completion"]
 
+            # If title changed, reorganize all files for this tracking record
+            files_reorganized = 0
+            if title_changed:
+                from models.database import Magazine
+
+                # Get organize directory from config
+                organize_base_dir = Path(_storage_config.get("organize_dir", "./local/data")).resolve()
+                category_prefix = _import_config.get("category_prefix", "_")
+
+                # Get all magazines linked to this tracking record
+                magazines = db_session.query(Magazine).filter(Magazine.tracking_id == tracking_id).all()
+
+                directories_to_cleanup = set()
+
+                for magazine in magazines:
+                    # Check if this is a special edition
+                    is_special = False
+                    if magazine.extra_metadata and isinstance(magazine.extra_metadata, dict):
+                        is_special = magazine.extra_metadata.get("special_edition") is not None
+                    if not is_special:
+                        is_special = is_special_edition(magazine.title)
+
+                    # Only reorganize regular editions
+                    if not is_special:
+                        # Store old directory for cleanup
+                        old_pdf_path = Path(magazine.file_path)
+                        if old_pdf_path.exists():
+                            directories_to_cleanup.add(old_pdf_path.parent)
+
+                        # Reorganize files to match new title structure
+                        new_pdf_path, new_cover_path = _reorganize_magazine_files(
+                            magazine, tracking.title, organize_base_dir, category_prefix
+                        )
+
+                        # Update database paths if reorganization succeeded
+                        if new_pdf_path:
+                            magazine.file_path = new_pdf_path
+                            if new_cover_path:
+                                magazine.cover_path = new_cover_path
+                            files_reorganized += 1
+                            logger.info(
+                                f"Reorganized files for: {magazine.title} ({magazine.issue_date.strftime('%b %Y')})"
+                            )
+                        else:
+                            logger.warning(
+                                f"Failed to reorganize files for magazine ID {magazine.id}, keeping original paths"
+                            )
+
+                        # Update magazine title to match tracking title
+                        magazine.title = tracking.title
+
             db_session.commit()
+
+            # Clean up empty directories after successful commit
+            if title_changed and files_reorganized > 0:
+                for directory in directories_to_cleanup:
+                    if directory.exists():
+                        _cleanup_empty_directories(directory, organize_base_dir)
+
+                logger.info(f"Title changed from '{old_title}' to '{tracking.title}', reorganized {files_reorganized} files")
 
             # Trigger immediate auto-download check if tracking settings changed
             if _auto_download_task_func and any(k in updates for k in ["track_all_editions", "track_new_only"]):
@@ -752,7 +819,7 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
                 except Exception as e:
                     logger.warning(f"Could not trigger immediate auto-download: {e}")
 
-            return {
+            response = {
                 "success": True,
                 "message": "Tracking updated successfully",
                 "tracking": {
@@ -763,6 +830,12 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
                     "delete_from_client_on_completion": tracking.delete_from_client_on_completion,
                 },
             }
+
+            if title_changed:
+                response["files_reorganized"] = files_reorganized
+                response["message"] = f"Tracking updated successfully. Reorganized {files_reorganized} files."
+
+            return response
         finally:
             db_session.close()
     except HTTPException:

@@ -46,6 +46,7 @@ matching_config = config_loader.get_matching()
 pdf_config = config_loader.get_pdf()
 downloads_config = config_loader.get_downloads()
 tasks_config = config_loader.get_tasks()
+import_config = config_loader.get_import()
 
 # Initialize database
 db_url = f"sqlite:///{storage_config.get('db_path', './data/periodicals.db')}"
@@ -342,7 +343,7 @@ async def lifespan(app: FastAPI):
         auth.set_auth_manager(auth_manager)
         search.set_dependencies(search_providers, metadata_providers, title_matcher, session_factory)
         periodicals.set_dependencies(session_factory)
-        tracking.set_dependencies(session_factory, search_providers, auto_download_task)
+        tracking.set_dependencies(session_factory, search_providers, auto_download_task, storage_config, import_config)
         downloads.set_dependencies(session_factory, download_manager, download_client)
         imports.set_dependencies(session_factory, file_importer, storage_config)
         tasks.set_dependencies(session_factory, download_monitor_task, file_importer, storage_config, ocr_processor_task, task_scheduler)

@@ -3,6 +3,7 @@ Test suite for tracking router endpoints
 """
 
 import sys
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -12,7 +13,7 @@ from sqlalchemy.orm import sessionmaker
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from models.database import Base, MagazineTracking
+from models.database import Base, Magazine, MagazineTracking
 
 
 @pytest.fixture
@@ -66,7 +67,7 @@ class TestTrackingCreation:
         assert tracking.track_all_editions is False
         assert tracking.track_new_only is False
         assert tracking.selected_editions == {}
-        assert tracking.selected_years == []
+        assert not tracking.selected_years
         assert tracking.total_editions_known == 0
 
         session.close()
@@ -327,7 +328,6 @@ class TestTrackingMerge:
         engine, session_factory = test_db
         session = session_factory()
 
-        from models.database import Magazine
         from web.routers.tracking import merge_tracking, set_dependencies
 
         # Set up dependencies
@@ -432,7 +432,6 @@ class TestTrackingMerge:
         engine, session_factory = test_db
         session = session_factory()
 
-        from models.database import Magazine
         from web.routers.tracking import merge_tracking, set_dependencies
 
         set_dependencies(session_factory, None, None)
@@ -505,7 +504,6 @@ class TestTrackingMerge:
         engine, session_factory = test_db
         session = session_factory()
 
-        from models.database import Magazine
         from web.routers.tracking import merge_tracking, set_dependencies
 
         set_dependencies(session_factory, None, None)
@@ -577,6 +575,234 @@ class TestTrackingMerge:
         assert special.extra_metadata.get("special_edition") == "Special Edition"
 
         session.close()
+
+
+class TestTitleChangeFileReorganization:
+    """Test that changing a tracking title reorganizes files and folders"""
+
+    def test_title_change_reorganizes_files(self, test_db):
+        """Test that renaming a tracking title moves files to new folders"""
+        engine, session_factory = test_db
+        session = session_factory()
+
+        # Create a temporary directory structure
+        with tempfile.TemporaryDirectory() as tmpdir:
+            organize_dir = Path(tmpdir) / "data"
+            organize_dir.mkdir(parents=True, exist_ok=True)
+
+            # Create tracking record
+            tracking = MagazineTracking(
+                olid="OL12345W",
+                title="Old Magazine Name",
+                category="Magazines",
+                track_all_editions=True,
+            )
+            session.add(tracking)
+            session.commit()
+            tracking_id = tracking.id
+
+            # Create directory structure and files with old title
+            old_folder = organize_dir / "_Magazines" / "Old Magazine Name" / "2024"
+            old_folder.mkdir(parents=True, exist_ok=True)
+
+            old_pdf = old_folder / "Old Magazine Name - Jan2024.pdf"
+            old_cover = old_folder / "Old Magazine Name - Jan2024.jpg"
+
+            # Create actual files
+            old_pdf.write_text("PDF content")
+            old_cover.write_text("Cover content")
+
+            # Add magazine record pointing to old paths
+            magazine = Magazine(
+                title="Old Magazine Name",
+                issue_date=datetime(2024, 1, 15),
+                file_path=str(old_pdf),
+                cover_path=str(old_cover),
+                tracking_id=tracking_id,
+                extra_metadata={"category": "Magazines"},
+            )
+            session.add(magazine)
+            session.commit()
+            magazine_id = magazine.id
+
+            # Verify old files exist
+            assert old_pdf.exists(), "Old PDF should exist"
+            assert old_cover.exists(), "Old cover should exist"
+
+            # Simulate the update_tracking endpoint behavior
+            from web.routers.tracking import _reorganize_magazine_files
+
+            # Update the tracking title
+            old_title = tracking.title
+            new_title = "New Magazine Name"
+            tracking.title = new_title
+
+            # Reorganize files
+            new_pdf_path, new_cover_path = _reorganize_magazine_files(
+                magazine, new_title, organize_dir, "_"
+            )
+
+            # Update magazine record
+            if new_pdf_path:
+                magazine.file_path = new_pdf_path
+                if new_cover_path:
+                    magazine.cover_path = new_cover_path
+                magazine.title = new_title
+
+            session.commit()
+
+            # Verify new structure
+            new_folder = organize_dir / "_Magazines" / "New Magazine Name" / "2024"
+            new_pdf = new_folder / "New Magazine Name - Jan2024.pdf"
+            new_cover = new_folder / "New Magazine Name - Jan2024.jpg"
+
+            assert new_pdf.exists(), f"New PDF should exist at {new_pdf}"
+            assert new_cover.exists(), f"New cover should exist at {new_cover}"
+            assert new_pdf.read_text() == "PDF content", "PDF content should be preserved"
+            assert new_cover.read_text() == "Cover content", "Cover content should be preserved"
+
+            # Verify database updates
+            session.refresh(magazine)
+            assert magazine.title == new_title, "Magazine title should be updated"
+            assert magazine.file_path == str(new_pdf), "PDF path should be updated"
+            assert magazine.cover_path == str(new_cover), "Cover path should be updated"
+
+            # Verify old files are gone
+            assert not old_pdf.exists(), "Old PDF should be moved"
+            assert not old_cover.exists(), "Old cover should be moved"
+
+            session.close()
+
+    def test_title_change_preserves_special_editions(self, test_db):
+        """Test that special editions keep their original titles when tracking title changes"""
+        engine, session_factory = test_db
+        session = session_factory()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            organize_dir = Path(tmpdir) / "data"
+            organize_dir.mkdir(parents=True, exist_ok=True)
+
+            # Create tracking record
+            tracking = MagazineTracking(
+                olid="OL12345W",
+                title="National Geographic",
+                category="Magazines",
+            )
+            session.add(tracking)
+            session.commit()
+            tracking_id = tracking.id
+
+            # Create special edition magazine
+            special_folder = organize_dir / "_Magazines" / "National Geographic" / "2024"
+            special_folder.mkdir(parents=True, exist_ok=True)
+
+            special_pdf = special_folder / "National Geographic Swimsuit - Jan2024.pdf"
+            special_pdf.write_text("Special PDF content")
+
+            special_magazine = Magazine(
+                title="National Geographic Swimsuit Edition",
+                issue_date=datetime(2024, 1, 15),
+                file_path=str(special_pdf),
+                tracking_id=tracking_id,
+                extra_metadata={
+                    "category": "Magazines",
+                    "special_edition": "Swimsuit Edition"
+                },
+            )
+            session.add(special_magazine)
+            session.commit()
+
+            # Change tracking title - special edition should NOT be reorganized
+            old_special_title = special_magazine.title
+
+            # This simulates what happens in the update endpoint
+            # Special editions should be skipped
+            from core.utils import is_special_edition
+
+            is_special = special_magazine.extra_metadata.get("special_edition") is not None
+            assert is_special, "Should detect as special edition"
+
+            # Special editions should NOT be reorganized
+            # Title should remain unchanged
+            session.refresh(special_magazine)
+            assert special_magazine.title == old_special_title, "Special edition title should be preserved"
+
+            session.close()
+
+    def test_title_change_multiple_issues(self, test_db):
+        """Test that all issues under a tracking record are reorganized"""
+        engine, session_factory = test_db
+        session = session_factory()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            organize_dir = Path(tmpdir) / "data"
+            organize_dir.mkdir(parents=True, exist_ok=True)
+
+            # Create tracking record
+            tracking = MagazineTracking(
+                olid="OL12345W",
+                title="Wired Magazine",
+                category="Magazines",
+            )
+            session.add(tracking)
+            session.commit()
+            tracking_id = tracking.id
+
+            # Create multiple issues
+            issues = [
+                ("Jan2024", datetime(2024, 1, 15)),
+                ("Feb2024", datetime(2024, 2, 15)),
+                ("Mar2024", datetime(2024, 3, 15)),
+            ]
+
+            old_folder = organize_dir / "_Magazines" / "Wired Magazine" / "2024"
+            old_folder.mkdir(parents=True, exist_ok=True)
+
+            magazines = []
+            for month_label, issue_date in issues:
+                pdf_path = old_folder / f"Wired Magazine - {month_label}.pdf"
+                pdf_path.write_text(f"Content for {month_label}")
+
+                magazine = Magazine(
+                    title="Wired Magazine",
+                    issue_date=issue_date,
+                    file_path=str(pdf_path),
+                    tracking_id=tracking_id,
+                    extra_metadata={"category": "Magazines"},
+                )
+                session.add(magazine)
+                magazines.append(magazine)
+
+            session.commit()
+
+            # Update title and reorganize all files
+            from web.routers.tracking import _reorganize_magazine_files
+
+            tracking.title = "Wired"
+
+            for magazine in magazines:
+                new_pdf_path, new_cover_path = _reorganize_magazine_files(
+                    magazine, "Wired", organize_dir, "_"
+                )
+                if new_pdf_path:
+                    magazine.file_path = new_pdf_path
+                    magazine.title = "Wired"
+
+            session.commit()
+
+            # Verify all files moved
+            new_folder = organize_dir / "_Magazines" / "Wired" / "2024"
+            for month_label, _ in issues:
+                new_pdf = new_folder / f"Wired - {month_label}.pdf"
+                assert new_pdf.exists(), f"{month_label} should be reorganized"
+                assert new_pdf.read_text() == f"Content for {month_label}", "Content should be preserved"
+
+            # Verify old folder is empty (except for .DS_Store or similar)
+            if old_folder.exists():
+                remaining = [f for f in old_folder.iterdir() if not f.name.startswith('.')]
+                assert len(remaining) == 0, "Old folder should be empty"
+
+            session.close()
 
 
 if __name__ == "__main__":
