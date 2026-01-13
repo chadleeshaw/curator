@@ -34,7 +34,7 @@ def _ocr_worker(cover_path: str, language: Optional[str] = None) -> Dict[str, An
         # Set environment variable to ensure CPU-only mode
         import os
         os.environ.setdefault('USE_GPU', '0')
-        
+
         result = OCRService.analyze_cover(cover_path, language=language)
         return {"success": True, "metadata": result}
     except (RuntimeError, OSError, SystemError) as e:

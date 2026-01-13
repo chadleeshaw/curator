@@ -144,21 +144,21 @@ class OCRService:
             global _OCR_WARNING_LOGGED
             if not _OCR_WARNING_LOGGED:
                 logger.warning("PaddleOCR not available. Install with: pip install paddleocr")
-                _OCR_WARNING_LOGGE - wrap in try/catch for runtime errors
-            try:
-                result = ocr.predict(image_path)
-            except (RuntimeError, OSError, SystemError) as e:
-                logger.error(f"PaddleOCR prediction failed (possible CPU instruction incompatibility): {e}")
-                logger.warning("Consider installing a CPU-compatible version or using Docker with proper architecture")
-                return ""
+                _OCR_WARNING_LOGGED = True
+            return ""
 
         try:
             ocr = _get_paddleocr_reader(language)
             if ocr is None:
                 return ""
 
-            # Run OCR on the image
-            result = ocr.predict(image_path)
+            # Run OCR on the image - wrap in try/catch for runtime errors
+            try:
+                result = ocr.predict(image_path)
+            except (RuntimeError, OSError, SystemError) as e:
+                logger.error(f"PaddleOCR prediction failed (possible CPU instruction incompatibility): {e}")
+                logger.warning("Consider installing a CPU-compatible version or using Docker with proper architecture")
+                return ""
 
             # PaddleOCR predict() returns a list of OCRResult objects
             # Each result has a 'rec_texts' field containing the detected text
