@@ -13,12 +13,9 @@ from sqlalchemy.orm import sessionmaker
 
 from models.database import Magazine, OCRJob
 from services.ocr_queue import OCRQueueService
-from services.ocr_service import OCRService, test_paddleocr_compatibility
+from services.ocr_service import OCRService
 
 logger = logging.getLogger(__name__)
-
-# Test PaddleOCR compatibility at module load
-_CPU_COMPATIBLE = test_paddleocr_compatibility()
 
 
 class OCRCoverGeneratorTask:
@@ -62,11 +59,6 @@ class OCRCoverGeneratorTask:
         Returns:
             Dict with statistics
         """
-        # Check CPU compatibility first
-        if not _CPU_COMPATIBLE:
-            logger.warning("OCR cover generation skipped: CPU incompatibility detected")
-            return {"skipped": True, "reason": "CPU incompatible with PaddleOCR"}
-
         # Check if OCR is enabled in config
         if self.config_loader:
             import_config = self.config_loader.get_import()

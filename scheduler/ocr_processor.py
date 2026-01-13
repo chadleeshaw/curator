@@ -8,12 +8,9 @@ from sqlalchemy.orm import sessionmaker
 
 from core import constants
 from services.ocr_queue import OCRQueueService
-from services.ocr_service import test_paddleocr_compatibility
+from services.ocr_service import OCRService
 
 logger = logging.getLogger(__name__)
-
-# Test PaddleOCR compatibility at module load to prevent crashes
-_CPU_COMPATIBLE = test_paddleocr_compatibility()
 
 
 class OCRProcessorTask:
@@ -61,10 +58,10 @@ class OCRProcessorTask:
         try:
             from datetime import datetime
 
-            # Check CPU compatibility first
-            if not _CPU_COMPATIBLE:
-                logger.warning("OCR processing skipped: CPU incompatibility detected")
-                return {"skipped": True, "reason": "CPU incompatible with PaddleOCR"}
+            # Check if OCR is available
+            if not OCRService.is_available():
+                logger.debug("OCR service not available, skipping OCR processing")
+                return {"skipped": True, "reason": "OCR not available"}
 
             # Check if OCR is enabled in config
             if self.config_loader:

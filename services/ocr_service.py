@@ -1,6 +1,7 @@
 """OCR service for extracting text from cover art images."""
 
 import logging
+import signal
 import warnings
 from pathlib import Path
 from typing import Optional, Dict
@@ -20,6 +21,21 @@ logger = logging.getLogger(__name__)
 
 # Global flag to track if PaddleOCR had a fatal CPU compatibility error
 _PADDLEOCR_CPU_INCOMPATIBLE = False
+
+
+def _sigill_handler(signum, frame):
+    """Handle SIGILL to prevent container crashes from CPU incompatibility."""
+    global _PADDLEOCR_CPU_INCOMPATIBLE
+    logger.error("SIGILL (Illegal Instruction) detected - CPU does not support PaddleOCR requirements")
+    logger.error("CPU lacks AVX/AVX2/AVX512 instruction sets required by PaddleOCR")
+    logger.error("OCR functionality will be disabled")
+    _PADDLEOCR_CPU_INCOMPATIBLE = True
+    # Raise an exception instead of crashing
+    raise RuntimeError("CPU instruction set incompatible with PaddleOCR (SIGILL)")
+
+
+# Install SIGILL handler before importing PaddleOCR
+signal.signal(signal.SIGILL, _sigill_handler)
 
 try:
     from paddleocr import PaddleOCR
@@ -130,40 +146,6 @@ def _get_paddleocr_reader(language: Optional[str] = None):
 
 # Track if we've already warned about PaddleOCR not being installed
 _OCR_WARNING_LOGGED = False
-
-
-def test_paddleocr_compatibility() -> bool:
-    """
-    Test if PaddleOCR can be initialized without CPU errors.
-    This should be called at startup to detect CPU incompatibilities early.
-
-    Returns:
-        True if PaddleOCR is compatible, False otherwise
-    """
-    global _PADDLEOCR_CPU_INCOMPATIBLE
-
-    if not OCR_AVAILABLE:
-        logger.info("PaddleOCR not available - OCR features will be disabled")
-        return False
-
-    if _PADDLEOCR_CPU_INCOMPATIBLE:
-        return False
-
-    try:
-        logger.info("Testing PaddleOCR CPU compatibility...")
-        # Try to initialize with minimal settings - this will catch SIGILL
-        test_reader = _get_paddleocr_reader("en")
-        if test_reader is None:
-            logger.warning("PaddleOCR initialization returned None - OCR will be disabled")
-            _PADDLEOCR_CPU_INCOMPATIBLE = True
-            return False
-        logger.info("PaddleOCR CPU compatibility test passed")
-        return True
-    except Exception as e:
-        logger.error(f"PaddleOCR compatibility test failed: {e}")
-        logger.error("OCR functionality will be disabled")
-        _PADDLEOCR_CPU_INCOMPATIBLE = True
-        return False
 
 
 class OCRService:
