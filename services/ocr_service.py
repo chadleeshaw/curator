@@ -10,33 +10,59 @@ import re
 
 from PIL import Image
 
+from core.constants import (
+    MAX_IMAGE_PIXELS,
+    OCR_DISABLE_ENV_VALUES,
+    OCR_TEXT_DETECTION_THRESHOLD,
+    OCR_TEXT_UNCLIP_RATIO,
+    OCR_ISSUE_PATTERNS,
+    OCR_YEAR_PATTERN,
+    OCR_MONTH_NAMES,
+    OCR_VOLUME_PATTERNS,
+    OCR_SPECIAL_EDITION_INDICATORS,
+    LANGUAGE_TO_PADDLEOCR,
+    OCR_MIN_MEMORY_MB,
+    PDF_COVER_DPI_OCR,
+)
+
 # Suppress various warnings from PaddleOCR and dependencies
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-# Increase Pillow's decompression bomb limit for high-res images (300 DPI)
-# Default is ~89 MP, we need ~130 MP for magazine covers at 300 DPI
-Image.MAX_IMAGE_PIXELS = 200000000  # 200 megapixels
+# Increase Pillow's decompression bomb limit for high-res images
+Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
 
 logger = logging.getLogger(__name__)
 
-# Global flag to track if PaddleOCR had a fatal CPU compatibility error
-_PADDLEOCR_CPU_INCOMPATIBLE = False
 
-# Check if OCR is explicitly disabled via environment variable
-_OCR_DISABLED = os.environ.get('DISABLE_OCR', '').lower() in ('true', '1', 'yes')
-if _OCR_DISABLED:
-    logger.info("OCR is disabled via DISABLE_OCR environment variable")
+class OCRServiceConfig:
+    """Manages OCR service state and configuration."""
+
+    def __init__(self):
+        self.cpu_incompatible = False
+        self.ocr_disabled = self._check_ocr_disabled()
+        self.paddleocr_cache = {}
+        self.warning_logged = False
+
+    @staticmethod
+    def _check_ocr_disabled():
+        """Check if OCR is disabled via environment variable."""
+        disabled = os.environ.get('DISABLE_OCR', '').lower() in OCR_DISABLE_ENV_VALUES
+        if disabled:
+            logger.info("OCR is disabled via DISABLE_OCR environment variable")
+        return disabled
+
+
+# Global configuration instance
+_ocr_config = OCRServiceConfig()
 
 
 def _sigill_handler(signum, frame):
     """Handle SIGILL to prevent container crashes from CPU incompatibility."""
-    global _PADDLEOCR_CPU_INCOMPATIBLE
     logger.error("SIGILL (Illegal Instruction) detected - CPU does not support PaddleOCR requirements")
     logger.error("CPU lacks AVX/AVX2/AVX512 instruction sets required by PaddleOCR")
     logger.error("OCR functionality will be disabled")
-    _PADDLEOCR_CPU_INCOMPATIBLE = True
-    # Raise an exception instead of crashing
+    _ocr_config.cpu_incompatible = True
     raise RuntimeError("CPU instruction set incompatible with PaddleOCR (SIGILL)")
 
 
@@ -44,96 +70,79 @@ def _sigill_handler(signum, frame):
 signal.signal(signal.SIGILL, _sigill_handler)
 
 # Only import PaddleOCR if not explicitly disabled
-if not _OCR_DISABLED:
+if not _ocr_config.ocr_disabled:
     try:
         from paddleocr import PaddleOCR
 
         OCR_AVAILABLE = True
-        # Cache for PaddleOCR instances by language
-        _paddleocr_cache = {}  # {lang_code: PaddleOCR instance}
     except (ImportError, OSError, RuntimeError, Exception) as e:
         logger.warning(f"PaddleOCR not available: {e}")
         OCR_AVAILABLE = False
-        _paddleocr_cache = {}
         PaddleOCR = None  # type: ignore
 else:
     OCR_AVAILABLE = False
-    _paddleocr_cache = {}
     PaddleOCR = None  # type: ignore
-# Mapping from common language names to PaddleOCR language codes
-LANGUAGE_TO_PADDLEOCR = {
-    "english": "en",
-    "en": "en",
-    "french": "fr",
-    "fr": "fr",
-    "german": "german",
-    "de": "german",
-    "spanish": "es",
-    "es": "es",
-    "italian": "it",
-    "it": "it",
-    "portuguese": "pt",
-    "pt": "pt",
-    "russian": "ru",
-    "ru": "ru",
-    "chinese": "ch",
-    "ch": "ch",
-    "zh": "ch",
-    "japanese": "japan",
-    "ja": "japan",
-    "korean": "korean",
-    "ko": "korean",
-    "arabic": "ar",
-    "ar": "ar",
-    "latin": "latin",
-    "la": "latin",
-}
 
 
-def _get_paddleocr_reader(language: Optional[str] = None):
+def _log_paddleocr_error(lang_code: str, error: Exception):
+    """Log PaddleOCR initialization error with CPU compatibility information."""
+    logger.error(f"Failed to initialize PaddleOCR for language {lang_code}: {error}")
+    logger.error("This may be due to CPU instruction set incompatibility (e.g., AVX/AVX2 requirements)")
+
+
+def _check_memory_available():
     """
-    Get or create PaddleOCR instance for specified language.
-    Instances are cached to avoid reloading models.
+    Check if sufficient memory is available for PaddleOCR.
+
+    Returns:
+        True if sufficient memory is available or cannot be checked, False otherwise
+    """
+    try:
+        import psutil
+        available_mb = psutil.virtual_memory().available / (1024 * 1024)
+        if available_mb < OCR_MIN_MEMORY_MB:
+            logger.error(
+                f"Insufficient memory for PaddleOCR: {available_mb:.0f}MB available, "
+                f"need ~{OCR_MIN_MEMORY_MB}MB"
+            )
+            logger.error("OCR functionality will be disabled to prevent OOM crashes")
+            _ocr_config.cpu_incompatible = True
+            return False
+        logger.debug(f"Available memory: {available_mb:.0f}MB - sufficient for PaddleOCR")
+        return True
+    except ImportError:
+        logger.warning("psutil not available - cannot check memory before PaddleOCR initialization")
+        return True
+    except Exception as e:
+        logger.warning(f"Could not check available memory: {e}")
+        return True
+
+
+def _normalize_language_code(language: Optional[str]) -> str:
+    """
+    Normalize language name or code to PaddleOCR language code.
 
     Args:
         language: Language name or code (e.g., "English", "en", "French", "fr")
-                If None or not recognized, defaults to English.
 
     Returns:
-        PaddleOCR instance or None if not available
+        PaddleOCR language code (e.g., "en", "fr", "german")
     """
-    global _PADDLEOCR_CPU_INCOMPATIBLE
-
-    if not OCR_AVAILABLE or _PADDLEOCR_CPU_INCOMPATIBLE:
-        return None
-
-    # Normalize language to PaddleOCR code
     if language:
-        lang_code = LANGUAGE_TO_PADDLEOCR.get(language.lower(), "en")
-    else:
-        lang_code = "en"
+        return LANGUAGE_TO_PADDLEOCR.get(language.lower(), "en")
+    return "en"
 
-    # Return cached instance if available
-    if lang_code in _paddleocr_cache:
-        return _paddleocr_cache[lang_code]
 
-    # Check available memory before initializing
-    try:
-        import psutil
-        from core.constants import OCR_MIN_MEMORY_MB
-        available_mb = psutil.virtual_memory().available / (1024 * 1024)
-        if available_mb < OCR_MIN_MEMORY_MB:
-            logger.error(f"Insufficient memory for PaddleOCR: {available_mb:.0f}MB available, need ~{OCR_MIN_MEMORY_MB}MB")
-            logger.error("OCR functionality will be disabled to prevent OOM crashes")
-            _PADDLEOCR_CPU_INCOMPATIBLE = True
-            return None
-        logger.debug(f"Available memory: {available_mb:.0f}MB - sufficient for PaddleOCR")
-    except ImportError:
-        logger.warning("psutil not available - cannot check memory before PaddleOCR initialization")
-    except Exception as e:
-        logger.warning(f"Could not check available memory: {e}")
+def _create_paddleocr_instance(lang_code: str):
+    """
+    Create a new PaddleOCR instance for the specified language.
 
-    # Create new instance
+    Args:
+        lang_code: PaddleOCR language code
+
+    Returns:
+        PaddleOCR instance or None if creation fails
+    """
     try:
         logger.info(f"Initializing PaddleOCR for language: {lang_code}")
         # PaddleOCR parameters optimized for performance
@@ -141,10 +150,10 @@ def _get_paddleocr_reader(language: Optional[str] = None):
         ocr = PaddleOCR(
             use_textline_orientation=False,  # Disable for faster processing
             lang=lang_code,
-            text_det_box_thresh=0.5,  # Lower threshold for faster detection
-            text_det_unclip_ratio=1.5,  # Smaller ratio for less expansion
+            text_det_box_thresh=OCR_TEXT_DETECTION_THRESHOLD,
+            text_det_unclip_ratio=OCR_TEXT_UNCLIP_RATIO,
         )
-        _paddleocr_cache[lang_code] = ocr
+        _ocr_config.paddleocr_cache[lang_code] = ocr
         return ocr
     except (RuntimeError, OSError, SystemError) as e:
         error_msg = str(e).lower()
@@ -153,11 +162,10 @@ def _get_paddleocr_reader(language: Optional[str] = None):
             logger.error(f"PaddleOCR CPU incompatibility detected: {e}")
             logger.error("CPU does not support required instruction sets (AVX/AVX2/AVX512)")
             logger.error("OCR functionality will be disabled to prevent crashes")
-            _PADDLEOCR_CPU_INCOMPATIBLE = True
+            _ocr_config.cpu_incompatible = True
             return None
 
-        logger.error(f"Failed to initialize PaddleOCR for language {lang_code}: {e}")
-        logger.error("This may be due to CPU instruction set incompatibility (e.g., AVX/AVX2 requirements)")
+        _log_paddleocr_error(lang_code, e)
         # Fallback to English
         if lang_code != "en":
             logger.info("Falling back to English OCR")
@@ -172,8 +180,145 @@ def _get_paddleocr_reader(language: Optional[str] = None):
         return None
 
 
-# Track if we've already warned about PaddleOCR not being installed
-_OCR_WARNING_LOGGED = False
+def _get_paddleocr_reader(language: Optional[str] = None):
+    """
+    Get or create PaddleOCR instance for specified language.
+    Instances are cached to avoid reloading models.
+
+    Args:
+        language: Language name or code (e.g., "English", "en", "French", "fr")
+                If None or not recognized, defaults to English.
+
+    Returns:
+        PaddleOCR instance or None if not available
+    """
+    if not OCR_AVAILABLE or _ocr_config.cpu_incompatible:
+        return None
+
+    # Normalize language to PaddleOCR code
+    lang_code = _normalize_language_code(language)
+
+    # Return cached instance if available
+    if lang_code in _ocr_config.paddleocr_cache:
+        return _ocr_config.paddleocr_cache[lang_code]
+
+    # Check available memory before initializing
+    if not _check_memory_available():
+        return None
+
+    # Create new instance
+    return _create_paddleocr_instance(lang_code)
+
+
+def _parse_paddle_ocr_results(result) -> list:
+    """
+    Parse PaddleOCR results to extract text lines.
+
+    Args:
+        result: PaddleOCR prediction result
+
+    Returns:
+        List of text strings
+    """
+    text_parts = []
+
+    if not isinstance(result, list) or len(result) == 0:
+        return text_parts
+
+    for item in result:
+        # Check if it has rec_texts attribute or key
+        texts = None
+        if hasattr(item, 'rec_texts'):
+            texts = item.rec_texts
+        elif isinstance(item, dict) and 'rec_texts' in item:
+            texts = item['rec_texts']
+
+        if texts and isinstance(texts, list):
+            text_parts.extend(texts)
+
+    return text_parts
+
+
+def _extract_issue_number(text_upper: str) -> Optional[int]:
+    """
+    Extract issue number from OCR text.
+
+    Args:
+        text_upper: Uppercase version of OCR text
+
+    Returns:
+        Issue number or None if not found
+    """
+    for pattern in OCR_ISSUE_PATTERNS:
+        match = re.search(pattern, text_upper)
+        if match:
+            return int(match.group(1))
+    return None
+
+
+def _extract_year(text: str) -> Optional[int]:
+    """
+    Extract year from OCR text.
+
+    Args:
+        text: OCR text (mixed case)
+
+    Returns:
+        Year (1900-2099) or None if not found
+    """
+    year_match = re.search(OCR_YEAR_PATTERN, text)
+    if year_match:
+        return int(year_match.group(1))
+    return None
+
+
+def _extract_month(text_upper: str) -> Optional[int]:
+    """
+    Extract month from OCR text.
+
+    Args:
+        text_upper: Uppercase version of OCR text
+
+    Returns:
+        Month number (1-12) or None if not found
+    """
+    for month_name, month_num in OCR_MONTH_NAMES.items():
+        if month_name in text_upper:
+            return month_num
+    return None
+
+
+def _extract_volume(text_upper: str) -> Optional[int]:
+    """
+    Extract volume number from OCR text.
+
+    Args:
+        text_upper: Uppercase version of OCR text
+
+    Returns:
+        Volume number or None if not found
+    """
+    for pattern in OCR_VOLUME_PATTERNS:
+        match = re.search(pattern, text_upper)
+        if match:
+            return int(match.group(1))
+    return None
+
+
+def _is_special_edition(text_upper_spaced: str) -> bool:
+    """
+    Detect if text indicates a special edition.
+
+    Args:
+        text_upper_spaced: Uppercase text with newlines replaced by spaces
+
+    Returns:
+        True if special edition indicators are found
+    """
+    for indicator in OCR_SPECIAL_EDITION_INDICATORS:
+        if indicator in text_upper_spaced:
+            return True
+    return False
 
 
 class OCRService:
@@ -182,7 +327,7 @@ class OCRService:
     @staticmethod
     def is_available() -> bool:
         """Check if OCR is available and CPU compatible."""
-        return OCR_AVAILABLE and not _PADDLEOCR_CPU_INCOMPATIBLE
+        return OCR_AVAILABLE and not _ocr_config.cpu_incompatible
 
     @staticmethod
     def extract_text_from_image(image_path: str, preprocess: bool = False, language: Optional[str] = None) -> str:
@@ -199,10 +344,9 @@ class OCRService:
             Extracted text as string
         """
         if not OCR_AVAILABLE:
-            global _OCR_WARNING_LOGGED
-            if not _OCR_WARNING_LOGGED:
+            if not _ocr_config.warning_logged:
                 logger.warning("PaddleOCR not available. Install with: pip install paddleocr")
-                _OCR_WARNING_LOGGED = True
+                _ocr_config.warning_logged = True
             return ""
 
         try:
@@ -219,27 +363,12 @@ class OCRService:
                 return ""
 
             # PaddleOCR predict() returns a list of OCRResult objects
-            # Each result has a 'rec_texts' field containing the detected text
             if not result:
                 logger.debug(f"No text detected in image: {image_path}")
                 return ""
 
             # Extract text from results
-            text_parts = []
-
-            # Handle PaddleOCR result format
-            if isinstance(result, list) and len(result) > 0:
-                for item in result:
-                    # Check if it has rec_texts attribute or key
-                    if hasattr(item, 'rec_texts'):
-                        texts = item.rec_texts
-                        if isinstance(texts, list):
-                            text_parts.extend(texts)
-                    elif isinstance(item, dict) and 'rec_texts' in item:
-                        texts = item['rec_texts']
-                        if isinstance(texts, list):
-                            text_parts.extend(texts)
-
+            text_parts = _parse_paddle_ocr_results(result)
             full_text = "\n".join(str(t) for t in text_parts if t)
             logger.debug(f"PaddleOCR extracted {len(text_parts)} text lines from {image_path}")
             return full_text.strip()
@@ -270,89 +399,15 @@ class OCRService:
 
         # Clean up text
         text_upper = text.upper()
-        # Also create a version with newlines replaced by spaces for multi-word phrase matching
+        # Create a version with newlines replaced by spaces for multi-word phrase matching
         text_upper_spaced = text_upper.replace('\n', ' ')
 
-        # Detect issue number patterns
-        issue_patterns = [
-            r"#(\d+)",  # #123
-            r"ISSUE\s+(\d+)",  # Issue 123
-            r"NO\.?\s*(\d+)",  # No. 123 or No 123
-            r"NUMBER\s+(\d+)",  # Number 123
-        ]
-
-        for pattern in issue_patterns:
-            match = re.search(pattern, text_upper)
-            if match:
-                metadata["issue_number"] = int(match.group(1))
-                break
-
-        # Detect year (4-digit number between 1900-2099)
-        year_match = re.search(r"\b(19\d{2}|20\d{2})\b", text)
-        if year_match:
-            metadata["year"] = int(year_match.group(1))
-
-        # Detect month names
-        months = {
-            "JANUARY": 1,
-            "FEBRUARY": 2,
-            "MARCH": 3,
-            "APRIL": 4,
-            "MAY": 5,
-            "JUNE": 6,
-            "JULY": 7,
-            "AUGUST": 8,
-            "SEPTEMBER": 9,
-            "OCTOBER": 10,
-            "NOVEMBER": 11,
-            "DECEMBER": 12,
-            "JAN": 1,
-            "FEB": 2,
-            "MAR": 3,
-            "APR": 4,
-            "JUN": 6,
-            "JUL": 7,
-            "AUG": 8,
-            "SEP": 9,
-            "SEPT": 9,
-            "OCT": 10,
-            "NOV": 11,
-            "DEC": 12,
-        }
-
-        for month_name, month_num in months.items():
-            if month_name in text_upper:
-                metadata["month"] = month_num
-                break
-
-        # Detect volume
-        volume_patterns = [
-            r"VOL\.?\s*(\d+)",  # Vol. 1 or Vol 1
-            r"VOLUME\s+(\d+)",  # Volume 1
-            r"V\.?\s*(\d+)",  # V. 1 or V 1
-        ]
-
-        for pattern in volume_patterns:
-            match = re.search(pattern, text_upper)
-            if match:
-                metadata["volume"] = int(match.group(1))
-                break
-
-        # Detect special edition indicators
-        # Use text_upper_spaced to handle multi-word phrases that may be split across lines
-        special_indicators = [
-            "SPECIAL EDITION",
-            "SPECIAL ISSUE",
-            "LIMITED EDITION",
-            "COLLECTOR",
-            "ANNIVERSARY",
-            "EXCLUSIVE",
-        ]
-
-        for indicator in special_indicators:
-            if indicator in text_upper_spaced:
-                metadata["special_edition"] = True
-                break
+        # Extract metadata using helper functions
+        metadata["issue_number"] = _extract_issue_number(text_upper)
+        metadata["year"] = _extract_year(text)
+        metadata["month"] = _extract_month(text_upper)
+        metadata["volume"] = _extract_volume(text_upper)
+        metadata["special_edition"] = _is_special_edition(text_upper_spaced)
 
         return metadata
 
@@ -428,8 +483,6 @@ class OCRService:
             Path to extracted PNG cover image, or None if failed
         """
         try:
-            from core.constants import PDF_COVER_DPI_OCR
-
             temp_dir = file_path.parent / ".ocr_temp"
             temp_dir.mkdir(exist_ok=True)
             cover_path = temp_dir / f"{file_path.stem}_ocr.png"
@@ -439,7 +492,7 @@ class OCRService:
 
                 # Extract at high DPI for OCR
                 images = convert_from_path(
-                    str(file_path), first_page=1, last_page=1, dpi=PDF_COVER_DPI_OCR, fmt="png"  # Use PNG format
+                    str(file_path), first_page=1, last_page=1, dpi=PDF_COVER_DPI_OCR, fmt="png"
                 )
                 if images:
                     images[0].save(str(cover_path), "PNG")
