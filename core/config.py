@@ -8,6 +8,131 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
+# ==============================================================================
+# Configuration Keys
+# ==============================================================================
+
+CONFIG_KEY_SEARCH_PROVIDERS = "search_providers"
+CONFIG_KEY_METADATA_PROVIDERS = "metadata_providers"
+CONFIG_KEY_DOWNLOAD_CLIENT = "download_client"
+CONFIG_KEY_STORAGE = "storage"
+CONFIG_KEY_MATCHING = "matching"
+CONFIG_KEY_IMPORT = "import"
+CONFIG_KEY_PDF = "pdf"
+CONFIG_KEY_DOWNLOADS = "downloads"
+CONFIG_KEY_TASKS = "tasks"
+CONFIG_KEY_LOGGING = "logging"
+CONFIG_KEY_SERVER = "server"
+CONFIG_KEY_OCR = "ocr"
+CONFIG_KEY_JWT_SECRET = "jwt_secret"
+
+# Storage Keys
+STORAGE_KEY_DB_PATH = "db_path"
+STORAGE_KEY_DOWNLOAD_DIR = "download_dir"
+STORAGE_KEY_ORGANIZE_DIR = "organize_dir"
+STORAGE_KEY_CACHE_DIR = "cache_dir"
+
+# Environment Variable Names
+ENV_CURATOR_CONFIG_PATH = "CURATOR_CONFIG_PATH"
+ENV_CURATOR_DB_PATH = "CURATOR_DB_PATH"
+ENV_CURATOR_DOWNLOAD_DIR = "CURATOR_DOWNLOAD_DIR"
+ENV_CURATOR_ORGANIZE_DIR = "CURATOR_ORGANIZE_DIR"
+ENV_CURATOR_CACHE_DIR = "CURATOR_CACHE_DIR"
+ENV_CURATOR_LOG_FILE = "CURATOR_LOG_FILE"
+ENV_CURATOR_LOG_LEVEL = "CURATOR_LOG_LEVEL"
+ENV_CURATOR_HOST = "CURATOR_HOST"
+ENV_CURATOR_PORT = "CURATOR_PORT"
+
+# Default Values
+DEFAULT_CONFIG_PATH = "local/config/config.yaml"
+DEFAULT_TEST_CONFIG_PATH = "tests/config.test.yaml"
+DEFAULT_SERVER_HOST = "0.0.0.0"
+DEFAULT_SERVER_PORT = 8000
+DEFAULT_LOG_LEVEL = "INFO"
+
+
+def _validate_directory(dir_path: Path, dir_name: str) -> None:
+    """
+    Validate and create a directory path.
+
+    Args:
+        dir_path: Path to validate
+        dir_name: Name of the directory for error messages
+
+    Raises:
+        ValueError: If directory is invalid or not writable
+        PermissionError: If directory creation fails due to permissions
+    """
+    try:
+        dir_path.mkdir(parents=True, exist_ok=True)
+        if not dir_path.is_dir():
+            raise ValueError(f"{dir_name} path exists but is not a directory: {dir_path}")
+        if not os.access(dir_path, os.W_OK):
+            raise ValueError(f"{dir_name} directory is not writable: {dir_path}")
+        logger.debug(f"Validated {dir_name}: {dir_path}")
+    except PermissionError as e:
+        raise ValueError(f"Permission denied creating {dir_name} directory: {dir_path}") from e
+
+
+def _validate_database_path(db_path: Path) -> None:
+    """
+    Validate database path by ensuring parent directory exists and is writable.
+
+    Args:
+        db_path: Path to database file
+
+    Raises:
+        ValueError: If database directory is not writable
+        PermissionError: If directory creation fails due to permissions
+    """
+    db_dir = db_path.parent
+    try:
+        db_dir.mkdir(parents=True, exist_ok=True)
+        if not os.access(db_dir, os.W_OK):
+            raise ValueError(f"Database directory is not writable: {db_dir}")
+        logger.debug(f"Validated db_path: {db_path}")
+    except PermissionError as e:
+        raise ValueError(f"Permission denied creating database directory: {db_dir}") from e
+
+
+def _apply_storage_env_overrides(storage: Dict[str, Any]) -> None:
+    """
+    Apply environment variable overrides to storage configuration.
+
+    Args:
+        storage: Storage configuration dictionary (modified in place)
+    """
+    if os.environ.get(ENV_CURATOR_DB_PATH):
+        storage[STORAGE_KEY_DB_PATH] = os.environ[ENV_CURATOR_DB_PATH]
+    if os.environ.get(ENV_CURATOR_DOWNLOAD_DIR):
+        storage[STORAGE_KEY_DOWNLOAD_DIR] = os.environ[ENV_CURATOR_DOWNLOAD_DIR]
+    if os.environ.get(ENV_CURATOR_ORGANIZE_DIR):
+        storage[STORAGE_KEY_ORGANIZE_DIR] = os.environ[ENV_CURATOR_ORGANIZE_DIR]
+    if os.environ.get(ENV_CURATOR_CACHE_DIR):
+        storage[STORAGE_KEY_CACHE_DIR] = os.environ[ENV_CURATOR_CACHE_DIR]
+
+
+def _validate_storage_paths(storage: Dict[str, Any]) -> None:
+    """
+    Validate all storage paths in configuration.
+
+    Args:
+        storage: Storage configuration dictionary
+
+    Raises:
+        ValueError: If any path is invalid or not writable
+    """
+    # Validate directories
+    for key in [STORAGE_KEY_DOWNLOAD_DIR, STORAGE_KEY_ORGANIZE_DIR, STORAGE_KEY_CACHE_DIR]:
+        if key in storage:
+            dir_path = Path(storage[key])
+            _validate_directory(dir_path, key)
+
+    # Validate database path
+    if STORAGE_KEY_DB_PATH in storage:
+        db_path = Path(storage[STORAGE_KEY_DB_PATH])
+        _validate_database_path(db_path)
+
 
 class ConfigLoader:
     """Load, validate, and save configuration from YAML"""
@@ -17,7 +142,7 @@ class ConfigLoader:
         from core.constants import OCR_RESIZE_WIDTH, OCR_CONTRAST_ENHANCE, OCR_DENOISE_H, OCR_SHARPEN_KERNEL
 
         return self.config.get(
-            "ocr",
+            CONFIG_KEY_OCR,
             {
                 "resize_width": OCR_RESIZE_WIDTH,
                 "contrast_enhance": OCR_CONTRAST_ENHANCE,
@@ -29,7 +154,7 @@ class ConfigLoader:
     def __init__(self, config_path: str = None):
         # Allow environment variable to override, fall back to local dev path
         if config_path is None:
-            config_path = os.environ.get("CURATOR_CONFIG_PATH", "local/config/config.yaml")
+            config_path = os.environ.get(ENV_CURATOR_CONFIG_PATH, DEFAULT_CONFIG_PATH)
         self.config_path = Path(config_path)
         self.config = self._load_config()
 
@@ -37,7 +162,7 @@ class ConfigLoader:
         """Load config from YAML file"""
         if not self.config_path.exists():
             # Try test config as fallback (for CI/CD environments)
-            test_config_path = Path("tests/config.test.yaml")
+            test_config_path = Path(DEFAULT_TEST_CONFIG_PATH)
             if test_config_path.exists():
                 logger.warning(
                     f"Config file not found at {self.config_path}, " f"using test config: {test_config_path}"
@@ -57,60 +182,30 @@ class ConfigLoader:
 
     def get_search_providers(self) -> List[Dict[str, Any]]:
         """Get enabled search providers (for finding and downloading issues)"""
-        providers = self.config.get("search_providers", [])
+        providers = self.config.get(CONFIG_KEY_SEARCH_PROVIDERS, [])
         return [p for p in providers if p.get("enabled", True)]
 
     def get_metadata_providers(self) -> List[Dict[str, Any]]:
         """Get enabled metadata providers (for periodical information)"""
-        providers = self.config.get("metadata_providers", [])
+        providers = self.config.get(CONFIG_KEY_METADATA_PROVIDERS, [])
         return [p for p in providers if p.get("enabled", True)]
 
     def get_download_client(self) -> Dict[str, Any]:
         """Get configured download client"""
-        client = self.config.get("download_client", {})
+        client = self.config.get(CONFIG_KEY_DOWNLOAD_CLIENT, {})
         if not client:
             raise ValueError("No download client configured")
         return client
 
     def get_storage(self) -> Dict[str, Any]:
         """Get storage configuration with environment variable overrides and validation"""
-        storage = self.config.get("storage", {}).copy()
+        storage = self.config.get(CONFIG_KEY_STORAGE, {}).copy()
 
-        # Environment variables override YAML config
-        if os.environ.get("CURATOR_DB_PATH"):
-            storage["db_path"] = os.environ["CURATOR_DB_PATH"]
-        if os.environ.get("CURATOR_DOWNLOAD_DIR"):
-            storage["download_dir"] = os.environ["CURATOR_DOWNLOAD_DIR"]
-        if os.environ.get("CURATOR_ORGANIZE_DIR"):
-            storage["organize_dir"] = os.environ["CURATOR_ORGANIZE_DIR"]
-        if os.environ.get("CURATOR_CACHE_DIR"):
-            storage["cache_dir"] = os.environ["CURATOR_CACHE_DIR"]
+        # Apply environment variable overrides
+        _apply_storage_env_overrides(storage)
 
-        # Validate and create directories
-        for key in ["download_dir", "organize_dir", "cache_dir"]:
-            if key in storage:
-                dir_path = Path(storage[key])
-                try:
-                    dir_path.mkdir(parents=True, exist_ok=True)
-                    if not dir_path.is_dir():
-                        raise ValueError(f"{key} path exists but is not a directory: {dir_path}")
-                    if not os.access(dir_path, os.W_OK):
-                        raise ValueError(f"{key} directory is not writable: {dir_path}")
-                    logger.debug(f"Validated {key}: {dir_path}")
-                except PermissionError as e:
-                    raise ValueError(f"Permission denied creating {key} directory: {dir_path}") from e
-
-        # Validate database path
-        if "db_path" in storage:
-            db_path = Path(storage["db_path"])
-            db_dir = db_path.parent
-            try:
-                db_dir.mkdir(parents=True, exist_ok=True)
-                if not os.access(db_dir, os.W_OK):
-                    raise ValueError(f"Database directory is not writable: {db_dir}")
-                logger.debug(f"Validated db_path: {db_path}")
-            except PermissionError as e:
-                raise ValueError(f"Permission denied creating database directory: {db_dir}") from e
+        # Validate all paths
+        _validate_storage_paths(storage)
 
         return storage
 
@@ -119,7 +214,7 @@ class ConfigLoader:
         from core.constants import DEFAULT_FUZZY_THRESHOLD, DUPLICATE_DATE_THRESHOLD_DAYS
 
         return self.config.get(
-            "matching",
+            CONFIG_KEY_MATCHING,
             {
                 "fuzzy_threshold": DEFAULT_FUZZY_THRESHOLD,
                 "duplicate_date_threshold_days": DUPLICATE_DATE_THRESHOLD_DAYS,
@@ -129,7 +224,14 @@ class ConfigLoader:
     def get_import(self) -> Dict[str, Any]:
         """Get import configuration"""
         return self.config.get(
-            "import", {"organization_pattern": None, "auto_track_imports": True, "category_prefix": "_", "enable_text_scan": True, "enable_ocr": True}
+            CONFIG_KEY_IMPORT,
+            {
+                "organization_pattern": None,
+                "auto_track_imports": True,
+                "category_prefix": "_",
+                "enable_text_scan": True,
+                "enable_ocr": True,
+            },
         )
 
     def get_pdf(self) -> Dict[str, Any]:
@@ -137,7 +239,7 @@ class ConfigLoader:
         from core.constants import PDF_COVER_DPI_LOW, PDF_COVER_DPI_HIGH, PDF_COVER_QUALITY, PDF_COVER_QUALITY_HIGH
 
         return self.config.get(
-            "pdf",
+            CONFIG_KEY_PDF,
             {
                 "cover_dpi_low": PDF_COVER_DPI_LOW,
                 "cover_dpi_high": PDF_COVER_DPI_HIGH,
@@ -151,7 +253,7 @@ class ConfigLoader:
         from core.constants import MAX_DOWNLOAD_RETRIES, MAX_DOWNLOADS_PER_BATCH
 
         return self.config.get(
-            "downloads", {"max_retries": MAX_DOWNLOAD_RETRIES, "max_per_batch": MAX_DOWNLOADS_PER_BATCH}
+            CONFIG_KEY_DOWNLOADS, {"max_retries": MAX_DOWNLOAD_RETRIES, "max_per_batch": MAX_DOWNLOADS_PER_BATCH}
         )
 
     def get_tasks(self) -> Dict[str, Any]:
@@ -159,7 +261,7 @@ class ConfigLoader:
         from core.constants import AUTO_DOWNLOAD_INTERVAL, DOWNLOAD_MONITOR_INTERVAL, CLEANUP_COVERS_INTERVAL
 
         return self.config.get(
-            "tasks",
+            CONFIG_KEY_TASKS,
             {
                 "auto_download_interval": AUTO_DOWNLOAD_INTERVAL,
                 "download_monitor_interval": DOWNLOAD_MONITOR_INTERVAL,
@@ -169,13 +271,13 @@ class ConfigLoader:
 
     def get_logging(self) -> Dict[str, Any]:
         """Get logging configuration with environment variable overrides"""
-        logging_config = self.config.get("logging", {"level": "INFO"}).copy()
+        logging_config = self.config.get(CONFIG_KEY_LOGGING, {"level": DEFAULT_LOG_LEVEL}).copy()
 
         # Environment variables override YAML config
-        if os.environ.get("CURATOR_LOG_FILE"):
-            logging_config["log_file"] = os.environ["CURATOR_LOG_FILE"]
-        if os.environ.get("CURATOR_LOG_LEVEL"):
-            logging_config["level"] = os.environ["CURATOR_LOG_LEVEL"]
+        if os.environ.get(ENV_CURATOR_LOG_FILE):
+            logging_config["log_file"] = os.environ[ENV_CURATOR_LOG_FILE]
+        if os.environ.get(ENV_CURATOR_LOG_LEVEL):
+            logging_config["level"] = os.environ[ENV_CURATOR_LOG_LEVEL]
 
         return logging_config
 
@@ -185,12 +287,12 @@ class ConfigLoader:
 
     def get_jwt_secret(self) -> str:
         """Get or generate JWT secret key"""
-        if "jwt_secret" not in self.config:
+        if CONFIG_KEY_JWT_SECRET not in self.config:
             # Generate new secret and save it
-            self.config["jwt_secret"] = secrets.token_urlsafe(32)
+            self.config[CONFIG_KEY_JWT_SECRET] = secrets.token_urlsafe(32)
             self.save_config(self.config)
             logger.info("Generated and saved new JWT secret")
-        return self.config["jwt_secret"]
+        return self.config[CONFIG_KEY_JWT_SECRET]
 
     def save_config(self, config: Dict[str, Any]) -> None:
         """Save configuration to YAML file"""
@@ -205,13 +307,15 @@ class ConfigLoader:
 
     def get_server(self) -> Dict[str, Any]:
         """Get server configuration with environment variable overrides"""
-        server = self.config.get("server", {"host": "0.0.0.0", "port": 8000}).copy()
+        server = self.config.get(
+            CONFIG_KEY_SERVER, {"host": DEFAULT_SERVER_HOST, "port": DEFAULT_SERVER_PORT}
+        ).copy()
 
         # Environment variables override YAML config
-        if os.environ.get("CURATOR_HOST"):
-            server["host"] = os.environ["CURATOR_HOST"]
-        if os.environ.get("CURATOR_PORT"):
-            server["port"] = int(os.environ["CURATOR_PORT"])
+        if os.environ.get(ENV_CURATOR_HOST):
+            server["host"] = os.environ[ENV_CURATOR_HOST]
+        if os.environ.get(ENV_CURATOR_PORT):
+            server["port"] = int(os.environ[ENV_CURATOR_PORT])
 
         return server
 
