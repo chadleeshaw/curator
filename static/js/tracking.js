@@ -241,26 +241,17 @@ export class TrackingManager {
       const publisher = result.metadata?.publisher || '';
 
       const div = document.createElement('div');
-      div.className = 'result-item';
-      div.style.padding = '15px';
-      div.style.margin = '10px 0';
-      div.style.border = '1px solid var(--border-color)';
-      div.style.borderRadius = '8px';
-      div.style.cursor = 'pointer';
-      div.style.background = 'var(--surface)';
-      div.style.display = 'flex';
-      div.style.justifyContent = 'space-between';
-      div.style.alignItems = 'center';
+      div.className = CSS_CLASSES.RESULT_ITEM;
 
       div.innerHTML = `
         <div class="result-info">
-          <h5 style="margin: 0 0 8px 0;">${periodical.displayTitle}</h5>
-          <p style="margin: 4px 0; color: var(--text-secondary);">
+          <h5 class="result-title">${periodical.displayTitle}</h5>
+          <p class="result-detail">
             <strong>Available Issues:</strong> ${periodical.count}
           </p>
-          ${publisher ? `<p style="margin: 4px 0; color: var(--text-secondary);"><strong>Publisher:</strong> ${publisher}</p>` : ''}
+          ${publisher ? `<p class="result-detail"><strong>Publisher:</strong> ${publisher}</p>` : ''}
         </div>
-        <div class="result-select" style="font-size: 24px; color: var(--primary);">→</div>
+        <div class="result-select">→</div>
       `;
 
       div.onclick = () =>
@@ -283,17 +274,12 @@ export class TrackingManager {
 
     results.forEach((result, _index) => {
       const div = document.createElement('div');
-      div.style.padding = '15px';
-      div.style.margin = '10px 0';
-      div.style.border = '1px solid var(--border-color)';
-      div.style.borderRadius = '8px';
-      div.style.cursor = 'pointer';
-      div.style.background = 'var(--surface)';
+      div.className = CSS_CLASSES.RESULT_ITEM;
 
       div.innerHTML = `
-        <h5>${result.title}</h5>
-        <p>${result.publisher || 'Unknown Publisher'}</p>
-        <p style="color: var(--text-secondary);">${result.source || ''}</p>
+        <h5 class="result-title">${result.title}</h5>
+        <p class="result-publisher">${result.publisher || 'Unknown Publisher'}</p>
+        <p class="result-source">${result.source || ''}</p>
       `;
 
       div.onclick = () => this.chooseSearchResult(result);
@@ -382,10 +368,10 @@ export class TrackingManager {
     }
 
     // Highlight the title field briefly to draw attention
-    titleInput.style.background = 'var(--success-bg)';
+    titleInput.classList.add(CSS_CLASSES.HIGHLIGHT_SUCCESS);
     setTimeout(() => {
-      titleInput.style.background = '';
-    }, 2000);
+      titleInput.classList.remove(CSS_CLASSES.HIGHLIGHT_SUCCESS);
+    }, TIMEOUTS.AUTO_HIDE_SUCCESS);
   }
 
   /**
@@ -1115,7 +1101,7 @@ export class TrackingManager {
           window.issueVariants = window.issueVariants || {};
           window.issueVariants[issueKey] = issue.variants;
 
-          cardHtml += ` onmouseover="this.style.background='var(--primary-color)'; this.style.color='white'; this.style.opacity='1';" onmouseout="this.style.background='var(--surface-variant)'; this.style.color='inherit'; this.style.opacity='${opacity}';" onclick='selectIssueWithVariants("${issueKey}", ${isDownloaded})'`;
+          cardHtml += ` onclick='selectIssueWithVariants("${issueKey}", ${isDownloaded})'`;
         }
 
         cardHtml += `>
@@ -1335,21 +1321,18 @@ window.selectIssueWithVariants = function (issueKey, alreadyDownloaded) {
     }
 
     const isDownloaded = variant.already_downloaded || alreadyDownloaded;
-    const downloaded = isDownloaded ? ' <span style="color: #4caf50;">✓ In Library</span>' : '';
+    const downloaded = isDownloaded ? ' <span class="variant-in-library">✓ In Library</span>' : '';
 
     const btn = document.createElement('button');
     // Different styling for re-download vs new download
     if (isDownloaded) {
-      btn.className = 'btn-secondary';
-      btn.style.cssText =
-        'width: 100%; text-align: left; padding: 15px; background: #4caf50; color: white; border: 2px solid #45a049;';
+      btn.className = 'btn-variant btn-variant-downloaded';
     } else {
-      btn.className = 'btn-primary';
-      btn.style.cssText = 'width: 100%; text-align: left; padding: 15px;';
+      btn.className = 'btn-variant btn-variant-new';
     }
     btn.innerHTML = `
-      <div style="font-weight: 600; font-size: 16px;">${displayLabel}${downloaded}</div>
-      <div style="font-size: 11px; margin-top: 6px; opacity: 0.8; word-break: break-all;">${variant.title}</div>
+      <div class="variant-label">${displayLabel}${downloaded}</div>
+      <div class="variant-title">${variant.title}</div>
     `;
     btn.onclick = () => {
       window.closeLangVariantModal();
@@ -1513,7 +1496,7 @@ window.showMergeTargetSelection = async function() {
   `;
   
   document.body.appendChild(modal);
-  modal.style.display = 'flex';
+  modal.classList.add(CSS_CLASSES.MODAL_VISIBLE);
 };
 
 /**

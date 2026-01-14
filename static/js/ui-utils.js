@@ -111,28 +111,22 @@ export class UIUtils {
     const statusDiv = document.getElementById(elementId);
     if (!statusDiv) return;
 
-    statusDiv.classList.remove('hidden');
+    statusDiv.classList.remove(CSS_CLASSES.HIDDEN);
 
-    // Style based on type
+    // Apply base status message class and type-specific class
+    statusDiv.className = CSS_CLASSES.STATUS_MESSAGE;
+
     if (type === 'success') {
-      statusDiv.style.background = '#e8f5e9';
-      statusDiv.style.color = '#2e7d32';
-      statusDiv.style.borderColor = '#4caf50';
+      statusDiv.classList.add(CSS_CLASSES.STATUS_SUCCESS);
       statusDiv.textContent = `✓ ${message}`;
     } else if (type === 'error') {
-      statusDiv.style.background = '#ffebee';
-      statusDiv.style.color = '#c62828';
-      statusDiv.style.borderColor = '#f44336';
+      statusDiv.classList.add(CSS_CLASSES.STATUS_ERROR);
       statusDiv.textContent = `✗ ${message}`;
     } else if (type === 'warning') {
-      statusDiv.style.background = '#fff3e0';
-      statusDiv.style.color = '#e65100';
-      statusDiv.style.borderColor = '#ff9800';
+      statusDiv.classList.add(CSS_CLASSES.STATUS_WARNING);
       statusDiv.textContent = message;
     } else if (type === 'info') {
-      statusDiv.style.background = '#e3f2fd';
-      statusDiv.style.color = '#1565c0';
-      statusDiv.style.borderColor = '#2196f3';
+      statusDiv.classList.add(CSS_CLASSES.STATUS_INFO);
       statusDiv.textContent = `ℹ ${message}`;
     }
 
@@ -157,11 +151,11 @@ export class UIUtils {
   static confirm(title, message) {
     return new Promise((resolve) => {
       const modalHTML = `
-        <div id="confirm-modal" class="modal" style="display: flex;">
-          <div class="modal-content" style="max-width: 450px;">
+        <div id="confirm-modal" class="modal modal-visible">
+          <div class="modal-content modal-content-sm">
             <h2>${title}</h2>
-            <p style="color: var(--text-secondary); margin: 20px 0;">${message}</p>
-            <div style="display: flex; gap: 10px; margin-top: 30px;">
+            <p class="modal-message">${message}</p>
+            <div class="modal-actions">
               <button id="confirm-yes" class="btn-primary flex-1">Yes</button>
               <button id="confirm-no" class="btn-secondary flex-1">No</button>
             </div>
@@ -205,21 +199,21 @@ export class UIUtils {
    */
   static showProgressModal(title, total) {
     const modalHTML = `
-      <div id="progress-modal" class="modal" style="display: flex;">
-        <div class="modal-content" style="max-width: 500px;">
+      <div id="progress-modal" class="modal modal-visible">
+        <div class="modal-content modal-content-md">
           <h2>${title}</h2>
-          <div style="margin: 30px 0;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-              <span id="progress-status" style="color: var(--text-secondary);">Preparing...</span>
-              <span id="progress-count" style="color: var(--text-primary); font-weight: 600;">0/${total}</span>
+          <div class="progress-container">
+            <div class="progress-header">
+              <span id="progress-status" class="progress-status">Preparing...</span>
+              <span id="progress-count" class="progress-count">0/${total}</span>
             </div>
-            <div style="width: 100%; height: 24px; background: var(--background-alt); border-radius: 12px; overflow: hidden; border: 1px solid var(--border-color);">
-              <div id="progress-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, var(--primary-color), var(--primary-hover)); transition: width 0.3s ease;"></div>
+            <div class="progress-bar-container">
+              <div id="progress-bar" class="progress-bar"></div>
             </div>
           </div>
-          <div id="progress-message" style="color: var(--text-secondary); font-size: 0.9em; min-height: 20px; text-align: center;"></div>
-          <div id="progress-close-container" style="display: none; margin-top: 20px;">
-            <button id="progress-close-btn" class="btn-primary" style="width: 100%;">Close</button>
+          <div id="progress-message" class="progress-message"></div>
+          <div id="progress-close-container" class="progress-close-container hidden">
+            <button id="progress-close-btn" class="btn-primary btn-full-width">Close</button>
           </div>
         </div>
       </div>
@@ -249,13 +243,13 @@ export class UIUtils {
 
       complete: (finalMessage, success = true) => {
         progressBar.style.width = '100%';
-        progressBar.style.background = success 
-          ? 'linear-gradient(90deg, #28a745, #20c997)' 
-          : 'linear-gradient(90deg, #dc3545, #c82333)';
+        progressBar.className = success
+          ? 'progress-bar progress-bar-success'
+          : 'progress-bar progress-bar-error';
         progressStatus.textContent = success ? 'Complete' : 'Finished';
         progressCount.textContent = `${currentCount}/${total}`;
         progressMessage.textContent = finalMessage;
-        closeContainer.style.display = 'block';
+        closeContainer.classList.remove(CSS_CLASSES.HIDDEN);
 
         closeBtn.onclick = () => {
           if (modal) modal.remove();
@@ -265,16 +259,16 @@ export class UIUtils {
         if (success) {
           setTimeout(() => {
             if (modal) modal.remove();
-          }, 3000);
+          }, TIMEOUTS.AUTO_HIDE_STATUS);
         }
       },
 
       error: (errorMessage) => {
-        progressBar.style.background = 'linear-gradient(90deg, #dc3545, #c82333)';
+        progressBar.className = 'progress-bar progress-bar-error';
         progressStatus.textContent = 'Error';
         progressMessage.textContent = errorMessage;
-        progressMessage.style.color = 'var(--status-failed)';
-        closeContainer.style.display = 'block';
+        progressMessage.classList.add(CSS_CLASSES.TEXT_ERROR);
+        closeContainer.classList.remove(CSS_CLASSES.HIDDEN);
 
         closeBtn.onclick = () => {
           if (modal) modal.remove();

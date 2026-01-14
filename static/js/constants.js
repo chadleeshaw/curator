@@ -133,6 +133,7 @@ export const CSS_CLASSES = {
 
   // Components
   MODAL: 'modal',
+  MODAL_VISIBLE: 'modal-visible',
   TAB: 'tab',
   NAV_BTN: 'nav-btn',
 
@@ -142,6 +143,12 @@ export const CSS_CLASSES = {
   STATUS_ERROR: 'status-error',
   STATUS_WARNING: 'status-warning',
   STATUS_INFO: 'status-info',
+
+  // Text color classes
+  TEXT_ERROR: 'text-error',
+
+  // Highlight effects
+  HIGHLIGHT_SUCCESS: 'highlight-success',
 
   // Tracking badges (will be added in Phase 1)
   BADGE_DOWNLOAD_ALL: 'badge-download-all',

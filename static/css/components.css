@@ -1211,3 +1211,347 @@
 .progress-bar-error {
   background: linear-gradient(90deg, var(--error-500), var(--error-600));
 }
+
+/* ==========================================================================
+   Modal Extensions (Added for JS Refactoring - Phase 3)
+   ========================================================================== */
+
+.modal-visible {
+  display: flex !important;
+}
+
+.modal-content-sm {
+  max-width: 450px;
+}
+
+.modal-content-md {
+  max-width: 500px;
+}
+
+.modal-message {
+  color: var(--text-secondary);
+  margin: 20px 0;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 30px;
+}
+
+/* ==========================================================================
+   Progress Modal Components (Added for JS Refactoring - Phase 3)
+   ========================================================================== */
+
+.progress-container {
+  margin: 30px 0;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.progress-status {
+  color: var(--text-secondary);
+}
+
+.progress-count {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.progress-bar-container {
+  width: 100%;
+  height: 24px;
+  background: var(--background-alt);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+}
+
+.progress-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--primary-color), var(--primary-hover));
+  transition: width 0.3s ease;
+}
+
+.progress-message {
+  color: var(--text-secondary);
+  font-size: 0.9em;
+  min-height: 20px;
+  text-align: center;
+}
+
+.progress-close-container {
+  margin-top: 20px;
+}
+
+.btn-full-width {
+  width: 100%;
+}
+
+/* ==========================================================================
+   Text Utility Classes (Added for JS Refactoring - Phase 3)
+   ========================================================================== */
+
+.text-error {
+  color: var(--status-failed);
+}
+
+/* ==========================================================================
+   Tracking Result Items (Added for JS Refactoring - Phase 3)
+   ========================================================================== */
+
+.result-info {
+  flex: 1;
+}
+
+.result-title {
+  margin: 0 0 8px 0;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.result-detail, .result-publisher {
+  margin: 4px 0;
+  color: var(--text-secondary);
+  font-size: 0.9em;
+}
+
+.result-source {
+  color: var(--text-secondary);
+  font-size: 0.85em;
+  font-style: italic;
+}
+
+.result-select {
+  font-size: 24px;
+  color: var(--primary-color);
+  margin-left: 20px;
+}
+
+/* ==========================================================================
+   Input Highlight Effects (Added for JS Refactoring - Phase 3)
+   ========================================================================== */
+
+.highlight-success {
+  background: var(--success-100) !important;
+  transition: background 0.3s ease;
+}
+
+/* ==========================================================================
+   Issue Cards - Tracking Variants (Added for JS Refactoring - Phase 3)
+   ========================================================================== */
+
+.issue-provider {
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin-top: 6px;
+}
+
+.issue-badge {
+  font-size: 10px;
+  margin-top: 6px;
+  font-weight: 600;
+}
+
+.issue-badge-library {
+  color: var(--text-secondary);
+}
+
+.issue-badge-have {
+  color: var(--success-500);
+}
+
+.issue-badge-variants {
+  color: var(--primary-color);
+}
+
+.issue-language {
+  font-size: 10px;
+  margin-top: 6px;
+  color: var(--text-secondary);
+}
+
+.issue-card-library-only {
+  cursor: default !important;
+  opacity: 0.7;
+}
+
+.issue-card-label {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+/* ==========================================================================
+   Language Variant Buttons (Added for JS Refactoring - Phase 3)
+   ========================================================================== */
+
+.btn-variant {
+  width: 100%;
+  text-align: left;
+  padding: 15px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 10px;
+}
+
+.btn-variant:hover {
+  background: var(--surface-hover);
+  border-color: var(--primary-color);
+}
+
+.btn-variant-new {
+  border-left: 3px solid var(--primary-color);
+}
+
+.btn-variant-downloaded {
+  background: var(--success-100);
+  border-left: 3px solid var(--success-500);
+}
+
+.variant-in-library {
+  color: var(--success-500);
+  font-weight: 600;
+}
+
+.variant-label {
+  font-weight: 600;
+  font-size: 16px;
+  margin-bottom: 6px;
+  color: var(--text-primary);
+}
+
+.variant-title {
+  font-size: 11px;
+  margin-top: 6px;
+  opacity: 0.8;
+  word-break: break-all;
+  color: var(--text-secondary);
+}
+
+/* ==========================================================================
+   Stat Box Color Variants (Added for JS Refactoring - Phase 3)
+   ========================================================================== */
+
+.stat-box-warning .stat-box-value,
+.stat-box-warning > .stat-box-value {
+  color: orange;
+}
+
+.stat-box-error .stat-box-value,
+.stat-box-error > .stat-box-value {
+  color: var(--status-failed);
+}
+
+.stat-box-primary .stat-box-value,
+.stat-box-primary > .stat-box-value {
+  color: var(--primary-color);
+}
+
+/* ==========================================================================
+   Badge Components (Added for JS Refactoring - Phase 3)
+   ========================================================================== */
+
+.badge {
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 0.85em;
+  font-weight: 600;
+  color: white;
+  display: inline-block;
+}
+
+.badge-warning {
+  background: orange;
+}
+
+.badge-error {
+  background: var(--status-failed);
+}
+
+.badge-success {
+  background: var(--success-500);
+}
+
+.badge-info {
+  background: var(--primary-color);
+}
+
+/* ==========================================================================
+   Periodical Group Cards (Added for JS Refactoring - Phase 3)
+   ========================================================================== */
+
+.periodical-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.periodical-group-card {
+  background: var(--surface-variant);
+  border-radius: 8px;
+  padding: 18px;
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.periodical-group-card:hover {
+  border-color: var(--primary-color);
+  transform: translateY(-2px);
+  box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+}
+
+.periodical-group-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.periodical-group-info {
+  flex: 1;
+}
+
+.periodical-group-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.periodical-group-icon {
+  font-size: 1.3em;
+}
+
+.periodical-group-title {
+  font-size: 1.1em;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.periodical-group-subtitle {
+  font-size: 0.9em;
+  color: var(--text-secondary);
+}
+
+.periodical-group-badges {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.periodical-group-arrow {
+  font-size: 1.5em;
+  color: var(--primary-color);
+}
