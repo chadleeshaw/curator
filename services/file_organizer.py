@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 from core.constants import (
+    DEFAULT_LANGUAGE,
     PDF_COVER_DPI_HIGH,
     PDF_COVER_QUALITY_HIGH,
     VOLUME_PREFIX,
@@ -289,7 +290,7 @@ class FileOrganizer:
             # Extract metadata
             title = metadata.get("title", pdf_path.stem)
             issue_date = metadata.get("issue_date", datetime.now())
-            language = metadata.get("language", "English")
+            language = metadata.get("language", DEFAULT_LANGUAGE)
             issue_number = metadata.get("issue_number")
             volume = metadata.get("volume")
 

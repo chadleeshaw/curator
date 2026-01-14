@@ -54,7 +54,7 @@ export class UIUtils {
   static showModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {
-      modal.classList.remove('hidden');
+      modal.classList.remove(CSS_CLASSES.HIDDEN);
     }
   }
 
@@ -64,7 +64,7 @@ export class UIUtils {
   static closeModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {
-      modal.classList.add('hidden');
+      modal.classList.add(CSS_CLASSES.HIDDEN);
     }
   }
 
@@ -74,7 +74,7 @@ export class UIUtils {
   static toggleModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {
-      modal.classList.toggle('hidden');
+      modal.classList.toggle(CSS_CLASSES.HIDDEN);
     }
   }
 
@@ -140,7 +140,7 @@ export class UIUtils {
   static hideStatus(elementId) {
     const statusDiv = document.getElementById(elementId);
     if (statusDiv) {
-      statusDiv.classList.add('hidden');
+      statusDiv.classList.add(CSS_CLASSES.HIDDEN);
     }
   }
 

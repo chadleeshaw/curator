@@ -13,6 +13,7 @@ import { settings } from './settings.js?v=1767733177';
 import { tasks } from './tasks.js?v=1767733177';
 import { imports } from './imports.js?v=1767733177';
 import { EventHandlers } from './event-handlers.js';
+import { CSS_CLASSES } from './constants.js';
 
 /**
  * Initialize the application
@@ -143,8 +144,8 @@ function showQueueView(queueType) {
   });
 
   // Show/hide queue views
-  document.getElementById('download-queue-view')?.classList.toggle('hidden', queueType !== 'download');
-  document.getElementById('ocr-queue-view')?.classList.toggle('hidden', queueType !== 'ocr');
+  document.getElementById('download-queue-view')?.classList.toggle(CSS_CLASSES.HIDDEN, queueType !== 'download');
+  document.getElementById('ocr-queue-view')?.classList.toggle(CSS_CLASSES.HIDDEN, queueType !== 'ocr');
 
   // Stop all auto-refresh
   downloads.stopAutoRefresh();

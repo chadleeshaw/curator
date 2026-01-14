@@ -107,7 +107,7 @@ class OCRProcessorTask:
             stats = self.ocr_service.process_queue(
                 db=db,
                 batch_size=self.batch_size,
-                max_retries=3
+                max_retries=constants.MAX_DOWNLOAD_RETRIES
             )
 
             # Clean up old completed jobs (weekly cleanup)

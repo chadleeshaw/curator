@@ -1,3 +1,5 @@
+import { CSS_CLASSES } from './constants.js';
+
 // Parse years data and special editions from data attributes
 const container = document.getElementById('periodical-container');
 const yearsData = container ? JSON.parse(container.getAttribute('data-years') || '[]') : [];
@@ -29,7 +31,7 @@ function openDeleteModal(magazineId, title) {
     if (modal && typeof modal.showModal === 'function') {
         modal.showModal();
     } else {
-        modal.classList.remove('hidden');
+        modal.classList.remove(CSS_CLASSES.HIDDEN);
     }
 }
 
@@ -40,7 +42,7 @@ function closeDeleteModal() {
     if (modal && typeof modal.close === 'function') {
         modal.close();
     } else {
-        modal.classList.add('hidden');
+        modal.classList.add(CSS_CLASSES.HIDDEN);
     }
     pendingDeleteId = null;
 }
@@ -367,10 +369,10 @@ function enableMetadataEdit() {
     if (!currentMagazineData) return;
 
     // Hide view, show edit form
-    document.getElementById('metadata-body').classList.add('hidden');
-    document.getElementById('metadata-edit-form').classList.remove('hidden');
-    document.getElementById('metadata-view-buttons').classList.add('hidden');
-    document.getElementById('metadata-edit-buttons').classList.remove('hidden');
+    document.getElementById('metadata-body').classList.add(CSS_CLASSES.HIDDEN);
+    document.getElementById('metadata-edit-form').classList.remove(CSS_CLASSES.HIDDEN);
+    document.getElementById('metadata-view-buttons').classList.add(CSS_CLASSES.HIDDEN);
+    document.getElementById('metadata-edit-buttons').classList.remove(CSS_CLASSES.HIDDEN);
 
     // Check if this issue is linked to tracking
     const hasTracking = currentMagazineData.tracking_id !== null && currentMagazineData.tracking_id !== undefined;
@@ -419,7 +421,7 @@ function enableMetadataEdit() {
     // Always show special edition field in edit mode
     const specialField = document.getElementById('special-edition-name-field');
     const isSpecialEdition = currentMagazineData.metadata && currentMagazineData.metadata.special_edition;
-    specialField.classList.remove('hidden');
+    specialField.classList.remove(CSS_CLASSES.HIDDEN);
     document.getElementById('edit-special-edition').value = (currentMagazineData.metadata && currentMagazineData.metadata.special_edition) || '';
     
     // Update the label to indicate if it's currently marked as special edition
@@ -433,10 +435,10 @@ function enableMetadataEdit() {
 
 function cancelMetadataEdit() {
     // Show view, hide edit form
-    document.getElementById('metadata-body').classList.remove('hidden');
-    document.getElementById('metadata-edit-form').classList.add('hidden');
-    document.getElementById('metadata-view-buttons').classList.remove('hidden');
-    document.getElementById('metadata-edit-buttons').classList.add('hidden');
+    document.getElementById('metadata-body').classList.remove(CSS_CLASSES.HIDDEN);
+    document.getElementById('metadata-edit-form').classList.add(CSS_CLASSES.HIDDEN);
+    document.getElementById('metadata-view-buttons').classList.remove(CSS_CLASSES.HIDDEN);
+    document.getElementById('metadata-edit-buttons').classList.add(CSS_CLASSES.HIDDEN);
 }
 
 // eslint-disable-next-line no-unused-vars -- Called from HTML onclick handlers
@@ -611,9 +613,9 @@ async function openMoveIssueModal() {
     const options = document.getElementById('move-issue-options');
     const select = document.getElementById('target-tracking-select');
 
-    modal.classList.remove('hidden');
-    loading.classList.remove('hidden');
-    options.classList.add('hidden');
+    modal.classList.remove(CSS_CLASSES.HIDDEN);
+    loading.classList.remove(CSS_CLASSES.HIDDEN);
+    options.classList.add(CSS_CLASSES.HIDDEN);
 
     try {
         // Fetch all tracking records
@@ -642,8 +644,8 @@ async function openMoveIssueModal() {
         });
 
         // Show options
-        loading.classList.add('hidden');
-        options.classList.remove('hidden');
+        loading.classList.add(CSS_CLASSES.HIDDEN);
+        options.classList.remove(CSS_CLASSES.HIDDEN);
 
         // Add change listener to enable/disable move button
         select.onchange = function() {
@@ -658,7 +660,7 @@ async function openMoveIssueModal() {
 }
 
 function closeMoveIssueModal() {
-    document.getElementById('move-issue-modal').classList.add('hidden');
+    document.getElementById('move-issue-modal').classList.add(CSS_CLASSES.HIDDEN);
 }
 
 // eslint-disable-next-line no-unused-vars -- Called from HTML onclick handlers
@@ -769,6 +771,20 @@ async function toggleSpecialEdition() {
         toggleBtn.textContent = originalText;
     }
 }
+
+// Expose functions to global scope for HTML onclick handlers
+// Must be done immediately so they're available when HTML loads
+window.goBack = goBack;
+window.closeDeleteModal = closeDeleteModal;
+window.confirmDeleteIssue = confirmDeleteIssue;
+window.closeMetadataModal = closeMetadataModal;
+window.enableMetadataEdit = enableMetadataEdit;
+window.cancelMetadataEdit = cancelMetadataEdit;
+window.saveMetadataEdit = saveMetadataEdit;
+window.toggleSpecialEdition = toggleSpecialEdition;
+window.openMoveIssueModal = openMoveIssueModal;
+window.closeMoveIssueModal = closeMoveIssueModal;
+window.confirmMoveIssue = confirmMoveIssue;
 
 // Initialize theme on page load
 document.addEventListener('DOMContentLoaded', () => {

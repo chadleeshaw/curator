@@ -115,6 +115,9 @@ LANGUAGE_TO_PADDLEOCR = {
 # Application Constants
 # ==============================================================================
 
+DEFAULT_LANGUAGE = "English"
+"""Default language for periodicals when none is detected"""
+
 # ==============================================================================
 # Matching and Deduplication
 # ==============================================================================
@@ -435,6 +438,26 @@ LANGUAGE_TO_COUNTRY = {
     "Korean": "KR",
 }
 """Default country mapping for each supported language"""
+
+
+LANGUAGE_CODE_MAP = {
+    "en": "English",
+    "de": "German",
+    "fr": "French",
+    "es": "Spanish",
+    "it": "Italian",
+    "pt": "Portuguese",
+    "nl": "Dutch",
+    "pl": "Polish",
+    "ru": "Russian",
+    "ja": "Japanese",
+    "zh": "Chinese",
+    "cn": "Chinese",
+    "ko": "Korean",
+    "kr": "Korean",
+    "ua": "Ukrainian",
+}
+"""Mapping from 2-letter language codes to full language names"""
 
 
 # ==============================================================================

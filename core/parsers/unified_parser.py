@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 from datetime import datetime
 
+from core.constants import DEFAULT_LANGUAGE
 from core.parsers.models import (
     ParsedMetadata,
     ParsedFilename,
@@ -138,7 +139,7 @@ class UnifiedParser:
                 original_title=title,
                 cleaned_title=title,
                 base_title=title,
-                language="English",
+                language=DEFAULT_LANGUAGE,
                 country=None,
                 is_special_edition=False,
                 special_edition_name=None,

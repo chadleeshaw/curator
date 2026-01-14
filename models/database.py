@@ -14,6 +14,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.declarative import declarative_base
 
+from core.constants import DEFAULT_LANGUAGE
 from core.parsers import utc_now
 
 Base = declarative_base()
@@ -58,7 +59,7 @@ class Magazine(Base):
 
     id = Column(Integer, primary_key=True)
     title = Column(String(255), nullable=False, index=True)
-    language = Column(String(50), nullable=True, default="English", index=True)  # Language of the edition
+    language = Column(String(50), nullable=True, default=DEFAULT_LANGUAGE, index=True)  # Language of the edition
     issue_date = Column(DateTime, nullable=False, index=True)
     file_path = Column(String(512), nullable=False, unique=True)
     cover_path = Column(String(512), nullable=True)

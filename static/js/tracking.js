@@ -994,7 +994,7 @@ export class TrackingManager {
           `Issue ${track ? 'marked for' : 'removed from'} tracking (${data.total_selected} total)`,
           'success'
         );
-        setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), 2000);
+        setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), TIMEOUTS.AUTO_HIDE_SUCCESS);
         return true;
       } else {
         throw new Error(data.message || 'Failed to update tracking');
@@ -1139,7 +1139,7 @@ export class TrackingManager {
       if (data.success) {
         UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Tracking removed', 'success');
         this.loadTrackedPeriodicals();
-        setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), 3000);
+        setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), TIMEOUTS.AUTO_HIDE_STATUS);
       } else {
         UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, data.message || 'Error removing tracking', 'error');
       }
@@ -1238,7 +1238,7 @@ window.saveEditedTracking = async function () {
       window.closeEditTrackingModal();
       tracking.loadTrackedPeriodicals();
       UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Tracking updated successfully', 'success');
-      setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), 3000);
+      setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), TIMEOUTS.AUTO_HIDE_STATUS);
     } else {
       UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Failed to update tracking', 'error');
     }
@@ -1571,7 +1571,7 @@ window.downloadIssue = async function (title, url, provider) {
 
     if (response.ok) {
       UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, `✓ Download queued! Job ID: ${data.job_id}`, 'success');
-      setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), 5000);
+      setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), TIMEOUTS.AUTO_HIDE_LONG);
       window.closeSearchIssuesModal();
     } else {
       UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, data.detail || 'Failed to queue download', 'error');
@@ -1631,7 +1631,7 @@ window.saveNewTracking = async () => {
       UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Tracking started successfully', 'success');
       tracking.closeTrackNewPeriodicalModal();
       tracking.loadTrackedPeriodicals();
-      setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), 2000);
+      setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), TIMEOUTS.AUTO_HIDE_SUCCESS);
     } else {
       UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, data.message || 'Failed to start tracking', 'error');
     }

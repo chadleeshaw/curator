@@ -9,6 +9,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from core.constants import SUPPORTED_LANGUAGES
+
 from core.constants import MAX_VALID_YEAR, MIN_VALID_YEAR
 
 logger = logging.getLogger(__name__)
@@ -33,19 +35,9 @@ class MetadataExtractor:
             "config",
             "logs",
             "app",
-            # Language folders (should be skipped when extracting periodical names)
-            "english",
-            "spanish",
-            "french",
-            "german",
-            "italian",
-            "portuguese",
-            "dutch",
-            "russian",
-            "chinese",
-            "japanese",
-            "korean",
         }
+        # Add language folders from constants (should be skipped when extracting periodical names)
+        self.system_folders.update(lang.lower() for lang in SUPPORTED_LANGUAGES)
 
     def extract_from_filename(self, pdf_path: Path) -> Dict[str, Any]:
         """
