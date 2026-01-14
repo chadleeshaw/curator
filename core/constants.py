@@ -495,17 +495,17 @@ COUNTRY_INDICATORS = {
 # ==============================================================================
 
 LANGUAGE_KEYWORDS = {
-    "German": ["German", "Deutsch", "Deutschland"],
-    "French": ["French", "Français", "France"],
-    "Spanish": ["Spanish", "Español", "España"],
-    "Italian": ["Italian", "Italiano", "Italia"],
-    "Portuguese": ["Portuguese", "Português"],
-    "Dutch": ["Dutch", "Nederlands", "nederlands", "Holland"],
-    "Polish": ["Polish", "Polski", "Polska"],
-    "Russian": ["Russian", "Русский"],
-    "Ukrainian": ["Ukrainian", "Українська"],
-    "Japanese": ["Japanese", "日本語", "Japan"],
-    "Chinese": ["Chinese", "中文", "China"],
-    "Korean": ["Korean", "한국어", "Korea"],
+    "German": ["German", "Deutsch", "Deutschland", "DE"],
+    "French": ["French", "Français", "Francais", "FRANCAIS", "France", "FR"],
+    "Spanish": ["Spanish", "Español", "Espanol", "ESPANOL", "España", "ES"],
+    "Italian": ["Italian", "Italiano", "Italia", "IT"],
+    "Portuguese": ["Portuguese", "Português", "Portugues", "PORTUGUES", "PT"],
+    "Dutch": ["Dutch", "Nederlands", "nederlands", "Holland", "NL"],
+    "Polish": ["Polish", "Polski", "Polska", "PL"],
+    "Russian": ["Russian", "Русский", "RU"],
+    "Ukrainian": ["Ukrainian", "Українська", "UA"],
+    "Japanese": ["Japanese", "日本語", "Japan", "JP"],
+    "Chinese": ["Chinese", "中文", "China", "CN", "ZH"],
+    "Korean": ["Korean", "한국어", "Korea", "KR"],
 }
 """Keywords used to detect language from periodical titles"""
