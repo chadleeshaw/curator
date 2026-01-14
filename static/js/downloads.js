@@ -267,13 +267,13 @@ export class DownloadsManager {
     );
 
     if (activeDownloads.length === 0) {
-      emptyDiv.classList.remove('hidden');
-      tableContainer.classList.add('hidden');
+      emptyDiv\.classList\.remove(CSS_CLASSES.HIDDEN);
+      tableContainer\.classList\.add(CSS_CLASSES.HIDDEN);
       return;
     }
 
-    emptyDiv.classList.add('hidden');
-    tableContainer.classList.remove('hidden');
+    emptyDiv\.classList\.add(CSS_CLASSES.HIDDEN);
+    tableContainer\.classList\.remove(CSS_CLASSES.HIDDEN);
 
     // Group by periodical
     const grouped = this.groupQueueByPeriodical(activeDownloads);
@@ -478,7 +478,7 @@ export class DownloadsManager {
     const container = document.getElementById('manage-queue-modal-content');
     if (container) {
       container.innerHTML = html;
-      document.getElementById('manage-queue-modal').classList.remove('hidden');
+      document.getElementById('manage-queue-modal')\.classList\.remove(CSS_CLASSES.HIDDEN);
     }
   }
 
@@ -494,7 +494,7 @@ export class DownloadsManager {
    * Close manage queue modal
    */
   closeManageQueueModal() {
-    document.getElementById('manage-queue-modal').classList.add('hidden');
+    document.getElementById('manage-queue-modal')\.classList\.add(CSS_CLASSES.HIDDEN);
     this.currentModalItems = null;
     this.currentModalPeriodical = null;
     this.currentModalFilter = 'all';
@@ -569,7 +569,7 @@ export class DownloadsManager {
     const container = document.getElementById('manage-failed-modal-content');
     if (container) {
       container.innerHTML = html;
-      document.getElementById('manage-failed-modal').classList.remove('hidden');
+      document.getElementById('manage-failed-modal')\.classList\.remove(CSS_CLASSES.HIDDEN);
     }
   }
 
@@ -577,7 +577,7 @@ export class DownloadsManager {
    * Close manage failed modal
    */
   closeManageFailedModal() {
-    document.getElementById('manage-failed-modal').classList.add('hidden');
+    document.getElementById('manage-failed-modal')\.classList\.add(CSS_CLASSES.HIDDEN);
     this.currentModalItems = null;
     this.currentModalPeriodical = null;
   }

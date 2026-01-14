@@ -45,17 +45,17 @@ export class ImportsManager {
       messageDiv.style.background = '#e8f5e9';
       messageDiv.style.color = '#2e7d32';
       messageDiv.style.borderColor = '#4caf50';
-      messageDiv.classList.remove('hidden');
+      messageDiv.classList.remove(CSS_CLASSES.HIDDEN);
 
       setTimeout(() => {
-        messageDiv.classList.add('hidden');
+        messageDiv.classList.add(CSS_CLASSES.HIDDEN);
       }, 3000);
     } catch {
       messageDiv.textContent = '✗ Error saving settings';
       messageDiv.style.background = '#ffebee';
       messageDiv.style.color = '#c62828';
       messageDiv.style.borderColor = '#f44336';
-      messageDiv.classList.remove('hidden');
+      messageDiv.classList.remove(CSS_CLASSES.HIDDEN);
     }
   }
 
@@ -75,7 +75,7 @@ export class ImportsManager {
       statusDiv.textContent = '📁 Importing from data directory...';
       statusDiv.style.background = 'var(--surface-variant)';
       statusDiv.style.color = 'var(--text-primary)';
-      statusDiv.classList.remove('hidden');
+      statusDiv.classList.remove(CSS_CLASSES.HIDDEN);
 
       // Close modal
       library.closeImportModal();
@@ -132,7 +132,7 @@ export class ImportsManager {
       statusDiv.style.color = '#1565c0';
       statusDiv.style.borderColor = '#2196f3';
       statusDiv.textContent = `⏳ Importing ${statusData.files} periodicals(s)...`;
-      statusDiv.classList.remove('hidden');
+      statusDiv.classList.remove(CSS_CLASSES.HIDDEN);
 
       // Start import
       const response = await APIClient.authenticatedFetch('/api/import/process', {

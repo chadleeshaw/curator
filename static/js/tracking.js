@@ -51,7 +51,7 @@ export class TrackingManager {
       }
     } catch (error) {
       console.error('Failed to load constants:', error);
-      UIUtils.showStatus('tracking-status', 'Failed to load form options', 'error');
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Failed to load form options', 'error');
     }
   }
 
@@ -129,23 +129,23 @@ export class TrackingManager {
    * Search for periodical metadata
    */
   async searchPeriodicalMetadata() {
-    const query = document.getElementById('tracking-search-query').value.trim();
-    const filterLanguage = document.getElementById('search-filter-language')?.value || '';
-    const filterCountry = document.getElementById('search-filter-country')?.value || '';
-    const filterCategory = document.getElementById('new-tracking-category')?.value || '';
+    const query = document.getElementById(ELEMENT_IDS.TRACKING_SEARCH_QUERY).value.trim();
+    const filterLanguage = document.getElementById(ELEMENT_IDS.SEARCH_FILTER_LANGUAGE)?.value || '';
+    const filterCountry = document.getElementById(ELEMENT_IDS.SEARCH_FILTER_COUNTRY)?.value || '';
+    const filterCategory = document.getElementById(ELEMENT_IDS.NEW_TRACKING_CATEGORY)?.value || '';
 
     if (!query) {
-      UIUtils.showStatus('tracking-status', 'Please enter a periodical title', 'error');
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, STATUS_MESSAGES.ENTER_TITLE, 'error');
       return;
     }
 
-    const loading = document.getElementById('tracking-search-loading');
-    const result = document.getElementById('tracking-search-result');
-    const error = document.getElementById('tracking-search-error');
+    const loading = document.getElementById(ELEMENT_IDS.TRACKING_SEARCH_LOADING);
+    const result = document.getElementById(ELEMENT_IDS.TRACKING_SEARCH_RESULT);
+    const error = document.getElementById(ELEMENT_IDS.TRACKING_SEARCH_ERROR);
 
-    loading.classList.remove('hidden');
-    result.classList.add('hidden');
-    error.classList.add('hidden');
+    loading.classList.remove(CSS_CLASSES.HIDDEN);
+    result.classList.add(CSS_CLASSES.HIDDEN);
+    error.classList.add(CSS_CLASSES.HIDDEN);
 
     try {
       // Build query parameters
@@ -173,13 +173,13 @@ export class TrackingManager {
 
       if (!response.ok) {
         error.textContent = data.detail || `Error: ${response.status}`;
-        error.classList.remove('hidden');
+        error.classList.remove(CSS_CLASSES.HIDDEN);
         return;
       }
 
       if (data.found && data.results && data.results.length > 0) {
         this.displaySearchResultsGrouped(data.results);
-        result.classList.remove('hidden');
+        result\.classList\.remove(CSS_CLASSES.HIDDEN);
       } else {
         const filterInfo = [];
         if (filterLanguage) filterInfo.push(`Language: ${filterLanguage}`);
@@ -187,14 +187,14 @@ export class TrackingManager {
         if (filterCategory) filterInfo.push(`Category: ${filterCategory}`);
         const filterText = filterInfo.length > 0 ? ` (Filters: ${filterInfo.join(', ')})` : '';
         error.textContent = `${data.message || 'Periodical not found'}${filterText}`;
-        error.classList.remove('hidden');
+        error.classList.remove(CSS_CLASSES.HIDDEN);
       }
     } catch (err) {
       console.error('Search error:', err);
       error.textContent = err.message;
-      error.classList.remove('hidden');
+      error\.classList\.remove(CSS_CLASSES.HIDDEN);
     } finally {
-      loading.classList.add('hidden');
+      loading\.classList\.add(CSS_CLASSES.HIDDEN);
     }
   }
 
@@ -202,7 +202,7 @@ export class TrackingManager {
    * Display search results grouped by edition
    */
   displaySearchResultsGrouped(results) {
-    const container = document.getElementById('tracking-search-result');
+    const container = document.getElementById(ELEMENT_IDS.TRACKING_SEARCH_RESULT);
 
     // Extract unique periodical editions and group results
     const uniquePeriodicals = {};
@@ -269,7 +269,7 @@ export class TrackingManager {
    * Display search results for user to select
    */
   displaySearchResults(results) {
-    const container = document.getElementById('tracking-search-result');
+    const container = document.getElementById(ELEMENT_IDS.TRACKING_SEARCH_RESULT);
     container.innerHTML = '<h4>Select a Periodical:</h4>';
 
     results.forEach((result, _index) => {
@@ -354,10 +354,10 @@ export class TrackingManager {
     }
 
     // Hide the search results
-    document.getElementById('tracking-search-result').classList.add('hidden');
+    document.getElementById(ELEMENT_IDS.TRACKING_SEARCH_RESULT)\.classList\.add(CSS_CLASSES.HIDDEN);
 
     // Show a success message and scroll to the form
-    UIUtils.showStatus('tracking-status', 
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 
       `✓ Selected: ${result.title}. Review the fields below and click "Start Tracking".`, 
       'success');
 
@@ -379,7 +379,7 @@ export class TrackingManager {
    */
   async saveTrackingPreferences() {
     if (!this.currentPeriodicalMetadata) {
-      UIUtils.showStatus('tracking-status', 'No periodical selected', 'error');
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'No periodical selected', 'error');
       return;
     }
 
@@ -413,21 +413,21 @@ export class TrackingManager {
       const data = await response.json();
 
       if (data.success) {
-        UIUtils.showStatus('tracking-status', 'Tracking saved successfully', 'success');
+        UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Tracking saved successfully', 'success');
 
         // Close modal and reload
         this.closeTrackNewPeriodicalModal();
         this.loadTrackedPeriodicals();
 
         setTimeout(() => {
-          UIUtils.hideStatus('tracking-status');
+          UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS);
         }, 2000);
       } else {
-        UIUtils.showStatus('tracking-status', data.message || 'Error saving tracking', 'error');
+        UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, data.message || 'Error saving tracking', 'error');
       }
     } catch (error) {
       console.error('Error saving tracking:', error);
-      UIUtils.showStatus('tracking-status', `Error: ${error.message}`, 'error');
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, `Error: ${error.message}`, 'error');
     }
   }
 
@@ -750,11 +750,11 @@ export class TrackingManager {
         document.getElementById('edit-tracking-org-pattern').value = t.organization_pattern || '';
 
         // Show modal
-        document.getElementById('edit-tracking-modal').classList.remove('hidden');
+        document.getElementById(ELEMENT_IDS.EDIT_TRACKING_MODAL)\.classList\.remove(CSS_CLASSES.HIDDEN);
       }
     } catch (err) {
       console.error('Error loading tracking details:', err);
-      UIUtils.showStatus('tracking-status', 'Failed to load tracking details', 'error');
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Failed to load tracking details', 'error');
     }
   }
 
@@ -770,7 +770,7 @@ export class TrackingManager {
           <div class="loading-spinner"></div>
           <p style="margin-top: 20px; color: var(--text-secondary);">Searching for issues...</p>
         </div>`;
-      document.getElementById('search-issues-modal').classList.remove('hidden');
+      document.getElementById(ELEMENT_IDS.SEARCH_ISSUES_MODAL)\.classList\.remove(CSS_CLASSES.HIDDEN);
 
       // Store tracking_id for later use in downloadIssue
       window.currentTrackingId = trackingId;
@@ -994,14 +994,14 @@ export class TrackingManager {
           `Issue ${track ? 'marked for' : 'removed from'} tracking (${data.total_selected} total)`,
           'success'
         );
-        setTimeout(() => UIUtils.hideStatus('tracking-status'), 2000);
+        setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), 2000);
         return true;
       } else {
         throw new Error(data.message || 'Failed to update tracking');
       }
     } catch (error) {
       console.error('Error toggling issue tracking:', error);
-      UIUtils.showStatus('tracking-status', `Error: ${error.message}`, 'error');
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, `Error: ${error.message}`, 'error');
       return false;
     }
   }
@@ -1137,15 +1137,15 @@ export class TrackingManager {
       const data = await response.json();
 
       if (data.success) {
-        UIUtils.showStatus('tracking-status', 'Tracking removed', 'success');
+        UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Tracking removed', 'success');
         this.loadTrackedPeriodicals();
-        setTimeout(() => UIUtils.hideStatus('tracking-status'), 3000);
+        setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), 3000);
       } else {
-        UIUtils.showStatus('tracking-status', data.message || 'Error removing tracking', 'error');
+        UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, data.message || 'Error removing tracking', 'error');
       }
     } catch (error) {
       console.error('Error deleting tracking:', error);
-      UIUtils.showStatus('tracking-status', 'Error removing tracking', 'error');
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Error removing tracking', 'error');
     }
   }
 
@@ -1161,11 +1161,11 @@ export class TrackingManager {
     const searchQuery = document.getElementById('tracking-search-query');
     if (searchQuery) searchQuery.value = '';
     
-    const searchResult = document.getElementById('tracking-search-result');
-    if (searchResult) searchResult.classList.add('hidden');
+    const searchResult = document.getElementById(ELEMENT_IDS.TRACKING_SEARCH_RESULT);
+    if (searchResult) searchResult\.classList\.add(CSS_CLASSES.HIDDEN);
     
     const searchError = document.getElementById('tracking-search-error');
-    if (searchError) searchError.classList.add('hidden');
+    if (searchError) searchError\.classList\.add(CSS_CLASSES.HIDDEN);
   }
 
   /**
@@ -1173,14 +1173,14 @@ export class TrackingManager {
    */
   openTrackNewPeriodicalModal() {
     this.resetTracking();
-    document.getElementById('track-new-periodical-modal').classList.remove('hidden');
+    document.getElementById('track-new-periodical-modal')\.classList\.remove(CSS_CLASSES.HIDDEN);
   }
 
   /**
    * Close track new periodical modal
    */
   closeTrackNewPeriodicalModal() {
-    document.getElementById('track-new-periodical-modal').classList.add('hidden');
+    document.getElementById('track-new-periodical-modal')\.classList\.add(CSS_CLASSES.HIDDEN);
     this.resetTracking();
   }
 
@@ -1201,11 +1201,11 @@ window.trackingManager = tracking;
 
 // Modal management functions
 window.closeEditTrackingModal = function () {
-  document.getElementById('edit-tracking-modal').classList.add('hidden');
+  document.getElementById(ELEMENT_IDS.EDIT_TRACKING_MODAL)\.classList\.add(CSS_CLASSES.HIDDEN);
 };
 
 window.closeSearchIssuesModal = function () {
-  document.getElementById('search-issues-modal').classList.add('hidden');
+  document.getElementById(ELEMENT_IDS.SEARCH_ISSUES_MODAL)\.classList\.add(CSS_CLASSES.HIDDEN);
 };
 
 // Save edited tracking
@@ -1237,14 +1237,14 @@ window.saveEditedTracking = async function () {
     if (result.success) {
       window.closeEditTrackingModal();
       tracking.loadTrackedPeriodicals();
-      UIUtils.showStatus('tracking-status', 'Tracking updated successfully', 'success');
-      setTimeout(() => UIUtils.hideStatus('tracking-status'), 3000);
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Tracking updated successfully', 'success');
+      setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), 3000);
     } else {
-      UIUtils.showStatus('tracking-status', 'Failed to update tracking', 'error');
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Failed to update tracking', 'error');
     }
   } catch (err) {
     console.error('Error updating tracking:', err);
-    UIUtils.showStatus('tracking-status', 'Failed to update tracking', 'error');
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Failed to update tracking', 'error');
   }
 };
 
@@ -1254,7 +1254,7 @@ window.selectIssueWithVariants = function (issueKey, alreadyDownloaded) {
   const variants = window.issueVariants[issueKey];
 
   if (!variants || variants.length === 0) {
-    UIUtils.showStatus('tracking-status', 'No variants available', 'error');
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'No variants available', 'error');
     return;
   }
 
@@ -1352,8 +1352,8 @@ window.selectIssue = async function (title, provider, url, alreadyDownloaded) {
   const isLibraryOnly = !url || url === '';
 
   if (isLibraryOnly) {
-    UIUtils.showStatus('tracking-status', 'This issue is already in your library', 'success');
-    setTimeout(() => UIUtils.hideStatus('tracking-status'), 3000);
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'This issue is already in your library', 'success');
+    setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), 3000);
     return;
   }
 
@@ -1393,7 +1393,7 @@ window.openMergeModal = async function() {
     
     if (!response.ok || items.length < 2) {
       console.log('Showing warning status');
-      UIUtils.showStatus('tracking-status', '⚠️ You need at least 2 tracked periodicals to merge', 'warning');
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, '⚠️ You need at least 2 tracked periodicals to merge', 'warning');
       return;
     }
 
@@ -1438,7 +1438,7 @@ window.openMergeModal = async function() {
     });
   } catch (error) {
     console.error('Error loading tracking records:', error);
-    UIUtils.showStatus('tracking-status', '✗ Failed to load tracking records', 'error');
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, '✗ Failed to load tracking records', 'error');
   }
 };
 
@@ -1459,7 +1459,7 @@ window.showMergeTargetSelection = async function() {
   const selectedIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
   
   if (selectedIds.length < 2) {
-    UIUtils.showStatus('tracking-status', '⚠️ Please select at least 2 tracking records', 'warning');
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, '⚠️ Please select at least 2 tracking records', 'warning');
     return;
   }
 
@@ -1519,7 +1519,7 @@ window.confirmMerge = async function() {
   const sourceIds = allSelectedIds.filter(id => id !== targetId);
   
   if (!targetId || sourceIds.length === 0) {
-    UIUtils.showStatus('tracking-status', '⚠️ Invalid selection', 'warning');
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, '⚠️ Invalid selection', 'warning');
     return;
   }
   
@@ -1534,7 +1534,7 @@ window.confirmMerge = async function() {
       const filesMsg = data.files_reorganized > 0 
         ? `, reorganized ${data.files_reorganized} files` 
         : '';
-      UIUtils.showStatus('tracking-status', 
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 
         `✓ ${data.message}. Moved ${data.magazines_moved} magazines and ${data.submissions_moved} downloads${filesMsg}.`, 
         'success');
       window.closeMergeModal();
@@ -1547,7 +1547,7 @@ window.confirmMerge = async function() {
     }
   } catch (error) {
     console.error('Merge error:', error);
-    UIUtils.showStatus('tracking-status', `✗ ${error.message}`, 'error');
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, `✗ ${error.message}`, 'error');
   }
 };
 
@@ -1556,7 +1556,7 @@ window.downloadIssue = async function (title, url, provider) {
   try {
     const trackingId = window.currentTrackingId;
     if (!trackingId) {
-      UIUtils.showStatus('tracking-status', 'Error: No tracking ID available', 'error');
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Error: No tracking ID available', 'error');
       return;
     }
 
@@ -1570,15 +1570,15 @@ window.downloadIssue = async function (title, url, provider) {
     const data = await response.json();
 
     if (response.ok) {
-      UIUtils.showStatus('tracking-status', `✓ Download queued! Job ID: ${data.job_id}`, 'success');
-      setTimeout(() => UIUtils.hideStatus('tracking-status'), 5000);
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, `✓ Download queued! Job ID: ${data.job_id}`, 'success');
+      setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), 5000);
       window.closeSearchIssuesModal();
     } else {
-      UIUtils.showStatus('tracking-status', data.detail || 'Failed to queue download', 'error');
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, data.detail || 'Failed to queue download', 'error');
     }
   } catch (err) {
     console.error('Download error:', err);
-    UIUtils.showStatus('tracking-status', `Error: ${err.message}`, 'error');
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, `Error: ${err.message}`, 'error');
   }
 };
 
@@ -1593,7 +1593,7 @@ window.saveNewTracking = async () => {
   const downloadCategory = document.getElementById('new-tracking-download-category').value.trim();
   
   if (!title) {
-    UIUtils.showStatus('tracking-status', 'Please enter a title', 'error');
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Please enter a title', 'error');
     return;
   }
 
@@ -1628,16 +1628,16 @@ window.saveNewTracking = async () => {
       }
       await APIClient.put(`/api/periodicals/tracking/${data.tracking_id}`, updateData);
 
-      UIUtils.showStatus('tracking-status', 'Tracking started successfully', 'success');
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Tracking started successfully', 'success');
       tracking.closeTrackNewPeriodicalModal();
       tracking.loadTrackedPeriodicals();
-      setTimeout(() => UIUtils.hideStatus('tracking-status'), 2000);
+      setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), 2000);
     } else {
-      UIUtils.showStatus('tracking-status', data.message || 'Failed to start tracking', 'error');
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, data.message || 'Failed to start tracking', 'error');
     }
   } catch (error) {
     console.error('Error starting tracking:', error);
-    UIUtils.showStatus('tracking-status', `Error: ${error.message}`, 'error');
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, `Error: ${error.message}`, 'error');
   }
 };
 window.saveTrackingPreferences = () => tracking.saveTrackingPreferences();

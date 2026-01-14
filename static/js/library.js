@@ -260,9 +260,9 @@ export class LibraryManager {
 
       if (result.success) {
         UIUtils.showStatus('import-status', result.message, 'success');
-        setTimeout(() => UIUtils.hideStatus('import-status'), 4000);
+        setTimeout(() => UIUtils.hideStatus('import-status'), TIMEOUTS.AUTO_HIDE_STATUS);
         this.closeDeleteModal();
-        setTimeout(() => this.loadPeriodicals(), 500);
+        setTimeout(() => this.loadPeriodicals(), TIMEOUTS.IMPORT_RELOAD_DELAY);
       }
     } catch (error) {
       console.error('Error deleting periodical:', error);

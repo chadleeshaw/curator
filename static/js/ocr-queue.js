@@ -94,13 +94,13 @@ export class OCRQueueManager {
     );
 
     if (activeJobs.length === 0) {
-      emptyDiv.classList.remove('hidden');
-      tableContainer.classList.add('hidden');
+      emptyDiv.classList.remove(CSS_CLASSES.HIDDEN);
+      tableContainer.classList.add(CSS_CLASSES.HIDDEN);
       return;
     }
 
-    emptyDiv.classList.add('hidden');
-    tableContainer.classList.remove('hidden');
+    emptyDiv.classList.add(CSS_CLASSES.HIDDEN);
+    tableContainer.classList.remove(CSS_CLASSES.HIDDEN);
 
     // Build table rows
     tbody.innerHTML = '';
