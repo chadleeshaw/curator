@@ -1079,3 +1079,135 @@
     transform: translateY(0);
   }
 }
+
+/* ==========================================================================
+   Status Messages (Added for JS Refactoring - Phase 1)
+   ========================================================================== */
+
+.status-message {
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid;
+  margin: 10px 0;
+  font-size: var(--font-size-sm);
+  transition: all var(--transition-base);
+}
+
+.status-success {
+  background: var(--success-100);
+  color: var(--success-700);
+  border-color: var(--success-500);
+}
+
+.status-error {
+  background: var(--error-100);
+  color: var(--error-700);
+  border-color: var(--error-500);
+}
+
+.status-warning {
+  background: var(--warning-100);
+  color: var(--warning-700);
+  border-color: var(--warning-500);
+}
+
+.status-info {
+  background: var(--info-100);
+  color: var(--info-700);
+  border-color: var(--info-500);
+}
+
+/* ==========================================================================
+   Issue Cards (Added for JS Refactoring - Phase 1)
+   ========================================================================== */
+
+.issue-card {
+  background: var(--surface);
+  padding: var(--space-md);
+  margin: 8px 0;
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.issue-card:hover {
+  border-color: var(--primary-color);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.issue-card-selected {
+  border-color: var(--primary-color);
+  background: var(--primary-50);
+}
+
+.issue-card-downloaded {
+  opacity: 0.6;
+  background: var(--surface-variant);
+}
+
+/* ==========================================================================
+   Empty State Extensions (Added for JS Refactoring - Phase 1)
+   ========================================================================== */
+
+.empty-state-title {
+  font-size: 1.2em;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+}
+
+.empty-state-subtitle {
+  color: var(--text-secondary);
+  font-size: 0.95em;
+}
+
+/* ==========================================================================
+   Stats Summary (Added for JS Refactoring - Phase 1)
+   ========================================================================== */
+
+.stats-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+  margin-bottom: 25px;
+}
+
+.stat-box {
+  background: var(--surface);
+  padding: 20px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  text-align: center;
+  box-shadow: var(--shadow-sm);
+}
+
+.stat-box-value {
+  font-size: 2.5em;
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.stat-box-label {
+  font-size: 0.9em;
+  color: var(--text-secondary);
+  margin-top: 5px;
+}
+
+.stat-box-sublabel {
+  font-size: 0.8em;
+  color: var(--text-secondary);
+  margin-top: 3px;
+}
+
+/* ==========================================================================
+   Progress Bar (Added for JS Refactoring - Phase 1)
+   ========================================================================== */
+
+.progress-bar-success {
+  background: linear-gradient(90deg, var(--success-500), var(--success-400));
+}
+
+.progress-bar-error {
+  background: linear-gradient(90deg, var(--error-500), var(--error-600));
+}

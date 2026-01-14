@@ -5,6 +5,7 @@
 
 import { APIClient } from './api.js?v=1767733177';
 import { UIUtils } from './ui-utils.js?v=1767733177';
+import { ELEMENT_IDS, STATUS_MESSAGES, CSS_CLASSES, TIMEOUTS } from './constants.js';
 
 export class OCRQueueManager {
   constructor() {

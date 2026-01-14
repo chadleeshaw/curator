@@ -8,6 +8,7 @@
 
 import { APIClient } from './api.js';
 import { UIUtils, SortManager } from './ui-utils.js';
+import { ELEMENT_IDS, STATUS_MESSAGES, CSS_CLASSES, TIMEOUTS, PATTERNS, BADGE_CONFIGS } from './constants.js';
 
 // Constants loaded from backend API
 let SUPPORTED_LANGUAGES = [];

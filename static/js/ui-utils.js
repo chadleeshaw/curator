@@ -3,6 +3,8 @@
  * Handles tab switching, modal management, theme switching, and UI helpers
  */
 
+import { ELEMENT_IDS, CSS_CLASSES, TIMEOUTS, STORAGE_KEYS, DEFAULTS } from './constants.js';
+
 export class UIUtils {
   /**
    * Show a specific tab and hide others

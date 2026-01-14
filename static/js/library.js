@@ -5,6 +5,7 @@
 
 import { APIClient } from './api.js';
 import { UIUtils, SortManager } from './ui-utils.js';
+import { ELEMENT_IDS, STATUS_MESSAGES, CSS_CLASSES, TIMEOUTS } from './constants.js';
 
 export class LibraryManager {
   constructor() {
