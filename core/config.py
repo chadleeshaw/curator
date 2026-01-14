@@ -107,9 +107,15 @@ def _apply_storage_env_overrides(storage: Dict[str, Any]) -> None:
     """
     Apply environment variable overrides to storage configuration.
 
+    Environment variables take precedence over YAML config for deployment flexibility.
+    This allows Docker containers, systemd services, or CI/CD to override paths
+    without modifying config files.
+
     Args:
         storage: Storage configuration dictionary (modified in place)
     """
+    # Override each storage path if corresponding environment variable is set
+    # Pattern: CURATOR_<KEY> overrides config.<key>
     if os.environ.get(ENV_CURATOR_DB_PATH):
         storage[STORAGE_KEY_DB_PATH] = os.environ[ENV_CURATOR_DB_PATH]
     if os.environ.get(ENV_CURATOR_DOWNLOAD_DIR):

@@ -135,17 +135,21 @@ class FileOrganizer:
         """
         filename_parts = [safe_title]
 
-        # Add volume if present
+        # Add volume if present (e.g., "Vol1")
+        # Volume comes before issue number following common periodical conventions
         if volume:
             filename_parts.append(f"{VOLUME_PREFIX}{volume}")
 
-        # Add issue number if present
+        # Add issue number if present (e.g., "No123")
         if issue_number:
             filename_parts.append(f"{ISSUE_PREFIX}{issue_number}")
 
-        # Add date
+        # Add date last (e.g., "Dec2024")
+        # This ensures consistent sorting and readability
         filename_parts.append(f"{month}{year}")
 
+        # Join with separator to create final filename
+        # Example: "Wired - Vol5 - No12 - Dec2024.pdf"
         return f"{ORGANIZED_FILENAME_SEPARATOR.join(filename_parts)}.pdf"
 
     def _build_default_directory(

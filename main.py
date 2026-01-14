@@ -133,7 +133,8 @@ def main():
 
     logger = logging.getLogger(__name__)
 
-    # Import app after logging is configured
+    # Import app after logging is configured to ensure all app startup logs are captured
+    # This triggers FastAPI initialization, database setup, and dependency injection
     from web.app import app
 
     try:
@@ -142,16 +143,18 @@ def main():
         logger.info("Starting Curator...")
         logger.info("Access the web UI at: http://localhost:8000")
 
-        # Enable access logs only if DEBUG logging is enabled
+        # Enable uvicorn access logs only if DEBUG logging is enabled
+        # This reduces log noise in production while keeping detailed logs in development
         log_config = config_loader.get_logging()
         log_level = log_config.get("level", DEFAULT_LOG_LEVEL).upper()
         access_log = log_level == "DEBUG"
 
-        # Get server configuration
+        # Get server configuration with environment variable override support
         server_config = config_loader.get_server()
         host = server_config.get("host", DEFAULT_SERVER_HOST)
         port = server_config.get("port", DEFAULT_SERVER_PORT)
 
+        # Start the ASGI server (blocks until shutdown signal received)
         uvicorn.run(app, host=host, port=port, access_log=access_log)
 
     except KeyboardInterrupt:
