@@ -102,6 +102,9 @@ class TitleMatcher:
         # Remove file extension
         title = re.sub(r"\.[a-z0-9]{2,4}$", "", title, flags=re.IGNORECASE)
 
+        # Remove category prefixes like [Magazine], [Comic], [Newspaper], [Book]
+        title = re.sub(r"^\[(?:Magazine|Comic|Newspaper|Book|Journal)\]\s*", "", title, flags=re.IGNORECASE)
+
         # Remove website prefixes: [www.site.com] or www.site.com -
         title = re.sub(
             r"^(?:\[\s*)?(?:www\.)?[-a-z0-9-]{1,256}\."
@@ -140,6 +143,10 @@ class TitleMatcher:
         )
         title = re.sub(language_pattern, " ", title, flags=re.IGNORECASE)
 
+        # Remove format indicators BEFORE replacing dots (to catch TruePDF as one word)
+        # TruePDF indicates a digitally created (text-based) PDF vs a scanned one
+        title = re.sub(r"[\.\s]*TruePDF[\.\s]*", " ", title, flags=re.IGNORECASE)
+
         # Remove release group tags (e.g., "-LORENZ-xpost", "[hash]-xpost") - BEFORE quality removal
         title = re.sub(r"-[A-Z][A-Za-z0-9]+(?:-[a-z]+)?\[[\w]+\].*$", "", title)  # -LORENZ[hash]
         title = re.sub(r"\[[\w]+\](?:-[a-z]+)?$", "", title)  # [hash]-xpost or [hash]
@@ -172,6 +179,25 @@ class TitleMatcher:
         # followed by lowercase letters (e.g., "NationalGeographic" -> "National Geographic")
         title = re.sub(r"([a-z])([A-Z])", r"\1 \2", title)
 
+        # Normalize common country code variations (USA -> US, etc.)
+        # Note: UK is kept as UK (not normalized to GB) for better user readability
+        country_normalizations = {
+            'USA': 'US',
+            'U S A': 'US',
+            'U.S.A': 'US',
+            'U.S.A.': 'US',
+            'U.S': 'US',
+            'U.S.': 'US',
+            'United States': 'US',
+            'U K': 'UK',
+            'U.K': 'UK',
+            'U.K.': 'UK',
+            'United Kingdom': 'UK',
+        }
+        for long_form, short_form in country_normalizations.items():
+            # Match whole words only with word boundaries
+            title = re.sub(rf'\b{re.escape(long_form)}\b', short_form, title, flags=re.IGNORECASE)
+
         # Remove issue numbers that appear as metadata: "No 123", "Issue 456", "No.789", "#42", "Vol 5", "Vol.5"
         # Must do this AFTER replacing dots with spaces
         title = re.sub(
@@ -183,12 +209,22 @@ class TitleMatcher:
         title = re.sub(r"\s+(?:No|Issue|Vol|Volume|Edition)\s+\d+", "", title, flags=re.IGNORECASE)  # Remove remaining
         title = re.sub(r"\s+#\d+(?:\s+(?:19|20)\d{2})?$", "", title, flags=re.IGNORECASE)
 
+        # Remove date patterns like "-October 2016", "-Jan 2025", etc. (common in magazine filenames)
+        title = re.sub(
+            r"\s*-\s*(?:January|February|March|April|May|June|July|August|September|October|November|December|"
+            r"Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+(?:19|20)\d{2}",
+            "",
+            title,
+            flags=re.IGNORECASE
+        )
+
         # Remove magazine type suffixes (often redundant metadata like "Hybrid Magazine", "Digital Magazine")
         title = re.sub(r"\s+(?:Hybrid|Digital|PDF|eMag|True|HQ)\s+(?:Magazine|Mag)", "", title, flags=re.IGNORECASE)
         title = re.sub(r"\s+(magazine|mag|mag\.)$", "", title, flags=re.IGNORECASE)
 
-        # Remove standalone format indicators (E Book, eBook, Digital, PDF, etc.)
-        title = re.sub(r"\s+(?:E\s*Book|eBook|Digital|PDF|ePub)(?:\s+|$)", " ", title, flags=re.IGNORECASE)
+        # Remove standalone format indicators (E Book, eBook, Digital, PDF, TruePDF, etc.)
+        # TruePDF indicates a digitally created (text-based) PDF vs a scanned one
+        title = re.sub(r"\s+(?:E\s*Book|eBook|Digital|PDF|ePub|True\s*PDF)(?:\s+|$)", " ", title, flags=re.IGNORECASE)
 
         # Clean up multiple spaces again after replacements
         title = re.sub(r"\s+", " ", title).strip()

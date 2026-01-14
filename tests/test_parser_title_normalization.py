@@ -303,7 +303,7 @@ class TestTitleNormalization:
             # Input -> Expected output
             ("Unpack Wired No 11 2024 UK Hybrid Magazine", "Wired Uk"),
             ("Wired Issue 05 2023 Digital Magazine", "Wired"),
-            ("PC Gamer Magazine - Dec 2023", "Pc Gamer Magazine - Dec 2023"),  # Magazine suffix only removed at end
+            ("PC Gamer Magazine - Dec 2023", "PC Gamer"),  # Date pattern removed
             ("PC Gamer #456", "PC Gamer"),  # PC stays uppercase
             ("2600 Hacker Quarterly", "2600 Hacker Quarterly"),  # No issue numbers to remove
         ]

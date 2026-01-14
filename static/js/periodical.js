@@ -404,16 +404,19 @@ function enableMetadataEdit() {
     // Issue-specific fields (always editable)
     document.getElementById('edit-issue-number').value = (currentMagazineData.metadata && currentMagazineData.metadata.issue_number) || '';
     document.getElementById('edit-volume').value = (currentMagazineData.metadata && currentMagazineData.metadata.volume) || '';
-    
-    // Handle special edition field
-    const isSpecialEdition = currentMagazineData.metadata && currentMagazineData.metadata.special_edition;
+
+    // Always show special edition field in edit mode
     const specialField = document.getElementById('special-edition-name-field');
+    const isSpecialEdition = currentMagazineData.metadata && currentMagazineData.metadata.special_edition;
+    specialField.classList.remove('hidden');
+    document.getElementById('edit-special-edition').value = (currentMagazineData.metadata && currentMagazineData.metadata.special_edition) || '';
+    
+    // Update the label to indicate if it's currently marked as special edition
+    const specialLabel = specialField.querySelector('label');
     if (isSpecialEdition) {
-        specialField.classList.remove('hidden');
-        document.getElementById('edit-special-edition').value = currentMagazineData.metadata.special_edition || '';
+        specialLabel.textContent = 'Special Edition Name ⭐';
     } else {
-        specialField.classList.add('hidden');
-        document.getElementById('edit-special-edition').value = '';
+        specialLabel.textContent = 'Special Edition Name';
     }
 }
 
@@ -445,11 +448,9 @@ async function saveMetadataEdit() {
     }
 
     // Include special edition name if it's a special edition
-    const isSpecialEdition = currentMagazineData.metadata && currentMagazineData.metadata.special_edition;
-    if (isSpecialEdition) {
-        const specialEditionName = document.getElementById('edit-special-edition').value;
-        updates.special_edition = specialEditionName || null;
-    }
+    const specialEditionName = document.getElementById('edit-special-edition').value;
+    updates.special_edition = specialEditionName || null;
+
 
     try {
         const response = await fetch(`/api/periodicals/${currentMagazineId}`, {

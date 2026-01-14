@@ -20,6 +20,7 @@ from core.constants import (
 )
 from core.parsers import generate_language_aware_olid
 from core.parsers import TitleMatcher, FileCategorizer, UnifiedParser
+from core.tracking_matcher import TrackingMatcher
 from core.pdf_utils import extract_cover_from_pdf
 from core.epub_utils import extract_cover_from_epub
 from core.utils import find_pdf_epub_files, hash_file_in_chunks
@@ -63,6 +64,7 @@ class FileImporter:
         self.category_prefix = category_prefix
         self._enable_text_scan = enable_text_scan
         self.title_matcher = TitleMatcher(threshold=fuzzy_threshold)
+        self.tracking_matcher = TrackingMatcher()
 
         # Initialize specialized helpers
         self.parser = UnifiedParser(fuzzy_threshold=fuzzy_threshold)
@@ -187,6 +189,7 @@ class FileImporter:
         skip_organize: bool = False,
         tracking_mode: str = "watch",
         use_ocr: bool = True,
+        tracking_id: Optional[int] = None,
     ) -> bool:
         """
         Import a single PDF file.
@@ -199,6 +202,7 @@ class FileImporter:
             skip_organize: If True, skip file organization and use file in place (for already-organized files)
             tracking_mode: Tracking mode - "all" (track all editions), "new" (track new only), "watch" (watch only), "none" (no tracking)
             use_ocr: Whether to use OCR for metadata extraction (default: True, set False for faster batch imports)
+            tracking_id: Optional tracking ID to associate this file with (from DownloadSubmission)
 
         Returns:
             True if successful, False otherwise
@@ -325,55 +329,91 @@ class FileImporter:
             session.add(magazine)
 
             # Manage tracking record based on import settings
+            # Priority:
+            # 1. If tracking_id is provided (from DownloadSubmission), use that
+            # 2. Otherwise, try to match with existing tracking using the matcher
+            # 3. If no match, create new tracking or leave untracked based on auto_track setting
 
-            # Generate OLID from tracking title (with language if applicable)
-            olid = tracking_title.lower().replace(" ", "_").replace("-", "_")
-            existing_tracking = session.query(MagazineTracking).filter(MagazineTracking.olid == olid).first()
+            target_tracking = None
 
-            if auto_track:
-                if not existing_tracking:
-                    track_all_editions = tracking_mode == "all"
-                    track_new_only = tracking_mode == "new"
-
-                    tracking = MagazineTracking(
-                        olid=olid,
-                        title=tracking_title,
-                        track_all_editions=track_all_editions,
-                        track_new_only=track_new_only,
-                        selected_editions={},
-                        selected_years=[],
-                        last_metadata_update=datetime.now(),
+            if tracking_id:
+                # Tracking ID provided from download submission - validate and use it
+                target_tracking = session.query(MagazineTracking).filter(MagazineTracking.id == tracking_id).first()
+                if target_tracking:
+                    logger.info(
+                        f"Using provided tracking_id={tracking_id} ('{target_tracking.title}') for '{tracking_title}'"
                     )
-                    session.add(tracking)
-                    # Flush to get the tracking ID before linking to magazine
-                    session.flush()
-                    magazine.tracking_id = tracking.id
-                    logger.debug(f"Will create tracking record for: {tracking_title} (mode: {tracking_mode})")
-
-                    # If this is a special edition, add it to the selected_editions
-                    if is_special_edition:
-                        logger.debug(f"Detected special edition '{special_name}' for: {tracking_title}")
                 else:
-                    # Link magazine to existing tracking record
-                    magazine.tracking_id = existing_tracking.id
-                    existing_tracking.track_all_editions = tracking_mode == "all"
-                    existing_tracking.track_new_only = tracking_mode == "new"
-                    existing_tracking.last_metadata_update = datetime.now()
-                    logger.debug(f"Will update tracking record for: {tracking_title} (mode: {tracking_mode})")
+                    logger.warning(
+                        f"Provided tracking_id={tracking_id} not found, will try to find best match"
+                    )
 
-                    # If this is a special edition, ensure it's in the selected_editions
-                    if is_special_edition and special_name:
-                        if existing_tracking.selected_editions is None:
-                            existing_tracking.selected_editions = {}
-                        # Add this special edition if not already tracked
-                        if special_name not in existing_tracking.selected_editions:
-                            existing_tracking.selected_editions[special_name] = True
-                            logger.debug(f"Added special edition '{special_name}' to tracking record: {tracking_title}")
+            if not target_tracking:
+                # Try to find best match using the tracking matcher
+                all_tracking = session.query(MagazineTracking).all()
+                if all_tracking:
+                    match_result = self.tracking_matcher.find_best_match(
+                        parsed_title=tracking_title,
+                        tracking_records=all_tracking,
+                        parsed_language=parsed.language,
+                        parsed_country=parsed.country,
+                        parsed_category=category,
+                    )
 
-            else:
-                if existing_tracking:
-                    session.delete(existing_tracking)
-                    logger.debug(f"Will remove tracking record for: {tracking_title} (tracking disabled)")
+                    if match_result and match_result.is_match:
+                        target_tracking = session.query(MagazineTracking).filter(
+                            MagazineTracking.id == match_result.tracking_id
+                        ).first()
+                        logger.info(
+                            f"Matched '{tracking_title}' to existing tracking '{match_result.tracking_title}' "
+                            f"(ID: {match_result.tracking_id}, score: {match_result.score})"
+                        )
+
+            if target_tracking:
+                # Link to existing tracking
+                magazine.tracking_id = target_tracking.id
+                target_tracking.last_metadata_update = datetime.now()
+                logger.debug(f"Linked magazine to tracking: {target_tracking.title} (ID: {target_tracking.id})")
+
+                # Update tracking mode if specified and not provided via tracking_id
+                if not tracking_id:
+                    target_tracking.track_all_editions = tracking_mode == "all"
+                    target_tracking.track_new_only = tracking_mode == "new"
+
+                # If this is a special edition, ensure it's in the selected_editions
+                if is_special_edition and special_name:
+                    if target_tracking.selected_editions is None:
+                        target_tracking.selected_editions = {}
+                    if special_name not in target_tracking.selected_editions:
+                        target_tracking.selected_editions[special_name] = True
+                        logger.debug(f"Added special edition '{special_name}' to tracking: {target_tracking.title}")
+
+            elif auto_track:
+                # No match found, create new tracking record
+                olid = tracking_title.lower().replace(" ", "_").replace("-", "_")
+                track_all_editions = tracking_mode == "all"
+                track_new_only = tracking_mode == "new"
+
+                new_tracking = MagazineTracking(
+                    olid=olid,
+                    title=tracking_title,
+                    language=parsed.language,
+                    country=parsed.country,
+                    category=category,
+                    track_all_editions=track_all_editions,
+                    track_new_only=track_new_only,
+                    selected_editions={},
+                    selected_years=[],
+                    last_metadata_update=datetime.now(),
+                )
+                session.add(new_tracking)
+                session.flush()
+                magazine.tracking_id = new_tracking.id
+                logger.info(f"Created new tracking record: {tracking_title} (ID: {new_tracking.id}, mode: {tracking_mode})")
+
+                # If this is a special edition, add it to the selected_editions
+                if is_special_edition:
+                    logger.debug(f"Detected special edition '{special_name}' for: {tracking_title}")
 
             session.commit()
             logger.info(f"Added to database: {parsed.title} ({category})")
