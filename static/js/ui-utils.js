@@ -3,7 +3,7 @@
  * Handles tab switching, modal management, theme switching, and UI helpers
  */
 
-import { ELEMENT_IDS, CSS_CLASSES, TIMEOUTS, STORAGE_KEYS, DEFAULTS } from './constants.js';
+import { ELEMENT_IDS as _ELEMENT_IDS, CSS_CLASSES, TIMEOUTS, STORAGE_KEYS as _STORAGE_KEYS, DEFAULTS as _DEFAULTS } from './constants.js';
 
 export class UIUtils {
   /**

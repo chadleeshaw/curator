@@ -8,7 +8,7 @@
 
 import { APIClient } from './api.js';
 import { UIUtils, SortManager } from './ui-utils.js';
-import { ELEMENT_IDS, STATUS_MESSAGES, CSS_CLASSES, TIMEOUTS, PATTERNS, BADGE_CONFIGS } from './constants.js';
+import { ELEMENT_IDS, STATUS_MESSAGES, CSS_CLASSES, TIMEOUTS, PATTERNS as _PATTERNS, BADGE_CONFIGS as _BADGE_CONFIGS } from './constants.js';
 
 // Constants loaded from backend API
 let SUPPORTED_LANGUAGES = [];
@@ -179,7 +179,7 @@ export class TrackingManager {
 
       if (data.found && data.results && data.results.length > 0) {
         this.displaySearchResultsGrouped(data.results);
-        result\.classList\.remove(CSS_CLASSES.HIDDEN);
+        result.classList.remove(CSS_CLASSES.HIDDEN);
       } else {
         const filterInfo = [];
         if (filterLanguage) filterInfo.push(`Language: ${filterLanguage}`);
@@ -192,9 +192,9 @@ export class TrackingManager {
     } catch (err) {
       console.error('Search error:', err);
       error.textContent = err.message;
-      error\.classList\.remove(CSS_CLASSES.HIDDEN);
+      error.classList.remove(CSS_CLASSES.HIDDEN);
     } finally {
-      loading\.classList\.add(CSS_CLASSES.HIDDEN);
+      loading.classList.add(CSS_CLASSES.HIDDEN);
     }
   }
 
@@ -354,7 +354,7 @@ export class TrackingManager {
     }
 
     // Hide the search results
-    document.getElementById(ELEMENT_IDS.TRACKING_SEARCH_RESULT)\.classList\.add(CSS_CLASSES.HIDDEN);
+    document.getElementById(ELEMENT_IDS.TRACKING_SEARCH_RESULT).classList.add(CSS_CLASSES.HIDDEN);
 
     // Show a success message and scroll to the form
     UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 
@@ -750,7 +750,7 @@ export class TrackingManager {
         document.getElementById('edit-tracking-org-pattern').value = t.organization_pattern || '';
 
         // Show modal
-        document.getElementById(ELEMENT_IDS.EDIT_TRACKING_MODAL)\.classList\.remove(CSS_CLASSES.HIDDEN);
+        document.getElementById(ELEMENT_IDS.EDIT_TRACKING_MODAL).classList.remove(CSS_CLASSES.HIDDEN);
       }
     } catch (err) {
       console.error('Error loading tracking details:', err);
@@ -770,7 +770,7 @@ export class TrackingManager {
           <div class="loading-spinner"></div>
           <p style="margin-top: 20px; color: var(--text-secondary);">Searching for issues...</p>
         </div>`;
-      document.getElementById(ELEMENT_IDS.SEARCH_ISSUES_MODAL)\.classList\.remove(CSS_CLASSES.HIDDEN);
+      document.getElementById(ELEMENT_IDS.SEARCH_ISSUES_MODAL).classList.remove(CSS_CLASSES.HIDDEN);
 
       // Store tracking_id for later use in downloadIssue
       window.currentTrackingId = trackingId;
@@ -1162,10 +1162,10 @@ export class TrackingManager {
     if (searchQuery) searchQuery.value = '';
     
     const searchResult = document.getElementById(ELEMENT_IDS.TRACKING_SEARCH_RESULT);
-    if (searchResult) searchResult\.classList\.add(CSS_CLASSES.HIDDEN);
+    if (searchResult) searchResult.classList.add(CSS_CLASSES.HIDDEN);
     
     const searchError = document.getElementById('tracking-search-error');
-    if (searchError) searchError\.classList\.add(CSS_CLASSES.HIDDEN);
+    if (searchError) searchError.classList.add(CSS_CLASSES.HIDDEN);
   }
 
   /**
@@ -1173,14 +1173,14 @@ export class TrackingManager {
    */
   openTrackNewPeriodicalModal() {
     this.resetTracking();
-    document.getElementById('track-new-periodical-modal')\.classList\.remove(CSS_CLASSES.HIDDEN);
+    document.getElementById('track-new-periodical-modal').classList.remove(CSS_CLASSES.HIDDEN);
   }
 
   /**
    * Close track new periodical modal
    */
   closeTrackNewPeriodicalModal() {
-    document.getElementById('track-new-periodical-modal')\.classList\.add(CSS_CLASSES.HIDDEN);
+    document.getElementById('track-new-periodical-modal').classList.add(CSS_CLASSES.HIDDEN);
     this.resetTracking();
   }
 
@@ -1201,11 +1201,11 @@ window.trackingManager = tracking;
 
 // Modal management functions
 window.closeEditTrackingModal = function () {
-  document.getElementById(ELEMENT_IDS.EDIT_TRACKING_MODAL)\.classList\.add(CSS_CLASSES.HIDDEN);
+  document.getElementById(ELEMENT_IDS.EDIT_TRACKING_MODAL).classList.add(CSS_CLASSES.HIDDEN);
 };
 
 window.closeSearchIssuesModal = function () {
-  document.getElementById(ELEMENT_IDS.SEARCH_ISSUES_MODAL)\.classList\.add(CSS_CLASSES.HIDDEN);
+  document.getElementById(ELEMENT_IDS.SEARCH_ISSUES_MODAL).classList.add(CSS_CLASSES.HIDDEN);
 };
 
 // Save edited tracking

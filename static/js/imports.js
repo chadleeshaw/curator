@@ -6,6 +6,7 @@
 import { APIClient } from './api.js';
 import { UIUtils } from './ui-utils.js';
 import { library } from './library.js';
+import { CSS_CLASSES } from './constants.js';
 
 export class ImportsManager {
   /**
