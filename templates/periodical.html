@@ -10,356 +10,7 @@
     <link rel="stylesheet" href="/static/css/layout.css">
     <link rel="stylesheet" href="/static/css/components.css">
     <link rel="stylesheet" href="/static/css/pages.css">
-    <style>
-        .periodical-header {
-            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
-            color: white;
-            padding: 40px 20px;
-            margin-bottom: 30px;
-            text-align: center;
-            border-radius: 8px;
-        }
-
-        .periodical-header h1 {
-            margin: 0;
-            font-size: 2.5em;
-            font-weight: bold;
-        }
-
-        .periodical-header p {
-            margin: 10px 0 0 0;
-            opacity: 0.9;
-            font-size: 1.1em;
-        }
-
-        .back-button {
-            display: inline-block;
-            margin-bottom: 20px;
-            padding: 10px 20px;
-            background: var(--primary-color);
-            color: white;
-            text-decoration: none;
-            border-radius: 5px;
-            font-weight: 600;
-            transition: background 0.3s;
-        }
-
-        .back-button:hover {
-            background: var(--primary-dark);
-        }
-
-        .year-section {
-            margin-bottom: 50px;
-        }
-
-        .year-title {
-            font-size: 1.5em;
-            font-weight: bold;
-            margin-bottom: 20px;
-            color: var(--text-primary);
-            border-bottom: 3px solid var(--primary-color);
-            padding-bottom: 10px;
-        }
-
-        /* Special edition section styling */
-        .special-edition-section {
-            background: linear-gradient(135deg, rgba(255, 215, 0, 0.05) 0%, rgba(255, 193, 7, 0.05) 100%);
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 60px;
-            border: 2px solid rgba(255, 215, 0, 0.3);
-        }
-
-        .special-edition-title {
-            color: #ffd700;
-            border-bottom-color: #ffc107;
-            text-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
-        }
-
-        .issues-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-            gap: 24px;
-            margin-bottom: 40px;
-        }
-
-        .issue-card {
-            background: var(--surface);
-            border: 2px solid var(--border-color);
-            border-radius: 12px;
-            overflow: hidden;
-            transition: all 0.2s ease;
-            cursor: pointer;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .issue-card:hover {
-            transform: translateY(-4px);
-            border-color: var(--primary-color);
-            box-shadow: 0 8px 16px rgba(99, 102, 241, 0.2);
-        }
-
-        .issue-cover {
-            width: 100%;
-            height: 220px;
-            background: linear-gradient(135deg, var(--surface-variant) 0%, var(--border-color) 100%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            position: relative;
-        }
-
-        .issue-cover img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .issue-cover-placeholder {
-            text-align: center;
-            color: var(--text-disabled);
-            font-size: 13px;
-            font-weight: 600;
-            padding: 16px;
-            width: 100%;
-        }
-
-        .issue-info {
-            padding: 16px;
-            flex-grow: 1;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .issue-date {
-            font-size: 13px;
-            color: var(--text-secondary);
-            margin-bottom: 8px;
-        }
-
-        .issue-title {
-            font-size: 14px;
-            color: var(--text-primary);
-            font-weight: 600;
-            flex-grow: 1;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            line-height: 1.4;
-        }
-
-        .issue-actions {
-            display: flex;
-            gap: 8px;
-            margin-top: 12px;
-        }
-
-        .issue-actions button {
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.2s ease;
-            font-size: 13px;
-            padding: 8px 14px;
-        }
-
-        .open-pdf-btn {
-            flex: 1;
-            background: var(--primary-color);
-            color: white;
-            white-space: nowrap;
-        }
-
-        .open-pdf-btn:hover {
-            background: var(--primary-dark);
-            transform: scale(1.05);
-        }
-
-        .metadata-btn {
-            background: var(--surface-variant);
-            color: var(--text-primary);
-            border: 2px solid var(--border-color);
-            padding: 8px 10px;
-            min-width: auto;
-            font-size: 18px;
-            width: 40px;
-            height: 40px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .metadata-btn:hover {
-            background: var(--primary-color);
-            border-color: var(--primary-color);
-            transform: scale(1.1);
-        }
-
-        .delete-issue-btn {
-            background: var(--surface-variant);
-            color: var(--text-primary);
-            border: 2px solid var(--border-color);
-            padding: 8px 10px;
-            min-width: auto;
-            font-size: 18px;
-            width: 40px;
-            height: 40px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .delete-issue-btn:hover {
-            background: #dc3545;
-            border-color: #dc3545;
-            transform: scale(1.1);
-        }
-
-        .no-issues {
-            text-align: center;
-            padding: 40px;
-            color: var(--text-disabled);
-            font-size: 1.1em;
-        }
-
-        /* Status message styles - theme-aware */
-        #status-message {
-            padding: 15px;
-            border-radius: 5px;
-            border: 2px solid;
-            font-weight: 500;
-        }
-
-        #status-message.status-success {
-            background: var(--success-bg, #e8f5e9);
-            color: var(--success-text, #2e7d32);
-            border-color: var(--success-border, #4caf50);
-        }
-
-        #status-message.status-error {
-            background: var(--error-bg, #ffebee);
-            color: var(--error-text, #c62828);
-            border-color: var(--error-border, #f44336);
-        }
-
-        /* Dark mode overrides for status messages */
-        body.dark-mode #status-message.status-success {
-            background: rgba(76, 175, 80, 0.2);
-            color: #81c784;
-            border-color: #66bb6a;
-        }
-
-        body.dark-mode #status-message.status-error {
-            background: rgba(244, 67, 54, 0.2);
-            color: #e57373;
-            border-color: #ef5350;
-        }
-
-        /* Metadata Modal */
-        .metadata-modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.7);
-            overflow: auto;
-        }
-
-        .metadata-modal.show {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .metadata-content {
-            background-color: var(--surface);
-            margin: auto;
-            padding: 0;
-            border: 1px solid var(--border-color);
-            width: 90%;
-            max-width: 600px;
-            border-radius: 10px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-            max-height: 80vh;
-            overflow-y: auto;
-        }
-
-        .metadata-header {
-            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 10px 10px 0 0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .metadata-header h3 {
-            margin: 0;
-            font-size: 1.3em;
-        }
-
-        .metadata-close {
-            color: white;
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-            background: none;
-            border: none;
-            padding: 0;
-            line-height: 1;
-            opacity: 0.8;
-            transition: opacity 0.3s;
-        }
-
-        .metadata-close:hover {
-            opacity: 1;
-        }
-
-        .metadata-body {
-            padding: 20px;
-        }
-
-        .metadata-item {
-            margin-bottom: 15px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .metadata-item:last-child {
-            border-bottom: none;
-            margin-bottom: 0;
-            padding-bottom: 0;
-        }
-
-        .metadata-label {
-            font-weight: bold;
-            color: var(--primary-color);
-            margin-bottom: 5px;
-            font-size: 0.9em;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .metadata-value {
-            color: var(--text-primary);
-            word-wrap: break-word;
-        }
-
-        .metadata-value pre {
-            background: var(--surface-variant);
-            padding: 10px;
-            border-radius: 5px;
-            overflow-x: auto;
-            font-size: 0.85em;
-        }
-    </style>
+    <link rel="stylesheet" href="/static/css/periodical.css">
 </head>
 <body>
     <div class="container" id="periodical-container" data-years="{{YEARS_DATA}}" data-special-editions="{{SPECIAL_EDITIONS_DATA}}">
@@ -415,11 +66,11 @@
             <div class="metadata-body" id="metadata-body">
                 <!-- Will be populated by JavaScript -->
             </div>
-            <div id="metadata-edit-form" class="hidden" style="padding: 20px; background: var(--surface-variant);">
-                <div style="display: flex; flex-direction: column; gap: 15px;">
-                    <div id="edit-language-container">
-                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Language</label>
-                        <select id="edit-language" style="width: 100%; padding: 8px; border-radius: 5px; border: 2px solid var(--border-color); background: var(--surface);">
+            <div id="metadata-edit-form" class="hidden metadata-edit-form">
+                <div class="form-fields">
+                    <div id="edit-language-container" class="form-field">
+                        <label class="form-label">Language</label>
+                        <select id="edit-language" class="form-input">
                             <option value="English">English</option>
                             <option value="German">German</option>
                             <option value="French">French</option>
@@ -432,52 +83,52 @@
                             <option value="Japanese">Japanese</option>
                             <option value="Chinese">Chinese</option>
                         </select>
-                        <small style="display: block; margin-top: 5px; color: var(--text-secondary); font-style: italic;">📌 Controlled by tracking record</small>
+                        <small class="form-hint">📌 Controlled by tracking record</small>
                     </div>
-                    <div>
-                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Issue Date</label>
-                        <input type="date" id="edit-issue-date" style="width: 100%; padding: 8px; border-radius: 5px; border: 2px solid var(--border-color); background: var(--surface);">
-                        <small style="display: block; margin-top: 5px; color: var(--text-secondary); font-style: italic;">✏️ Issue-specific</small>
+                    <div class="form-field">
+                        <label class="form-label">Issue Date</label>
+                        <input type="date" id="edit-issue-date" class="form-input">
+                        <small class="form-hint">✏️ Issue-specific</small>
                     </div>
-                    <div id="edit-country-container">
-                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Country</label>
-                        <input type="text" id="edit-country" placeholder="e.g., US, UK, International" style="width: 100%; padding: 8px; border-radius: 5px; border: 2px solid var(--border-color); background: var(--surface);">
-                        <small style="display: block; margin-top: 5px; color: var(--text-secondary); font-style: italic;">📌 Controlled by tracking record</small>
+                    <div id="edit-country-container" class="form-field">
+                        <label class="form-label">Country</label>
+                        <input type="text" id="edit-country" placeholder="e.g., US, UK, International" class="form-input">
+                        <small class="form-hint">📌 Controlled by tracking record</small>
                     </div>
-                    <div>
-                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Issue Number</label>
-                        <input type="text" id="edit-issue-number" placeholder="e.g., 405, 2024-01" style="width: 100%; padding: 8px; border-radius: 5px; border: 2px solid var(--border-color); background: var(--surface);">
-                        <small style="display: block; margin-top: 5px; color: var(--text-secondary); font-style: italic;">✏️ Issue-specific</small>
+                    <div class="form-field">
+                        <label class="form-label">Issue Number</label>
+                        <input type="text" id="edit-issue-number" placeholder="e.g., 405, 2024-01" class="form-input">
+                        <small class="form-hint">✏️ Issue-specific</small>
                     </div>
-                    <div>
-                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Volume</label>
-                        <input type="text" id="edit-volume" placeholder="e.g., 32, Vol. 32" style="width: 100%; padding: 8px; border-radius: 5px; border: 2px solid var(--border-color); background: var(--surface);">
-                        <small style="display: block; margin-top: 5px; color: var(--text-secondary); font-style: italic;">✏️ Issue-specific</small>
+                    <div class="form-field">
+                        <label class="form-label">Volume</label>
+                        <input type="text" id="edit-volume" placeholder="e.g., 32, Vol. 32" class="form-input">
+                        <small class="form-hint">✏️ Issue-specific</small>
                     </div>
-                    <div id="special-edition-name-field" class="hidden">
-                        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Special Edition Name</label>
-                        <input type="text" id="edit-special-edition" placeholder="e.g., Swimsuit Edition, Holiday Special" style="width: 100%; padding: 8px; border-radius: 5px; border: 2px solid var(--border-color); background: var(--surface);">
-                        <small style="display: block; margin-top: 5px; color: var(--text-secondary); font-style: italic;">✏️ Issue-specific</small>
+                    <div id="special-edition-name-field" class="hidden form-field">
+                        <label class="form-label">Special Edition Name</label>
+                        <input type="text" id="edit-special-edition" placeholder="e.g., Swimsuit Edition, Holiday Special" class="form-input">
+                        <small class="form-hint">✏️ Issue-specific</small>
                     </div>
                 </div>
             </div>
-            <div style="padding: 20px; border-top: 2px solid var(--border-color); background: var(--surface-variant); display: flex; flex-direction: column; gap: 10px;">
-                <div id="metadata-view-buttons" style="display: flex; flex-direction: column; gap: 10px;">
-                    <button onclick="enableMetadataEdit()" class="btn-primary" style="width: 100%;">
+            <div class="metadata-footer">
+                <div id="metadata-view-buttons" class="metadata-view-buttons">
+                    <button onclick="enableMetadataEdit()" class="btn-primary full-width">
                         ✏️ Edit Metadata
                     </button>
-                    <button onclick="toggleSpecialEdition()" class="btn-secondary" id="toggle-special-btn" style="width: 100%;">
+                    <button onclick="toggleSpecialEdition()" class="btn-secondary full-width" id="toggle-special-btn">
                         ⭐ Toggle Special Edition
                     </button>
-                    <button onclick="openMoveIssueModal()" class="btn-secondary" style="width: 100%;">
+                    <button onclick="openMoveIssueModal()" class="btn-secondary full-width">
                         🔀 Move to Different Tracking
                     </button>
                 </div>
-                <div id="metadata-edit-buttons" class="hidden" style="display: flex; gap: 10px;">
-                    <button onclick="cancelMetadataEdit()" class="btn-secondary" style="flex: 1;">
+                <div id="metadata-edit-buttons" class="hidden metadata-edit-buttons">
+                    <button onclick="cancelMetadataEdit()" class="btn-secondary flex-1">
                         Cancel
                     </button>
-                    <button onclick="saveMetadataEdit()" class="btn-primary" style="flex: 1;">
+                    <button onclick="saveMetadataEdit()" class="btn-primary flex-1">
                         💾 Save Changes
                     </button>
                 </div>
@@ -487,20 +138,20 @@
 
     <!-- Move Issue Modal -->
     <div id="move-issue-modal" class="modal hidden">
-        <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-content move-modal-content">
             <h3>🔀 Move Issue to Different Tracking</h3>
-            <p style="color: var(--text-secondary); margin-bottom: 20px;">
+            <p class="modal-description">
                 Select which tracking record this issue should belong to. This is useful for correcting misplaced issues.
             </p>
-            <div id="move-issue-loading" style="text-align: center; padding: 20px;">
+            <div id="move-issue-loading" class="modal-loading">
                 <div class="loading-spinner"></div>
                 <p>Loading tracking options...</p>
             </div>
             <div id="move-issue-options" class="hidden">
-                <select id="target-tracking-select" style="width: 100%; padding: 12px; margin-bottom: 20px; font-size: 14px; border-radius: 5px; border: 2px solid var(--border-color); background: var(--surface);">
+                <select id="target-tracking-select" class="form-select">
                     <option value="">Select a tracking record...</option>
                 </select>
-                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <div class="modal-actions">
                     <button onclick="closeMoveIssueModal()" class="btn-secondary">Cancel</button>
                     <button onclick="confirmMoveIssue()" class="btn-primary" id="confirm-move-btn" disabled>Move Issue</button>
                 </div>

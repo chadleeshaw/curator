@@ -8,35 +8,39 @@
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
 }
 
 .stat-card {
   background: var(--surface);
-  padding: 20px;
-  border-radius: 12px;
+  padding: var(--space-lg);
+  border-radius: var(--radius-xl);
   border: 2px solid var(--border-color);
   text-align: center;
-  transition: all 0.2s ease;
+  transition:
+    border-color var(--transition-base),
+    transform var(--transition-base),
+    box-shadow var(--transition-base);
+  contain: layout style paint;
 }
 
 .stat-card:hover {
   border-color: var(--primary-color);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+  box-shadow: 0 4px 12px rgb(99 102 241 / 0.15);
 }
 
 .stat-value {
-  font-size: 32px;
+  font-size: var(--font-size-4xl);
   font-weight: 700;
   color: var(--primary-color);
-  margin-bottom: 8px;
+  margin-bottom: var(--space-sm);
   line-height: 1;
 }
 
 .stat-label {
-  font-size: 13px;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
   font-weight: 500;
   text-transform: uppercase;
@@ -51,12 +55,22 @@
 .btn-secondary,
 .btn-small,
 .btn-danger {
-  padding: 10px 20px;
+  padding: var(--space-sm) var(--space-lg);
   border: none;
-  border-radius: 5px;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: 14px;
-  transition: background 0.3s;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  transition:
+    background-color var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.btn-primary:active,
+.btn-secondary:active,
+.btn-small:active,
+.btn-danger:active {
+  transform: translateY(1px);
 }
 
 .btn-primary {
@@ -78,8 +92,8 @@
 }
 
 .btn-small {
-  padding: 6px 12px;
-  font-size: 12px;
+  padding: var(--space-xs) var(--space-md);
+  font-size: var(--font-size-xs);
   background: var(--primary-color);
   color: white;
 }
@@ -89,30 +103,33 @@
 }
 
 .btn-danger {
-  background: #dc3545;
+  background: var(--error-600);
   color: white;
 }
 
 .btn-danger:hover {
-  background: #c82333;
+  background: var(--error-700);
 }
 
 /* Sort buttons */
 .sort-buttons {
   display: flex;
-  gap: 5px;
+  gap: var(--space-xs);
 }
 
 .sort-btn {
-  padding: 8px 16px;
+  padding: var(--space-sm) var(--space-md);
   background: var(--surface-variant);
   color: var(--text-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--font-size-sm);
   font-weight: 500;
-  transition: all 0.2s ease;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast);
 }
 
 .sort-btn:hover {
@@ -128,14 +145,17 @@
 }
 
 .sort-toggle-btn {
-  padding: 8px 16px;
+  padding: var(--space-sm) var(--space-md);
   background: var(--surface-variant);
   color: var(--text-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: 18px;
-  transition: all 0.2s;
+  font-size: var(--font-size-lg);
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast);
 }
 
 .sort-toggle-btn:hover {
@@ -146,19 +166,19 @@
 
 .sort-controls {
   display: flex;
-  gap: 10px;
+  gap: var(--space-sm);
   align-items: center;
 }
 
 .save-btn {
   background: var(--primary-color);
   color: white;
-  padding: 10px 20px;
+  padding: var(--space-sm) var(--space-lg);
   border: none;
-  border-radius: 5px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   font-weight: 500;
-  transition: background 0.2s;
+  transition: background-color var(--transition-fast);
 }
 
 .save-btn:hover {
@@ -171,17 +191,17 @@
 
 .search-form {
   display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
 }
 
 .search-form input {
   flex: 1;
-  padding: 12px;
+  padding: var(--space-md);
   border: 2px solid var(--border-color);
-  border-radius: 8px;
-  font-size: 16px;
-  transition: border-color 0.3s ease;
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-base);
+  transition: border-color var(--transition-base);
   background: var(--surface);
   color: var(--text-primary);
 }
@@ -192,14 +212,14 @@
 }
 
 .search-form button {
-  padding: 12px 30px;
+  padding: var(--space-md) var(--space-2xl);
   background: var(--primary-color);
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
   font-weight: 600;
-  transition: background 0.3s ease;
+  transition: background-color var(--transition-base);
 }
 
 .search-form button:hover {
@@ -209,9 +229,9 @@
 .checkbox-label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--font-size-sm);
   color: var(--text-primary);
 }
 
@@ -224,21 +244,23 @@
 .radio-label {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: var(--space-md);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--font-size-sm);
   color: var(--text-primary);
-  margin-bottom: 12px;
-  padding: 10px;
+  margin-bottom: var(--space-md);
+  padding: var(--space-sm);
   background: var(--surface);
   border: 1px solid var(--border-color);
-  border-radius: 5px;
-  transition: all 0.2s;
+  border-radius: var(--radius-md);
+  transition:
+    border-color var(--transition-fast),
+    background-color var(--transition-fast);
 }
 
 .radio-label:hover {
   border-color: var(--primary-color);
-  background: rgba(99, 102, 241, 0.05);
+  background: rgb(99 102 241 / 0.05);
 }
 
 .radio-label input[type='radio'] {
@@ -315,13 +337,17 @@
   border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    transform var(--transition-base),
+    border-color var(--transition-base),
+    box-shadow var(--transition-base);
+  contain: layout style paint;
 }
 
 .periodical-card:hover {
   transform: translateY(-4px);
   border-color: var(--primary-color);
-  box-shadow: 0 8px 16px rgba(99, 102, 241, 0.2);
+  box-shadow: 0 8px 16px rgb(99 102 241 / 0.2);
 }
 
 .periodical-cover {
@@ -458,14 +484,16 @@
 .edition-card {
   background: var(--surface);
   border: 2px solid var(--border-color);
-  border-radius: 5px;
-  transition: all 0.3s;
+  border-radius: var(--radius-md);
+  transition:
+    border-color var(--transition-base),
+    box-shadow var(--transition-base);
   cursor: pointer;
 }
 
 .edition-card:hover {
   border-color: var(--primary-color);
-  box-shadow: 0 2px 4px rgba(99, 102, 241, 0.2);
+  box-shadow: 0 2px 4px rgb(99 102 241 / 0.2);
 }
 
 .edition-label {
@@ -516,12 +544,16 @@
   grid-template-columns: auto 1fr auto;
   gap: 20px;
   align-items: start;
-  transition: all 0.2s ease;
+  transition:
+    border-color var(--transition-base),
+    box-shadow var(--transition-base),
+    transform var(--transition-base);
+  contain: layout style paint;
 }
 
 .tracked-card:hover {
   border-color: var(--primary-color);
-  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.15);
+  box-shadow: 0 4px 16px rgb(99 102 241 / 0.15);
   transform: translateY(-2px);
 }
 
@@ -615,13 +647,9 @@
   font-weight: 500;
 }
 
-.text-muted {
-  opacity: 0.6;
-}
-
 .tracked-card-buttons {
   display: flex;
-  gap: 8px;
+  gap: var(--space-sm);
   flex-direction: row;
   align-items: center;
   justify-self: end;
@@ -635,7 +663,11 @@
   color: var(--text-primary);
   font-size: 18px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    transform var(--transition-fast),
+    color var(--transition-fast);
   line-height: 1;
   display: flex;
   align-items: center;
@@ -647,6 +679,7 @@
 .btn-icon:hover {
   background: var(--primary-color);
   border-color: var(--primary-color);
+  color: white;
   transform: scale(1.1);
 }
 
@@ -694,13 +727,15 @@
 .merge-select-item {
   background: var(--surface-variant);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
-  padding: 12px;
-  margin-bottom: 10px;
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin-bottom: var(--space-sm);
   display: flex;
-  gap: 12px;
+  gap: var(--space-md);
   align-items: flex-start;
-  transition: all 0.2s ease;
+  transition:
+    border-color var(--transition-fast),
+    background-color var(--transition-fast);
 }
 
 .merge-select-item:hover {
@@ -950,6 +985,8 @@
   background: var(--surface-variant);
   border-radius: 8px;
   border: 1px solid var(--border-color);
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .settings-nav-btn {
@@ -977,6 +1014,8 @@
   display: flex;
   gap: 10px;
   margin-bottom: 30px;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .queue-switch-btn {

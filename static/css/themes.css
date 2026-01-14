@@ -5,6 +5,38 @@
    Dark Mode Theme
    ========================================================================== */
 
+/* System preference dark mode - automatically applied */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    /* Surface Colors */
+    --background: #1a1a1a;
+    --surface: #2d2d2d;
+    --surface-variant: #3d3d3d;
+
+    /* Text Colors */
+    --text-primary: #f0f0f0;
+    --text-secondary: #b0b0b0;
+    --text-disabled: #707070;
+
+    /* Border & Divider Colors */
+    --border-color: #4a4a4a;
+    --table-border: #4a4a4a;
+    --url-text: #999;
+
+    /* Input Colors */
+    --input-bg: #4a4a4a;
+  }
+
+  :root:not([data-theme="light"]) img {
+    opacity: 0.9;
+  }
+
+  :root:not([data-theme="light"]) .periodical-card:hover img {
+    opacity: 1;
+  }
+}
+
+/* Manual dark mode toggle - class-based */
 body.dark-mode {
   /* Surface Colors */
   --background: #1a1a1a;

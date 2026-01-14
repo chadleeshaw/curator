@@ -144,6 +144,7 @@ export class LibraryManager {
     viewBtn.style.fontWeight = '600';
     viewBtn.onclick = (e) => {
       e.stopPropagation();
+      e.preventDefault();
       this.viewPeriodical(periodical.title, periodical.language);
     };
     actionsDiv.appendChild(viewBtn);

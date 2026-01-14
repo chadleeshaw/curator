@@ -5,19 +5,14 @@
    Settings Page
    ========================================================================== */
 
-.settings-container {
-  background: var(--surface);
-  padding: 30px;
-  border-radius: 10px;
-  box-shadow: var(--shadow-md);
-}
-
 .settings-section {
   margin-bottom: 30px;
   padding: 20px;
   background: var(--surface-variant);
   border-radius: 8px;
   border-left: 4px solid var(--primary-color);
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .settings-section h3 {
@@ -42,12 +37,6 @@
    Tracking Page
    ========================================================================== */
 
-.tracking-container {
-  background: var(--surface);
-  padding: 30px;
-  border-radius: 10px;
-  box-shadow: var(--shadow-md);
-}
 
 .tracking-container > p {
   color: var(--text-secondary);
@@ -250,13 +239,6 @@
    Tasks Page
    ========================================================================== */
 
-.tasks-container {
-  background: var(--surface);
-  padding: 30px;
-  border-radius: 10px;
-  box-shadow: var(--shadow-md);
-}
-
 .task-card {
   background: var(--surface-variant);
   border-left: 4px solid var(--primary-color);
@@ -361,13 +343,6 @@
 /* ==========================================================================
    Library/Periodicals Page
    ========================================================================== */
-
-.library-container {
-  background: var(--surface);
-  padding: 30px;
-  border-radius: 10px;
-  box-shadow: var(--shadow-md);
-}
 
 .status-info-item {
   padding: 15px;

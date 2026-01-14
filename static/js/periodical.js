@@ -25,12 +25,23 @@ function openDeleteModal(magazineId, title) {
         titleElement.textContent = `Are you sure you want to delete "${title}"?`;
     }
     
-    modal.classList.remove('hidden');
+    // Use showModal() for dialog element
+    if (modal && typeof modal.showModal === 'function') {
+        modal.showModal();
+    } else {
+        modal.classList.remove('hidden');
+    }
 }
 
 function closeDeleteModal() {
     const modal = document.getElementById('delete-modal');
-    modal.classList.add('hidden');
+    
+    // Use close() for dialog element
+    if (modal && typeof modal.close === 'function') {
+        modal.close();
+    } else {
+        modal.classList.add('hidden');
+    }
     pendingDeleteId = null;
 }
 
@@ -762,6 +773,13 @@ async function toggleSpecialEdition() {
 // Initialize theme on page load
 document.addEventListener('DOMContentLoaded', () => {
     initializeTheme();
+    
+    // Ensure delete modal is closed on page load
+    const deleteModal = document.getElementById('delete-modal');
+    if (deleteModal && typeof deleteModal.close === 'function') {
+        deleteModal.close();
+    }
+    
     try {
         renderIssues();
         // If yearsData is empty or no issues were rendered, show a message

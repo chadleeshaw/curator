@@ -38,15 +38,19 @@ def test_auth_manager(test_db):
     engine, session_factory = test_db
     jwt_secret = "test-secret-key-for-testing-only"
     auth_manager = AuthManager(session_factory, jwt_secret)
-    # Set it globally so all tests in this module use it
-    auth.set_auth_manager(auth_manager)
     return auth_manager
 
 
 @pytest.fixture(scope="module")
-def test_app():
+def test_app(test_auth_manager):
     """Create test FastAPI app with auth router"""
+    from web.middleware.auth import AuthMiddleware
+
     app = FastAPI(title="Test App")
+    # Store auth_manager in app state so it can be accessed by dependency injection
+    app.state.auth_manager = test_auth_manager
+    # Create and store auth middleware
+    app.state.auth_middleware = AuthMiddleware(test_auth_manager)
     app.include_router(auth.router)
     return app
 
@@ -54,9 +58,8 @@ def test_app():
 @pytest.fixture
 def test_client(test_auth_manager, test_app):
     """Create test client with auth manager injected"""
+    # Auth manager is already set in test_app fixture
     with TestClient(test_app, raise_server_exceptions=True) as client:
-        # Re-set auth manager to ensure it's not overridden
-        auth.set_auth_manager(test_auth_manager)
         yield client
         # Clean up credentials after each test to ensure isolation
         session = test_auth_manager.session_factory()

@@ -104,10 +104,8 @@ nav {
 
 .tab {
   display: none;
-  background: var(--surface);
   padding: 0;
-  border-radius: 10px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  overflow-x: hidden;
 }
 
 .tab.active {
@@ -146,8 +144,15 @@ nav {
 .library-container,
 .tracking-container,
 .tasks-container,
+.queue-container,
 .settings-container {
-  width: 100%;
+  padding: 30px;
+  background: var(--surface);
+  border-radius: 10px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  position: relative;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .scheduled-tasks-section,
