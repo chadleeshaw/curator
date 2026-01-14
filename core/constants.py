@@ -14,6 +14,103 @@ OCR_DENOISE_H = 30
 OCR_SHARPEN_KERNEL = [[0, -1, 0], [-1, 5, -1], [0, -1, 0]]
 """Default sharpening kernel for OCR (2D list)"""
 
+MAX_IMAGE_PIXELS = 200000000
+"""Maximum image pixels for Pillow decompression (200 megapixels)"""
+
+OCR_DISABLE_ENV_VALUES = ('true', '1', 'yes')
+"""Environment variable values that disable OCR"""
+
+OCR_TEXT_DETECTION_THRESHOLD = 0.5
+"""PaddleOCR text detection threshold (lower = faster detection)"""
+
+OCR_TEXT_UNCLIP_RATIO = 1.5
+"""PaddleOCR text unclip ratio (smaller = less expansion)"""
+
+OCR_ISSUE_PATTERNS = [
+    r"#(\d+)",  # #123
+    r"ISSUE\s+(\d+)",  # Issue 123
+    r"NO\.?\s*(\d+)",  # No. 123 or No 123
+    r"NUMBER\s+(\d+)",  # Number 123
+]
+"""Regex patterns for detecting issue numbers in OCR text"""
+
+OCR_YEAR_PATTERN = r"\b(19\d{2}|20\d{2})\b"
+"""Regex pattern for detecting year (1900-2099) in OCR text"""
+
+OCR_VOLUME_PATTERNS = [
+    r"VOL\.?\s*(\d+)",  # Vol. 1 or Vol 1
+    r"VOLUME\s+(\d+)",  # Volume 1
+    r"V\.?\s*(\d+)",  # V. 1 or V 1
+]
+"""Regex patterns for detecting volume numbers in OCR text"""
+
+OCR_MONTH_NAMES = {
+    "JANUARY": 1,
+    "FEBRUARY": 2,
+    "MARCH": 3,
+    "APRIL": 4,
+    "MAY": 5,
+    "JUNE": 6,
+    "JULY": 7,
+    "AUGUST": 8,
+    "SEPTEMBER": 9,
+    "OCTOBER": 10,
+    "NOVEMBER": 11,
+    "DECEMBER": 12,
+    "JAN": 1,
+    "FEB": 2,
+    "MAR": 3,
+    "APR": 4,
+    "JUN": 6,
+    "JUL": 7,
+    "AUG": 8,
+    "SEP": 9,
+    "SEPT": 9,
+    "OCT": 10,
+    "NOV": 11,
+    "DEC": 12,
+}
+"""Month name to number mapping for OCR metadata extraction"""
+
+OCR_SPECIAL_EDITION_INDICATORS = [
+    "SPECIAL EDITION",
+    "SPECIAL ISSUE",
+    "LIMITED EDITION",
+    "COLLECTOR",
+    "ANNIVERSARY",
+    "EXCLUSIVE",
+]
+"""Keywords indicating special edition in OCR text"""
+
+LANGUAGE_TO_PADDLEOCR = {
+    "english": "en",
+    "en": "en",
+    "french": "fr",
+    "fr": "fr",
+    "german": "german",
+    "de": "german",
+    "spanish": "es",
+    "es": "es",
+    "italian": "it",
+    "it": "it",
+    "portuguese": "pt",
+    "pt": "pt",
+    "russian": "ru",
+    "ru": "ru",
+    "chinese": "ch",
+    "ch": "ch",
+    "zh": "ch",
+    "japanese": "japan",
+    "ja": "japan",
+    "korean": "korean",
+    "ko": "korean",
+    "arabic": "ar",
+    "ar": "ar",
+    "latin": "latin",
+    "la": "latin",
+}
+"""Mapping from language names/codes to PaddleOCR language codes"""
+
 # ==============================================================================
 # Application Constants
 # ==============================================================================
@@ -205,6 +302,15 @@ CATEGORY_KEYWORDS = {
 
 ORGANIZED_FILENAME_PATTERN = "{title} - {month}{year}"
 """Pattern for organized filenames: e.g., 'Wired - Dec2006'"""
+
+VOLUME_PREFIX = "Vol"
+"""Prefix for volume numbers in filenames (e.g., 'Vol1')"""
+
+ISSUE_PREFIX = "No"
+"""Prefix for issue numbers in filenames (e.g., 'No123')"""
+
+ORGANIZED_FILENAME_SEPARATOR = " - "
+"""Separator used in organized filenames between components"""
 
 
 # ==============================================================================

@@ -31,6 +31,7 @@ from web.routers import (
     tasks,
     tracking,
 )
+from web.middleware.auth import AuthMiddleware
 
 # Import documentation configuration
 from web.docs import OPENAPI_METADATA, OPENAPI_TAGS, DOCS_URLS
@@ -340,7 +341,9 @@ async def lifespan(app: FastAPI):
         scheduler_task = asyncio.create_task(task_scheduler.start())
 
         # Initialize router dependencies
-        auth.set_auth_manager(auth_manager)
+        # Set auth manager and middleware in app state for FastAPI dependency injection
+        app.state.auth_manager = auth_manager
+        app.state.auth_middleware = AuthMiddleware(auth_manager)
         search.set_dependencies(search_providers, metadata_providers, title_matcher, session_factory)
         periodicals.set_dependencies(session_factory)
         tracking.set_dependencies(session_factory, search_providers, auto_download_task, storage_config, import_config)
