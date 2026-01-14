@@ -84,18 +84,37 @@ else:
     PaddleOCR = None  # type: ignore
 
 
-def _log_paddleocr_error(lang_code: str, error: Exception):
-    """Log PaddleOCR initialization error with CPU compatibility information."""
+def _log_paddleocr_error(lang_code: str, error: Exception) -> None:
+    """
+    Log PaddleOCR initialization error with CPU compatibility information.
+
+    This helper provides consistent error logging for PaddleOCR initialization
+    failures, including guidance on potential CPU instruction set issues.
+
+    Args:
+        lang_code: PaddleOCR language code that failed to initialize
+        error: Exception that occurred during initialization
+    """
     logger.error(f"Failed to initialize PaddleOCR for language {lang_code}: {error}")
     logger.error("This may be due to CPU instruction set incompatibility (e.g., AVX/AVX2 requirements)")
 
 
-def _check_memory_available():
+def _check_memory_available() -> bool:
     """
-    Check if sufficient memory is available for PaddleOCR.
+    Check if sufficient memory is available for PaddleOCR initialization.
+
+    PaddleOCR requires significant memory (~4GB) to load models. This function
+    checks system memory before attempting initialization to prevent OOM crashes.
+    If psutil is not available or memory check fails, returns True to allow
+    initialization attempt (fail-safe behavior).
 
     Returns:
-        True if sufficient memory is available or cannot be checked, False otherwise
+        True if sufficient memory is available or cannot be checked (fail-safe).
+        False if insufficient memory detected, OCR will be disabled.
+
+    Note:
+        Sets _ocr_config.cpu_incompatible = True when insufficient memory detected
+        to prevent future initialization attempts.
     """
     try:
         import psutil
@@ -137,11 +156,20 @@ def _create_paddleocr_instance(lang_code: str):
     """
     Create a new PaddleOCR instance for the specified language.
 
+    Attempts to initialize PaddleOCR with optimized parameters for performance.
+    If initialization fails due to CPU incompatibility (SIGILL/AVX errors),
+    disables OCR functionality. For other errors, attempts fallback to English.
+
     Args:
-        lang_code: PaddleOCR language code
+        lang_code: PaddleOCR language code (e.g., "en", "fr", "german")
 
     Returns:
-        PaddleOCR instance or None if creation fails
+        PaddleOCR instance if successful, None if initialization fails
+
+    Note:
+        - Caches successful instances in _ocr_config.paddleocr_cache
+        - Sets _ocr_config.cpu_incompatible = True on CPU instruction errors
+        - Recursively calls _get_paddleocr_reader("en") for fallback
     """
     try:
         logger.info(f"Initializing PaddleOCR for language: {lang_code}")
@@ -158,6 +186,7 @@ def _create_paddleocr_instance(lang_code: str):
     except (RuntimeError, OSError, SystemError) as e:
         error_msg = str(e).lower()
         # Check for CPU instruction errors (SIGILL indicators)
+        # PaddleOCR requires AVX/AVX2 instruction sets; older CPUs may not support these
         if "illegal instruction" in error_msg or "sigill" in error_msg or "avx" in error_msg:
             logger.error(f"PaddleOCR CPU incompatibility detected: {e}")
             logger.error("CPU does not support required instruction sets (AVX/AVX2/AVX512)")
@@ -166,7 +195,7 @@ def _create_paddleocr_instance(lang_code: str):
             return None
 
         _log_paddleocr_error(lang_code, e)
-        # Fallback to English
+        # Try English as fallback - many language packs may fail but English is usually available
         if lang_code != "en":
             logger.info("Falling back to English OCR")
             return _get_paddleocr_reader("en")

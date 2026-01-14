@@ -33,11 +33,25 @@ def _setup_directories(config_loader: ConfigLoader) -> Dict[str, Path]:
     """
     Set up required directories from configuration.
 
+    Creates all necessary application directories (database, downloads, organized files,
+    cache, logs) based on configuration with fallback to defaults. Ensures parent
+    directories exist before application startup.
+
     Args:
-        config_loader: Configuration loader instance
+        config_loader: Configuration loader instance with storage and logging config
 
     Returns:
-        Dictionary of directory paths
+        Dictionary containing Path objects for all required directories:
+        - db_path: Database file path
+        - download_dir: Download staging directory
+        - organize_dir: Organized periodicals directory
+        - cache_dir: Application cache directory
+        - log_file: Log file path
+        - log_dir: Log directory path
+
+    Raises:
+        PermissionError: If unable to create directories due to permissions
+        OSError: If directory creation fails for other reasons
     """
     storage_config = config_loader.get_storage()
 
@@ -67,11 +81,19 @@ def _setup_directories(config_loader: ConfigLoader) -> Dict[str, Path]:
 
 def _setup_logging(config_loader: ConfigLoader, log_file: Path) -> None:
     """
-    Configure application logging.
+    Configure application logging with file and console handlers.
+
+    Sets up Python logging with INFO level by default, configurable via config.
+    Logs are written to both the specified file and console (stdout) for
+    monitoring during development and production.
 
     Args:
         config_loader: Configuration loader instance
-        log_file: Path to log file
+        log_file: Path to log file (must exist, parent dir created by _setup_directories)
+
+    Raises:
+        PermissionError: If log file cannot be written due to permissions
+        OSError: If log file cannot be created
     """
     log_config = config_loader.get_logging()
     log_level = log_config.get("level", DEFAULT_LOG_LEVEL).upper()
@@ -83,7 +105,27 @@ def _setup_logging(config_loader: ConfigLoader, log_file: Path) -> None:
 
 
 def main():
-    """Main application entry point."""
+    """
+    Main application entry point.
+
+    Initializes configuration, sets up directories and logging, imports the FastAPI
+    app, and starts the uvicorn web server. Handles graceful shutdown on keyboard
+    interrupt and logs fatal errors.
+
+    The application lifecycle:
+    1. Load configuration from YAML (with env var overrides)
+    2. Create required directories (db, downloads, organize, cache, logs)
+    3. Configure logging (file + console)
+    4. Import FastAPI app (triggers dependency initialization)
+    5. Start uvicorn server (blocks until shutdown)
+
+    Exit codes:
+        0: Clean shutdown via keyboard interrupt
+        1: Fatal error during initialization or runtime
+
+    Raises:
+        SystemExit: On keyboard interrupt (exit code 0) or fatal error (exit code 1)
+    """
     # Initialize configuration and setup
     config_loader = ConfigLoader()
     paths = _setup_directories(config_loader)

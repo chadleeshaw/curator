@@ -53,15 +53,23 @@ DEFAULT_LOG_LEVEL = "INFO"
 
 def _validate_directory(dir_path: Path, dir_name: str) -> None:
     """
-    Validate and create a directory path.
+    Validate and create a directory path with write permission check.
+
+    Creates the directory (including parents) if it doesn't exist, then validates
+    that it's actually a directory (not a file) and has write permissions. This
+    ensures storage locations are usable before application startup.
 
     Args:
-        dir_path: Path to validate
-        dir_name: Name of the directory for error messages
+        dir_path: Path to validate and create
+        dir_name: Human-readable name for error messages (e.g., "download_dir")
 
     Raises:
-        ValueError: If directory is invalid or not writable
-        PermissionError: If directory creation fails due to permissions
+        ValueError: If path exists but is not a directory, or is not writable
+        PermissionError: If directory creation fails due to insufficient permissions
+
+    Examples:
+        >>> _validate_directory(Path("/tmp/downloads"), "download_dir")
+        # Creates /tmp/downloads if needed and validates write access
     """
     try:
         dir_path.mkdir(parents=True, exist_ok=True)
