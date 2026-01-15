@@ -5,6 +5,7 @@
 
 import { APIClient } from './api.js?v=1767733177';
 import { UIUtils } from './ui-utils.js?v=1767733177';
+import { ELEMENT_IDS as _ELEMENT_IDS, STATUS_MESSAGES as _STATUS_MESSAGES, CSS_CLASSES, TIMEOUTS as _TIMEOUTS } from './constants.js';
 
 export class OCRQueueManager {
   constructor() {
@@ -93,13 +94,13 @@ export class OCRQueueManager {
     );
 
     if (activeJobs.length === 0) {
-      emptyDiv.classList.remove('hidden');
-      tableContainer.classList.add('hidden');
+      emptyDiv.classList.remove(CSS_CLASSES.HIDDEN);
+      tableContainer.classList.add(CSS_CLASSES.HIDDEN);
       return;
     }
 
-    emptyDiv.classList.add('hidden');
-    tableContainer.classList.remove('hidden');
+    emptyDiv.classList.add(CSS_CLASSES.HIDDEN);
+    tableContainer.classList.remove(CSS_CLASSES.HIDDEN);
 
     // Build table rows
     tbody.innerHTML = '';

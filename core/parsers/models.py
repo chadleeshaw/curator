@@ -8,6 +8,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any
 
+from core.constants import DEFAULT_LANGUAGE
+
 
 # pylint: disable=too-many-instance-attributes
 @dataclass
@@ -20,7 +22,7 @@ class ParsedMetadata:
 
     # Core fields (always attempted to extract)
     title: str
-    language: str = "English"
+    language: str = DEFAULT_LANGUAGE
     country: Optional[str] = None
 
     # Date fields

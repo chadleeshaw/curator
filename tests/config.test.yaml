@@ -12,9 +12,9 @@ download_client:
   api_key: test-api-key
 storage:
   db_path: ':memory:'
-  download_dir: ./test_downloads
-  organize_dir: ./test_data
-  cache_dir: ./test_cache
+  download_dir: ./local/downloads
+  organize_dir: ./local/data
+  cache_dir: ./local/cache
 import:
   organization_pattern: "{category}/{title}/{year}/"
   auto_track_imports: true
@@ -31,7 +31,7 @@ matching:
   fuzzy_threshold: 80
 logging:
   level: WARNING
-  log_file: ./test_logs/test.log
+  log_file: ./local/logs/test.log
 server:
   host: 127.0.0.1
   port: 8000

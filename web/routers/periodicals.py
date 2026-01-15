@@ -4,17 +4,62 @@ Periodicals/Library management routes
 
 import asyncio
 import logging
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 
+from core.constants import MONTH_TO_NUMBER, NUMBER_TO_MONTH
 from models.database import Magazine
 from web.schemas import MagazineResponse
 
 router = APIRouter(prefix="/api", tags=["periodicals"])
 logger = logging.getLogger(__name__)
+
+
+def parse_month_string(month_str: Optional[str]) -> Tuple[int, str]:
+    """
+    Parse a month string, handling multi-month formats like "June/July".
+
+    Args:
+        month_str: Month string to parse (e.g., "June", "June/July", "Jan-Feb")
+
+    Returns:
+        Tuple of (month_number, normalized_month_string)
+        month_number is 1-12 (defaults to 1 if unparseable)
+    """
+    if not month_str:
+        return 1, ""
+
+    month_str = month_str.strip()
+    if not month_str:
+        return 1, ""
+
+    # Handle multi-month formats: "June/July", "Jan-Feb", "March / April"
+    # Use the first month for the date, but preserve original string
+    separators = ["/", "-", "&"]
+    first_month = month_str
+
+    for sep in separators:
+        if sep in month_str:
+            first_month = month_str.split(sep)[0].strip()
+            break
+
+    # Look up the month number
+    month_num = MONTH_TO_NUMBER.get(first_month.lower(), 0)
+
+    # If not found, try common abbreviations
+    if month_num == 0:
+        abbrev_map = {
+            "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+            "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12
+        }
+        month_num = abbrev_map.get(first_month.lower()[:3], 1)
+
+    return month_num, month_str
+
 
 # Global state (injected from main app)
 _session_factory = None
@@ -370,7 +415,6 @@ async def move_issue_to_tracking(magazine_id: int, target_tracking_id: int) -> D
 
                     # Handle filename conflicts by appending timestamp
                     if new_pdf_path.exists() and new_pdf_path != old_pdf_path:
-                        from datetime import datetime
 
                         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                         filename_base_with_ts = f"{safe_title} - {month}{year} ({timestamp})"
@@ -533,14 +577,6 @@ async def update_periodical(magazine_id: int, updates: Dict[str, Any]) -> Dict[s
             if "language" in updates and not has_tracking:
                 magazine.language = updates["language"]
 
-            if "issue_date" in updates:
-                from datetime import datetime
-                # Parse ISO date string
-                if isinstance(updates["issue_date"], str):
-                    magazine.issue_date = datetime.fromisoformat(updates["issue_date"].replace('Z', '+00:00'))
-                else:
-                    magazine.issue_date = updates["issue_date"]
-
             # Update extra_metadata fields
             if magazine.extra_metadata is None:
                 magazine.extra_metadata = {}
@@ -548,6 +584,40 @@ async def update_periodical(magazine_id: int, updates: Dict[str, Any]) -> Dict[s
             # Country can only be updated if NOT linked to tracking
             if "country" in updates and not has_tracking:
                 magazine.extra_metadata["country"] = updates["country"]
+
+            # Handle year and month updates
+            year_provided = "year" in updates and updates["year"]
+            month_provided = "month" in updates
+
+            # Update metadata fields
+            if year_provided:
+                magazine.extra_metadata["year"] = updates["year"]
+
+            if month_provided:
+                magazine.extra_metadata["month"] = updates["month"]
+
+            # Auto-populate from issue_date if fields not provided
+            if magazine.issue_date:
+                if not year_provided:
+                    magazine.extra_metadata["year"] = magazine.issue_date.year
+                if not month_provided or not updates.get("month"):
+                    magazine.extra_metadata["month"] = NUMBER_TO_MONTH.get(
+                        magazine.issue_date.month, ""
+                    )
+
+            # Reconstruct issue_date when year is provided
+            # This keeps the database field in sync for sorting/filtering
+            if year_provided:
+                year = int(updates["year"])
+                month_str = updates.get("month", "")
+                month_num, _ = parse_month_string(month_str)
+
+                try:
+                    magazine.issue_date = datetime(year, month_num, 1)
+                except ValueError:
+                    # Invalid date (e.g., Feb 30) - default to year start
+                    logger.warning(f"Invalid date: year={year}, month={month_num}")
+                    magazine.issue_date = datetime(year, 1, 1)
 
             if "issue_number" in updates:
                 magazine.extra_metadata["issue_number"] = updates["issue_number"]

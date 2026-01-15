@@ -9,6 +9,7 @@
 import { APIClient } from './api.js';
 import { UIUtils } from './ui-utils.js';
 import { AuthManager } from './auth.js';
+import { ELEMENT_IDS as _ELEMENT_IDS, STATUS_MESSAGES as _STATUS_MESSAGES, CSS_CLASSES, TIMEOUTS } from './constants.js';
 
 export class SettingsManager {
   constructor() {
@@ -423,7 +424,7 @@ export class SettingsManager {
     });
 
     // Show modal
-    modal.classList.remove('hidden');
+    modal.classList.remove(CSS_CLASSES.HIDDEN);
   }
 
   /**
@@ -431,7 +432,7 @@ export class SettingsManager {
    */
   closeAddProviderModal() {
     const modal = document.getElementById('add-provider-modal');
-    modal.classList.add('hidden');
+    modal.classList.add(CSS_CLASSES.HIDDEN);
   }
 
   /**
@@ -688,7 +689,7 @@ export class SettingsManager {
    */
   async restartApplication() {
     const modal = document.getElementById('restart-modal');
-    modal.classList.remove('hidden');
+    modal.classList.remove(CSS_CLASSES.HIDDEN);
   }
 
   /**
@@ -696,7 +697,7 @@ export class SettingsManager {
    */
   closeRestartModal() {
     const modal = document.getElementById('restart-modal');
-    modal.classList.add('hidden');
+    modal.classList.add(CSS_CLASSES.HIDDEN);
   }
 
   /**
@@ -757,7 +758,7 @@ export class SettingsManager {
 
       attempts++;
       if (attempts < maxAttempts) {
-        setTimeout(checkServer, 2000);
+        setTimeout(checkServer, TIMEOUTS.AUTO_HIDE_SUCCESS);
       } else {
         UIUtils.showStatus(
           'settings-status',
@@ -822,7 +823,7 @@ export class SettingsManager {
         await navigator.clipboard.writeText(tokenDisplay.value);
         UIUtils.showStatus('api-token-message', 'API token copied to clipboard!', 'success');
         setTimeout(() => {
-          document.getElementById('api-token-message').classList.add('hidden');
+          document.getElementById('api-token-message').classList.add(CSS_CLASSES.HIDDEN);
         }, 3000);
       } catch (error) {
         UIUtils.showStatus('api-token-message', 'Failed to copy token', 'error');
@@ -852,7 +853,7 @@ export class SettingsManager {
         tokenDisplay.type = 'password';
         UIUtils.showStatus('api-token-message', 'API token regenerated successfully!', 'success');
         setTimeout(() => {
-          document.getElementById('api-token-message').classList.add('hidden');
+          document.getElementById('api-token-message').classList.add(CSS_CLASSES.HIDDEN);
         }, 3000);
       } else {
         UIUtils.showStatus('api-token-message', result.message || 'Failed to regenerate token', 'error');

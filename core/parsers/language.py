@@ -7,30 +7,24 @@ Detects language from title, filename, or metadata.
 import re
 from typing import Optional
 
-
-# Common language indicators in titles and filenames
-LANGUAGE_INDICATORS = {
-    "german": ["GERMAN", "DEUTSCH", "DE"],
-    "french": ["FRENCH", "FRANCAIS", "FRANÇAIS", "FR"],
-    "spanish": ["SPANISH", "ESPANOL", "ESPAÑOL", "ES"],
-    "italian": ["ITALIAN", "ITALIANO", "IT"],
-    "portuguese": ["PORTUGUESE", "PORTUGUES", "PORTUGUÊS", "PT"],
-    "dutch": ["DUTCH", "NEDERLANDS", "NL"],
-    "polish": ["POLISH", "POLSKI", "PL"],
-    "russian": ["RUSSIAN", "РУССКИЙ", "RU"],
-    "japanese": ["JAPANESE", "日本語", "JP"],
-    "chinese": ["CHINESE", "中文", "ZH", "CN"],
-    "korean": ["KOREAN", "한국어", "KR"],
-}
+from core.constants import (
+    DEFAULT_LANGUAGE,
+    LANGUAGE_CODE_MAP,
+    LANGUAGE_KEYWORDS,
+)
 
 
-def detect_language(text: str, default: str = "English") -> str:
+# Use language keywords from constants
+LANGUAGE_INDICATORS = LANGUAGE_KEYWORDS
+
+
+def detect_language(text: str, default: str = DEFAULT_LANGUAGE) -> str:
     """
     Detect language from text (title, filename, or description).
 
     Args:
         text: Text to analyze (title, filename, etc.)
-        default: Default language if none detected (default: "English")
+        default: Default language if none detected (default: DEFAULT_LANGUAGE)
 
     Returns:
         Detected language name (capitalized), or default if not detected
@@ -49,11 +43,11 @@ def detect_language(text: str, default: str = "English") -> str:
     # Check for language indicators
     for language, indicators in LANGUAGE_INDICATORS.items():
         for indicator in indicators:
-            # Look for whole word matches or as part of compound words
-            if re.search(rf"\b{re.escape(indicator)}\b", text_upper):
+            # Look for whole word matches or as part of compound words (case-insensitive)
+            if re.search(rf"\b{re.escape(indicator.upper())}\b", text_upper):
                 return language.capitalize()
 
-    # Default to English if no language indicator found
+    # Default to configured default language if no language indicator found
     return default
 
 
@@ -74,28 +68,13 @@ def normalize_language_name(language: str) -> str:
         'English'
     """
     if not language:
-        return "English"
+        return DEFAULT_LANGUAGE
 
     lang_lower = language.lower()
 
-    # Map common codes to full names
-    language_map = {
-        "en": "English",
-        "de": "German",
-        "fr": "French",
-        "es": "Spanish",
-        "it": "Italian",
-        "pt": "Portuguese",
-        "nl": "Dutch",
-        "pl": "Polish",
-        "ru": "Russian",
-        "ja": "Japanese",
-        "zh": "Chinese",
-        "ko": "Korean",
-    }
-
-    if lang_lower in language_map:
-        return language_map[lang_lower]
+    # Use language code map from constants
+    if lang_lower in LANGUAGE_CODE_MAP:
+        return LANGUAGE_CODE_MAP[lang_lower]
 
     # Return capitalized version
     return language.capitalize()
@@ -118,7 +97,7 @@ def generate_language_aware_olid(base_olid: str, language: str) -> str:
         >>> generate_language_aware_olid("wired", "English")
         'wired'
     """
-    if not language or language.lower() == "english":
+    if not language or language.lower() == DEFAULT_LANGUAGE.lower():
         return base_olid
 
     # Append language code to OLID

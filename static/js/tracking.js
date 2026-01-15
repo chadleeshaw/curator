@@ -1,28 +1,44 @@
 /**
  * Tracking Module
  * Handles periodical tracking, metadata search, and issue downloads
- *
- * NOTE: This is a working skeleton extracted from script.js lines 620-1650
- * Contains core functionality - may need additional methods added
+ * @module tracking
  */
 
 import { APIClient } from './api.js';
 import { UIUtils, SortManager } from './ui-utils.js';
+import { ELEMENT_IDS, STATUS_MESSAGES, CSS_CLASSES, TIMEOUTS, PATTERNS as _PATTERNS, BADGE_CONFIGS as _BADGE_CONFIGS } from './constants.js';
 
-// Constants loaded from backend API
+/** @type {string[]} Supported languages loaded from backend */
 let SUPPORTED_LANGUAGES = [];
+/** @type {Object.<string, string>} ISO country codes to names */
 let ISO_COUNTRIES = {};
+/** @type {Object.<string, string>} Language to default country mapping */
 let LANGUAGE_TO_COUNTRY = {};
+/** @type {Object.<string, string[]>} Country code to title indicators */
 let COUNTRY_INDICATORS = {};
+/** @type {Object.<string, string[]>} Language to title keywords */
 let LANGUAGE_KEYWORDS = {};
 
+/**
+ * Tracking Manager class for managing periodical tracking operations
+ * @class
+ */
 export class TrackingManager {
+  /**
+   * Create a new TrackingManager instance
+   */
   constructor() {
+    /** @type {SortManager} Manager for tracking list sorting */
     this.sortManager = new SortManager('title', 'asc', () => this.loadTrackedPeriodicals());
+    /** @type {Object|null} Current periodical metadata from search */
     this.currentPeriodicalMetadata = null;
+    /** @type {Object|null} Current editions data */
     this.currentEditionsData = null;
+    /** @type {Object.<string, boolean>} Selected editions map */
     this.selectedEditions = {};
+    /** @type {boolean} Whether merge mode is active */
     this.mergeMode = false;
+    /** @type {Set<number>} IDs selected for merge */
     this.selectedForMerge = new Set();
   }
 
@@ -36,21 +52,24 @@ export class TrackingManager {
 
   /**
    * Load constants from backend API
+   *
+   * @returns {Promise<void>}
+   * @throws {Error} When API request fails
    */
   async loadConstants() {
     try {
       const response = await APIClient.get('/api/constants');
       const data = await response.json();
       if (data.success) {
-        SUPPORTED_LANGUAGES = data.languages;
-        ISO_COUNTRIES = data.countries;
-        LANGUAGE_TO_COUNTRY = data.language_to_country || {};
-        COUNTRY_INDICATORS = data.country_indicators || {};
-        LANGUAGE_KEYWORDS = data.language_keywords || {};
+        SUPPORTED_LANGUAGES = data.languages ?? [];
+        ISO_COUNTRIES = data.countries ?? {};
+        LANGUAGE_TO_COUNTRY = data.language_to_country ?? {};
+        COUNTRY_INDICATORS = data.country_indicators ?? {};
+        LANGUAGE_KEYWORDS = data.language_keywords ?? {};
       }
     } catch (error) {
-      console.error('Failed to load constants:', error);
-      UIUtils.showStatus('tracking-status', 'Failed to load form options', 'error');
+      console.error('[Tracking] Failed to load constants:', error);
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Failed to load form options', 'error');
     }
   }
 
@@ -125,26 +144,29 @@ export class TrackingManager {
     }
 
   /**
-   * Search for periodical metadata
+   * Search for periodical metadata from providers
+   *
+   * @returns {Promise<void>}
+   * @throws {Error} When API request fails
    */
   async searchPeriodicalMetadata() {
-    const query = document.getElementById('tracking-search-query').value.trim();
-    const filterLanguage = document.getElementById('search-filter-language')?.value || '';
-    const filterCountry = document.getElementById('search-filter-country')?.value || '';
-    const filterCategory = document.getElementById('new-tracking-category')?.value || '';
+    const query = document.getElementById(ELEMENT_IDS.TRACKING_SEARCH_QUERY)?.value.trim() ?? '';
+    const filterLanguage = document.getElementById(ELEMENT_IDS.SEARCH_FILTER_LANGUAGE)?.value ?? '';
+    const filterCountry = document.getElementById(ELEMENT_IDS.SEARCH_FILTER_COUNTRY)?.value ?? '';
+    const filterCategory = document.getElementById(ELEMENT_IDS.NEW_TRACKING_CATEGORY)?.value ?? '';
 
     if (!query) {
-      UIUtils.showStatus('tracking-status', 'Please enter a periodical title', 'error');
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, STATUS_MESSAGES.ENTER_TITLE, 'error');
       return;
     }
 
-    const loading = document.getElementById('tracking-search-loading');
-    const result = document.getElementById('tracking-search-result');
-    const error = document.getElementById('tracking-search-error');
+    const loading = document.getElementById(ELEMENT_IDS.TRACKING_SEARCH_LOADING);
+    const result = document.getElementById(ELEMENT_IDS.TRACKING_SEARCH_RESULT);
+    const error = document.getElementById(ELEMENT_IDS.TRACKING_SEARCH_ERROR);
 
-    loading.classList.remove('hidden');
-    result.classList.add('hidden');
-    error.classList.add('hidden');
+    loading.classList.remove(CSS_CLASSES.HIDDEN);
+    result.classList.add(CSS_CLASSES.HIDDEN);
+    error.classList.add(CSS_CLASSES.HIDDEN);
 
     try {
       // Build query parameters
@@ -172,13 +194,13 @@ export class TrackingManager {
 
       if (!response.ok) {
         error.textContent = data.detail || `Error: ${response.status}`;
-        error.classList.remove('hidden');
+        error.classList.remove(CSS_CLASSES.HIDDEN);
         return;
       }
 
       if (data.found && data.results && data.results.length > 0) {
         this.displaySearchResultsGrouped(data.results);
-        result.classList.remove('hidden');
+        result.classList.remove(CSS_CLASSES.HIDDEN);
       } else {
         const filterInfo = [];
         if (filterLanguage) filterInfo.push(`Language: ${filterLanguage}`);
@@ -186,14 +208,14 @@ export class TrackingManager {
         if (filterCategory) filterInfo.push(`Category: ${filterCategory}`);
         const filterText = filterInfo.length > 0 ? ` (Filters: ${filterInfo.join(', ')})` : '';
         error.textContent = `${data.message || 'Periodical not found'}${filterText}`;
-        error.classList.remove('hidden');
+        error.classList.remove(CSS_CLASSES.HIDDEN);
       }
     } catch (err) {
       console.error('Search error:', err);
       error.textContent = err.message;
-      error.classList.remove('hidden');
+      error.classList.remove(CSS_CLASSES.HIDDEN);
     } finally {
-      loading.classList.add('hidden');
+      loading.classList.add(CSS_CLASSES.HIDDEN);
     }
   }
 
@@ -201,7 +223,7 @@ export class TrackingManager {
    * Display search results grouped by edition
    */
   displaySearchResultsGrouped(results) {
-    const container = document.getElementById('tracking-search-result');
+    const container = document.getElementById(ELEMENT_IDS.TRACKING_SEARCH_RESULT);
 
     // Extract unique periodical editions and group results
     const uniquePeriodicals = {};
@@ -240,26 +262,17 @@ export class TrackingManager {
       const publisher = result.metadata?.publisher || '';
 
       const div = document.createElement('div');
-      div.className = 'result-item';
-      div.style.padding = '15px';
-      div.style.margin = '10px 0';
-      div.style.border = '1px solid var(--border-color)';
-      div.style.borderRadius = '8px';
-      div.style.cursor = 'pointer';
-      div.style.background = 'var(--surface)';
-      div.style.display = 'flex';
-      div.style.justifyContent = 'space-between';
-      div.style.alignItems = 'center';
+      div.className = CSS_CLASSES.RESULT_ITEM;
 
       div.innerHTML = `
         <div class="result-info">
-          <h5 style="margin: 0 0 8px 0;">${periodical.displayTitle}</h5>
-          <p style="margin: 4px 0; color: var(--text-secondary);">
+          <h5 class="result-title">${periodical.displayTitle}</h5>
+          <p class="result-detail">
             <strong>Available Issues:</strong> ${periodical.count}
           </p>
-          ${publisher ? `<p style="margin: 4px 0; color: var(--text-secondary);"><strong>Publisher:</strong> ${publisher}</p>` : ''}
+          ${publisher ? `<p class="result-detail"><strong>Publisher:</strong> ${publisher}</p>` : ''}
         </div>
-        <div class="result-select" style="font-size: 24px; color: var(--primary);">→</div>
+        <div class="result-select">→</div>
       `;
 
       div.onclick = () =>
@@ -277,22 +290,17 @@ export class TrackingManager {
    * Display search results for user to select
    */
   displaySearchResults(results) {
-    const container = document.getElementById('tracking-search-result');
+    const container = document.getElementById(ELEMENT_IDS.TRACKING_SEARCH_RESULT);
     container.innerHTML = '<h4>Select a Periodical:</h4>';
 
     results.forEach((result, _index) => {
       const div = document.createElement('div');
-      div.style.padding = '15px';
-      div.style.margin = '10px 0';
-      div.style.border = '1px solid var(--border-color)';
-      div.style.borderRadius = '8px';
-      div.style.cursor = 'pointer';
-      div.style.background = 'var(--surface)';
+      div.className = CSS_CLASSES.RESULT_ITEM;
 
       div.innerHTML = `
-        <h5>${result.title}</h5>
-        <p>${result.publisher || 'Unknown Publisher'}</p>
-        <p style="color: var(--text-secondary);">${result.source || ''}</p>
+        <h5 class="result-title">${result.title}</h5>
+        <p class="result-publisher">${result.publisher || 'Unknown Publisher'}</p>
+        <p class="result-source">${result.source || ''}</p>
       `;
 
       div.onclick = () => this.chooseSearchResult(result);
@@ -367,10 +375,10 @@ export class TrackingManager {
     }
 
     // Hide the search results
-    document.getElementById('tracking-search-result').classList.add('hidden');
+    document.getElementById(ELEMENT_IDS.TRACKING_SEARCH_RESULT).classList.add(CSS_CLASSES.HIDDEN);
 
     // Show a success message and scroll to the form
-    UIUtils.showStatus('tracking-status', 
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 
       `✓ Selected: ${result.title}. Review the fields below and click "Start Tracking".`, 
       'success');
 
@@ -381,10 +389,10 @@ export class TrackingManager {
     }
 
     // Highlight the title field briefly to draw attention
-    titleInput.style.background = 'var(--success-bg)';
+    titleInput.classList.add(CSS_CLASSES.HIGHLIGHT_SUCCESS);
     setTimeout(() => {
-      titleInput.style.background = '';
-    }, 2000);
+      titleInput.classList.remove(CSS_CLASSES.HIGHLIGHT_SUCCESS);
+    }, TIMEOUTS.AUTO_HIDE_SUCCESS);
   }
 
   /**
@@ -392,7 +400,7 @@ export class TrackingManager {
    */
   async saveTrackingPreferences() {
     if (!this.currentPeriodicalMetadata) {
-      UIUtils.showStatus('tracking-status', 'No periodical selected', 'error');
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'No periodical selected', 'error');
       return;
     }
 
@@ -426,26 +434,29 @@ export class TrackingManager {
       const data = await response.json();
 
       if (data.success) {
-        UIUtils.showStatus('tracking-status', 'Tracking saved successfully', 'success');
+        UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Tracking saved successfully', 'success');
 
         // Close modal and reload
         this.closeTrackNewPeriodicalModal();
         this.loadTrackedPeriodicals();
 
         setTimeout(() => {
-          UIUtils.hideStatus('tracking-status');
+          UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS);
         }, 2000);
       } else {
-        UIUtils.showStatus('tracking-status', data.message || 'Error saving tracking', 'error');
+        UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, data.message || 'Error saving tracking', 'error');
       }
     } catch (error) {
       console.error('Error saving tracking:', error);
-      UIUtils.showStatus('tracking-status', `Error: ${error.message}`, 'error');
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, `Error: ${error.message}`, 'error');
     }
   }
 
   /**
-   * Load tracked periodicals
+   * Load tracked periodicals from the API
+   *
+   * @returns {Promise<void>}
+   * @throws {Error} When API request fails
    */
   async loadTrackedPeriodicals() {
     try {
@@ -455,7 +466,7 @@ export class TrackingManager {
       );
       const data = await response.json();
 
-      const tracked = data.tracked_magazines || data.tracked || [];
+      const tracked = data.tracked_magazines ?? data.tracked ?? [];
       
       // Update statistics
       this.updateTrackingStatistics(tracked);
@@ -528,56 +539,77 @@ export class TrackingManager {
   }
 
   /**
-   * Create a tracked periodical card
+   * Create a tracked periodical card element
+   *
+   * @param {Object} tracked - The tracking data object
+   * @param {number} tracked.id - Tracking ID
+   * @param {string} tracked.title - Periodical title
+   * @param {boolean} [tracked.track_all_editions] - Whether tracking all editions
+   * @param {boolean} [tracked.track_new_only] - Whether tracking new issues only
+   * @param {number} [tracked.total_known] - Total known issues
+   * @param {number} [tracked.selected_count] - Selected issue count
+   * @param {number} [tracked.library_count] - Issues in library
+   * @param {number} [tracked.failed_count] - Failed download count
+   * @param {string} [tracked.country] - Country code
+   * @param {string} [tracked.category] - Category
+   * @param {string} [tracked.language] - Language
+   * @returns {HTMLElement} The created card element
    */
   createTrackedCard(tracked) {
+    const {
+      id,
+      title,
+      track_all_editions: trackAll,
+      track_new_only: trackNew,
+      total_known: totalKnown = 0,
+      selected_count: selectedCount = 0,
+      library_count: libraryCount = 0,
+      failed_count: failedCount = 0,
+      country = '',
+      category,
+      language,
+    } = tracked;
+
     const card = document.createElement('div');
     card.className = 'tracked-card';
-    card.dataset.trackingId = tracked.id;
+    card.dataset.trackingId = id;
 
     // Determine tracking badge
     let trackingBadge = '';
-    if (tracked.track_all_editions) {
-      trackingBadge = '<span class="tracking-badge badge-download-all">⬇️ All Issues</span>';
-    } else if (tracked.track_new_only) {
-      trackingBadge = '<span class="tracking-badge badge-download-new">⬇️ New Issues</span>';
+    if (trackAll) {
+      trackingBadge = '<span class="tracking-badge badge-download-all">\u2B07\uFE0F All Issues</span>';
+    } else if (trackNew) {
+      trackingBadge = '<span class="tracking-badge badge-download-new">\u2B07\uFE0F New Issues</span>';
     } else {
-      trackingBadge = '<span class="tracking-badge badge-watch">👁️ Watch Only</span>';
+      trackingBadge = '<span class="tracking-badge badge-watch">\uD83D\uDC41\uFE0F Watch Only</span>';
     }
 
-
-    // Build issue stats
-    const totalKnown = tracked.total_known || 0;
-    const selectedCount = tracked.selected_count || 0;
-    const libraryCount = tracked.library_count || 0;
-    const failedCount = tracked.failed_count || 0;
-    const country = tracked.country || '';
-    const countryStats = country ? `<span class="country">🌍 ${country}</span>` : '';
-    const issueStats = totalKnown > 0 
-      ? `<span class="issue-count">${totalKnown} issues found</span>` 
+    const countryStats = country ? `<span class="country">\uD83C\uDF0D ${country}</span>` : '';
+    const issueStats = totalKnown > 0
+      ? `<span class="issue-count">${totalKnown} issues found</span>`
       : '';
-    const libraryStats = `<span class="library-count">📚 ${libraryCount} in library</span>`;
+    const libraryStats = `<span class="library-count">\uD83D\uDCDA ${libraryCount} in library</span>`;
     const selectedStats = selectedCount > 0
-      ? `<span class="selected-count">• ${selectedCount} selected</span>`
+      ? `<span class="selected-count">\u2022 ${selectedCount} selected</span>`
       : '';
     const failedStats = failedCount > 0
-      ? `<span class="failed-count" style="color: var(--status-pending); cursor: pointer;" data-tracking-id="${tracked.id}" title="Click to view failed downloads">⚠️ ${failedCount} failed</span>`
+      ? `<span class="failed-count" style="color: var(--status-pending); cursor: pointer;" data-tracking-id="${id}" title="Click to view failed downloads">\u26A0\uFE0F ${failedCount} failed</span>`
       : '';
 
-    const checkboxHtml = this.mergeMode 
-      ? `<input type="checkbox" class="merge-checkbox" data-tracking-id="${tracked.id}" ${this.selectedForMerge.has(tracked.id) ? 'checked' : ''}>` 
+    const checkboxHtml = this.mergeMode
+      ? `<input type="checkbox" class="merge-checkbox" data-tracking-id="${id}" ${this.selectedForMerge.has(id) ? 'checked' : ''}>`
       : '';
 
     card.innerHTML = `
       ${checkboxHtml}
       <div class="tracked-card-main">
         <div class="tracked-card-header">
-          <h5>${tracked.title}</h5>
+          <h5>${title}</h5>
           ${trackingBadge}
         </div>
         <div class="tracked-card-meta">
-          <span class="meta-item">📁 ${tracked.category || 'Auto-detect'}</span>
-          <span class="meta-item">🌐 ${tracked.language || 'English'}</span>
+          <span class="meta-item">\uD83D\uDCC1 ${category ?? 'Auto-detect'}</span>
+          <span class="meta-item">\uD83C\uDF10 ${language ?? 'English'}</span>
           ${countryStats}
           ${issueStats}
           ${libraryStats}
@@ -586,43 +618,31 @@ export class TrackingManager {
         </div>
       </div>
       <div class="tracked-card-buttons">
-        <button onclick="editTracking(${tracked.id})" class="btn-icon" title="Edit">✏️</button>
-        <button class="btn-icon search-issues-btn" data-tracking-id="${tracked.id}" title="Search Issues">🔍</button>
-        <button class="btn-icon btn-danger delete-tracking-btn" data-tracking-id="${tracked.id}" title="Delete">🗑️</button>
+        <button onclick="editTracking(${id})" class="btn-icon" title="Edit">\u270F\uFE0F</button>
+        <button class="btn-icon search-issues-btn" data-tracking-id="${id}" title="Search Issues">\uD83D\uDD0D</button>
+        <button class="btn-icon btn-danger delete-tracking-btn" data-tracking-id="${id}" title="Delete">\uD83D\uDDD1\uFE0F</button>
       </div>
     `;
 
     // Add event listeners for search and delete buttons
     const searchBtn = card.querySelector('.search-issues-btn');
-    if (searchBtn) {
-      searchBtn.addEventListener('click', () => this.searchForIssues(
-        tracked.id,
-        tracked.title,
-        tracked.language,
-        tracked.country,
-        tracked.category
-      ));
-    }
+    searchBtn?.addEventListener('click', () => this.searchForIssues(id, title, language, country, category));
 
     const deleteBtn = card.querySelector('.delete-tracking-btn');
-    if (deleteBtn) {
-      deleteBtn.addEventListener('click', () => this.deleteTracking(tracked.id, tracked.title));
-    }
+    deleteBtn?.addEventListener('click', () => this.deleteTracking(id, title));
 
     // Add event listener for failed count to open failed downloads modal
     const failedCountSpan = card.querySelector('.failed-count');
-    if (failedCountSpan) {
-      failedCountSpan.addEventListener('click', () => this.showFailedDownloadsForTracking(tracked.id, tracked.title));
-    }
+    failedCountSpan?.addEventListener('click', () => this.showFailedDownloadsForTracking(id, title));
 
     // Add event listener for checkbox if in merge mode
     if (this.mergeMode) {
       const checkbox = card.querySelector('.merge-checkbox');
-      checkbox.addEventListener('change', (e) => {
+      checkbox?.addEventListener('change', (e) => {
         if (e.target.checked) {
-          this.selectedForMerge.add(tracked.id);
+          this.selectedForMerge.add(id);
         } else {
-          this.selectedForMerge.delete(tracked.id);
+          this.selectedForMerge.delete(id);
         }
         this.updateMergeButtonState();
       });
@@ -763,11 +783,11 @@ export class TrackingManager {
         document.getElementById('edit-tracking-org-pattern').value = t.organization_pattern || '';
 
         // Show modal
-        document.getElementById('edit-tracking-modal').classList.remove('hidden');
+        document.getElementById(ELEMENT_IDS.EDIT_TRACKING_MODAL).classList.remove(CSS_CLASSES.HIDDEN);
       }
     } catch (err) {
       console.error('Error loading tracking details:', err);
-      UIUtils.showStatus('tracking-status', 'Failed to load tracking details', 'error');
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Failed to load tracking details', 'error');
     }
   }
 
@@ -783,7 +803,7 @@ export class TrackingManager {
           <div class="loading-spinner"></div>
           <p style="margin-top: 20px; color: var(--text-secondary);">Searching for issues...</p>
         </div>`;
-      document.getElementById('search-issues-modal').classList.remove('hidden');
+      document.getElementById(ELEMENT_IDS.SEARCH_ISSUES_MODAL).classList.remove(CSS_CLASSES.HIDDEN);
 
       // Store tracking_id for later use in downloadIssue
       window.currentTrackingId = trackingId;
@@ -1007,14 +1027,14 @@ export class TrackingManager {
           `Issue ${track ? 'marked for' : 'removed from'} tracking (${data.total_selected} total)`,
           'success'
         );
-        setTimeout(() => UIUtils.hideStatus('tracking-status'), 2000);
+        setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), TIMEOUTS.AUTO_HIDE_SUCCESS);
         return true;
       } else {
         throw new Error(data.message || 'Failed to update tracking');
       }
     } catch (error) {
       console.error('Error toggling issue tracking:', error);
-      UIUtils.showStatus('tracking-status', `Error: ${error.message}`, 'error');
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, `Error: ${error.message}`, 'error');
       return false;
     }
   }
@@ -1114,7 +1134,7 @@ export class TrackingManager {
           window.issueVariants = window.issueVariants || {};
           window.issueVariants[issueKey] = issue.variants;
 
-          cardHtml += ` onmouseover="this.style.background='var(--primary-color)'; this.style.color='white'; this.style.opacity='1';" onmouseout="this.style.background='var(--surface-variant)'; this.style.color='inherit'; this.style.opacity='${opacity}';" onclick='selectIssueWithVariants("${issueKey}", ${isDownloaded})'`;
+          cardHtml += ` onclick='selectIssueWithVariants("${issueKey}", ${isDownloaded})'`;
         }
 
         cardHtml += `>
@@ -1150,15 +1170,15 @@ export class TrackingManager {
       const data = await response.json();
 
       if (data.success) {
-        UIUtils.showStatus('tracking-status', 'Tracking removed', 'success');
+        UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Tracking removed', 'success');
         this.loadTrackedPeriodicals();
-        setTimeout(() => UIUtils.hideStatus('tracking-status'), 3000);
+        setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), TIMEOUTS.AUTO_HIDE_STATUS);
       } else {
-        UIUtils.showStatus('tracking-status', data.message || 'Error removing tracking', 'error');
+        UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, data.message || 'Error removing tracking', 'error');
       }
     } catch (error) {
       console.error('Error deleting tracking:', error);
-      UIUtils.showStatus('tracking-status', 'Error removing tracking', 'error');
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Error removing tracking', 'error');
     }
   }
 
@@ -1174,11 +1194,11 @@ export class TrackingManager {
     const searchQuery = document.getElementById('tracking-search-query');
     if (searchQuery) searchQuery.value = '';
     
-    const searchResult = document.getElementById('tracking-search-result');
-    if (searchResult) searchResult.classList.add('hidden');
+    const searchResult = document.getElementById(ELEMENT_IDS.TRACKING_SEARCH_RESULT);
+    if (searchResult) searchResult.classList.add(CSS_CLASSES.HIDDEN);
     
     const searchError = document.getElementById('tracking-search-error');
-    if (searchError) searchError.classList.add('hidden');
+    if (searchError) searchError.classList.add(CSS_CLASSES.HIDDEN);
   }
 
   /**
@@ -1186,14 +1206,14 @@ export class TrackingManager {
    */
   openTrackNewPeriodicalModal() {
     this.resetTracking();
-    document.getElementById('track-new-periodical-modal').classList.remove('hidden');
+    document.getElementById('track-new-periodical-modal').classList.remove(CSS_CLASSES.HIDDEN);
   }
 
   /**
    * Close track new periodical modal
    */
   closeTrackNewPeriodicalModal() {
-    document.getElementById('track-new-periodical-modal').classList.add('hidden');
+    document.getElementById('track-new-periodical-modal').classList.add(CSS_CLASSES.HIDDEN);
     this.resetTracking();
   }
 
@@ -1214,11 +1234,11 @@ window.trackingManager = tracking;
 
 // Modal management functions
 window.closeEditTrackingModal = function () {
-  document.getElementById('edit-tracking-modal').classList.add('hidden');
+  document.getElementById(ELEMENT_IDS.EDIT_TRACKING_MODAL).classList.add(CSS_CLASSES.HIDDEN);
 };
 
 window.closeSearchIssuesModal = function () {
-  document.getElementById('search-issues-modal').classList.add('hidden');
+  document.getElementById(ELEMENT_IDS.SEARCH_ISSUES_MODAL).classList.add(CSS_CLASSES.HIDDEN);
 };
 
 // Save edited tracking
@@ -1250,14 +1270,14 @@ window.saveEditedTracking = async function () {
     if (result.success) {
       window.closeEditTrackingModal();
       tracking.loadTrackedPeriodicals();
-      UIUtils.showStatus('tracking-status', 'Tracking updated successfully', 'success');
-      setTimeout(() => UIUtils.hideStatus('tracking-status'), 3000);
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Tracking updated successfully', 'success');
+      setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), TIMEOUTS.AUTO_HIDE_STATUS);
     } else {
-      UIUtils.showStatus('tracking-status', 'Failed to update tracking', 'error');
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Failed to update tracking', 'error');
     }
   } catch (err) {
     console.error('Error updating tracking:', err);
-    UIUtils.showStatus('tracking-status', 'Failed to update tracking', 'error');
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Failed to update tracking', 'error');
   }
 };
 
@@ -1267,7 +1287,7 @@ window.selectIssueWithVariants = function (issueKey, alreadyDownloaded) {
   const variants = window.issueVariants[issueKey];
 
   if (!variants || variants.length === 0) {
-    UIUtils.showStatus('tracking-status', 'No variants available', 'error');
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'No variants available', 'error');
     return;
   }
 
@@ -1334,21 +1354,18 @@ window.selectIssueWithVariants = function (issueKey, alreadyDownloaded) {
     }
 
     const isDownloaded = variant.already_downloaded || alreadyDownloaded;
-    const downloaded = isDownloaded ? ' <span style="color: #4caf50;">✓ In Library</span>' : '';
+    const downloaded = isDownloaded ? ' <span class="variant-in-library">✓ In Library</span>' : '';
 
     const btn = document.createElement('button');
     // Different styling for re-download vs new download
     if (isDownloaded) {
-      btn.className = 'btn-secondary';
-      btn.style.cssText =
-        'width: 100%; text-align: left; padding: 15px; background: #4caf50; color: white; border: 2px solid #45a049;';
+      btn.className = 'btn-variant btn-variant-downloaded';
     } else {
-      btn.className = 'btn-primary';
-      btn.style.cssText = 'width: 100%; text-align: left; padding: 15px;';
+      btn.className = 'btn-variant btn-variant-new';
     }
     btn.innerHTML = `
-      <div style="font-weight: 600; font-size: 16px;">${displayLabel}${downloaded}</div>
-      <div style="font-size: 11px; margin-top: 6px; opacity: 0.8; word-break: break-all;">${variant.title}</div>
+      <div class="variant-label">${displayLabel}${downloaded}</div>
+      <div class="variant-title">${variant.title}</div>
     `;
     btn.onclick = () => {
       window.closeLangVariantModal();
@@ -1368,8 +1385,8 @@ window.selectIssue = async function (title, provider, url, alreadyDownloaded) {
   const isLibraryOnly = !url || url === '';
 
   if (isLibraryOnly) {
-    UIUtils.showStatus('tracking-status', 'This issue is already in your library', 'success');
-    setTimeout(() => UIUtils.hideStatus('tracking-status'), 3000);
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'This issue is already in your library', 'success');
+    setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), 3000);
     return;
   }
 
@@ -1409,7 +1426,7 @@ window.openMergeModal = async function() {
     
     if (!response.ok || items.length < 2) {
       console.log('Showing warning status');
-      UIUtils.showStatus('tracking-status', '⚠️ You need at least 2 tracked periodicals to merge', 'warning');
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, '⚠️ You need at least 2 tracked periodicals to merge', 'warning');
       return;
     }
 
@@ -1454,7 +1471,7 @@ window.openMergeModal = async function() {
     });
   } catch (error) {
     console.error('Error loading tracking records:', error);
-    UIUtils.showStatus('tracking-status', '✗ Failed to load tracking records', 'error');
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, '✗ Failed to load tracking records', 'error');
   }
 };
 
@@ -1475,7 +1492,7 @@ window.showMergeTargetSelection = async function() {
   const selectedIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
   
   if (selectedIds.length < 2) {
-    UIUtils.showStatus('tracking-status', '⚠️ Please select at least 2 tracking records', 'warning');
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, '⚠️ Please select at least 2 tracking records', 'warning');
     return;
   }
 
@@ -1512,7 +1529,7 @@ window.showMergeTargetSelection = async function() {
   `;
   
   document.body.appendChild(modal);
-  modal.style.display = 'flex';
+  modal.classList.add(CSS_CLASSES.MODAL_VISIBLE);
 };
 
 /**
@@ -1535,7 +1552,7 @@ window.confirmMerge = async function() {
   const sourceIds = allSelectedIds.filter(id => id !== targetId);
   
   if (!targetId || sourceIds.length === 0) {
-    UIUtils.showStatus('tracking-status', '⚠️ Invalid selection', 'warning');
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, '⚠️ Invalid selection', 'warning');
     return;
   }
   
@@ -1550,7 +1567,7 @@ window.confirmMerge = async function() {
       const filesMsg = data.files_reorganized > 0 
         ? `, reorganized ${data.files_reorganized} files` 
         : '';
-      UIUtils.showStatus('tracking-status', 
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 
         `✓ ${data.message}. Moved ${data.magazines_moved} magazines and ${data.submissions_moved} downloads${filesMsg}.`, 
         'success');
       window.closeMergeModal();
@@ -1563,7 +1580,7 @@ window.confirmMerge = async function() {
     }
   } catch (error) {
     console.error('Merge error:', error);
-    UIUtils.showStatus('tracking-status', `✗ ${error.message}`, 'error');
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, `✗ ${error.message}`, 'error');
   }
 };
 
@@ -1572,7 +1589,7 @@ window.downloadIssue = async function (title, url, provider) {
   try {
     const trackingId = window.currentTrackingId;
     if (!trackingId) {
-      UIUtils.showStatus('tracking-status', 'Error: No tracking ID available', 'error');
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Error: No tracking ID available', 'error');
       return;
     }
 
@@ -1586,15 +1603,15 @@ window.downloadIssue = async function (title, url, provider) {
     const data = await response.json();
 
     if (response.ok) {
-      UIUtils.showStatus('tracking-status', `✓ Download queued! Job ID: ${data.job_id}`, 'success');
-      setTimeout(() => UIUtils.hideStatus('tracking-status'), 5000);
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, `✓ Download queued! Job ID: ${data.job_id}`, 'success');
+      setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), TIMEOUTS.AUTO_HIDE_LONG);
       window.closeSearchIssuesModal();
     } else {
-      UIUtils.showStatus('tracking-status', data.detail || 'Failed to queue download', 'error');
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, data.detail || 'Failed to queue download', 'error');
     }
   } catch (err) {
     console.error('Download error:', err);
-    UIUtils.showStatus('tracking-status', `Error: ${err.message}`, 'error');
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, `Error: ${err.message}`, 'error');
   }
 };
 
@@ -1609,7 +1626,7 @@ window.saveNewTracking = async () => {
   const downloadCategory = document.getElementById('new-tracking-download-category').value.trim();
   
   if (!title) {
-    UIUtils.showStatus('tracking-status', 'Please enter a title', 'error');
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Please enter a title', 'error');
     return;
   }
 
@@ -1644,16 +1661,16 @@ window.saveNewTracking = async () => {
       }
       await APIClient.put(`/api/periodicals/tracking/${data.tracking_id}`, updateData);
 
-      UIUtils.showStatus('tracking-status', 'Tracking started successfully', 'success');
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Tracking started successfully', 'success');
       tracking.closeTrackNewPeriodicalModal();
       tracking.loadTrackedPeriodicals();
-      setTimeout(() => UIUtils.hideStatus('tracking-status'), 2000);
+      setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), TIMEOUTS.AUTO_HIDE_SUCCESS);
     } else {
-      UIUtils.showStatus('tracking-status', data.message || 'Failed to start tracking', 'error');
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, data.message || 'Failed to start tracking', 'error');
     }
   } catch (error) {
     console.error('Error starting tracking:', error);
-    UIUtils.showStatus('tracking-status', `Error: ${error.message}`, 'error');
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, `Error: ${error.message}`, 'error');
   }
 };
 window.saveTrackingPreferences = () => tracking.saveTrackingPreferences();

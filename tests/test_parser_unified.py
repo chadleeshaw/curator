@@ -194,6 +194,96 @@ class TestUnifiedParserFilesParsing:
         assert result.language == "English"
         assert result.year == 2024 or result.issue_date.year == 2024
 
+    def test_parse_file_multi_month_period(self, parser, tmp_path):
+        """Test parsing file with multi-month period (e.g., June/July)."""
+        # Arrange - Use dash for filesystem compatibility
+        pdf_file = tmp_path / "National Geographic - June-July 2003.pdf"
+        pdf_file.write_text("test content")
+
+        # Act
+        result = parser.parse_file(pdf_file)
+
+        # Assert
+        assert "Geographic" in result.title
+        assert result.year == 2003
+        assert result.month_name == "June/July"  # Normalized to slash
+        assert result.issue_date.year == 2003
+        assert result.issue_date.month == 6  # Uses first month for sorting
+
+    def test_parse_file_multi_month_abbreviated(self, parser, tmp_path):
+        """Test parsing file with abbreviated multi-month (e.g., Jun/Jul)."""
+        # Arrange - Use dash for filesystem compatibility
+        pdf_file = tmp_path / "Wired - Jun-Jul2024.pdf"
+        pdf_file.write_text("test content")
+
+        # Act
+        result = parser.parse_file(pdf_file)
+
+        # Assert
+        assert "Wired" in result.title
+        assert result.year == 2024
+        # Normalized to slash format
+        assert result.month_name == "Jun/Jul"
+        assert result.issue_date.month == 6
+
+    def test_parse_file_volume_and_year(self, parser, tmp_path):
+        """Test parsing file with volume and year."""
+        # Arrange
+        pdf_file = tmp_path / "Magazine Vol.32 No.5 2024.pdf"
+        pdf_file.write_text("test content")
+
+        # Act
+        result = parser.parse_file(pdf_file)
+
+        # Assert
+        assert result.year == 2024
+        # Volume parsing depends on specific pattern support
+        # Just verify we extracted year and issue number
+        assert result.edition_number == 5 or result.issue_number == 5
+
+    def test_parse_file_seasonal_issue(self, parser, tmp_path):
+        """Test parsing file with seasonal naming."""
+        # Arrange
+        pdf_file = tmp_path / "Quarterly Magazine Winter 2023.pdf"
+        pdf_file.write_text("test content")
+
+        # Act
+        result = parser.parse_file(pdf_file)
+
+        # Assert
+        # Year may be in issue_date or raw_metadata
+        assert result.issue_date.year == 2023
+        assert result.month_name == "Winter" or result.raw_metadata.get("month_name") == "Winter"
+        assert result.issue_date.month == 12  # Winter maps to December
+
+    def test_parse_file_multi_season_period(self, parser, tmp_path):
+        """Test parsing file with multi-season period (e.g., Spring/Summer)."""
+        # Arrange - Use dash instead of slash for filesystem compatibility
+        pdf_file = tmp_path / "Fashion-Spring-Summer2024.pdf"
+        pdf_file.write_text("test content")
+
+        # Act
+        result = parser.parse_file(pdf_file)
+
+        # Assert
+        assert result.year == 2024
+        # Seasonal period should be captured in month_name
+        assert result.month_name is not None
+
+    def test_parse_file_fall_winter_collection(self, parser, tmp_path):
+        """Test parsing Fall/Winter seasonal period."""
+        # Arrange - Use dash instead of slash for filesystem compatibility
+        pdf_file = tmp_path / "Magazine - Fall-Winter 2023.pdf"
+        pdf_file.write_text("test content")
+
+        # Act
+        result = parser.parse_file(pdf_file)
+
+        # Assert
+        assert result.year == 2023
+        assert "Fall" in result.month_name or "Winter" in result.month_name
+        assert result.issue_date.month == 9  # Uses Fall for sorting
+
 
 # ==============================================================================
 # Test UnifiedParser: Search Result Parsing (Use Case 4)

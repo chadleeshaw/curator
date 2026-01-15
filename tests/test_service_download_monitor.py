@@ -14,6 +14,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from core.config import ConfigLoader
 from scheduler import DownloadMonitorTask
 from services import DownloadManager
 from services import FileImporter
@@ -41,6 +42,12 @@ def test_db():
     Base.metadata.create_all(engine)
     session_factory = sessionmaker(bind=engine)
     return engine, session_factory
+
+
+@pytest.fixture
+def test_config():
+    """Load test configuration"""
+    return ConfigLoader(config_path="tests/config.test.yaml")
 
 
 @pytest.fixture
@@ -396,30 +403,32 @@ class TestFileImporterIntegration:
 class TestMonitorTaskInitialization:
     """Test DownloadMonitorTask initialization"""
 
-    def test_requires_downloads_dir_parameter(self, test_db, download_manager, mock_file_importer):
+    def test_requires_downloads_dir_parameter(self, test_db, test_config, download_manager, mock_file_importer):
         """Test initialization requires downloads_dir parameter"""
         engine, session_factory = test_db
+        downloads_dir = Path(test_config.get_storage()["download_dir"])
 
         # Should require downloads_dir
         monitor = DownloadMonitorTask(
             download_manager=download_manager,
             session_factory=session_factory,
             file_importer=mock_file_importer,
-            downloads_dir=Path("./test_downloads"),
+            downloads_dir=downloads_dir,
         )
 
         assert monitor.downloads_dir is not None
-        assert monitor.downloads_dir.name == "test_downloads"
+        assert monitor.downloads_dir.name == "downloads"
 
-    def test_converts_string_to_path(self, test_db, download_manager, mock_file_importer):
+    def test_converts_string_to_path(self, test_db, test_config, download_manager, mock_file_importer):
         """Test initialization converts string to Path object"""
         engine, session_factory = test_db
+        downloads_dir = test_config.get_storage()["download_dir"]
 
         monitor = DownloadMonitorTask(
             download_manager=download_manager,
             session_factory=session_factory,
             file_importer=mock_file_importer,
-            downloads_dir="./test_downloads",  # String
+            downloads_dir=downloads_dir,  # String from config
         )
 
         # Should convert to Path

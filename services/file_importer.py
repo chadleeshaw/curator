@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from core.constants import (
     CATEGORY_KEYWORDS,
     DEFAULT_FUZZY_THRESHOLD,
+    DEFAULT_LANGUAGE,
     DUPLICATE_DATE_THRESHOLD_DAYS,
 )
 from core.parsers import generate_language_aware_olid
@@ -261,12 +262,12 @@ class FileImporter:
                     date_diff = abs((parsed.issue_date - existing.issue_date).days)
                     # Also check language match for duplicates
                     same_language = (existing.language == parsed.language) or (
-                        not existing.language and parsed.language == "English"
+                        not existing.language and parsed.language == DEFAULT_LANGUAGE
                     )
                     if date_diff <= DUPLICATE_DATE_THRESHOLD_DAYS and same_language:
                         logger.warning(
                             f"Duplicate detected: '{tracking_title}' ({parsed.issue_date.strftime('%b %Y')}, {parsed.language}) matches existing "
-                            f"'{existing.title}' ({existing.issue_date.strftime('%b %Y')}, {existing.language or 'English'}) "
+                            f"'{existing.title}' ({existing.issue_date.strftime('%b %Y')}, {existing.language or DEFAULT_LANGUAGE}) "
                             f"(title score: {score}, date diff: {date_diff} days). Skipping import."
                         )
                         # Cleanup duplicate file from downloads if not already organized
@@ -309,6 +310,10 @@ class FileImporter:
             }
             if parsed.country:
                 extra_metadata["country"] = parsed.country
+            if parsed.year:
+                extra_metadata["year"] = parsed.year
+            if parsed.month_name:
+                extra_metadata["month"] = parsed.month_name
             if parsed.issue_number:
                 extra_metadata["issue_number"] = parsed.issue_number
             if parsed.volume:
