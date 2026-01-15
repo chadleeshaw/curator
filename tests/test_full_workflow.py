@@ -289,7 +289,7 @@ class TestFileOrganizationWorkflow:
         # Step 4: Verify organized
         assert Path(pdf_path).exists()
         assert "Test Magazine" in pdf_path
-        assert "Jan2024" in pdf_path
+        assert "January2024" in pdf_path
 
 
 class TestImportWorkflow:

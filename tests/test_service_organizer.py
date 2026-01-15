@@ -79,8 +79,8 @@ def test_organize_file():
 
         # Verify PDF was renamed and moved
         assert Path(pdf_path).exists()
-        assert Path(pdf_path).name == "Wired Magazine - Dec2006.pdf"
-        assert "Dec2006" in Path(pdf_path).name
+        assert Path(pdf_path).name == "Wired Magazine - December2006.pdf"
+        assert "December2006" in Path(pdf_path).name
 
         # Verify source file no longer exists
         assert not test_pdf.exists()
@@ -110,8 +110,8 @@ def test_organize_file_with_cover():
         # Verify both files were organized
         assert Path(pdf_path).exists()
         assert Path(jpg_path).exists()
-        assert Path(pdf_path).name == "National Geographic - Mar2023.pdf"
-        assert Path(jpg_path).name == "National Geographic - Mar2023.jpg"
+        assert Path(pdf_path).name == "National Geographic - March2023.pdf"
+        assert Path(jpg_path).name == "National Geographic - March2023.jpg"
 
         # Verify source files moved
         assert not test_pdf.exists()
@@ -164,17 +164,17 @@ def test_filename_patterns():
         processor = FileOrganizer(tmpdir)
 
         test_cases = [
-            ("Wired", datetime(2006, 1, 1), "Wired - Jan2006"),
-            ("Time Magazine", datetime(2015, 12, 1), "Time Magazine - Dec2015"),
+            ("Wired", datetime(2006, 1, 1), "Wired - January2006"),
+            ("Time Magazine", datetime(2015, 12, 1), "Time Magazine - December2015"),
             (
                 "National Geographic",
                 datetime(2023, 7, 1),
-                "National Geographic - Jul2023",
+                "National Geographic - July2023",
             ),
             (
                 "Scientific American",
                 datetime(2010, 2, 1),
-                "Scientific American - Feb2010",
+                "Scientific American - February2010",
             ),
         ]
 

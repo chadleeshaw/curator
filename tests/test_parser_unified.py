@@ -33,7 +33,7 @@ def parser():
 @pytest.fixture
 def temp_pdf_file(tmp_path):
     """Create a temporary PDF file for testing."""
-    pdf_file = tmp_path / "Test Magazine - Jan2024.pdf"
+    pdf_file = tmp_path / "Test Magazine - January2024.pdf"
     pdf_file.write_text("fake pdf content")
     return pdf_file
 
@@ -70,7 +70,7 @@ class TestUnifiedParserFilesParsing:
         # Arrange
         german_dir = tmp_path / "German"
         german_dir.mkdir()
-        pdf_file = german_dir / "Stern - Jan2024.pdf"
+        pdf_file = german_dir / "Stern - January2024.pdf"
         pdf_file.write_text("test content")
 
         # Act
@@ -100,7 +100,7 @@ class TestUnifiedParserFilesParsing:
         # Arrange
         misleading_dir = tmp_path / "WrongTitle"
         misleading_dir.mkdir()
-        pdf_file = misleading_dir / "Correct Title - Jan2024.pdf"
+        pdf_file = misleading_dir / "Correct Title - January2024.pdf"
         pdf_file.write_text("test content")
 
         # Act
@@ -127,7 +127,7 @@ class TestUnifiedParserFilesParsing:
     def test_parse_file_derives_base_and_normalized_titles(self, parser, tmp_path):
         """Test that base_title and normalized_title are derived."""
         # Arrange
-        pdf_file = tmp_path / "WIRED Magazine - Jan2024.pdf"
+        pdf_file = tmp_path / "WIRED Magazine - January2024.pdf"
         pdf_file.write_text("test content")
 
         # Act
@@ -142,7 +142,7 @@ class TestUnifiedParserFilesParsing:
     def test_parse_file_confidence_high_with_date(self, parser, tmp_path):
         """Test that confidence is high when date is successfully extracted."""
         # Arrange
-        pdf_file = tmp_path / "Magazine - Jan2024.pdf"
+        pdf_file = tmp_path / "Magazine - January2024.pdf"
         pdf_file.write_text("test content")
 
         # Act
@@ -184,7 +184,7 @@ class TestUnifiedParserFilesParsing:
         # Arrange
         complex_path = tmp_path / "Magazines" / "English" / "Technology" / "2024"
         complex_path.mkdir(parents=True)
-        pdf_file = complex_path / "Wired - Jan2024.pdf"
+        pdf_file = complex_path / "Wired - January2024.pdf"
         pdf_file.write_text("test content")
 
         # Act
@@ -253,7 +253,8 @@ class TestUnifiedParserFilesParsing:
         # Assert
         # Year may be in issue_date or raw_metadata
         assert result.issue_date.year == 2023
-        assert result.month_name == "Winter" or result.raw_metadata.get("month_name") == "Winter"
+        # Winter is normalized to December (month number 12)
+        assert result.month_name == "December" or result.raw_metadata.get("month_name") == "December"
         assert result.issue_date.month == 12  # Winter maps to December
 
     def test_parse_file_multi_season_period(self, parser, tmp_path):
@@ -456,7 +457,7 @@ class TestUnifiedParserDownloadFiles:
     def test_parse_download_file_without_hint(self, parser, tmp_path):
         """Test parsing download file without title hint."""
         # Arrange
-        file_path = tmp_path / "Wired - Jan2024.pdf"
+        file_path = tmp_path / "Wired - January2024.pdf"
         file_path.write_text("test content")
 
         # Act
@@ -487,7 +488,7 @@ class TestUnifiedParserDownloadFiles:
         # Use a clearer language indicator in the path
         german_dir = tmp_path / "German"
         german_dir.mkdir()
-        file_path = german_dir / "Stern - Jan2024.pdf"
+        file_path = german_dir / "Stern - January2024.pdf"
         file_path.write_text("test content")
 
         # Act
@@ -509,7 +510,7 @@ class TestUnifiedParserFilenameOnly:
     def test_parse_filename_string_basic(self, parser):
         """Test parsing a simple filename string."""
         # Arrange
-        filename = "Wired - Jan2024.pdf"
+        filename = "Wired - January2024.pdf"
 
         # Act
         result = parser.parse_filename_string(filename)
@@ -534,7 +535,7 @@ class TestUnifiedParserFilenameOnly:
     def test_parse_filename_string_confidence_levels(self, parser):
         """Test confidence levels based on parsing success."""
         # Arrange
-        good_filename = "Magazine - Jan2024.pdf"
+        good_filename = "Magazine - January2024.pdf"
         bad_filename = "unknown_file.pdf"
 
         # Act

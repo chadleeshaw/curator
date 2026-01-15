@@ -83,7 +83,7 @@ class FileOrganizer:
         if not title or not title.strip():
             raise ValueError("Title cannot be empty")
 
-        month = issue_date.strftime("%b")
+        month = issue_date.strftime("%B")
         year = issue_date.strftime("%Y")
 
         safe_title = sanitize_filename(title)
@@ -113,7 +113,7 @@ class FileOrganizer:
 
         return str(pdf_path), str(jpg_path)
 
-    def _build_filename(
+    def _build_filename(  # pylint: disable=too-many-positional-arguments
         self,
         safe_title: str,
         volume: Optional[int],
@@ -197,7 +197,7 @@ class FileOrganizer:
             return self.organize_dir / path_str
         return Path(path_str)
 
-    def _build_pattern_directory(
+    def _build_pattern_directory(  # pylint: disable=too-many-positional-arguments
         self,
         pattern: str,
         category_with_prefix: str,
@@ -296,7 +296,7 @@ class FileOrganizer:
 
             # Format date components
             safe_title = sanitize_filename(title)
-            month = issue_date.strftime("%b")
+            month = issue_date.strftime("%B")
             year = issue_date.strftime("%Y")
             day = issue_date.strftime("%d")
 

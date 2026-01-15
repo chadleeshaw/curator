@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-from core.constants import MAX_VALID_YEAR, MIN_VALID_YEAR, MONTH_TO_NUMBER, SUPPORTED_LANGUAGES
+from core.constants import MAX_VALID_YEAR, MIN_VALID_YEAR, MONTH_TO_NUMBER, NUMBER_TO_MONTH, SUPPORTED_LANGUAGES
 
 logger = logging.getLogger(__name__)
 
@@ -58,13 +58,20 @@ def parse_multi_month(month_str: str) -> Tuple[Optional[int], str]:
                 normalized_parts = []
                 for part in parts:
                     part = part.strip()
-                    # Capitalize first letter
-                    normalized_parts.append(part.capitalize())
+                    part_num = parse_month(part)
+                    if part_num:
+                        # Convert to full month name
+                        normalized_parts.append(NUMBER_TO_MONTH[part_num])
+                    else:
+                        # Keep original if not recognized
+                        normalized_parts.append(part.capitalize())
                 return month_num, "/".join(normalized_parts)
 
-    # Single month
+    # Single month - convert to full name
     month_num = parse_month(month_str)
-    return month_num, month_str.capitalize() if month_num else month_str
+    if month_num:
+        return month_num, NUMBER_TO_MONTH[month_num]
+    return None, month_str.capitalize()
 
 
 def clean_title(title: str, remove_descriptors: bool = False) -> str:
@@ -319,7 +326,7 @@ class MetadataExtractor:
         metadata["title"] = title_clean
         metadata["issue_date"] = datetime(year, 1, 1)
         metadata["year"] = year
-        metadata["month_name"] = "Jan"
+        metadata["month_name"] = "January"
         metadata["edition_number"] = int(issue_num)
         metadata["is_special_edition"] = "special" in filename.lower() and "edition" in filename.lower()
 
@@ -345,7 +352,7 @@ class MetadataExtractor:
         metadata["title"] = clean_title(title_part)
         metadata["issue_date"] = datetime(year, 1, 1)
         metadata["year"] = year
-        metadata["month_name"] = "Jan"
+        metadata["month_name"] = "January"
         metadata["volume"] = int(volume_num)
         metadata["edition_number"] = int(issue_num)
         metadata["is_special_edition"] = False

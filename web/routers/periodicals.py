@@ -153,7 +153,7 @@ async def list_periodicals(
 
             # Get total count of unique groups
             total_query = db_session.query(
-                func.count(
+                func.count(  # pylint: disable=not-callable
                     func.distinct(  # pylint: disable=not-callable
                         case((Magazine.tracking_id.isnot(None), Magazine.tracking_id), else_=Magazine.id)
                         .concat("_")
@@ -161,7 +161,7 @@ async def list_periodicals(
                     )
                 )
             )
-            total_titles = total_query.scalar()  # pylint: disable=not-callable
+            total_titles = total_query.scalar()
 
             # Get issue counts for each group
             # For tracked items, count all issues with same tracking_id + language
@@ -402,7 +402,7 @@ async def move_issue_to_tracking(magazine_id: int, target_tracking_id: int) -> D
 
                     # Build new path structure
                     safe_title = sanitize_filename(target_tracking.title)
-                    month = issue_date.strftime("%b")
+                    month = issue_date.strftime("%B")
                     year = issue_date.strftime("%Y")
                     filename_base = f"{safe_title} - {month}{year}"
 

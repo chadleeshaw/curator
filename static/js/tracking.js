@@ -6,7 +6,7 @@
 
 import { APIClient } from './api.js';
 import { UIUtils, SortManager } from './ui-utils.js';
-import { ELEMENT_IDS, STATUS_MESSAGES, CSS_CLASSES, TIMEOUTS, PATTERNS as _PATTERNS, BADGE_CONFIGS as _BADGE_CONFIGS } from './constants.js';
+import { ELEMENT_IDS, STATUS_MESSAGES, CSS_CLASSES, TIMEOUTS, PATTERNS as _PATTERNS, BADGE_CONFIGS as _BADGE_CONFIGS, NUMBER_TO_MONTH, MONTH_NAMES_LOWER, MONTH_ABBR_LOWER } from './constants.js';
 
 /** @type {string[]} Supported languages loaded from backend */
 let SUPPORTED_LANGUAGES = [];
@@ -983,23 +983,8 @@ export class TrackingManager {
         /\b(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/i
       );
       if (monthMatch) {
-        const monthNames = [
-          'january',
-          'february',
-          'march',
-          'april',
-          'may',
-          'june',
-          'july',
-          'august',
-          'september',
-          'october',
-          'november',
-          'december',
-        ];
-        const monthAbbr = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
         const lowerMonth = monthMatch[1].toLowerCase();
-        month = monthNames.indexOf(lowerMonth) + 1 || monthAbbr.indexOf(lowerMonth) + 1 || 0;
+        month = MONTH_NAMES_LOWER.indexOf(lowerMonth) + 1 || MONTH_ABBR_LOWER.indexOf(lowerMonth) + 1 || 0;
       }
     }
 
@@ -1070,13 +1055,11 @@ export class TrackingManager {
         }
         // Priority 2: Month and Issue
         else if (issue.month > 0 && issue.issue > 0) {
-          const monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-          displayLabel = `${monthNames[issue.month]} #${issue.issue}`;
+          displayLabel = `${NUMBER_TO_MONTH[issue.month]} #${issue.issue}`;
         } 
         // Priority 3: Month only
         else if (issue.month > 0) {
-          const monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-          displayLabel = monthNames[issue.month];
+          displayLabel = NUMBER_TO_MONTH[issue.month];
         } 
         // Priority 4: Issue number only
         else if (issue.issue > 0) {

@@ -605,8 +605,8 @@ class TestTitleChangeFileReorganization:
             old_folder = organize_dir / "_Magazines" / "Old Magazine Name" / "2024"
             old_folder.mkdir(parents=True, exist_ok=True)
 
-            old_pdf = old_folder / "Old Magazine Name - Jan2024.pdf"
-            old_cover = old_folder / "Old Magazine Name - Jan2024.jpg"
+            old_pdf = old_folder / "Old Magazine Name - January2024.pdf"
+            old_cover = old_folder / "Old Magazine Name - January2024.jpg"
 
             # Create actual files
             old_pdf.write_text("PDF content")
@@ -653,8 +653,8 @@ class TestTitleChangeFileReorganization:
 
             # Verify new structure
             new_folder = organize_dir / "_Magazines" / "New Magazine Name" / "2024"
-            new_pdf = new_folder / "New Magazine Name - Jan2024.pdf"
-            new_cover = new_folder / "New Magazine Name - Jan2024.jpg"
+            new_pdf = new_folder / "New Magazine Name - January2024.pdf"
+            new_cover = new_folder / "New Magazine Name - January2024.jpg"
 
             assert new_pdf.exists(), f"New PDF should exist at {new_pdf}"
             assert new_cover.exists(), f"New cover should exist at {new_cover}"
@@ -696,7 +696,7 @@ class TestTitleChangeFileReorganization:
             special_folder = organize_dir / "_Magazines" / "National Geographic" / "2024"
             special_folder.mkdir(parents=True, exist_ok=True)
 
-            special_pdf = special_folder / "National Geographic Swimsuit - Jan2024.pdf"
+            special_pdf = special_folder / "National Geographic Swimsuit - January2024.pdf"
             special_pdf.write_text("Special PDF content")
 
             special_magazine = Magazine(
@@ -750,9 +750,9 @@ class TestTitleChangeFileReorganization:
 
             # Create multiple issues
             issues = [
-                ("Jan2024", datetime(2024, 1, 15)),
-                ("Feb2024", datetime(2024, 2, 15)),
-                ("Mar2024", datetime(2024, 3, 15)),
+                ("January2024", datetime(2024, 1, 15)),
+                ("February2024", datetime(2024, 2, 15)),
+                ("March2024", datetime(2024, 3, 15)),
             ]
 
             old_folder = organize_dir / "_Magazines" / "Wired Magazine" / "2024"

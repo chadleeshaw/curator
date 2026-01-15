@@ -456,7 +456,7 @@ def _reorganize_magazine_files(
 
         # Build new path structure (without language folder)
         safe_title = sanitize_filename(new_title)
-        month = issue_date.strftime("%b")
+        month = issue_date.strftime("%B")
         year = issue_date.strftime("%Y")
         filename_base = f"{safe_title} - {month}{year}"
 

@@ -264,10 +264,10 @@ class TestTrackingMergeIntegration:
             wired_mag_dir.mkdir(parents=True, exist_ok=True)
 
             # Create actual test files
-            wired_jan_pdf = wired_dir / "Wired - Jan2024.pdf"
-            wired_jan_jpg = wired_dir / "Wired - Jan2024.jpg"
-            wired_mag_feb_pdf = wired_mag_dir / "Wired Magazine - Feb2024.pdf"
-            wired_mag_feb_jpg = wired_mag_dir / "Wired Magazine - Feb2024.jpg"
+            wired_jan_pdf = wired_dir / "Wired - January2024.pdf"
+            wired_jan_jpg = wired_dir / "Wired - January2024.jpg"
+            wired_mag_feb_pdf = wired_mag_dir / "Wired Magazine - February2024.pdf"
+            wired_mag_feb_jpg = wired_mag_dir / "Wired Magazine - February2024.jpg"
 
             wired_jan_pdf.write_text("fake pdf content 1")
             wired_jan_jpg.write_text("fake jpg content 1")
@@ -401,8 +401,8 @@ class TestTrackingMergeIntegration:
             assert result["files_reorganized"] == 1
 
             # Verify files were moved to new location (without language folder)
-            expected_new_pdf = tmpdir_path / "_Magazines" / "Wired" / "2024" / "Wired - Feb2024.pdf"
-            expected_new_jpg = tmpdir_path / "_Magazines" / "Wired" / "2024" / "Wired - Feb2024.jpg"
+            expected_new_pdf = tmpdir_path / "_Magazines" / "Wired" / "2024" / "Wired - February2024.pdf"
+            expected_new_jpg = tmpdir_path / "_Magazines" / "Wired" / "2024" / "Wired - February2024.jpg"
 
             assert expected_new_pdf.exists(), f"File should exist at {expected_new_pdf}"
             assert expected_new_jpg.exists(), f"Cover should exist at {expected_new_jpg}"

@@ -231,6 +231,41 @@ export const PATTERNS = {
 };
 
 // ============================================================================
+// Month Names
+// ============================================================================
+
+export const NUMBER_TO_MONTH = {
+  1: 'January',
+  2: 'February',
+  3: 'March',
+  4: 'April',
+  5: 'May',
+  6: 'June',
+  7: 'July',
+  8: 'August',
+  9: 'September',
+  10: 'October',
+  11: 'November',
+  12: 'December'
+};
+
+/**
+ * Full month names (lowercase) for lookup
+ */
+export const MONTH_NAMES_LOWER = [
+  'january', 'february', 'march', 'april', 'may', 'june',
+  'july', 'august', 'september', 'october', 'november', 'december'
+];
+
+/**
+ * Month abbreviations (lowercase) for lookup
+ */
+export const MONTH_ABBR_LOWER = [
+  'jan', 'feb', 'mar', 'apr', 'may', 'jun',
+  'jul', 'aug', 'sep', 'oct', 'nov', 'dec'
+];
+
+// ============================================================================
 // Badge Configurations
 // ============================================================================
 
