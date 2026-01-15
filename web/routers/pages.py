@@ -7,9 +7,10 @@ import logging
 from collections import defaultdict
 
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 from core.utils import is_special_edition
+from core.version import get_version_info
 from models.database import Magazine
 
 router = APIRouter(tags=["pages"])
@@ -23,6 +24,12 @@ def set_dependencies(session_factory):
     """Set dependencies from main app"""
     global _session_factory
     _session_factory = session_factory
+
+
+@router.get("/api/version")
+async def get_version():
+    """Get application version information"""
+    return JSONResponse(content=get_version_info())
 
 
 @router.get("/")
