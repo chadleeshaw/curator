@@ -12,10 +12,85 @@ os.environ['USE_GPU'] = '0'
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
 from core import constants
+from core.constants import NUMBER_TO_MONTH
 from models.database import OCRJob, Magazine
 from services.ocr_service import OCRService
 
 logger = logging.getLogger(__name__)
+
+
+def _apply_scan_metadata_to_magazine(magazine: Magazine, scan_metadata: Dict[str, Any]) -> bool:
+    """
+    Apply scan/OCR metadata to magazine fields if not already present.
+    Only fills in missing data, never overwrites existing metadata from filename parsing.
+
+    Args:
+        magazine: Magazine record to update
+        scan_metadata: Metadata extracted from text scan or OCR
+
+    Returns:
+        True if any field was updated
+    """
+    if not scan_metadata:
+        return False
+
+    updated = False
+
+    if not magazine.extra_metadata:
+        magazine.extra_metadata = {}
+
+    # Year - only if not already set
+    if scan_metadata.get("year") and not magazine.extra_metadata.get("year"):
+        magazine.extra_metadata["year"] = scan_metadata["year"]
+        updated = True
+        logger.debug(f"Applied year {scan_metadata['year']} from scan to {magazine.title}")
+
+    # Month - only if not already set
+    if scan_metadata.get("month") and not magazine.extra_metadata.get("month"):
+        month_name = NUMBER_TO_MONTH.get(scan_metadata["month"], "")
+        if month_name:
+            magazine.extra_metadata["month"] = month_name
+            updated = True
+            logger.debug(f"Applied month {month_name} from scan to {magazine.title}")
+
+    # Volume - only if not already set
+    if scan_metadata.get("volume") and not magazine.extra_metadata.get("volume"):
+        magazine.extra_metadata["volume"] = scan_metadata["volume"]
+        updated = True
+        logger.debug(f"Applied volume {scan_metadata['volume']} from scan to {magazine.title}")
+
+    # Issue number - only if not already set
+    if scan_metadata.get("issue_number") and not magazine.extra_metadata.get("issue_number"):
+        magazine.extra_metadata["issue_number"] = scan_metadata["issue_number"]
+        updated = True
+        logger.debug(f"Applied issue number {scan_metadata['issue_number']} from scan to {magazine.title}")
+
+    # Special edition - only if not already set
+    if scan_metadata.get("special_edition") and not magazine.extra_metadata.get("special_edition"):
+        magazine.extra_metadata["special_edition"] = scan_metadata["special_edition"]
+        updated = True
+        logger.debug(f"Applied special edition flag from scan to {magazine.title}")
+
+    # Update issue_date if we found year and current date seems like a placeholder
+    if updated and scan_metadata.get("year"):
+        year = scan_metadata["year"]
+        month = scan_metadata.get("month", 1)
+
+        try:
+            new_date = datetime(year, month, 1)
+            # Only update if current issue_date appears to be a placeholder/default
+            # (same as created_at or outside reasonable range)
+            current_year = magazine.issue_date.year if magazine.issue_date else 1900
+            # Check if current date is placeholder or invalid
+            if (current_year < 1900 or  # noqa: W504
+                    (magazine.created_at and  # noqa: W504
+                     abs((magazine.issue_date - magazine.created_at).total_seconds()) < 60)):
+                magazine.issue_date = new_date
+                logger.info(f"Updated issue_date to {new_date.strftime('%Y-%m')} for {magazine.title}")
+        except ValueError as e:
+            logger.warning(f"Invalid date from scan metadata (year={year}, month={month}): {e}")
+
+    return updated
 
 
 def _ocr_worker(cover_path: str, language: Optional[str] = None) -> Dict[str, Any]:
@@ -295,6 +370,11 @@ class OCRQueueService:
                     else:
                         magazine.extra_metadata["ocr_metadata"] = metadata
                         logger.info(f"Stored OCR metadata for {magazine.title} (method: {extraction_method})")
+
+                    # Apply scan/OCR metadata to main magazine fields if missing
+                    fields_updated = _apply_scan_metadata_to_magazine(magazine, metadata)
+                    if fields_updated:
+                        logger.info(f"Enhanced {magazine.title} with metadata from scan/OCR")
 
                     # Flag the JSON field as modified so SQLAlchemy persists it
                     from sqlalchemy.orm.attributes import flag_modified

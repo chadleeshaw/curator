@@ -31,6 +31,7 @@ from services.file_organizer import FileOrganizer
 from services.ocr_service import OCRService
 from services.ocr_queue import OCRQueueService
 from services.text_scan_service import TextScanService
+from services.ocr_queue import _apply_scan_metadata_to_magazine
 
 logger = logging.getLogger(__name__)
 
@@ -439,6 +440,12 @@ class FileImporter:
                         if not magazine.extra_metadata:
                             magazine.extra_metadata = {}
                         magazine.extra_metadata["text_scan"] = scan_result
+
+                        # Apply text scan metadata to main magazine fields if missing
+                        if scan_result.get("text_found"):
+                            fields_updated = _apply_scan_metadata_to_magazine(magazine, scan_result)
+                            if fields_updated:
+                                logger.info(f"Enhanced {magazine.title} with metadata from text scan")
 
                         from sqlalchemy.orm.attributes import flag_modified
                         flag_modified(magazine, "extra_metadata")
