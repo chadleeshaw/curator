@@ -448,22 +448,66 @@ async def search_periodical_providers(
             scored_results.sort(key=lambda x: x[1], reverse=True)
             result_dicts = [r[0] for r in scored_results[:50]]  # Keep top 50 by fuzzy score
 
-            # Add library issues that aren't in provider results
-            # Also filter library items by language/country
-            provider_titles = {r["title"].lower() for r in result_dicts}
+            # Deduplicate results by title and date similarity
+            # Group similar titles together and keep only the best result per group
+            deduplicated_results = []
+            seen_groups = set()
+
+            for result in result_dicts:
+                # Create a deduplication key based on normalized title and date
+                title_lower = result["title"].lower()
+                pub_date = result.get("publication_date", "")
+
+                # Normalize the title for grouping
+                # Remove common noise words and normalize spacing
+                normalized_title = re.sub(r'\s+', ' ', title_lower.strip())
+
+                # Create a key that includes both title and date
+                dedup_key = (normalized_title, pub_date)
+
+                # Check if this is a duplicate of something we've already seen
+                is_duplicate = False
+                for seen_key in seen_groups:
+                    seen_title, seen_date = seen_key
+                    # If titles match closely and dates match, it's a duplicate
+                    title_match, score = _title_matcher.match(normalized_title, seen_title)
+                    if title_match and seen_date == pub_date:
+                        is_duplicate = True
+                        break
+
+                if not is_duplicate:
+                    deduplicated_results.append(result)
+                    seen_groups.add(dedup_key)
+
+            result_dicts = deduplicated_results
+
+            # Add library issues that aren't already in provider results
+            # Use fuzzy matching to detect duplicates, not just exact title matching
             library_items_to_add = []
             for mag in matching_library_issues:
-                if mag.title.lower() not in provider_titles:
-                    # For library-only items, append year to title so frontend parser can extract it
-                    year = mag.issue_date.year if mag.issue_date else None
-                    title_with_year = f"{mag.title} {year}" if year else mag.title
+                # For library-only items, append year to title so frontend parser can extract it
+                year = mag.issue_date.year if mag.issue_date else None
+                title_with_year = f"{mag.title} {year}" if year else mag.title
+                lib_pub_date = mag.issue_date.isoformat() if mag.issue_date else None
 
+                # Check if this library item is a duplicate of any provider result
+                # using fuzzy matching and date comparison
+                is_duplicate = False
+                for provider_result in result_dicts:
+                    provider_title = provider_result["title"].lower()
+                    provider_date = provider_result.get("publication_date", "")
+                    title_match, score = _title_matcher.match(mag.title.lower(), provider_title)
+                    if title_match and lib_pub_date == provider_date:
+                        is_duplicate = True
+                        break
+
+                if not is_duplicate:
                     library_items_to_add.append(
                         {
                             "title": title_with_year,
                             "url": "",  # No URL for library-only items
                             "provider": "📚 Library",
-                            "publication_date": (mag.issue_date.isoformat() if mag.issue_date else None),
+                            "publication_date": lib_pub_date,
                             "metadata": mag.extra_metadata or {},
                             "already_downloaded": True,
                             "from_provider": False,
@@ -504,114 +548,6 @@ async def search_periodical_providers(
     except Exception as e:
         logger.error(f"Periodical search error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Search error: {str(e)}")
-
-
-# @router.post(
-#     "/periodicals/search-metadata",
-#     summary="Search for periodical metadata",
-#     description="Query metadata providers (CrossRef, Wikipedia) for periodical information. Does not search for downloadable issues.",
-#     responses={
-#         200: {
-#             "description": "Metadata retrieved successfully",
-#             "content": {
-#                 "application/json": {
-#                     "example": {
-#                         "query": "Wired",
-#                         "results": [
-#                             {
-#                                 "title": "Wired Magazine",
-#                                 "publisher": "Condé Nast",
-#                                 "issn": "1059-1028",
-#                             }
-#                         ],
-#                         "total": 1,
-#                     }
-#                 }
-#             },
-#         },
-#         400: {"description": "Invalid query parameter", "model": APIError},
-#         500: {"description": "Metadata search failed", "model": APIError},
-#     },
-# )
-# async def search_periodical_metadata(query: str = Query(...)) -> Dict[str, Any]:
-#     """
-#     Search for periodical metadata using only METADATA providers (CrossRef, Wikipedia).
-#     This does NOT include search providers like Newsnab or RSS.
-
-#     Args:
-#         query: Periodical title to search for (as query parameter)
-
-#     Returns:
-#         Periodical metadata from metadata sources
-#     """
-#     try:
-#         if not query or len(query.strip()) < 2:
-#             raise HTTPException(
-#                 status_code=400, detail="Query must be at least 2 characters"
-#             )
-
-#         logger.debug(f"Searching for metadata: {query}")
-
-#         if not _metadata_providers:
-#             logger.warning("No metadata providers configured")
-#             return {
-#                 "found": False,
-#                 "message": "No metadata providers available",
-#                 "results": [],
-#             }
-
-#         all_results = []
-#         for provider in _metadata_providers:
-#             try:
-#                 logger.debug(
-#                     f"Searching metadata provider: {provider.name} (type: {provider.type})"
-#                 )
-#                 provider_results = provider.search(query.strip())
-#                 logger.debug(
-#                     f"Provider {provider.name} returned {len(provider_results)} results"
-#                 )
-#                 all_results.extend(provider_results)
-#             except Exception as e:
-#                 logger.warning(
-#                     f"Error searching metadata provider {provider.__class__.__name__}: {e}",
-#                     exc_info=True,
-#                 )
-
-#         if all_results:
-#             logger.debug(f"Found {len(all_results)} metadata results for: {query}")
-#             # Convert SearchResult objects to dictionaries
-#             result_dicts = [
-#                 {
-#                     "title": result.title,
-#                     "url": result.url,
-#                     "provider": result.provider,
-#                     "publication_date": (
-#                         result.publication_date.isoformat()
-#                         if result.publication_date
-#                         else None
-#                     ),
-#                     "raw_metadata": result.raw_metadata or {},
-#                 }
-#                 for result in all_results[:50]  # Limit to 50 results
-#             ]
-#             return {
-#                 "found": True,
-#                 "results": result_dicts,
-#                 "message": f"Found {len(all_results)} metadata results for '{query}'",
-#             }
-#         else:
-#             logger.debug(f"No metadata results found for query: {query}")
-#             return {
-#                 "found": False,
-#                 "message": f"No metadata found for '{query}'",
-#                 "results": [],
-#             }
-
-#     except HTTPException:
-#         raise
-#     except Exception as e:
-#         logger.error(f"Metadata search error: {e}", exc_info=True)
-#         raise HTTPException(status_code=500, detail=f"Search error: {str(e)}")
 
 
 @router.get(

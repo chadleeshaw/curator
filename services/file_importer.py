@@ -259,7 +259,7 @@ class FileImporter:
             # Regional editions should have separate tracking from the base edition
             # Only do this if the country name/code was explicitly in the original filename
             # to avoid false positives from spurious country detection
-            if parsed.country and parsed.country not in ['US', 'XU', 'XW', None]:
+            if parsed.country and parsed.country not in ['XU', 'XW', None]:
                 # Import country name mapping
                 country_name = ISO_COUNTRIES.get(parsed.country, parsed.country)
 
