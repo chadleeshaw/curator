@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 # Scoring weights for different matching criteria
 WEIGHT_TITLE_EXACT = 100
 WEIGHT_TITLE_FUZZY_HIGH = 80
+WEIGHT_TITLE_ABBREVIATION = 70
 WEIGHT_TITLE_FUZZY_MEDIUM = 60
 WEIGHT_LANGUAGE_MATCH = 20
 WEIGHT_COUNTRY_MATCH = 15
@@ -143,6 +144,38 @@ class TrackingMatcher:
         # If no match, return uppercase version
         return country_clean.upper()
 
+    def generate_abbreviation(self, title: str) -> str:
+        """
+        Generate an abbreviation from a title by taking first letters of significant words.
+
+        Args:
+            title: Title to generate abbreviation from
+
+        Returns:
+            Lowercase abbreviation string
+
+        Examples:
+            >>> generate_abbreviation("National Geographic")
+            "ng"
+            >>> generate_abbreviation("PC Gamer")
+            "pg"
+        """
+        if not title:
+            return ""
+
+        # Normalize and split into words
+        normalized = self.normalize_title(title)
+        words = normalized.lower().split()
+
+        # Skip common filler words
+        skip_words = {'the', 'a', 'an', 'and', 'or', 'of', 'magazine', 'mag'}
+        significant_words = [w for w in words if w not in skip_words and w.strip()]
+
+        # Take first letter of each significant word
+        abbreviation = ''.join(word[0] for word in significant_words if word)
+
+        return abbreviation
+
     def calculate_title_score(
         self, parsed_title: str, tracking_title: str
     ) -> Tuple[int, str]:
@@ -163,6 +196,14 @@ class TrackingMatcher:
         # Exact match
         if norm_parsed == norm_tracking:
             return (WEIGHT_TITLE_EXACT, "exact")
+
+        # Check for abbreviation match if parsed title is very short (2-4 chars)
+        # This works well for multi-word titles: "ng" -> "National Geographic"
+        if 2 <= len(norm_parsed) <= 4 and norm_parsed.isalpha():
+            tracking_abbreviation = self.generate_abbreviation(tracking_title)
+            if tracking_abbreviation and norm_parsed == tracking_abbreviation:
+                logger.info(f"Abbreviation match: '{parsed_title}' matches '{tracking_title}' (abbreviation: {tracking_abbreviation})")
+                return (WEIGHT_TITLE_ABBREVIATION, f"abbreviation ({norm_parsed} -> {tracking_title})")
 
         # Fuzzy matching
         fuzzy_score = fuzz.ratio(norm_parsed, norm_tracking)

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 from datetime import datetime
 
-from core.constants import DEFAULT_LANGUAGE
+from core.constants import DEFAULT_LANGUAGE, COUNTRY_TO_LANGUAGE
 from core.parsers.models import (
     ParsedMetadata,
     ParsedFilename,
@@ -66,6 +66,11 @@ class UnifiedParser:
         full_path_str = str(file_path)
         language = filepath_data.language_from_path or detect_language(full_path_str)
         country = detect_country(full_path_str)
+
+        # If country is detected but language is still default, infer language from country
+        if country and language == DEFAULT_LANGUAGE and country in COUNTRY_TO_LANGUAGE:
+            inferred_language = COUNTRY_TO_LANGUAGE[country]
+            language = inferred_language
 
         # Determine confidence
         confidence = "high" if filename_data.confidence == "high" else "medium"
@@ -159,6 +164,11 @@ class UnifiedParser:
         language = detect_language(title)
         country = detect_country(title)
 
+        # If country is detected but language is still default, infer language from country
+        if country and language == DEFAULT_LANGUAGE and country in COUNTRY_TO_LANGUAGE:
+            inferred_language = COUNTRY_TO_LANGUAGE[country]
+            language = inferred_language
+
         return ParsedSearchResult(
             title=cleaned_title,
             original_title=title,
@@ -202,6 +212,11 @@ class UnifiedParser:
         full_path_str = str(file_path)
         language = detect_language(full_path_str)
         country = detect_country(full_path_str)
+
+        # If country is detected but language is still default, infer language from country
+        if country and language == DEFAULT_LANGUAGE and country in COUNTRY_TO_LANGUAGE:
+            inferred_language = COUNTRY_TO_LANGUAGE[country]
+            language = inferred_language
 
         # Try to extract date from filename
         filename_data = self._parse_filename_only(file_path)
