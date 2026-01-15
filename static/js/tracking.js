@@ -1,29 +1,44 @@
 /**
  * Tracking Module
  * Handles periodical tracking, metadata search, and issue downloads
- *
- * NOTE: This is a working skeleton extracted from script.js lines 620-1650
- * Contains core functionality - may need additional methods added
+ * @module tracking
  */
 
 import { APIClient } from './api.js';
 import { UIUtils, SortManager } from './ui-utils.js';
 import { ELEMENT_IDS, STATUS_MESSAGES, CSS_CLASSES, TIMEOUTS, PATTERNS as _PATTERNS, BADGE_CONFIGS as _BADGE_CONFIGS } from './constants.js';
 
-// Constants loaded from backend API
+/** @type {string[]} Supported languages loaded from backend */
 let SUPPORTED_LANGUAGES = [];
+/** @type {Object.<string, string>} ISO country codes to names */
 let ISO_COUNTRIES = {};
+/** @type {Object.<string, string>} Language to default country mapping */
 let LANGUAGE_TO_COUNTRY = {};
+/** @type {Object.<string, string[]>} Country code to title indicators */
 let COUNTRY_INDICATORS = {};
+/** @type {Object.<string, string[]>} Language to title keywords */
 let LANGUAGE_KEYWORDS = {};
 
+/**
+ * Tracking Manager class for managing periodical tracking operations
+ * @class
+ */
 export class TrackingManager {
+  /**
+   * Create a new TrackingManager instance
+   */
   constructor() {
+    /** @type {SortManager} Manager for tracking list sorting */
     this.sortManager = new SortManager('title', 'asc', () => this.loadTrackedPeriodicals());
+    /** @type {Object|null} Current periodical metadata from search */
     this.currentPeriodicalMetadata = null;
+    /** @type {Object|null} Current editions data */
     this.currentEditionsData = null;
+    /** @type {Object.<string, boolean>} Selected editions map */
     this.selectedEditions = {};
+    /** @type {boolean} Whether merge mode is active */
     this.mergeMode = false;
+    /** @type {Set<number>} IDs selected for merge */
     this.selectedForMerge = new Set();
   }
 
@@ -37,20 +52,23 @@ export class TrackingManager {
 
   /**
    * Load constants from backend API
+   *
+   * @returns {Promise<void>}
+   * @throws {Error} When API request fails
    */
   async loadConstants() {
     try {
       const response = await APIClient.get('/api/constants');
       const data = await response.json();
       if (data.success) {
-        SUPPORTED_LANGUAGES = data.languages;
-        ISO_COUNTRIES = data.countries;
-        LANGUAGE_TO_COUNTRY = data.language_to_country || {};
-        COUNTRY_INDICATORS = data.country_indicators || {};
-        LANGUAGE_KEYWORDS = data.language_keywords || {};
+        SUPPORTED_LANGUAGES = data.languages ?? [];
+        ISO_COUNTRIES = data.countries ?? {};
+        LANGUAGE_TO_COUNTRY = data.language_to_country ?? {};
+        COUNTRY_INDICATORS = data.country_indicators ?? {};
+        LANGUAGE_KEYWORDS = data.language_keywords ?? {};
       }
     } catch (error) {
-      console.error('Failed to load constants:', error);
+      console.error('[Tracking] Failed to load constants:', error);
       UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Failed to load form options', 'error');
     }
   }
@@ -126,13 +144,16 @@ export class TrackingManager {
     }
 
   /**
-   * Search for periodical metadata
+   * Search for periodical metadata from providers
+   *
+   * @returns {Promise<void>}
+   * @throws {Error} When API request fails
    */
   async searchPeriodicalMetadata() {
-    const query = document.getElementById(ELEMENT_IDS.TRACKING_SEARCH_QUERY).value.trim();
-    const filterLanguage = document.getElementById(ELEMENT_IDS.SEARCH_FILTER_LANGUAGE)?.value || '';
-    const filterCountry = document.getElementById(ELEMENT_IDS.SEARCH_FILTER_COUNTRY)?.value || '';
-    const filterCategory = document.getElementById(ELEMENT_IDS.NEW_TRACKING_CATEGORY)?.value || '';
+    const query = document.getElementById(ELEMENT_IDS.TRACKING_SEARCH_QUERY)?.value.trim() ?? '';
+    const filterLanguage = document.getElementById(ELEMENT_IDS.SEARCH_FILTER_LANGUAGE)?.value ?? '';
+    const filterCountry = document.getElementById(ELEMENT_IDS.SEARCH_FILTER_COUNTRY)?.value ?? '';
+    const filterCategory = document.getElementById(ELEMENT_IDS.NEW_TRACKING_CATEGORY)?.value ?? '';
 
     if (!query) {
       UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, STATUS_MESSAGES.ENTER_TITLE, 'error');
@@ -432,7 +453,10 @@ export class TrackingManager {
   }
 
   /**
-   * Load tracked periodicals
+   * Load tracked periodicals from the API
+   *
+   * @returns {Promise<void>}
+   * @throws {Error} When API request fails
    */
   async loadTrackedPeriodicals() {
     try {
@@ -442,7 +466,7 @@ export class TrackingManager {
       );
       const data = await response.json();
 
-      const tracked = data.tracked_magazines || data.tracked || [];
+      const tracked = data.tracked_magazines ?? data.tracked ?? [];
       
       // Update statistics
       this.updateTrackingStatistics(tracked);
@@ -515,56 +539,77 @@ export class TrackingManager {
   }
 
   /**
-   * Create a tracked periodical card
+   * Create a tracked periodical card element
+   *
+   * @param {Object} tracked - The tracking data object
+   * @param {number} tracked.id - Tracking ID
+   * @param {string} tracked.title - Periodical title
+   * @param {boolean} [tracked.track_all_editions] - Whether tracking all editions
+   * @param {boolean} [tracked.track_new_only] - Whether tracking new issues only
+   * @param {number} [tracked.total_known] - Total known issues
+   * @param {number} [tracked.selected_count] - Selected issue count
+   * @param {number} [tracked.library_count] - Issues in library
+   * @param {number} [tracked.failed_count] - Failed download count
+   * @param {string} [tracked.country] - Country code
+   * @param {string} [tracked.category] - Category
+   * @param {string} [tracked.language] - Language
+   * @returns {HTMLElement} The created card element
    */
   createTrackedCard(tracked) {
+    const {
+      id,
+      title,
+      track_all_editions: trackAll,
+      track_new_only: trackNew,
+      total_known: totalKnown = 0,
+      selected_count: selectedCount = 0,
+      library_count: libraryCount = 0,
+      failed_count: failedCount = 0,
+      country = '',
+      category,
+      language,
+    } = tracked;
+
     const card = document.createElement('div');
     card.className = 'tracked-card';
-    card.dataset.trackingId = tracked.id;
+    card.dataset.trackingId = id;
 
     // Determine tracking badge
     let trackingBadge = '';
-    if (tracked.track_all_editions) {
-      trackingBadge = '<span class="tracking-badge badge-download-all">⬇️ All Issues</span>';
-    } else if (tracked.track_new_only) {
-      trackingBadge = '<span class="tracking-badge badge-download-new">⬇️ New Issues</span>';
+    if (trackAll) {
+      trackingBadge = '<span class="tracking-badge badge-download-all">\u2B07\uFE0F All Issues</span>';
+    } else if (trackNew) {
+      trackingBadge = '<span class="tracking-badge badge-download-new">\u2B07\uFE0F New Issues</span>';
     } else {
-      trackingBadge = '<span class="tracking-badge badge-watch">👁️ Watch Only</span>';
+      trackingBadge = '<span class="tracking-badge badge-watch">\uD83D\uDC41\uFE0F Watch Only</span>';
     }
 
-
-    // Build issue stats
-    const totalKnown = tracked.total_known || 0;
-    const selectedCount = tracked.selected_count || 0;
-    const libraryCount = tracked.library_count || 0;
-    const failedCount = tracked.failed_count || 0;
-    const country = tracked.country || '';
-    const countryStats = country ? `<span class="country">🌍 ${country}</span>` : '';
-    const issueStats = totalKnown > 0 
-      ? `<span class="issue-count">${totalKnown} issues found</span>` 
+    const countryStats = country ? `<span class="country">\uD83C\uDF0D ${country}</span>` : '';
+    const issueStats = totalKnown > 0
+      ? `<span class="issue-count">${totalKnown} issues found</span>`
       : '';
-    const libraryStats = `<span class="library-count">📚 ${libraryCount} in library</span>`;
+    const libraryStats = `<span class="library-count">\uD83D\uDCDA ${libraryCount} in library</span>`;
     const selectedStats = selectedCount > 0
-      ? `<span class="selected-count">• ${selectedCount} selected</span>`
+      ? `<span class="selected-count">\u2022 ${selectedCount} selected</span>`
       : '';
     const failedStats = failedCount > 0
-      ? `<span class="failed-count" style="color: var(--status-pending); cursor: pointer;" data-tracking-id="${tracked.id}" title="Click to view failed downloads">⚠️ ${failedCount} failed</span>`
+      ? `<span class="failed-count" style="color: var(--status-pending); cursor: pointer;" data-tracking-id="${id}" title="Click to view failed downloads">\u26A0\uFE0F ${failedCount} failed</span>`
       : '';
 
-    const checkboxHtml = this.mergeMode 
-      ? `<input type="checkbox" class="merge-checkbox" data-tracking-id="${tracked.id}" ${this.selectedForMerge.has(tracked.id) ? 'checked' : ''}>` 
+    const checkboxHtml = this.mergeMode
+      ? `<input type="checkbox" class="merge-checkbox" data-tracking-id="${id}" ${this.selectedForMerge.has(id) ? 'checked' : ''}>`
       : '';
 
     card.innerHTML = `
       ${checkboxHtml}
       <div class="tracked-card-main">
         <div class="tracked-card-header">
-          <h5>${tracked.title}</h5>
+          <h5>${title}</h5>
           ${trackingBadge}
         </div>
         <div class="tracked-card-meta">
-          <span class="meta-item">📁 ${tracked.category || 'Auto-detect'}</span>
-          <span class="meta-item">🌐 ${tracked.language || 'English'}</span>
+          <span class="meta-item">\uD83D\uDCC1 ${category ?? 'Auto-detect'}</span>
+          <span class="meta-item">\uD83C\uDF10 ${language ?? 'English'}</span>
           ${countryStats}
           ${issueStats}
           ${libraryStats}
@@ -573,43 +618,31 @@ export class TrackingManager {
         </div>
       </div>
       <div class="tracked-card-buttons">
-        <button onclick="editTracking(${tracked.id})" class="btn-icon" title="Edit">✏️</button>
-        <button class="btn-icon search-issues-btn" data-tracking-id="${tracked.id}" title="Search Issues">🔍</button>
-        <button class="btn-icon btn-danger delete-tracking-btn" data-tracking-id="${tracked.id}" title="Delete">🗑️</button>
+        <button onclick="editTracking(${id})" class="btn-icon" title="Edit">\u270F\uFE0F</button>
+        <button class="btn-icon search-issues-btn" data-tracking-id="${id}" title="Search Issues">\uD83D\uDD0D</button>
+        <button class="btn-icon btn-danger delete-tracking-btn" data-tracking-id="${id}" title="Delete">\uD83D\uDDD1\uFE0F</button>
       </div>
     `;
 
     // Add event listeners for search and delete buttons
     const searchBtn = card.querySelector('.search-issues-btn');
-    if (searchBtn) {
-      searchBtn.addEventListener('click', () => this.searchForIssues(
-        tracked.id,
-        tracked.title,
-        tracked.language,
-        tracked.country,
-        tracked.category
-      ));
-    }
+    searchBtn?.addEventListener('click', () => this.searchForIssues(id, title, language, country, category));
 
     const deleteBtn = card.querySelector('.delete-tracking-btn');
-    if (deleteBtn) {
-      deleteBtn.addEventListener('click', () => this.deleteTracking(tracked.id, tracked.title));
-    }
+    deleteBtn?.addEventListener('click', () => this.deleteTracking(id, title));
 
     // Add event listener for failed count to open failed downloads modal
     const failedCountSpan = card.querySelector('.failed-count');
-    if (failedCountSpan) {
-      failedCountSpan.addEventListener('click', () => this.showFailedDownloadsForTracking(tracked.id, tracked.title));
-    }
+    failedCountSpan?.addEventListener('click', () => this.showFailedDownloadsForTracking(id, title));
 
     // Add event listener for checkbox if in merge mode
     if (this.mergeMode) {
       const checkbox = card.querySelector('.merge-checkbox');
-      checkbox.addEventListener('change', (e) => {
+      checkbox?.addEventListener('change', (e) => {
         if (e.target.checked) {
-          this.selectedForMerge.add(tracked.id);
+          this.selectedForMerge.add(id);
         } else {
-          this.selectedForMerge.delete(tracked.id);
+          this.selectedForMerge.delete(id);
         }
         this.updateMergeButtonState();
       });

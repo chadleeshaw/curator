@@ -86,9 +86,14 @@
                         <small class="form-hint">📌 Controlled by tracking record</small>
                     </div>
                     <div class="form-field">
-                        <label class="form-label">Issue Date</label>
-                        <input type="date" id="edit-issue-date" class="form-input">
+                        <label class="form-label">Year</label>
+                        <input type="number" id="edit-year" placeholder="e.g., 2024" min="1900" max="2100" class="form-input">
                         <small class="form-hint">✏️ Issue-specific</small>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Month/Period</label>
+                        <input type="text" id="edit-month" placeholder="e.g., January, June/July, Summer" class="form-input">
+                        <small class="form-hint">✏️ Issue-specific (supports multi-month like "June/July")</small>
                     </div>
                     <div id="edit-country-container" class="form-field">
                         <label class="form-label">Country</label>

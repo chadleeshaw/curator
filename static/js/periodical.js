@@ -274,7 +274,8 @@ function displayMetadata(data) {
     addMetadataItem('Title', data.title);
     addMetadataItem('Language', data.language || '(not set)');
     if (data.metadata && data.metadata.country) addMetadataItem('Country', data.metadata.country);
-    addMetadataItem('Issue Date', data.issue_date ? new Date(data.issue_date).toLocaleDateString() : '(not set)');
+    if (data.metadata && data.metadata.year) addMetadataItem('Year', data.metadata.year);
+    if (data.metadata && data.metadata.month) addMetadataItem('Month/Period', data.metadata.month);
     if (data.metadata && data.metadata.issue_number) addMetadataItem('Issue Number', data.metadata.issue_number);
     if (data.metadata && data.metadata.volume) addMetadataItem('Volume', data.metadata.volume);
     if (data.metadata && data.metadata.special_edition) addMetadataItem('Special Edition', data.metadata.special_edition);
@@ -393,10 +394,11 @@ function enableMetadataEdit() {
         languageContainer.style.opacity = '1';
     }
     
-    if (currentMagazineData.issue_date) {
-        const date = new Date(currentMagazineData.issue_date);
-        document.getElementById('edit-issue-date').value = date.toISOString().split('T')[0];
-    }
+    // Year field
+    document.getElementById('edit-year').value = (currentMagazineData.metadata && currentMagazineData.metadata.year) || '';
+    
+    // Month field
+    document.getElementById('edit-month').value = (currentMagazineData.metadata && currentMagazineData.metadata.month) || '';
     
     // Country field
     const countryField = document.getElementById('edit-country');
@@ -449,7 +451,8 @@ async function saveMetadataEdit() {
     const hasTracking = currentMagazineData.tracking_id !== null && currentMagazineData.tracking_id !== undefined;
 
     const updates = {
-        issue_date: document.getElementById('edit-issue-date').value,
+        year: document.getElementById('edit-year').value || null,
+        month: document.getElementById('edit-month').value || null,
         issue_number: document.getElementById('edit-issue-number').value || null,
         volume: document.getElementById('edit-volume').value || null,
     };

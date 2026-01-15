@@ -1,13 +1,25 @@
 /**
  * UI Utilities Module
  * Handles tab switching, modal management, theme switching, and UI helpers
+ * @module ui-utils
  */
 
 import { ELEMENT_IDS as _ELEMENT_IDS, CSS_CLASSES, TIMEOUTS, STORAGE_KEYS as _STORAGE_KEYS, DEFAULTS as _DEFAULTS } from './constants.js';
 
+/**
+ * UI Utilities class providing static methods for common UI operations
+ * @class
+ */
 export class UIUtils {
   /**
    * Show a specific tab and hide others
+   *
+   * @param {string} tabName - The name of the tab to show (e.g., 'library', 'tracking')
+   * @param {Event} [event=null] - The click event that triggered the tab switch
+   * @returns {string} The name of the tab that was shown
+   *
+   * @example
+   * UIUtils.showTab('library', event);
    */
   static showTab(tabName, event) {
     if (event) {
@@ -27,19 +39,17 @@ export class UIUtils {
 
     // Show the selected tab
     const selectedTab = document.getElementById(`${tabName}-tab`);
-    if (selectedTab) {
-      selectedTab.classList.add('active');
-    }
+    selectedTab?.classList.add('active');
 
     // Mark the clicked button as active
-    if (event && event.target) {
+    if (event?.target) {
       event.target.classList.add('active');
     } else {
       // Find button by looking at onclick attribute
       const buttons = document.querySelectorAll('.nav-btn');
       buttons.forEach((btn) => {
         const onclick = btn.getAttribute('onclick');
-        if (onclick && onclick.includes(`showTab('${tabName}'`)) {
+        if (onclick?.includes(`showTab('${tabName}'`)) {
           btn.classList.add('active');
         }
       });
@@ -49,40 +59,59 @@ export class UIUtils {
   }
 
   /**
-   * Show a modal by ID
+   * Show a modal by its element ID
+   *
+   * @param {string} modalId - The ID of the modal element to show
+   * @returns {void}
+   *
+   * @example
+   * UIUtils.showModal('edit-tracking-modal');
    */
   static showModal(modalId) {
     const modal = document.getElementById(modalId);
-    if (modal) {
-      modal.classList.remove(CSS_CLASSES.HIDDEN);
-    }
+    modal?.classList.remove(CSS_CLASSES.HIDDEN);
   }
 
   /**
-   * Close a modal by ID
+   * Close/hide a modal by its element ID
+   *
+   * @param {string} modalId - The ID of the modal element to close
+   * @returns {void}
+   *
+   * @example
+   * UIUtils.closeModal('edit-tracking-modal');
    */
   static closeModal(modalId) {
     const modal = document.getElementById(modalId);
-    if (modal) {
-      modal.classList.add(CSS_CLASSES.HIDDEN);
-    }
+    modal?.classList.add(CSS_CLASSES.HIDDEN);
   }
 
   /**
-   * Toggle a modal by ID
+   * Toggle a modal's visibility
+   *
+   * @param {string} modalId - The ID of the modal element to toggle
+   * @returns {void}
+   *
+   * @example
+   * UIUtils.toggleModal('settings-modal');
    */
   static toggleModal(modalId) {
     const modal = document.getElementById(modalId);
-    if (modal) {
-      modal.classList.toggle(CSS_CLASSES.HIDDEN);
-    }
+    modal?.classList.toggle(CSS_CLASSES.HIDDEN);
   }
 
   /**
    * Initialize theme from localStorage
+   * Applies saved theme preference or defaults to dark mode
+   *
+   * @returns {void}
+   *
+   * @example
+   * // Call on page load
+   * UIUtils.initTheme();
    */
   static initTheme() {
-    const savedTheme = localStorage.getItem('curator-theme') || 'dark';
+    const savedTheme = localStorage.getItem('curator-theme') ?? 'dark';
     if (savedTheme === 'dark') {
       document.body.classList.add('dark-mode');
     }
@@ -94,6 +123,12 @@ export class UIUtils {
 
   /**
    * Set theme and save to localStorage
+   *
+   * @param {'dark'|'light'} theme - The theme to apply
+   * @returns {void}
+   *
+   * @example
+   * UIUtils.setTheme('dark');
    */
   static setTheme(theme) {
     localStorage.setItem('curator-theme', theme);
@@ -105,7 +140,16 @@ export class UIUtils {
   }
 
   /**
-   * Display a status message
+   * Display a status message to the user
+   *
+   * @param {string} elementId - The ID of the status element to update
+   * @param {string} message - The message to display
+   * @param {'success'|'error'|'warning'|'info'} [type='success'] - The type of status message
+   * @returns {void}
+   *
+   * @example
+   * UIUtils.showStatus('tracking-status', 'Saved successfully', 'success');
+   * UIUtils.showStatus('tracking-status', 'Please enter a title', 'error');
    */
   static showStatus(elementId, message, type = 'success') {
     const statusDiv = document.getElementById(elementId);
@@ -116,19 +160,16 @@ export class UIUtils {
     // Apply base status message class and type-specific class
     statusDiv.className = CSS_CLASSES.STATUS_MESSAGE;
 
-    if (type === 'success') {
-      statusDiv.classList.add(CSS_CLASSES.STATUS_SUCCESS);
-      statusDiv.textContent = `✓ ${message}`;
-    } else if (type === 'error') {
-      statusDiv.classList.add(CSS_CLASSES.STATUS_ERROR);
-      statusDiv.textContent = `✗ ${message}`;
-    } else if (type === 'warning') {
-      statusDiv.classList.add(CSS_CLASSES.STATUS_WARNING);
-      statusDiv.textContent = message;
-    } else if (type === 'info') {
-      statusDiv.classList.add(CSS_CLASSES.STATUS_INFO);
-      statusDiv.textContent = `ℹ ${message}`;
-    }
+    const statusConfig = {
+      success: { className: CSS_CLASSES.STATUS_SUCCESS, icon: '\u2713' },
+      error: { className: CSS_CLASSES.STATUS_ERROR, icon: '\u2717' },
+      warning: { className: CSS_CLASSES.STATUS_WARNING, icon: '' },
+      info: { className: CSS_CLASSES.STATUS_INFO, icon: '\u2139' },
+    };
+
+    const config = statusConfig[type] ?? statusConfig.info;
+    statusDiv.classList.add(config.className);
+    statusDiv.textContent = config.icon ? `${config.icon} ${message}` : message;
 
     // Scroll to the status message so it's visible
     statusDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -136,17 +177,30 @@ export class UIUtils {
 
   /**
    * Hide a status message
+   *
+   * @param {string} elementId - The ID of the status element to hide
+   * @returns {void}
+   *
+   * @example
+   * UIUtils.hideStatus('tracking-status');
    */
   static hideStatus(elementId) {
     const statusDiv = document.getElementById(elementId);
-    if (statusDiv) {
-      statusDiv.classList.add(CSS_CLASSES.HIDDEN);
-    }
+    statusDiv?.classList.add(CSS_CLASSES.HIDDEN);
   }
 
   /**
    * Show a confirmation modal with Yes/No buttons
-   * Returns a Promise that resolves to true/false
+   *
+   * @param {string} title - The title of the confirmation dialog
+   * @param {string} message - The message/question to display (supports HTML)
+   * @returns {Promise<boolean>} Resolves to true if user clicked Yes, false otherwise
+   *
+   * @example
+   * const confirmed = await UIUtils.confirm('Delete Item', 'Are you sure?');
+   * if (confirmed) {
+   *   // User clicked Yes
+   * }
    */
   static confirm(title, message) {
     return new Promise((resolve) => {
@@ -170,7 +224,7 @@ export class UIUtils {
       const noBtn = document.getElementById('confirm-no');
 
       const cleanup = () => {
-        if (modal) modal.remove();
+        modal?.remove();
       };
 
       yesBtn.onclick = () => {
@@ -195,7 +249,22 @@ export class UIUtils {
 
   /**
    * Show a progress modal for batch operations
-   * Returns an object with update and close methods
+   *
+   * @param {string} title - The title of the progress modal
+   * @param {number} total - The total number of items to process
+   * @returns {Object} Controller object with update, complete, error, and close methods
+   * @returns {Function} return.update - Update progress (count, status, message)
+   * @returns {Function} return.complete - Mark as complete (finalMessage, success)
+   * @returns {Function} return.error - Show error state (errorMessage)
+   * @returns {Function} return.close - Close the modal
+   *
+   * @example
+   * const progress = UIUtils.showProgressModal('Processing', 10);
+   * for (let i = 0; i < 10; i++) {
+   *   progress.update(i + 1, 'Processing...', `Item ${i + 1}`);
+   *   await processItem(i);
+   * }
+   * progress.complete('All items processed!', true);
    */
   static showProgressModal(title, total) {
     const modalHTML = `
@@ -232,6 +301,12 @@ export class UIUtils {
     let currentCount = 0;
 
     return {
+      /**
+       * Update progress display
+       * @param {number} count - Current progress count
+       * @param {string|null} [status=null] - Status text to display
+       * @param {string|null} [message=null] - Additional message to display
+       */
       update: (count, status = null, message = null) => {
         currentCount = count;
         const percentage = (count / total) * 100;
@@ -241,6 +316,11 @@ export class UIUtils {
         if (message) progressMessage.textContent = message;
       },
 
+      /**
+       * Mark progress as complete
+       * @param {string} finalMessage - Final message to display
+       * @param {boolean} [success=true] - Whether the operation was successful
+       */
       complete: (finalMessage, success = true) => {
         progressBar.style.width = '100%';
         progressBar.className = success
@@ -252,17 +332,21 @@ export class UIUtils {
         closeContainer.classList.remove(CSS_CLASSES.HIDDEN);
 
         closeBtn.onclick = () => {
-          if (modal) modal.remove();
+          modal?.remove();
         };
 
-        // Auto-close after 3 seconds if successful
+        // Auto-close after timeout if successful
         if (success) {
           setTimeout(() => {
-            if (modal) modal.remove();
+            modal?.remove();
           }, TIMEOUTS.AUTO_HIDE_STATUS);
         }
       },
 
+      /**
+       * Display an error state
+       * @param {string} errorMessage - Error message to display
+       */
       error: (errorMessage) => {
         progressBar.className = 'progress-bar progress-bar-error';
         progressStatus.textContent = 'Error';
@@ -271,12 +355,15 @@ export class UIUtils {
         closeContainer.classList.remove(CSS_CLASSES.HIDDEN);
 
         closeBtn.onclick = () => {
-          if (modal) modal.remove();
+          modal?.remove();
         };
       },
 
+      /**
+       * Close the modal immediately
+       */
       close: () => {
-        if (modal) modal.remove();
+        modal?.remove();
       }
     };
   }
@@ -285,39 +372,65 @@ export class UIUtils {
 /**
  * Sort Manager Class
  * Handles sorting state and UI updates for sortable lists
+ * @class
  */
 export class SortManager {
+  /**
+   * Create a new SortManager instance
+   *
+   * @param {string} [defaultField='title'] - The default field to sort by
+   * @param {'asc'|'desc'} [defaultOrder='asc'] - The default sort order
+   * @param {Function|null} [onChangeCallback=null] - Callback function when sort changes
+   *
+   * @example
+   * const sortManager = new SortManager('title', 'asc', () => loadItems());
+   */
   constructor(defaultField = 'title', defaultOrder = 'asc', onChangeCallback = null) {
+    /** @type {string} Current sort field */
     this.field = defaultField;
+    /** @type {'asc'|'desc'} Current sort order */
     this.order = defaultOrder;
+    /** @type {Function|null} Callback when sort changes */
     this.onChange = onChangeCallback;
   }
 
   /**
-   * Set the sort field
+   * Set the sort field and reset order to ascending
+   *
+   * @param {string} field - The field to sort by
+   * @param {string} buttonSelector - CSS selector for sort buttons to update
+   * @returns {void}
+   *
+   * @example
+   * sortManager.setField('date', '.sort-btn');
    */
   setField(field, buttonSelector) {
     this.field = field;
     this.order = 'asc';
     this.updateButtons(buttonSelector);
-    if (this.onChange) {
-      this.onChange();
-    }
+    this.onChange?.();
   }
 
   /**
-   * Toggle sort order between asc and desc
+   * Toggle sort order between ascending and descending
+   *
+   * @param {string} toggleBtnId - The ID of the toggle button to update
+   * @returns {void}
+   *
+   * @example
+   * sortManager.toggleOrder('sort-toggle-btn');
    */
   toggleOrder(toggleBtnId) {
     this.order = this.order === 'asc' ? 'desc' : 'asc';
     this.updateToggleButton(toggleBtnId);
-    if (this.onChange) {
-      this.onChange();
-    }
+    this.onChange?.();
   }
 
   /**
    * Update button states to show active sort field
+   *
+   * @param {string} selector - CSS selector for sort buttons
+   * @returns {void}
    */
   updateButtons(selector) {
     const buttons = document.querySelectorAll(selector);
@@ -332,16 +445,24 @@ export class SortManager {
 
   /**
    * Update toggle button to show current order
+   *
+   * @param {string} btnId - The ID of the toggle button
+   * @returns {void}
    */
   updateToggleButton(btnId) {
     const btn = document.getElementById(btnId);
     if (btn) {
-      btn.textContent = this.order === 'asc' ? '↑ Ascending' : '↓ Descending';
+      btn.textContent = this.order === 'asc' ? '\u2191 Ascending' : '\u2193 Descending';
     }
   }
 
   /**
    * Get current sort parameters
+   *
+   * @returns {{field: string, order: string}} Object containing field and order
+   *
+   * @example
+   * const { field, order } = sortManager.getSortParams();
    */
   getSortParams() {
     return {
@@ -356,10 +477,11 @@ window.showTab = (tabName, event) => UIUtils.showTab(tabName, event);
 
 /**
  * Scroll to a specific section within the settings page
+ *
+ * @param {string} sectionId - The ID of the section to scroll to
+ * @returns {void}
  */
 window.scrollToSection = (sectionId) => {
   const section = document.getElementById(sectionId);
-  if (section) {
-    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
+  section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 };

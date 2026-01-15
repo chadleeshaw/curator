@@ -310,6 +310,10 @@ class FileImporter:
             }
             if parsed.country:
                 extra_metadata["country"] = parsed.country
+            if parsed.year:
+                extra_metadata["year"] = parsed.year
+            if parsed.month_name:
+                extra_metadata["month"] = parsed.month_name
             if parsed.issue_number:
                 extra_metadata["issue_number"] = parsed.issue_number
             if parsed.volume:

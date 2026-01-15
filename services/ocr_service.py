@@ -287,7 +287,7 @@ def _extract_issue_number(text_upper: str) -> Optional[int]:
 
 def _extract_year(text: str) -> Optional[int]:
     """
-    Extract year from OCR text.
+    Extract year from OCR text, handling common OCR errors.
 
     Args:
         text: OCR text (mixed case)
@@ -295,9 +295,36 @@ def _extract_year(text: str) -> Optional[int]:
     Returns:
         Year (1900-2099) or None if not found
     """
+    # First try standard pattern
     year_match = re.search(OCR_YEAR_PATTERN, text)
     if year_match:
         return int(year_match.group(1))
+
+    # Handle OCR errors: O → 0
+    # Look for 4-character sequences that could be years with OCR errors
+    # Pattern: starts with 19 or 20 (or 1O, 2O), followed by 2 more digits/O's
+    cleaned_text = text.upper()
+
+    # Match sequences like: 2OOO, 20OO, 2O00, 19OO, etc. (may or may not have word boundaries)
+    potential_years = re.finditer(r'(?<![0-9])([12][09O])([0-9O]{2})(?![0-9])', cleaned_text)
+    for match in potential_years:
+        cleaned_year = match.group(0).replace('O', '0')
+        try:
+            # Check if it's a valid year range
+            year_num = int(cleaned_year)
+            if 1900 <= year_num <= 2099:
+                return year_num
+        except ValueError:
+            continue
+
+    # Also try cleaning O's systematically
+    cleaned_text = re.sub(r'(?<=[12])O', '0', cleaned_text)  # 2O -> 20
+    cleaned_text = re.sub(r'(?<=\d)O', '0', cleaned_text)  # 20O, 2O0, etc. -> clean all
+
+    year_match = re.search(OCR_YEAR_PATTERN, cleaned_text)
+    if year_match:
+        return int(year_match.group(1))
+
     return None
 
 

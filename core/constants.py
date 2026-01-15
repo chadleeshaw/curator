@@ -34,8 +34,8 @@ OCR_ISSUE_PATTERNS = [
 ]
 """Regex patterns for detecting issue numbers in OCR text"""
 
-OCR_YEAR_PATTERN = r"\b(19\d{2}|20\d{2})\b"
-"""Regex pattern for detecting year (1900-2099) in OCR text"""
+OCR_YEAR_PATTERN = r"(?<![0-9])(19\d{2}|20\d{2})"
+"""Regex pattern for detecting year (1900-2099) in OCR text. Uses negative lookbehind to avoid matching middle of larger numbers."""
 
 OCR_VOLUME_PATTERNS = [
     r"VOL\.?\s*(\d+)",  # Vol. 1 or Vol 1
@@ -72,6 +72,34 @@ OCR_MONTH_NAMES = {
 }
 """Month name to number mapping for OCR metadata extraction"""
 
+MONTH_TO_NUMBER = {
+    # Full month names
+    'january': 1, 'february': 2, 'march': 3, 'april': 4,
+    'may': 5, 'june': 6, 'july': 7, 'august': 8,
+    'september': 9, 'october': 10, 'november': 11, 'december': 12,
+    # Abbreviations
+    'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4,
+    'jun': 6, 'jul': 7, 'aug': 8,
+    'sep': 9, 'sept': 9, 'oct': 10, 'nov': 11, 'dec': 12,
+    # Seasons
+    'spring': 3, 'summer': 6, 'fall': 9, 'autumn': 9, 'winter': 12
+}
+"""Month/period name to number mapping for date parsing (case-insensitive)"""
+
+NUMBER_TO_MONTH = {
+    1: 'January', 2: 'February', 3: 'March', 4: 'April',
+    5: 'May', 6: 'June', 7: 'July', 8: 'August',
+    9: 'September', 10: 'October', 11: 'November', 12: 'December'
+}
+"""Month number to full English month name mapping"""
+
+NUMBER_TO_MONTH_ABBR = {
+    1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr',
+    5: 'May', 6: 'Jun', 7: 'Jul', 8: 'Aug',
+    9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dec'
+}
+"""Month number to abbreviated English month name mapping"""
+
 OCR_SPECIAL_EDITION_INDICATORS = [
     "SPECIAL EDITION",
     "SPECIAL ISSUE",
@@ -79,6 +107,7 @@ OCR_SPECIAL_EDITION_INDICATORS = [
     "COLLECTOR",
     "ANNIVERSARY",
     "EXCLUSIVE",
+    "HOLIDAY",
 ]
 """Keywords indicating special edition in OCR text"""
 

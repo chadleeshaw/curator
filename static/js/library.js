@@ -1,21 +1,41 @@
 /**
  * Library Module
  * Handles periodical library display, sorting, and deletion
+ * @module library
  */
 
 import { APIClient } from './api.js';
 import { UIUtils, SortManager } from './ui-utils.js';
 import { ELEMENT_IDS as _ELEMENT_IDS, STATUS_MESSAGES as _STATUS_MESSAGES, CSS_CLASSES as _CSS_CLASSES, TIMEOUTS } from './constants.js';
+import { ValidationError as _ValidationError } from './errors.js';
 
+/**
+ * Library Manager class for managing periodical library operations
+ * @class
+ */
 export class LibraryManager {
+  /**
+   * Create a new LibraryManager instance
+   */
   constructor() {
+    /** @type {SortManager} Manager for library sorting */
     this.sortManager = new SortManager('title', 'asc', () => this.loadPeriodicals());
+    /** @type {number|null} ID of periodical pending deletion */
     this.pendingDeleteId = null;
+    /** @type {string|null} Title of periodical pending deletion */
     this.pendingDeleteTitle = null;
+    /** @type {number|null} Issue count of periodical pending deletion */
+    this.pendingDeleteIssueCount = null;
   }
 
   /**
    * Load and display periodicals from the library
+   *
+   * @returns {Promise<void>}
+   * @throws {Error} When API request fails
+   *
+   * @example
+   * await library.loadPeriodicals();
    */
   async loadPeriodicals() {
     try {
@@ -28,21 +48,28 @@ export class LibraryManager {
       const grid = document.getElementById('periodicals-grid');
       grid.innerHTML = '';
 
-      if (data.periodicals.length === 0) {
+      const { periodicals } = data;
+      if (periodicals.length === 0) {
         grid.innerHTML = '<p>No periodicals in library yet</p>';
         return;
       }
 
-      data.periodicals.forEach((periodical) => {
+      periodicals.forEach((periodical) => {
         grid.appendChild(this.createPeriodicalCard(periodical));
       });
     } catch (error) {
-      console.error('Error loading periodicals:', error);
+      console.error('[Library] Failed to load periodicals:', error);
     }
   }
 
   /**
    * Set the sort field for the library
+   *
+   * @param {string} field - The field to sort by (e.g., 'title', 'date')
+   * @returns {void}
+   *
+   * @example
+   * library.setLibrarySortField('date');
    */
   setLibrarySortField(field) {
     this.sortManager.field = field;
@@ -53,9 +80,7 @@ export class LibraryManager {
       btn.classList.remove('active');
     });
     const activeBtn = document.querySelector(`.library-controls [data-lib-sort="${field}"]`);
-    if (activeBtn) {
-      activeBtn.classList.add('active');
-    }
+    activeBtn?.classList.add('active');
 
     this.updateLibrarySortToggleButton();
     this.loadPeriodicals();
@@ -63,6 +88,11 @@ export class LibraryManager {
 
   /**
    * Toggle the sort order for the library
+   *
+   * @returns {void}
+   *
+   * @example
+   * library.toggleLibrarySortOrder();
    */
   toggleLibrarySortOrder() {
     this.sortManager.order = this.sortManager.order === 'asc' ? 'desc' : 'asc';
@@ -72,35 +102,51 @@ export class LibraryManager {
 
   /**
    * Update the library sort toggle button display
+   *
+   * @returns {void}
+   * @private
    */
   updateLibrarySortToggleButton() {
     const btn = document.getElementById('library-sort-toggle');
     if (btn) {
-      btn.textContent = this.sortManager.order === 'asc' ? '↑' : '↓';
-      btn.title =
-        this.sortManager.order === 'asc'
-          ? 'Ascending (click to descend)'
-          : 'Descending (click to ascend)';
+      btn.textContent = this.sortManager.order === 'asc' ? '\u2191' : '\u2193';
+      btn.title = this.sortManager.order === 'asc'
+        ? 'Ascending (click to descend)'
+        : 'Descending (click to ascend)';
     }
   }
 
   /**
    * Create a periodical card element
+   *
+   * @param {Object} periodical - The periodical data
+   * @param {number} periodical.id - Unique identifier
+   * @param {string} periodical.title - Periodical title
+   * @param {string} [periodical.cover_path] - Path to cover image
+   * @param {string} [periodical.language] - Language of the periodical
+   * @param {string} periodical.issue_date - Date of latest issue
+   * @param {number} [periodical.issue_count=1] - Number of issues
+   * @returns {HTMLElement} The created card element
+   *
+   * @example
+   * const card = library.createPeriodicalCard({ id: 1, title: 'PC Gamer', issue_date: '2024-01-01' });
    */
   createPeriodicalCard(periodical) {
+    const { id, title, cover_path, language, issue_date, issue_count = 1 } = periodical;
+
     const card = document.createElement('div');
     card.className = 'periodical-card';
 
     const cover = document.createElement('div');
     cover.className = 'periodical-cover';
 
-    if (periodical.cover_path) {
+    if (cover_path) {
       const img = document.createElement('img');
-      img.src = `/api/periodicals/${periodical.id}/cover`;
-      img.alt = periodical.title;
+      img.src = `/api/periodicals/${id}/cover`;
+      img.alt = title;
       cover.appendChild(img);
     } else {
-      cover.textContent = periodical.title;
+      cover.textContent = title;
     }
 
     card.appendChild(cover);
@@ -109,25 +155,24 @@ export class LibraryManager {
     info.className = 'periodical-info';
 
     const h4 = document.createElement('h4');
-    h4.textContent = periodical.title;
+    h4.textContent = title;
     info.appendChild(h4);
 
-    // Add language badge if present
-    if (periodical.language && periodical.language !== 'English') {
+    // Add language badge if present and not English
+    if (language && language !== 'English') {
       const langBadge = document.createElement('span');
       langBadge.className = 'language-badge';
-      langBadge.textContent = periodical.language;
+      langBadge.textContent = language;
       info.appendChild(langBadge);
     }
 
     const dateP = document.createElement('p');
-    const dateText = new Date(periodical.issue_date).toLocaleDateString();
+    const dateText = new Date(issue_date).toLocaleDateString();
     dateP.textContent = `Latest: ${dateText}`;
     info.appendChild(dateP);
 
     const issueP = document.createElement('p');
-    const issueCount = periodical.issue_count || 1;
-    const issueText = issueCount === 1 ? '1 issue' : `${issueCount} issues`;
+    const issueText = issue_count === 1 ? '1 issue' : `${issue_count} issues`;
     issueP.textContent = issueText;
     info.appendChild(issueP);
 
@@ -146,18 +191,18 @@ export class LibraryManager {
     viewBtn.onclick = (e) => {
       e.stopPropagation();
       e.preventDefault();
-      this.viewPeriodical(periodical.title, periodical.language);
+      this.viewPeriodical(title, language);
     };
     actionsDiv.appendChild(viewBtn);
 
     // Delete button
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'btn-icon btn-danger';
-    deleteBtn.textContent = '🗑️';
+    deleteBtn.textContent = '\uD83D\uDDD1\uFE0F';
     deleteBtn.title = 'Delete this periodical';
     deleteBtn.onclick = (e) => {
       e.stopPropagation();
-      window.deletePeriodical(periodical.id, periodical.title, periodical.issue_count);
+      window.deletePeriodical(id, title, issue_count);
     };
     actionsDiv.appendChild(deleteBtn);
 
@@ -165,7 +210,7 @@ export class LibraryManager {
     card.appendChild(info);
 
     // Make card clickable on cover/title but not buttons
-    const coverClickable = () => this.viewPeriodical(periodical.title, periodical.language);
+    const coverClickable = () => this.viewPeriodical(title, language);
     cover.style.cursor = 'pointer';
     cover.onclick = coverClickable;
     h4.style.cursor = 'pointer';
@@ -175,7 +220,14 @@ export class LibraryManager {
   }
 
   /**
-   * View periodical (navigate to periodical page)
+   * Navigate to periodical detail page
+   *
+   * @param {string} periodicalTitle - The title of the periodical
+   * @param {string|null} [language=null] - Optional language filter
+   * @returns {void}
+   *
+   * @example
+   * library.viewPeriodical('PC Gamer', 'English');
    */
   viewPeriodical(periodicalTitle, language = null) {
     let url = `/periodicals/${encodeURIComponent(periodicalTitle)}`;
@@ -187,6 +239,14 @@ export class LibraryManager {
 
   /**
    * Show delete confirmation modal for a periodical
+   *
+   * @param {number} periodicalId - The ID of the periodical to delete
+   * @param {string} title - The title of the periodical
+   * @param {number|null} [issueCount=null] - Number of issues (for display purposes)
+   * @returns {void}
+   *
+   * @example
+   * library.deletePeriodical(123, 'PC Gamer', 5);
    */
   deletePeriodical(periodicalId, title, issueCount = null) {
     console.log(`[Library] Setting pending delete: ID=${periodicalId}, Title=${title}, IssueCount=${issueCount}`);
@@ -196,17 +256,15 @@ export class LibraryManager {
 
     const modal = document.getElementById('delete-modal');
     if (!modal) {
-      console.error('Delete modal not found in DOM');
+      console.error('[Library] Delete modal not found in DOM');
       return;
     }
 
     const titleElement = document.getElementById('delete-modal-title');
     if (titleElement) {
-      if (issueCount && issueCount > 1) {
-        titleElement.textContent = `Are you sure you want to delete all ${issueCount} issues of "${title}"?`;
-      } else {
-        titleElement.textContent = `Are you sure you want to delete "${title}"?`;
-      }
+      titleElement.textContent = issueCount && issueCount > 1
+        ? `Are you sure you want to delete all ${issueCount} issues of "${title}"?`
+        : `Are you sure you want to delete "${title}"?`;
     }
 
     UIUtils.showModal('delete-modal');
@@ -214,6 +272,8 @@ export class LibraryManager {
 
   /**
    * Close the delete confirmation modal
+   *
+   * @returns {void}
    */
   closeDeleteModal() {
     UIUtils.closeModal('delete-modal');
@@ -224,12 +284,19 @@ export class LibraryManager {
 
   /**
    * Confirm and execute periodical deletion
+   *
+   * @returns {Promise<void>}
+   * @throws {ValidationError} When no periodical is selected for deletion
+   * @throws {Error} When API request fails
+   *
+   * @example
+   * await library.confirmDeletePeriodical();
    */
   async confirmDeletePeriodical() {
     console.log(`[Library] Confirming delete: pendingDeleteId=${this.pendingDeleteId}, pendingDeleteTitle=${this.pendingDeleteTitle}`);
+
     if (!this.pendingDeleteId) {
-      console.error('No periodical selected for deletion');
-      console.error('This usually means the state was cleared. Check if modal is being closed unexpectedly.');
+      console.error('[Library] No periodical selected for deletion');
       UIUtils.showStatus('import-status', 'Error: No periodical selected for deletion. Please try again.', 'error');
       this.closeDeleteModal();
       return;
@@ -237,12 +304,12 @@ export class LibraryManager {
 
     const deleteOption = document.querySelector('input[name="delete-option"]:checked');
     if (!deleteOption) {
-      console.error('No delete option selected');
+      console.error('[Library] No delete option selected');
       return;
     }
 
     const deleteFiles = deleteOption.value === 'delete-files';
-    const removeTracking = document.getElementById('delete-remove-tracking').checked;
+    const removeTracking = document.getElementById('delete-remove-tracking')?.checked ?? false;
     const deleteAllIssues = true; // Always delete all issues when deleting from library page
 
     try {
@@ -253,7 +320,7 @@ export class LibraryManager {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.detail || 'Failed to delete periodical');
+        throw new Error(error.detail ?? 'Failed to delete periodical');
       }
 
       const result = await response.json();
@@ -265,13 +332,20 @@ export class LibraryManager {
         setTimeout(() => this.loadPeriodicals(), TIMEOUTS.IMPORT_RELOAD_DELAY);
       }
     } catch (error) {
-      console.error('Error deleting periodical:', error);
+      console.error('[Library] Failed to delete periodical:', error);
       UIUtils.showStatus('import-status', `Error: ${error.message}`, 'error');
     }
   }
 
   /**
    * Open PDF in new tab
+   *
+   * @param {number} magazineId - The ID of the magazine
+   * @param {string} _title - The title (unused, for logging)
+   * @returns {void}
+   *
+   * @example
+   * library.viewPDF(123, 'PC Gamer Issue 1');
    */
   viewPDF(magazineId, _title) {
     window.open(`/api/periodicals/${magazineId}/pdf`, '_blank');
@@ -279,6 +353,11 @@ export class LibraryManager {
 
   /**
    * Show import options modal
+   *
+   * @returns {void}
+   *
+   * @example
+   * library.openImportModal();
    */
   openImportModal() {
     UIUtils.showModal('import-options-modal');
@@ -289,9 +368,9 @@ export class LibraryManager {
 
     // Sync tracking mode dropdown with checkbox
     const syncTrackingOptions = () => {
-      if (autoTrackCheckbox.checked) {
+      if (autoTrackCheckbox?.checked) {
         trackingModeSelect.disabled = false;
-      } else {
+      } else if (trackingModeSelect) {
         trackingModeSelect.disabled = true;
         trackingModeSelect.value = 'none';
       }
@@ -301,11 +380,13 @@ export class LibraryManager {
     syncTrackingOptions();
 
     // Add change listener
-    autoTrackCheckbox.addEventListener('change', syncTrackingOptions);
+    autoTrackCheckbox?.addEventListener('change', syncTrackingOptions);
   }
 
   /**
    * Close import options modal
+   *
+   * @returns {void}
    */
   closeImportModal() {
     UIUtils.closeModal('import-options-modal');

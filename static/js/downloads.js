@@ -1,20 +1,65 @@
 /**
  * Downloads Module
- * Handles download queue management and cleanup
+ * Handles download queue management, failed downloads, and cleanup operations
+ * @module downloads
  */
 
 import { APIClient } from './api.js?v=1767733177';
 import { UIUtils } from './ui-utils.js?v=1767733177';
 import { ELEMENT_IDS as _ELEMENT_IDS, STATUS_MESSAGES as _STATUS_MESSAGES, CSS_CLASSES, TIMEOUTS as _TIMEOUTS } from './constants.js';
 
+/**
+ * @typedef {Object} DownloadItem
+ * @property {number} id - Unique identifier
+ * @property {number} submission_id - Submission ID
+ * @property {string} title - Download title
+ * @property {string} magazine - Associated magazine name
+ * @property {string} status - Current status (pending, downloading, completed, failed, skipped)
+ * @property {number} [attempt_count] - Number of download attempts
+ * @property {string} [last_error] - Last error message
+ * @property {string} [created_at] - Creation timestamp
+ * @property {string} [updated_at] - Last update timestamp
+ * @property {boolean} [isBad] - Whether marked as a bad file
+ */
+
+/**
+ * @typedef {Object} DownloadGroup
+ * @property {string} periodical - Periodical name
+ * @property {DownloadItem[]} items - Download items in this group
+ * @property {number} failedCount - Number of failed downloads
+ * @property {number} badCount - Number of bad files
+ * @property {number} totalCount - Total count of items
+ */
+
+/**
+ * Downloads Manager class for managing download queue operations
+ * @class
+ */
 export class DownloadsManager {
+  /**
+   * Create a new DownloadsManager instance
+   */
   constructor() {
+    /** @type {number|null} Auto-refresh interval ID */
     this.refreshInterval = null;
+    /** @type {boolean} Whether to include bad files in display */
     this.showBadFiles = true;
+    /** @type {DownloadItem[]|null} Current items in modal */
+    this.currentModalItems = null;
+    /** @type {string|null} Current periodical in modal */
+    this.currentModalPeriodical = null;
+    /** @type {string} Current filter in modal */
+    this.currentModalFilter = 'all';
   }
 
   /**
-   * Load failed downloads and bad files
+   * Load failed downloads and bad files from the API
+   *
+   * @returns {Promise<void>}
+   * @throws {Error} When API request fails
+   *
+   * @example
+   * await downloads.loadFailedDownloads();
    */
   async loadFailedDownloads() {
     try {
@@ -24,40 +69,42 @@ export class DownloadsManager {
       const data = await response.json();
       this.displayFailedDownloads(data);
     } catch (error) {
-      console.error('[Downloads] Error loading failed downloads:', error);
+      console.error('[Downloads] Failed to load failed downloads:', error);
       UIUtils.showStatus('downloads-status', 'Error loading failed downloads', 'error');
     }
   }
 
   /**
    * Display failed downloads and bad files grouped by periodical
+   *
+   * @param {Object} data - Response data from API
+   * @param {DownloadItem[]} data.failed_downloads - Array of failed downloads
+   * @param {DownloadItem[]} data.bad_files - Array of bad files
+   * @returns {void}
    */
   displayFailedDownloads(data) {
     const container = document.getElementById('failed-downloads-container');
     if (!container) return;
 
-    // Group by periodical name (tracking_id)
-    const grouped = this.groupDownloadsByPeriodical(data.failed_downloads, data.bad_files);
-
-    let html = '';
+    const { failed_downloads: failedDownloads, bad_files: badFiles } = data;
+    const grouped = this.groupDownloadsByPeriodical(failedDownloads, badFiles);
 
     if (grouped.length === 0) {
-      html = `
+      container.innerHTML = `
         <div class="${CSS_CLASSES.EMPTY_STATE}">
-          <div class="${CSS_CLASSES.EMPTY_STATE_ICON}">✅</div>
+          <div class="${CSS_CLASSES.EMPTY_STATE_ICON}">\u2705</div>
           <p class="${CSS_CLASSES.EMPTY_STATE_TITLE}">No failed downloads</p>
           <p class="${CSS_CLASSES.EMPTY_STATE_SUBTITLE}">All downloads completed successfully</p>
         </div>
       `;
-      container.innerHTML = html;
       return;
     }
 
-    // Display stats summary
+    // Calculate totals
     const totalFailed = grouped.reduce((sum, g) => sum + g.failedCount, 0);
     const totalBad = grouped.reduce((sum, g) => sum + g.badCount, 0);
-    
-    html += `
+
+    let html = `
       <div class="${CSS_CLASSES.STATS_SUMMARY}">
         <div class="${CSS_CLASSES.STAT_BOX}">
           <div class="${CSS_CLASSES.STAT_BOX_VALUE} stat-box-warning">${totalFailed}</div>
@@ -75,32 +122,31 @@ export class DownloadsManager {
           <div class="${CSS_CLASSES.STAT_BOX_SUBLABEL}">Click below to manage</div>
         </div>
       </div>
+      <div class="periodical-groups">
     `;
 
-    // Display grouped by periodical
-    html += '<div class="periodical-groups">';
-
     grouped.forEach((group) => {
-      const hasBadFiles = group.badCount > 0;
-      const icon = hasBadFiles ? '🚫' : '⚠️';
+      const { periodical, badCount, failedCount, totalCount, items } = group;
+      const hasBadFiles = badCount > 0;
+      const icon = hasBadFiles ? '\uD83D\uDEAB' : '\u26A0\uFE0F';
 
       html += `
         <div class="periodical-group-card"
-             onclick="downloads.openManageFailedModal('${group.periodical}', ${JSON.stringify(group.items).replace(/"/g, '&quot;')})">
+             onclick="downloads.openManageFailedModal('${periodical}', ${JSON.stringify(items).replace(/"/g, '&quot;')})">
           <div class="periodical-group-content">
             <div class="periodical-group-info">
               <div class="periodical-group-header">
                 <span class="periodical-group-icon">${icon}</span>
-                <span class="periodical-group-title">${group.periodical}</span>
+                <span class="periodical-group-title">${periodical}</span>
               </div>
               <div class="periodical-group-subtitle">
-                ${group.totalCount} issue${group.totalCount !== 1 ? 's' : ''} need${group.totalCount === 1 ? 's' : ''} attention
+                ${totalCount} issue${totalCount !== 1 ? 's' : ''} need${totalCount === 1 ? 's' : ''} attention
               </div>
             </div>
             <div class="periodical-group-badges">
-              ${group.failedCount > 0 ? `<span class="badge badge-warning">${group.failedCount} Failed</span>` : ''}
-              ${hasBadFiles ? `<span class="badge badge-error">${group.badCount} Bad</span>` : ''}
-              <span class="periodical-group-arrow">→</span>
+              ${failedCount > 0 ? `<span class="badge badge-warning">${failedCount} Failed</span>` : ''}
+              ${hasBadFiles ? `<span class="badge badge-error">${badCount} Bad</span>` : ''}
+              <span class="periodical-group-arrow">\u2192</span>
             </div>
           </div>
         </div>
@@ -113,13 +159,17 @@ export class DownloadsManager {
 
   /**
    * Group downloads by periodical name
+   *
+   * @param {DownloadItem[]} failed - Array of failed downloads
+   * @param {DownloadItem[]} bad - Array of bad files
+   * @returns {DownloadGroup[]} Grouped downloads sorted by total count
    */
   groupDownloadsByPeriodical(failed, bad) {
     const map = new Map();
 
     // Process failed downloads
     failed.forEach((item) => {
-      const key = item.magazine || 'Unknown';
+      const key = item.magazine ?? 'Unknown';
       if (!map.has(key)) {
         map.set(key, { periodical: key, items: [], failedCount: 0, badCount: 0, totalCount: 0 });
       }
@@ -131,7 +181,7 @@ export class DownloadsManager {
 
     // Process bad files
     bad.forEach((item) => {
-      const key = item.magazine || 'Unknown';
+      const key = item.magazine ?? 'Unknown';
       if (!map.has(key)) {
         map.set(key, { periodical: key, items: [], failedCount: 0, badCount: 0, totalCount: 0 });
       }
@@ -145,7 +195,13 @@ export class DownloadsManager {
   }
 
   /**
-   * Delete a failed download
+   * Delete a failed download from the database
+   *
+   * @param {number} submissionId - The submission ID to delete
+   * @returns {Promise<void>}
+   *
+   * @example
+   * await downloads.deleteFailedDownload(123);
    */
   async deleteFailedDownload(submissionId) {
     const confirmed = await UIUtils.confirm(
@@ -155,12 +211,10 @@ export class DownloadsManager {
     if (!confirmed) return;
 
     // Determine which status element to use (modal or base page)
-    let statusId = 'downloads-status';
-    
     const failedModal = document.getElementById('manage-failed-modal');
-    if (failedModal && !failedModal.classList.contains('hidden')) {
-      statusId = 'modal-failed-status';
-    }
+    const statusId = failedModal && !failedModal.classList.contains('hidden')
+      ? 'modal-failed-status'
+      : 'downloads-status';
 
     try {
       const response = await APIClient.authenticatedFetch(`/api/downloads/failed/${submissionId}`, {
@@ -172,89 +226,100 @@ export class DownloadsManager {
         UIUtils.showStatus(statusId, 'Failed download removed', 'success');
         this.loadFailedDownloads();
       } else {
-        throw new Error(data.message || 'Failed to remove');
+        throw new Error(data.message ?? 'Failed to remove');
       }
     } catch (error) {
-      console.error('[Downloads] Error deleting failed download:', error);
+      console.error('[Downloads] Failed to delete failed download:', error);
       UIUtils.showStatus(statusId, `Error: ${error.message}`, 'error');
     }
   }
 
   /**
-   * Load download queue
+   * Load the download queue from the API
+   *
+   * @returns {Promise<void>}
+   *
+   * @example
+   * await downloads.loadDownloadQueue();
    */
   async loadDownloadQueue() {
     try {
       const url = '/api/downloads/queue/all';
-
       console.log('[Queue] Fetching from:', url);
+
       const response = await APIClient.authenticatedFetch(url);
       const data = await response.json();
 
       console.log('[Queue] API Response:', data);
-      console.log('[Queue] Items in queue:', data.queue?.length || 0);
+      console.log('[Queue] Items in queue:', data.queue?.length ?? 0);
       console.log('[Queue] Status counts:', data.status_counts);
+
       if (data.queue?.length > 0) {
         data.queue.slice(0, 3).forEach((item, idx) => {
           console.log(`  [${idx}] ${item.title}: ${item.status} (${item.magazine})`);
         });
         if (data.queue.length > 3) console.log(`  ... and ${data.queue.length - 3} more`);
       }
+
       this.displayQueue(data);
     } catch (error) {
-      console.error('[Queue] Error loading queue:', error);
+      console.error('[Queue] Failed to load queue:', error);
     }
   }
 
   /**
    * Display queue data grouped by periodical
+   *
+   * @param {Object} data - Queue data from API
+   * @param {DownloadItem[]} data.queue - Array of queue items
+   * @param {Object} data.status_counts - Status counts object
+   * @returns {void}
    */
   displayQueue(data) {
     console.log('[Queue] displayQueue called');
+
     const emptyDiv = document.getElementById('queue-empty');
     const tableContainer = document.getElementById('queue-table-container');
     const tbody = document.getElementById('queue-body');
     const statsDiv = document.getElementById('queue-stats');
 
     // Get CSS variable colors
+    const root = document.documentElement;
+    const getColor = (name) => getComputedStyle(root).getPropertyValue(name).trim();
+
     const colors = {
-      pending: getComputedStyle(document.documentElement)
-        .getPropertyValue('--status-pending')
-        .trim(),
-      downloading: getComputedStyle(document.documentElement)
-        .getPropertyValue('--status-downloading')
-        .trim(),
-      completed: getComputedStyle(document.documentElement)
-        .getPropertyValue('--status-completed')
-        .trim(),
-      failed: getComputedStyle(document.documentElement).getPropertyValue('--status-failed').trim(),
-      skipped: getComputedStyle(document.documentElement)
-        .getPropertyValue('--status-skipped')
-        .trim(),
+      pending: getColor('--status-pending'),
+      downloading: getColor('--status-downloading'),
+      completed: getColor('--status-completed'),
+      failed: getColor('--status-failed'),
+      skipped: getColor('--status-skipped'),
     };
 
     // Display status counts
-    if (data.status_counts) {
+    const { status_counts: statusCounts } = data;
+    if (statusCounts) {
+      const { pending = 0, downloading = 0, completed = 0, failed = 0, skipped = 0 } = statusCounts;
+
       statsDiv.innerHTML = `
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px;">
           <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <div class="queue-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.pending};">${data.status_counts.pending || 0}</div>
+            <div class="queue-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.pending};">${pending}</div>
             <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Pending</div>
           </div>
           <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <div class="queue-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.downloading};">${data.status_counts.downloading || 0}</div>
+            <div class="queue-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.downloading};">${downloading}</div>
             <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Downloading</div>
           </div>
           <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <div class="queue-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.completed};">${data.status_counts.completed || 0}</div>
+            <div class="queue-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.completed};">${completed}</div>
             <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Completed</div>
           </div>
           <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <div class="queue-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.failed};">${data.status_counts.failed || 0}</div>
+            <div class="queue-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.failed};">${failed}</div>
             <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Failed</div>
           </div>
           <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <div class="queue-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.skipped};">${data.status_counts.skipped || 0}</div>
+            <div class="queue-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.skipped};">${skipped}</div>
             <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Skipped</div>
           </div>
         </div>
@@ -262,8 +327,8 @@ export class DownloadsManager {
     }
 
     // Filter to show only active downloads (pending and downloading)
-    const activeDownloads = data.queue.filter(item =>
-      item.status === 'pending' || item.status === 'downloading'
+    const activeDownloads = data.queue.filter(({ status }) =>
+      status === 'pending' || status === 'downloading'
     );
 
     if (activeDownloads.length === 0) {
@@ -277,18 +342,20 @@ export class DownloadsManager {
 
     // Group by periodical
     const grouped = this.groupQueueByPeriodical(activeDownloads);
-    
+
     tbody.innerHTML = '';
     grouped.forEach((group) => {
+      const { periodical, items } = group;
+
       // Create periodical header row
       const headerRow = document.createElement('tr');
       headerRow.style.background = 'var(--surface)';
       headerRow.style.cursor = 'pointer';
-      headerRow.onclick = () => this.openManageQueueModal(group.periodical, group.items);
-      
-      const statusCounts = this.getStatusCounts(group.items);
+      headerRow.onclick = () => this.openManageQueueModal(periodical, items);
+
+      const statusCounts = this.getStatusCounts(items);
       const statusBadges = Object.entries(statusCounts)
-        .filter(([_, count]) => count > 0)
+        .filter(([, count]) => count > 0)
         .map(([status, count]) => {
           const color = this.getStatusColor(status);
           return `<span style="background: ${color}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.85em; margin-right: 5px;">${count} ${status}</span>`;
@@ -299,12 +366,12 @@ export class DownloadsManager {
         <td colspan="5" style="padding: 12px; font-weight: bold; border-bottom: 2px solid var(--border-color);">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <span style="font-size: 1.1em;">📰 ${group.periodical}</span>
-              <span style="margin-left: 15px; font-size: 0.9em; color: var(--text-secondary);">${group.items.length} issues</span>
+              <span style="font-size: 1.1em;">\uD83D\uDCF0 ${periodical}</span>
+              <span style="margin-left: 15px; font-size: 0.9em; color: var(--text-secondary);">${items.length} issues</span>
             </div>
             <div style="display: flex; gap: 10px; align-items: center;">
               ${statusBadges}
-              <span style="font-size: 1.2em; color: var(--text-secondary);">→</span>
+              <span style="font-size: 1.2em; color: var(--text-secondary);">\u2192</span>
             </div>
           </div>
         </td>
@@ -315,12 +382,15 @@ export class DownloadsManager {
 
   /**
    * Group queue items by periodical
+   *
+   * @param {DownloadItem[]} queue - Array of queue items
+   * @returns {DownloadGroup[]} Grouped queue items
    */
   groupQueueByPeriodical(queue) {
     const map = new Map();
 
     queue.forEach((item) => {
-      const key = item.magazine || 'Unknown';
+      const key = item.magazine ?? 'Unknown';
       if (!map.has(key)) {
         map.set(key, { periodical: key, items: [] });
       }
@@ -331,19 +401,23 @@ export class DownloadsManager {
   }
 
   /**
-   * Get status counts for items
+   * Get status counts for an array of items
+   *
+   * @param {DownloadItem[]} items - Array of download items
+   * @returns {Object.<string, number>} Object with status counts
    */
   getStatusCounts(items) {
-    const counts = {};
-    items.forEach((item) => {
-      const status = item.status || 'unknown';
-      counts[status] = (counts[status] || 0) + 1;
-    });
-    return counts;
+    return items.reduce((counts, { status = 'unknown' }) => {
+      counts[status] = (counts[status] ?? 0) + 1;
+      return counts;
+    }, {});
   }
 
   /**
-   * Get color for status
+   * Get color for a given status
+   *
+   * @param {string} status - The status string
+   * @returns {string} CSS color value
    */
   getStatusColor(status) {
     const colors = {
@@ -354,31 +428,38 @@ export class DownloadsManager {
       failed: '#dc3545',
       paused: '#ffc107',
     };
-    return colors[status] || '#6c757d';
+    return colors[status] ?? '#6c757d';
   }
 
   /**
-   * Get action buttons for queue item
+   * Get action buttons HTML for a queue item
+   *
+   * @param {DownloadItem} item - The download item
+   * @returns {string} HTML string of action buttons
    */
   getQueueActionButtons(item) {
+    const { status, submission_id: submissionId } = item;
     let buttons = '';
-    
-    if (item.status === 'failed') {
-      buttons += `<button onclick="downloads.retryDownload(${item.submission_id})" class="btn-secondary" style="padding: 4px 8px; margin-right: 5px;">🔄 Retry</button>`;
+
+    if (status === 'failed') {
+      buttons += `<button onclick="downloads.retryDownload(${submissionId})" class="btn-secondary" style="padding: 4px 8px; margin-right: 5px;">\uD83D\uDD04 Retry</button>`;
     }
-    
-    if (item.status !== 'completed') {
-      buttons += `<button onclick="downloads.deleteQueueItem(${item.submission_id})" class="btn-secondary" style="background: var(--status-failed); padding: 4px 8px;">Remove</button>`;
+
+    if (status !== 'completed') {
+      buttons += `<button onclick="downloads.deleteQueueItem(${submissionId})" class="btn-secondary" style="background: var(--status-failed); padding: 4px 8px;">Remove</button>`;
     }
-    
+
     return buttons || '-';
   }
 
   /**
    * Open modal to manage queue for a periodical
+   *
+   * @param {string} periodical - The periodical name
+   * @param {DownloadItem[]} items - Array of download items
+   * @returns {void}
    */
   openManageQueueModal(periodical, items) {
-    // Store current items
     this.currentModalItems = items;
     this.currentModalPeriodical = periodical;
     this.currentModalFilter = 'all';
@@ -388,36 +469,75 @@ export class DownloadsManager {
 
   /**
    * Render the manage queue modal with current filter
+   *
+   * @returns {void}
+   * @private
    */
   renderManageQueueModal() {
-    const items = this.currentModalItems;
-    const periodical = this.currentModalPeriodical;
-    const filter = this.currentModalFilter || 'all';
+    const { currentModalItems: items, currentModalPeriodical: periodical, currentModalFilter: filter = 'all' } = this;
 
     // Filter items based on current filter
-    const filteredItems = filter === 'all' ? items : items.filter(item => item.status === filter);
+    const filteredItems = filter === 'all'
+      ? items
+      : items.filter(({ status }) => status === filter);
 
     const statusCounts = this.getStatusCounts(items);
     const statusList = Object.entries(statusCounts)
       .map(([status, count]) => `${count} ${status}`)
       .join(', ');
 
-    let html = `
+    const filterButtons = ['all', 'pending', 'downloading', 'completed', 'failed', 'skipped']
+      .map((f) => {
+        const count = f === 'all' ? items.length : (statusCounts[f] ?? 0);
+        const active = filter === f ? 'active' : '';
+        return `<button onclick="downloads.filterModalQueue('${f}')" class="sort-btn ${active}">${f.charAt(0).toUpperCase() + f.slice(1)} (${count})</button>`;
+      })
+      .join('\n');
+
+    let tableRows = '';
+    if (filteredItems.length === 0) {
+      tableRows = `
+        <tr>
+          <td colspan="3" style="padding: 40px; text-align: center; color: var(--text-secondary);">
+            No ${filter === 'all' ? '' : filter} items found
+          </td>
+        </tr>
+      `;
+    } else {
+      tableRows = filteredItems.map((item) => {
+        const { title, magazine, submission_id: submissionId, created_at: createdAt, status } = item;
+        const statusColor = this.getStatusColor(status);
+
+        // Add clarity if title equals magazine name
+        let displayTitle = title;
+        if (title === magazine || title === periodical) {
+          const date = createdAt ? new Date(createdAt).toLocaleDateString() : '';
+          displayTitle = `${title} <span style="color: var(--text-secondary); font-size: 0.85em;">(#${submissionId}${date ? ' - ' + date : ''})</span>`;
+        }
+
+        return `
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid var(--border-color);">${displayTitle}</td>
+            <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
+              <span style="background: ${statusColor}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.85em;">${status}</span>
+            </td>
+            <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
+              ${this.getQueueActionButtons(item)}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    const html = `
       <div class="modal-header">
         <h3>Manage Downloads: ${periodical}</h3>
         <p style="color: var(--text-secondary); margin-top: 10px;">${items.length} issues - ${statusList}</p>
         <div id="modal-queue-status" class="hidden" style="margin-top: 10px;"></div>
-        
         <div style="display: flex; gap: 5px; margin-top: 15px; flex-wrap: wrap;">
-          <button onclick="downloads.filterModalQueue('all')" class="sort-btn ${filter === 'all' ? 'active' : ''}">All (${items.length})</button>
-          <button onclick="downloads.filterModalQueue('pending')" class="sort-btn ${filter === 'pending' ? 'active' : ''}">Pending (${statusCounts.pending || 0})</button>
-          <button onclick="downloads.filterModalQueue('downloading')" class="sort-btn ${filter === 'downloading' ? 'active' : ''}">Downloading (${statusCounts.downloading || 0})</button>
-          <button onclick="downloads.filterModalQueue('completed')" class="sort-btn ${filter === 'completed' ? 'active' : ''}">Completed (${statusCounts.completed || 0})</button>
-          <button onclick="downloads.filterModalQueue('failed')" class="sort-btn ${filter === 'failed' ? 'active' : ''}">Failed (${statusCounts.failed || 0})</button>
-          <button onclick="downloads.filterModalQueue('skipped')" class="sort-btn ${filter === 'skipped' ? 'active' : ''}">Skipped (${statusCounts.skipped || 0})</button>
+          ${filterButtons}
         </div>
       </div>
-      
       <div class="modal-body" style="max-height: 400px; overflow-y: auto; margin: 20px 0;">
         <table style="width: 100%; border-collapse: collapse;">
           <thead style="position: sticky; top: 0; background: var(--surface); z-index: 1;">
@@ -427,49 +547,13 @@ export class DownloadsManager {
               <th style="text-align: center; padding: 10px; border-bottom: 2px solid var(--border-color);">Actions</th>
             </tr>
           </thead>
-          <tbody>
-    `;
-
-    if (filteredItems.length === 0) {
-      html += `
-        <tr>
-          <td colspan="3" style="padding: 40px; text-align: center; color: var(--text-secondary);">
-            No ${filter === 'all' ? '' : filter} items found
-          </td>
-        </tr>
-      `;
-    } else {
-      filteredItems.forEach((item) => {
-        const statusColor = this.getStatusColor(item.status);
-        // If title is just the magazine name, add submission ID for clarity
-        let displayTitle = item.title;
-        if (item.title === item.magazine || item.title === periodical) {
-          const date = item.created_at ? new Date(item.created_at).toLocaleDateString() : '';
-          displayTitle = `${item.title} <span style="color: var(--text-secondary); font-size: 0.85em;">(#${item.submission_id}${date ? ' - ' + date : ''})</span>`;
-        }
-        html += `
-          <tr>
-            <td style="padding: 10px; border-bottom: 1px solid var(--border-color);">${displayTitle}</td>
-            <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
-              <span style="background: ${statusColor}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.85em;">${item.status}</span>
-            </td>
-            <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
-              ${this.getQueueActionButtons(item)}
-            </td>
-          </tr>
-        `;
-      });
-    }
-
-    html += `
-          </tbody>
+          <tbody>${tableRows}</tbody>
         </table>
       </div>
-      
       <div class="modal-footer" style="display: flex; gap: 10px; justify-content: space-between; padding-top: 20px; border-top: 1px solid var(--border-color);">
         <div>
-          <button onclick="downloads.bulkRetryQueue()" class="btn-secondary">🔄 Retry Failed</button>
-          <button onclick="downloads.bulkRemoveQueue()" class="btn-secondary" style="background: var(--status-failed);">🗑️ Remove All</button>
+          <button onclick="downloads.bulkRetryQueue()" class="btn-secondary">\uD83D\uDD04 Retry Failed</button>
+          <button onclick="downloads.bulkRemoveQueue()" class="btn-secondary" style="background: var(--status-failed);">\uD83D\uDDD1\uFE0F Remove All</button>
         </div>
         <button onclick="downloads.closeManageQueueModal()" class="save-btn">Close</button>
       </div>
@@ -478,12 +562,15 @@ export class DownloadsManager {
     const container = document.getElementById('manage-queue-modal-content');
     if (container) {
       container.innerHTML = html;
-      document.getElementById('manage-queue-modal').classList.remove(CSS_CLASSES.HIDDEN);
+      document.getElementById('manage-queue-modal')?.classList.remove(CSS_CLASSES.HIDDEN);
     }
   }
 
   /**
    * Filter items in the manage queue modal
+   *
+   * @param {string} status - The status to filter by ('all' or a specific status)
+   * @returns {void}
    */
   filterModalQueue(status) {
     this.currentModalFilter = status;
@@ -492,15 +579,22 @@ export class DownloadsManager {
 
   /**
    * Close manage queue modal
+   *
+   * @returns {void}
    */
   closeManageQueueModal() {
-    document.getElementById('manage-queue-modal').classList.add(CSS_CLASSES.HIDDEN);
+    document.getElementById('manage-queue-modal')?.classList.add(CSS_CLASSES.HIDDEN);
     this.currentModalItems = null;
     this.currentModalPeriodical = null;
     this.currentModalFilter = 'all';
   }
+
   /**
    * Open modal to manage failed downloads for a periodical
+   *
+   * @param {string} periodical - The periodical name
+   * @param {DownloadItem[]|string} items - Array of items or JSON string
+   * @returns {void}
    */
   openManageFailedModal(periodical, items) {
     // Parse items if it's a string
@@ -508,7 +602,7 @@ export class DownloadsManager {
       try {
         items = JSON.parse(items.replace(/&quot;/g, '"'));
       } catch (e) {
-        console.error('Error parsing items:', e);
+        console.error('[Downloads] Error parsing items:', e);
         return;
       }
     }
@@ -519,13 +613,30 @@ export class DownloadsManager {
     const badCount = items.filter((i) => i.isBad).length;
     const failedCount = items.filter((i) => !i.isBad).length;
 
-    let html = `
+    const tableRows = items.map((item) => {
+      const { id, title, attempt_count: attemptCount, last_error: lastError, isBad } = item;
+      const color = isBad ? 'var(--status-failed)' : 'orange';
+
+      return `
+        <tr>
+          <td style="padding: 10px; border-bottom: 1px solid var(--border-color);">${title}</td>
+          <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
+            <span style="background: ${color}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.85em;">${attemptCount}/3</span>
+          </td>
+          <td style="padding: 10px; border-bottom: 1px solid var(--border-color); font-size: 0.85em;">${lastError ?? 'Unknown'}</td>
+          <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
+            <button onclick="downloads.deleteFailedDownload(${id})" class="btn-secondary" style="background: var(--status-failed); padding: 4px 8px;">Remove</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    const html = `
       <div class="modal-header">
         <h3>Manage Failed Downloads: ${periodical}</h3>
         <p style="color: var(--text-secondary); margin-top: 10px;">${failedCount} recent failures, ${badCount} bad files</p>
         <div id="modal-failed-status" class="hidden" style="margin-top: 10px;"></div>
       </div>
-      
       <div class="modal-body" style="max-height: 400px; overflow-y: auto; margin: 20px 0;">
         <table style="width: 100%; border-collapse: collapse;">
           <thead style="position: sticky; top: 0; background: var(--surface); z-index: 1;">
@@ -536,32 +647,11 @@ export class DownloadsManager {
               <th style="text-align: center; padding: 10px; border-bottom: 2px solid var(--border-color);">Actions</th>
             </tr>
           </thead>
-          <tbody>
-    `;
-
-    items.forEach((item) => {
-      const color = item.isBad ? 'var(--status-failed)' : 'orange';
-      html += `
-        <tr>
-          <td style="padding: 10px; border-bottom: 1px solid var(--border-color);">${item.title}</td>
-          <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
-            <span style="background: ${color}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.85em;">${item.attempt_count}/3</span>
-          </td>
-          <td style="padding: 10px; border-bottom: 1px solid var(--border-color); font-size: 0.85em;">${item.last_error || 'Unknown'}</td>
-          <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
-            <button onclick="downloads.deleteFailedDownload(${item.id})" class="btn-secondary" style="background: var(--status-failed); padding: 4px 8px;">Remove</button>
-          </td>
-        </tr>
-      `;
-    });
-
-    html += `
-          </tbody>
+          <tbody>${tableRows}</tbody>
         </table>
       </div>
-      
       <div class="modal-footer" style="display: flex; gap: 10px; justify-content: space-between; padding-top: 20px; border-top: 1px solid var(--border-color);">
-        <button onclick="downloads.bulkRemoveFailed()" class="btn-secondary" style="background: var(--status-failed);">🗑️ Remove All</button>
+        <button onclick="downloads.bulkRemoveFailed()" class="btn-secondary" style="background: var(--status-failed);">\uD83D\uDDD1\uFE0F Remove All</button>
         <button onclick="downloads.closeManageFailedModal()" class="save-btn">Close</button>
       </div>
     `;
@@ -569,26 +659,30 @@ export class DownloadsManager {
     const container = document.getElementById('manage-failed-modal-content');
     if (container) {
       container.innerHTML = html;
-      document.getElementById('manage-failed-modal').classList.remove(CSS_CLASSES.HIDDEN);
+      document.getElementById('manage-failed-modal')?.classList.remove(CSS_CLASSES.HIDDEN);
     }
   }
 
   /**
    * Close manage failed modal
+   *
+   * @returns {void}
    */
   closeManageFailedModal() {
-    document.getElementById('manage-failed-modal').classList.add(CSS_CLASSES.HIDDEN);
+    document.getElementById('manage-failed-modal')?.classList.add(CSS_CLASSES.HIDDEN);
     this.currentModalItems = null;
     this.currentModalPeriodical = null;
   }
 
   /**
    * Bulk retry failed downloads for current periodical
+   *
+   * @returns {Promise<void>}
    */
   async bulkRetryQueue() {
     if (!this.currentModalItems) return;
 
-    const failedItems = this.currentModalItems.filter((item) => item.status === 'failed');
+    const failedItems = this.currentModalItems.filter(({ status }) => status === 'failed');
     if (failedItems.length === 0) {
       UIUtils.showStatus('modal-queue-status', 'No failed items to retry', 'info');
       return;
@@ -605,11 +699,11 @@ export class DownloadsManager {
     let failed = 0;
 
     for (let i = 0; i < failedItems.length; i++) {
-      const item = failedItems[i];
+      const { submission_id: submissionId, issue } = failedItems[i];
       try {
-        progress.update(i + 1, 'Retrying...', `Processing: ${item.issue || 'Unknown'}`);
+        progress.update(i + 1, 'Retrying...', `Processing: ${issue ?? 'Unknown'}`);
         const response = await APIClient.authenticatedFetch(
-          `/api/downloads/queue/retry/${item.submission_id}`,
+          `/api/downloads/queue/retry/${submissionId}`,
           { method: 'POST' }
         );
         const data = await response.json();
@@ -619,12 +713,12 @@ export class DownloadsManager {
           failed++;
         }
       } catch (e) {
-        console.error('Retry failed:', e);
+        console.error('[Downloads] Retry failed:', e);
         failed++;
       }
     }
 
-    const message = failed > 0 
+    const message = failed > 0
       ? `Retried ${succeeded} of ${failedItems.length} downloads (${failed} failed)`
       : `Successfully retried all ${succeeded} downloads`;
     progress.complete(message, failed === 0);
@@ -638,6 +732,8 @@ export class DownloadsManager {
 
   /**
    * Bulk remove all downloads for current periodical
+   *
+   * @returns {Promise<void>}
    */
   async bulkRemoveQueue() {
     if (!this.currentModalItems) return;
@@ -653,11 +749,11 @@ export class DownloadsManager {
     let failed = 0;
 
     for (let i = 0; i < this.currentModalItems.length; i++) {
-      const item = this.currentModalItems[i];
+      const { submission_id: submissionId, issue } = this.currentModalItems[i];
       try {
-        progress.update(i + 1, 'Deleting...', `Processing: ${item.issue || 'Unknown'}`);
+        progress.update(i + 1, 'Deleting...', `Processing: ${issue ?? 'Unknown'}`);
         const response = await APIClient.authenticatedFetch(
-          `/api/downloads/queue/${item.submission_id}`,
+          `/api/downloads/queue/${submissionId}`,
           { method: 'DELETE' }
         );
         const data = await response.json();
@@ -667,7 +763,7 @@ export class DownloadsManager {
           failed++;
         }
       } catch (e) {
-        console.error('Remove failed:', e);
+        console.error('[Downloads] Remove failed:', e);
         failed++;
       }
     }
@@ -686,6 +782,8 @@ export class DownloadsManager {
 
   /**
    * Bulk remove all failed downloads for current periodical
+   *
+   * @returns {Promise<void>}
    */
   async bulkRemoveFailed() {
     if (!this.currentModalItems) return;
@@ -701,10 +799,10 @@ export class DownloadsManager {
     let failed = 0;
 
     for (let i = 0; i < this.currentModalItems.length; i++) {
-      const item = this.currentModalItems[i];
+      const { id, issue } = this.currentModalItems[i];
       try {
-        progress.update(i + 1, 'Deleting...', `Processing: ${item.issue || 'Unknown'}`);
-        const response = await APIClient.authenticatedFetch(`/api/downloads/failed/${item.id}`, {
+        progress.update(i + 1, 'Deleting...', `Processing: ${issue ?? 'Unknown'}`);
+        const response = await APIClient.authenticatedFetch(`/api/downloads/failed/${id}`, {
           method: 'DELETE',
         });
         const data = await response.json();
@@ -714,7 +812,7 @@ export class DownloadsManager {
           failed++;
         }
       } catch (e) {
-        console.error('Remove failed:', e);
+        console.error('[Downloads] Remove failed:', e);
         failed++;
       }
     }
@@ -733,6 +831,9 @@ export class DownloadsManager {
 
   /**
    * Retry a failed download
+   *
+   * @param {number} submissionId - The submission ID to retry
+   * @returns {Promise<void>}
    */
   async retryDownload(submissionId) {
     const confirmed = await UIUtils.confirm(
@@ -741,29 +842,22 @@ export class DownloadsManager {
     );
     if (!confirmed) return;
 
-    // Determine which status element to use (modal or base page)
-    let statusId = 'downloads-status';
-    
-    // Check if we're in the manage queue modal
+    // Determine which status element to use
     const queueModal = document.getElementById('manage-queue-modal');
+    const failedModal = document.getElementById('manage-failed-modal');
+
+    let statusId = 'downloads-status';
     if (queueModal && !queueModal.classList.contains('hidden')) {
       statusId = 'modal-queue-status';
-    }
-    
-    // Check if we're in the manage failed modal
-    const failedModal = document.getElementById('manage-failed-modal');
-    if (failedModal && !failedModal.classList.contains('hidden')) {
+    } else if (failedModal && !failedModal.classList.contains('hidden')) {
       statusId = 'modal-failed-status';
     }
 
     try {
       const response = await APIClient.authenticatedFetch(
         `/api/downloads/queue/retry/${submissionId}`,
-        {
-          method: 'POST',
-        }
+        { method: 'POST' }
       );
-
       const data = await response.json();
 
       if (data.success) {
@@ -771,16 +865,19 @@ export class DownloadsManager {
         setTimeout(() => UIUtils.hideStatus(statusId), 3000);
         this.loadDownloadQueue();
       } else {
-        UIUtils.showStatus(statusId, data.message || 'Failed to retry', 'error');
+        UIUtils.showStatus(statusId, data.message ?? 'Failed to retry', 'error');
       }
     } catch (error) {
-      console.error('Error retrying download:', error);
+      console.error('[Downloads] Error retrying download:', error);
       UIUtils.showStatus(statusId, error.message, 'error');
     }
   }
 
   /**
    * Remove a submission from queue
+   *
+   * @param {number} submissionId - The submission ID to remove
+   * @returns {Promise<void>}
    */
   async removeFromQueue(submissionId) {
     const confirmed = await UIUtils.confirm(
@@ -789,16 +886,14 @@ export class DownloadsManager {
     );
     if (!confirmed) return;
 
-    // Determine which status element to use (modal or base page)
-    let statusId = 'downloads-status';
-    
+    // Determine which status element to use
     const queueModal = document.getElementById('manage-queue-modal');
+    const failedModal = document.getElementById('manage-failed-modal');
+
+    let statusId = 'downloads-status';
     if (queueModal && !queueModal.classList.contains('hidden')) {
       statusId = 'modal-queue-status';
-    }
-    
-    const failedModal = document.getElementById('manage-failed-modal');
-    if (failedModal && !failedModal.classList.contains('hidden')) {
+    } else if (failedModal && !failedModal.classList.contains('hidden')) {
       statusId = 'modal-failed-status';
     }
 
@@ -806,7 +901,6 @@ export class DownloadsManager {
       const response = await APIClient.authenticatedFetch(`/api/downloads/queue/${submissionId}`, {
         method: 'DELETE',
       });
-
       const data = await response.json();
 
       if (data.success) {
@@ -814,16 +908,19 @@ export class DownloadsManager {
         setTimeout(() => UIUtils.hideStatus(statusId), 3000);
         this.loadDownloadQueue();
       } else {
-        UIUtils.showStatus(statusId, data.message || 'Failed to remove', 'error');
+        UIUtils.showStatus(statusId, data.message ?? 'Failed to remove', 'error');
       }
     } catch (error) {
-      console.error('Error removing from queue:', error);
+      console.error('[Downloads] Error removing from queue:', error);
       UIUtils.showStatus(statusId, error.message, 'error');
     }
   }
 
   /**
    * Alias for removeFromQueue (used by action buttons)
+   *
+   * @param {number} submissionId - The submission ID to delete
+   * @returns {Promise<void>}
    */
   async deleteQueueItem(submissionId) {
     return this.removeFromQueue(submissionId);
@@ -831,6 +928,8 @@ export class DownloadsManager {
 
   /**
    * Open cleanup modal
+   *
+   * @returns {void}
    */
   openCleanupModal() {
     UIUtils.showModal('cleanup-queue-modal');
@@ -838,6 +937,8 @@ export class DownloadsManager {
 
   /**
    * Close cleanup modal
+   *
+   * @returns {void}
    */
   closeCleanupModal() {
     UIUtils.closeModal('cleanup-queue-modal');
@@ -849,45 +950,54 @@ export class DownloadsManager {
 
   /**
    * Preview cleanup (show what will be deleted)
+   *
+   * @returns {Promise<void>}
    */
   async previewCleanup() {
-    const status = document.getElementById('cleanup-status').value;
-    const hours = parseInt(document.getElementById('cleanup-hours').value) || 24;
+    const statusSelect = document.getElementById('cleanup-status');
+    const hoursInput = document.getElementById('cleanup-hours');
+
+    const status = statusSelect?.value ?? '';
+    const hours = parseInt(hoursInput?.value, 10) || 24;
 
     try {
       const response = await APIClient.authenticatedFetch('/api/downloads/queue/all');
       const data = await response.json();
 
-      let count = 0;
-      data.queue.forEach((item) => {
+      const now = new Date();
+      const count = data.queue.filter((item) => {
         const updatedTime = new Date(item.updated_at);
-        const nowTime = new Date();
-        const hoursDiff = (nowTime - updatedTime) / (1000 * 60 * 60);
+        const hoursDiff = (now - updatedTime) / (1000 * 60 * 60);
 
         if (hoursDiff > hours) {
-          if (!status || item.status === status) {
-            count++;
-          }
+          return !status || item.status === status;
         }
-      });
+        return false;
+      }).length;
 
       const preview = document.getElementById('cleanup-preview');
       const countDiv = document.getElementById('cleanup-count');
 
       if (preview) preview.style.display = 'block';
-      if (countDiv)
+      if (countDiv) {
         countDiv.textContent = `${count} item${count !== 1 ? 's' : ''} older than ${hours} hours with status "${status || 'any'}"`;
+      }
     } catch (error) {
-      console.error('Error previewing cleanup:', error);
+      console.error('[Downloads] Error previewing cleanup:', error);
     }
   }
 
   /**
    * Execute cleanup
+   *
+   * @returns {Promise<void>}
    */
   async executeCleanup() {
-    const status = document.getElementById('cleanup-status').value;
-    const hours = parseInt(document.getElementById('cleanup-hours').value) || 24;
+    const statusSelect = document.getElementById('cleanup-status');
+    const hoursInput = document.getElementById('cleanup-hours');
+
+    const status = statusSelect?.value ?? '';
+    const hours = parseInt(hoursInput?.value, 10) || 24;
 
     try {
       const response = await APIClient.authenticatedFetch('/api/downloads/queue/cleanup', {
@@ -907,25 +1017,25 @@ export class DownloadsManager {
         this.closeCleanupModal();
         this.loadDownloadQueue();
       } else {
-        UIUtils.showStatus('downloads-status', data.message || 'Cleanup failed', 'error');
+        UIUtils.showStatus('downloads-status', data.message ?? 'Cleanup failed', 'error');
       }
     } catch (error) {
-      console.error('Error executing cleanup:', error);
+      console.error('[Downloads] Error executing cleanup:', error);
       UIUtils.showStatus('downloads-status', error.message, 'error');
     }
   }
 
   /**
    * Start auto-refresh for the tasks tab
+   *
+   * @returns {void}
    */
   startAutoRefresh() {
-    // Clear any existing interval
     this.stopAutoRefresh();
 
-    // Auto-refresh every 10 seconds
     this.refreshInterval = setInterval(() => {
       const tasksTab = document.getElementById('tasks-tab');
-      if (tasksTab && tasksTab.classList.contains('active')) {
+      if (tasksTab?.classList.contains('active')) {
         this.loadDownloadQueue();
       } else {
         this.stopAutoRefresh();
@@ -935,6 +1045,8 @@ export class DownloadsManager {
 
   /**
    * Stop auto-refresh
+   *
+   * @returns {void}
    */
   stopAutoRefresh() {
     if (this.refreshInterval) {
@@ -957,4 +1069,3 @@ window.openCleanupModal = () => downloads.openCleanupModal();
 window.closeCleanupModal = () => downloads.closeCleanupModal();
 window.previewCleanup = () => downloads.previewCleanup();
 window.executeCleanup = () => downloads.executeCleanup();
-
