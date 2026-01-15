@@ -180,7 +180,7 @@ def test_matching_ignores_case():
 
 
 def test_country_mismatch_penalty():
-    """Test that mismatched countries get penalized"""
+    """Test that mismatched countries block matching entirely"""
     matcher = TrackingMatcher()
 
     # Matching country
@@ -199,9 +199,30 @@ def test_country_mismatch_penalty():
         tracking_country="GB"
     )
 
-    # Mismatched should be lower
-    assert score_mismatch < score_match
-    assert breakdown['country'] == -5
+    # Country mismatch now blocks matching entirely (score = 0)
+    assert score_mismatch == 0
+    assert breakdown['country'] == 'mismatch'
+
+
+def test_regional_editions_dont_match():
+    """Test that regional editions (e.g., Playboy South Africa vs Playboy US) don't match"""
+    matcher = TrackingMatcher()
+
+    tracking_records = [
+        MockTracking(1, "Playboy", "English", "US", "Magazines"),
+    ]
+
+    # Playboy South Africa should NOT match Playboy US
+    result = matcher.find_best_match(
+        parsed_title="Playboy",
+        tracking_records=tracking_records,
+        parsed_language="English",
+        parsed_country="ZA",  # South Africa
+        parsed_category="Magazines"
+    )
+
+    # Should not match due to country mismatch blocking
+    assert result is None or not result.is_match
 
 
 if __name__ == "__main__":

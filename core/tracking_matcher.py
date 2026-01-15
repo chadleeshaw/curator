@@ -287,9 +287,10 @@ class TrackingMatcher:
                     breakdown['country'] = WEIGHT_COUNTRY_MATCH
                     total_score += WEIGHT_COUNTRY_MATCH
                 else:
-                    # Penalize country mismatch if both are specified
-                    breakdown['country'] = -5
-                    total_score -= 5
+                    # Explicit country mismatch - regional editions should be separate trackings
+                    # Set score to 0 to prevent matching entirely
+                    breakdown['country'] = 'mismatch'
+                    total_score = 0
             else:
                 # One or both not specified, neutral
                 breakdown['country'] = 0

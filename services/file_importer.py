@@ -252,7 +252,18 @@ class FileImporter:
 
             # Use base_title for tracking - language is stored separately in the language field
             # This keeps titles clean and allows proper filtering by language
+            # However, for regional editions (different countries), include country in title
             tracking_title = base_title
+
+            # Include country in tracking title for regional editions
+            # Regional editions should have separate tracking from the base edition
+            if parsed.country and parsed.country not in ['US', 'XU', 'XW', None]:
+                # Import country name mapping
+                from core.parsers.country import ISO_COUNTRIES
+                country_name = ISO_COUNTRIES.get(parsed.country, parsed.country)
+                # Only append if not already in title
+                if country_name.lower() not in base_title.lower():
+                    tracking_title = f"{base_title} {country_name}"
 
             # Check for duplicates using fuzzy matching on tracking titles AND issue date
             # A duplicate is defined as: same tracking title (fuzzy match) AND same issue date (within 5 days)
