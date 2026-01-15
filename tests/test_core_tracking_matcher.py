@@ -205,16 +205,16 @@ def test_country_mismatch_penalty():
 
 
 def test_regional_editions_dont_match():
-    """Test that regional editions (e.g., Playboy South Africa vs Playboy US) don't match"""
+    """Test that regional editions (e.g., GQ South Africa vs GQ US) don't match"""
     matcher = TrackingMatcher()
 
     tracking_records = [
-        MockTracking(1, "Playboy", "English", "US", "Magazines"),
+        MockTracking(1, "GQ", "English", "US", "Magazines"),
     ]
 
-    # Playboy South Africa should NOT match Playboy US
+    # GQ South Africa should NOT match GQ US
     result = matcher.find_best_match(
-        parsed_title="Playboy",
+        parsed_title="GQ",
         tracking_records=tracking_records,
         parsed_language="English",
         parsed_country="ZA",  # South Africa

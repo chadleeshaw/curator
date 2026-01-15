@@ -147,6 +147,9 @@ class TitleMatcher:
         # TruePDF indicates a digitally created (text-based) PDF vs a scanned one
         title = re.sub(r"[\.\s]*TruePDF[\.\s]*", " ", title, flags=re.IGNORECASE)
 
+        # Remove "True Pdf" format indicator (but preserve "Special Edition" after it)
+        title = re.sub(r"\s+True\s+Pdf[\s\-]*", " ", title, flags=re.IGNORECASE)
+
         # Remove release group tags (e.g., "-LORENZ-xpost", "[hash]-xpost") - BEFORE quality removal
         title = re.sub(r"-[A-Z][A-Za-z0-9]+(?:-[a-z]+)?\[[\w]+\].*$", "", title)  # -LORENZ[hash]
         title = re.sub(r"\[[\w]+\](?:-[a-z]+)?$", "", title)  # [hash]-xpost or [hash]

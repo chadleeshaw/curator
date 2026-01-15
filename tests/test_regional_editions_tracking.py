@@ -2,7 +2,7 @@
 Test that regional editions get separate tracking entries.
 
 This test suite verifies that magazines with different regional editions
-(e.g., Playboy US vs Playboy South Africa) are tracked separately and
+(e.g., Esquire US vs Esquire South Africa) are tracked separately and
 don't get merged into the same tracking record.
 """
 
