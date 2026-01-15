@@ -406,7 +406,10 @@ class MetadataExtractor:
         if not month_num:
             return None
 
-        metadata["issue_date"] = datetime(int(year_str), month_num, 1)
+        year = int(year_str)
+        metadata["issue_date"] = datetime(year, month_num, 1)
+        metadata["year"] = year
+        metadata["month_name"] = month_str.capitalize()
 
         if magazine_name:
             metadata["title"] = magazine_name
