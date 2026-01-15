@@ -293,9 +293,22 @@ class FileImporter:
 
             # Check for duplicates using fuzzy matching on tracking titles AND issue date
             # A duplicate is defined as: same tracking title (fuzzy match) AND same issue date (within 5 days)
+            # Normalize existing titles to use full country names for consistent comparison
             existing_magazines = session.query(Magazine).all()
             for existing in existing_magazines:
-                is_match, score = self.title_matcher.match(tracking_title, existing.title)
+                # Normalize the existing title to use full country names instead of codes
+                # This ensures "Esquire US" matches "Esquire United States"
+                existing_normalized = existing.title
+                existing_metadata = existing.extra_metadata or {}
+                existing_country = existing_metadata.get("country")
+
+                if existing_country:
+                    country_name = ISO_COUNTRIES.get(existing_country, existing_country)
+                    # Replace country code with country name if it appears at the end of the title
+                    if existing.title.endswith(f" {existing_country}"):
+                        existing_normalized = existing.title[:-len(existing_country) - 1] + f" {country_name}"
+
+                is_match, score = self.title_matcher.match(tracking_title, existing_normalized)
                 if is_match and parsed.issue_date and existing.issue_date:
                     date_diff = abs((parsed.issue_date - existing.issue_date).days)
                     # Also check language match for duplicates
