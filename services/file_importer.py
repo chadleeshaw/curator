@@ -5,7 +5,6 @@ Extracts cover art, categorizes files, and adds them to the database.
 
 import logging
 import re
-import shutil
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime
 from pathlib import Path
@@ -19,6 +18,7 @@ from core.constants import (
     DEFAULT_LANGUAGE,
     DUPLICATE_DATE_THRESHOLD_DAYS,
 )
+from core.parsers.country import ISO_COUNTRIES
 from core.parsers import generate_language_aware_olid
 from core.parsers import TitleMatcher, FileCategorizer, UnifiedParser
 from core.tracking_matcher import TrackingMatcher
@@ -257,12 +257,38 @@ class FileImporter:
 
             # Include country in tracking title for regional editions
             # Regional editions should have separate tracking from the base edition
+            # Only do this if the country name/code was explicitly in the original filename
+            # to avoid false positives from spurious country detection
             if parsed.country and parsed.country not in ['US', 'XU', 'XW', None]:
                 # Import country name mapping
-                from core.parsers.country import ISO_COUNTRIES
                 country_name = ISO_COUNTRIES.get(parsed.country, parsed.country)
-                # Only append if not already in title
-                if country_name.lower() not in base_title.lower():
+
+                # Check if country name or code was explicitly in the filename
+                # Use word boundaries to avoid false matches (e.g., "TH" in "The")
+                filename_lower = pdf_path.stem.lower()
+
+                # Check for country name (e.g., "South Africa", "United Kingdom")
+                country_name_in_filename = bool(re.search(
+                    rf'\b{re.escape(country_name.lower())}\b',
+                    filename_lower
+                ))
+
+                # Check for country code with word boundaries or as separate token
+                # (e.g., "UK", "ZA" but not "TH" in "The")
+                country_code_in_filename = bool(re.search(
+                    rf'\b{re.escape(parsed.country.lower())}\b',
+                    filename_lower
+                ))
+
+                country_in_filename = country_name_in_filename or country_code_in_filename
+
+                # Only append if:
+                # 1. Country was in filename
+                # 2. Country name not already in title
+                # 3. Country code not already in title
+                if (country_in_filename
+                        and country_name.lower() not in base_title.lower()
+                        and parsed.country.lower() not in base_title.lower()):
                     tracking_title = f"{base_title} {country_name}"
 
             # Check for duplicates using fuzzy matching on tracking titles AND issue date
