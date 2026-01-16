@@ -63,12 +63,15 @@ def parse_month_string(month_str: Optional[str]) -> Tuple[int, str]:
 
 # Global state (injected from main app)
 _session_factory = None
+_organize_base_dir = None
 
 
-def set_dependencies(session_factory):
+def set_dependencies(session_factory, organize_base_dir=None):
     """Set dependencies from main app"""
-    global _session_factory
+    global _session_factory, _organize_base_dir
     _session_factory = session_factory
+    if organize_base_dir:
+        _organize_base_dir = Path(organize_base_dir)
 
 
 @router.get("/periodicals")
@@ -685,8 +688,12 @@ async def regenerate_cover(magazine_id: int, request_data: Dict[str, Any]) -> Di
             if not pdf_path.exists():
                 raise HTTPException(status_code=404, detail="PDF file not found on disk")
 
-            # Determine cover directory
-            cover_dir = pdf_path.parent.parent.parent / ".covers"
+            # Determine cover directory from config
+            if _organize_base_dir:
+                cover_dir = _organize_base_dir / ".covers"
+            else:
+                # Fallback: use pdf's parent directory structure
+                cover_dir = pdf_path.parent.parent.parent / ".covers"
 
             # Extract cover from specified page
             if OCRService.is_available():

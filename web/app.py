@@ -345,7 +345,7 @@ async def lifespan(app: FastAPI):
         app.state.auth_manager = auth_manager
         app.state.auth_middleware = AuthMiddleware(auth_manager)
         search.set_dependencies(search_providers, metadata_providers, title_matcher, session_factory)
-        periodicals.set_dependencies(session_factory)
+        periodicals.set_dependencies(session_factory, storage_config.get("organize_dir", "./"))
         tracking.set_dependencies(session_factory, search_providers, auto_download_task, storage_config, import_config)
         downloads.set_dependencies(session_factory, download_manager, download_client)
         imports.set_dependencies(session_factory, file_importer, storage_config)
