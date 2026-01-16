@@ -457,6 +457,7 @@ The error is handled in services/file_importer.py:142
 ### Environment Variables
 
 - `CURATOR_CONFIG_PATH`: Custom config file location
+- `CURATOR_DRY_RUN`: Set to `true` to enable dry run mode for reorganization (default: `false`)
 - `DISABLE_OCR`: Set to `true` to disable OCR features
 - `USE_GPU`: Set to `0` for CPU-only mode (default)
 

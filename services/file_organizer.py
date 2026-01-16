@@ -505,25 +505,29 @@ class FileOrganizer:
                     if tracking:
                         country = tracking.country
 
-                # Build full title with country code (e.g., "Magazine US", "Magazine DE")
-                # Use the existing title as-is - don't append country code if title already has location info
+                # Build full title with country name (e.g., "Magazine South Africa", "Magazine Germany")
+                # Use the existing title as-is - don't append country if title already has location info
                 full_title = magazine.title
 
-                # Only append country code if:
+                # Only append country name if:
                 # 1. Country code exists in tracking
-                # 2. Title doesn't already end with a country code
-                # 3. Title doesn't already contain common country names
+                # 2. Title doesn't already end with a country code or name
+                # 3. Title doesn't already contain the country name
                 if country:
-                    # Get list of country names from ISO_COUNTRIES constant
-                    country_names = list(ISO_COUNTRIES.values())
+                    # Get country name from code (e.g., "ZA" -> "South Africa")
+                    country_name = ISO_COUNTRIES.get(country)
 
-                    # Check if title already has country info
-                    has_country_name = any(name in magazine.title for name in country_names)
-                    has_country_code = magazine.title.endswith(f" {country}")
+                    if country_name:
+                        # Get list of country names from ISO_COUNTRIES constant
+                        country_names = list(ISO_COUNTRIES.values())
 
-                    if not has_country_name and not has_country_code:
-                        # Title doesn't have country info, add the code
-                        full_title = f"{magazine.title} {country}"
+                        # Check if title already has country info
+                        has_country_name = any(name in magazine.title for name in country_names)
+                        has_country_code = magazine.title.endswith(f" {country}")
+
+                        if not has_country_name and not has_country_code:
+                            # Title doesn't have country info, add the country name
+                            full_title = f"{magazine.title} {country_name}"
 
                 # Build expected path based on pattern
                 metadata = {

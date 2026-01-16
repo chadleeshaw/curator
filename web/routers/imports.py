@@ -3,6 +3,7 @@ File import routes
 """
 
 import logging
+import os
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
@@ -193,7 +194,7 @@ async def import_from_organize_dir(
 async def reorganize_library(
     category: str = "Magazines",
     pattern: Optional[str] = None,
-    dry_run: bool = True,
+    dry_run: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """
     Reorganize files in the library to match the current organization pattern.
@@ -204,12 +205,18 @@ async def reorganize_library(
     Args:
         category: Category to reorganize (default: "Magazines")
         pattern: Organization pattern with tags like {category}/{title}/{year}/ (uses config default if not provided)
-        dry_run: If True, only report what would be done without making changes (default: True)
+        dry_run: If True, only report what would be done without making changes.
+                 If None (default), checks CURATOR_DRY_RUN env var (defaults to False if not set)
 
     Returns:
         Reorganization results
     """
     try:
+        # Determine dry_run value: parameter > env var > default False
+        if dry_run is None:
+            dry_run_env = os.environ.get("CURATOR_DRY_RUN", "false").lower()
+            dry_run = dry_run_env in ("true", "1", "yes")
+
         if not _file_importer:
             raise HTTPException(status_code=503, detail=ErrorMessages.FILE_IMPORTER_UNAVAILABLE)
 
