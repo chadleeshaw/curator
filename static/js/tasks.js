@@ -134,6 +134,149 @@ export class TasksManager {
       UIUtils.showStatus('tasks-status', 'Error running task', 'error');
     }
   }
+
+  /**
+   * Run reorganization preview (dry run)
+   */
+  async runReorganizePreview() {
+    const category = document.getElementById('reorganize-category').value;
+    const pattern = document.getElementById('reorganize-pattern').value || null;
+
+    try {
+      UIUtils.showStatus('reorganize-status', '🔍 Analyzing files...', 'info');
+      document.getElementById('reorganize-results').innerHTML = '';
+
+      const params = new URLSearchParams({
+        category,
+        dry_run: 'true',
+      });
+
+      if (pattern) {
+        params.append('pattern', pattern);
+      }
+
+      const response = await APIClient.authenticatedFetch(
+        `/api/import/reorganize?${params.toString()}`,
+        {
+          method: 'POST',
+        }
+      );
+
+      const data = await response.json();
+
+      if (data.success) {
+        this.displayReorganizeResults(data, true);
+        UIUtils.showStatus(
+          'reorganize-status',
+          `Preview complete: ${data.files_reorganized} file(s) would be reorganized`,
+          'success'
+        );
+      } else {
+        UIUtils.showStatus('reorganize-status', data.error || 'Preview failed', 'error');
+      }
+    } catch (error) {
+      console.error('Error running reorganize preview:', error);
+      UIUtils.showStatus('reorganize-status', `Error: ${error.message}`, 'error');
+    }
+  }
+
+  /**
+   * Run actual reorganization
+   */
+  async runReorganize() {
+    const category = document.getElementById('reorganize-category').value;
+    const pattern = document.getElementById('reorganize-pattern').value || null;
+
+    // Confirm before running
+    const filesReorganized = document.getElementById('reorganize-results').textContent;
+    const confirmMsg = filesReorganized
+      ? 'Are you sure you want to reorganize these files? This will move files and delete old directories.'
+      : 'Are you sure you want to reorganize files? Run Preview first to see what will change.';
+
+    if (!confirm(confirmMsg)) {
+      return;
+    }
+
+    try {
+      UIUtils.showStatus('reorganize-status', '📁 Reorganizing files...', 'info');
+      document.getElementById('reorganize-results').innerHTML = '';
+
+      const params = new URLSearchParams({
+        category,
+        dry_run: 'false',
+      });
+
+      if (pattern) {
+        params.append('pattern', pattern);
+      }
+
+      const response = await APIClient.authenticatedFetch(
+        `/api/import/reorganize?${params.toString()}`,
+        {
+          method: 'POST',
+        }
+      );
+
+      const data = await response.json();
+
+      if (data.success) {
+        this.displayReorganizeResults(data, false);
+        UIUtils.showStatus(
+          'reorganize-status',
+          `✓ Reorganized ${data.files_reorganized} file(s) successfully`,
+          'success'
+        );
+      } else {
+        UIUtils.showStatus('reorganize-status', data.error || 'Reorganization failed', 'error');
+      }
+    } catch (error) {
+      console.error('Error running reorganize:', error);
+      UIUtils.showStatus('reorganize-status', `Error: ${error.message}`, 'error');
+    }
+  }
+
+  /**
+   * Display reorganization results
+   */
+  displayReorganizeResults(data, isPreview) {
+    const resultsDiv = document.getElementById('reorganize-results');
+
+    const statusLabel = isPreview ? 'Would be reorganized' : 'Reorganized';
+    const skippedLabel = isPreview ? 'Would be skipped' : 'Skipped';
+
+    let html = `
+      <div style="padding: 15px; background: var(--background); border: 1px solid var(--border); border-radius: 6px;">
+        <h4 style="margin-top: 0; color: var(--text-primary);">${isPreview ? '🔍 Preview' : '✓ Completed'}</h4>
+        <div style="display: grid; gap: 8px; font-size: 0.95em;">
+          <div><strong>Category:</strong> ${data.category}</div>
+          <div><strong>Pattern:</strong> ${data.pattern}</div>
+          <div><strong>Files found:</strong> ${data.files_found}</div>
+          <div style="color: ${data.files_reorganized > 0 ? 'var(--status-completed)' : 'var(--text-secondary)'};">
+            <strong>${statusLabel}:</strong> ${data.files_reorganized}
+          </div>
+          <div><strong>${skippedLabel}:</strong> ${data.files_skipped}</div>
+        </div>
+    `;
+
+    if (data.errors && data.errors.length > 0) {
+      html += `
+        <div style="margin-top: 15px; padding: 10px; background: var(--status-failed-bg); border: 1px solid var(--status-failed); border-radius: 4px;">
+          <strong style="color: var(--status-failed);">⚠️ Errors (${data.errors.length}):</strong>
+          <ul style="margin: 8px 0 0 20px; color: var(--text-secondary); font-size: 0.9em;">
+            ${data.errors
+              .slice(0, 5)
+              .map((err) => `<li>${err}</li>`)
+              .join('')}
+            ${data.errors.length > 5 ? `<li><em>... and ${data.errors.length - 5} more</em></li>` : ''}
+          </ul>
+        </div>
+      `;
+    }
+
+    html += '</div>';
+
+    resultsDiv.innerHTML = html;
+  }
 }
 
 // Create singleton instance
@@ -141,3 +284,5 @@ export const tasks = new TasksManager();
 
 // Expose functions globally for onclick handlers
 window.runTaskManually = (taskId) => tasks.runTaskManually(taskId);
+window.runReorganizePreview = () => tasks.runReorganizePreview();
+window.runReorganize = () => tasks.runReorganize();

@@ -1079,6 +1079,44 @@ export class DownloadsManager {
       this.refreshInterval = null;
     }
   }
+
+  /**
+   * Clear all pending downloads from the queue
+   *
+   * @returns {Promise<void>}
+   */
+  async clearPendingDownloads() {
+    try {
+      // Confirm before clearing
+      const confirmMsg =
+        'Are you sure you want to clear all pending downloads? This cannot be undone.';
+
+      if (!confirm(confirmMsg)) {
+        return;
+      }
+
+      UIUtils.showStatus('downloads-status', '🗑️ Clearing pending downloads...', 'info');
+
+      const response = await APIClient.authenticatedFetch('/api/downloads/queue/pending', {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        UIUtils.showStatus('downloads-status', data.message, 'success');
+        setTimeout(() => {
+          UIUtils.hideStatus('downloads-status');
+          this.loadDownloadQueue(); // Refresh the queue
+        }, 2000);
+      } else {
+        UIUtils.showStatus('downloads-status', data.message || 'Failed to clear pending', 'error');
+      }
+    } catch (error) {
+      console.error('[Downloads] Error clearing pending downloads:', error);
+      UIUtils.showStatus('downloads-status', `Error: ${error.message}`, 'error');
+    }
+  }
 }
 
 // Create singleton instance
@@ -1094,3 +1132,4 @@ window.openCleanupModal = () => downloads.openCleanupModal();
 window.closeCleanupModal = () => downloads.closeCleanupModal();
 window.previewCleanup = () => downloads.previewCleanup();
 window.executeCleanup = () => downloads.executeCleanup();
+window.clearPendingDownloads = () => downloads.clearPendingDownloads();
