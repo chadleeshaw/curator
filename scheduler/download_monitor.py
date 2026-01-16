@@ -12,6 +12,7 @@ from typing import Callable, Optional
 from sqlalchemy.orm import Session, sessionmaker
 
 from core.constants import DOWNLOAD_FILE_SEARCH_DEPTH
+from core.metadata_sidecar import create_sidecar_file
 from models.database import DownloadSubmission, MagazineTracking
 from services import DownloadManager
 from services import FileImporter
@@ -397,6 +398,24 @@ class DownloadMonitorTask:
                 continue
 
             logger.debug(f"[DownloadMonitor] Found file at: {file_path}")
+
+            # Create sidecar metadata file if we have tracking info
+            # This preserves the tracking association even if the filename is ambiguous
+            if submission.tracking_id:
+                try:
+                    tracking = session.query(MagazineTracking).filter_by(id=submission.tracking_id).first()
+                    if tracking:
+                        create_sidecar_file(
+                            file_path,
+                            tracking_id=tracking.id,
+                            tracking_title=tracking.title,
+                            submission_id=submission.id,
+                            category=tracking.category,
+                            language=tracking.language,
+                            country=tracking.country,
+                        )
+                except Exception as e:
+                    logger.warning(f"Failed to create sidecar file for {file_path.name}: {e}")
 
             try:
                 logger.debug(f"[DownloadMonitor] Importing file from client download: {file_path}")

@@ -22,6 +22,7 @@ from core.parsers.country import ISO_COUNTRIES
 from core.parsers import generate_language_aware_olid
 from core.parsers import TitleMatcher, FileCategorizer, UnifiedParser
 from core.tracking_matcher import TrackingMatcher
+from core.metadata_sidecar import read_sidecar_file, delete_sidecar_file
 from core.pdf_utils import extract_cover_from_pdf
 from core.epub_utils import extract_cover_from_epub
 from core.utils import find_pdf_epub_files, hash_file_in_chunks
@@ -210,6 +211,17 @@ class FileImporter:
             True if successful, False otherwise
         """
         try:
+            # Check for sidecar metadata file first - this provides tracking context
+            # that may not be available from the filename alone
+            sidecar_metadata = read_sidecar_file(pdf_path)
+            if sidecar_metadata and not tracking_id:
+                # Use tracking_id from sidecar if not explicitly provided
+                tracking_id = sidecar_metadata.get("tracking_id")
+                logger.debug(
+                    f"Found sidecar metadata for {pdf_path.name}: tracking_id={tracking_id}, "
+                    f"tracking_title='{sidecar_metadata.get('tracking_title')}'"
+                )
+
             # Parse file using unified parser - combines filename and filepath parsing
             parsed = self.parser.parse_file(pdf_path)
 
@@ -560,11 +572,15 @@ class FileImporter:
     def _cleanup_download_file(self, pdf_path: Path) -> None:
         """
         Clean up a file from downloads folder and its parent directory if empty.
+        Also removes sidecar metadata file if present.
 
         Args:
             pdf_path: Path to PDF file in downloads folder
         """
         try:
+            # Delete sidecar metadata file if it exists
+            delete_sidecar_file(pdf_path)
+
             if pdf_path.exists() and pdf_path.is_file():
                 pdf_path.unlink()
                 logger.info(f"Deleted file from downloads: {pdf_path.name}")
