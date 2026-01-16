@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from core.constants.country import ISO_COUNTRIES
 from core.constants.files import (
     PDF_COVER_DPI_HIGH,
     PDF_COVER_QUALITY_HIGH,
@@ -504,11 +505,24 @@ class FileOrganizer:
                     if tracking:
                         country = tracking.country
 
-                # Build full title with country (e.g., "Magazine US", "Magazine Germany")
+                # Build full title with country code (e.g., "Magazine US", "Magazine DE")
+                # Use the existing title as-is - don't append country code if title already has location info
                 full_title = magazine.title
+
+                # Only append country code if:
+                # 1. Country code exists in tracking
+                # 2. Title doesn't already end with a country code
+                # 3. Title doesn't already contain common country names
                 if country:
-                    # Only append country if not already in title
-                    if not magazine.title.endswith(f" {country}"):
+                    # Get list of country names from ISO_COUNTRIES constant
+                    country_names = list(ISO_COUNTRIES.values())
+
+                    # Check if title already has country info
+                    has_country_name = any(name in magazine.title for name in country_names)
+                    has_country_code = magazine.title.endswith(f" {country}")
+
+                    if not has_country_name and not has_country_code:
+                        # Title doesn't have country info, add the code
                         full_title = f"{magazine.title} {country}"
 
                 # Build expected path based on pattern
@@ -715,10 +729,23 @@ class FileOrganizer:
                     files_skipped += 1
                     continue
 
-                # Build full title with country
+                # Build full title with country code (e.g., "Magazine US", "Magazine DE")
+                # Use the tracking title as-is - don't append country code if title already has location info
                 full_title = tracking_title
+
+                # Only append country code if:
+                # 1. Country code exists
+                # 2. Title doesn't already contain common country names
                 if country:
-                    full_title = f"{tracking_title} {country}"
+                    # Get list of country names from ISO_COUNTRIES constant
+                    country_names = list(ISO_COUNTRIES.values())
+
+                    # Check if title already has country info
+                    has_country_name = any(name in tracking_title for name in country_names)
+
+                    if not has_country_name:
+                        # Title doesn't have country info, add the code
+                        full_title = f"{tracking_title} {country}"
 
                 # Parse filename to get date information
                 from core.parsers.metadata import MetadataExtractor

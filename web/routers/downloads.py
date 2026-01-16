@@ -459,6 +459,48 @@ async def retry_download(submission_id: int) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.delete("/queue/pending")
+async def clear_pending_downloads() -> Dict[str, Any]:
+    """Clear all pending downloads from the queue"""
+    try:
+
+        def _db_operation():
+            db_session = _session_factory()
+            try:
+                # Get all pending downloads
+                pending_query = db_session.query(DownloadSubmission).filter(
+                    DownloadSubmission.status == DownloadSubmission.StatusEnum.PENDING
+                )
+
+                count = pending_query.count()
+
+                if count == 0:
+                    return {
+                        "success": True,
+                        "deleted": 0,
+                        "message": "No pending downloads to clear",
+                    }
+
+                # Delete all pending downloads
+                pending_query.delete()
+                db_session.commit()
+
+                logger.info(f"Cleared {count} pending downloads from queue")
+
+                return {
+                    "success": True,
+                    "deleted": count,
+                    "message": f"Cleared {count} pending download(s) from queue",
+                }
+            finally:
+                db_session.close()
+
+        return await run_in_thread(_db_operation)
+    except Exception as e:
+        logger.error(f"Error clearing pending downloads: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.delete("/queue/{submission_id}")
 async def delete_from_queue(submission_id: int) -> Dict[str, Any]:
     """Remove a submission from the download queue"""
@@ -518,48 +560,6 @@ async def cleanup_old_submissions(days_old: int = 30, status_filter: str = None)
         return await run_in_thread(_db_operation)
     except Exception as e:
         logger.error(f"Error cleaning up queue: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.delete("/queue/pending")
-async def clear_pending_downloads() -> Dict[str, Any]:
-    """Clear all pending downloads from the queue"""
-    try:
-
-        def _db_operation():
-            db_session = _session_factory()
-            try:
-                # Get all pending downloads
-                pending_query = db_session.query(DownloadSubmission).filter(
-                    DownloadSubmission.status == DownloadSubmission.StatusEnum.PENDING
-                )
-
-                count = pending_query.count()
-
-                if count == 0:
-                    return {
-                        "success": True,
-                        "deleted": 0,
-                        "message": "No pending downloads to clear",
-                    }
-
-                # Delete all pending downloads
-                pending_query.delete()
-                db_session.commit()
-
-                logger.info(f"Cleared {count} pending downloads from queue")
-
-                return {
-                    "success": True,
-                    "deleted": count,
-                    "message": f"Cleared {count} pending download(s) from queue",
-                }
-            finally:
-                db_session.close()
-
-        return await run_in_thread(_db_operation)
-    except Exception as e:
-        logger.error(f"Error clearing pending downloads: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
