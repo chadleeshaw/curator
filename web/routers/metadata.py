@@ -7,6 +7,7 @@ from typing import Any, Dict
 
 from fastapi import APIRouter
 
+from core.constants.app import MAX_DOWNLOAD_RETRIES
 from core.constants.country import (
     ISO_COUNTRIES,
     LANGUAGE_TO_COUNTRY,
@@ -43,6 +44,7 @@ async def get_all_constants() -> Dict[str, Any]:
         "language_to_country": LANGUAGE_TO_COUNTRY,
         "country_indicators": COUNTRY_INDICATORS,
         "language_keywords": LANGUAGE_KEYWORDS,
+        "max_download_retries": MAX_DOWNLOAD_RETRIES,
     }
 
 

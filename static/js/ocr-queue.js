@@ -15,6 +15,27 @@ import {
 export class OCRQueueManager {
   constructor() {
     this.refreshInterval = null;
+    /** @type {number} Maximum OCR retry attempts */
+    this.maxRetries = 3; // Default value, will be loaded from API
+
+    // Load constants from API
+    this.loadConstants();
+  }
+
+  /**
+   * Load application constants from the API
+   * @returns {Promise<void>}
+   */
+  async loadConstants() {
+    try {
+      const response = await APIClient.get('/api/constants');
+      const data = await response.json();
+      if (data.success && data.max_ocr_retries) {
+        this.maxRetries = data.max_ocr_retries;
+      }
+    } catch (error) {
+      console.warn('[OCR Queue] Failed to load constants, using defaults:', error);
+    }
   }
 
   /**
@@ -139,7 +160,7 @@ export class OCRQueueManager {
 
       // Add additional context based on status (but not for processing since badge already says it)
       if (job.status === 'failed' && job.attempt_count) {
-        statusContent += `<div style="font-size: 0.8em; color: var(--text-secondary); margin-top: 4px;">Attempt ${job.attempt_count}/3</div>`;
+        statusContent += `<div style="font-size: 0.8em; color: var(--text-secondary); margin-top: 4px;">Attempt ${job.attempt_count}/${this.maxRetries}</div>`;
       } else if (job.status === 'completed' && job.processing_time_seconds) {
         statusContent += `<div style="font-size: 0.8em; color: var(--text-secondary); margin-top: 4px;">${job.processing_time_seconds}s</div>`;
       }

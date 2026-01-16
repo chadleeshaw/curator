@@ -49,12 +49,33 @@ export class DownloadsManager {
     this.refreshInterval = null;
     /** @type {boolean} Whether to include bad files in display */
     this.showBadFiles = true;
+    /** @type {number} Maximum download retry attempts */
+    this.maxRetries = 3; // Default value, will be loaded from API
     /** @type {DownloadItem[]|null} Current items in modal */
     this.currentModalItems = null;
     /** @type {string|null} Current periodical in modal */
     this.currentModalPeriodical = null;
     /** @type {string} Current filter in modal */
     this.currentModalFilter = 'all';
+
+    // Load constants from API
+    this.loadConstants();
+  }
+
+  /**
+   * Load application constants from the API
+   * @returns {Promise<void>}
+   */
+  async loadConstants() {
+    try {
+      const response = await APIClient.get('/api/constants');
+      const data = await response.json();
+      if (data.success && data.max_download_retries) {
+        this.maxRetries = data.max_download_retries;
+      }
+    } catch (error) {
+      console.warn('[Downloads] Failed to load constants, using defaults:', error);
+    }
   }
 
   /**
@@ -639,7 +660,7 @@ export class DownloadsManager {
         <tr>
           <td style="padding: 10px; border-bottom: 1px solid var(--border-color);">${title}</td>
           <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
-            <span style="background: ${color}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.85em;">${attemptCount}/3</span>
+            <span style="background: ${color}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.85em;">${attemptCount}/${this.maxRetries}</span>
           </td>
           <td style="padding: 10px; border-bottom: 1px solid var(--border-color); font-size: 0.85em;">${lastError ?? 'Unknown'}</td>
           <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
