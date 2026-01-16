@@ -204,8 +204,17 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
 
                 db_session.commit()
 
+                # Extract tracking data before closing session
+                tracking_data = {
+                    "id": tracking.id,
+                    "title": tracking.title,
+                    "track_all_editions": tracking.track_all_editions,
+                    "track_new_only": tracking.track_new_only,
+                    "delete_from_client_on_completion": tracking.delete_from_client_on_completion,
+                }
+
                 return {
-                    "tracking": tracking,
+                    "tracking_data": tracking_data,
                     "old_title": old_title,
                     "title_changed": title_changed,
                     "files_reorganized": files_reorganized,
@@ -216,7 +225,7 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
                 db_session.close()
 
         result = await run_in_thread(_update)
-        tracking = result["tracking"]
+        tracking_data = result["tracking_data"]
         title_changed = result["title_changed"]
         files_reorganized = result["files_reorganized"]
         directories_to_cleanup = result["directories_to_cleanup"]
@@ -230,7 +239,7 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
                     cleanup_empty_directories(directory, organize_base_dir)
 
             logger.info(
-                f"Title changed from '{old_title}' to '{tracking.title}', reorganized {files_reorganized} files"
+                f"Title changed from '{old_title}' to '{tracking_data['title']}', reorganized {files_reorganized} files"
             )
 
         # Trigger immediate auto-download check if tracking settings changed
@@ -239,20 +248,16 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
 
             try:
                 asyncio.create_task(_shared._auto_download_task_func())
-                logger.info(f"Triggered immediate auto-download check after updating tracking for '{tracking.title}'")
+                logger.info(
+                    f"Triggered immediate auto-download check after updating tracking for '{tracking_data['title']}'"
+                )
             except Exception as e:
                 logger.warning(f"Could not trigger immediate auto-download: {e}")
 
         response = {
             "success": True,
             "message": "Tracking updated successfully",
-            "tracking": {
-                "id": tracking.id,
-                "title": tracking.title,
-                "track_all_editions": tracking.track_all_editions,
-                "track_new_only": tracking.track_new_only,
-                "delete_from_client_on_completion": tracking.delete_from_client_on_completion,
-            },
+            "tracking": tracking_data,
         }
 
         if title_changed:
