@@ -651,8 +651,11 @@ class FileImporter:
 
     def _cleanup_download_file(self, pdf_path: Path) -> None:
         """
-        Clean up a file from downloads folder and its parent directory if empty.
+        Clean up a file from downloads folder and its parent directory.
         Also removes sidecar metadata file if present.
+
+        This removes the entire download directory (e.g., the SABnzbd/NZBGet folder)
+        including any leftover files like .nzb, .par2, .nfo, etc.
 
         Args:
             pdf_path: Path to PDF file in downloads folder
@@ -665,12 +668,13 @@ class FileImporter:
                 pdf_path.unlink()
                 logger.info(f"Deleted file from downloads: {pdf_path.name}")
 
-            # Also cleanup parent directory if it's empty and within downloads
+            # Cleanup parent directory (including any leftover files) if within downloads
             parent_dir = pdf_path.parent
             if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
-                if parent_dir.exists() and not any(parent_dir.iterdir()):
-                    parent_dir.rmdir()
-                    logger.info(f"Deleted empty download folder: {parent_dir.name}")
+                if parent_dir.exists():
+                    # Remove directory and all its contents (e.g., .nzb, .par2, .nfo files)
+                    shutil.rmtree(parent_dir)
+                    logger.info(f"Deleted download folder and contents: {parent_dir.name}")
         except Exception as e:
             logger.warning(f"Failed to cleanup download file: {e}")
 
