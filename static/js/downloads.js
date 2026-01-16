@@ -1109,10 +1109,12 @@ export class DownloadsManager {
   async clearPendingDownloads() {
     try {
       // Confirm before clearing
-      const confirmMsg =
-        'Are you sure you want to clear all pending downloads? This cannot be undone.';
+      const confirmed = await UIUtils.confirm(
+        'Clear Pending Downloads',
+        'Are you sure you want to clear all pending downloads? This cannot be undone.'
+      );
 
-      if (!confirm(confirmMsg)) {
+      if (!confirmed) {
         return;
       }
 

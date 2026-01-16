@@ -839,7 +839,8 @@ export class SettingsManager {
    * Regenerate a new API token
    */
   async regenerateAPIToken() {
-    const confirmed = confirm(
+    const confirmed = await UIUtils.confirm(
+      'Regenerate API Token',
       'Are you sure you want to regenerate your API token? This will invalidate the old token.'
     );
     if (!confirmed) return;

@@ -193,7 +193,9 @@ export class TasksManager {
       ? 'Are you sure you want to reorganize these files? This will move files and delete old directories.'
       : 'Are you sure you want to reorganize files? Run Preview first to see what will change.';
 
-    if (!confirm(confirmMsg)) {
+    const confirmed = await UIUtils.confirm('Reorganize Files', confirmMsg);
+
+    if (!confirmed) {
       return;
     }
 
