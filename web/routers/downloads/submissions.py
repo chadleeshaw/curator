@@ -15,6 +15,7 @@ from web.schemas import (
     DownloadSingleIssueRequest,
     DownloadSubmissionResponse,
 )
+from core.utils import run_in_thread
 
 from . import _shared
 
@@ -50,26 +51,39 @@ async def download_all_periodical_issues(
     """Search for and download all available issues of a tracked periodical"""
     try:
         if not _shared._download_manager:
-            raise HTTPException(status_code=503, detail=ErrorMessages.DOWNLOAD_MANAGER_UNAVAILABLE)
+            raise HTTPException(
+                status_code=503, detail=ErrorMessages.DOWNLOAD_MANAGER_UNAVAILABLE
+            )
 
-        db_session = _shared._session_factory()
-        try:
-            tracking = db_session.query(MagazineTracking).filter(MagazineTracking.id == request.tracking_id).first()
-            if not tracking:
-                raise HTTPException(status_code=404, detail="Tracking record not found")
+        def _download():
+            db_session = _shared._session_factory()
+            try:
+                tracking = (
+                    db_session.query(MagazineTracking)
+                    .filter(MagazineTracking.id == request.tracking_id)
+                    .first()
+                )
+                if not tracking:
+                    raise HTTPException(
+                        status_code=404, detail="Tracking record not found"
+                    )
 
-            results = _shared._download_manager.download_all_periodical_issues(request.tracking_id, db_session)
-            return {
-                "success": True,
-                "tracking_id": request.tracking_id,
-                "magazine": tracking.title,
-                "submitted": results["submitted"],
-                "skipped": results["skipped"],
-                "failed": results["failed"],
-                "message": f"Started downloading issues: {results['submitted']} submitted, {results['skipped']} skipped",
-            }
-        finally:
-            db_session.close()
+                results = _shared._download_manager.download_all_periodical_issues(
+                    request.tracking_id, db_session
+                )
+                return {
+                    "success": True,
+                    "tracking_id": request.tracking_id,
+                    "magazine": tracking.title,
+                    "submitted": results["submitted"],
+                    "skipped": results["skipped"],
+                    "failed": results["failed"],
+                    "message": f"Started downloading issues: {results['submitted']} submitted, {results['skipped']} skipped",
+                }
+            finally:
+                db_session.close()
+
+        return await run_in_thread(_download)
     except HTTPException:
         raise
     except Exception as e:
@@ -84,39 +98,56 @@ async def download_single_issue(
     """Download a single issue"""
     try:
         if not _shared._download_manager:
-            raise HTTPException(status_code=503, detail=ErrorMessages.DOWNLOAD_MANAGER_UNAVAILABLE)
-
-        db_session = _shared._session_factory()
-        try:
-            tracking = db_session.query(MagazineTracking).filter(MagazineTracking.id == request.tracking_id).first()
-            if not tracking:
-                raise HTTPException(status_code=404, detail="Tracking record not found")
-
-            search_result = {
-                "title": request.title,
-                "url": request.url,
-                "provider": request.provider or "manual",
-                "publication_date": (
-                    datetime.fromisoformat(request.publication_date) if request.publication_date else None
-                ),
-                "raw_metadata": {},
-            }
-
-            submission = _shared._download_manager.download_single_issue(request.tracking_id, search_result, db_session)
-            if not submission:
-                raise HTTPException(status_code=500, detail="Failed to submit download")
-
-            return DownloadSubmissionResponse(
-                submission_id=submission.id,
-                job_id=submission.job_id,
-                tracking_id=request.tracking_id,
-                title=request.title,
-                url=request.url,
-                status=submission.status.value,
-                message=f"Download submitted: {request.title}",
+            raise HTTPException(
+                status_code=503, detail=ErrorMessages.DOWNLOAD_MANAGER_UNAVAILABLE
             )
-        finally:
-            db_session.close()
+
+        def _download():
+            db_session = _shared._session_factory()
+            try:
+                tracking = (
+                    db_session.query(MagazineTracking)
+                    .filter(MagazineTracking.id == request.tracking_id)
+                    .first()
+                )
+                if not tracking:
+                    raise HTTPException(
+                        status_code=404, detail="Tracking record not found"
+                    )
+
+                search_result = {
+                    "title": request.title,
+                    "url": request.url,
+                    "provider": request.provider or "manual",
+                    "publication_date": (
+                        datetime.fromisoformat(request.publication_date)
+                        if request.publication_date
+                        else None
+                    ),
+                    "raw_metadata": {},
+                }
+
+                submission = _shared._download_manager.download_single_issue(
+                    request.tracking_id, search_result, db_session
+                )
+                if not submission:
+                    raise HTTPException(
+                        status_code=500, detail="Failed to submit download"
+                    )
+
+                return DownloadSubmissionResponse(
+                    submission_id=submission.id,
+                    job_id=submission.job_id,
+                    tracking_id=request.tracking_id,
+                    title=request.title,
+                    url=request.url,
+                    status=submission.status.value,
+                    message=f"Download submitted: {request.title}",
+                )
+            finally:
+                db_session.close()
+
+        return await run_in_thread(_download)
     except HTTPException:
         raise
     except Exception as e:

@@ -9,6 +9,8 @@ from typing import Any, Callable, Dict, Optional
 
 from fastapi import APIRouter
 
+from core.utils import run_in_thread
+
 logger = logging.getLogger(__name__)
 
 # Create the main router that all sub-routers will use
@@ -39,7 +41,12 @@ def set_dependencies(
         storage_config: Storage configuration dict
         import_config: Import configuration dict
     """
-    global _session_factory, _search_providers, _auto_download_task_func, _storage_config, _import_config
+    global \
+        _session_factory, \
+        _search_providers, \
+        _auto_download_task_func, \
+        _storage_config, \
+        _import_config
     _session_factory = session_factory
     _search_providers = search_providers
     _auto_download_task_func = auto_download_task

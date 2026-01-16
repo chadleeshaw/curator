@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 
 # Path setup handled by conftest.py
 
-from services.ocr_queue import OCRQueueService
+from services.ocr.queue import OCRQueueService
 
 
 def test_ocr_queue_initialization():

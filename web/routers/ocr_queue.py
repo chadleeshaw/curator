@@ -7,8 +7,9 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy.orm import sessionmaker
 
 from core.constants.errors import ErrorMessages
+from core.utils import run_in_thread
 from models.database import OCRJob, Magazine
-from services.ocr_queue import OCRQueueService
+from services.ocr.queue import OCRQueueService
 
 logger = logging.getLogger(__name__)
 
@@ -38,60 +39,75 @@ async def get_ocr_queue(status: Optional[str] = None):
     if _session_factory is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
 
-    db = _session_factory()
-    try:
-        query = db.query(OCRJob).join(Magazine, OCRJob.magazine_id == Magazine.id)
+    def _db_operation():
+        db = _session_factory()
+        try:
+            query = db.query(OCRJob).join(Magazine, OCRJob.magazine_id == Magazine.id)
 
-        # Filter by status if provided
-        if status:
-            try:
-                status_enum = OCRJob.StatusEnum[status.upper()]
-                query = query.filter(OCRJob.status == status_enum)
-            except KeyError:
-                raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
+            # Filter by status if provided
+            if status:
+                try:
+                    status_enum = OCRJob.StatusEnum[status.upper()]
+                    query = query.filter(OCRJob.status == status_enum)
+                except KeyError:
+                    raise HTTPException(
+                        status_code=400, detail=f"Invalid status: {status}"
+                    )
 
-        # Order by priority (highest first) and creation time
-        jobs = query.order_by(OCRJob.priority.desc(), OCRJob.created_at).all()
+            # Order by priority (highest first) and creation time
+            jobs = query.order_by(OCRJob.priority.desc(), OCRJob.created_at).all()
 
-        # Build response with magazine details
-        result = []
-        for job in jobs:
-            magazine = db.query(Magazine).filter(Magazine.id == job.magazine_id).first()
-            if not magazine:
-                continue
+            # Build response with magazine details
+            result = []
+            for job in jobs:
+                magazine = (
+                    db.query(Magazine).filter(Magazine.id == job.magazine_id).first()
+                )
+                if not magazine:
+                    continue
 
-            # Format issue date for display
-            issue_display = ""
-            if magazine.issue_date:
-                issue_display = magazine.issue_date.strftime("%b %Y")
+                # Format issue date for display
+                issue_display = ""
+                if magazine.issue_date:
+                    issue_display = magazine.issue_date.strftime("%b %Y")
 
-            result.append(
-                {
-                    "id": job.id,
-                    "magazine_id": job.magazine_id,
-                    "magazine_title": magazine.title,
-                    "magazine_issue": issue_display,
-                    "magazine_year": (magazine.issue_date.year if magazine.issue_date else None),
-                    "status": job.status.value,
-                    "priority": job.priority,
-                    "language": job.language,
-                    "attempt_count": job.attempt_count,
-                    "last_error": job.last_error,
-                    "ocr_metadata": job.ocr_metadata,
-                    "processing_time_seconds": job.processing_time_seconds,
-                    "created_at": (job.created_at.isoformat() if job.created_at else None),
-                    "started_at": (job.started_at.isoformat() if job.started_at else None),
-                    "completed_at": (job.completed_at.isoformat() if job.completed_at else None),
-                }
-            )
+                result.append(
+                    {
+                        "id": job.id,
+                        "magazine_id": job.magazine_id,
+                        "magazine_title": magazine.title,
+                        "magazine_issue": issue_display,
+                        "magazine_year": (
+                            magazine.issue_date.year if magazine.issue_date else None
+                        ),
+                        "status": job.status.value,
+                        "priority": job.priority,
+                        "language": job.language,
+                        "attempt_count": job.attempt_count,
+                        "last_error": job.last_error,
+                        "ocr_metadata": job.ocr_metadata,
+                        "processing_time_seconds": job.processing_time_seconds,
+                        "created_at": (
+                            job.created_at.isoformat() if job.created_at else None
+                        ),
+                        "started_at": (
+                            job.started_at.isoformat() if job.started_at else None
+                        ),
+                        "completed_at": (
+                            job.completed_at.isoformat() if job.completed_at else None
+                        ),
+                    }
+                )
 
-        return {"jobs": result, "count": len(result)}
+            return {"jobs": result, "count": len(result)}
 
-    except Exception as e:
-        logger.error(f"Error fetching OCR queue: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
+        except Exception as e:
+            logger.error(f"Error fetching OCR queue: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+        finally:
+            db.close()
+
+    return await run_in_thread(_db_operation)
 
 
 @router.get("/queue/stats")
@@ -105,15 +121,18 @@ async def get_ocr_stats():
     if _session_factory is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
 
-    db = _session_factory()
-    try:
-        stats = OCRQueueService.get_queue_status(db)
-        return stats
-    except Exception as e:
-        logger.error(f"Error fetching OCR stats: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
+    def _db_operation():
+        db = _session_factory()
+        try:
+            stats = OCRQueueService.get_queue_status(db)
+            return stats
+        except Exception as e:
+            logger.error(f"Error fetching OCR stats: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=str(e))
+        finally:
+            db.close()
+
+    return await run_in_thread(_db_operation)
 
 
 @router.post("/retry/{job_id}")
@@ -130,45 +149,50 @@ async def retry_ocr_job(job_id: int):
     if _session_factory is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
 
-    db = _session_factory()
-    try:
-        job = db.query(OCRJob).filter(OCRJob.id == job_id).first()
+    def _db_operation():
+        db = _session_factory()
+        try:
+            job = db.query(OCRJob).filter(OCRJob.id == job_id).first()
 
-        if not job:
-            raise HTTPException(status_code=404, detail=ErrorMessages.OCR_JOB_NOT_FOUND)
+            if not job:
+                raise HTTPException(
+                    status_code=404, detail=ErrorMessages.OCR_JOB_NOT_FOUND
+                )
 
-        if job.status != OCRJob.StatusEnum.FAILED:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Can only retry failed jobs (current status: {job.status.value})",
-            )
+            if job.status != OCRJob.StatusEnum.FAILED:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Can only retry failed jobs (current status: {job.status.value})",
+                )
 
-        # Reset job to pending
-        job.status = OCRJob.StatusEnum.PENDING
-        job.last_error = None
-        job.started_at = None
-        job.completed_at = None
-        job.processing_time_seconds = None
+            # Reset job to pending
+            job.status = OCRJob.StatusEnum.PENDING
+            job.last_error = None
+            job.started_at = None
+            job.completed_at = None
+            job.processing_time_seconds = None
 
-        db.commit()
-        db.refresh(job)
+            db.commit()
+            db.refresh(job)
 
-        logger.info(f"Reset OCR job {job_id} to pending for retry")
+            logger.info(f"Reset OCR job {job_id} to pending for retry")
 
-        return {
-            "id": job.id,
-            "status": job.status.value,
-            "message": "Job queued for retry",
-        }
+            return {
+                "id": job.id,
+                "status": job.status.value,
+                "message": "Job queued for retry",
+            }
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error retrying OCR job {job_id}: {e}", exc_info=True)
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error retrying OCR job {job_id}: {e}", exc_info=True)
+            db.rollback()
+            raise HTTPException(status_code=500, detail=str(e))
+        finally:
+            db.close()
+
+    return await run_in_thread(_db_operation)
 
 
 @router.delete("/queue/{job_id}")
@@ -186,35 +210,46 @@ async def delete_ocr_job(job_id: int):
     if _session_factory is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
 
-    db = _session_factory()
-    try:
-        job = db.query(OCRJob).filter(OCRJob.id == job_id).first()
+    def _db_operation():
+        db = _session_factory()
+        try:
+            job = db.query(OCRJob).filter(OCRJob.id == job_id).first()
 
-        if not job:
-            raise HTTPException(status_code=404, detail=ErrorMessages.OCR_JOB_NOT_FOUND)
+            if not job:
+                raise HTTPException(
+                    status_code=404, detail=ErrorMessages.OCR_JOB_NOT_FOUND
+                )
 
-        # Log appropriate message based on status
-        action = "cancelled" if job.status == OCRJob.StatusEnum.PROCESSING else "deleted"
+            # Log appropriate message based on status
+            action = (
+                "cancelled" if job.status == OCRJob.StatusEnum.PROCESSING else "deleted"
+            )
 
-        db.delete(job)
-        db.commit()
+            db.delete(job)
+            db.commit()
 
-        logger.info(f"{action.capitalize()} OCR job {job_id} (status: {job.status.value})")
+            logger.info(
+                f"{action.capitalize()} OCR job {job_id} (status: {job.status.value})"
+            )
 
-        return {"message": f"Job {action} successfully"}
+            return {"message": f"Job {action} successfully"}
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting OCR job {job_id}: {e}", exc_info=True)
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error deleting OCR job {job_id}: {e}", exc_info=True)
+            db.rollback()
+            raise HTTPException(status_code=500, detail=str(e))
+        finally:
+            db.close()
+
+    return await run_in_thread(_db_operation)
 
 
 @router.post("/queue/{magazine_id}")
-async def queue_magazine_ocr(magazine_id: int, priority: int = OCRJob.PriorityEnum.NORMAL.value):
+async def queue_magazine_ocr(
+    magazine_id: int, priority: int = OCRJob.PriorityEnum.NORMAL.value
+):
     """
     Manually queue OCR for a magazine.
 
@@ -228,49 +263,56 @@ async def queue_magazine_ocr(magazine_id: int, priority: int = OCRJob.PriorityEn
     if _session_factory is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
 
-    db = _session_factory()
-    try:
-        # Verify magazine exists
-        magazine = db.query(Magazine).filter(Magazine.id == magazine_id).first()
-        if not magazine:
-            raise HTTPException(status_code=404, detail="Magazine not found")
+    def _db_operation():
+        db = _session_factory()
+        try:
+            # Verify magazine exists
+            magazine = db.query(Magazine).filter(Magazine.id == magazine_id).first()
+            if not magazine:
+                raise HTTPException(status_code=404, detail="Magazine not found")
 
-        # Queue the job
-        job = OCRQueueService.queue_ocr_job(
-            db=db,
-            magazine_id=magazine_id,
-            priority=priority,
-            language=magazine.language,
-        )
-
-        if not job:
-            # Job already exists
-            existing = (
-                db.query(OCRJob)
-                .filter(
-                    OCRJob.magazine_id == magazine_id,
-                    OCRJob.status.in_([OCRJob.StatusEnum.PENDING, OCRJob.StatusEnum.PROCESSING]),
-                )
-                .first()
+            # Queue the job
+            job = OCRQueueService.queue_ocr_job(
+                db=db,
+                magazine_id=magazine_id,
+                priority=priority,
+                language=magazine.language,
             )
 
+            if not job:
+                # Job already exists
+                existing = (
+                    db.query(OCRJob)
+                    .filter(
+                        OCRJob.magazine_id == magazine_id,
+                        OCRJob.status.in_(
+                            [OCRJob.StatusEnum.PENDING, OCRJob.StatusEnum.PROCESSING]
+                        ),
+                    )
+                    .first()
+                )
+
+                return {
+                    "message": "Job already queued",
+                    "job_id": existing.id if existing else None,
+                }
+
             return {
-                "message": "Job already queued",
-                "job_id": existing.id if existing else None,
+                "id": job.id,
+                "magazine_id": job.magazine_id,
+                "status": job.status.value,
+                "priority": job.priority,
+                "message": "Job queued successfully",
             }
 
-        return {
-            "id": job.id,
-            "magazine_id": job.magazine_id,
-            "status": job.status.value,
-            "priority": job.priority,
-            "message": "Job queued successfully",
-        }
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(
+                f"Error queueing OCR for magazine {magazine_id}: {e}", exc_info=True
+            )
+            raise HTTPException(status_code=500, detail=str(e))
+        finally:
+            db.close()
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error queueing OCR for magazine {magazine_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
+    return await run_in_thread(_db_operation)

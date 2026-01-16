@@ -31,8 +31,8 @@ MAX_PAGE_SIZE = 100
 MAX_DOWNLOAD_RETRIES = 3
 """Maximum number of retry attempts for failed downloads"""
 
-MAX_DOWNLOADS_PER_BATCH = 10
-"""Maximum number of concurrent downloads allowed system-wide (not per batch, but total)"""
+MAX_DOWNLOADS = 10
+"""Maximum number of concurrent downloads allowed system-wide"""
 
 DOWNLOAD_FILE_SEARCH_DEPTH = 2
 """Maximum directory depth to search for downloaded files"""

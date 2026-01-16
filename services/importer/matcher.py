@@ -66,7 +66,9 @@ class TrackingMatcher:
             r"\s+Comic$",
             r"\s+Newspaper$",
         ]
-        self.compiled_noise_patterns = [re.compile(p, re.IGNORECASE) for p in self.title_noise]
+        self.compiled_noise_patterns = [
+            re.compile(p, re.IGNORECASE) for p in self.title_noise
+        ]
 
         # Country code normalizations
         self.country_normalizations = {
@@ -110,7 +112,9 @@ class TrackingMatcher:
             # Replace dots with optional spaces for matching
             # (e.g., U.S.A. or U S A or USA)
             pattern_str = re.escape(long_form).replace(r"\.", r"[.\s]*")
-            normalized = re.sub(rf"\b{pattern_str}\b", short_form, normalized, flags=re.IGNORECASE)
+            normalized = re.sub(
+                rf"\b{pattern_str}\b", short_form, normalized, flags=re.IGNORECASE
+            )
 
         # Clean up any trailing dots after normalization
         normalized = re.sub(r"\.+$", "", normalized).strip()
@@ -172,7 +176,9 @@ class TrackingMatcher:
 
         return abbreviation
 
-    def calculate_title_score(self, parsed_title: str, tracking_title: str) -> Tuple[int, str]:
+    def calculate_title_score(
+        self, parsed_title: str, tracking_title: str
+    ) -> Tuple[int, str]:
         """
         Calculate similarity score between two titles.
 
@@ -199,7 +205,10 @@ class TrackingMatcher:
                 logger.info(
                     f"Abbreviation match: '{parsed_title}' matches '{tracking_title}' (abbreviation: {tracking_abbreviation})"
                 )
-                return (WEIGHT_TITLE_ABBREVIATION, f"abbreviation ({norm_parsed} -> {tracking_title})")
+                return (
+                    WEIGHT_TITLE_ABBREVIATION,
+                    f"abbreviation ({norm_parsed} -> {tracking_title})",
+                )
 
         # Fuzzy matching
         fuzzy_score = fuzz.ratio(norm_parsed, norm_tracking)
@@ -250,7 +259,9 @@ class TrackingMatcher:
         total_score = 0
 
         # Title matching (most important)
-        title_score, match_type = self.calculate_title_score(parsed_title, tracking_title)
+        title_score, match_type = self.calculate_title_score(
+            parsed_title, tracking_title
+        )
         breakdown["title"] = title_score
         breakdown["title_match_type"] = match_type
         total_score += title_score
@@ -334,7 +345,11 @@ class TrackingMatcher:
         best_match = None
         best_score = 0
 
-        logger.debug("Matching parsed title '%s' against %d tracking records", parsed_title, len(tracking_records))
+        logger.debug(
+            "Matching parsed title '%s' against %d tracking records",
+            parsed_title,
+            len(tracking_records),
+        )
 
         for tracking in tracking_records:
             score, breakdown = self.match_to_tracking(
@@ -349,7 +364,11 @@ class TrackingMatcher:
             )
 
             logger.debug(
-                "  Tracking '%s' (ID: %d): score=%d, breakdown=%s", tracking.title, tracking.id, score, breakdown
+                "  Tracking '%s' (ID: %d): score=%d, breakdown=%s",
+                tracking.title,
+                tracking.id,
+                score,
+                breakdown,
             )
 
             if score > best_score:
@@ -364,7 +383,7 @@ class TrackingMatcher:
 
         if best_match and best_match.is_match:
             logger.info(
-                "Found tracking match: '%s' -> '%s' " "(ID: %d, score: %d, breakdown: %s)",
+                "Found tracking match: '%s' -> '%s' (ID: %d, score: %d, breakdown: %s)",
                 parsed_title,
                 best_match.tracking_title,
                 best_match.tracking_id,
@@ -374,7 +393,7 @@ class TrackingMatcher:
             return best_match
         if best_match:
             logger.info(
-                "Best match below threshold: '%s' -> '%s' " "(ID: %d, score: %d/%d, breakdown: %s)",
+                "Best match below threshold: '%s' -> '%s' (ID: %d, score: %d/%d, breakdown: %s)",
                 parsed_title,
                 best_match.tracking_title,
                 best_match.tracking_id,

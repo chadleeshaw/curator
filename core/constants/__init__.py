@@ -6,7 +6,7 @@ logical, focused modules for better maintainability and discoverability.
 """
 
 # Import all constants from submodules
-from .errors import ErrorMessages
+from .errors import ErrorMessages, ErrorCodes
 from .app import (
     AUTO_DOWNLOAD_INTERVAL,
     AUTO_IMPORT_INTERVAL,
@@ -16,7 +16,7 @@ from .app import (
     DOWNLOAD_FILE_SEARCH_DEPTH,
     DOWNLOAD_MONITOR_INTERVAL,
     MAX_DOWNLOAD_RETRIES,
-    MAX_DOWNLOADS_PER_BATCH,
+    MAX_DOWNLOADS,
     MAX_PAGE_SIZE,
     OCR_COVER_GENERATOR_INTERVAL,
     OCR_PROCESSOR_INTERVAL,
@@ -94,8 +94,9 @@ from .ocr import (
 
 # Define __all__ for wildcard imports
 __all__ = [
-    # Error messages
+    # Error messages and codes
     "ErrorMessages",
+    "ErrorCodes",
     # App constants
     "AUTO_DOWNLOAD_INTERVAL",
     "AUTO_IMPORT_INTERVAL",
@@ -105,7 +106,7 @@ __all__ = [
     "DOWNLOAD_FILE_SEARCH_DEPTH",
     "DOWNLOAD_MONITOR_INTERVAL",
     "MAX_DOWNLOAD_RETRIES",
-    "MAX_DOWNLOADS_PER_BATCH",
+    "MAX_DOWNLOADS",
     "MAX_PAGE_SIZE",
     "OCR_COVER_GENERATOR_INTERVAL",
     "OCR_PROCESSOR_INTERVAL",

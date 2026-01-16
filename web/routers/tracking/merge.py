@@ -11,10 +11,15 @@ from fastapi import HTTPException, Query
 
 from core.constants.errors import ErrorMessages
 from core.parsers import sanitize_filename
-from core.utils.general import is_special_edition, generate_olid, cleanup_empty_directories
+from core.utils.general import (
+    is_special_edition,
+    generate_olid,
+    cleanup_empty_directories,
+)
 from models.database import MagazineTracking
 from models.database import SearchResult as DBSearchResult
 from web.schemas import APIError, TrackingPreferencesRequest
+from core.utils import run_in_thread
 from . import _shared
 
 # Access global state via _shared module to get current values
@@ -47,7 +52,11 @@ def _reorganize_magazine_files(
         old_cover_path = Path(magazine.cover_path) if magazine.cover_path else None
 
         # Extract metadata from current path structure
-        category = magazine.extra_metadata.get("category", "Magazines") if magazine.extra_metadata else "Magazines"
+        category = (
+            magazine.extra_metadata.get("category", "Magazines")
+            if magazine.extra_metadata
+            else "Magazines"
+        )
         issue_date = magazine.issue_date
 
         # Build new path structure (without language folder)
@@ -83,7 +92,12 @@ def _reorganize_magazine_files(
             return None, None
 
         # Move cover file if it exists
-        if old_cover_path and old_cover_path.exists() and new_cover_path and new_cover_path != old_cover_path:
+        if (
+            old_cover_path
+            and old_cover_path.exists()
+            and new_cover_path
+            and new_cover_path != old_cover_path
+        ):
             shutil.move(str(old_cover_path), str(new_cover_path))
             logger.info(f"Moved cover: {old_cover_path} -> {new_cover_path}")
 
@@ -118,7 +132,9 @@ def _reorganize_magazine_files(
         500: {"description": "Failed to merge tracking", "model": APIError},
     },
 )
-async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Dict[str, Any]:
+async def merge_tracking(
+    target_id: int, source_ids: Dict[str, list[int]]
+) -> Dict[str, Any]:
     """
     Merge multiple tracking records into a single target record.
 
@@ -131,122 +147,149 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
     """
     try:
         if not source_ids.get("source_ids"):
-            raise HTTPException(status_code=400, detail="No source tracking IDs provided")
+            raise HTTPException(
+                status_code=400, detail="No source tracking IDs provided"
+            )
 
         source_id_list = source_ids["source_ids"]
 
         if target_id in source_id_list:
-            raise HTTPException(status_code=400, detail="Target tracking ID cannot be in source list")
-
-        db_session = _shared._session_factory()
-        try:
-            from models.database import Magazine, DownloadSubmission
-
-            # Get target tracking record
-            target = db_session.query(MagazineTracking).filter(MagazineTracking.id == target_id).first()
-            if not target:
-                raise HTTPException(status_code=404, detail="Target tracking record not found")
-
-            # Get source tracking records
-            sources = db_session.query(MagazineTracking).filter(MagazineTracking.id.in_(source_id_list)).all()
-            if len(sources) != len(source_id_list):
-                raise HTTPException(
-                    status_code=404,
-                    detail="One or more source tracking records not found",
-                )
-
-            magazines_moved = 0
-            submissions_moved = 0
-            files_reorganized = 0
-            directories_to_cleanup = set()
-
-            # Get organize directory from config or use default
-            # This should match the structure used by FileOrganizer
-            organize_base_dir = Path("./local/data").resolve()
-            category_prefix = "_"
-
-            # Move magazines from source to target
-            for source in sources:
-                # Update magazines to point to target tracking and normalize title
-                magazines = db_session.query(Magazine).filter(Magazine.tracking_id == source.id).all()
-                for magazine in magazines:
-                    magazine.tracking_id = target.id
-
-                    # Only update title if this is NOT a special edition
-                    # Special editions need to keep their distinct title to be grouped separately
-                    is_special = False
-                    if magazine.extra_metadata and isinstance(magazine.extra_metadata, dict):
-                        is_special = magazine.extra_metadata.get("special_edition") is not None
-
-                    # Also check title using the is_special_edition function
-                    if not is_special:
-                        is_special = is_special_edition(magazine.title)
-
-                    # Only normalize title and reorganize files for regular editions
-                    if not is_special:
-                        # Store old directory for cleanup
-                        old_pdf_path = Path(magazine.file_path)
-                        if old_pdf_path.exists():
-                            directories_to_cleanup.add(old_pdf_path.parent)
-
-                        # Reorganize files to match new title structure
-                        new_pdf_path, new_cover_path = _reorganize_magazine_files(
-                            magazine, target.title, organize_base_dir, category_prefix
-                        )
-
-                        # Update database paths if reorganization succeeded
-                        if new_pdf_path:
-                            magazine.file_path = new_pdf_path
-                            if new_cover_path:
-                                magazine.cover_path = new_cover_path
-                            files_reorganized += 1
-                            logger.info(
-                                f"Reorganized files for: {magazine.title} ({magazine.issue_date.strftime('%b %Y')})"
-                            )
-                        else:
-                            logger.warning(
-                                f"Failed to reorganize files for magazine ID {magazine.id}, keeping original paths"
-                            )
-
-                        # Update title after file operations
-                        magazine.title = target.title
-
-                    magazines_moved += 1
-
-                # Update download submissions to point to target tracking
-                submissions = (
-                    db_session.query(DownloadSubmission).filter(DownloadSubmission.tracking_id == source.id).all()
-                )
-                for submission in submissions:
-                    submission.tracking_id = target.id
-                    submissions_moved += 1
-
-                # Delete source tracking record
-                db_session.delete(source)
-
-            db_session.commit()
-
-            # Clean up empty directories after successful commit
-            for directory in directories_to_cleanup:
-                if directory.exists():
-                    cleanup_empty_directories(directory, organize_base_dir)
-
-            source_titles = [s.title for s in sources]
-            logger.info(
-                f"Merged {len(sources)} tracking records ({', '.join(source_titles)}) into '{target.title}' (ID: {target_id}). "
-                f"Moved {magazines_moved} magazines, reorganized {files_reorganized} files."
+            raise HTTPException(
+                status_code=400, detail="Target tracking ID cannot be in source list"
             )
 
-            return {
-                "success": True,
-                "message": f"Merged {len(sources)} tracking record{'s' if len(sources) > 1 else ''} into '{target.title}'",
-                "magazines_moved": magazines_moved,
-                "submissions_moved": submissions_moved,
-                "files_reorganized": files_reorganized,
-                "merged_titles": source_titles,
-            }
-        finally:
-            db_session.close()
+        def _merge():
+            db_session = _shared._session_factory()
+            try:
+                from models.database import Magazine, DownloadSubmission
+
+                # Get target tracking record
+                target = (
+                    db_session.query(MagazineTracking)
+                    .filter(MagazineTracking.id == target_id)
+                    .first()
+                )
+                if not target:
+                    raise HTTPException(
+                        status_code=404, detail="Target tracking record not found"
+                    )
+
+                # Get source tracking records
+                sources = (
+                    db_session.query(MagazineTracking)
+                    .filter(MagazineTracking.id.in_(source_id_list))
+                    .all()
+                )
+                if len(sources) != len(source_id_list):
+                    raise HTTPException(
+                        status_code=404,
+                        detail="One or more source tracking records not found",
+                    )
+
+                magazines_moved = 0
+                submissions_moved = 0
+                files_reorganized = 0
+                directories_to_cleanup = set()
+
+                # Get organize directory from config or use default
+                # This should match the structure used by FileOrganizer
+                organize_base_dir = Path("./local/data").resolve()
+                category_prefix = "_"
+
+                # Move magazines from source to target
+                for source in sources:
+                    # Update magazines to point to target tracking and normalize title
+                    magazines = (
+                        db_session.query(Magazine)
+                        .filter(Magazine.tracking_id == source.id)
+                        .all()
+                    )
+                    for magazine in magazines:
+                        magazine.tracking_id = target.id
+
+                        # Only update title if this is NOT a special edition
+                        # Special editions need to keep their distinct title to be grouped separately
+                        is_special = False
+                        if magazine.extra_metadata and isinstance(
+                            magazine.extra_metadata, dict
+                        ):
+                            is_special = (
+                                magazine.extra_metadata.get("special_edition") is not None
+                            )
+
+                        # Also check title using the is_special_edition function
+                        if not is_special:
+                            is_special = is_special_edition(magazine.title)
+
+                        # Only normalize title and reorganize files for regular editions
+                        if not is_special:
+                            # Store old directory for cleanup
+                            old_pdf_path = Path(magazine.file_path)
+                            if old_pdf_path.exists():
+                                directories_to_cleanup.add(old_pdf_path.parent)
+
+                            # Reorganize files to match new title structure
+                            new_pdf_path, new_cover_path = _reorganize_magazine_files(
+                                magazine, target.title, organize_base_dir, category_prefix
+                            )
+
+                            # Update database paths if reorganization succeeded
+                            if new_pdf_path:
+                                magazine.file_path = new_pdf_path
+                                if new_cover_path:
+                                    magazine.cover_path = new_cover_path
+                                files_reorganized += 1
+                                logger.info(
+                                    f"Reorganized files for: {magazine.title} ({magazine.issue_date.strftime('%b %Y')})"
+                                )
+                            else:
+                                logger.warning(
+                                    f"Failed to reorganize files for magazine ID {magazine.id}, keeping original paths"
+                                )
+
+                            # Update title after file operations
+                            magazine.title = target.title
+
+                        magazines_moved += 1
+
+                    # Update download submissions to point to target tracking
+                    submissions = (
+                        db_session.query(DownloadSubmission)
+                        .filter(DownloadSubmission.tracking_id == source.id)
+                        .all()
+                    )
+                    for submission in submissions:
+                        submission.tracking_id = target.id
+                        submissions_moved += 1
+
+                    # Delete source tracking record
+                    db_session.delete(source)
+
+                db_session.commit()
+
+                # Clean up empty directories after successful commit
+                for directory in directories_to_cleanup:
+                    if directory.exists():
+                        cleanup_empty_directories(directory, organize_base_dir)
+
+                source_titles = [s.title for s in sources]
+                logger.info(
+                    f"Merged {len(sources)} tracking records ({', '.join(source_titles)}) into '{target.title}' (ID: {target_id}). "
+                    f"Moved {magazines_moved} magazines, reorganized {files_reorganized} files."
+                )
+
+                return {
+                    "success": True,
+                    "message": f"Merged {len(sources)} tracking record{'s' if len(sources) > 1 else ''} into '{target.title}'",
+                    "magazines_moved": magazines_moved,
+                    "submissions_moved": submissions_moved,
+                    "files_reorganized": files_reorganized,
+                    "merged_titles": source_titles,
+                }
+            finally:
+                db_session.close()
+
+        return await run_in_thread(_merge)
     except HTTPException:
         raise
     except Exception as e:

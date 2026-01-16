@@ -218,13 +218,13 @@ async def lifespan(app: FastAPI):
                             .count()
                         )
 
-                        if pending_count >= constants.MAX_DOWNLOADS_PER_BATCH:
+                        if pending_count >= constants.MAX_DOWNLOADS:
                             logger.info(
-                                f"Auto-download: Skipping - already at max downloads ({pending_count}/{constants.MAX_DOWNLOADS_PER_BATCH})"
+                                f"Auto-download: Skipping - already at max downloads ({pending_count}/{constants.MAX_DOWNLOADS})"
                             )
                             return
 
-                        remaining_slots = constants.MAX_DOWNLOADS_PER_BATCH - pending_count
+                        remaining_slots = constants.MAX_DOWNLOADS - pending_count
                         logger.info(
                             f"Auto-download: {remaining_slots} download slots available ({pending_count} already queued)"
                         )

@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 
 # Path setup handled by conftest.py
 
-from services.file_importer import FileImporter
+from services.importer.importer import FileImporter
 
 
 def test_file_importer_initialization():

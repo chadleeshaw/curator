@@ -12,8 +12,8 @@ from PIL import Image
 from sqlalchemy.orm import sessionmaker
 
 from models.database import Magazine, OCRJob
-from services.ocr_queue import OCRQueueService
-from services.ocr_service import OCRService
+from services.ocr.queue import OCRQueueService
+from services.ocr.service import OCRService
 
 logger = logging.getLogger(__name__)
 
@@ -76,28 +76,42 @@ class OCRCoverGenerator:
             try:
                 # Get all magazines with covers
                 # Query all magazines that have PDF files
-                magazines_with_pdfs = db_session.query(Magazine).filter(Magazine.file_path.isnot(None)).all()
+                magazines_with_pdfs = (
+                    db_session.query(Magazine)
+                    .filter(Magazine.file_path.isnot(None))
+                    .all()
+                )
 
-                logger.info(f"Found {len(magazines_with_pdfs)} magazines with PDF files")
+                logger.info(
+                    f"Found {len(magazines_with_pdfs)} magazines with PDF files"
+                )
 
                 # Filter to those that exist and need OCR
                 magazines_needing_ocr = []
                 for mag in magazines_with_pdfs:
                     if not mag.file_path or not Path(mag.file_path).exists():
-                        logger.debug(f"Skipping {mag.title}: PDF file path missing or doesn't exist")
+                        logger.debug(
+                            f"Skipping {mag.title}: PDF file path missing or doesn't exist"
+                        )
                         continue
 
                     # Check if already has OCR metadata or sufficient text scan results
                     if mag.extra_metadata:
                         # Skip if OCR was already completed
                         if mag.extra_metadata.get("ocr_metadata"):
-                            logger.debug(f"Skipping {mag.title}: already has OCR metadata")
+                            logger.debug(
+                                f"Skipping {mag.title}: already has OCR metadata"
+                            )
                             continue
 
                         # Skip if text scan found text with sufficient metadata
                         text_scan = mag.extra_metadata.get("text_scan", {})
-                        if text_scan.get("text_found") and text_scan.get("has_sufficient_metadata"):
-                            logger.debug(f"Skipping {mag.title}: text scan found sufficient metadata")
+                        if text_scan.get("text_found") and text_scan.get(
+                            "has_sufficient_metadata"
+                        ):
+                            logger.debug(
+                                f"Skipping {mag.title}: text scan found sufficient metadata"
+                            )
                             continue
 
                     # Check if OCR job already exists
@@ -123,7 +137,9 @@ class OCRCoverGenerator:
 
                     magazines_needing_ocr.append(mag)
 
-                logger.info(f"Found {len(magazines_needing_ocr)} magazines needing OCR processing")
+                logger.info(
+                    f"Found {len(magazines_needing_ocr)} magazines needing OCR processing"
+                )
 
                 # Part 1: Generate high-res PNG files for OCR
                 generated_count = 0
@@ -153,10 +169,14 @@ class OCRCoverGenerator:
                             )
                             if ocr_job:
                                 queued_count += 1
-                                logger.debug(f"Queued OCR job {ocr_job.id} for {magazine.title}")
+                                logger.debug(
+                                    f"Queued OCR job {ocr_job.id} for {magazine.title}"
+                                )
 
                     except Exception as e:
-                        logger.error(f"Error generating OCR cover for {magazine.title}: {e}")
+                        logger.error(
+                            f"Error generating OCR cover for {magazine.title}: {e}"
+                        )
 
                 # Part 2: Clean up orphaned PNG files
                 deleted_orphaned = await self._cleanup_orphaned_pngs(db_session)
@@ -224,7 +244,9 @@ class OCRCoverGenerator:
 
                     with Image.open(png_path) as img:
                         if max(img.size) > OCR_IMAGE_MAX_DIMENSION:
-                            logger.info(f"Existing OCR PNG is too large ({img.size}), regenerating: {png_path}")
+                            logger.info(
+                                f"Existing OCR PNG is too large ({img.size}), regenerating: {png_path}"
+                            )
                             png_path.unlink()  # Delete the old oversized PNG
                         else:
                             logger.debug(f"OCR PNG already exists: {png_path}")
@@ -265,7 +287,9 @@ class OCRCoverGenerator:
                 ratio = OCR_IMAGE_MAX_DIMENSION / max(img.size)
                 new_size = tuple(int(dim * ratio) for dim in img.size)
                 img = img.resize(new_size, Image.Resampling.LANCZOS)
-                logger.debug(f"Resized OCR PNG from {images[0].size} to {new_size} for optimal OCR performance")
+                logger.debug(
+                    f"Resized OCR PNG from {images[0].size} to {new_size} for optimal OCR performance"
+                )
 
             # Save as PNG
             img.save(str(png_path), "PNG")
@@ -331,14 +355,21 @@ class OCRCoverGenerator:
             deleted_count = 0
 
             # Get magazines that have OCR metadata (OCR completed)
-            magazines_with_ocr = db_session.query(Magazine.id).filter(Magazine.extra_metadata.isnot(None)).all()
+            magazines_with_ocr = (
+                db_session.query(Magazine.id)
+                .filter(Magazine.extra_metadata.isnot(None))
+                .all()
+            )
 
             completed_ids = set()
             for mag in magazines_with_ocr:
                 # Re-query to access extra_metadata properly
-                magazine = db_session.query(Magazine).filter(Magazine.id == mag.id).first()
+                magazine = (
+                    db_session.query(Magazine).filter(Magazine.id == mag.id).first()
+                )
                 if magazine.extra_metadata and (
-                    magazine.extra_metadata.get("ocr_metadata") or magazine.extra_metadata.get("text_metadata")
+                    magazine.extra_metadata.get("ocr_metadata")
+                    or magazine.extra_metadata.get("text_metadata")
                 ):
                     completed_ids.add(magazine.id)
 
@@ -368,7 +399,11 @@ class OCRCoverGenerator:
             try:
                 active_jobs = (
                     db_session.query(OCRJob.magazine_id)
-                    .filter(OCRJob.status.in_([OCRJob.StatusEnum.PENDING, OCRJob.StatusEnum.PROCESSING]))
+                    .filter(
+                        OCRJob.status.in_(
+                            [OCRJob.StatusEnum.PENDING, OCRJob.StatusEnum.PROCESSING]
+                        )
+                    )
                     .all()
                 )
 
@@ -391,7 +426,9 @@ class OCRCoverGenerator:
                         logger.debug(f"Error processing {png_file}: {e}")
 
                 if deleted_count > 0:
-                    logger.info(f"Startup cleanup: deleted {deleted_count} OCR PNG files")
+                    logger.info(
+                        f"Startup cleanup: deleted {deleted_count} OCR PNG files"
+                    )
 
             finally:
                 db_session.close()

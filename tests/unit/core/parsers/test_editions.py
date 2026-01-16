@@ -14,17 +14,38 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from services import DownloadManager
-from models.database import Base, MagazineTracking, DownloadSubmission, SearchResult as DBSearchResult
+from models.database import (
+    Base,
+    MagazineTracking,
+    DownloadSubmission,
+    SearchResult as DBSearchResult,
+)
 from core.interfaces import SearchProvider, DownloadClient, SearchResult
 
 
 @pytest.fixture
 def test_db():
-    """Create in-memory test database"""
-    engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
-    session_factory = sessionmaker(bind=engine)
-    return engine, session_factory
+    """Create file-based test database for thread-safe testing"""
+    # Use a temporary file-based database instead of :memory:
+    # This is necessary because SQLite :memory: databases are not shared across threads
+    # even with check_same_thread=False - each connection gets its own memory space
+    import tempfile
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp_file:
+        db_path = tmp_file.name
+
+    try:
+        engine = create_engine(
+            f"sqlite:///{db_path}", connect_args={"check_same_thread": False}
+        )
+        Base.metadata.create_all(engine)
+        session_factory = sessionmaker(bind=engine)
+        yield engine, session_factory
+    finally:
+        engine.dispose()
+        from pathlib import Path
+
+        Path(db_path).unlink(missing_ok=True)
 
 
 @pytest.fixture
@@ -169,7 +190,9 @@ class TestDownloadSelectedEditions:
 
         session.close()
 
-    def test_download_selected_editions_returns_zero_if_none_selected(self, test_db, download_manager):
+    def test_download_selected_editions_returns_zero_if_none_selected(
+        self, test_db, download_manager
+    ):
         """Test returns zero submissions if no editions selected"""
         engine, session_factory = test_db
         session = session_factory()
@@ -189,7 +212,9 @@ class TestDownloadSelectedEditions:
 
         session.close()
 
-    def test_download_selected_editions_skips_all_false_editions(self, test_db, download_manager):
+    def test_download_selected_editions_skips_all_false_editions(
+        self, test_db, download_manager
+    ):
         """Test skips when all editions are marked False"""
         engine, session_factory = test_db
         session = session_factory()
@@ -215,7 +240,9 @@ class TestDownloadSelectedEditions:
 class TestEditionMatching:
     """Test edition ID matching logic"""
 
-    def test_exact_olid_match(self, test_db, download_manager, mock_search_provider, mock_download_client):
+    def test_exact_olid_match(
+        self, test_db, download_manager, mock_search_provider, mock_download_client
+    ):
         """Test matching by exact OLID in metadata"""
         engine, session_factory = test_db
         session = session_factory()
@@ -237,7 +264,9 @@ class TestEditionMatching:
 
         session.close()
 
-    def test_edition_id_field_variants(self, test_db, download_manager, mock_download_client):
+    def test_edition_id_field_variants(
+        self, test_db, download_manager, mock_download_client
+    ):
         """Test matching with different edition ID field names"""
         engine, session_factory = test_db
         session = session_factory()
@@ -275,7 +304,9 @@ class TestEditionMatching:
 
         session.close()
 
-    def test_fuzzy_title_matching_fallback(self, test_db, download_manager, mock_download_client):
+    def test_fuzzy_title_matching_fallback(
+        self, test_db, download_manager, mock_download_client
+    ):
         """Test fuzzy title matching when OLID not in metadata"""
         engine, session_factory = test_db
         session = session_factory()
@@ -302,7 +333,9 @@ class TestEditionMatching:
             olid="test-mag",
             title="Test Magazine",
             selected_editions={"OL123456M": True},
-            periodical_metadata={"editions": [{"olid": "OL123456M", "title": "Test Magazine Issue 42"}]},
+            periodical_metadata={
+                "editions": [{"olid": "OL123456M", "title": "Test Magazine Issue 42"}]
+            },
         )
         session.add(tracking)
         session.commit()
@@ -317,7 +350,9 @@ class TestEditionMatching:
 
         session.close()
 
-    def test_no_match_skips_download(self, test_db, download_manager, mock_download_client):
+    def test_no_match_skips_download(
+        self, test_db, download_manager, mock_download_client
+    ):
         """Test that non-matching results are skipped"""
         engine, session_factory = test_db
         session = session_factory()
@@ -376,14 +411,18 @@ class TestAutoDownloadIntegration:
 
         # Query for periodicals to check (mimics auto_download_task logic)
         tracked_with_selections = (
-            session.query(MagazineTracking).filter(MagazineTracking.selected_editions.isnot(None)).all()
+            session.query(MagazineTracking)
+            .filter(MagazineTracking.selected_editions.isnot(None))
+            .all()
         )
 
         # Should find the tracking record
         assert len(tracked_with_selections) > 0
 
         # Check if any editions are actually selected
-        has_selections = any(any(t.selected_editions.values()) for t in tracked_with_selections)
+        has_selections = any(
+            any(t.selected_editions.values()) for t in tracked_with_selections
+        )
         assert has_selections is True
 
         session.close()

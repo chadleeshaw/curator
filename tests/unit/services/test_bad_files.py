@@ -14,17 +14,38 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from services import DownloadManager
-from models.database import Base, MagazineTracking, DownloadSubmission, SearchResult as DBSearchResult
+from models.database import (
+    Base,
+    MagazineTracking,
+    DownloadSubmission,
+    SearchResult as DBSearchResult,
+)
 from core.interfaces import DownloadClient
 
 
 @pytest.fixture
 def test_db():
-    """Create in-memory test database"""
-    engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
-    session_factory = sessionmaker(bind=engine)
-    return engine, session_factory
+    """Create file-based test database for thread-safe testing"""
+    # Use a temporary file-based database instead of :memory:
+    # This is necessary because SQLite :memory: databases are not shared across threads
+    # even with check_same_thread=False - each connection gets its own memory space
+    import tempfile
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp_file:
+        db_path = tmp_file.name
+
+    try:
+        engine = create_engine(
+            f"sqlite:///{db_path}", connect_args={"check_same_thread": False}
+        )
+        Base.metadata.create_all(engine)
+        session_factory = sessionmaker(bind=engine)
+        yield engine, session_factory
+    finally:
+        engine.dispose()
+        from pathlib import Path
+
+        Path(db_path).unlink(missing_ok=True)
 
 
 @pytest.fixture
@@ -50,7 +71,9 @@ def download_manager(mock_download_client):
 class TestAttemptCounting:
     """Test that attempt_count increments on failures"""
 
-    def test_attempt_count_increments_on_failure(self, test_db, download_manager, mock_download_client):
+    def test_attempt_count_increments_on_failure(
+        self, test_db, download_manager, mock_download_client
+    ):
         """Test attempt count increases each time download fails"""
         engine, session_factory = test_db
         session = session_factory()
@@ -78,7 +101,10 @@ class TestAttemptCounting:
         session.commit()
 
         # Simulate failure from client
-        mock_download_client.get_status.return_value = {"status": "failed", "error": "Download error"}
+        mock_download_client.get_status.return_value = {
+            "status": "failed",
+            "error": "Download error",
+        }
 
         # Update submission status (should increment attempt_count)
         result = download_manager.update_submission_status("job-123", session)
@@ -108,14 +134,18 @@ class TestAttemptCounting:
             "provider": "test",
         }
 
-        submission = download_manager.submit_download(tracking.id, search_result, session)
+        submission = download_manager.submit_download(
+            tracking.id, search_result, session
+        )
 
         assert submission is not None
         assert submission.attempt_count == 1
 
         session.close()
 
-    def test_multiple_failures_increment_count(self, test_db, download_manager, mock_download_client):
+    def test_multiple_failures_increment_count(
+        self, test_db, download_manager, mock_download_client
+    ):
         """Test attempt count increases with each failure"""
         engine, session_factory = test_db
         session = session_factory()
@@ -137,7 +167,10 @@ class TestAttemptCounting:
         session.commit()
 
         # Fail three times
-        mock_download_client.get_status.return_value = {"status": "failed", "error": "Error"}
+        mock_download_client.get_status.return_value = {
+            "status": "failed",
+            "error": "Error",
+        }
 
         for expected_count in [1, 2, 3]:
             result = download_manager.update_submission_status("job-456", session)
@@ -182,7 +215,9 @@ class TestBadFileDetection:
 
         session.close()
 
-    def test_get_failed_downloads_excludes_bad_files_by_default(self, test_db, download_manager):
+    def test_get_failed_downloads_excludes_bad_files_by_default(
+        self, test_db, download_manager
+    ):
         """Test get_failed_downloads excludes bad files by default"""
         engine, session_factory = test_db
         session = session_factory()
@@ -214,7 +249,9 @@ class TestBadFileDetection:
 
         session.close()
 
-    def test_get_failed_downloads_includes_bad_files_when_requested(self, test_db, download_manager):
+    def test_get_failed_downloads_includes_bad_files_when_requested(
+        self, test_db, download_manager
+    ):
         """Test get_failed_downloads includes bad files when include_bad_files=True"""
         engine, session_factory = test_db
         session = session_factory()
@@ -284,7 +321,9 @@ class TestRetryPrevention:
 
         session.close()
 
-    def test_two_failures_still_allows_retry(self, test_db, download_manager, mock_download_client):
+    def test_two_failures_still_allows_retry(
+        self, test_db, download_manager, mock_download_client
+    ):
         """Test files with <3 failures can still be retried"""
         engine, session_factory = test_db
         session = session_factory()
@@ -319,7 +358,9 @@ class TestRetryPrevention:
 
         session.close()
 
-    def test_max_retries_logged(self, test_db, download_manager, mock_download_client, caplog):
+    def test_max_retries_logged(
+        self, test_db, download_manager, mock_download_client, caplog
+    ):
         """Test that reaching max retries is logged"""
         engine, session_factory = test_db
         session = session_factory()
@@ -341,7 +382,10 @@ class TestRetryPrevention:
         session.commit()
 
         # Fail one more time to reach 3
-        mock_download_client.get_status.return_value = {"status": "failed", "error": "Final error"}
+        mock_download_client.get_status.return_value = {
+            "status": "failed",
+            "error": "Final error",
+        }
 
         with caplog.at_level("ERROR"):
             result = download_manager.update_submission_status("job-max", session)

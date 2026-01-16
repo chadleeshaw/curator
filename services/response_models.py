@@ -2,7 +2,7 @@
 Standardized response models for consistent API responses.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 class ErrorDetail:
@@ -68,40 +68,3 @@ class OperationResult:
             result["errors"] = [e.to_dict() for e in self.errors]
 
         return result
-
-
-# Common error codes
-class ErrorCodes:
-    """Standard error codes used across the application."""
-
-    # Validation errors
-    VALIDATION_ERROR = "VALIDATION_ERROR"
-    INVALID_URL = "INVALID_URL"
-    INVALID_TITLE = "INVALID_TITLE"
-
-    # Duplicate/conflict errors
-    DUPLICATE = "DUPLICATE"
-    ALREADY_EXISTS = "ALREADY_EXISTS"
-
-    # Network/timeout errors
-    TIMEOUT = "TIMEOUT"
-    NETWORK_ERROR = "NETWORK_ERROR"
-
-    # Client errors
-    CLIENT_ERROR = "CLIENT_ERROR"
-    CLIENT_REJECTED = "CLIENT_REJECTED"
-
-    # File errors
-    FILE_NOT_FOUND = "FILE_NOT_FOUND"
-    FILE_READ_ERROR = "FILE_READ_ERROR"
-    FILE_WRITE_ERROR = "FILE_WRITE_ERROR"
-
-    # Database errors
-    DATABASE_ERROR = "DATABASE_ERROR"
-
-    # Import/processing errors
-    IMPORT_FAILED = "IMPORT_FAILED"
-    PROCESSING_FAILED = "PROCESSING_FAILED"
-
-    # Generic errors
-    UNKNOWN_ERROR = "UNKNOWN_ERROR"

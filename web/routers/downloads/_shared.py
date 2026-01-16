@@ -7,6 +7,8 @@ from typing import Any, Callable
 
 from fastapi import APIRouter
 
+from core.utils import run_in_thread
+
 # Router instance
 router = APIRouter(prefix="/api/downloads", tags=["downloads"])
 logger = logging.getLogger(__name__)
@@ -17,7 +19,9 @@ _download_manager = None
 _download_client = None
 
 
-def set_dependencies(session_factory: Callable, download_manager: Any, download_client: Any) -> None:
+def set_dependencies(
+    session_factory: Callable, download_manager: Any, download_client: Any
+) -> None:
     """Set dependencies from main app"""
     global _session_factory, _download_manager, _download_client
     _session_factory = session_factory

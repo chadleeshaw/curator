@@ -3,7 +3,7 @@ Tests for OCR year extraction with error handling
 """
 
 import pytest
-from services.ocr_service import OCRService
+from services.ocr.service import OCRService
 
 
 class TestOCRYearExtraction:

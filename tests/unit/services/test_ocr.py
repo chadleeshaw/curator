@@ -17,7 +17,7 @@ os.environ["DISABLE_MODEL_SOURCE_CHECK"] = "True"
 # Add parent directory to path to import services
 # Path setup handled by conftest.py
 
-from services.ocr_service import OCRService
+from services.ocr.service import OCRService
 
 # Test images to process
 TEST_IMAGES = [

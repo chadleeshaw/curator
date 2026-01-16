@@ -287,13 +287,13 @@ class ConfigLoader:
 
     def get_downloads(self) -> Dict[str, Any]:
         """Get downloads configuration"""
-        from core.constants.app import MAX_DOWNLOAD_RETRIES, MAX_DOWNLOADS_PER_BATCH
+        from core.constants.app import MAX_DOWNLOAD_RETRIES, MAX_DOWNLOADS
 
         return self.config.get(
             CONFIG_KEY_DOWNLOADS,
             {
                 "max_retries": MAX_DOWNLOAD_RETRIES,
-                "max_per_batch": MAX_DOWNLOADS_PER_BATCH,
+                "max_per_batch": MAX_DOWNLOADS,
             },
         )
 

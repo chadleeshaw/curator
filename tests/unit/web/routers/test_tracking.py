@@ -18,11 +18,23 @@ from models.database import Base, Magazine, MagazineTracking
 
 @pytest.fixture
 def test_db():
-    """Create in-memory test database"""
-    engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
-    session_factory = sessionmaker(bind=engine)
-    return engine, session_factory
+    """Create file-based test database for thread-safe testing"""
+    # Use a temporary file-based database instead of :memory:
+    # This is necessary because SQLite :memory: databases are not shared across threads
+    # even with check_same_thread=False - each connection gets its own memory space
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp_file:
+        db_path = tmp_file.name
+
+    try:
+        engine = create_engine(
+            f"sqlite:///{db_path}", connect_args={"check_same_thread": False}
+        )
+        Base.metadata.create_all(engine)
+        session_factory = sessionmaker(bind=engine)
+        yield engine, session_factory
+    finally:
+        engine.dispose()
+        Path(db_path).unlink(missing_ok=True)
 
 
 class TestTrackingCreation:
@@ -175,7 +187,9 @@ class TestTrackingQueries:
         session.commit()
 
         # Query for track_all_editions
-        tracking_all = session.query(MagazineTracking).filter_by(track_all_editions=True).all()
+        tracking_all = (
+            session.query(MagazineTracking).filter_by(track_all_editions=True).all()
+        )
         assert len(tracking_all) == 2
         assert all(t.track_all_editions for t in tracking_all)
 
@@ -310,7 +324,11 @@ class TestTrackingUniqueness:
         session.commit()  # Should not raise - duplicate OLID with different language is allowed
 
         # Verify both exist
-        all_tracking = session.query(MagazineTracking).filter(MagazineTracking.olid == "OL12345W").all()
+        all_tracking = (
+            session.query(MagazineTracking)
+            .filter(MagazineTracking.olid == "OL12345W")
+            .all()
+        )
         assert len(all_tracking) == 2
 
         session.close()
@@ -384,7 +402,9 @@ class TestTrackingMerge:
         # Merge tracking2 into tracking1 (keep "Wired" as the target)
         import asyncio
 
-        result = asyncio.run(merge_tracking(target_id=target_id, source_ids={"source_ids": [source_id]}))
+        result = asyncio.run(
+            merge_tracking(target_id=target_id, source_ids={"source_ids": [source_id]})
+        )
 
         # Verify merge results
         assert result["success"] is True
@@ -398,7 +418,9 @@ class TestTrackingMerge:
         all_magazines = session.query(Magazine).all()
         assert len(all_magazines) == 3
         for mag in all_magazines:
-            assert mag.title == "Wired", f"Magazine title should be 'Wired', got '{mag.title}'"
+            assert mag.title == "Wired", (
+                f"Magazine title should be 'Wired', got '{mag.title}'"
+            )
             assert mag.tracking_id == target_id
 
         # Verify library grouping would work (only 1 distinct title now)
@@ -407,11 +429,19 @@ class TestTrackingMerge:
         assert distinct_titles_after[0][0] == "Wired"
 
         # Verify source tracking record was deleted
-        deleted_tracking = session.query(MagazineTracking).filter(MagazineTracking.id == source_id).first()
+        deleted_tracking = (
+            session.query(MagazineTracking)
+            .filter(MagazineTracking.id == source_id)
+            .first()
+        )
         assert deleted_tracking is None
 
         # Verify target tracking record still exists
-        target_tracking = session.query(MagazineTracking).filter(MagazineTracking.id == target_id).first()
+        target_tracking = (
+            session.query(MagazineTracking)
+            .filter(MagazineTracking.id == target_id)
+            .first()
+        )
         assert target_tracking is not None
         assert target_tracking.title == "Wired"
 
@@ -467,7 +497,9 @@ class TestTrackingMerge:
         # Merge
         import asyncio
 
-        asyncio.run(merge_tracking(target_id=target_id, source_ids={"source_ids": [source_id]}))
+        asyncio.run(
+            merge_tracking(target_id=target_id, source_ids={"source_ids": [source_id]})
+        )
 
         session.expire_all()
 
@@ -480,7 +512,9 @@ class TestTrackingMerge:
         # Should have 2 groups in library view (by title+language)
         from sqlalchemy import func
 
-        title_lang_groups = session.query(Magazine.title, Magazine.language).distinct().all()
+        title_lang_groups = (
+            session.query(Magazine.title, Magazine.language).distinct().all()
+        )
         assert len(title_lang_groups) == 2
 
         session.close()
@@ -535,7 +569,9 @@ class TestTrackingMerge:
         # Merge tracking2 into tracking1
         import asyncio
 
-        asyncio.run(merge_tracking(target_id=target_id, source_ids={"source_ids": [source_id]}))
+        asyncio.run(
+            merge_tracking(target_id=target_id, source_ids={"source_ids": [source_id]})
+        )
 
         session.expire_all()
 
@@ -546,12 +582,22 @@ class TestTrackingMerge:
             assert mag.tracking_id == target_id
 
         # Regular edition should have normalized title
-        regular = session.query(Magazine).filter(Magazine.file_path == "/lib/natgeo-jan2024.pdf").first()
+        regular = (
+            session.query(Magazine)
+            .filter(Magazine.file_path == "/lib/natgeo-jan2024.pdf")
+            .first()
+        )
         assert regular.title == "National Geographic"
 
         # Special edition should KEEP its special title
-        special = session.query(Magazine).filter(Magazine.file_path == "/lib/natgeo-special-jan2024.pdf").first()
-        assert special.title == "National Geographic Special Edition", "Special edition title should be preserved"
+        special = (
+            session.query(Magazine)
+            .filter(Magazine.file_path == "/lib/natgeo-special-jan2024.pdf")
+            .first()
+        )
+        assert special.title == "National Geographic Special Edition", (
+            "Special edition title should be preserved"
+        )
         assert special.extra_metadata.get("special_edition") == "Special Edition"
 
         session.close()
@@ -618,7 +664,9 @@ class TestTitleChangeFileReorganization:
             tracking.title = new_title
 
             # Reorganize files
-            new_pdf_path, new_cover_path = _reorganize_magazine_files(magazine, new_title, organize_dir, "_")
+            new_pdf_path, new_cover_path = _reorganize_magazine_files(
+                magazine, new_title, organize_dir, "_"
+            )
 
             # Update magazine record
             if new_pdf_path:
@@ -636,8 +684,12 @@ class TestTitleChangeFileReorganization:
 
             assert new_pdf.exists(), f"New PDF should exist at {new_pdf}"
             assert new_cover.exists(), f"New cover should exist at {new_cover}"
-            assert new_pdf.read_text() == "PDF content", "PDF content should be preserved"
-            assert new_cover.read_text() == "Cover content", "Cover content should be preserved"
+            assert new_pdf.read_text() == "PDF content", (
+                "PDF content should be preserved"
+            )
+            assert new_cover.read_text() == "Cover content", (
+                "Cover content should be preserved"
+            )
 
             # Verify database updates
             session.refresh(magazine)
@@ -671,10 +723,14 @@ class TestTitleChangeFileReorganization:
             tracking_id = tracking.id
 
             # Create special edition magazine
-            special_folder = organize_dir / "_Magazines" / "National Geographic" / "2024"
+            special_folder = (
+                organize_dir / "_Magazines" / "National Geographic" / "2024"
+            )
             special_folder.mkdir(parents=True, exist_ok=True)
 
-            special_pdf = special_folder / "National Geographic Swimsuit - January2024.pdf"
+            special_pdf = (
+                special_folder / "National Geographic Swimsuit - January2024.pdf"
+            )
             special_pdf.write_text("Special PDF content")
 
             special_magazine = Magazine(
@@ -682,7 +738,10 @@ class TestTitleChangeFileReorganization:
                 issue_date=datetime(2024, 1, 15),
                 file_path=str(special_pdf),
                 tracking_id=tracking_id,
-                extra_metadata={"category": "Magazines", "special_edition": "Swimsuit Edition"},
+                extra_metadata={
+                    "category": "Magazines",
+                    "special_edition": "Swimsuit Edition",
+                },
             )
             session.add(special_magazine)
             session.commit()
@@ -694,13 +753,17 @@ class TestTitleChangeFileReorganization:
             # Special editions should be skipped
             from core.utils.general import is_special_edition
 
-            is_special = special_magazine.extra_metadata.get("special_edition") is not None
+            is_special = (
+                special_magazine.extra_metadata.get("special_edition") is not None
+            )
             assert is_special, "Should detect as special edition"
 
             # Special editions should NOT be reorganized
             # Title should remain unchanged
             session.refresh(special_magazine)
-            assert special_magazine.title == old_special_title, "Special edition title should be preserved"
+            assert special_magazine.title == old_special_title, (
+                "Special edition title should be preserved"
+            )
 
             session.close()
 
@@ -756,7 +819,9 @@ class TestTitleChangeFileReorganization:
             tracking.title = "Wired"
 
             for magazine in magazines:
-                new_pdf_path, new_cover_path = _reorganize_magazine_files(magazine, "Wired", organize_dir, "_")
+                new_pdf_path, new_cover_path = _reorganize_magazine_files(
+                    magazine, "Wired", organize_dir, "_"
+                )
                 if new_pdf_path:
                     magazine.file_path = new_pdf_path
                     magazine.title = "Wired"
@@ -768,11 +833,15 @@ class TestTitleChangeFileReorganization:
             for month_label, _ in issues:
                 new_pdf = new_folder / f"Wired - {month_label}.pdf"
                 assert new_pdf.exists(), f"{month_label} should be reorganized"
-                assert new_pdf.read_text() == f"Content for {month_label}", "Content should be preserved"
+                assert new_pdf.read_text() == f"Content for {month_label}", (
+                    "Content should be preserved"
+                )
 
             # Verify old folder is empty (except for .DS_Store or similar)
             if old_folder.exists():
-                remaining = [f for f in old_folder.iterdir() if not f.name.startswith(".")]
+                remaining = [
+                    f for f in old_folder.iterdir() if not f.name.startswith(".")
+                ]
                 assert len(remaining) == 0, "Old folder should be empty"
 
             session.close()

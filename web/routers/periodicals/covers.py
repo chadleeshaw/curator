@@ -10,6 +10,7 @@ from fastapi import HTTPException, Query
 from fastapi.responses import FileResponse
 
 from core.constants.errors import ErrorMessages
+from core.utils import run_in_thread
 from models.database import Magazine
 
 from . import _shared
@@ -31,29 +32,35 @@ async def get_cover(
         thumbnail: If True (default), returns optimized thumbnail for UI. If False, returns full resolution.
     """
     try:
-        db_session = _shared._session_factory()
-        try:
-            magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
 
-            if not magazine or not magazine.cover_path:
-                raise HTTPException(status_code=404, detail=ErrorMessages.COVER_NOT_FOUND)
+        def _db_operation():
+            db_session = _shared._session_factory()
+            try:
+                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
 
-            cover_path = Path(magazine.cover_path)
-            if not cover_path.exists():
-                raise HTTPException(status_code=404, detail="Cover file not found")
+                if not magazine or not magazine.cover_path:
+                    raise HTTPException(status_code=404, detail=ErrorMessages.COVER_NOT_FOUND)
 
-            # Return thumbnail for UI (fast loading)
-            if thumbnail:
-                from core.utils.thumbnail import get_or_create_thumbnail
+                cover_path = Path(magazine.cover_path)
+                if not cover_path.exists():
+                    raise HTTPException(status_code=404, detail="Cover file not found")
 
-                loop = asyncio.get_event_loop()
-                thumbnail_path = await loop.run_in_executor(None, get_or_create_thumbnail, cover_path)
-                return FileResponse(thumbnail_path, media_type="image/jpeg")
+                return cover_path
+            finally:
+                db_session.close()
 
-            # Return full resolution (for downloads/printing)
-            return FileResponse(cover_path, media_type="image/jpeg")
-        finally:
-            db_session.close()
+        cover_path = await run_in_thread(_db_operation)
+
+        # Return thumbnail for UI (fast loading)
+        if thumbnail:
+            from core.utils.thumbnail import get_or_create_thumbnail
+
+            loop = asyncio.get_event_loop()
+            thumbnail_path = await loop.run_in_executor(None, get_or_create_thumbnail, cover_path)
+            return FileResponse(thumbnail_path, media_type="image/jpeg")
+
+        # Return full resolution (for downloads/printing)
+        return FileResponse(cover_path, media_type="image/jpeg")
 
     except HTTPException:
         raise
@@ -78,60 +85,63 @@ async def regenerate_cover(magazine_id: int, request_data: Dict[str, Any]) -> Di
         from core.utils.pdf import extract_cover_from_pdf
         from core.constants.ocr import PDF_COVER_DPI_OCR
         from core.constants.files import PDF_COVER_QUALITY_HIGH
-        from services.ocr_service import OCRService
+        from services.ocr.service import OCRService
 
         page_number = request_data.get("page_number", 1)
         if page_number < 1:
             raise HTTPException(status_code=400, detail="Page number must be >= 1")
 
-        db_session = _shared._session_factory()
-        try:
-            magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
-            if not magazine:
-                raise HTTPException(status_code=404, detail=ErrorMessages.PERIODICAL_NOT_FOUND)
+        def _db_operation():
+            db_session = _shared._session_factory()
+            try:
+                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+                if not magazine:
+                    raise HTTPException(status_code=404, detail=ErrorMessages.PERIODICAL_NOT_FOUND)
 
-            pdf_path = Path(magazine.file_path)
-            if not pdf_path.exists():
-                raise HTTPException(status_code=404, detail="PDF file not found on disk")
+                pdf_path = Path(magazine.file_path)
+                if not pdf_path.exists():
+                    raise HTTPException(status_code=404, detail="PDF file not found on disk")
 
-            # Determine cover directory from config
-            if _shared._organize_base_dir:
-                cover_dir = _shared._organize_base_dir / ".covers"
-            else:
-                # Fallback: use pdf's parent directory structure
-                cover_dir = pdf_path.parent.parent.parent / ".covers"
+                # Determine cover directory from config
+                if _shared._organize_base_dir:
+                    cover_dir = _shared._organize_base_dir / ".covers"
+                else:
+                    # Fallback: use pdf's parent directory structure
+                    cover_dir = pdf_path.parent.parent.parent / ".covers"
 
-            # Extract cover from specified page
-            if OCRService.is_available():
-                cover_path = extract_cover_from_pdf(
-                    pdf_path,
-                    cover_dir,
-                    dpi=PDF_COVER_DPI_OCR,
-                    quality=PDF_COVER_QUALITY_HIGH,
-                    page_number=page_number,
-                )
-            else:
-                cover_path = extract_cover_from_pdf(pdf_path, cover_dir, page_number=page_number)
+                # Extract cover from specified page
+                if OCRService.is_available():
+                    cover_path = extract_cover_from_pdf(
+                        pdf_path,
+                        cover_dir,
+                        dpi=PDF_COVER_DPI_OCR,
+                        quality=PDF_COVER_QUALITY_HIGH,
+                        page_number=page_number,
+                    )
+                else:
+                    cover_path = extract_cover_from_pdf(pdf_path, cover_dir, page_number=page_number)
 
-            if not cover_path:
-                raise HTTPException(status_code=500, detail="Failed to extract cover from PDF")
+                if not cover_path:
+                    raise HTTPException(status_code=500, detail="Failed to extract cover from PDF")
 
-            # Update database with new cover path and page number
-            magazine.cover_path = str(cover_path)
-            if magazine.extra_metadata is None:
-                magazine.extra_metadata = {}
-            magazine.extra_metadata["cover_page"] = page_number
-            db_session.commit()
+                # Update database with new cover path and page number
+                magazine.cover_path = str(cover_path)
+                if magazine.extra_metadata is None:
+                    magazine.extra_metadata = {}
+                magazine.extra_metadata["cover_page"] = page_number
+                db_session.commit()
 
-            logger.info(f"Regenerated cover for magazine {magazine_id} from page {page_number}")
+                logger.info(f"Regenerated cover for magazine {magazine_id} from page {page_number}")
 
-            return {
-                "success": True,
-                "message": f"Cover regenerated from page {page_number}",
-                "cover_path": str(cover_path),
-            }
-        finally:
-            db_session.close()
+                return {
+                    "success": True,
+                    "message": f"Cover regenerated from page {page_number}",
+                    "cover_path": str(cover_path),
+                }
+            finally:
+                db_session.close()
+
+        return await run_in_thread(_db_operation)
 
     except HTTPException:
         raise

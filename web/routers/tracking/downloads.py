@@ -11,10 +11,15 @@ from fastapi import HTTPException, Query
 
 from core.constants.errors import ErrorMessages
 from core.parsers import sanitize_filename
-from core.utils.general import is_special_edition, generate_olid, cleanup_empty_directories
+from core.utils.general import (
+    is_special_edition,
+    generate_olid,
+    cleanup_empty_directories,
+)
 from models.database import MagazineTracking
 from models.database import SearchResult as DBSearchResult
 from web.schemas import APIError, TrackingPreferencesRequest
+from core.utils import run_in_thread
 from . import _shared
 
 # Access global state via _shared module to get current values
@@ -44,52 +49,72 @@ logger = _shared.logger
         500: {"description": "Failed to update tracking", "model": APIError},
     },
 )
-async def track_single_issue(tracking_id: int, edition_id: str, track: bool = Query(True)) -> Dict[str, Any]:
+async def track_single_issue(
+    tracking_id: int, edition_id: str, track: bool = Query(True)
+) -> Dict[str, Any]:
     """Track or untrack a single issue/edition"""
     try:
-        db_session = _shared._session_factory()
-        try:
-            tracking = db_session.query(MagazineTracking).filter(MagazineTracking.id == tracking_id).first()
-            if not tracking:
-                raise HTTPException(status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND)
 
-            # Initialize selected_editions if None
-            if tracking.selected_editions is None:
-                tracking.selected_editions = {}
+        def _update():
+            db_session = _shared._session_factory()
+            try:
+                tracking = (
+                    db_session.query(MagazineTracking)
+                    .filter(MagazineTracking.id == tracking_id)
+                    .first()
+                )
+                if not tracking:
+                    raise HTTPException(
+                        status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND
+                    )
 
-            # Update the selected_editions dictionary
-            tracking.selected_editions[edition_id] = track
+                # Initialize selected_editions if None
+                if tracking.selected_editions is None:
+                    tracking.selected_editions = {}
 
-            # Mark the column as modified for SQLAlchemy to detect the change
-            from sqlalchemy.orm.attributes import flag_modified
+                # Update the selected_editions dictionary
+                tracking.selected_editions[edition_id] = track
 
-            flag_modified(tracking, "selected_editions")
+                # Mark the column as modified for SQLAlchemy to detect the change
+                from sqlalchemy.orm.attributes import flag_modified
 
-            db_session.commit()
+                flag_modified(tracking, "selected_editions")
 
-            # Trigger immediate auto-download check if an edition was marked for tracking
-            if track and _shared._auto_download_task_func:
-                import asyncio
+                db_session.commit()
 
-                try:
-                    asyncio.create_task(_shared._auto_download_task_func())
-                    logger.info(f"Triggered immediate auto-download check after tracking edition {edition_id}")
-                except Exception as e:
-                    logger.warning(f"Could not trigger immediate auto-download: {e}")
+                # Trigger immediate auto-download check if an edition was marked for tracking
+                if track and _shared._auto_download_task_func:
+                    import asyncio
 
-            action = "marked for tracking" if track else "unmarked from tracking"
-            logger.info(f"Issue {edition_id} {action} for periodical '{tracking.title}'")
+                    try:
+                        asyncio.create_task(_shared._auto_download_task_func())
+                        logger.info(
+                            f"Triggered immediate auto-download check after tracking edition {edition_id}"
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            f"Could not trigger immediate auto-download: {e}"
+                        )
 
-            return {
-                "success": True,
-                "message": f"Issue {action}",
-                "tracking_id": tracking.id,
-                "edition_id": edition_id,
-                "tracked": track,
-                "total_selected": len([v for v in tracking.selected_editions.values() if v]),
-            }
-        finally:
-            db_session.close()
+                action = "marked for tracking" if track else "unmarked from tracking"
+                logger.info(
+                    f"Issue {edition_id} {action} for periodical '{tracking.title}'"
+                )
+
+                return {
+                    "success": True,
+                    "message": f"Issue {action}",
+                    "tracking_id": tracking.id,
+                    "edition_id": edition_id,
+                    "tracked": track,
+                    "total_selected": len(
+                        [v for v in tracking.selected_editions.values() if v]
+                    ),
+                }
+            finally:
+                db_session.close()
+
+        return await run_in_thread(_update)
     except HTTPException:
         raise
     except Exception as e:

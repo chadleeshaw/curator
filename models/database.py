@@ -34,17 +34,23 @@ class Credentials(Base):
     id = Column(Integer, primary_key=True)
     username = Column(String(255), nullable=False, unique=True, index=True)
     password_hash = Column(String(255), nullable=False)
-    api_token = Column(String(255), nullable=True, unique=True, index=True)  # For API access
+    api_token = Column(
+        String(255), nullable=True, unique=True, index=True
+    )  # For API access
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     def set_password(self, password: str) -> None:
         """Hash and set the password"""
-        self.password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        self.password_hash = bcrypt.hashpw(
+            password.encode("utf-8"), bcrypt.gensalt()
+        ).decode("utf-8")
 
     def verify_password(self, password: str) -> bool:
         """Verify a password against the stored hash"""
-        return bcrypt.checkpw(password.encode("utf-8"), self.password_hash.encode("utf-8"))
+        return bcrypt.checkpw(
+            password.encode("utf-8"), self.password_hash.encode("utf-8")
+        )
 
     def generate_api_token(self) -> str:
         """Generate a new API token"""
@@ -71,11 +77,15 @@ class Magazine(Base):
 
     id = Column(Integer, primary_key=True)
     title = Column(String(255), nullable=False, index=True)
-    language = Column(String(50), nullable=True, default=DEFAULT_LANGUAGE, index=True)  # Language of the edition
+    language = Column(
+        String(50), nullable=True, default=DEFAULT_LANGUAGE, index=True
+    )  # Language of the edition
     issue_date = Column(DateTime, nullable=False, index=True)
     file_path = Column(String(512), nullable=False, unique=True)
     cover_path = Column(String(512), nullable=True)
-    content_hash = Column(String(64), nullable=True, index=True)  # SHA256 hash of file content for deduplication
+    content_hash = Column(
+        String(64), nullable=True, index=True
+    )  # SHA256 hash of file content for deduplication
     extra_metadata = Column(JSON, nullable=True)  # Extra metadata from Open Library
     created_at = Column(DateTime, default=utcnow, index=True)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
@@ -110,21 +120,31 @@ class MagazineTracking(Base):
         String(50), nullable=False, index=True
     )  # Open Library ID (not unique anymore - different languages can share)
     title = Column(String(255), nullable=False, index=True)
-    language = Column(String(50), nullable=True, default="English", index=True)  # Language of tracked edition
+    language = Column(
+        String(50), nullable=True, default="English", index=True
+    )  # Language of tracked edition
     country = Column(String(50), nullable=True, index=True)  # Country code (ISO)
     first_publish_year = Column(Integer, nullable=True)
     total_editions_known = Column(Integer, default=0)
 
     # Selection preferences
-    track_all_editions = Column(Boolean, default=False)  # Auto-download all new editions
-    track_new_only = Column(Boolean, default=False)  # Auto-download only new/future editions
+    track_all_editions = Column(
+        Boolean, default=False
+    )  # Auto-download all new editions
+    track_new_only = Column(
+        Boolean, default=False
+    )  # Auto-download only new/future editions
     selected_editions = Column(JSON, default={})  # Dict: {olid: True/False, ...}
     selected_years = Column(JSON, default=[])  # List of years to track
     delete_from_client_on_completion = Column(
         Boolean, default=False
     )  # Delete from download client after completion or failure
-    category = Column(String(100), nullable=True)  # Content category: Magazines, Comics, Articles, News
-    download_category = Column(String(100), nullable=True)  # Download client category (e.g., "books", "magazines")
+    category = Column(
+        String(100), nullable=True
+    )  # Content category: Magazines, Comics, Articles, News
+    download_category = Column(
+        String(100), nullable=True
+    )  # Download client category (e.g., "books", "magazines")
 
     # Metadata
     periodical_metadata = Column(JSON, nullable=True)  # Full metadata from Open Library
@@ -151,7 +171,9 @@ class MagazineTracking(Base):
             "category": self.category,
             "download_category": self.download_category,
             "periodical_metadata": self.periodical_metadata,
-            "last_metadata_update": self.last_metadata_update.isoformat() if self.last_metadata_update else None,
+            "last_metadata_update": self.last_metadata_update.isoformat()
+            if self.last_metadata_update
+            else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -169,9 +191,13 @@ class SearchResult(Base):
     url = Column(String(512), nullable=False)
     publication_date = Column(DateTime, nullable=True)
     raw_metadata = Column(JSON, nullable=True)  # Provider-specific fields as JSON
-    fuzzy_match_group_id = Column(String(255), nullable=True, index=True)  # Grouping for deduplication
+    fuzzy_match_group_id = Column(
+        String(255), nullable=True, index=True
+    )  # Grouping for deduplication
     created_at = Column(DateTime, default=utcnow, index=True)
-    magazine_id = Column(Integer, ForeignKey("periodicals.id"), nullable=True)  # Links to downloaded periodical
+    magazine_id = Column(
+        Integer, ForeignKey("periodicals.id"), nullable=True
+    )  # Links to downloaded periodical
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize SearchResult to dictionary for API responses"""
@@ -181,7 +207,9 @@ class SearchResult(Base):
             "query": self.query,
             "title": self.title,
             "url": self.url,
-            "publication_date": self.publication_date.isoformat() if self.publication_date else None,
+            "publication_date": self.publication_date.isoformat()
+            if self.publication_date
+            else None,
             "raw_metadata": self.raw_metadata,
             "fuzzy_match_group_id": self.fuzzy_match_group_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
@@ -195,22 +223,29 @@ class DownloadSubmission(Base):
     __tablename__ = "download_submissions"
 
     class StatusEnum(enum.Enum):
-        PENDING = "pending"
+        QUEUED = "queued"  # Waiting for download slot
+        PENDING = "pending"  # Submitted to client, waiting for completion
         DOWNLOADING = "downloading"
         COMPLETED = "completed"
         FAILED = "failed"
         SKIPPED = "skipped"
 
     id = Column(Integer, primary_key=True)
-    tracking_id = Column(Integer, ForeignKey("periodical_tracking.id"), nullable=False, index=True)  # Which periodical
+    tracking_id = Column(
+        Integer, ForeignKey("periodical_tracking.id"), nullable=False, index=True
+    )  # Which periodical
     search_result_id = Column(
         Integer, ForeignKey("search_results.id"), nullable=True, index=True
     )  # Which search result
-    job_id = Column(String(255), nullable=True, index=True)  # Client's job ID (if submitted)
+    job_id = Column(
+        String(255), nullable=True, index=True
+    )  # Client's job ID (if submitted)
     status = Column(Enum(StatusEnum), default=StatusEnum.PENDING, index=True)
     source_url = Column(String(512), nullable=False)  # NZB URL or download link
     result_title = Column(String(255), nullable=False)  # Title from search result
-    fuzzy_match_group = Column(String(255), nullable=True, index=True)  # For dedup grouping
+    fuzzy_match_group = Column(
+        String(255), nullable=True, index=True
+    )  # For dedup grouping
     client_name = Column(String(100), nullable=True)  # Which client handled this
     attempt_count = Column(Integer, default=0)  # Number of download attempts
     last_error = Column(String(512), nullable=True)  # Last error message
@@ -250,7 +285,9 @@ class Download(Base):
         FAILED = "failed"
 
     id = Column(Integer, primary_key=True)
-    job_id = Column(String(255), nullable=False, unique=True, index=True)  # Client's job ID
+    job_id = Column(
+        String(255), nullable=False, unique=True, index=True
+    )  # Client's job ID
     status = Column(Enum(StatusEnum), default=StatusEnum.PENDING, index=True)
     source_url = Column(String(512), nullable=False)  # NZB URL sent to client
     client_name = Column(String(100), nullable=False)  # Which client handled this
@@ -291,7 +328,9 @@ class OCRJob(Base):
         HIGH = 10  # User-requested
 
     id = Column(Integer, primary_key=True)
-    magazine_id = Column(Integer, ForeignKey("periodicals.id"), nullable=False, index=True)
+    magazine_id = Column(
+        Integer, ForeignKey("periodicals.id"), nullable=False, index=True
+    )
     status = Column(Enum(StatusEnum), default=StatusEnum.PENDING, index=True)
     priority = Column(Integer, default=PriorityEnum.NORMAL.value, index=True)
     language = Column(String(50), nullable=True)  # OCR language hint
@@ -318,6 +357,8 @@ class OCRJob(Base):
             "processing_time_seconds": self.processing_time_seconds,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "completed_at": self.completed_at.isoformat()
+            if self.completed_at
+            else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

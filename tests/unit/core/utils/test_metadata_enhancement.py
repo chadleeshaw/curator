@@ -8,7 +8,7 @@ from datetime import datetime
 
 # Path setup handled by conftest.py
 
-from services.ocr_queue import _apply_scan_metadata_to_magazine
+from services.ocr.queue import _apply_scan_metadata_to_magazine
 from models.database import Magazine
 
 
@@ -62,7 +62,10 @@ def test_dont_overwrite_existing_year():
         language="English",
         issue_date=datetime(2023, 3, 1),
         file_path="/test/path.pdf",
-        extra_metadata={"year": 2023, "month": "March"},  # Already has year from filename
+        extra_metadata={
+            "year": 2023,
+            "month": "March",
+        },  # Already has year from filename
     )
 
     scan_metadata = {"year": 2022, "month": 12}  # Different year from OCR (wrong)
@@ -152,7 +155,12 @@ def test_no_update_when_all_fields_present():
         language="English",
         issue_date=datetime(2024, 5, 1),
         file_path="/test/path.pdf",
-        extra_metadata={"year": 2024, "month": "May", "volume": 10, "issue_number": 123},
+        extra_metadata={
+            "year": 2024,
+            "month": "May",
+            "volume": 10,
+            "issue_number": 123,
+        },
     )
 
     scan_metadata = {"year": 2023, "month": 4, "volume": 9, "issue_number": 122}

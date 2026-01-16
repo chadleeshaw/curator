@@ -9,6 +9,7 @@ from typing import Callable, Optional, Tuple
 from fastapi import APIRouter
 
 from core.constants.date import MONTH_TO_NUMBER
+from core.utils import run_in_thread
 
 router = APIRouter(prefix="/api", tags=["periodicals"])
 logger = logging.getLogger(__name__)
@@ -18,7 +19,9 @@ _session_factory = None
 _organize_base_dir = None
 
 
-def set_dependencies(session_factory: Callable, organize_base_dir: Optional[str] = None) -> None:
+def set_dependencies(
+    session_factory: Callable, organize_base_dir: Optional[str] = None
+) -> None:
     """Set dependencies from main app"""
     global _session_factory, _organize_base_dir
     _session_factory = session_factory

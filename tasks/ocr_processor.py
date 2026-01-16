@@ -7,8 +7,8 @@ from typing import Dict, Any
 from sqlalchemy.orm import sessionmaker
 
 from core import constants
-from services.ocr_queue import OCRQueueService
-from services.ocr_service import OCRService
+from services.ocr.queue import OCRQueueService
+from services.ocr.service import OCRService
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,9 @@ class OCRProcessor:
             "last_process_time": None,
         }
 
-        logger.info(f"OCR processor initialized with {max_workers} workers, batch size {batch_size}")
+        logger.info(
+            f"OCR processor initialized with {max_workers} workers, batch size {batch_size}"
+        )
 
     async def run(self) -> Dict[str, Any]:
         """

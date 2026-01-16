@@ -8,7 +8,8 @@ from pathlib import Path
 
 # Path setup handled by conftest.py
 
-from services.response_models import ErrorDetail, OperationResult, ErrorCodes
+from services.response_models import ErrorDetail, OperationResult
+from core.constants.errors import ErrorCodes
 
 
 def test_error_detail():

@@ -9,6 +9,7 @@ from fastapi import HTTPException
 
 from core.constants.date import NUMBER_TO_MONTH
 from core.constants.errors import ErrorMessages
+from core.utils import run_in_thread
 from models.database import Magazine
 
 from . import _shared
@@ -27,43 +28,47 @@ async def toggle_special_edition(magazine_id: int, is_special: bool) -> Dict[str
         is_special: True to mark as special edition, False to unmark
     """
     try:
-        db_session = _shared._session_factory()
-        try:
-            magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
-            if not magazine:
-                raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
 
-            # Initialize extra_metadata if needed
-            if magazine.extra_metadata is None:
-                magazine.extra_metadata = {}
+        def _db_operation():
+            db_session = _shared._session_factory()
+            try:
+                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+                if not magazine:
+                    raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
 
-            # Update special edition status
-            if is_special:
-                # Mark as special edition - store the current title as special edition name
-                magazine.extra_metadata["special_edition"] = magazine.title
-                logger.info(f"Marked issue as special edition: {magazine.title}")
-                message = f"Marked '{magazine.title}' as a special edition"
-            else:
-                # Unmark as special edition
-                if "special_edition" in magazine.extra_metadata:
-                    del magazine.extra_metadata["special_edition"]
-                logger.info(f"Unmarked special edition: {magazine.title}")
-                message = f"Unmarked '{magazine.title}' as special edition"
+                # Initialize extra_metadata if needed
+                if magazine.extra_metadata is None:
+                    magazine.extra_metadata = {}
 
-            # Mark the column as modified for SQLAlchemy to detect the change
-            from sqlalchemy.orm.attributes import flag_modified
+                # Update special edition status
+                if is_special:
+                    # Mark as special edition - store the current title as special edition name
+                    magazine.extra_metadata["special_edition"] = magazine.title
+                    logger.info(f"Marked issue as special edition: {magazine.title}")
+                    message = f"Marked '{magazine.title}' as a special edition"
+                else:
+                    # Unmark as special edition
+                    if "special_edition" in magazine.extra_metadata:
+                        del magazine.extra_metadata["special_edition"]
+                    logger.info(f"Unmarked special edition: {magazine.title}")
+                    message = f"Unmarked '{magazine.title}' as special edition"
 
-            flag_modified(magazine, "extra_metadata")
+                # Mark the column as modified for SQLAlchemy to detect the change
+                from sqlalchemy.orm.attributes import flag_modified
 
-            db_session.commit()
+                flag_modified(magazine, "extra_metadata")
 
-            return {
-                "success": True,
-                "message": message,
-                "is_special_edition": is_special,
-            }
-        finally:
-            db_session.close()
+                db_session.commit()
+
+                return {
+                    "success": True,
+                    "message": message,
+                    "is_special_edition": is_special,
+                }
+            finally:
+                db_session.close()
+
+        return await run_in_thread(_db_operation)
 
     except HTTPException:
         raise
@@ -76,88 +81,93 @@ async def toggle_special_edition(magazine_id: int, is_special: bool) -> Dict[str
 async def update_periodical(magazine_id: int, updates: Dict[str, Any]) -> Dict[str, Any]:
     """Update periodical metadata"""
     try:
-        db_session = _shared._session_factory()
-        try:
-            magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
-            if not magazine:
-                raise HTTPException(status_code=404, detail=ErrorMessages.PERIODICAL_NOT_FOUND)
 
-            # Check if this magazine is linked to tracking
-            has_tracking = magazine.tracking_id is not None
+        def _db_operation():
+            db_session = _shared._session_factory()
+            try:
+                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+                if not magazine:
+                    raise HTTPException(status_code=404, detail=ErrorMessages.PERIODICAL_NOT_FOUND)
 
-            # Update allowed fields
-            # Language can only be updated if NOT linked to tracking
-            if "language" in updates and not has_tracking:
-                magazine.language = updates["language"]
+                # Check if this magazine is linked to tracking
+                has_tracking = magazine.tracking_id is not None
 
-            # Update extra_metadata fields
-            if magazine.extra_metadata is None:
-                magazine.extra_metadata = {}
+                # Update allowed fields
+                # Language can only be updated if NOT linked to tracking
+                if "language" in updates and not has_tracking:
+                    magazine.language = updates["language"]
 
-            # Country can only be updated if NOT linked to tracking
-            if "country" in updates and not has_tracking:
-                magazine.extra_metadata["country"] = updates["country"]
+                # Update extra_metadata fields
+                if magazine.extra_metadata is None:
+                    magazine.extra_metadata = {}
 
-            # Handle year and month updates
-            year_provided = "year" in updates and updates["year"]
-            month_provided = "month" in updates
+                # Country can only be updated if NOT linked to tracking
+                if "country" in updates and not has_tracking:
+                    magazine.extra_metadata["country"] = updates["country"]
 
-            # Update metadata fields
-            if year_provided:
-                magazine.extra_metadata["year"] = updates["year"]
+                # Handle year and month updates
+                year_provided = "year" in updates and updates["year"]
+                month_provided = "month" in updates
 
-            if month_provided:
-                magazine.extra_metadata["month"] = updates["month"]
+                # Update metadata fields
+                if year_provided:
+                    magazine.extra_metadata["year"] = updates["year"]
 
-            # Auto-populate from issue_date if fields not provided
-            if magazine.issue_date:
-                if not year_provided:
-                    magazine.extra_metadata["year"] = magazine.issue_date.year
-                if not month_provided or not updates.get("month"):
-                    magazine.extra_metadata["month"] = NUMBER_TO_MONTH.get(magazine.issue_date.month, "")
+                if month_provided:
+                    magazine.extra_metadata["month"] = updates["month"]
 
-            # Reconstruct issue_date when year is provided
-            # This keeps the database field in sync for sorting/filtering
-            if year_provided:
-                year = int(updates["year"])
-                month_str = updates.get("month", "")
-                month_num, _ = _shared.parse_month_string(month_str)
+                # Auto-populate from issue_date if fields not provided
+                if magazine.issue_date:
+                    if not year_provided:
+                        magazine.extra_metadata["year"] = magazine.issue_date.year
+                    if not month_provided or not updates.get("month"):
+                        magazine.extra_metadata["month"] = NUMBER_TO_MONTH.get(magazine.issue_date.month, "")
 
-                try:
-                    magazine.issue_date = datetime(year, month_num, 1)
-                except ValueError:
-                    # Invalid date (e.g., Feb 30) - default to year start
-                    logger.warning(f"Invalid date: year={year}, month={month_num}")
-                    magazine.issue_date = datetime(year, 1, 1)
+                # Reconstruct issue_date when year is provided
+                # This keeps the database field in sync for sorting/filtering
+                if year_provided:
+                    year = int(updates["year"])
+                    month_str = updates.get("month", "")
+                    month_num, _ = _shared.parse_month_string(month_str)
 
-            if "issue_number" in updates:
-                magazine.extra_metadata["issue_number"] = updates["issue_number"]
+                    try:
+                        magazine.issue_date = datetime(year, month_num, 1)
+                    except ValueError:
+                        # Invalid date (e.g., Feb 30) - default to year start
+                        logger.warning(f"Invalid date: year={year}, month={month_num}")
+                        magazine.issue_date = datetime(year, 1, 1)
 
-            if "volume" in updates:
-                magazine.extra_metadata["volume"] = updates["volume"]
+                if "issue_number" in updates:
+                    magazine.extra_metadata["issue_number"] = updates["issue_number"]
 
-            if "special_edition" in updates:
-                if updates["special_edition"]:
-                    magazine.extra_metadata["special_edition"] = updates["special_edition"]
-                elif "special_edition" in magazine.extra_metadata:
-                    del magazine.extra_metadata["special_edition"]
+                if "volume" in updates:
+                    magazine.extra_metadata["volume"] = updates["volume"]
 
-            db_session.commit()
-            db_session.refresh(magazine)
+                if "special_edition" in updates:
+                    if updates["special_edition"]:
+                        magazine.extra_metadata["special_edition"] = updates["special_edition"]
+                    elif "special_edition" in magazine.extra_metadata:
+                        del magazine.extra_metadata["special_edition"]
 
-            return {
-                "success": True,
-                "message": "Metadata updated successfully",
-                "periodical": {
-                    "id": magazine.id,
-                    "title": magazine.title,
-                    "language": magazine.language,
-                    "issue_date": (magazine.issue_date.isoformat() if magazine.issue_date else None),
-                    "metadata": magazine.extra_metadata,
-                },
-            }
-        finally:
-            db_session.close()
+                db_session.commit()
+                db_session.refresh(magazine)
+
+                return {
+                    "success": True,
+                    "message": "Metadata updated successfully",
+                    "periodical": {
+                        "id": magazine.id,
+                        "title": magazine.title,
+                        "language": magazine.language,
+                        "issue_date": (magazine.issue_date.isoformat() if magazine.issue_date else None),
+                        "metadata": magazine.extra_metadata,
+                    },
+                }
+            finally:
+                db_session.close()
+
+        return await run_in_thread(_db_operation)
+
     except HTTPException:
         raise
     except Exception as e:
