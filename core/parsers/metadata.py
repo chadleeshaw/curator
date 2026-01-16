@@ -208,9 +208,16 @@ class MetadataExtractor:
     def _try_dash_month_year_pattern(self, filename: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         Pattern: "Title - MonYear" (e.g., "National Geographic - Dec2024").
+        Also handles: "Title-Month.Year" (e.g., "Esquire.Africa-August.2023").
         """
+        # Try with year directly after month (no separator)
         pattern = r"(.+?)\s*-\s*([A-Za-z]{3,9})(\d{4})"
         match = re.search(pattern, filename)
+
+        # Also try with dot or space before year
+        if not match:
+            pattern = r"(.+?)\s*-\s*([A-Za-z]{3,9})[\.\s]+(\d{4})"
+            match = re.search(pattern, filename)
 
         if not match:
             return None

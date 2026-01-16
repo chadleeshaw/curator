@@ -6,6 +6,7 @@ from typing import Dict, List, Tuple, Optional
 
 from fuzzywuzzy import fuzz
 
+from core.constants import REGIONAL_EDITION_INDICATORS
 from core.parsers.language import LANGUAGE_INDICATORS
 
 logger = logging.getLogger(__name__)
@@ -381,6 +382,21 @@ class TitleMatcher:
         # Strategy: Look for 2+ words at the end that appear to be proper names
         # or edition identifiers (like person names or descriptive phrases)
         #
+        # Check if title ends with regional indicators - these are part of the base title
+        words = title.split()
+        if len(words) >= 2:
+            last_word = words[-1].lower()
+            # Common two-word regional indicators
+            if len(words) >= 2 and " ".join(words[-2:]).lower() in [
+                "south africa", "north america", "south america", "new zealand",
+                "united kingdom", "united states", "hong kong"
+            ]:
+                # This is a regional edition, not a special edition
+                return (title, False, "")
+            # Single-word country names at the end
+            elif last_word in REGIONAL_EDITION_INDICATORS:
+                return (title, False, "")
+
         # Common periodical words that are part of the base title:
         common_periodical_words = {
             "magazine",
@@ -405,8 +421,6 @@ class TitleMatcher:
             "world",
             "today",
         }
-
-        words = title.split()
 
         # Need at least 3 words: "Base" + "Special" + "Name"
         if len(words) >= 3:

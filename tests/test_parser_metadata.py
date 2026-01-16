@@ -238,6 +238,33 @@ class TestMetadataExtractorMultiMonth:
         assert result["issue_date"].year == 2024
         assert result["issue_date"].month == 12
 
+    def test_extract_dot_separated_year(self):
+        """Test extraction of filenames with dot-separated year like 'Title-Month.Year'."""
+        extractor = MetadataExtractor()
+        pdf_path = Path("/test/Vogue.Africa-August.2023.pdf")
+
+        result = extractor.extract_from_filename(pdf_path)
+
+        assert "Vogue" in result["title"]
+        assert "Africa" in result["title"]
+        assert result["issue_date"].year == 2023
+        assert result["issue_date"].month == 8
+        assert result["month_name"] == "August"
+
+    def test_extract_regional_edition_with_dot_year(self):
+        """Test extraction of regional edition with dot-separated year."""
+        extractor = MetadataExtractor()
+        pdf_path = Path("/test/National.Geographic.South.Africa-March.2023.pdf")
+
+        result = extractor.extract_from_filename(pdf_path)
+
+        assert "National" in result["title"]
+        assert "Geographic" in result["title"]
+        assert "South" in result["title"] or "Africa" in result["title"]
+        assert result["issue_date"].year == 2023
+        assert result["issue_date"].month == 3
+
+
     def test_seasonal_still_works(self):
         """Test that seasonal parsing still works."""
         extractor = MetadataExtractor()

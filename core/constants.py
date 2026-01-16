@@ -629,6 +629,15 @@ COUNTRY_INDICATORS = {
 }
 """Keywords and patterns used to detect country from periodical titles"""
 
+REGIONAL_EDITION_INDICATORS = {
+    "africa", "south", "north", "east", "west",
+    "europe", "asia", "america", "usa", "uk", "us",
+    "australia", "canada", "france", "germany", "italy", "spain",
+    "mexico", "brazil", "argentina", "japan", "china", "korea",
+    "international", "worldwide", "global",
+}
+"""Regional/country names that indicate regional editions, not special editions"""
+
 
 # ==============================================================================
 # Language Detection Keywords

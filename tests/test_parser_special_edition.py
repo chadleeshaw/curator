@@ -66,3 +66,17 @@ class TestSpecialEditionDetection:
     def test_yearbook_keyword(self):
         """Test detection of yearbook keyword"""
         assert is_special_edition("School Magazine Yearbook 2024")
+
+    def test_regional_editions_not_special(self):
+        """Test that regional editions are not marked as special editions"""
+        # Africa editions
+        assert not is_special_edition("Vogue Africa")
+        assert not is_special_edition("Esquire South Africa")
+        assert not is_special_edition("GQ Africa")
+        assert not is_special_edition("Cosmopolitan South Africa")
+        
+        # Other regional editions
+        assert not is_special_edition("Wired UK")
+        assert not is_special_edition("National Geographic Europe")
+        assert not is_special_edition("Time Asia")
+
