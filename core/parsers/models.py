@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any
 
-from core.constants import DEFAULT_LANGUAGE
+from core.constants.language import DEFAULT_LANGUAGE
 
 
 # pylint: disable=too-many-instance-attributes

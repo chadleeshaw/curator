@@ -76,7 +76,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         library.closeDeleteModal();
       }
     });
-    
+
     // Prevent modal content clicks from propagating to modal background
     const modalContent = modal.querySelector('.modal-content');
     if (modalContent) {
@@ -123,7 +123,7 @@ window.addEventListener('hashchange', () => {
  */
 function initQueueSwitcher() {
   const switchButtons = document.querySelectorAll('.queue-switch-btn');
-  switchButtons.forEach(btn => {
+  switchButtons.forEach((btn) => {
     btn.addEventListener('click', () => {
       const queueType = btn.dataset.queue;
       showQueueView(queueType);
@@ -139,13 +139,17 @@ function showQueueView(queueType) {
   localStorage.setItem('lastQueueView', queueType);
 
   // Update button active states
-  document.querySelectorAll('.queue-switch-btn').forEach(btn => {
+  document.querySelectorAll('.queue-switch-btn').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.queue === queueType);
   });
 
   // Show/hide queue views
-  document.getElementById('download-queue-view')?.classList.toggle(CSS_CLASSES.HIDDEN, queueType !== 'download');
-  document.getElementById('ocr-queue-view')?.classList.toggle(CSS_CLASSES.HIDDEN, queueType !== 'ocr');
+  document
+    .getElementById('download-queue-view')
+    ?.classList.toggle(CSS_CLASSES.HIDDEN, queueType !== 'download');
+  document
+    .getElementById('ocr-queue-view')
+    ?.classList.toggle(CSS_CLASSES.HIDDEN, queueType !== 'ocr');
 
   // Stop all auto-refresh
   downloads.stopAutoRefresh();
@@ -171,17 +175,17 @@ async function updateQueueBadges() {
   try {
     // Get download queue stats
     const downloadResponse = await fetch('/api/downloads/queue', {
-      headers: { 'Authorization': `Bearer ${AuthManager.getToken()}` }
+      headers: { Authorization: `Bearer ${AuthManager.getToken()}` },
     });
     const downloadData = await downloadResponse.json();
-    const activeDownloads = downloadData.queue?.filter(d =>
-      d.status === 'pending' || d.status === 'downloading'
-    ).length || 0;
+    const activeDownloads =
+      downloadData.queue?.filter((d) => d.status === 'pending' || d.status === 'downloading')
+        .length || 0;
     document.getElementById('download-queue-badge').textContent = activeDownloads;
 
     // Get OCR queue stats
     const ocrResponse = await fetch('/api/ocr/queue/stats', {
-      headers: { 'Authorization': `Bearer ${AuthManager.getToken()}` }
+      headers: { Authorization: `Bearer ${AuthManager.getToken()}` },
     });
     const ocrData = await ocrResponse.json();
     const activeOcr = (ocrData.pending || 0) + (ocrData.processing || 0);

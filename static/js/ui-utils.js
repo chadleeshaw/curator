@@ -4,7 +4,13 @@
  * @module ui-utils
  */
 
-import { ELEMENT_IDS as _ELEMENT_IDS, CSS_CLASSES, TIMEOUTS, STORAGE_KEYS as _STORAGE_KEYS, DEFAULTS as _DEFAULTS } from './constants.js';
+import {
+  ELEMENT_IDS as _ELEMENT_IDS,
+  CSS_CLASSES,
+  TIMEOUTS,
+  STORAGE_KEYS as _STORAGE_KEYS,
+  DEFAULTS as _DEFAULTS,
+} from './constants.js';
 
 /**
  * UI Utilities class providing static methods for common UI operations
@@ -364,7 +370,7 @@ export class UIUtils {
        */
       close: () => {
         modal?.remove();
-      }
+      },
     };
   }
 }

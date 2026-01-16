@@ -40,7 +40,7 @@ def get_version() -> str:
             version = result.stdout.strip()
             # Only use git version if it's a proper tag (contains 'v' or '-')
             # If it's just a bare commit hash, fall through to package.json
-            if 'v' in version or '-' in version:
+            if "v" in version or "-" in version:
                 logger.debug("Version from git tags: %s", version)
                 return version
 

@@ -8,7 +8,7 @@ from typing import Any, Dict, List
 
 import requests
 
-from core.bases import DownloadClient
+from core.interfaces import DownloadClient
 
 logger = logging.getLogger(__name__)
 

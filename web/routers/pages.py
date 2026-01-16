@@ -5,11 +5,12 @@ HTML page serving routes
 import json
 import logging
 from collections import defaultdict
+from typing import Callable
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
-from core.utils import is_special_edition
+from core.utils.general import is_special_edition
 from core.version import get_version_info
 from models.database import Magazine
 
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 _session_factory = None
 
 
-def set_dependencies(session_factory):
+def set_dependencies(session_factory: Callable) -> None:
     """Set dependencies from main app"""
     global _session_factory
     _session_factory = session_factory
@@ -146,7 +147,7 @@ async def view_periodical_by_id(id: int = Query(...)):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"View periodical error: {e}")
+        logger.error(f"View periodical error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -183,7 +184,11 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
                     sample_mag = query.first()
                     if sample_mag and sample_mag.tracking_id:
                         # This magazine has tracking - use the tracking title
-                        tracking = db_session.query(MagazineTracking).filter(MagazineTracking.id == sample_mag.tracking_id).first()
+                        tracking = (
+                            db_session.query(MagazineTracking)
+                            .filter(MagazineTracking.id == sample_mag.tracking_id)
+                            .first()
+                        )
                         if tracking:
                             display_title = tracking.title
                             # Re-query using tracking_id to get all issues
@@ -289,5 +294,5 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"View periodical error: {e}")
+        logger.error(f"View periodical error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

@@ -9,7 +9,12 @@
 import { APIClient } from './api.js';
 import { UIUtils } from './ui-utils.js';
 import { AuthManager } from './auth.js';
-import { ELEMENT_IDS as _ELEMENT_IDS, STATUS_MESSAGES as _STATUS_MESSAGES, CSS_CLASSES, TIMEOUTS } from './constants.js';
+import {
+  ELEMENT_IDS as _ELEMENT_IDS,
+  STATUS_MESSAGES as _STATUS_MESSAGES,
+  CSS_CLASSES,
+  TIMEOUTS,
+} from './constants.js';
 
 export class SettingsManager {
   constructor() {
@@ -60,16 +65,17 @@ export class SettingsManager {
         // Store current username for comparison
         // Handle case where username might be an object (extract string value)
         let username = data.username;
-        
+
         // If username is somehow an object, try to extract the actual username
         if (typeof username === 'object' && username !== null) {
           console.warn('Username is an object:', username);
           // Try common property names
-          username = username.username || username.name || username.value || JSON.stringify(username);
+          username =
+            username.username || username.name || username.value || JSON.stringify(username);
         } else if (typeof username !== 'string') {
           username = String(username || '');
         }
-        
+
         this.currentUsername = username;
 
         // Pre-populate username
@@ -232,13 +238,11 @@ export class SettingsManager {
     const pattern = document.getElementById('import-organize-pattern');
     const enableTextScan = document.getElementById('import-enable-text-scan');
     const enableOcr = document.getElementById('import-enable-ocr');
-    
+
     if (pattern)
       pattern.value = importConfig.organization_pattern || 'data/{category}/{title}/{year}/';
-    if (enableTextScan)
-      enableTextScan.checked = importConfig.enable_text_scan ?? true;
-    if (enableOcr)
-      enableOcr.checked = importConfig.enable_ocr ?? true;
+    if (enableTextScan) enableTextScan.checked = importConfig.enable_text_scan ?? true;
+    if (enableOcr) enableOcr.checked = importConfig.enable_ocr ?? true;
   }
 
   /**
@@ -778,8 +782,8 @@ export class SettingsManager {
     try {
       const response = await fetch('/api/auth/api-token', {
         headers: {
-          'Authorization': `Bearer ${AuthManager.getToken()}`
-        }
+          Authorization: `Bearer ${AuthManager.getToken()}`,
+        },
       });
 
       if (response.ok) {
@@ -801,7 +805,7 @@ export class SettingsManager {
   toggleAPITokenVisibility() {
     const tokenDisplay = document.getElementById('api-token-display');
     const toggleBtn = document.getElementById('api-token-toggle-btn');
-    
+
     if (tokenDisplay.type === 'password') {
       tokenDisplay.type = 'text';
       toggleBtn.textContent = '🙈';
@@ -835,15 +839,17 @@ export class SettingsManager {
    * Regenerate a new API token
    */
   async regenerateAPIToken() {
-    const confirmed = confirm('Are you sure you want to regenerate your API token? This will invalidate the old token.');
+    const confirmed = confirm(
+      'Are you sure you want to regenerate your API token? This will invalidate the old token.'
+    );
     if (!confirmed) return;
 
     try {
       const response = await fetch('/api/auth/api-token/regenerate', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${AuthManager.getToken()}`
-        }
+          Authorization: `Bearer ${AuthManager.getToken()}`,
+        },
       });
 
       const result = await response.json();
@@ -856,7 +862,11 @@ export class SettingsManager {
           document.getElementById('api-token-message').classList.add(CSS_CLASSES.HIDDEN);
         }, 3000);
       } else {
-        UIUtils.showStatus('api-token-message', result.message || 'Failed to regenerate token', 'error');
+        UIUtils.showStatus(
+          'api-token-message',
+          result.message || 'Failed to regenerate token',
+          'error'
+        );
       }
     } catch (error) {
       console.error('Error regenerating API token:', error);

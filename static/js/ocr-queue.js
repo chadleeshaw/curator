@@ -5,7 +5,12 @@
 
 import { APIClient } from './api.js?v=1767733177';
 import { UIUtils } from './ui-utils.js?v=1767733177';
-import { ELEMENT_IDS as _ELEMENT_IDS, STATUS_MESSAGES as _STATUS_MESSAGES, CSS_CLASSES, TIMEOUTS as _TIMEOUTS } from './constants.js';
+import {
+  ELEMENT_IDS as _ELEMENT_IDS,
+  STATUS_MESSAGES as _STATUS_MESSAGES,
+  CSS_CLASSES,
+  TIMEOUTS as _TIMEOUTS,
+} from './constants.js';
 
 export class OCRQueueManager {
   constructor() {
@@ -19,7 +24,7 @@ export class OCRQueueManager {
     try {
       const [queueResponse, statsResponse] = await Promise.all([
         APIClient.authenticatedFetch('/api/ocr/queue'),
-        APIClient.authenticatedFetch('/api/ocr/queue/stats')
+        APIClient.authenticatedFetch('/api/ocr/queue/stats'),
       ]);
 
       const queueData = await queueResponse.json();
@@ -58,9 +63,15 @@ export class OCRQueueManager {
 
     // Get CSS variable colors
     const colors = {
-      pending: getComputedStyle(document.documentElement).getPropertyValue('--status-pending').trim(),
-      processing: getComputedStyle(document.documentElement).getPropertyValue('--status-downloading').trim(),
-      completed: getComputedStyle(document.documentElement).getPropertyValue('--status-completed').trim(),
+      pending: getComputedStyle(document.documentElement)
+        .getPropertyValue('--status-pending')
+        .trim(),
+      processing: getComputedStyle(document.documentElement)
+        .getPropertyValue('--status-downloading')
+        .trim(),
+      completed: getComputedStyle(document.documentElement)
+        .getPropertyValue('--status-completed')
+        .trim(),
       failed: getComputedStyle(document.documentElement).getPropertyValue('--status-failed').trim(),
     };
 
@@ -89,8 +100,8 @@ export class OCRQueueManager {
     }
 
     // Filter to show only pending and processing jobs
-    const activeJobs = queueData.jobs.filter(job =>
-      job.status === 'pending' || job.status === 'processing'
+    const activeJobs = queueData.jobs.filter(
+      (job) => job.status === 'pending' || job.status === 'processing'
     );
 
     if (activeJobs.length === 0) {
@@ -123,16 +134,16 @@ export class OCRQueueManager {
       const statusCell = document.createElement('td');
       statusCell.style.padding = '12px';
       statusCell.style.textAlign = 'center';
-      
+
       let statusContent = this.getStatusBadge(job.status);
-      
+
       // Add additional context based on status (but not for processing since badge already says it)
       if (job.status === 'failed' && job.attempt_count) {
         statusContent += `<div style="font-size: 0.8em; color: var(--text-secondary); margin-top: 4px;">Attempt ${job.attempt_count}/3</div>`;
       } else if (job.status === 'completed' && job.processing_time_seconds) {
         statusContent += `<div style="font-size: 0.8em; color: var(--text-secondary); margin-top: 4px;">${job.processing_time_seconds}s</div>`;
       }
-      
+
       statusCell.innerHTML = statusContent;
       row.appendChild(statusCell);
 
@@ -154,27 +165,31 @@ export class OCRQueueManager {
         retryBtn.className = 'action-btn';
         retryBtn.textContent = '🔄 Retry';
         retryBtn.title = 'Retry this job';
-        retryBtn.style.cssText = 'background: var(--primary); color: white; padding: 6px 12px; border-radius: 4px; border: none; cursor: pointer; margin-right: 5px;';
+        retryBtn.style.cssText =
+          'background: var(--primary); color: white; padding: 6px 12px; border-radius: 4px; border: none; cursor: pointer; margin-right: 5px;';
         retryBtn.addEventListener('click', () => this.retryJob(job.id));
         actionsCell.appendChild(retryBtn);
       }
 
       // Delete button for all jobs
-      const deleteTitle = job.status === 'processing' ? 'Cancel OCR processing' : 'Remove from queue';
+      const deleteTitle =
+        job.status === 'processing' ? 'Cancel OCR processing' : 'Remove from queue';
       const deleteBtn = document.createElement('button');
       deleteBtn.className = 'action-btn';
       deleteBtn.textContent = '🗑️';
       deleteBtn.title = deleteTitle;
-      deleteBtn.style.cssText = 'background: var(--surface-variant); color: var(--status-failed); padding: 6px 12px; border-radius: 4px; border: 1px solid var(--border); cursor: pointer;';
+      deleteBtn.style.cssText =
+        'background: var(--surface-variant); color: var(--status-failed); padding: 6px 12px; border-radius: 4px; border: 1px solid var(--border); cursor: pointer;';
       deleteBtn.addEventListener('click', () => this.deleteJob(job.id, job.magazine_title));
-      
+
       // Also add info button if there's an error
       if (job.last_error) {
         const infoBtn = document.createElement('button');
         infoBtn.className = 'action-btn';
         infoBtn.textContent = 'ℹ️ Info';
         infoBtn.title = 'View error details';
-        infoBtn.style.cssText = 'background: var(--surface-variant); padding: 6px 12px; border-radius: 4px; border: 1px solid var(--border); cursor: pointer; margin-right: 5px;';
+        infoBtn.style.cssText =
+          'background: var(--surface-variant); padding: 6px 12px; border-radius: 4px; border: 1px solid var(--border); cursor: pointer; margin-right: 5px;';
         infoBtn.addEventListener('click', () => this.showError(job.magazine_title, job.last_error));
         actionsCell.appendChild(infoBtn);
       }
@@ -191,10 +206,14 @@ export class OCRQueueManager {
    */
   getStatusBadge(status) {
     const badges = {
-      'pending': '<span style="background: var(--status-pending); color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.85em;">⏱️ Pending</span>',
-      'processing': '<span style="background: var(--status-downloading); color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.85em;">⚡ Processing</span>',
-      'completed': '<span style="background: var(--status-completed); color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.85em;">✅ Done</span>',
-      'failed': '<span style="background: var(--status-failed); color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.85em;">❌ Failed</span>',
+      pending:
+        '<span style="background: var(--status-pending); color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.85em;">⏱️ Pending</span>',
+      processing:
+        '<span style="background: var(--status-downloading); color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.85em;">⚡ Processing</span>',
+      completed:
+        '<span style="background: var(--status-completed); color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.85em;">✅ Done</span>',
+      failed:
+        '<span style="background: var(--status-failed); color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.85em;">❌ Failed</span>',
     };
     return badges[status] || status;
   }
@@ -218,7 +237,7 @@ export class OCRQueueManager {
   async retryJob(jobId) {
     try {
       const response = await APIClient.authenticatedFetch(`/api/ocr/retry/${jobId}`, {
-        method: 'POST'
+        method: 'POST',
       });
 
       if (response.ok) {
@@ -253,8 +272,9 @@ export class OCRQueueManager {
     `;
 
     const modalContent = document.createElement('div');
-    modalContent.style.cssText = 'background: var(--surface); border-radius: 8px; padding: 24px; max-width: 500px; width: 90%; box-shadow: 0 4px 20px rgba(0,0,0,0.3);';
-    
+    modalContent.style.cssText =
+      'background: var(--surface); border-radius: 8px; padding: 24px; max-width: 500px; width: 90%; box-shadow: 0 4px 20px rgba(0,0,0,0.3);';
+
     modalContent.innerHTML = `
       <h3 style="margin: 0 0 16px 0; color: var(--text-primary);">⚠️ Remove OCR Job</h3>
       <p style="margin: 0 0 12px 0; color: var(--text-secondary);">Are you sure you want to remove this OCR job from the queue?</p>
@@ -263,20 +283,22 @@ export class OCRQueueManager {
     `;
 
     const buttonContainer = modalContent.querySelector('div[style*="display: flex"]');
-    
+
     const cancelBtn = document.createElement('button');
     cancelBtn.textContent = 'Cancel';
-    cancelBtn.style.cssText = 'background: var(--surface-variant); color: var(--text-primary); padding: 8px 16px; border-radius: 4px; border: 1px solid var(--border); cursor: pointer;';
+    cancelBtn.style.cssText =
+      'background: var(--surface-variant); color: var(--text-primary); padding: 8px 16px; border-radius: 4px; border: 1px solid var(--border); cursor: pointer;';
     cancelBtn.addEventListener('click', () => modal.remove());
-    
+
     const deleteBtn = document.createElement('button');
     deleteBtn.textContent = 'Delete';
-    deleteBtn.style.cssText = 'background: var(--status-failed); color: white; padding: 8px 16px; border-radius: 4px; border: none; cursor: pointer;';
+    deleteBtn.style.cssText =
+      'background: var(--status-failed); color: white; padding: 8px 16px; border-radius: 4px; border: none; cursor: pointer;';
     deleteBtn.addEventListener('click', () => {
       this.confirmDelete(jobId);
       modal.remove();
     });
-    
+
     buttonContainer.appendChild(cancelBtn);
     buttonContainer.appendChild(deleteBtn);
     modal.appendChild(modalContent);
@@ -294,7 +316,7 @@ export class OCRQueueManager {
   async confirmDelete(jobId) {
     try {
       const response = await APIClient.authenticatedFetch(`/api/ocr/queue/${jobId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
       });
 
       if (response.ok) {

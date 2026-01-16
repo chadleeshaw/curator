@@ -7,11 +7,13 @@ from typing import Any, Dict
 
 from fastapi import APIRouter
 
-from core.constants import (
-    SUPPORTED_LANGUAGES,
+from core.constants.country import (
     ISO_COUNTRIES,
     LANGUAGE_TO_COUNTRY,
     COUNTRY_INDICATORS,
+)
+from core.constants.language import (
+    SUPPORTED_LANGUAGES,
     LANGUAGE_KEYWORDS,
 )
 

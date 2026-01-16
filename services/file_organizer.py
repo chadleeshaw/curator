@@ -11,16 +11,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-from core.constants import (
-    DEFAULT_LANGUAGE,
+from core.constants.files import (
     PDF_COVER_DPI_HIGH,
     PDF_COVER_QUALITY_HIGH,
     VOLUME_PREFIX,
     ISSUE_PREFIX,
     ORGANIZED_FILENAME_SEPARATOR,
 )
+from core.constants.language import DEFAULT_LANGUAGE
 from core.parsers import month_abbr_to_number
-from core.pdf_utils import extract_cover_from_pdf as extract_cover_util
+from core.utils.pdf import extract_cover_from_pdf as extract_cover_util
 from core.parsers import sanitize_filename
 
 logger = logging.getLogger(__name__)
@@ -96,8 +96,8 @@ class FileOrganizer:
             try:
                 source.rename(pdf_path)
                 logger.info(f"Organized PDF: {pdf_path}")
-            except Exception as e:
-                logger.error(f"Error moving PDF: {e}")
+            except (OSError, PermissionError) as e:
+                logger.error(f"Error moving PDF: {e}", exc_info=True)
                 pdf_path = None
         else:
             logger.warning(f"Source file is not PDF: {source}")
@@ -107,8 +107,8 @@ class FileOrganizer:
             try:
                 Path(cover_path).rename(jpg_path)
                 logger.info(f"Organized cover: {jpg_path}")
-            except Exception as e:
-                logger.error(f"Error moving cover: {e}")
+            except (OSError, PermissionError) as e:
+                logger.error(f"Error moving cover: {e}", exc_info=True)
                 jpg_path = None
 
         return str(pdf_path), str(jpg_path)
@@ -133,6 +133,13 @@ class FileOrganizer:
 
         Returns:
             Filename with .pdf extension
+
+        Examples:
+            >>> organizer._build_filename("Wired", 5, 12, "Dec", "2024")
+            'Wired - Vol5 - No12 - Dec2024.pdf'
+
+            >>> organizer._build_filename("Nature", None, None, "Jan", "2023")
+            'Nature - Jan2023.pdf'
         """
         filename_parts = [safe_title]
 
@@ -308,9 +315,7 @@ class FileOrganizer:
 
             # Build target directory
             if not pattern:
-                target_dir = self._build_default_directory(
-                    category_with_prefix, safe_title, volume, year
-                )
+                target_dir = self._build_default_directory(category_with_prefix, safe_title, volume, year)
             else:
                 target_dir = self._build_pattern_directory(
                     pattern,
@@ -334,7 +339,7 @@ class FileOrganizer:
             return target_path
 
         except Exception as e:
-            logger.error(f"Error organizing file {pdf_path}: {e}")
+            logger.error(f"Error organizing file {pdf_path}: {e}", exc_info=True)
             return None
 
     def extract_cover_from_pdf(self, pdf_path: str, output_path: str) -> bool:
@@ -352,7 +357,12 @@ class FileOrganizer:
         output_path_obj = Path(output_path)
         output_dir = output_path_obj.parent
 
-        result = extract_cover_util(pdf_path_obj, output_dir, dpi=PDF_COVER_DPI_HIGH, quality=PDF_COVER_QUALITY_HIGH)
+        result = extract_cover_util(
+            pdf_path_obj,
+            output_dir,
+            dpi=PDF_COVER_DPI_HIGH,
+            quality=PDF_COVER_QUALITY_HIGH,
+        )
 
         if result:
             if result != output_path_obj:

@@ -7,7 +7,7 @@ Detects language from title, filename, or metadata.
 import re
 from typing import Optional
 
-from core.constants import (
+from core.constants.language import (
     DEFAULT_LANGUAGE,
     LANGUAGE_CODE_MAP,
     LANGUAGE_KEYWORDS,

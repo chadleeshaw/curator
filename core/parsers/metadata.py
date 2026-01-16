@@ -9,7 +9,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-from core.constants import MAX_VALID_YEAR, MIN_VALID_YEAR, MONTH_TO_NUMBER, NUMBER_TO_MONTH, SUPPORTED_LANGUAGES
+from core.constants.date import (
+    MAX_VALID_YEAR,
+    MIN_VALID_YEAR,
+    MONTH_TO_NUMBER,
+    NUMBER_TO_MONTH,
+)
+from core.constants.language import SUPPORTED_LANGUAGES
 
 logger = logging.getLogger(__name__)
 
@@ -123,8 +129,19 @@ class MetadataExtractor:
     def __init__(self):
         """Initialize metadata extractor with system folder list."""
         self.system_folders = {
-            ".", "..", "downloads", "data", "local", "cache", "config", "logs", "app",
-            "_Magazines", "_Comics", "_Articles", "_News",
+            ".",
+            "..",
+            "downloads",
+            "data",
+            "local",
+            "cache",
+            "config",
+            "logs",
+            "app",
+            "_Magazines",
+            "_Comics",
+            "_Articles",
+            "_News",
         }
         # Add language folders (should be skipped when extracting periodical names)
         self.system_folders.update(lang.lower() for lang in SUPPORTED_LANGUAGES)

@@ -1,4 +1,4 @@
-.PHONY: help lint format lint-python lint-js lint-css format-python format-js format-css test test-routers test-coverage test-quick install run clean
+.PHONY: help lint format lint-python lint-js lint-css format-python format-js format-css test test-unit test-integration test-e2e test-routers test-coverage test-quick install run clean
 
 PYTHON_FILES := $(shell find . -name '*.py' -not -path './.venv/*' -not -path './node_modules/*' -not -path './.node_modules/*')
 JS_FILES := static/js/*.js
@@ -27,6 +27,9 @@ help:
 	@echo ""
 	@echo "Testing:"
 	@echo "  make test             Run all tests with pytest"
+	@echo "  make test-unit        Run unit tests only (fast)"
+	@echo "  make test-integration Run integration tests only"
+	@echo "  make test-e2e         Run end-to-end tests only"
 	@echo "  make test-routers     Run router/API tests only"
 	@echo "  make test-coverage    Run tests with coverage report"
 	@echo "  make test-quick       Quick syntax check of test files"
@@ -85,9 +88,24 @@ test:
 	@.venv/bin/python -m pytest tests/ -v --tb=short 2>&1 | tail -50 || echo "⚠ Some tests failed"
 	@echo "✅ Test run completed!"
 
+test-unit:
+	@echo "🧪 Running unit tests (fast)..."
+	@.venv/bin/python -m pytest tests/unit/ -v --tb=short
+	@echo "✅ Unit tests completed!"
+
+test-integration:
+	@echo "🧪 Running integration tests..."
+	@.venv/bin/python -m pytest tests/integration/ -v --tb=short
+	@echo "✅ Integration tests completed!"
+
+test-e2e:
+	@echo "🧪 Running end-to-end tests..."
+	@.venv/bin/python -m pytest tests/e2e/ -v --tb=short
+	@echo "✅ E2E tests completed!"
+
 test-routers:
 	@echo "🧪 Running router tests..."
-	@.venv/bin/python -m pytest tests/test_routers_*.py -v --tb=short
+	@.venv/bin/python -m pytest tests/unit/web/routers/ -v --tb=short
 	@echo "✅ Router tests completed!"
 
 test-coverage:
@@ -97,7 +115,7 @@ test-coverage:
 
 test-quick:
 	@echo "🧪 Quick test (syntax check only)..."
-	@.venv/bin/python -m py_compile tests/*.py && echo "✅ All test files compile"
+	@find tests/ -name "test_*.py" -exec .venv/bin/python -m py_compile {} + && echo "✅ All test files compile"
 
 # Cleanup
 clean:

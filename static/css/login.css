@@ -17,172 +17,174 @@ body {
 }
 
 .login-container {
-    background: var(--surface);
-    border-radius: var(--radius-lg);
-    box-shadow: 0 10px 40px rgb(0 0 0 / 0.2);
-    width: 100%;
-    max-width: 400px;
-    padding: 40px;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 10px 40px rgb(0 0 0 / 0.2);
+  width: 100%;
+  max-width: 400px;
+  padding: 40px;
 }
 
 .login-header {
-    text-align: center;
-    margin-bottom: 40px;
+  text-align: center;
+  margin-bottom: 40px;
 }
 
 .login-header h1 {
-    font-size: 32px;
-    color: var(--text-primary);
-    margin-bottom: 10px;
+  font-size: 32px;
+  color: var(--text-primary);
+  margin-bottom: 10px;
 }
 
 .login-header p {
-    color: var(--text-secondary);
-    font-size: 14px;
+  color: var(--text-secondary);
+  font-size: 14px;
 }
 
 .form-group {
-    margin-bottom: 20px;
+  margin-bottom: 20px;
 }
 
 .form-group label {
-    display: block;
-    margin-bottom: 8px;
-    color: var(--text-primary);
-    font-weight: 500;
-    font-size: 14px;
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+  font-weight: 500;
+  font-size: 14px;
 }
 
 .form-group input {
-    width: 100%;
-    padding: 12px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    font-size: 14px;
-    background: var(--input-bg);
-    color: var(--text-primary);
-    transition: border-color var(--transition-fast);
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  background: var(--input-bg);
+  color: var(--text-primary);
+  transition: border-color var(--transition-fast);
 }
 
 .form-group input:focus {
-    outline: none;
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgb(99 102 241 / 0.1);
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgb(99 102 241 / 0.1);
 }
 
 .submit-btn {
-    width: 100%;
-    padding: 12px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border: none;
-    border-radius: var(--radius-md);
-    font-size: 16px;
-    font-weight: 600;
-    cursor: pointer;
-    transition:
-        transform var(--transition-fast),
-        box-shadow var(--transition-fast);
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 
 .submit-btn:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 .submit-btn:active:not(:disabled) {
-    transform: translateY(0);
+  transform: translateY(0);
 }
 
 .submit-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .error-message,
 .success-message {
-    padding: 12px;
-    border-radius: var(--radius-md);
-    margin-bottom: 20px;
-    font-size: 14px;
-    display: none;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  margin-bottom: 20px;
+  font-size: 14px;
+  display: none;
 }
 
 .error-message {
-    background: var(--error-bg, #ffebee);
-    color: var(--error-color);
-    border: 1px solid var(--error-color);
+  background: var(--error-bg, #ffebee);
+  color: var(--error-color);
+  border: 1px solid var(--error-color);
 }
 
 .success-message {
-    background: var(--success-bg, #e8f5e9);
-    color: var(--success-color);
-    border: 1px solid var(--success-color);
+  background: var(--success-bg, #e8f5e9);
+  color: var(--success-color);
+  border: 1px solid var(--success-color);
 }
 
 .error-message.show,
 .success-message.show {
-    display: block;
+  display: block;
 }
 
 .loading {
-    display: inline-block;
-    width: 14px;
-    height: 14px;
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    border-radius: 50%;
-    border-top-color: white;
-    animation: spin 1s ease-in-out infinite;
-    margin-right: 8px;
-    vertical-align: middle;
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: white;
+  animation: spin 1s ease-in-out infinite;
+  margin-right: 8px;
+  vertical-align: middle;
 }
 
 @keyframes spin {
-    to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .mode-switcher {
-    text-align: center;
-    margin-top: 20px;
-    padding-top: 20px;
-    border-top: 1px solid var(--border-color);
+  text-align: center;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-color);
 }
 
 .mode-switcher p {
-    color: var(--text-secondary);
-    font-size: 14px;
-    margin-bottom: 10px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-bottom: 10px;
 }
 
 .mode-switcher button {
-    background: none;
-    border: none;
-    color: var(--primary-color);
-    font-weight: 600;
-    cursor: pointer;
-    font-size: 14px;
-    transition: opacity var(--transition-fast);
+  background: none;
+  border: none;
+  color: var(--primary-color);
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 14px;
+  transition: opacity var(--transition-fast);
 }
 
 .mode-switcher button:hover {
-    opacity: 0.8;
-    text-decoration: underline;
+  opacity: 0.8;
+  text-decoration: underline;
 }
 
 .form-group-password {
-    position: relative;
+  position: relative;
 }
 
 .toggle-password {
-    position: absolute;
-    right: 12px;
-    top: 38px;
-    cursor: pointer;
-    color: var(--text-disabled);
-    user-select: none;
-    transition: color var(--transition-fast);
+  position: absolute;
+  right: 12px;
+  top: 38px;
+  cursor: pointer;
+  color: var(--text-disabled);
+  user-select: none;
+  transition: color var(--transition-fast);
 }
 
 .toggle-password:hover {
-    color: var(--text-primary);
+  color: var(--text-primary);
 }

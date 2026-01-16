@@ -4,13 +4,15 @@ Search routes for periodicals
 
 import logging
 import re
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 
 from fastapi import APIRouter, HTTPException, Query
 
+from core.constants.errors import ErrorMessages
 from models.database import Magazine
 from web.schemas import APIError, SearchRequest
-from core.constants import LANGUAGE_TO_COUNTRY, LANGUAGE_KEYWORDS, COUNTRY_INDICATORS
+from core.constants.country import LANGUAGE_TO_COUNTRY, COUNTRY_INDICATORS
+from core.constants.language import LANGUAGE_KEYWORDS
 
 router = APIRouter(prefix="/api", tags=["search"])
 logger = logging.getLogger(__name__)
@@ -22,7 +24,12 @@ _title_matcher = None
 _session_factory = None
 
 
-def set_dependencies(search_providers, metadata_providers, title_matcher, session_factory):
+def set_dependencies(
+    search_providers: Any,
+    metadata_providers: Any,
+    title_matcher: Any,
+    session_factory: Callable,
+) -> None:
     """Set dependencies from main app"""
     global _search_providers, _metadata_providers, _title_matcher, _session_factory
     _search_providers = search_providers
@@ -261,7 +268,7 @@ async def search(request: SearchRequest) -> Dict[str, Any]:
                         }
                     )
             except Exception as e:
-                logger.error(f"Error searching {provider.name}: {e}")
+                logger.error(f"Error searching {provider.name}: {e}", exc_info=True)
 
         # Deduplicate results by title similarity
         deduplicated = _title_matcher.deduplicate_results(all_results)
@@ -289,7 +296,7 @@ async def search(request: SearchRequest) -> Dict[str, Any]:
             }
 
     except Exception as e:
-        logger.error(f"Search error: {e}")
+        logger.error(f"Search error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -368,7 +375,7 @@ async def search_periodical_providers(
                         except Exception as e:
                             pass  # Already logged above
             else:
-                error_msg = "No search providers configured"
+                error_msg = ErrorMessages.SEARCH_PROVIDERS_UNAVAILABLE
                 logger.warning(error_msg)
                 provider_errors.append(error_msg)
 
@@ -383,7 +390,11 @@ async def search_periodical_providers(
 
             # Create a more specific set: title + date for exact matching (scoped to tracking)
             existing_title_dates = {
-                (m.title.lower(), m.issue_date.strftime("%Y-%m") if m.issue_date else "") for m in scoped_magazines
+                (
+                    m.title.lower(),
+                    m.issue_date.strftime("%Y-%m") if m.issue_date else "",
+                )
+                for m in scoped_magazines
             }
             # Also keep simple title set for backward compatibility (scoped to tracking)
             existing_titles = {m.title.lower() for m in scoped_magazines}
@@ -460,7 +471,7 @@ async def search_periodical_providers(
 
                 # Normalize the title for grouping
                 # Remove common noise words and normalize spacing
-                normalized_title = re.sub(r'\s+', ' ', title_lower.strip())
+                normalized_title = re.sub(r"\s+", " ", title_lower.strip())
 
                 # Create a key that includes both title and date
                 dedup_key = (normalized_title, pub_date)
@@ -568,7 +579,10 @@ async def search_periodical_providers(
             },
         },
         400: {"description": "Invalid periodical title", "model": APIError},
-        503: {"description": "No search providers configured", "model": APIError},
+        503: {
+            "description": ErrorMessages.SEARCH_PROVIDERS_UNAVAILABLE,
+            "model": APIError,
+        },
     },
 )
 async def get_periodical_editions(magazine_title: str) -> Dict[str, Any]:
@@ -586,8 +600,8 @@ async def get_periodical_editions(magazine_title: str) -> Dict[str, Any]:
             raise HTTPException(status_code=400, detail="Invalid periodical title")
 
         if not _search_providers:
-            logger.error("No search providers configured")
-            raise HTTPException(status_code=503, detail="No search providers configured.")
+            logger.error(ErrorMessages.SEARCH_PROVIDERS_UNAVAILABLE)
+            raise HTTPException(status_code=503, detail=ErrorMessages.SEARCH_PROVIDERS_UNAVAILABLE)
 
         # Search across search providers for specific editions
         results = []

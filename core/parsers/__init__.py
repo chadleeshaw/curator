@@ -28,11 +28,11 @@ from core.parsers.models import (
     ParsedDownloadFile,
 )
 from core.parsers.title import TitleMatcher
-from core.parsers.unified_parser import UnifiedParser
+from core.parsers.parser import Parser
 
 __all__ = [
-    # Unified parser (primary interface)
-    "UnifiedParser",
+    # Primary parser interface
+    "Parser",
     # Data models
     "ParsedMetadata",
     "ParsedFilename",

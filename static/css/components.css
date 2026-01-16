@@ -743,7 +743,7 @@
   background: var(--surface);
 }
 
-.merge-select-item input[type="checkbox"] {
+.merge-select-item input[type='checkbox'] {
   margin-top: 2px;
   width: 18px;
   height: 18px;
@@ -1315,7 +1315,8 @@
   color: var(--text-primary);
 }
 
-.result-detail, .result-publisher {
+.result-detail,
+.result-publisher {
   margin: 4px 0;
   color: var(--text-secondary);
   font-size: 0.9em;
@@ -1502,13 +1503,13 @@
   cursor: pointer;
   border: 1px solid var(--border-color);
   transition: all 0.2s ease;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .periodical-group-card:hover {
   border-color: var(--primary-color);
   transform: translateY(-2px);
-  box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
 }
 
 .periodical-group-content {

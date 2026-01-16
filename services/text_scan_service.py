@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 
 try:
     from pypdf import PdfReader
+
     PDF_TEXT_AVAILABLE = True
 except ImportError:
     PDF_TEXT_AVAILABLE = False
@@ -71,7 +72,8 @@ class TextScanService:
             Extracted text as string
         """
         try:
-            from core.epub_utils import extract_text_from_epub
+            from core.utils.epub import extract_text_from_epub
+
             text = extract_text_from_epub(epub_path, max_items=max_items)
             return text
         except Exception as e:
@@ -103,7 +105,7 @@ class TextScanService:
         # Clean up text
         text_upper = text.upper()
         # Also create a version with newlines replaced by spaces for multi-word phrase matching
-        text_upper_spaced = text_upper.replace('\n', ' ')
+        text_upper_spaced = text_upper.replace("\n", " ")
 
         # Detect issue number patterns
         issue_patterns = [
@@ -200,9 +202,7 @@ class TextScanService:
             True if metadata has year/month/volume, False otherwise
         """
         return (
-            metadata.get("year") is not None
-            or metadata.get("month") is not None
-            or metadata.get("volume") is not None
+            metadata.get("year") is not None or metadata.get("month") is not None or metadata.get("volume") is not None
         )
 
     @staticmethod

@@ -187,22 +187,22 @@ export const CSS_CLASSES = {
 
 export const TIMEOUTS = {
   // Status message auto-hide timeouts
-  AUTO_HIDE_STATUS: 3000,      // Standard status message auto-hide
-  AUTO_HIDE_SUCCESS: 2000,     // Success message auto-hide (faster)
-  AUTO_HIDE_LONG: 5000,        // Long status message auto-hide
-  AUTO_HIDE_IMPORT: 4000,      // Import status message auto-hide
+  AUTO_HIDE_STATUS: 3000, // Standard status message auto-hide
+  AUTO_HIDE_SUCCESS: 2000, // Success message auto-hide (faster)
+  AUTO_HIDE_LONG: 5000, // Long status message auto-hide
+  AUTO_HIDE_IMPORT: 4000, // Import status message auto-hide
 
   // Polling and refresh intervals
-  POLLING_INTERVAL: 5000,      // Standard polling interval
-  LONG_POLLING: 10000,         // Long polling interval (OCR queue)
+  POLLING_INTERVAL: 5000, // Standard polling interval
+  LONG_POLLING: 10000, // Long polling interval (OCR queue)
 
   // Debounce timeouts
-  DEBOUNCE_SHORT: 300,         // Short debounce
-  DEBOUNCE_LONG: 500,          // Long debounce
+  DEBOUNCE_SHORT: 300, // Short debounce
+  DEBOUNCE_LONG: 500, // Long debounce
 
   // Reload timeouts
-  RELOAD_DELAY: 1000,          // Delay before page reload
-  IMPORT_RELOAD_DELAY: 500,    // Delay before reloading after import
+  RELOAD_DELAY: 1000, // Delay before page reload
+  IMPORT_RELOAD_DELAY: 500, // Delay before reloading after import
 };
 
 // ============================================================================
@@ -220,7 +220,8 @@ export const PATTERNS = {
   ISSUE_PREFIX: /No\.?\s*(\d+)/i,
 
   // Month patterns
-  MONTH_NAME: /(January|February|March|April|May|June|July|August|September|October|November|December)/i,
+  MONTH_NAME:
+    /(January|February|March|April|May|June|July|August|September|October|November|December)/i,
   MONTH_ABBR: /(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)/i,
 
   // Season patterns
@@ -246,23 +247,43 @@ export const NUMBER_TO_MONTH = {
   9: 'September',
   10: 'October',
   11: 'November',
-  12: 'December'
+  12: 'December',
 };
 
 /**
  * Full month names (lowercase) for lookup
  */
 export const MONTH_NAMES_LOWER = [
-  'january', 'february', 'march', 'april', 'may', 'june',
-  'july', 'august', 'september', 'october', 'november', 'december'
+  'january',
+  'february',
+  'march',
+  'april',
+  'may',
+  'june',
+  'july',
+  'august',
+  'september',
+  'october',
+  'november',
+  'december',
 ];
 
 /**
  * Month abbreviations (lowercase) for lookup
  */
 export const MONTH_ABBR_LOWER = [
-  'jan', 'feb', 'mar', 'apr', 'may', 'jun',
-  'jul', 'aug', 'sep', 'oct', 'nov', 'dec'
+  'jan',
+  'feb',
+  'mar',
+  'apr',
+  'may',
+  'jun',
+  'jul',
+  'aug',
+  'sep',
+  'oct',
+  'nov',
+  'dec',
 ];
 
 // ============================================================================
@@ -273,18 +294,18 @@ export const BADGE_CONFIGS = {
   ALL_ISSUES: {
     icon: '⬇️',
     text: 'All Issues',
-    class: 'badge-download-all'
+    class: 'badge-download-all',
   },
   NEW_ISSUES: {
     icon: '⬇️',
     text: 'New Issues',
-    class: 'badge-download-new'
+    class: 'badge-download-new',
   },
   WATCH_ONLY: {
     icon: '👁️',
     text: 'Watch Only',
-    class: 'badge-watch'
-  }
+    class: 'badge-watch',
+  },
 };
 
 // ============================================================================
@@ -298,7 +319,7 @@ export const HTTP_STATUS = {
   UNAUTHORIZED: 401,
   FORBIDDEN: 403,
   NOT_FOUND: 404,
-  INTERNAL_SERVER_ERROR: 500
+  INTERNAL_SERVER_ERROR: 500,
 };
 
 // ============================================================================
@@ -307,7 +328,7 @@ export const HTTP_STATUS = {
 
 export const STORAGE_KEYS = {
   THEME: 'curator-theme',
-  AUTH_TOKEN: 'curator-token'
+  AUTH_TOKEN: 'curator-token',
 };
 
 // ============================================================================
@@ -319,5 +340,5 @@ export const DEFAULTS = {
   ORGANIZATION_PATTERN: 'data/{category}/{title}/{year}/',
   CLEANUP_HOURS: 24,
   ENABLE_TEXT_SCAN: true,
-  ENABLE_OCR: true
+  ENABLE_OCR: true,
 };

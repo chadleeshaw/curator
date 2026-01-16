@@ -1,0 +1,59 @@
+"""
+Core utilities package - centralized utility functions
+
+This package reorganizes utility modules for better organization and discoverability.
+"""
+
+# Database utilities
+from .db import get_db_session
+
+# EPUB utilities
+from .epub import extract_cover_from_epub, extract_text_from_epub
+
+# General utilities
+from .general import (
+    cleanup_empty_directories,
+    find_pdf_epub_files,
+    generate_olid,
+    hash_file_in_chunks,
+    is_special_edition,
+)
+
+# PDF utilities
+from .pdf import extract_cover_from_pdf
+
+# Provider utilities
+from .provider import handle_provider_errors
+
+# Thumbnail utilities
+from .thumbnail import (
+    THUMBNAIL_MAX_HEIGHT,
+    THUMBNAIL_MAX_WIDTH,
+    THUMBNAIL_QUALITY,
+    generate_thumbnail,
+    get_or_create_thumbnail,
+)
+
+__all__ = [
+    # Database utilities
+    "get_db_session",
+    # EPUB utilities
+    "extract_cover_from_epub",
+    "extract_text_from_epub",
+    # General utilities
+    "cleanup_empty_directories",
+    "find_pdf_epub_files",
+    "generate_olid",
+    "hash_file_in_chunks",
+    "is_special_edition",
+    # PDF utilities
+    "extract_cover_from_pdf",
+    # Provider utilities
+    "handle_provider_errors",
+    # Thumbnail utilities
+    "THUMBNAIL_MAX_HEIGHT",
+    "THUMBNAIL_MAX_WIDTH",
+    "THUMBNAIL_QUALITY",
+    "generate_thumbnail",
+    "get_or_create_thumbnail",
+]

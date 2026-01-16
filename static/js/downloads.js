@@ -6,7 +6,12 @@
 
 import { APIClient } from './api.js?v=1767733177';
 import { UIUtils } from './ui-utils.js?v=1767733177';
-import { ELEMENT_IDS as _ELEMENT_IDS, STATUS_MESSAGES as _STATUS_MESSAGES, CSS_CLASSES, TIMEOUTS as _TIMEOUTS } from './constants.js';
+import {
+  ELEMENT_IDS as _ELEMENT_IDS,
+  STATUS_MESSAGES as _STATUS_MESSAGES,
+  CSS_CLASSES,
+  TIMEOUTS as _TIMEOUTS,
+} from './constants.js';
 
 /**
  * @typedef {Object} DownloadItem
@@ -212,9 +217,10 @@ export class DownloadsManager {
 
     // Determine which status element to use (modal or base page)
     const failedModal = document.getElementById('manage-failed-modal');
-    const statusId = failedModal && !failedModal.classList.contains('hidden')
-      ? 'modal-failed-status'
-      : 'downloads-status';
+    const statusId =
+      failedModal && !failedModal.classList.contains('hidden')
+        ? 'modal-failed-status'
+        : 'downloads-status';
 
     try {
       const response = await APIClient.authenticatedFetch(`/api/downloads/failed/${submissionId}`, {
@@ -327,8 +333,8 @@ export class DownloadsManager {
     }
 
     // Filter to show only active downloads (pending and downloading)
-    const activeDownloads = data.queue.filter(({ status }) =>
-      status === 'pending' || status === 'downloading'
+    const activeDownloads = data.queue.filter(
+      ({ status }) => status === 'pending' || status === 'downloading'
     );
 
     if (activeDownloads.length === 0) {
@@ -474,12 +480,15 @@ export class DownloadsManager {
    * @private
    */
   renderManageQueueModal() {
-    const { currentModalItems: items, currentModalPeriodical: periodical, currentModalFilter: filter = 'all' } = this;
+    const {
+      currentModalItems: items,
+      currentModalPeriodical: periodical,
+      currentModalFilter: filter = 'all',
+    } = this;
 
     // Filter items based on current filter
-    const filteredItems = filter === 'all'
-      ? items
-      : items.filter(({ status }) => status === filter);
+    const filteredItems =
+      filter === 'all' ? items : items.filter(({ status }) => status === filter);
 
     const statusCounts = this.getStatusCounts(items);
     const statusList = Object.entries(statusCounts)
@@ -504,18 +513,25 @@ export class DownloadsManager {
         </tr>
       `;
     } else {
-      tableRows = filteredItems.map((item) => {
-        const { title, magazine, submission_id: submissionId, created_at: createdAt, status } = item;
-        const statusColor = this.getStatusColor(status);
+      tableRows = filteredItems
+        .map((item) => {
+          const {
+            title,
+            magazine,
+            submission_id: submissionId,
+            created_at: createdAt,
+            status,
+          } = item;
+          const statusColor = this.getStatusColor(status);
 
-        // Add clarity if title equals magazine name
-        let displayTitle = title;
-        if (title === magazine || title === periodical) {
-          const date = createdAt ? new Date(createdAt).toLocaleDateString() : '';
-          displayTitle = `${title} <span style="color: var(--text-secondary); font-size: 0.85em;">(#${submissionId}${date ? ' - ' + date : ''})</span>`;
-        }
+          // Add clarity if title equals magazine name
+          let displayTitle = title;
+          if (title === magazine || title === periodical) {
+            const date = createdAt ? new Date(createdAt).toLocaleDateString() : '';
+            displayTitle = `${title} <span style="color: var(--text-secondary); font-size: 0.85em;">(#${submissionId}${date ? ' - ' + date : ''})</span>`;
+          }
 
-        return `
+          return `
           <tr>
             <td style="padding: 10px; border-bottom: 1px solid var(--border-color);">${displayTitle}</td>
             <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
@@ -526,7 +542,8 @@ export class DownloadsManager {
             </td>
           </tr>
         `;
-      }).join('');
+        })
+        .join('');
     }
 
     const html = `
@@ -613,11 +630,12 @@ export class DownloadsManager {
     const badCount = items.filter((i) => i.isBad).length;
     const failedCount = items.filter((i) => !i.isBad).length;
 
-    const tableRows = items.map((item) => {
-      const { id, title, attempt_count: attemptCount, last_error: lastError, isBad } = item;
-      const color = isBad ? 'var(--status-failed)' : 'orange';
+    const tableRows = items
+      .map((item) => {
+        const { id, title, attempt_count: attemptCount, last_error: lastError, isBad } = item;
+        const color = isBad ? 'var(--status-failed)' : 'orange';
 
-      return `
+        return `
         <tr>
           <td style="padding: 10px; border-bottom: 1px solid var(--border-color);">${title}</td>
           <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
@@ -629,7 +647,8 @@ export class DownloadsManager {
           </td>
         </tr>
       `;
-    }).join('');
+      })
+      .join('');
 
     const html = `
       <div class="modal-header">
@@ -718,9 +737,10 @@ export class DownloadsManager {
       }
     }
 
-    const message = failed > 0
-      ? `Retried ${succeeded} of ${failedItems.length} downloads (${failed} failed)`
-      : `Successfully retried all ${succeeded} downloads`;
+    const message =
+      failed > 0
+        ? `Retried ${succeeded} of ${failedItems.length} downloads (${failed} failed)`
+        : `Successfully retried all ${succeeded} downloads`;
     progress.complete(message, failed === 0);
 
     UIUtils.showStatus('modal-queue-status', message, failed === 0 ? 'success' : 'warning');
@@ -768,9 +788,10 @@ export class DownloadsManager {
       }
     }
 
-    const message = failed > 0
-      ? `Removed ${succeeded} of ${this.currentModalItems.length} downloads (${failed} failed)`
-      : `Successfully removed all ${succeeded} downloads`;
+    const message =
+      failed > 0
+        ? `Removed ${succeeded} of ${this.currentModalItems.length} downloads (${failed} failed)`
+        : `Successfully removed all ${succeeded} downloads`;
     progress.complete(message, failed === 0);
 
     UIUtils.showStatus('modal-queue-status', message, failed === 0 ? 'success' : 'warning');
@@ -794,7 +815,10 @@ export class DownloadsManager {
     );
     if (!confirmed) return;
 
-    const progress = UIUtils.showProgressModal('Removing Failed Downloads', this.currentModalItems.length);
+    const progress = UIUtils.showProgressModal(
+      'Removing Failed Downloads',
+      this.currentModalItems.length
+    );
     let succeeded = 0;
     let failed = 0;
 
@@ -817,9 +841,10 @@ export class DownloadsManager {
       }
     }
 
-    const message = failed > 0
-      ? `Removed ${succeeded} of ${this.currentModalItems.length} failed downloads (${failed} failed)`
-      : `Successfully removed all ${succeeded} failed downloads`;
+    const message =
+      failed > 0
+        ? `Removed ${succeeded} of ${this.currentModalItems.length} failed downloads (${failed} failed)`
+        : `Successfully removed all ${succeeded} failed downloads`;
     progress.complete(message, failed === 0);
 
     UIUtils.showStatus('modal-failed-status', message, failed === 0 ? 'success' : 'warning');

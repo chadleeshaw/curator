@@ -137,7 +137,11 @@ def _validate_storage_paths(storage: Dict[str, Any]) -> None:
         ValueError: If any path is invalid or not writable
     """
     # Validate directories
-    for key in [STORAGE_KEY_DOWNLOAD_DIR, STORAGE_KEY_ORGANIZE_DIR, STORAGE_KEY_CACHE_DIR]:
+    for key in [
+        STORAGE_KEY_DOWNLOAD_DIR,
+        STORAGE_KEY_ORGANIZE_DIR,
+        STORAGE_KEY_CACHE_DIR,
+    ]:
         if key in storage:
             dir_path = Path(storage[key])
             _validate_directory(dir_path, key)
@@ -153,7 +157,12 @@ class ConfigLoader:
 
     def get_ocr(self) -> Dict[str, Any]:
         """Get OCR/image preprocessing configuration"""
-        from core.constants import OCR_RESIZE_WIDTH, OCR_CONTRAST_ENHANCE, OCR_DENOISE_H, OCR_SHARPEN_KERNEL
+        from core.constants.ocr import (
+            OCR_RESIZE_WIDTH,
+            OCR_CONTRAST_ENHANCE,
+            OCR_DENOISE_H,
+            OCR_SHARPEN_KERNEL,
+        )
 
         return self.config.get(
             CONFIG_KEY_OCR,
@@ -225,7 +234,16 @@ class ConfigLoader:
 
     def get_matching(self) -> Dict[str, Any]:
         """Get matching configuration"""
-        from core.constants import DEFAULT_FUZZY_THRESHOLD, DUPLICATE_DATE_THRESHOLD_DAYS
+        from core.constants.app import DEFAULT_FUZZY_THRESHOLD
+        from core.constants.date import DUPLICATE_DATE_THRESHOLD_DAYS
+
+        return self.config.get(
+            CONFIG_KEY_MATCHING,
+            {
+                "fuzzy_threshold": DEFAULT_FUZZY_THRESHOLD,
+                "duplicate_date_threshold_days": DUPLICATE_DATE_THRESHOLD_DAYS,
+            },
+        )
 
         return self.config.get(
             CONFIG_KEY_MATCHING,
@@ -250,7 +268,12 @@ class ConfigLoader:
 
     def get_pdf(self) -> Dict[str, Any]:
         """Get PDF processing configuration"""
-        from core.constants import PDF_COVER_DPI_LOW, PDF_COVER_DPI_HIGH, PDF_COVER_QUALITY, PDF_COVER_QUALITY_HIGH
+        from core.constants.files import (
+            PDF_COVER_DPI_LOW,
+            PDF_COVER_DPI_HIGH,
+            PDF_COVER_QUALITY,
+            PDF_COVER_QUALITY_HIGH,
+        )
 
         return self.config.get(
             CONFIG_KEY_PDF,
@@ -264,15 +287,23 @@ class ConfigLoader:
 
     def get_downloads(self) -> Dict[str, Any]:
         """Get downloads configuration"""
-        from core.constants import MAX_DOWNLOAD_RETRIES, MAX_DOWNLOADS_PER_BATCH
+        from core.constants.app import MAX_DOWNLOAD_RETRIES, MAX_DOWNLOADS_PER_BATCH
 
         return self.config.get(
-            CONFIG_KEY_DOWNLOADS, {"max_retries": MAX_DOWNLOAD_RETRIES, "max_per_batch": MAX_DOWNLOADS_PER_BATCH}
+            CONFIG_KEY_DOWNLOADS,
+            {
+                "max_retries": MAX_DOWNLOAD_RETRIES,
+                "max_per_batch": MAX_DOWNLOADS_PER_BATCH,
+            },
         )
 
     def get_tasks(self) -> Dict[str, Any]:
         """Get task scheduling configuration"""
-        from core.constants import AUTO_DOWNLOAD_INTERVAL, DOWNLOAD_MONITOR_INTERVAL, CLEANUP_COVERS_INTERVAL
+        from core.constants.app import (
+            AUTO_DOWNLOAD_INTERVAL,
+            DOWNLOAD_MONITOR_INTERVAL,
+            CLEANUP_COVERS_INTERVAL,
+        )
 
         return self.config.get(
             CONFIG_KEY_TASKS,
@@ -322,7 +353,8 @@ class ConfigLoader:
     def get_server(self) -> Dict[str, Any]:
         """Get server configuration with environment variable overrides"""
         server = self.config.get(
-            CONFIG_KEY_SERVER, {"host": DEFAULT_SERVER_HOST, "port": DEFAULT_SERVER_PORT}
+            CONFIG_KEY_SERVER,
+            {"host": DEFAULT_SERVER_HOST, "port": DEFAULT_SERVER_PORT},
         ).copy()
 
         # Environment variables override YAML config

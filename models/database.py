@@ -1,5 +1,6 @@
 import enum
 import secrets
+from typing import Any, Dict
 
 import bcrypt
 from sqlalchemy import (
@@ -14,7 +15,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.declarative import declarative_base
 
-from core.constants import DEFAULT_LANGUAGE
+from core.constants.language import DEFAULT_LANGUAGE
 from core.parsers import utc_now
 
 Base = declarative_base()
@@ -37,7 +38,7 @@ class Credentials(Base):
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
-    def set_password(self, password: str):
+    def set_password(self, password: str) -> None:
         """Hash and set the password"""
         self.password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
@@ -50,6 +51,17 @@ class Credentials(Base):
         self.api_token = secrets.token_urlsafe(32)
         self.updated_at = utc_now()
         return self.api_token
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize Credentials to dictionary for API responses (excludes password_hash)"""
+        return {
+            "id": self.id,
+            "username": self.username,
+            # Note: password_hash intentionally excluded for security
+            "api_token": self.api_token,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
 
 
 class Magazine(Base):
@@ -70,6 +82,22 @@ class Magazine(Base):
     tracking_id = Column(
         Integer, ForeignKey("periodical_tracking.id"), nullable=True, index=True
     )  # Link to tracking record
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize Magazine to dictionary for API responses"""
+        return {
+            "id": self.id,
+            "title": self.title,
+            "language": self.language,
+            "issue_date": self.issue_date.isoformat() if self.issue_date else None,
+            "file_path": self.file_path,
+            "cover_path": self.cover_path,
+            "content_hash": self.content_hash,
+            "extra_metadata": self.extra_metadata,
+            "tracking_id": self.tracking_id,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
 
 
 class MagazineTracking(Base):
@@ -105,6 +133,29 @@ class MagazineTracking(Base):
     created_at = Column(DateTime, default=utcnow, index=True)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize MagazineTracking to dictionary for API responses"""
+        return {
+            "id": self.id,
+            "olid": self.olid,
+            "title": self.title,
+            "language": self.language,
+            "country": self.country,
+            "first_publish_year": self.first_publish_year,
+            "total_editions_known": self.total_editions_known,
+            "track_all_editions": self.track_all_editions,
+            "track_new_only": self.track_new_only,
+            "selected_editions": self.selected_editions,
+            "selected_years": self.selected_years,
+            "delete_from_client_on_completion": self.delete_from_client_on_completion,
+            "category": self.category,
+            "download_category": self.download_category,
+            "periodical_metadata": self.periodical_metadata,
+            "last_metadata_update": self.last_metadata_update.isoformat() if self.last_metadata_update else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
 
 class SearchResult(Base):
     """Search results from providers before downloading"""
@@ -121,6 +172,21 @@ class SearchResult(Base):
     fuzzy_match_group_id = Column(String(255), nullable=True, index=True)  # Grouping for deduplication
     created_at = Column(DateTime, default=utcnow, index=True)
     magazine_id = Column(Integer, ForeignKey("periodicals.id"), nullable=True)  # Links to downloaded periodical
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize SearchResult to dictionary for API responses"""
+        return {
+            "id": self.id,
+            "provider": self.provider,
+            "query": self.query,
+            "title": self.title,
+            "url": self.url,
+            "publication_date": self.publication_date.isoformat() if self.publication_date else None,
+            "raw_metadata": self.raw_metadata,
+            "fuzzy_match_group_id": self.fuzzy_match_group_id,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "magazine_id": self.magazine_id,
+        }
 
 
 class DownloadSubmission(Base):
@@ -152,6 +218,25 @@ class DownloadSubmission(Base):
     created_at = Column(DateTime, default=utcnow, index=True)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize DownloadSubmission to dictionary for API responses"""
+        return {
+            "id": self.id,
+            "tracking_id": self.tracking_id,
+            "search_result_id": self.search_result_id,
+            "job_id": self.job_id,
+            "status": self.status.value if self.status else None,
+            "source_url": self.source_url,
+            "result_title": self.result_title,
+            "fuzzy_match_group": self.fuzzy_match_group,
+            "client_name": self.client_name,
+            "attempt_count": self.attempt_count,
+            "last_error": self.last_error,
+            "file_path": self.file_path,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
 
 class Download(Base):
     """Track downloads from clients (legacy - for backward compatibility)"""
@@ -173,6 +258,20 @@ class Download(Base):
     search_result_id = Column(Integer, ForeignKey("search_results.id"), nullable=True)
     created_at = Column(DateTime, default=utcnow, index=True)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize Download to dictionary for API responses"""
+        return {
+            "id": self.id,
+            "job_id": self.job_id,
+            "status": self.status.value if self.status else None,
+            "source_url": self.source_url,
+            "client_name": self.client_name,
+            "magazine_id": self.magazine_id,
+            "search_result_id": self.search_result_id,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
 
 
 class OCRJob(Base):
@@ -204,3 +303,21 @@ class OCRJob(Base):
     started_at = Column(DateTime, nullable=True)  # When processing started
     completed_at = Column(DateTime, nullable=True)  # When processing completed
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize OCRJob to dictionary for API responses"""
+        return {
+            "id": self.id,
+            "magazine_id": self.magazine_id,
+            "status": self.status.value if self.status else None,
+            "priority": self.priority,
+            "language": self.language,
+            "attempt_count": self.attempt_count,
+            "last_error": self.last_error,
+            "ocr_metadata": self.ocr_metadata,
+            "processing_time_seconds": self.processing_time_seconds,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }

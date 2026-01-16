@@ -11,11 +11,17 @@ from core.auth import AuthManager
 from core.config import ConfigLoader
 from core import constants
 from core.database import DatabaseManager
-from core.factory import ClientFactory, ProviderFactory
+from core.factories import ClientFactory, ProviderFactory
 from core.parsers import TitleMatcher
 from models.database import MagazineTracking
 from services import DownloadManager, FileImporter, FileOrganizer
-from scheduler import TaskScheduler, DownloadMonitorTask, CoverCleanupTask, OCRProcessorTask, OCRCoverGeneratorTask
+from tasks import (
+    TaskScheduler,
+    DownloadMonitor,
+    CoverCleanup,
+    OCRProcessor,
+    OCRCoverGenerator,
+)
 
 # Import all routers
 from web.routers import (
@@ -127,7 +133,8 @@ async def lifespan(app: FastAPI):
         category_prefix = import_config.get("category_prefix", "_")
         title_matcher = TitleMatcher(fuzzy_threshold)
         file_processor = FileOrganizer(
-            storage_config.get("organize_dir", "./_Magazines"), category_prefix=category_prefix
+            storage_config.get("organize_dir", "./_Magazines"),
+            category_prefix=category_prefix,
         )
         file_importer = FileImporter(
             downloads_dir=storage_config.get("download_dir", "./downloads"),
@@ -148,7 +155,7 @@ async def lifespan(app: FastAPI):
             logger.info("Download manager initialized")
 
             # Initialize download monitor task
-            download_monitor_task = DownloadMonitorTask(
+            download_monitor_task = DownloadMonitor(
                 download_manager=download_manager,
                 file_importer=file_importer,
                 session_factory=session_factory,
@@ -159,7 +166,7 @@ async def lifespan(app: FastAPI):
             logger.warning("Download manager not initialized: missing download client or search providers")
 
         # Initialize cover cleanup task
-        cover_cleanup_task = CoverCleanupTask(
+        cover_cleanup_task = CoverCleanup(
             session_factory=session_factory,
             organize_base_dir=storage_config.get("organize_dir", "./_Magazines"),
             file_importer=file_importer,
@@ -167,7 +174,7 @@ async def lifespan(app: FastAPI):
         logger.info("Cover cleanup task initialized")
 
         # Initialize OCR cover generator task
-        ocr_cover_generator_task = OCRCoverGeneratorTask(
+        ocr_cover_generator_task = OCRCoverGenerator(
             session_factory=session_factory,
             organize_base_dir=storage_config.get("organize_dir", "./_Magazines"),
             config_loader=config_loader,
@@ -175,11 +182,11 @@ async def lifespan(app: FastAPI):
         logger.info("OCR cover generator task initialized")
 
         # Initialize OCR processor task
-        ocr_processor_task = OCRProcessorTask(
+        ocr_processor_task = OCRProcessor(
             session_factory=session_factory,
             config_loader=config_loader,
             max_workers=tasks_config.get("ocr_max_workers", constants.OCR_MAX_WORKERS),
-            batch_size=tasks_config.get("ocr_batch_size", constants.OCR_BATCH_SIZE)
+            batch_size=tasks_config.get("ocr_batch_size", constants.OCR_BATCH_SIZE),
         )
         logger.info("OCR processor task initialized")
 
@@ -200,7 +207,14 @@ async def lifespan(app: FastAPI):
 
                         pending_count = (
                             db_session.query(Download)
-                            .filter(Download.status.in_([Download.StatusEnum.PENDING, Download.StatusEnum.DOWNLOADING]))
+                            .filter(
+                                Download.status.in_(
+                                    [
+                                        Download.StatusEnum.PENDING,
+                                        Download.StatusEnum.DOWNLOADING,
+                                    ]
+                                )
+                            )
                             .count()
                         )
 
@@ -295,7 +309,11 @@ async def lifespan(app: FastAPI):
             """Generate high-res PNG covers for OCR and clean up orphaned files (runs every 5 minutes)"""
             try:
                 stats = await ocr_cover_generator_task.run()
-                if stats.get("generated_count", 0) > 0 or stats.get("deleted_orphaned", 0) > 0 or stats.get("deleted_completed", 0) > 0:
+                if (
+                    stats.get("generated_count", 0) > 0
+                    or stats.get("deleted_orphaned", 0) > 0
+                    or stats.get("deleted_completed", 0) > 0
+                ):
                     logger.info(f"OCR cover generator: {stats}")
             except Exception as e:
                 logger.error(f"OCR cover generator error: {e}", exc_info=True)
@@ -318,23 +336,33 @@ async def lifespan(app: FastAPI):
 
         # Schedule tasks with intervals from config
         task_scheduler.schedule_periodic(
-            "auto_download", auto_download_task, tasks_config.get("auto_download_interval", constants.AUTO_DOWNLOAD_INTERVAL)
+            "auto_download",
+            auto_download_task,
+            tasks_config.get("auto_download_interval", constants.AUTO_DOWNLOAD_INTERVAL),
         )
 
         task_scheduler.schedule_periodic(
-            "download_monitor", download_monitoring_task, tasks_config.get("download_monitor_interval", constants.DOWNLOAD_MONITOR_INTERVAL)
+            "download_monitor",
+            download_monitoring_task,
+            tasks_config.get("download_monitor_interval", constants.DOWNLOAD_MONITOR_INTERVAL),
         )
 
         task_scheduler.schedule_periodic(
-            "cleanup_orphaned_covers", cleanup_orphaned_covers_task, tasks_config.get("cleanup_covers_interval", constants.CLEANUP_COVERS_INTERVAL)
+            "cleanup_orphaned_covers",
+            cleanup_orphaned_covers_task,
+            tasks_config.get("cleanup_covers_interval", constants.CLEANUP_COVERS_INTERVAL),
         )
 
         task_scheduler.schedule_periodic(
-            "ocr_cover_generator", ocr_cover_generator_task_wrapper, tasks_config.get("ocr_cover_generator_interval", constants.OCR_COVER_GENERATOR_INTERVAL)
+            "ocr_cover_generator",
+            ocr_cover_generator_task_wrapper,
+            tasks_config.get("ocr_cover_generator_interval", constants.OCR_COVER_GENERATOR_INTERVAL),
         )
 
         task_scheduler.schedule_periodic(
-            "ocr_processor", ocr_processing_task, tasks_config.get("ocr_processor_interval", constants.OCR_PROCESSOR_INTERVAL)
+            "ocr_processor",
+            ocr_processing_task,
+            tasks_config.get("ocr_processor_interval", constants.OCR_PROCESSOR_INTERVAL),
         )
 
         # Start scheduler in background
@@ -346,10 +374,23 @@ async def lifespan(app: FastAPI):
         app.state.auth_middleware = AuthMiddleware(auth_manager)
         search.set_dependencies(search_providers, metadata_providers, title_matcher, session_factory)
         periodicals.set_dependencies(session_factory, storage_config.get("organize_dir", "./"))
-        tracking.set_dependencies(session_factory, search_providers, auto_download_task, storage_config, import_config)
+        tracking.set_dependencies(
+            session_factory,
+            search_providers,
+            auto_download_task,
+            storage_config,
+            import_config,
+        )
         downloads.set_dependencies(session_factory, download_manager, download_client)
         imports.set_dependencies(session_factory, file_importer, storage_config)
-        tasks.set_dependencies(session_factory, download_monitor_task, file_importer, storage_config, ocr_processor_task, task_scheduler)
+        tasks.set_dependencies(
+            session_factory,
+            download_monitor_task,
+            file_importer,
+            storage_config,
+            ocr_processor_task,
+            task_scheduler,
+        )
         config.set_dependencies(config_loader)
         pages.set_dependencies(session_factory)
         ocr_queue.set_dependencies(session_factory)

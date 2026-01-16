@@ -4,11 +4,12 @@ File import routes
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
-from core.utils import find_pdf_epub_files
+from core.constants.errors import ErrorMessages
+from core.utils.general import find_pdf_epub_files
 from web.schemas import ImportOptionsRequest
 
 router = APIRouter(prefix="/api/import", tags=["imports"])
@@ -20,7 +21,7 @@ _file_importer = None
 _storage_config = None
 
 
-def set_dependencies(session_factory, file_importer, storage_config):
+def set_dependencies(session_factory: Callable, file_importer: Any, storage_config: Dict[str, Any]) -> None:
     """Set dependencies from main app"""
     global _session_factory, _file_importer, _storage_config
     _session_factory = session_factory
@@ -44,7 +45,7 @@ async def import_from_downloads(
     """
     try:
         if not _file_importer:
-            raise HTTPException(status_code=503, detail="File importer not available")
+            raise HTTPException(status_code=503, detail=ErrorMessages.FILE_IMPORTER_UNAVAILABLE)
 
         def process_imports():
             """Background task to process imports"""
@@ -121,7 +122,7 @@ async def import_from_organize_dir(
     """
     try:
         if not _file_importer:
-            raise HTTPException(status_code=503, detail="File importer not available")
+            raise HTTPException(status_code=503, detail=ErrorMessages.FILE_IMPORTER_UNAVAILABLE)
 
         organize_dir = Path(_storage_config.get("organize_dir", "./local/data"))
 

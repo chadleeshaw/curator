@@ -33,3 +33,4 @@ local/
 node_modules/
 .node_modules/
 .pytest_cache/
+.ruff_cache/

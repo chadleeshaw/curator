@@ -6,7 +6,12 @@
 
 import { APIClient } from './api.js';
 import { UIUtils, SortManager } from './ui-utils.js';
-import { ELEMENT_IDS as _ELEMENT_IDS, STATUS_MESSAGES as _STATUS_MESSAGES, CSS_CLASSES as _CSS_CLASSES, TIMEOUTS } from './constants.js';
+import {
+  ELEMENT_IDS as _ELEMENT_IDS,
+  STATUS_MESSAGES as _STATUS_MESSAGES,
+  CSS_CLASSES as _CSS_CLASSES,
+  TIMEOUTS,
+} from './constants.js';
 import { ValidationError as _ValidationError } from './errors.js';
 
 /**
@@ -110,9 +115,10 @@ export class LibraryManager {
     const btn = document.getElementById('library-sort-toggle');
     if (btn) {
       btn.textContent = this.sortManager.order === 'asc' ? '\u2191' : '\u2193';
-      btn.title = this.sortManager.order === 'asc'
-        ? 'Ascending (click to descend)'
-        : 'Descending (click to ascend)';
+      btn.title =
+        this.sortManager.order === 'asc'
+          ? 'Ascending (click to descend)'
+          : 'Descending (click to ascend)';
     }
   }
 
@@ -249,7 +255,9 @@ export class LibraryManager {
    * library.deletePeriodical(123, 'PC Gamer', 5);
    */
   deletePeriodical(periodicalId, title, issueCount = null) {
-    console.log(`[Library] Setting pending delete: ID=${periodicalId}, Title=${title}, IssueCount=${issueCount}`);
+    console.log(
+      `[Library] Setting pending delete: ID=${periodicalId}, Title=${title}, IssueCount=${issueCount}`
+    );
     this.pendingDeleteId = periodicalId;
     this.pendingDeleteTitle = title;
     this.pendingDeleteIssueCount = issueCount;
@@ -262,9 +270,10 @@ export class LibraryManager {
 
     const titleElement = document.getElementById('delete-modal-title');
     if (titleElement) {
-      titleElement.textContent = issueCount && issueCount > 1
-        ? `Are you sure you want to delete all ${issueCount} issues of "${title}"?`
-        : `Are you sure you want to delete "${title}"?`;
+      titleElement.textContent =
+        issueCount && issueCount > 1
+          ? `Are you sure you want to delete all ${issueCount} issues of "${title}"?`
+          : `Are you sure you want to delete "${title}"?`;
     }
 
     UIUtils.showModal('delete-modal');
@@ -293,11 +302,17 @@ export class LibraryManager {
    * await library.confirmDeletePeriodical();
    */
   async confirmDeletePeriodical() {
-    console.log(`[Library] Confirming delete: pendingDeleteId=${this.pendingDeleteId}, pendingDeleteTitle=${this.pendingDeleteTitle}`);
+    console.log(
+      `[Library] Confirming delete: pendingDeleteId=${this.pendingDeleteId}, pendingDeleteTitle=${this.pendingDeleteTitle}`
+    );
 
     if (!this.pendingDeleteId) {
       console.error('[Library] No periodical selected for deletion');
-      UIUtils.showStatus('import-status', 'Error: No periodical selected for deletion. Please try again.', 'error');
+      UIUtils.showStatus(
+        'import-status',
+        'Error: No periodical selected for deletion. Please try again.',
+        'error'
+      );
       this.closeDeleteModal();
       return;
     }

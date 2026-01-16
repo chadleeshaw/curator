@@ -7,6 +7,7 @@ import logging
 import os
 from pathlib import Path
 from functools import partial
+from typing import Any, Callable, Dict, Optional
 
 from fastapi import APIRouter, HTTPException
 
@@ -24,7 +25,14 @@ _storage_config = None
 _task_scheduler = None
 
 
-def set_dependencies(session_factory, download_monitor_task, file_importer, storage_config, ocr_processor_task=None, task_scheduler=None):  # pylint: disable=too-many-positional-arguments
+def set_dependencies(
+    session_factory: Callable,
+    download_monitor_task: Any,
+    file_importer: Any,
+    storage_config: Dict[str, Any],
+    ocr_processor_task: Optional[Any] = None,
+    task_scheduler: Optional[Any] = None,
+) -> None:  # pylint: disable=too-many-positional-arguments
     """Set dependencies from main app"""
     global _session_factory, _download_monitor_task, _file_importer, _storage_config, _ocr_processor_task, _task_scheduler
     _session_factory = session_factory
@@ -169,7 +177,9 @@ async def run_task_manually(task_id: str):
         elif task_id == "ocr_processor":
             if _ocr_processor_task:
                 stats = await _ocr_processor_task.run()
-                message = f"OCR processor executed. Processed: {stats.get('processed', 0)}, Failed: {stats.get('failed', 0)}"
+                message = (
+                    f"OCR processor executed. Processed: {stats.get('processed', 0)}, Failed: {stats.get('failed', 0)}"
+                )
                 return {
                     "success": True,
                     "task_name": "OCR Processor",

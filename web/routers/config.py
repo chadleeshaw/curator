@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 _config_loader = None
 
 
-def set_dependencies(config_loader):
+def set_dependencies(config_loader: Any) -> None:
     """Set dependencies from main app"""
     global _config_loader
     _config_loader = config_loader

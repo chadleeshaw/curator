@@ -7,9 +7,9 @@ from typing import Optional, Tuple
 
 import jwt
 
-from core.constants import TOKEN_EXPIRATION_HOURS
+from core.constants.app import TOKEN_EXPIRATION_HOURS
 from core.parsers import utc_now
-from core.db_utils import get_db_session
+from core.utils.db import get_db_session
 from models.database import Credentials
 
 # JWT configuration constants

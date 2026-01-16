@@ -1,0 +1,438 @@
+"""
+Integration test for tracking merge functionality with library view grouping
+"""
+
+import sys
+import tempfile
+from datetime import UTC, datetime
+from pathlib import Path
+
+import pytest
+from sqlalchemy import create_engine, func
+from sqlalchemy.orm import sessionmaker
+
+# Path setup handled by conftest.py
+
+from models.database import Base, Magazine, MagazineTracking
+from web.routers.tracking import merge_tracking, set_dependencies
+
+
+@pytest.fixture
+def test_db():
+    """Create in-memory test database"""
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine)
+    return engine, session_factory
+
+
+class TestTrackingMergeIntegration:
+    """Integration test demonstrating full merge workflow"""
+
+    def test_merge_consolidates_library_view(self, test_db):
+        """
+        End-to-end test: User has magazines with variant titles.
+        After merging tracking records, library view should group them together.
+        """
+        engine, session_factory = test_db
+        session = session_factory()
+
+        # Set up dependencies
+        set_dependencies(session_factory, None, None)
+
+        # Scenario: User downloaded magazines with different title variations
+        # These could come from different providers or filename variations
+        tracking_wired = MagazineTracking(
+            olid="OL123W",
+            title="Wired",
+            track_all_editions=True,
+            last_metadata_update=datetime.now(UTC),
+        )
+        tracking_wired_mag = MagazineTracking(
+            olid="OL456W",
+            title="Wired Magazine",
+            track_all_editions=True,
+            last_metadata_update=datetime.now(UTC),
+        )
+        tracking_wired_uk = MagazineTracking(
+            olid="OL789W",
+            title="Wired UK",
+            track_all_editions=True,
+            last_metadata_update=datetime.now(UTC),
+        )
+        session.add_all([tracking_wired, tracking_wired_mag, tracking_wired_uk])
+        session.commit()
+
+        # Create magazines from different sources/imports
+        magazines = [
+            Magazine(
+                title="Wired",
+                language="English",
+                issue_date=datetime(2024, 1, 1),
+                file_path="/library/wired-jan2024.pdf",
+                tracking_id=tracking_wired.id,
+            ),
+            Magazine(
+                title="Wired",
+                language="English",
+                issue_date=datetime(2024, 2, 1),
+                file_path="/library/wired-feb2024.pdf",
+                tracking_id=tracking_wired.id,
+            ),
+            Magazine(
+                title="Wired Magazine",
+                language="English",
+                issue_date=datetime(2024, 3, 1),
+                file_path="/library/wired-magazine-mar2024.pdf",
+                tracking_id=tracking_wired_mag.id,
+            ),
+            Magazine(
+                title="Wired Magazine",
+                language="English",
+                issue_date=datetime(2024, 4, 1),
+                file_path="/library/wired-magazine-apr2024.pdf",
+                tracking_id=tracking_wired_mag.id,
+            ),
+            Magazine(
+                title="Wired UK",
+                language="English",
+                issue_date=datetime(2024, 5, 1),
+                file_path="/library/wired-uk-may2024.pdf",
+                tracking_id=tracking_wired_uk.id,
+            ),
+        ]
+        session.add_all(magazines)
+        session.commit()
+
+        # BEFORE MERGE: Library view shows 3 separate periodical groups
+        # This simulates /api/periodicals endpoint query
+        subquery = (
+            session.query(
+                Magazine.title,
+                Magazine.language,
+                func.max(Magazine.issue_date).label("max_date"),
+            )
+            .group_by(Magazine.title, Magazine.language)
+            .subquery()
+        )
+
+        library_groups_before = (
+            session.query(Magazine)
+            .join(
+                subquery,
+                (Magazine.title == subquery.c.title)
+                & (Magazine.language == subquery.c.language)
+                & (Magazine.issue_date == subquery.c.max_date),
+            )
+            .all()
+        )
+
+        assert len(library_groups_before) == 3, "Should show 3 separate groups before merge"
+        library_titles_before = {mag.title for mag in library_groups_before}
+        assert library_titles_before == {"Wired", "Wired Magazine", "Wired UK"}
+
+        # USER ACTION: Merge the tracking records
+        # Keep "Wired" as canonical title, merge others into it
+        import asyncio
+
+        result = asyncio.run(
+            merge_tracking(
+                target_id=tracking_wired.id,
+                source_ids={"source_ids": [tracking_wired_mag.id, tracking_wired_uk.id]},
+            )
+        )
+
+        assert result["success"] is True
+        assert result["magazines_moved"] == 3  # 2 from Wired Magazine + 1 from Wired UK
+        assert len(result["merged_titles"]) == 2
+
+        # Refresh session
+        session.expire_all()
+
+        # AFTER MERGE: Library view shows 1 consolidated group
+        library_groups_after = (
+            session.query(Magazine)
+            .join(
+                subquery,
+                (Magazine.title == subquery.c.title)
+                & (Magazine.language == subquery.c.language)
+                & (Magazine.issue_date == subquery.c.max_date),
+            )
+            .all()
+        )
+
+        assert len(library_groups_after) == 1, "Should show 1 consolidated group after merge"
+        assert library_groups_after[0].title == "Wired"
+
+        # Verify all magazines are grouped together
+        all_mags = session.query(Magazine).order_by(Magazine.issue_date).all()
+        assert len(all_mags) == 5
+        for mag in all_mags:
+            assert mag.title == "Wired", "All magazines should have normalized title"
+            assert mag.tracking_id == tracking_wired.id, "All should link to target tracking"
+
+        # Verify issue count for the group
+        wired_count = session.query(Magazine).filter(Magazine.title == "Wired", Magazine.language == "English").count()
+        assert wired_count == 5, "Should have all 5 issues under one title"
+
+        session.close()
+
+    def test_merge_preserves_language_separation(self, test_db):
+        """
+        Merging should normalize titles but preserve language-based grouping
+        """
+        engine, session_factory = test_db
+        session = session_factory()
+
+        set_dependencies(session_factory, None, None)
+
+        # Create tracking for different language editions
+        tracking_en = MagazineTracking(
+            olid="OL_EN",
+            title="Le Monde Diplomatique",
+            language="English",
+            track_all_editions=True,
+            last_metadata_update=datetime.now(UTC),
+        )
+        tracking_fr = MagazineTracking(
+            olid="OL_FR",
+            title="Monde Diplomatique",
+            language="French",
+            track_all_editions=True,
+            last_metadata_update=datetime.now(UTC),
+        )
+        session.add_all([tracking_en, tracking_fr])
+        session.commit()
+
+        # Add magazines in each language
+        magazines = [
+            Magazine(
+                title="Le Monde Diplomatique",
+                language="English",
+                issue_date=datetime(2024, 1, 1),
+                file_path="/lib/monde-en-jan.pdf",
+                tracking_id=tracking_en.id,
+            ),
+            Magazine(
+                title="Monde Diplomatique",
+                language="French",
+                issue_date=datetime(2024, 1, 1),
+                file_path="/lib/monde-fr-jan.pdf",
+                tracking_id=tracking_fr.id,
+            ),
+        ]
+        session.add_all(magazines)
+        session.commit()
+
+        # Merge tracking records
+        import asyncio
+
+        asyncio.run(merge_tracking(target_id=tracking_en.id, source_ids={"source_ids": [tracking_fr.id]}))
+
+        session.expire_all()
+
+        # Both should have same title now
+        all_mags = session.query(Magazine).all()
+        for mag in all_mags:
+            assert mag.title == "Le Monde Diplomatique"
+
+        # But library should still show 2 groups (different languages)
+        from sqlalchemy import func
+
+        language_groups = session.query(Magazine.title, Magazine.language).distinct().all()
+
+        assert len(language_groups) == 2, "Should maintain language-based grouping"
+        languages = {group[1] for group in language_groups}
+        assert languages == {"English", "French"}
+
+        session.close()
+
+    def test_merge_reorganizes_files_on_disk(self, test_db):
+        """
+        Test that merging tracking records actually moves files on disk
+        and updates database paths accordingly.
+        """
+        engine, session_factory = test_db
+        session = session_factory()
+
+        set_dependencies(session_factory, None, None)
+
+        # Create temporary directory structure for testing
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            # Create source folder structures
+            wired_dir = tmpdir_path / "_Magazines" / "Wired" / "English" / "2024"
+            wired_mag_dir = tmpdir_path / "_Magazines" / "Wired Magazine" / "English" / "2024"
+            wired_dir.mkdir(parents=True, exist_ok=True)
+            wired_mag_dir.mkdir(parents=True, exist_ok=True)
+
+            # Create actual test files
+            wired_jan_pdf = wired_dir / "Wired - January2024.pdf"
+            wired_jan_jpg = wired_dir / "Wired - January2024.jpg"
+            wired_mag_feb_pdf = wired_mag_dir / "Wired Magazine - February2024.pdf"
+            wired_mag_feb_jpg = wired_mag_dir / "Wired Magazine - February2024.jpg"
+
+            wired_jan_pdf.write_text("fake pdf content 1")
+            wired_jan_jpg.write_text("fake jpg content 1")
+            wired_mag_feb_pdf.write_text("fake pdf content 2")
+            wired_mag_feb_jpg.write_text("fake jpg content 2")
+
+            # Create tracking records
+            tracking_wired = MagazineTracking(
+                olid="OL123W",
+                title="Wired",
+                track_all_editions=True,
+                last_metadata_update=datetime.now(UTC),
+            )
+            tracking_wired_mag = MagazineTracking(
+                olid="OL456W",
+                title="Wired Magazine",
+                track_all_editions=True,
+                last_metadata_update=datetime.now(UTC),
+            )
+            session.add_all([tracking_wired, tracking_wired_mag])
+            session.commit()
+
+            # Create magazine records with proper metadata
+            mag1 = Magazine(
+                title="Wired",
+                language="English",
+                issue_date=datetime(2024, 1, 1),
+                file_path=str(wired_jan_pdf),
+                cover_path=str(wired_jan_jpg),
+                tracking_id=tracking_wired.id,
+                extra_metadata={"category": "Magazines"},
+            )
+            mag2 = Magazine(
+                title="Wired Magazine",
+                language="English",
+                issue_date=datetime(2024, 2, 1),
+                file_path=str(wired_mag_feb_pdf),
+                cover_path=str(wired_mag_feb_jpg),
+                tracking_id=tracking_wired_mag.id,
+                extra_metadata={"category": "Magazines"},
+            )
+            session.add_all([mag1, mag2])
+            session.commit()
+
+            # Verify files exist in source locations
+            assert wired_jan_pdf.exists()
+            assert wired_mag_feb_pdf.exists()
+            assert wired_mag_feb_jpg.exists()
+
+            # Mock the organize_base_dir to use our temp directory
+            import web.routers.tracking as tracking_module
+
+            original_merge = tracking_module.merge_tracking
+
+            async def patched_merge(target_id, source_ids):
+                # Temporarily patch the organize_base_dir
+                db_session = session_factory()
+                try:
+                    from models.database import Magazine as Mag, DownloadSubmission
+
+                    # Get target tracking record
+                    target = db_session.query(MagazineTracking).filter(MagazineTracking.id == target_id).first()
+                    sources = (
+                        db_session.query(MagazineTracking)
+                        .filter(MagazineTracking.id.in_(source_ids["source_ids"]))
+                        .all()
+                    )
+
+                    magazines_moved = 0
+                    files_reorganized = 0
+                    directories_to_cleanup = set()
+                    organize_base_dir = tmpdir_path  # Use temp dir
+                    category_prefix = "_"
+
+                    # Import helper functions
+                    from web.routers.tracking import _reorganize_magazine_files
+                    from core.utils.general import cleanup_empty_directories
+
+                    for source in sources:
+                        magazines = db_session.query(Mag).filter(Mag.tracking_id == source.id).all()
+                        for magazine in magazines:
+                            magazine.tracking_id = target.id
+
+                            # Store old directory for cleanup
+                            old_pdf_path = Path(magazine.file_path)
+                            if old_pdf_path.exists():
+                                directories_to_cleanup.add(old_pdf_path.parent)
+
+                            # Reorganize files
+                            new_pdf_path, new_cover_path = _reorganize_magazine_files(
+                                magazine,
+                                target.title,
+                                organize_base_dir,
+                                category_prefix,
+                            )
+
+                            if new_pdf_path:
+                                magazine.file_path = new_pdf_path
+                                if new_cover_path:
+                                    magazine.cover_path = new_cover_path
+                                files_reorganized += 1
+
+                            magazine.title = target.title
+                            magazines_moved += 1
+
+                        db_session.delete(source)
+
+                    db_session.commit()
+
+                    # Clean up empty directories
+                    for directory in directories_to_cleanup:
+                        if directory.exists():
+                            cleanup_empty_directories(directory, organize_base_dir)
+
+                    return {
+                        "success": True,
+                        "magazines_moved": magazines_moved,
+                        "files_reorganized": files_reorganized,
+                        "merged_titles": [s.title for s in sources],
+                    }
+                finally:
+                    db_session.close()
+
+            # Perform merge
+            import asyncio
+
+            result = asyncio.run(
+                patched_merge(
+                    target_id=tracking_wired.id,
+                    source_ids={"source_ids": [tracking_wired_mag.id]},
+                )
+            )
+
+            session.expire_all()
+
+            # Verify merge succeeded
+            assert result["success"] is True
+            assert result["files_reorganized"] == 1
+
+            # Verify files were moved to new location (without language folder)
+            expected_new_pdf = tmpdir_path / "_Magazines" / "Wired" / "2024" / "Wired - February2024.pdf"
+            expected_new_jpg = tmpdir_path / "_Magazines" / "Wired" / "2024" / "Wired - February2024.jpg"
+
+            assert expected_new_pdf.exists(), f"File should exist at {expected_new_pdf}"
+            assert expected_new_jpg.exists(), f"Cover should exist at {expected_new_jpg}"
+
+            # Verify old files no longer exist
+            assert not wired_mag_feb_pdf.exists(), "Old PDF should be moved"
+            assert not wired_mag_feb_jpg.exists(), "Old cover should be moved"
+
+            # Verify database paths were updated
+            mag2_updated = session.query(Magazine).filter(Magazine.id == mag2.id).first()
+            assert mag2_updated.file_path == str(expected_new_pdf)
+            assert mag2_updated.cover_path == str(expected_new_jpg)
+            assert mag2_updated.title == "Wired"
+
+            # Verify empty source directory was cleaned up
+            assert not wired_mag_dir.exists(), "Empty source directory should be removed"
+
+            session.close()
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v", "--tb=short"])

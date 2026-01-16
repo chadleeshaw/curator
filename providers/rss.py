@@ -4,7 +4,7 @@ from typing import List
 
 import feedparser
 
-from core.bases import SearchProvider, SearchResult
+from core.interfaces import SearchProvider, SearchResult
 
 logger = logging.getLogger(__name__)
 

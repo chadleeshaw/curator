@@ -95,7 +95,7 @@ export class EventHandlers {
       // UI actions
       'show-tab': (e, target) => this.showTab(target.dataset.tabName, e),
       'scroll-to-section': (e, target) => this.scrollToSection(target.dataset.sectionId),
-      'logout': () => this.logout(),
+      logout: () => this.logout(),
     };
   }
 
@@ -112,7 +112,7 @@ export class EventHandlers {
     });
 
     // Close button handlers for all modals
-    document.querySelectorAll('.modal .close').forEach(closeBtn => {
+    document.querySelectorAll('.modal .close').forEach((closeBtn) => {
       closeBtn.addEventListener('click', (e) => {
         const modal = closeBtn.closest('.modal');
         if (modal) {
@@ -128,7 +128,7 @@ export class EventHandlers {
    * Prevents default form submission and routes to JS handlers
    */
   static initFormHandlers() {
-    document.querySelectorAll('form[data-handler]').forEach(form => {
+    document.querySelectorAll('form[data-handler]').forEach((form) => {
       form.addEventListener('submit', (e) => {
         e.preventDefault();
         const handlerName = form.dataset.handler;

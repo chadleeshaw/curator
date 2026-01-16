@@ -6,7 +6,17 @@
 
 import { APIClient } from './api.js';
 import { UIUtils, SortManager } from './ui-utils.js';
-import { ELEMENT_IDS, STATUS_MESSAGES, CSS_CLASSES, TIMEOUTS, PATTERNS as _PATTERNS, BADGE_CONFIGS as _BADGE_CONFIGS, NUMBER_TO_MONTH, MONTH_NAMES_LOWER, MONTH_ABBR_LOWER } from './constants.js';
+import {
+  ELEMENT_IDS,
+  STATUS_MESSAGES,
+  CSS_CLASSES,
+  TIMEOUTS,
+  PATTERNS as _PATTERNS,
+  BADGE_CONFIGS as _BADGE_CONFIGS,
+  NUMBER_TO_MONTH,
+  MONTH_NAMES_LOWER,
+  MONTH_ABBR_LOWER,
+} from './constants.js';
 
 /** @type {string[]} Supported languages loaded from backend */
 let SUPPORTED_LANGUAGES = [];
@@ -78,70 +88,69 @@ export class TrackingManager {
    */
   populateFormDropdowns() {
     // Populate language dropdown
-        // Populate language dropdowns (new, edit, and search filter)
-        const languageSelects = [
-          document.getElementById('new-tracking-language'),
-          document.getElementById('edit-tracking-language'),
-          document.getElementById('search-filter-language')
-        ];
-        languageSelects.forEach(languageSelect => {
-          if (languageSelect && SUPPORTED_LANGUAGES.length > 0) {
-            // Keep existing options for search filter
-            const existingOptions = languageSelect.id === 'search-filter-language' 
-              ? languageSelect.innerHTML 
-              : '';
-            
-            languageSelect.innerHTML = existingOptions || '';
-            
-            SUPPORTED_LANGUAGES.forEach(lang => {
-              const option = document.createElement('option');
-              option.value = lang;
-              option.textContent = lang;
-              if (lang === 'English' && languageSelect.id !== 'search-filter-language') {
-                option.selected = true;
-              }
-              languageSelect.appendChild(option);
-            });
+    // Populate language dropdowns (new, edit, and search filter)
+    const languageSelects = [
+      document.getElementById('new-tracking-language'),
+      document.getElementById('edit-tracking-language'),
+      document.getElementById('search-filter-language'),
+    ];
+    languageSelects.forEach((languageSelect) => {
+      if (languageSelect && SUPPORTED_LANGUAGES.length > 0) {
+        // Keep existing options for search filter
+        const existingOptions =
+          languageSelect.id === 'search-filter-language' ? languageSelect.innerHTML : '';
+
+        languageSelect.innerHTML = existingOptions || '';
+
+        SUPPORTED_LANGUAGES.forEach((lang) => {
+          const option = document.createElement('option');
+          option.value = lang;
+          option.textContent = lang;
+          if (lang === 'English' && languageSelect.id !== 'search-filter-language') {
+            option.selected = true;
+          }
+          languageSelect.appendChild(option);
+        });
+      }
+    });
+
+    // Populate country dropdowns (new, edit, and search filter)
+    const countrySelects = [
+      document.getElementById('new-tracking-country'),
+      document.getElementById('edit-tracking-country'),
+      document.getElementById('search-filter-country'),
+    ];
+    countrySelects.forEach((countrySelect) => {
+      if (countrySelect && Object.keys(ISO_COUNTRIES).length > 0) {
+        // Keep the default option
+        const defaultOption = countrySelect.querySelector('option[value=""]');
+        const existingDefault = defaultOption ? defaultOption.outerHTML : '';
+
+        countrySelect.innerHTML = existingDefault || '';
+
+        // Get unique countries (removes duplicates like UK/GB)
+        const uniqueCountries = new Map();
+        Object.entries(ISO_COUNTRIES).forEach(([code, name]) => {
+          if (!uniqueCountries.has(name)) {
+            uniqueCountries.set(name, code);
           }
         });
 
-        // Populate country dropdowns (new, edit, and search filter)
-        const countrySelects = [
-          document.getElementById('new-tracking-country'),
-          document.getElementById('edit-tracking-country'),
-          document.getElementById('search-filter-country')
-        ];
-        countrySelects.forEach(countrySelect => {
-          if (countrySelect && Object.keys(ISO_COUNTRIES).length > 0) {
-            // Keep the default option
-            const defaultOption = countrySelect.querySelector('option[value=""]');
-            const existingDefault = defaultOption ? defaultOption.outerHTML : '';
-            
-            countrySelect.innerHTML = existingDefault || '';
-
-            // Get unique countries (removes duplicates like UK/GB)
-            const uniqueCountries = new Map();
-            Object.entries(ISO_COUNTRIES).forEach(([code, name]) => {
-              if (!uniqueCountries.has(name)) {
-                uniqueCountries.set(name, code);
-              }
-            });
-
-            // Sort by country name and add options
-            Array.from(uniqueCountries.entries())
-              .sort((a, b) => a[0].localeCompare(b[0]))
-              .forEach(([name, code]) => {
-                const option = document.createElement('option');
-                option.value = code;
-                option.textContent = `${name} (${code})`;
-                if (code === 'US' && countrySelect.id !== 'search-filter-country') {
-                  option.selected = true;
-                }
-                countrySelect.appendChild(option);
-              });
-          }
-        });
-    }
+        // Sort by country name and add options
+        Array.from(uniqueCountries.entries())
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .forEach(([name, code]) => {
+            const option = document.createElement('option');
+            option.value = code;
+            option.textContent = `${name} (${code})`;
+            if (code === 'US' && countrySelect.id !== 'search-filter-country') {
+              option.selected = true;
+            }
+            countrySelect.appendChild(option);
+          });
+      }
+    });
+  }
 
   /**
    * Search for periodical metadata from providers
@@ -171,17 +180,17 @@ export class TrackingManager {
     try {
       // Build query parameters
       const params = new URLSearchParams({
-        query: query
+        query: query,
       });
-      
+
       if (filterLanguage) {
         params.append('language', filterLanguage);
       }
-      
+
       if (filterCountry) {
         params.append('country', filterCountry);
       }
-      
+
       if (filterCategory) {
         params.append('category', filterCategory);
       }
@@ -344,7 +353,7 @@ export class TrackingManager {
       // Try to detect from title using centralized LANGUAGE_KEYWORDS
       let detectedLanguage = 'English'; // Default
       for (const [language, keywords] of Object.entries(LANGUAGE_KEYWORDS)) {
-        if (keywords.some(keyword => result.title.includes(keyword))) {
+        if (keywords.some((keyword) => result.title.includes(keyword))) {
           detectedLanguage = language;
           break;
         }
@@ -360,17 +369,17 @@ export class TrackingManager {
       // Try to detect from title using centralized COUNTRY_INDICATORS
       let detectedCountry = '';
       for (const [code, indicators] of Object.entries(COUNTRY_INDICATORS)) {
-        if (indicators.some(ind => result.title.includes(ind))) {
+        if (indicators.some((ind) => result.title.includes(ind))) {
           detectedCountry = code;
           break;
         }
       }
-      
+
       // If no country detected, try to infer from detected language
       if (!detectedCountry && languageSelect.value && LANGUAGE_TO_COUNTRY[languageSelect.value]) {
         detectedCountry = LANGUAGE_TO_COUNTRY[languageSelect.value];
       }
-      
+
       countrySelect.value = detectedCountry || 'US'; // Default to US
     }
 
@@ -378,9 +387,11 @@ export class TrackingManager {
     document.getElementById(ELEMENT_IDS.TRACKING_SEARCH_RESULT).classList.add(CSS_CLASSES.HIDDEN);
 
     // Show a success message and scroll to the form
-    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 
-      `✓ Selected: ${result.title}. Review the fields below and click "Start Tracking".`, 
-      'success');
+    UIUtils.showStatus(
+      ELEMENT_IDS.TRACKING_STATUS,
+      `✓ Selected: ${result.title}. Review the fields below and click "Start Tracking".`,
+      'success'
+    );
 
     // Scroll to the manual form
     const manualSection = titleInput.closest('div[style*="margin-top: 30px"]');
@@ -444,7 +455,11 @@ export class TrackingManager {
           UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS);
         }, 2000);
       } else {
-        UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, data.message || 'Error saving tracking', 'error');
+        UIUtils.showStatus(
+          ELEMENT_IDS.TRACKING_STATUS,
+          data.message || 'Error saving tracking',
+          'error'
+        );
       }
     } catch (error) {
       console.error('Error saving tracking:', error);
@@ -467,7 +482,7 @@ export class TrackingManager {
       const data = await response.json();
 
       const tracked = data.tracked_magazines ?? data.tracked ?? [];
-      
+
       // Update statistics
       this.updateTrackingStatistics(tracked);
 
@@ -503,11 +518,11 @@ export class TrackingManager {
 
     const stats = {
       total: tracked.length,
-      watching: tracked.filter(t => !t.track_all_editions && !t.track_new_only).length,
-      trackingNew: tracked.filter(t => t.track_new_only).length,
-      trackingAll: tracked.filter(t => t.track_all_editions).length,
+      watching: tracked.filter((t) => !t.track_all_editions && !t.track_new_only).length,
+      trackingNew: tracked.filter((t) => t.track_new_only).length,
+      trackingAll: tracked.filter((t) => t.track_all_editions).length,
       totalKnown: tracked.reduce((sum, t) => sum + (t.total_known || 0), 0),
-      totalSelected: tracked.reduce((sum, t) => sum + (t.selected_count || 0), 0)
+      totalSelected: tracked.reduce((sum, t) => sum + (t.selected_count || 0), 0),
     };
 
     statsContainer.innerHTML = `
@@ -577,24 +592,28 @@ export class TrackingManager {
     // Determine tracking badge
     let trackingBadge = '';
     if (trackAll) {
-      trackingBadge = '<span class="tracking-badge badge-download-all">\u2B07\uFE0F All Issues</span>';
+      trackingBadge =
+        '<span class="tracking-badge badge-download-all">\u2B07\uFE0F All Issues</span>';
     } else if (trackNew) {
-      trackingBadge = '<span class="tracking-badge badge-download-new">\u2B07\uFE0F New Issues</span>';
+      trackingBadge =
+        '<span class="tracking-badge badge-download-new">\u2B07\uFE0F New Issues</span>';
     } else {
-      trackingBadge = '<span class="tracking-badge badge-watch">\uD83D\uDC41\uFE0F Watch Only</span>';
+      trackingBadge =
+        '<span class="tracking-badge badge-watch">\uD83D\uDC41\uFE0F Watch Only</span>';
     }
 
     const countryStats = country ? `<span class="country">\uD83C\uDF0D ${country}</span>` : '';
-    const issueStats = totalKnown > 0
-      ? `<span class="issue-count">${totalKnown} issues found</span>`
-      : '';
+    const issueStats =
+      totalKnown > 0 ? `<span class="issue-count">${totalKnown} issues found</span>` : '';
     const libraryStats = `<span class="library-count">\uD83D\uDCDA ${libraryCount} in library</span>`;
-    const selectedStats = selectedCount > 0
-      ? `<span class="selected-count">\u2022 ${selectedCount} selected</span>`
-      : '';
-    const failedStats = failedCount > 0
-      ? `<span class="failed-count" style="color: var(--status-pending); cursor: pointer;" data-tracking-id="${id}" title="Click to view failed downloads">\u26A0\uFE0F ${failedCount} failed</span>`
-      : '';
+    const selectedStats =
+      selectedCount > 0
+        ? `<span class="selected-count">\u2022 ${selectedCount} selected</span>`
+        : '';
+    const failedStats =
+      failedCount > 0
+        ? `<span class="failed-count" style="color: var(--status-pending); cursor: pointer;" data-tracking-id="${id}" title="Click to view failed downloads">\u26A0\uFE0F ${failedCount} failed</span>`
+        : '';
 
     const checkboxHtml = this.mergeMode
       ? `<input type="checkbox" class="merge-checkbox" data-tracking-id="${id}" ${this.selectedForMerge.has(id) ? 'checked' : ''}>`
@@ -626,14 +645,18 @@ export class TrackingManager {
 
     // Add event listeners for search and delete buttons
     const searchBtn = card.querySelector('.search-issues-btn');
-    searchBtn?.addEventListener('click', () => this.searchForIssues(id, title, language, country, category));
+    searchBtn?.addEventListener('click', () =>
+      this.searchForIssues(id, title, language, country, category)
+    );
 
     const deleteBtn = card.querySelector('.delete-tracking-btn');
     deleteBtn?.addEventListener('click', () => this.deleteTracking(id, title));
 
     // Add event listener for failed count to open failed downloads modal
     const failedCountSpan = card.querySelector('.failed-count');
-    failedCountSpan?.addEventListener('click', () => this.showFailedDownloadsForTracking(id, title));
+    failedCountSpan?.addEventListener('click', () =>
+      this.showFailedDownloadsForTracking(id, title)
+    );
 
     // Add event listener for checkbox if in merge mode
     if (this.mergeMode) {
@@ -662,25 +685,25 @@ export class TrackingManager {
 
       // Filter items for this tracking ID
       const failedItems = data.failed_downloads
-        .filter(item => item.tracking_id === trackingId)
-        .map(item => ({
+        .filter((item) => item.tracking_id === trackingId)
+        .map((item) => ({
           id: item.id,
           title: item.title,
           attempt_count: item.attempt_count,
           last_error: item.last_error,
           status: 'failed',
-          isBad: false
+          isBad: false,
         }));
 
       const badItems = data.bad_files
-        .filter(item => item.tracking_id === trackingId)
-        .map(item => ({
+        .filter((item) => item.tracking_id === trackingId)
+        .map((item) => ({
           id: item.id,
           title: item.title,
           attempt_count: item.attempt_count,
           last_error: item.last_error,
           status: 'failed',
-          isBad: true
+          isBad: true,
         }));
 
       const allItems = [...failedItems, ...badItems];
@@ -767,7 +790,8 @@ export class TrackingManager {
         document.getElementById('edit-tracking-category').value = t.category || '';
         document.getElementById('edit-tracking-language').value = t.language || 'English';
         document.getElementById('edit-tracking-country').value = t.country || '';
-        document.getElementById('edit-tracking-download-category').value = t.download_category || '';
+        document.getElementById('edit-tracking-download-category').value =
+          t.download_category || '';
 
         // Set tracking mode
         let mode = 'none';
@@ -783,7 +807,9 @@ export class TrackingManager {
         document.getElementById('edit-tracking-org-pattern').value = t.organization_pattern || '';
 
         // Show modal
-        document.getElementById(ELEMENT_IDS.EDIT_TRACKING_MODAL).classList.remove(CSS_CLASSES.HIDDEN);
+        document
+          .getElementById(ELEMENT_IDS.EDIT_TRACKING_MODAL)
+          .classList.remove(CSS_CLASSES.HIDDEN);
       }
     } catch (err) {
       console.error('Error loading tracking details:', err);
@@ -984,7 +1010,10 @@ export class TrackingManager {
       );
       if (monthMatch) {
         const lowerMonth = monthMatch[1].toLowerCase();
-        month = MONTH_NAMES_LOWER.indexOf(lowerMonth) + 1 || MONTH_ABBR_LOWER.indexOf(lowerMonth) + 1 || 0;
+        month =
+          MONTH_NAMES_LOWER.indexOf(lowerMonth) + 1 ||
+          MONTH_ABBR_LOWER.indexOf(lowerMonth) + 1 ||
+          0;
       }
     }
 
@@ -1012,7 +1041,10 @@ export class TrackingManager {
           `Issue ${track ? 'marked for' : 'removed from'} tracking (${data.total_selected} total)`,
           'success'
         );
-        setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), TIMEOUTS.AUTO_HIDE_SUCCESS);
+        setTimeout(
+          () => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS),
+          TIMEOUTS.AUTO_HIDE_SUCCESS
+        );
         return true;
       } else {
         throw new Error(data.message || 'Failed to update tracking');
@@ -1048,7 +1080,7 @@ export class TrackingManager {
       issues.forEach((issue) => {
         // Create display label based on available information
         let displayLabel;
-        
+
         // Priority 1: Season (if present)
         if (issue.season) {
           displayLabel = issue.season;
@@ -1056,15 +1088,15 @@ export class TrackingManager {
         // Priority 2: Month and Issue
         else if (issue.month > 0 && issue.issue > 0) {
           displayLabel = `${NUMBER_TO_MONTH[issue.month]} #${issue.issue}`;
-        } 
+        }
         // Priority 3: Month only
         else if (issue.month > 0) {
           displayLabel = NUMBER_TO_MONTH[issue.month];
-        } 
+        }
         // Priority 4: Issue number only
         else if (issue.issue > 0) {
           displayLabel = `#${issue.issue}`;
-        } 
+        }
         // Fallback: Just show year (shouldn't happen often now)
         else {
           displayLabel = `${issue.year}`;
@@ -1155,9 +1187,16 @@ export class TrackingManager {
       if (data.success) {
         UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Tracking removed', 'success');
         this.loadTrackedPeriodicals();
-        setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), TIMEOUTS.AUTO_HIDE_STATUS);
+        setTimeout(
+          () => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS),
+          TIMEOUTS.AUTO_HIDE_STATUS
+        );
       } else {
-        UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, data.message || 'Error removing tracking', 'error');
+        UIUtils.showStatus(
+          ELEMENT_IDS.TRACKING_STATUS,
+          data.message || 'Error removing tracking',
+          'error'
+        );
       }
     } catch (error) {
       console.error('Error deleting tracking:', error);
@@ -1172,14 +1211,14 @@ export class TrackingManager {
     this.currentPeriodicalMetadata = null;
     const titleInput = document.getElementById('new-tracking-title');
     if (titleInput) titleInput.value = '';
-    
+
     // Clear search query and results
     const searchQuery = document.getElementById('tracking-search-query');
     if (searchQuery) searchQuery.value = '';
-    
+
     const searchResult = document.getElementById(ELEMENT_IDS.TRACKING_SEARCH_RESULT);
     if (searchResult) searchResult.classList.add(CSS_CLASSES.HIDDEN);
-    
+
     const searchError = document.getElementById('tracking-search-error');
     if (searchError) searchError.classList.add(CSS_CLASSES.HIDDEN);
   }
@@ -1264,7 +1303,6 @@ window.saveEditedTracking = async function () {
   }
 };
 
-
 // Select and download issue with language variant selection
 window.selectIssueWithVariants = function (issueKey, alreadyDownloaded) {
   const variants = window.issueVariants[issueKey];
@@ -1305,19 +1343,19 @@ window.selectIssueWithVariants = function (issueKey, alreadyDownloaded) {
     // Detect language using centralized constants
     let detectedLang = '';
     let detectedCountry = '';
-    
+
     if (window.appConstants?.language_keywords) {
       for (const [lang, keywords] of Object.entries(window.appConstants.language_keywords)) {
-        if (keywords.some(kw => variant.title.toLowerCase().includes(kw.toLowerCase()))) {
+        if (keywords.some((kw) => variant.title.toLowerCase().includes(kw.toLowerCase()))) {
           detectedLang = lang;
           break;
         }
       }
     }
-    
+
     if (window.appConstants?.country_indicators) {
       for (const [country, indicators] of Object.entries(window.appConstants.country_indicators)) {
-        if (indicators.some(ind => variant.title.toLowerCase().includes(ind.toLowerCase()))) {
+        if (indicators.some((ind) => variant.title.toLowerCase().includes(ind.toLowerCase()))) {
           detectedCountry = country;
           break;
         }
@@ -1333,7 +1371,8 @@ window.selectIssueWithVariants = function (issueKey, alreadyDownloaded) {
     // Build display label
     let displayLabel = detectedCountry || detectedLang || `Edition ${index + 1}`;
     if (edition) {
-      displayLabel = displayLabel !== `Edition ${index + 1}` ? `${displayLabel} - ${edition}` : edition;
+      displayLabel =
+        displayLabel !== `Edition ${index + 1}` ? `${displayLabel} - ${edition}` : edition;
     }
 
     const isDownloaded = variant.already_downloaded || alreadyDownloaded;
@@ -1368,7 +1407,11 @@ window.selectIssue = async function (title, provider, url, alreadyDownloaded) {
   const isLibraryOnly = !url || url === '';
 
   if (isLibraryOnly) {
-    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'This issue is already in your library', 'success');
+    UIUtils.showStatus(
+      ELEMENT_IDS.TRACKING_STATUS,
+      'This issue is already in your library',
+      'success'
+    );
     setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), 3000);
     return;
   }
@@ -1391,33 +1434,39 @@ window.selectIssue = async function (title, provider, url, alreadyDownloaded) {
 /**
  * Open modal to select tracking records to merge
  */
-window.openMergeModal = async function() {
+window.openMergeModal = async function () {
   const tracking = window.trackingManager;
   if (!tracking) return;
 
   try {
     const response = await APIClient.get('/api/periodicals/tracking?limit=1000');
     const data = await response.json();
-    
+
     const items = data.tracked_magazines || [];
-    
+
     console.log('Merge modal check:', {
       responseOk: response.ok,
       itemsLength: items.length,
-      shouldShowWarning: !response.ok || items.length < 2
+      shouldShowWarning: !response.ok || items.length < 2,
     });
-    
+
     if (!response.ok || items.length < 2) {
       console.log('Showing warning status');
-      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, '⚠️ You need at least 2 tracked periodicals to merge', 'warning');
+      UIUtils.showStatus(
+        ELEMENT_IDS.TRACKING_STATUS,
+        '⚠️ You need at least 2 tracked periodicals to merge',
+        'warning'
+      );
       return;
     }
 
     const modal = document.createElement('div');
     modal.className = 'modal';
     modal.id = 'merge-selection-modal';
-    
-    const trackingOptions = items.map(item => `
+
+    const trackingOptions = items
+      .map(
+        (item) => `
       <div class="merge-select-item">
         <input type="checkbox" id="merge-check-${item.id}" value="${item.id}" class="merge-selection-checkbox">
         <label for="merge-check-${item.id}">
@@ -1425,7 +1474,9 @@ window.openMergeModal = async function() {
           <span style="font-size: 12px; color: var(--text-secondary);">Publisher: ${item.publisher || 'Unknown'} | ISSN: ${item.issn || 'N/A'}</span>
         </label>
       </div>
-    `).join('');
+    `
+      )
+      .join('');
 
     modal.innerHTML = `
       <div class="modal-content" style="max-width: 600px;">
@@ -1440,13 +1491,13 @@ window.openMergeModal = async function() {
         </div>
       </div>
     `;
-    
+
     document.body.appendChild(modal);
     modal.style.display = 'flex';
 
     // Add change listeners to checkboxes
     const checkboxes = modal.querySelectorAll('.merge-selection-checkbox');
-    checkboxes.forEach(cb => {
+    checkboxes.forEach((cb) => {
       cb.addEventListener('change', () => {
         const checkedCount = modal.querySelectorAll('.merge-selection-checkbox:checked').length;
         document.getElementById('continue-merge-btn').disabled = checkedCount < 2;
@@ -1461,7 +1512,7 @@ window.openMergeModal = async function() {
 /**
  * Close merge selection modal
  */
-window.closeMergeSelectionModal = function() {
+window.closeMergeSelectionModal = function () {
   const modal = document.getElementById('merge-selection-modal');
   if (modal) modal.remove();
 };
@@ -1469,33 +1520,41 @@ window.closeMergeSelectionModal = function() {
 /**
  * Show target selection after initial selection
  */
-window.showMergeTargetSelection = async function() {
+window.showMergeTargetSelection = async function () {
   const selectionModal = document.getElementById('merge-selection-modal');
   const checkboxes = selectionModal.querySelectorAll('.merge-selection-checkbox:checked');
-  const selectedIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
-  
+  const selectedIds = Array.from(checkboxes).map((cb) => parseInt(cb.value));
+
   if (selectedIds.length < 2) {
-    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, '⚠️ Please select at least 2 tracking records', 'warning');
+    UIUtils.showStatus(
+      ELEMENT_IDS.TRACKING_STATUS,
+      '⚠️ Please select at least 2 tracking records',
+      'warning'
+    );
     return;
   }
 
   // Get the tracking data for selected items
   const response = await APIClient.get('/api/periodicals/tracking?limit=1000');
   const data = await response.json();
-  const selectedItems = (data.tracked_magazines || []).filter(item => selectedIds.includes(item.id));
-  
+  const selectedItems = (data.tracked_magazines || []).filter((item) =>
+    selectedIds.includes(item.id)
+  );
+
   // Close selection modal
   window.closeMergeSelectionModal();
-  
+
   // Show target modal
   const modal = document.createElement('div');
   modal.className = 'modal';
   modal.id = 'merge-target-modal';
-  
-  const options = selectedItems.map(item => 
-    `<option value="${item.id}">${item.title} (${item.publisher || 'Unknown'})</option>`
-  ).join('');
-  
+
+  const options = selectedItems
+    .map(
+      (item) => `<option value="${item.id}">${item.title} (${item.publisher || 'Unknown'})</option>`
+    )
+    .join('');
+
   modal.innerHTML = `
     <div class="modal-content">
       <h3>Select Target Tracking Record</h3>
@@ -1510,7 +1569,7 @@ window.showMergeTargetSelection = async function() {
       </div>
     </div>
   `;
-  
+
   document.body.appendChild(modal);
   modal.classList.add(CSS_CLASSES.MODAL_VISIBLE);
 };
@@ -1518,7 +1577,7 @@ window.showMergeTargetSelection = async function() {
 /**
  * Close merge target selection modal
  */
-window.closeMergeModal = function() {
+window.closeMergeModal = function () {
   const modal = document.getElementById('merge-target-modal');
   if (modal) {
     modal.remove();
@@ -1528,31 +1587,32 @@ window.closeMergeModal = function() {
 /**
  * Confirm and execute the merge
  */
-window.confirmMerge = async function() {
+window.confirmMerge = async function () {
   const targetId = parseInt(document.getElementById('merge-target-select').value);
   const sourceIdsStr = document.getElementById('merge-source-ids').value;
-  const allSelectedIds = sourceIdsStr.split(',').map(id => parseInt(id));
-  const sourceIds = allSelectedIds.filter(id => id !== targetId);
-  
+  const allSelectedIds = sourceIdsStr.split(',').map((id) => parseInt(id));
+  const sourceIds = allSelectedIds.filter((id) => id !== targetId);
+
   if (!targetId || sourceIds.length === 0) {
     UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, '⚠️ Invalid selection', 'warning');
     return;
   }
-  
+
   try {
     const response = await APIClient.post(`/api/periodicals/tracking/${targetId}/merge`, {
-      source_ids: sourceIds
+      source_ids: sourceIds,
     });
-    
+
     const data = await response.json();
-    
+
     if (response.ok) {
-      const filesMsg = data.files_reorganized > 0 
-        ? `, reorganized ${data.files_reorganized} files` 
-        : '';
-      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 
-        `✓ ${data.message}. Moved ${data.magazines_moved} magazines and ${data.submissions_moved} downloads${filesMsg}.`, 
-        'success');
+      const filesMsg =
+        data.files_reorganized > 0 ? `, reorganized ${data.files_reorganized} files` : '';
+      UIUtils.showStatus(
+        ELEMENT_IDS.TRACKING_STATUS,
+        `✓ ${data.message}. Moved ${data.magazines_moved} magazines and ${data.submissions_moved} downloads${filesMsg}.`,
+        'success'
+      );
       window.closeMergeModal();
       const tracking = window.trackingManager;
       if (tracking) {
@@ -1586,11 +1646,19 @@ window.downloadIssue = async function (title, url, provider) {
     const data = await response.json();
 
     if (response.ok) {
-      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, `✓ Download queued! Job ID: ${data.job_id}`, 'success');
+      UIUtils.showStatus(
+        ELEMENT_IDS.TRACKING_STATUS,
+        `✓ Download queued! Job ID: ${data.job_id}`,
+        'success'
+      );
       setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), TIMEOUTS.AUTO_HIDE_LONG);
       window.closeSearchIssuesModal();
     } else {
-      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, data.detail || 'Failed to queue download', 'error');
+      UIUtils.showStatus(
+        ELEMENT_IDS.TRACKING_STATUS,
+        data.detail || 'Failed to queue download',
+        'error'
+      );
     }
   } catch (err) {
     console.error('Download error:', err);
@@ -1607,7 +1675,7 @@ window.saveNewTracking = async () => {
   const language = document.getElementById('new-tracking-language').value || 'English';
   const country = document.getElementById('new-tracking-country').value;
   const downloadCategory = document.getElementById('new-tracking-download-category').value.trim();
-  
+
   if (!title) {
     UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Please enter a title', 'error');
     return;
@@ -1619,7 +1687,7 @@ window.saveNewTracking = async () => {
     // Build query string for the POST request
     const params = new URLSearchParams({
       title: title,
-      language: language
+      language: language,
     });
     if (category) {
       params.append('category', category);
@@ -1649,7 +1717,11 @@ window.saveNewTracking = async () => {
       tracking.loadTrackedPeriodicals();
       setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), TIMEOUTS.AUTO_HIDE_SUCCESS);
     } else {
-      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, data.message || 'Failed to start tracking', 'error');
+      UIUtils.showStatus(
+        ELEMENT_IDS.TRACKING_STATUS,
+        data.message || 'Failed to start tracking',
+        'error'
+      );
     }
   } catch (error) {
     console.error('Error starting tracking:', error);
@@ -1662,5 +1734,6 @@ window.updateTrackingMode = () => tracking.updateTrackingMode();
 window.setSortField = (field) => tracking.setSortField(field);
 window.toggleSortOrder = () => tracking.toggleSortOrder();
 window.editTracking = (id) => tracking.editTracking(id);
-window.searchForIssues = (id, title, language, country, category) => tracking.searchForIssues(id, title, language, country, category);
+window.searchForIssues = (id, title, language, country, category) =>
+  tracking.searchForIssues(id, title, language, country, category);
 window.deleteTracking = (id, title) => tracking.deleteTracking(id, title);

@@ -41,11 +41,11 @@ export class TasksManager {
     }
 
     console.log('[Tasks] Rendering tasks');
-    
+
     // Get timezone info
     // eslint-disable-next-line no-undef
     const timezone = data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
-    
+
     tasksList.innerHTML = data.tasks
       .map((task) => {
         const lastRun = task.last_run ? new Date(task.last_run).toLocaleString() : 'Never';
@@ -54,11 +54,11 @@ export class TasksManager {
 
         // Build additional timestamps section if available
         let timestampsHtml = '';
-        const hasDetailedTimestamps = task.stats && (
-          task.stats.last_client_check || 
-          task.stats.last_folder_scan || 
-          task.stats.last_process_time
-        );
+        const hasDetailedTimestamps =
+          task.stats &&
+          (task.stats.last_client_check ||
+            task.stats.last_folder_scan ||
+            task.stats.last_process_time);
         if (hasDetailedTimestamps) {
           const stats = task.stats;
           timestampsHtml = `
@@ -92,16 +92,19 @@ export class TasksManager {
       `;
       })
       .join('');
-    
+
     // Add timezone info at the top with consistent styling
     if (timezone) {
-      tasksList.insertAdjacentHTML('afterbegin', `
+      tasksList.insertAdjacentHTML(
+        'afterbegin',
+        `
         <div style="padding: 15px 20px; background: var(--surface-variant); border-radius: 8px; border: 1px solid var(--border); margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 1.2em;">🌍</span>
           <span style="color: var(--text-secondary);">Timezone:</span>
           <strong style="color: var(--text-primary);">${timezone}</strong>
         </div>
-      `);
+      `
+      );
     }
   }
 

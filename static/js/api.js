@@ -70,12 +70,7 @@ export class APIClient {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         const errorMessage = errorData.detail ?? errorData.message ?? `HTTP ${response.status}`;
-        throw new APIError(
-          errorMessage,
-          response.status,
-          url,
-          errorData
-        );
+        throw new APIError(errorMessage, response.status, url, errorData);
       }
 
       return response;
@@ -86,11 +81,7 @@ export class APIClient {
 
       // Network or other fetch errors
       console.error(`[APIClient] Request failed for ${url}:`, error);
-      throw new NetworkError(
-        `Failed to connect to ${url}: ${error.message}`,
-        url,
-        error
-      );
+      throw new NetworkError(`Failed to connect to ${url}: ${error.message}`, url, error);
     }
   }
 

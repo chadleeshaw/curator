@@ -6,7 +6,7 @@ from typing import Dict, List, Tuple, Optional
 
 from fuzzywuzzy import fuzz
 
-from core.constants import REGIONAL_EDITION_INDICATORS
+from core.constants.country import REGIONAL_EDITION_INDICATORS
 from core.parsers.language import LANGUAGE_INDICATORS
 
 logger = logging.getLogger(__name__)
@@ -16,7 +16,22 @@ class TitleMatcher:
     """Fuzzy title matching for deduplication"""
 
     # Word delimiters for fuzzy matching
-    WORD_DELIMITERS = {" ", ".", ",", "_", "-", "=", "(", ")", "[", "]", "|", '"', "'", "`"}
+    WORD_DELIMITERS = {
+        " ",
+        ".",
+        ",",
+        "_",
+        "-",
+        "=",
+        "(",
+        ")",
+        "[",
+        "]",
+        "|",
+        '"',
+        "'",
+        "`",
+    }
 
     # Hashed release patterns to reject
     HASHED_RELEASE_PATTERNS = [
@@ -36,7 +51,10 @@ class TitleMatcher:
             "issue_date",
         ),
         # Pattern 2: Title.YYYY.MM or Title YYYY MM
-        (r"^(?P<title>.+?)[.\s](?P<year>\d{4})[.\s](?P<month>\d{2})(?:[.\s](?P<day>\d{2}))?", "date_standard"),
+        (
+            r"^(?P<title>.+?)[.\s](?P<year>\d{4})[.\s](?P<month>\d{2})(?:[.\s](?P<day>\d{2}))?",
+            "date_standard",
+        ),
         # Pattern 3: Title Special Edition Name
         (r"^(?P<title>.+?)\s+Special\s+Edition\s+(?P<special>.+)$", "special_edition"),
         # Pattern 4: Title - Name (for special editions like "Time - Person Of The Year")
@@ -104,7 +122,12 @@ class TitleMatcher:
         title = re.sub(r"\.[a-z0-9]{2,4}$", "", title, flags=re.IGNORECASE)
 
         # Remove category prefixes like [Magazine], [Comic], [Newspaper], [Book]
-        title = re.sub(r"^\[(?:Magazine|Comic|Newspaper|Book|Journal)\]\s*", "", title, flags=re.IGNORECASE)
+        title = re.sub(
+            r"^\[(?:Magazine|Comic|Newspaper|Book|Journal)\]\s*",
+            "",
+            title,
+            flags=re.IGNORECASE,
+        )
 
         # Remove website prefixes: [www.site.com] or www.site.com -
         title = re.sub(
@@ -163,7 +186,15 @@ class TitleMatcher:
         title = re.sub(r"[\.\s]*(8|10)bit", "", title, flags=re.IGNORECASE)
 
         # Remove common scene release tags
-        release_tags = ["READNFO", "REPACK", "PROPER", "REAL", "RETAIL", "EXTENDED", "UNRATED"]
+        release_tags = [
+            "READNFO",
+            "REPACK",
+            "PROPER",
+            "REAL",
+            "RETAIL",
+            "EXTENDED",
+            "UNRATED",
+        ]
         for tag in release_tags:
             title = re.sub(rf"[\.\s]*{tag}", "", title, flags=re.IGNORECASE)
 
@@ -186,21 +217,21 @@ class TitleMatcher:
         # Normalize common country code variations (USA -> US, etc.)
         # Note: UK is kept as UK (not normalized to GB) for better user readability
         country_normalizations = {
-            'USA': 'US',
-            'U S A': 'US',
-            'U.S.A': 'US',
-            'U.S.A.': 'US',
-            'U.S': 'US',
-            'U.S.': 'US',
-            'United States': 'US',
-            'U K': 'UK',
-            'U.K': 'UK',
-            'U.K.': 'UK',
-            'United Kingdom': 'UK',
+            "USA": "US",
+            "U S A": "US",
+            "U.S.A": "US",
+            "U.S.A.": "US",
+            "U.S": "US",
+            "U.S.": "US",
+            "United States": "US",
+            "U K": "UK",
+            "U.K": "UK",
+            "U.K.": "UK",
+            "United Kingdom": "UK",
         }
         for long_form, short_form in country_normalizations.items():
             # Match whole words only with word boundaries
-            title = re.sub(rf'\b{re.escape(long_form)}\b', short_form, title, flags=re.IGNORECASE)
+            title = re.sub(rf"\b{re.escape(long_form)}\b", short_form, title, flags=re.IGNORECASE)
 
         # Remove issue numbers that appear as metadata: "No 123", "Issue 456", "No.789", "#42", "Vol 5", "Vol.5"
         # Must do this AFTER replacing dots with spaces
@@ -220,16 +251,26 @@ class TitleMatcher:
             r"Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+(?:19|20)\d{2}",
             "",
             title,
-            flags=re.IGNORECASE
+            flags=re.IGNORECASE,
         )
 
         # Remove magazine type suffixes (often redundant metadata like "Hybrid Magazine", "Digital Magazine")
-        title = re.sub(r"\s+(?:Hybrid|Digital|PDF|eMag|True|HQ)\s+(?:Magazine|Mag)", "", title, flags=re.IGNORECASE)
+        title = re.sub(
+            r"\s+(?:Hybrid|Digital|PDF|eMag|True|HQ)\s+(?:Magazine|Mag)",
+            "",
+            title,
+            flags=re.IGNORECASE,
+        )
         title = re.sub(r"\s+(magazine|mag|mag\.)$", "", title, flags=re.IGNORECASE)
 
         # Remove standalone format indicators (E Book, eBook, Digital, PDF, TruePDF, etc.)
         # TruePDF indicates a digitally created (text-based) PDF vs a scanned one
-        title = re.sub(r"\s+(?:E\s*Book|eBook|Digital|PDF|ePub|True\s*PDF)(?:\s+|$)", " ", title, flags=re.IGNORECASE)
+        title = re.sub(
+            r"\s+(?:E\s*Book|eBook|Digital|PDF|ePub|True\s*PDF)(?:\s+|$)",
+            " ",
+            title,
+            flags=re.IGNORECASE,
+        )
 
         # Clean up multiple spaces again after replacements
         title = re.sub(r"\s+", " ", title).strip()
@@ -388,8 +429,13 @@ class TitleMatcher:
             last_word = words[-1].lower()
             # Common two-word regional indicators
             if len(words) >= 2 and " ".join(words[-2:]).lower() in [
-                "south africa", "north america", "south america", "new zealand",
-                "united kingdom", "united states", "hong kong"
+                "south africa",
+                "north america",
+                "south america",
+                "new zealand",
+                "united kingdom",
+                "united states",
+                "hong kong",
             ]:
                 # This is a regional edition, not a special edition
                 return (title, False, "")

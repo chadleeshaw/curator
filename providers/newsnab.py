@@ -9,7 +9,7 @@ from typing import List
 
 import requests
 
-from core.bases import SearchProvider, SearchResult
+from core.interfaces import SearchProvider, SearchResult
 
 logger = logging.getLogger(__name__)
 

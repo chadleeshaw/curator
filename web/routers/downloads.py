@@ -4,11 +4,12 @@ Download management routes
 
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 
 from fastapi import APIRouter, HTTPException
 
-from core.constants import MAX_DOWNLOADS_PER_BATCH
+from core.constants.app import MAX_DOWNLOADS_PER_BATCH
+from core.constants.errors import ErrorMessages
 from models.database import DownloadSubmission, MagazineTracking
 from web.schemas import (
     APIError,
@@ -26,7 +27,7 @@ _download_manager = None
 _download_client = None
 
 
-def set_dependencies(session_factory, download_manager, download_client):
+def set_dependencies(session_factory: Callable, download_manager: Any, download_client: Any) -> None:
     """Set dependencies from main app"""
     global _session_factory, _download_manager, _download_client
     _session_factory = session_factory
@@ -53,7 +54,10 @@ def set_dependencies(session_factory, download_manager, download_client):
             },
         },
         404: {"description": "Tracking record not found", "model": APIError},
-        503: {"description": "Download manager not available", "model": APIError},
+        503: {
+            "description": ErrorMessages.DOWNLOAD_MANAGER_UNAVAILABLE,
+            "model": APIError,
+        },
     },
 )
 async def download_all_periodical_issues(
@@ -62,7 +66,7 @@ async def download_all_periodical_issues(
     """Search for and download all available issues of a tracked periodical"""
     try:
         if not _download_manager:
-            raise HTTPException(status_code=503, detail="Download manager not available")
+            raise HTTPException(status_code=503, detail=ErrorMessages.DOWNLOAD_MANAGER_UNAVAILABLE)
 
         db_session = _session_factory()
         try:
@@ -96,7 +100,7 @@ async def download_single_issue(
     """Download a single issue"""
     try:
         if not _download_manager:
-            raise HTTPException(status_code=503, detail="Download manager not available")
+            raise HTTPException(status_code=503, detail=ErrorMessages.DOWNLOAD_MANAGER_UNAVAILABLE)
 
         db_session = _session_factory()
         try:
@@ -186,7 +190,7 @@ async def get_download_status_for_tracking(tracking_id: int) -> Dict[str, Any]:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting download status: {e}")
+        logger.error(f"Error getting download status: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -221,7 +225,7 @@ async def get_completed_downloads() -> Dict[str, Any]:
         finally:
             db_session.close()
     except Exception as e:
-        logger.error(f"Error getting completed downloads: {e}")
+        logger.error(f"Error getting completed downloads: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -348,33 +352,39 @@ async def get_download_queue_status() -> Dict[str, Any]:
         db_session = _session_factory()
         try:
             # Count active downloads (pending + downloading)
-            active_downloads = db_session.query(DownloadSubmission).filter(
-                DownloadSubmission.status.in_([
-                    DownloadSubmission.StatusEnum.PENDING,
-                    DownloadSubmission.StatusEnum.DOWNLOADING,
-                ])
-            ).count()
+            active_downloads = (
+                db_session.query(DownloadSubmission)
+                .filter(
+                    DownloadSubmission.status.in_(
+                        [
+                            DownloadSubmission.StatusEnum.PENDING,
+                            DownloadSubmission.StatusEnum.DOWNLOADING,
+                        ]
+                    )
+                )
+                .count()
+            )
 
             # Calculate available slots
             available_slots = max(0, MAX_DOWNLOADS_PER_BATCH - active_downloads)
 
             # Count all statuses
             status_counts = {
-                "pending": db_session.query(DownloadSubmission).filter(
-                    DownloadSubmission.status == DownloadSubmission.StatusEnum.PENDING
-                ).count(),
-                "downloading": db_session.query(DownloadSubmission).filter(
-                    DownloadSubmission.status == DownloadSubmission.StatusEnum.DOWNLOADING
-                ).count(),
-                "completed": db_session.query(DownloadSubmission).filter(
-                    DownloadSubmission.status == DownloadSubmission.StatusEnum.COMPLETED
-                ).count(),
-                "failed": db_session.query(DownloadSubmission).filter(
-                    DownloadSubmission.status == DownloadSubmission.StatusEnum.FAILED
-                ).count(),
-                "skipped": db_session.query(DownloadSubmission).filter(
-                    DownloadSubmission.status == DownloadSubmission.StatusEnum.SKIPPED
-                ).count(),
+                "pending": db_session.query(DownloadSubmission)
+                .filter(DownloadSubmission.status == DownloadSubmission.StatusEnum.PENDING)
+                .count(),
+                "downloading": db_session.query(DownloadSubmission)
+                .filter(DownloadSubmission.status == DownloadSubmission.StatusEnum.DOWNLOADING)
+                .count(),
+                "completed": db_session.query(DownloadSubmission)
+                .filter(DownloadSubmission.status == DownloadSubmission.StatusEnum.COMPLETED)
+                .count(),
+                "failed": db_session.query(DownloadSubmission)
+                .filter(DownloadSubmission.status == DownloadSubmission.StatusEnum.FAILED)
+                .count(),
+                "skipped": db_session.query(DownloadSubmission)
+                .filter(DownloadSubmission.status == DownloadSubmission.StatusEnum.SKIPPED)
+                .count(),
             }
 
             return {
@@ -396,13 +406,13 @@ async def retry_download(submission_id: int) -> Dict[str, Any]:
     """Retry a failed download submission"""
     try:
         if not _download_manager:
-            raise HTTPException(status_code=503, detail="Download manager not available")
+            raise HTTPException(status_code=503, detail=ErrorMessages.DOWNLOAD_MANAGER_UNAVAILABLE)
 
         db_session = _session_factory()
         try:
             submission = db_session.query(DownloadSubmission).filter(DownloadSubmission.id == submission_id).first()
             if not submission:
-                raise HTTPException(status_code=404, detail="Submission not found")
+                raise HTTPException(status_code=404, detail=ErrorMessages.SUBMISSION_NOT_FOUND)
 
             result = _download_manager.retry_submission(submission_id, db_session)
             return {
@@ -427,7 +437,7 @@ async def delete_from_queue(submission_id: int) -> Dict[str, Any]:
         try:
             submission = db_session.query(DownloadSubmission).filter(DownloadSubmission.id == submission_id).first()
             if not submission:
-                raise HTTPException(status_code=404, detail="Submission not found")
+                raise HTTPException(status_code=404, detail=ErrorMessages.SUBMISSION_NOT_FOUND)
 
             title = submission.result_title
             db_session.delete(submission)
@@ -496,7 +506,7 @@ async def get_failed_downloads(include_bad: bool = True) -> Dict[str, Any]:
     """Get all failed downloads and bad files"""
     try:
         if not _download_manager:
-            raise HTTPException(status_code=503, detail="Download manager not available")
+            raise HTTPException(status_code=503, detail=ErrorMessages.DOWNLOAD_MANAGER_UNAVAILABLE)
 
         db_session = _session_factory()
         try:
@@ -567,7 +577,7 @@ async def delete_failed_download(submission_id: int) -> Dict[str, Any]:
             submission = db_session.query(DownloadSubmission).filter(DownloadSubmission.id == submission_id).first()
 
             if not submission:
-                raise HTTPException(status_code=404, detail="Submission not found")
+                raise HTTPException(status_code=404, detail=ErrorMessages.SUBMISSION_NOT_FOUND)
 
             if submission.status != DownloadSubmission.StatusEnum.FAILED:
                 raise HTTPException(

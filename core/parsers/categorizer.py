@@ -2,7 +2,7 @@
 File categorization based on title keywords.
 """
 
-from core.constants import CATEGORY_KEYWORDS
+from core.constants.category import CATEGORY_KEYWORDS
 
 
 class FileCategorizer:
