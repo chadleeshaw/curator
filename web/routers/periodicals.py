@@ -654,6 +654,75 @@ async def update_periodical(magazine_id: int, updates: Dict[str, Any]) -> Dict[s
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/periodicals/{magazine_id}/regenerate-cover")
+async def regenerate_cover(magazine_id: int, request_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Regenerate cover image from a specific PDF page.
+
+    Args:
+        magazine_id: ID of the periodical
+        request_data: Dict with 'page_number' field
+
+    Returns:
+        Success response with new cover path
+    """
+    try:
+        from core.pdf_utils import extract_cover_from_pdf
+        from core.constants import PDF_COVER_DPI_OCR, PDF_COVER_QUALITY_HIGH
+        from services.ocr_service import OCRService
+
+        page_number = request_data.get("page_number", 1)
+        if page_number < 1:
+            raise HTTPException(status_code=400, detail="Page number must be >= 1")
+
+        db_session = _session_factory()
+        try:
+            magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+            if not magazine:
+                raise HTTPException(status_code=404, detail="Periodical not found")
+
+            pdf_path = Path(magazine.file_path)
+            if not pdf_path.exists():
+                raise HTTPException(status_code=404, detail="PDF file not found on disk")
+
+            # Determine cover directory
+            cover_dir = pdf_path.parent.parent.parent / ".covers"
+
+            # Extract cover from specified page
+            if OCRService.is_available():
+                cover_path = extract_cover_from_pdf(
+                    pdf_path, cover_dir, dpi=PDF_COVER_DPI_OCR, quality=PDF_COVER_QUALITY_HIGH, page_number=page_number
+                )
+            else:
+                cover_path = extract_cover_from_pdf(pdf_path, cover_dir, page_number=page_number)
+
+            if not cover_path:
+                raise HTTPException(status_code=500, detail="Failed to extract cover from PDF")
+
+            # Update database with new cover path and page number
+            magazine.cover_path = str(cover_path)
+            if magazine.extra_metadata is None:
+                magazine.extra_metadata = {}
+            magazine.extra_metadata["cover_page"] = page_number
+            db_session.commit()
+
+            logger.info(f"Regenerated cover for magazine {magazine_id} from page {page_number}")
+
+            return {
+                "success": True,
+                "message": f"Cover regenerated from page {page_number}",
+                "cover_path": str(cover_path),
+            }
+        finally:
+            db_session.close()
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error regenerating cover: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.delete("/periodicals/{magazine_id}")
 async def delete_periodical(
     magazine_id: int, delete_files: bool = False, remove_tracking: bool = False, delete_all_issues: bool = False

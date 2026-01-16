@@ -212,9 +212,10 @@ class TitleMatcher:
         title = re.sub(r"\s+(?:No|Issue|Vol|Volume|Edition)\s+\d+", "", title, flags=re.IGNORECASE)  # Remove remaining
         title = re.sub(r"\s+#\d+(?:\s+(?:19|20)\d{2})?$", "", title, flags=re.IGNORECASE)
 
-        # Remove date patterns like "-October 2016", "-Jan 2025", etc. (common in magazine filenames)
+        # Remove date patterns like "-October 2016", "-Jan 2025", "August 2020" etc. (common in magazine filenames)
+        # Match with or without leading dash/hyphen
         title = re.sub(
-            r"\s*-\s*(?:January|February|March|April|May|June|July|August|September|October|November|December|"
+            r"\s*-?\s*(?:January|February|March|April|May|June|July|August|September|October|November|December|"
             r"Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+(?:19|20)\d{2}",
             "",
             title,

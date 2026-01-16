@@ -20,16 +20,17 @@ Image.MAX_IMAGE_PIXELS = 200000000  # 200 megapixels
 
 
 def extract_cover_from_pdf(
-    pdf_path: Path, output_dir: Path, dpi: int = PDF_COVER_DPI_LOW, quality: int = PDF_COVER_QUALITY
+    pdf_path: Path, output_dir: Path, dpi: int = PDF_COVER_DPI_LOW, quality: int = PDF_COVER_QUALITY, page_number: int = 1
 ) -> Optional[Path]:
     """
-    Extract first page of PDF as cover image.
+    Extract specified page of PDF as cover image.
 
     Args:
         pdf_path: Path to PDF file
         output_dir: Directory to save cover image
         dpi: Resolution for extraction
         quality: JPEG quality (1-100)
+        page_number: Page number to extract (default: 1)
 
     Returns:
         Path to extracted cover image, or None if failed
@@ -38,13 +39,13 @@ def extract_cover_from_pdf(
         output_dir.mkdir(parents=True, exist_ok=True)
         cover_path = output_dir / f"{pdf_path.stem}.jpg"
 
-        images = convert_from_path(str(pdf_path), first_page=1, last_page=1, dpi=dpi)
+        images = convert_from_path(str(pdf_path), first_page=page_number, last_page=page_number, dpi=dpi)
         if not images:
             logger.warning(f"Could not extract images from PDF: {pdf_path}")
             return None
 
         images[0].save(str(cover_path), "JPEG", quality=quality)
-        logger.info(f"Extracted cover: {cover_path}")
+        logger.info(f"Extracted cover from page {page_number}: {cover_path}")
         return cover_path
 
     except ImportError:

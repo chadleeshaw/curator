@@ -433,6 +433,9 @@ function enableMetadataEdit() {
     } else {
         specialLabel.textContent = 'Special Edition Name';
     }
+
+    // Cover page field
+    document.getElementById('edit-cover-page').value = (currentMagazineData.metadata && currentMagazineData.metadata.cover_page) || '1';
 }
 
 function cancelMetadataEdit() {
@@ -467,6 +470,11 @@ async function saveMetadataEdit() {
     const specialEditionName = document.getElementById('edit-special-edition').value;
     updates.special_edition = specialEditionName || null;
 
+    // Check if cover page number has changed
+    const coverPage = document.getElementById('edit-cover-page').value;
+    const currentCoverPage = currentMagazineData.metadata?.cover_page || 1;
+    const shouldRegenerateCover = coverPage && parseInt(coverPage) !== currentCoverPage;
+
 
     try {
         const response = await fetch(`/api/periodicals/${currentMagazineId}`, {
@@ -479,6 +487,22 @@ async function saveMetadataEdit() {
 
         if (!response.ok) {
             throw new Error('Failed to update metadata');
+        }
+
+        // Regenerate cover if page number changed
+        if (shouldRegenerateCover) {
+            showNotification('🔄 Regenerating cover from page ' + coverPage, 'info');
+            const coverResponse = await fetch(`/api/periodicals/${currentMagazineId}/regenerate-cover`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ page_number: parseInt(coverPage) }),
+            });
+
+            if (!coverResponse.ok) {
+                throw new Error('Failed to regenerate cover');
+            }
         }
 
         await viewMetadata(currentMagazineId);
