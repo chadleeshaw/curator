@@ -64,7 +64,7 @@ async def view_periodical_by_id(id: int = Query(...)):
                 tracking = (
                     db_session.query(MagazineTracking).filter(MagazineTracking.id == periodical.tracking_id).first()
                 )
-                periodical_title = tracking.title if tracking else periodical.title
+                display_title = tracking.title if tracking else periodical.title
 
                 # Query all magazines with same tracking_id (includes special editions)
                 periodicals = (
@@ -74,11 +74,11 @@ async def view_periodical_by_id(id: int = Query(...)):
                     .all()
                 )
             else:
-                # No tracking - query by title
-                periodical_title = periodical.title
+                # No tracking - use the magazine's own title
+                display_title = periodical.title
                 periodicals = (
                     db_session.query(Magazine)
-                    .filter(Magazine.title == periodical_title)
+                    .filter(Magazine.title == display_title)
                     .order_by(Magazine.issue_date.desc())
                     .all()
                 )
@@ -86,7 +86,7 @@ async def view_periodical_by_id(id: int = Query(...)):
             if not periodicals:
                 raise HTTPException(
                     status_code=404,
-                    detail=f"No periodicals found for '{periodical_title}'",
+                    detail=f"No periodicals found for '{display_title}'",
                 )
 
             # Group periodicals by year
@@ -134,7 +134,7 @@ async def view_periodical_by_id(id: int = Query(...)):
             # Replace template variables
             import html
 
-            html_content = template_content.replace("{{PERIODICAL_TITLE}}", periodical_title).replace(
+            html_content = template_content.replace("{{PERIODICAL_TITLE}}", display_title).replace(
                 "{{YEARS_DATA}}", html.escape(json.dumps(years_data))
             )
 
@@ -158,9 +158,16 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
         try:
             from models.database import MagazineTracking
 
+            # Determine the actual tracking title to display
+            display_title = periodical_title
+
             # If tracking_id is provided, query by that (includes merged items)
             if tracking_id:
                 query = db_session.query(Magazine).filter(Magazine.tracking_id == tracking_id)
+                # Get the tracking title for display
+                tracking = db_session.query(MagazineTracking).filter(MagazineTracking.id == tracking_id).first()
+                if tracking:
+                    display_title = tracking.title
             else:
                 # Try to find a tracking record by title first
                 tracking = db_session.query(MagazineTracking).filter(MagazineTracking.title == periodical_title).first()
@@ -168,9 +175,19 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
                 if tracking:
                     # Query all magazines with this tracking_id
                     query = db_session.query(Magazine).filter(Magazine.tracking_id == tracking.id)
+                    display_title = tracking.title
                 else:
-                    # No tracking - query by title
+                    # No tracking found by that title - try querying magazines by title
+                    # and if they have a tracking_id, use that tracking title instead
                     query = db_session.query(Magazine).filter(Magazine.title == periodical_title)
+                    sample_mag = query.first()
+                    if sample_mag and sample_mag.tracking_id:
+                        # This magazine has tracking - use the tracking title
+                        tracking = db_session.query(MagazineTracking).filter(MagazineTracking.id == sample_mag.tracking_id).first()
+                        if tracking:
+                            display_title = tracking.title
+                            # Re-query using tracking_id to get all issues
+                            query = db_session.query(Magazine).filter(Magazine.tracking_id == tracking.id)
 
             # Add language filter if provided
             if language:
