@@ -58,9 +58,8 @@ jobs:
 
       - name: Run Python linting
         run: |
-          PYTHON_FILES=$(find . -name '*.py' -not -path './.venv/*' -not -path './node_modules/*')
-          .venv/bin/python -m pylint --fail-under=7.0 $PYTHON_FILES || true
-          .venv/bin/python -m flake8 $PYTHON_FILES
+          .venv/bin/python -m pylint --fail-under=7.0 --recursive=y . --ignore=.venv,node_modules || true
+          find . -name '*.py' -not -path './.venv/*' -not -path './node_modules/*' -print0 | xargs -0 .venv/bin/python -m flake8
 
       - name: Check Python formatting
         run: |
