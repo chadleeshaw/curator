@@ -4,24 +4,24 @@
 # Stage 1: Builder
 FROM python:3.13-slim AS builder
 
-# Install build dependencies
+# Install build dependencies and Tesseract OCR
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     gcc \
     g++ \
+    tesseract-ocr \
+    libtesseract-dev \
+    tesseract-ocr-eng \
+    tesseract-ocr-fra \
+    tesseract-ocr-deu \
+    tesseract-ocr-spa \
+    tesseract-ocr-ita \
+    tesseract-ocr-por \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements
 COPY requirements-prod.txt /tmp/requirements.txt
 
-# Install PaddlePaddle from CPU-optimized Chinese mirror for better compatibility
-RUN --mount=type=cache,target=/root/.cache/pip \
-    python -m pip install --user paddlepaddle==3.2.2 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
-
-# Install PaddleOCR separately
-RUN --mount=type=cache,target=/root/.cache/pip \
-    python -m pip install --user paddleocr
-
-# Install remaining Python packages with pip cache
+# Install Python packages with pip cache
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --user -r /tmp/requirements.txt
 
@@ -31,36 +31,16 @@ FROM python:3.13-slim
 WORKDIR /app
 
 # Install runtime dependencies (without cache mount to avoid lock issues)
-# PaddleOCR requires OpenCV which needs these graphics/X11 libraries
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     poppler-utils \
-    libglib2.0-0 \
-    libgomp1 \
-    libgl1 \
-    libsm6 \
-    libxext6 \
-    libxrender1 \
-    libfontconfig1 \
-    libice6 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Python packages from builder
 COPY --from=builder /root/.local /root/.local
 ENV PATH=/root/.local/bin:$PATH
 
-# Set PaddleOCR environment variables for CPU compatibility
-ENV HOME=/root \
-    USE_GPU=False \
-    DISABLE_MODEL_SOURCE_CHECK=True \
-    FLAGS_cpu_deterministic=true
-
-# Note: PaddleOCR models will be downloaded on first use to avoid build-time
-# CPU instruction compatibility issues. Models are cached in /root/.paddleocr
-# If you want to pre-download models during build (only if your build and runtime
-# CPUs are compatible), uncomment the following:
-RUN python3 -c "from paddleocr import PaddleOCR; \
-    ocr = PaddleOCR(use_angle_cls=True, lang='en'); \
-    print('PaddleOCR models downloaded')"
+# Set environment variables
+ENV HOME=/root
 
 # Copy application code
 COPY . .
@@ -85,9 +65,7 @@ ENV CURATOR_CONFIG_PATH=/app/local/config/config.yaml \
     CURATOR_LOG_FILE=/app/local/logs/periodical_manager.log \
     CURATOR_LOG_LEVEL=INFO \
     CURATOR_PORT=8000 \
-    CURATOR_HOST=0.0.0.0 \
-    USE_GPU=False \
-    DISABLE_MODEL_SOURCE_CHECK=True
+    CURATOR_HOST=0.0.0.0
 
 # Volumes
 VOLUME ["/app/local/config", "/app/local/data", "/app/local/downloads", "/app/local/cache", "/app/local/logs"]

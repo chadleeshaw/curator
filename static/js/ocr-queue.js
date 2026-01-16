@@ -405,8 +405,8 @@ export class OCRQueueManager {
     if (this.refreshInterval) {
       clearInterval(this.refreshInterval);
     }
-    // Refresh every 10 seconds
-    this.refreshInterval = setInterval(() => this.loadQueue(), 10000);
+    // Refresh every 5 seconds
+    this.refreshInterval = setInterval(() => this.loadQueue(), 5000);
   }
 
   /**

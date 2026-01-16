@@ -1,33 +1,29 @@
-"""OCR service for extracting text from cover art images."""
+"""OCR service for extracting text from cover art images using PyMuPDF + Tesseract."""
 
 import logging
 import os
-import signal
-import warnings
-from pathlib import Path
-from typing import Optional, Dict
 import re
+import json
+from pathlib import Path
+from typing import Optional, Dict, List
 
+import fitz  # PyMuPDF
+import pytesseract
 from PIL import Image
 
 from core.constants.date import OCR_MONTH_NAMES
-from core.constants.language import LANGUAGE_TO_PADDLEOCR
+from core.constants.language import (
+    LANGUAGE_TO_PADDLEOCR,
+)  # Will rename to LANGUAGE_TO_TESSERACT
 from core.constants.ocr import (
     MAX_IMAGE_PIXELS,
     OCR_DISABLE_ENV_VALUES,
-    OCR_TEXT_DETECTION_THRESHOLD,
-    OCR_TEXT_UNCLIP_RATIO,
     OCR_ISSUE_PATTERNS,
     OCR_YEAR_PATTERN,
     OCR_VOLUME_PATTERNS,
     OCR_SPECIAL_EDITION_INDICATORS,
-    OCR_MIN_MEMORY_MB,
     PDF_COVER_DPI_OCR,
 )
-
-# Suppress various warnings from PaddleOCR and dependencies
-warnings.filterwarnings("ignore", category=UserWarning)
-warnings.filterwarnings("ignore", category=FutureWarning)
 
 # Increase Pillow's decompression bomb limit for high-res images
 Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
@@ -39,10 +35,9 @@ class OCRServiceConfig:
     """Manages OCR service state and configuration."""
 
     def __init__(self):
-        self.cpu_incompatible = False
         self.ocr_disabled = self._check_ocr_disabled()
-        self.paddleocr_cache = {}
         self.warning_logged = False
+        self.tesseract_available = self._check_tesseract_available()
 
     @staticmethod
     def _check_ocr_disabled():
@@ -52,198 +47,69 @@ class OCRServiceConfig:
             logger.info("OCR is disabled via DISABLE_OCR environment variable")
         return disabled
 
+    @staticmethod
+    def _check_tesseract_available():
+        """Check if Tesseract is available on the system."""
+        try:
+            pytesseract.get_tesseract_version()
+            return True
+        except Exception as e:
+            logger.warning(f"Tesseract not available: {e}")
+            return False
+
 
 # Global configuration instance
 _ocr_config = OCRServiceConfig()
 
-
-def _sigill_handler(signum, frame):
-    """Handle SIGILL to prevent container crashes from CPU incompatibility."""
-    logger.error("SIGILL (Illegal Instruction) detected - CPU does not support PaddleOCR requirements")
-    logger.error("CPU lacks AVX/AVX2/AVX512 instruction sets required by PaddleOCR")
-    logger.error("OCR functionality will be disabled")
-    _ocr_config.cpu_incompatible = True
-    raise RuntimeError("CPU instruction set incompatible with PaddleOCR (SIGILL)")
-
-
-# Install SIGILL handler before importing PaddleOCR
-signal.signal(signal.SIGILL, _sigill_handler)
-
-# Only import PaddleOCR if not explicitly disabled
-if not _ocr_config.ocr_disabled:
-    try:
-        from paddleocr import PaddleOCR
-
-        OCR_AVAILABLE = True
-    except (ImportError, OSError, RuntimeError, Exception) as e:
-        logger.warning(f"PaddleOCR not available: {e}")
-        OCR_AVAILABLE = False
-        PaddleOCR = None  # type: ignore
-else:
-    OCR_AVAILABLE = False
-    PaddleOCR = None  # type: ignore
-
-
-def _log_paddleocr_error(lang_code: str, error: Exception) -> None:
-    """
-    Log PaddleOCR initialization error with CPU compatibility information.
-
-    This helper provides consistent error logging for PaddleOCR initialization
-    failures, including guidance on potential CPU instruction set issues.
-
-    Args:
-        lang_code: PaddleOCR language code that failed to initialize
-        error: Exception that occurred during initialization
-    """
-    logger.error(f"Failed to initialize PaddleOCR for language {lang_code}: {error}")
-    logger.error("This may be due to CPU instruction set incompatibility (e.g., AVX/AVX2 requirements)")
-
-
-def _check_memory_available() -> bool:
-    """
-    Check if sufficient memory is available for PaddleOCR initialization.
-
-    PaddleOCR requires significant memory (~4GB) to load models. This function
-    checks system memory before attempting initialization to prevent OOM crashes.
-    If psutil is not available or memory check fails, returns True to allow
-    initialization attempt (fail-safe behavior).
-
-    Returns:
-        True if sufficient memory is available or cannot be checked (fail-safe).
-        False if insufficient memory detected, OCR will be disabled.
-
-    Note:
-        Sets _ocr_config.cpu_incompatible = True when insufficient memory detected
-        to prevent future initialization attempts.
-    """
-    try:
-        import psutil
-
-        available_mb = psutil.virtual_memory().available / (1024 * 1024)
-        if available_mb < OCR_MIN_MEMORY_MB:
-            logger.error(
-                f"Insufficient memory for PaddleOCR: {available_mb:.0f}MB available, " f"need ~{OCR_MIN_MEMORY_MB}MB"
-            )
-            logger.error("OCR functionality will be disabled to prevent OOM crashes")
-            _ocr_config.cpu_incompatible = True
-            return False
-        logger.debug(f"Available memory: {available_mb:.0f}MB - sufficient for PaddleOCR")
-        return True
-    except ImportError:
-        logger.warning("psutil not available - cannot check memory before PaddleOCR initialization")
-        return True
-    except Exception as e:
-        logger.warning(f"Could not check available memory: {e}")
-        return True
+# Check if OCR is available
+OCR_AVAILABLE = _ocr_config.tesseract_available and not _ocr_config.ocr_disabled
 
 
 def _normalize_language_code(language: Optional[str]) -> str:
     """
-    Normalize language name or code to PaddleOCR language code.
+    Normalize language name or code to Tesseract language code.
 
     Args:
         language: Language name or code (e.g., "English", "en", "French", "fr")
 
     Returns:
-        PaddleOCR language code (e.g., "en", "fr", "german")
+        Tesseract language code (e.g., "eng", "fra", "deu", "spa")
     """
+    # Tesseract language codes mapping
+    tesseract_codes = {
+        "english": "eng",
+        "en": "eng",
+        "french": "fra",
+        "fr": "fra",
+        "french (france)": "fra",
+        "german": "deu",
+        "de": "deu",
+        "spanish": "spa",
+        "es": "spa",
+        "italian": "ita",
+        "it": "ita",
+        "portuguese": "por",
+        "pt": "por",
+        "dutch": "nld",
+        "nl": "nld",
+        "russian": "rus",
+        "ru": "rus",
+        "chinese": "chi_sim",
+        "zh": "chi_sim",
+        "japanese": "jpn",
+        "ja": "jpn",
+        "korean": "kor",
+        "ko": "kor",
+    }
+
     if language:
-        return LANGUAGE_TO_PADDLEOCR.get(language.lower(), "en")
-    return "en"
-
-
-def _create_paddleocr_instance(lang_code: str):
-    """
-    Create a new PaddleOCR instance for the specified language.
-
-    Attempts to initialize PaddleOCR with optimized parameters for performance.
-    If initialization fails due to CPU incompatibility (SIGILL/AVX errors),
-    disables OCR functionality. For other errors, attempts fallback to English.
-
-    Args:
-        lang_code: PaddleOCR language code (e.g., "en", "fr", "german")
-
-    Returns:
-        PaddleOCR instance if successful, None if initialization fails
-
-    Note:
-        - Caches successful instances in _ocr_config.paddleocr_cache
-        - Sets _ocr_config.cpu_incompatible = True on CPU instruction errors
-        - Recursively calls _get_paddleocr_reader("en") for fallback
-    """
-    try:
-        logger.info(f"Initializing PaddleOCR for language: {lang_code}")
-        # PaddleOCR parameters optimized for performance
-        # GPU is controlled via environment variable USE_GPU=False
-        ocr = PaddleOCR(
-            use_textline_orientation=False,  # Disable for faster processing
-            lang=lang_code,
-            text_det_box_thresh=OCR_TEXT_DETECTION_THRESHOLD,
-            text_det_unclip_ratio=OCR_TEXT_UNCLIP_RATIO,
-        )
-        _ocr_config.paddleocr_cache[lang_code] = ocr
-        return ocr
-    except (RuntimeError, OSError, SystemError) as e:
-        error_msg = str(e).lower()
-        # Check for CPU instruction errors (SIGILL indicators)
-        # PaddleOCR requires AVX/AVX2 instruction sets; older CPUs may not support these
-        if "illegal instruction" in error_msg or "sigill" in error_msg or "avx" in error_msg:
-            logger.error(f"PaddleOCR CPU incompatibility detected: {e}")
-            logger.error("CPU does not support required instruction sets (AVX/AVX2/AVX512)")
-            logger.error("OCR functionality will be disabled to prevent crashes")
-            _ocr_config.cpu_incompatible = True
-            return None
-
-        _log_paddleocr_error(lang_code, e)
-        # Try English as fallback - many language packs may fail but English is usually available
-        if lang_code != "en":
-            logger.info("Falling back to English OCR")
-            return _get_paddleocr_reader("en")
-        return None
-    except Exception as e:
-        logger.error(
-            f"Unexpected error initializing PaddleOCR for language {lang_code}: {e}",
-            exc_info=True,
-        )
-        # Fallback to English
-        if lang_code != "en":
-            logger.info("Falling back to English OCR")
-            return _get_paddleocr_reader("en")
-        return None
-
-
-def _get_paddleocr_reader(language: Optional[str] = None):
-    """
-    Get or create PaddleOCR instance for specified language.
-    Instances are cached to avoid reloading models.
-
-    Args:
-        language: Language name or code (e.g., "English", "en", "French", "fr")
-                If None or not recognized, defaults to English.
-
-    Returns:
-        PaddleOCR instance or None if not available
-    """
-    if not OCR_AVAILABLE or _ocr_config.cpu_incompatible:
-        return None
-
-    # Normalize language to PaddleOCR code
-    lang_code = _normalize_language_code(language)
-
-    # Return cached instance if available
-    if lang_code in _ocr_config.paddleocr_cache:
-        return _ocr_config.paddleocr_cache[lang_code]
-
-    # Check available memory before initializing
-    if not _check_memory_available():
-        return None
-
-    # Create new instance
-    return _create_paddleocr_instance(lang_code)
+        return tesseract_codes.get(language.lower(), "eng")
+    return "eng"
 
 
 def _parse_paddle_ocr_results(result) -> list:
     """
+    Deprecated: Kept for backward compatibility.
     Parse PaddleOCR results to extract text lines.
 
     Args:
@@ -381,55 +247,156 @@ def _is_special_edition(text_upper_spaced: str) -> bool:
 
 
 class OCRService:
-    """Service for extracting text from images using OCR."""
+    """Service for extracting text from images using Tesseract OCR."""
 
     @staticmethod
     def is_available() -> bool:
-        """Check if OCR is available and CPU compatible."""
-        return OCR_AVAILABLE and not _ocr_config.cpu_incompatible
+        """Check if OCR is available."""
+        return OCR_AVAILABLE
 
     @staticmethod
-    def extract_text_from_image(image_path: str, preprocess: bool = False, language: Optional[str] = None) -> str:
+    def extract_text_from_pdf_pages(
+        pdf_path: str,
+        max_pages: int = 2,
+        dpi: int = 300,
+        language: Optional[str] = None,
+        confidence_threshold: int = 30,
+    ) -> Dict[str, any]:
         """
-        Extract text from an image file using PaddleOCR.
+        Extract text from first N pages of a PDF using PyMuPDF + Tesseract.
+        Scans multiple pages because some PDFs have the cover on the second page.
 
         Args:
-            image_path: Path to the image file (preferably PNG or TIFF for lossless quality)
-            preprocess: Deprecated parameter kept for backward compatibility, not used with PaddleOCR
+            pdf_path: Path to the PDF file
+            max_pages: Maximum number of pages to scan (default: 2 for cover + potential second cover)
+            dpi: DPI for rendering PDF pages (default: 300 for good OCR quality)
+            language: Language code for Tesseract (e.g., "eng", "fra", "deu")
+            confidence_threshold: Minimum confidence score to include word (default: 30)
+
+        Returns:
+            Dictionary with OCR results per page including text, words with bounding boxes, and confidence
+        """
+        if not OCR_AVAILABLE:
+            logger.warning("Tesseract OCR not available")
+            return {"pages": [], "error": "OCR not available"}
+
+        try:
+            # Normalize language code
+            lang_code = _normalize_language_code(language)
+
+            # Open PDF
+            doc = fitz.open(pdf_path)
+            results = {
+                "pages": [],
+                "total_pages": doc.page_count,
+                "scanned_pages": min(max_pages, doc.page_count),
+            }
+
+            # Process only the first N pages
+            for page_num in range(min(max_pages, doc.page_count)):
+                page = doc[page_num]
+
+                # Render page to image at specified DPI
+                pix = page.get_pixmap(dpi=dpi)
+                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+
+                # Get structured OCR data as a dict
+                data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT, lang=lang_code)
+
+                # Filter out low-confidence or empty detections
+                words = []
+                full_text_parts = []
+                for i in range(len(data["text"])):
+                    text = data["text"][i].strip()
+                    conf = int(data["conf"][i]) if data["conf"][i] != "-1" else 0
+
+                    if text and conf > confidence_threshold:
+                        words.append(
+                            {
+                                "text": text,
+                                "confidence": conf,
+                                "box": {
+                                    "left": data["left"][i],
+                                    "top": data["top"][i],
+                                    "width": data["width"][i],
+                                    "height": data["height"][i],
+                                },
+                            }
+                        )
+                        full_text_parts.append(text)
+
+                # Combine all text for this page
+                page_text = " ".join(full_text_parts)
+
+                results["pages"].append(
+                    {
+                        "page_number": page_num + 1,
+                        "word_count": len(words),
+                        "text": page_text,
+                        "words": words,  # Detailed word-level data with positions
+                    }
+                )
+
+                logger.debug(f"OCR extracted {len(words)} words from page {page_num + 1} of {pdf_path}")
+
+            doc.close()
+
+            # Combine all text from all pages
+            all_text = "\n\n".join(page["text"] for page in results["pages"])
+            results["full_text"] = all_text
+
+            return results
+
+        except Exception as e:
+            logger.error(f"Error extracting text from PDF {pdf_path}: {e}", exc_info=True)
+            return {"pages": [], "error": str(e)}
+
+    @staticmethod
+    def extract_text_from_image(
+        image_path: str,
+        preprocess: bool = False,
+        language: Optional[str] = None,
+        confidence_threshold: int = 30,
+    ) -> str:
+        """
+        Extract text from an image file using Tesseract OCR.
+
+        Args:
+            image_path: Path to the image file
+            preprocess: Deprecated parameter kept for backward compatibility
             language: Language name or code (e.g., "English", "French", "de", "es")
-                     If None, defaults to English
+            confidence_threshold: Minimum confidence score to include word (default: 30)
 
         Returns:
             Extracted text as string
         """
         if not OCR_AVAILABLE:
             if not _ocr_config.warning_logged:
-                logger.warning("PaddleOCR not available. Install with: pip install paddleocr")
+                logger.warning("Tesseract OCR not available. Install with: apt-get install tesseract-ocr")
                 _ocr_config.warning_logged = True
             return ""
 
         try:
-            ocr = _get_paddleocr_reader(language)
-            if ocr is None:
-                return ""
+            # Normalize language code
+            lang_code = _normalize_language_code(language)
 
-            # Run OCR on the image - wrap in try/catch for runtime errors
-            try:
-                result = ocr.predict(image_path)
-            except (RuntimeError, OSError, SystemError) as e:
-                logger.error(f"PaddleOCR prediction failed (possible CPU instruction incompatibility): {e}")
-                logger.warning("Consider installing a CPU-compatible version or using Docker with proper architecture")
-                return ""
+            # Open image
+            img = Image.open(image_path)
 
-            # PaddleOCR predict() returns a list of OCRResult objects
-            if not result:
-                logger.debug(f"No text detected in image: {image_path}")
-                return ""
+            # Get structured OCR data
+            data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT, lang=lang_code)
 
-            # Extract text from results
-            text_parts = _parse_paddle_ocr_results(result)
-            full_text = "\n".join(str(t) for t in text_parts if t)
-            logger.debug(f"PaddleOCR extracted {len(text_parts)} text lines from {image_path}")
+            # Filter and extract text
+            text_parts = []
+            for i in range(len(data["text"])):
+                text = data["text"][i].strip()
+                conf = int(data["conf"][i]) if data["conf"][i] != "-1" else 0
+
+                if text and conf > confidence_threshold:
+                    text_parts.append(text)
+
+            full_text = " ".join(text_parts)
+            logger.debug(f"Tesseract extracted {len(text_parts)} words from {image_path}")
             return full_text.strip()
 
         except Exception as e:
@@ -473,15 +440,15 @@ class OCRService:
     @staticmethod
     def analyze_cover(cover_path: str, language: Optional[str] = None) -> Dict[str, any]:
         """
-        Analyze a cover image, PDF, or EPUB using OCR to extract metadata.
-        For PDFs/EPUBs, extracts a lossless cover image first, then applies OCR.
+        Analyze a cover image or PDF using OCR to extract metadata.
+        For PDFs, scans the first 2 pages (some PDFs have cover on page 2).
         For images, uses OCR directly.
 
         NOTE: This service is for OCR only. For direct text extraction from PDF/EPUB,
         use TextScanService.scan_document() instead.
 
         Args:
-            cover_path: Path to the cover image, PDF, or EPUB
+            cover_path: Path to the cover image or PDF
             language: Language name or code for OCR (e.g., "English", "French", "de", "es")
                      If None, defaults to English.
 
@@ -492,24 +459,50 @@ class OCRService:
             logger.warning("OCR not available, skipping cover analysis")
             return {"ocr_available": False}
 
-        logger.info(f"Analyzing cover with OCR: {cover_path} (language: {language or 'English'})")
         path = Path(cover_path)
+
+        # Skip EPUB files - they are text-based and should use TextScanService
+        if path.suffix.lower() == ".epub":
+            logger.info(f"Skipping OCR for EPUB file (use TextScanService instead): {cover_path}")
+            return {
+                "ocr_available": True,
+                "text_found": False,
+                "used_ocr": False,
+                "skipped": True,
+                "reason": "EPUB files are text-based, use TextScanService.scan_document() instead",
+            }
+
+        logger.info(f"Analyzing cover with OCR: {cover_path} (language: {language or 'English'})")
         text = ""
         metadata = {}
 
-        # For PDF, extract a lossless cover image first
+        # For PDF, scan first 2 pages
         if path.suffix.lower() == ".pdf":
-            logger.debug("Extracting lossless cover image for OCR")
-            cover_image_path = OCRService._extract_lossless_cover(path)
-            if cover_image_path:
-                logger.debug(f"Using OCR on lossless cover image: {cover_image_path}")
-                text = OCRService.extract_text_from_image(str(cover_image_path), language=language)
-                metadata["extraction_method"] = "ocr_image"
-                # Clean up temporary cover image
-                try:
-                    cover_image_path.unlink()
-                except Exception as e:
-                    logger.debug(f"Could not delete temporary cover image: {e}")
+            logger.debug("Extracting text from first 2 pages of PDF using OCR")
+            ocr_results = OCRService.extract_text_from_pdf_pages(
+                str(path), max_pages=2, dpi=PDF_COVER_DPI_OCR, language=language
+            )
+
+            if "error" in ocr_results:
+                logger.error(f"OCR failed: {ocr_results['error']}")
+                return {
+                    "ocr_available": True,
+                    "text_found": False,
+                    "used_ocr": True,
+                    "error": ocr_results["error"],
+                }
+
+            # Combine text from all scanned pages
+            text = ocr_results.get("full_text", "")
+            metadata["extraction_method"] = "ocr_pdf_pages"
+            metadata["pages_scanned"] = ocr_results.get("scanned_pages", 0)
+            metadata["ocr_details"] = {
+                "total_pages": ocr_results.get("total_pages", 0),
+                "pages": [
+                    {"page_number": p["page_number"], "word_count": p["word_count"]}
+                    for p in ocr_results.get("pages", [])
+                ],
+            }
         else:
             # It's already an image file, use OCR directly
             logger.debug("Using OCR for text extraction on image file")
@@ -523,7 +516,8 @@ class OCRService:
         logger.debug(f"Extracted text: {text[:200]}...")  # Log first 200 chars
 
         # Extract metadata from text
-        metadata = OCRService.extract_metadata_from_text(text)
+        extracted_metadata = OCRService.extract_metadata_from_text(text)
+        metadata.update(extracted_metadata)
         metadata["ocr_available"] = True
         metadata["text_found"] = True
         metadata["used_ocr"] = True
@@ -533,6 +527,7 @@ class OCRService:
     @staticmethod
     def _extract_lossless_cover(file_path: Path) -> Optional[Path]:
         """
+        Deprecated: No longer used with PyMuPDF approach.
         Extract a lossless cover image (PNG) from PDF for OCR processing.
 
         Args:
@@ -541,33 +536,8 @@ class OCRService:
         Returns:
             Path to extracted PNG cover image, or None if failed
         """
-        try:
-            temp_dir = file_path.parent / ".ocr_temp"
-            temp_dir.mkdir(exist_ok=True)
-            cover_path = temp_dir / f"{file_path.stem}_ocr.png"
-
-            if file_path.suffix.lower() == ".pdf":
-                from pdf2image import convert_from_path
-
-                # Extract at high DPI for OCR
-                images = convert_from_path(
-                    str(file_path),
-                    first_page=1,
-                    last_page=1,
-                    dpi=PDF_COVER_DPI_OCR,
-                    fmt="png",
-                )
-                if images:
-                    images[0].save(str(cover_path), "PNG")
-                    logger.debug(f"Extracted lossless PDF cover at {PDF_COVER_DPI_OCR} DPI: {cover_path}")
-                    return cover_path
-
-            logger.warning(f"Could not extract lossless cover from {file_path}")
-            return None
-
-        except Exception as e:
-            logger.error(f"Error extracting lossless cover from {file_path}: {e}")
-            return None
+        logger.warning("_extract_lossless_cover is deprecated with PyMuPDF approach")
+        return None
 
 
 # Export all public items for wildcard imports

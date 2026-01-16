@@ -172,10 +172,13 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
 
                         # Only reorganize regular editions
                         if not is_special:
-                            # Store old directory for cleanup
+                            # Store old title directory for cleanup (parent of year directory)
                             old_pdf_path = Path(magazine.file_path)
                             if old_pdf_path.exists():
-                                directories_to_cleanup.add(old_pdf_path.parent)
+                                # Add title directory (grandparent of PDF) not just year directory
+                                # Structure: title_dir/year/magazine.pdf
+                                title_dir = old_pdf_path.parent.parent
+                                directories_to_cleanup.add(title_dir)
 
                             # Reorganize files to match new title structure
                             new_pdf_path, new_cover_path = _reorganize_magazine_files(

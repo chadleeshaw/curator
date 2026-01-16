@@ -1086,7 +1086,7 @@ export class DownloadsManager {
       } else {
         this.stopAutoRefresh();
       }
-    }, 10000);
+    }, 5000);
   }
 
   /**

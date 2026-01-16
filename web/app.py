@@ -20,7 +20,6 @@ from tasks import (
     DownloadMonitor,
     CoverCleanup,
     OCRProcessor,
-    OCRCoverGenerator,
 )
 
 # Import all routers
@@ -72,7 +71,6 @@ download_client = None
 download_manager = None
 download_monitor_task = None
 cover_cleanup_task = None
-ocr_cover_generator_task = None
 title_matcher = None
 file_processor = None
 file_importer = None
@@ -173,14 +171,6 @@ async def lifespan(app: FastAPI):
         )
         logger.info("Cover cleanup task initialized")
 
-        # Initialize OCR cover generator task
-        ocr_cover_generator_task = OCRCoverGenerator(
-            session_factory=session_factory,
-            organize_base_dir=storage_config.get("organize_dir", "./_Magazines"),
-            config_loader=config_loader,
-        )
-        logger.info("OCR cover generator task initialized")
-
         # Initialize OCR processor task
         ocr_processor_task = OCRProcessor(
             session_factory=session_factory,
@@ -203,15 +193,16 @@ async def lifespan(app: FastAPI):
                         logger.debug("Auto-download: Checking tracked periodicals for new issues")
 
                         # Check how many downloads are currently pending or downloading
-                        from models.database import Download
+                        from models.database import DownloadSubmission
 
                         pending_count = (
-                            db_session.query(Download)
+                            db_session.query(DownloadSubmission)
                             .filter(
-                                Download.status.in_(
+                                DownloadSubmission.status.in_(
                                     [
-                                        Download.StatusEnum.PENDING,
-                                        Download.StatusEnum.DOWNLOADING,
+                                        DownloadSubmission.StatusEnum.QUEUED,
+                                        DownloadSubmission.StatusEnum.PENDING,
+                                        DownloadSubmission.StatusEnum.DOWNLOADING,
                                     ]
                                 )
                             )
@@ -304,20 +295,6 @@ async def lifespan(app: FastAPI):
             """Clean up cover files that aren't tied to any periodical and generate missing covers (runs every hour)"""
             await cover_cleanup_task.run()
 
-        # Define OCR cover generator task wrapper
-        async def ocr_cover_generator_task_wrapper():
-            """Generate high-res PNG covers for OCR and clean up orphaned files (runs every 5 minutes)"""
-            try:
-                stats = await ocr_cover_generator_task.run()
-                if (
-                    stats.get("generated_count", 0) > 0
-                    or stats.get("deleted_orphaned", 0) > 0
-                    or stats.get("deleted_completed", 0) > 0
-                ):
-                    logger.info(f"OCR cover generator: {stats}")
-            except Exception as e:
-                logger.error(f"OCR cover generator error: {e}", exc_info=True)
-
         # Define OCR processor task wrapper
         async def ocr_processing_task():
             """Process queued OCR jobs with process pool (runs every hour)"""
@@ -336,31 +313,25 @@ async def lifespan(app: FastAPI):
 
         # Schedule tasks with intervals from config
         task_scheduler.schedule_periodic(
-            "auto_download",
+            "auto-download",
             auto_download_task,
             tasks_config.get("auto_download_interval", constants.AUTO_DOWNLOAD_INTERVAL),
         )
 
         task_scheduler.schedule_periodic(
-            "download_monitor",
+            "auto-import",
             download_monitoring_task,
             tasks_config.get("download_monitor_interval", constants.DOWNLOAD_MONITOR_INTERVAL),
         )
 
         task_scheduler.schedule_periodic(
-            "cleanup_orphaned_covers",
+            "auto-covers",
             cleanup_orphaned_covers_task,
             tasks_config.get("cleanup_covers_interval", constants.CLEANUP_COVERS_INTERVAL),
         )
 
         task_scheduler.schedule_periodic(
-            "ocr_cover_generator",
-            ocr_cover_generator_task_wrapper,
-            tasks_config.get("ocr_cover_generator_interval", constants.OCR_COVER_GENERATOR_INTERVAL),
-        )
-
-        task_scheduler.schedule_periodic(
-            "ocr_processor",
+            "auto-OCR",
             ocr_processing_task,
             tasks_config.get("ocr_processor_interval", constants.OCR_PROCESSOR_INTERVAL),
         )
