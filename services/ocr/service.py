@@ -7,8 +7,22 @@ import json
 from pathlib import Path
 from typing import Optional, Dict, List
 
-import fitz  # PyMuPDF
-import pytesseract
+try:
+    import fitz  # PyMuPDF
+
+    PYMUPDF_AVAILABLE = True
+except ImportError:
+    PYMUPDF_AVAILABLE = False
+    fitz = None  # type: ignore
+
+try:
+    import pytesseract
+
+    PYTESSERACT_AVAILABLE = True
+except ImportError:
+    PYTESSERACT_AVAILABLE = False
+    pytesseract = None  # type: ignore
+
 from PIL import Image
 
 from core.constants.date import OCR_MONTH_NAMES
@@ -62,7 +76,12 @@ class OCRServiceConfig:
 _ocr_config = OCRServiceConfig()
 
 # Check if OCR is available
-OCR_AVAILABLE = _ocr_config.tesseract_available and not _ocr_config.ocr_disabled
+OCR_AVAILABLE = (
+    _ocr_config.tesseract_available
+    and not _ocr_config.ocr_disabled
+    and PYMUPDF_AVAILABLE
+    and PYTESSERACT_AVAILABLE
+)
 
 
 def _normalize_language_code(language: Optional[str]) -> str:
@@ -175,7 +194,9 @@ def _extract_year(text: str) -> Optional[int]:
     cleaned_text = text.upper()
 
     # Match sequences like: 2OOO, 20OO, 2O00, 19OO, etc. (may or may not have word boundaries)
-    potential_years = re.finditer(r"(?<![0-9])([12][09O])([0-9O]{2})(?![0-9])", cleaned_text)
+    potential_years = re.finditer(
+        r"(?<![0-9])([12][09O])([0-9O]{2})(?![0-9])", cleaned_text
+    )
     for match in potential_years:
         cleaned_year = match.group(0).replace("O", "0")
         try:
@@ -301,7 +322,9 @@ class OCRService:
                 img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
 
                 # Get structured OCR data as a dict
-                data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT, lang=lang_code)
+                data = pytesseract.image_to_data(
+                    img, output_type=pytesseract.Output.DICT, lang=lang_code
+                )
 
                 # Filter out low-confidence or empty detections
                 words = []
@@ -337,7 +360,9 @@ class OCRService:
                     }
                 )
 
-                logger.debug(f"OCR extracted {len(words)} words from page {page_num + 1} of {pdf_path}")
+                logger.debug(
+                    f"OCR extracted {len(words)} words from page {page_num + 1} of {pdf_path}"
+                )
 
             doc.close()
 
@@ -348,7 +373,9 @@ class OCRService:
             return results
 
         except Exception as e:
-            logger.error(f"Error extracting text from PDF {pdf_path}: {e}", exc_info=True)
+            logger.error(
+                f"Error extracting text from PDF {pdf_path}: {e}", exc_info=True
+            )
             return {"pages": [], "error": str(e)}
 
     @staticmethod
@@ -372,7 +399,9 @@ class OCRService:
         """
         if not OCR_AVAILABLE:
             if not _ocr_config.warning_logged:
-                logger.warning("Tesseract OCR not available. Install with: apt-get install tesseract-ocr")
+                logger.warning(
+                    "Tesseract OCR not available. Install with: apt-get install tesseract-ocr"
+                )
                 _ocr_config.warning_logged = True
             return ""
 
@@ -384,7 +413,9 @@ class OCRService:
             img = Image.open(image_path)
 
             # Get structured OCR data
-            data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT, lang=lang_code)
+            data = pytesseract.image_to_data(
+                img, output_type=pytesseract.Output.DICT, lang=lang_code
+            )
 
             # Filter and extract text
             text_parts = []
@@ -396,7 +427,9 @@ class OCRService:
                     text_parts.append(text)
 
             full_text = " ".join(text_parts)
-            logger.debug(f"Tesseract extracted {len(text_parts)} words from {image_path}")
+            logger.debug(
+                f"Tesseract extracted {len(text_parts)} words from {image_path}"
+            )
             return full_text.strip()
 
         except Exception as e:
@@ -438,7 +471,9 @@ class OCRService:
         return metadata
 
     @staticmethod
-    def analyze_cover(cover_path: str, language: Optional[str] = None) -> Dict[str, any]:
+    def analyze_cover(
+        cover_path: str, language: Optional[str] = None
+    ) -> Dict[str, any]:
         """
         Analyze a cover image or PDF using OCR to extract metadata.
         For PDFs, scans the first 2 pages (some PDFs have cover on page 2).
@@ -463,7 +498,9 @@ class OCRService:
 
         # Skip EPUB files - they are text-based and should use TextScanService
         if path.suffix.lower() == ".epub":
-            logger.info(f"Skipping OCR for EPUB file (use TextScanService instead): {cover_path}")
+            logger.info(
+                f"Skipping OCR for EPUB file (use TextScanService instead): {cover_path}"
+            )
             return {
                 "ocr_available": True,
                 "text_found": False,
@@ -472,7 +509,9 @@ class OCRService:
                 "reason": "EPUB files are text-based, use TextScanService.scan_document() instead",
             }
 
-        logger.info(f"Analyzing cover with OCR: {cover_path} (language: {language or 'English'})")
+        logger.info(
+            f"Analyzing cover with OCR: {cover_path} (language: {language or 'English'})"
+        )
         text = ""
         metadata = {}
 
@@ -537,7 +576,6 @@ class OCRService:
             Path to extracted PNG cover image, or None if failed
         """
         logger.warning("_extract_lossless_cover is deprecated with PyMuPDF approach")
-        return None
 
 
 # Export all public items for wildcard imports
