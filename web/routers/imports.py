@@ -187,3 +187,53 @@ async def import_from_organize_dir(
     except Exception as e:
         logger.error(f"Import from organize dir error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/reorganize")
+async def reorganize_library(
+    category: str = "Magazines",
+    pattern: Optional[str] = None,
+    dry_run: bool = True,
+) -> Dict[str, Any]:
+    """
+    Reorganize files in the library to match the current organization pattern.
+
+    Scans the organized directory for files in the wrong location and moves them
+    to the correct location based on their metadata in the database.
+
+    Args:
+        category: Category to reorganize (default: "Magazines")
+        pattern: Organization pattern with tags like {category}/{title}/{year}/ (uses config default if not provided)
+        dry_run: If True, only report what would be done without making changes (default: True)
+
+    Returns:
+        Reorganization results
+    """
+    try:
+        if not _file_importer:
+            raise HTTPException(status_code=503, detail=ErrorMessages.FILE_IMPORTER_UNAVAILABLE)
+
+        def reorganize():
+            db_session = _session_factory()
+            try:
+                # Use the file organizer from the file importer
+                organizer = _file_importer.organizer
+
+                results = organizer.reorganize_from_database(
+                    db_session=db_session,
+                    category=category,
+                    pattern=pattern,
+                    dry_run=dry_run,
+                )
+
+                return results
+            finally:
+                db_session.close()
+
+        return await run_in_thread(reorganize)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Reorganization error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))

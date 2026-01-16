@@ -9,7 +9,7 @@ import re
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from core.constants.files import (
     PDF_COVER_DPI_HIGH,
@@ -22,6 +22,7 @@ from core.constants.language import DEFAULT_LANGUAGE
 from core.parsers import month_abbr_to_number
 from core.utils.pdf import extract_cover_from_pdf as extract_cover_util
 from core.parsers import sanitize_filename
+from services.importer.sidecar import read_sidecar_file
 
 logger = logging.getLogger(__name__)
 
@@ -369,3 +370,534 @@ class FileOrganizer:
                 result.rename(output_path_obj)
             return True
         return False
+
+    def scan_for_reorganization(
+        self,
+        category: str,
+        pattern: Optional[str] = None,
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Scan organized directory and identify files that need reorganization.
+
+        Looks for files in the wrong location based on current organization pattern.
+        This helps clean up messy folder structures.
+
+        Args:
+            category: Category to scan (e.g., "Magazines")
+            pattern: Expected organization pattern (defaults to {category}/{title}/{year}/)
+            dry_run: If True, only report what would be done without making changes
+
+        Returns:
+            Dictionary with scan results and reorganization actions
+        """
+        category_with_prefix = f"{self.category_prefix}{category}"
+        category_dir = self.organize_dir / category_with_prefix
+
+        if not category_dir.exists():
+            logger.warning(f"Category directory does not exist: {category_dir}")
+            return {
+                "success": False,
+                "error": f"Category directory not found: {category_dir}",
+                "files_found": 0,
+                "files_reorganized": 0,
+            }
+
+        logger.info(f"Scanning for files to reorganize in: {category_dir}")
+
+        files_found = []
+        files_reorganized = 0
+        errors = []
+
+        # Find all PDF and EPUB files recursively
+        for file_path in category_dir.rglob("*"):
+            if not file_path.is_file():
+                continue
+
+            if file_path.suffix.lower() not in [".pdf", ".epub"]:
+                continue
+
+            files_found.append(str(file_path))
+
+        logger.info(f"Found {len(files_found)} files in {category_dir}")
+
+        return {
+            "success": True,
+            "category": category,
+            "category_dir": str(category_dir),
+            "pattern": pattern or "{category}/{title}/{year}/",
+            "files_found": len(files_found),
+            "files_reorganized": files_reorganized,
+            "errors": errors,
+            "dry_run": dry_run,
+        }
+
+    def reorganize_from_database(
+        self,
+        db_session: Any,
+        category: str,
+        pattern: Optional[str] = None,
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Reorganize files based on metadata from database.
+
+        Scans the category folder and reorganizes files that are in the wrong location
+        by looking up their metadata in the Magazine table. Uses country from tracking
+        record to build full title (e.g., "Magazine US", "Magazine Germany").
+
+        Args:
+            db_session: SQLAlchemy database session
+            category: Category to reorganize (e.g., "Magazines")
+            pattern: Organization pattern (defaults to {category}/{title}/{year}/)
+            dry_run: If True, only report what would be done without making changes
+
+        Returns:
+            Dictionary with reorganization results
+        """
+        from models.database import (
+            Magazine,
+            MagazineTracking,
+        )  # Import here to avoid circular dependency
+
+        category_with_prefix = f"{self.category_prefix}{category}"
+        category_dir = self.organize_dir / category_with_prefix
+
+        if not category_dir.exists():
+            logger.warning(f"Category directory does not exist: {category_dir}")
+            return {
+                "success": False,
+                "error": f"Category directory not found: {category_dir}",
+                "files_found": 0,
+                "files_reorganized": 0,
+            }
+
+        logger.info(f"Reorganizing files in: {category_dir}")
+
+        files_found = 0
+        files_reorganized = 0
+        files_skipped = 0
+        errors = []
+        old_directories = set()  # Track directories we moved files from
+
+        # Query all magazines in this category from database
+        magazines = db_session.query(Magazine).filter(Magazine.file_path.like(f"%{category_with_prefix}%")).all()
+
+        logger.info(f"Found {len(magazines)} magazine records in database for category {category}")
+
+        for magazine in magazines:
+            try:
+                files_found += 1
+                current_path = Path(magazine.file_path)
+
+                if not current_path.exists():
+                    logger.debug(f"File not found, skipping: {current_path}")
+                    files_skipped += 1
+                    continue
+
+                # Get country from tracking record if available
+                country = None
+                if magazine.tracking_id:
+                    tracking = db_session.query(MagazineTracking).filter_by(id=magazine.tracking_id).first()
+                    if tracking:
+                        country = tracking.country
+
+                # Build full title with country (e.g., "Magazine US", "Magazine Germany")
+                full_title = magazine.title
+                if country:
+                    # Use country code directly (e.g., "US", "DE", "GB")
+                    full_title = f"{magazine.title} {country}"
+
+                # Build expected path based on pattern
+                metadata = {
+                    "title": full_title,
+                    "issue_date": magazine.issue_date,
+                    "language": magazine.language or DEFAULT_LANGUAGE,
+                    "issue_number": magazine.extra_metadata.get("issue_number") if magazine.extra_metadata else None,
+                    "volume": magazine.extra_metadata.get("volume") if magazine.extra_metadata else None,
+                }
+
+                # Build expected directory and filename
+                safe_title = sanitize_filename(metadata["title"])
+                issue_date = metadata["issue_date"]
+                month = issue_date.strftime("%B")
+                year = issue_date.strftime("%Y")
+                day = issue_date.strftime("%d")
+
+                # Build filename
+                filename = self._build_filename(
+                    safe_title,
+                    metadata.get("volume"),
+                    metadata.get("issue_number"),
+                    month,
+                    year,
+                )
+
+                # Build target directory
+                if not pattern:
+                    target_dir = self._build_default_directory(
+                        category_with_prefix, safe_title, metadata.get("volume"), year
+                    )
+                else:
+                    target_dir = self._build_pattern_directory(
+                        pattern,
+                        category_with_prefix,
+                        safe_title,
+                        metadata.get("language") or DEFAULT_LANGUAGE,
+                        year,
+                        month,
+                        day,
+                        metadata.get("issue_number"),
+                        metadata.get("volume"),
+                    )
+
+                expected_path = target_dir / filename
+
+                # Skip if already in correct location
+                if current_path.resolve() == expected_path.resolve():
+                    logger.debug(f"File already in correct location: {current_path}")
+                    files_skipped += 1
+                    continue
+
+                logger.info(f"Reorganizing: {current_path} -> {expected_path}")
+
+                if not dry_run:
+                    # Create target directory
+                    target_dir.mkdir(parents=True, exist_ok=True)
+
+                    # Get unique target path if file exists
+                    final_path = self._get_unique_target_path(target_dir, filename)
+
+                    # Track old directory for cleanup
+                    old_dir = current_path.parent
+                    old_directories.add(old_dir)
+
+                    # Move file
+                    shutil.move(str(current_path), str(final_path))
+
+                    # Update database with new path and title
+                    magazine.file_path = str(final_path)
+                    magazine.title = full_title  # Update title in database to include country
+                    db_session.commit()
+
+                    # Also move cover if it exists
+                    current_cover = current_path.with_suffix(".jpg")
+                    if current_cover.exists():
+                        new_cover = final_path.with_suffix(".jpg")
+                        shutil.move(str(current_cover), str(new_cover))
+                        magazine.cover_path = str(new_cover)
+                        db_session.commit()
+                        logger.info(f"Moved cover: {current_cover} -> {new_cover}")
+
+                    logger.info(f"Reorganized: {final_path}")
+
+                files_reorganized += 1
+
+            except Exception as e:
+                error_msg = f"Error reorganizing {magazine.file_path}: {e}"
+                logger.error(error_msg, exc_info=True)
+                errors.append(error_msg)
+
+        # Remove old directories (even if not empty)
+        if not dry_run:
+            self._cleanup_old_directories(old_directories, category_dir)
+
+        # Also process files with sidecar metadata that aren't in the database
+        sidecar_results = self._reorganize_from_sidecars(
+            db_session,
+            category_dir,
+            category_with_prefix,
+            pattern,
+            dry_run,
+            old_directories,
+        )
+
+        files_found += sidecar_results["files_found"]
+        files_reorganized += sidecar_results["files_reorganized"]
+        files_skipped += sidecar_results["files_skipped"]
+        errors.extend(sidecar_results["errors"])
+
+        # Final cleanup after processing sidecar files
+        if not dry_run and sidecar_results["files_reorganized"] > 0:
+            self._cleanup_old_directories(old_directories, category_dir)
+
+        return {
+            "success": True,
+            "category": category,
+            "category_dir": str(category_dir),
+            "pattern": pattern or "{category}/{title}/{year}/",
+            "files_found": files_found,
+            "files_reorganized": files_reorganized,
+            "files_skipped": files_skipped,
+            "errors": errors,
+            "dry_run": dry_run,
+        }
+
+    def _reorganize_from_sidecars(
+        self,
+        db_session: Any,
+        category_dir: Path,
+        category_with_prefix: str,
+        pattern: Optional[str],
+        dry_run: bool,
+        old_directories: set,
+    ) -> Dict[str, Any]:
+        """
+        Reorganize files that have sidecar metadata but aren't in the database.
+
+        This handles downloaded files that haven't been imported yet or were
+        imported but the database record was lost.
+
+        Args:
+            db_session: SQLAlchemy database session
+            category_dir: Category directory to scan
+            category_with_prefix: Category name with prefix (e.g., "_Magazines")
+            pattern: Organization pattern
+            dry_run: If True, only report what would be done
+            old_directories: Set to track directories we move files from
+
+        Returns:
+            Dictionary with processing results
+        """
+        from models.database import Magazine, MagazineTracking
+
+        files_found = 0
+        files_reorganized = 0
+        files_skipped = 0
+        errors = []
+
+        # Find all PDF and EPUB files in the category directory
+        for file_path in category_dir.rglob("*"):
+            if not file_path.is_file():
+                continue
+
+            if file_path.suffix.lower() not in [".pdf", ".epub"]:
+                continue
+
+            # Skip if file is already in database
+            existing = db_session.query(Magazine).filter(Magazine.file_path == str(file_path)).first()
+            if existing:
+                continue  # Already handled by database reorganization
+
+            # Check for sidecar file
+            sidecar_data = read_sidecar_file(file_path)
+            if not sidecar_data:
+                # No sidecar, skip this file
+                logger.debug(f"No sidecar found for {file_path}, skipping")
+                continue
+
+            try:
+                files_found += 1
+
+                # Extract metadata from sidecar
+                tracking_id = sidecar_data.get("tracking_id")
+                tracking_title = sidecar_data.get("tracking_title")
+                country = sidecar_data.get("country")
+                language = sidecar_data.get("language", DEFAULT_LANGUAGE)
+
+                if not tracking_title:
+                    logger.warning(f"Sidecar missing tracking_title for {file_path}, skipping")
+                    files_skipped += 1
+                    continue
+
+                # Build full title with country
+                full_title = tracking_title
+                if country:
+                    full_title = f"{tracking_title} {country}"
+
+                # Parse filename to get date information
+                from core.parsers.metadata import MetadataExtractor
+
+                extractor = MetadataExtractor()
+                parsed_dict = extractor.extract_from_filename(file_path)
+
+                if not parsed_dict or not parsed_dict.get("year"):
+                    logger.warning(f"Could not extract date from {file_path.name}, skipping")
+                    files_skipped += 1
+                    continue
+
+                # Build issue_date from parsed metadata
+                issue_date = datetime(
+                    year=parsed_dict["year"],
+                    month=parsed_dict.get("month", 1),
+                    day=1,
+                )
+
+                # Build metadata dict
+                metadata = {
+                    "title": full_title,
+                    "issue_date": issue_date,
+                    "language": language,
+                    "issue_number": parsed_dict.get("issue_number"),
+                    "volume": parsed_dict.get("volume"),
+                }
+
+                # Build expected directory and filename
+                safe_title = sanitize_filename(metadata["title"])
+                month = issue_date.strftime("%B")
+                year = issue_date.strftime("%Y")
+                day = issue_date.strftime("%d")
+
+                # Build filename
+                filename = self._build_filename(
+                    safe_title,
+                    metadata.get("volume"),
+                    metadata.get("issue_number"),
+                    month,
+                    year,
+                )
+
+                # Build target directory
+                if not pattern:
+                    target_dir = self._build_default_directory(
+                        category_with_prefix, safe_title, metadata.get("volume"), year
+                    )
+                else:
+                    target_dir = self._build_pattern_directory(
+                        pattern,
+                        category_with_prefix,
+                        safe_title,
+                        metadata.get("language") or DEFAULT_LANGUAGE,
+                        year,
+                        month,
+                        day,
+                        metadata.get("issue_number"),
+                        metadata.get("volume"),
+                    )
+
+                expected_path = target_dir / filename
+
+                # Skip if already in correct location
+                if file_path.resolve() == expected_path.resolve():
+                    logger.debug(f"File already in correct location: {file_path}")
+                    files_skipped += 1
+                    continue
+
+                logger.info(f"Reorganizing (from sidecar): {file_path} -> {expected_path}")
+
+                if not dry_run:
+                    # Create target directory
+                    target_dir.mkdir(parents=True, exist_ok=True)
+
+                    # Get unique target path if file exists
+                    final_path = self._get_unique_target_path(target_dir, filename)
+
+                    # Track old directory for cleanup
+                    old_dir = file_path.parent
+                    old_directories.add(old_dir)
+
+                    # Move file
+                    shutil.move(str(file_path), str(final_path))
+
+                    # Move sidecar file
+                    sidecar_path = file_path.with_suffix(file_path.suffix + ".curator_meta.json")
+                    if sidecar_path.exists():
+                        new_sidecar = final_path.with_suffix(final_path.suffix + ".curator_meta.json")
+                        shutil.move(str(sidecar_path), str(new_sidecar))
+
+                    # Also move cover if it exists
+                    current_cover = file_path.with_suffix(".jpg")
+                    if current_cover.exists():
+                        new_cover = final_path.with_suffix(".jpg")
+                        shutil.move(str(current_cover), str(new_cover))
+                        logger.info(f"Moved cover: {current_cover} -> {new_cover}")
+
+                    logger.info(f"Reorganized (from sidecar): {final_path}")
+
+                files_reorganized += 1
+
+            except Exception as e:
+                error_msg = f"Error reorganizing from sidecar {file_path}: {e}"
+                logger.error(error_msg, exc_info=True)
+                errors.append(error_msg)
+
+        return {
+            "files_found": files_found,
+            "files_reorganized": files_reorganized,
+            "files_skipped": files_skipped,
+            "errors": errors,
+        }
+
+    def _cleanup_old_directories(self, old_directories: set, base_dir: Path) -> int:
+        """
+        Remove old directories that we moved files from (even if they still contain other files).
+
+        When we reorganize a PDF/EPUB, the old directory becomes obsolete and should be
+        completely removed along with any leftover files (.nfo, .jpg, etc.).
+
+        Args:
+            old_directories: Set of directories we moved files from
+            base_dir: Base directory to start cleanup from (for parent directory cleanup)
+
+        Returns:
+            Number of directories removed
+        """
+        removed_count = 0
+
+        # First, remove the directories we moved files from
+        for old_dir in old_directories:
+            try:
+                if old_dir.exists():
+                    # Remove directory and all its contents
+                    shutil.rmtree(str(old_dir))
+                    logger.info(f"Removed old directory and contents: {old_dir}")
+                    removed_count += 1
+            except OSError as e:
+                logger.warning(f"Could not remove directory {old_dir}: {e}")
+
+        # Then, clean up any empty parent directories left behind
+        # Walk bottom-up to remove nested empty dirs
+        for dirpath, dirnames, filenames in os.walk(str(base_dir), topdown=False):
+            dir_path = Path(dirpath)
+
+            # Skip the base directory itself
+            if dir_path == base_dir:
+                continue
+
+            # Check if directory is empty
+            try:
+                if not any(dir_path.iterdir()):
+                    logger.info(f"Removing empty parent directory: {dir_path}")
+                    dir_path.rmdir()
+                    removed_count += 1
+            except OSError as e:
+                logger.debug(f"Could not remove directory {dir_path}: {e}")
+
+        if removed_count > 0:
+            logger.info(f"Removed {removed_count} directories during cleanup")
+
+        return removed_count
+
+    def _cleanup_empty_directories(self, base_dir: Path) -> int:
+        """
+        Remove empty directories recursively.
+
+        Args:
+            base_dir: Base directory to start cleanup from
+
+        Returns:
+            Number of directories removed
+        """
+        removed_count = 0
+
+        # Walk directory tree bottom-up so we can remove empty parent dirs
+        for dirpath, dirnames, filenames in os.walk(str(base_dir), topdown=False):
+            dir_path = Path(dirpath)
+
+            # Skip the base directory itself
+            if dir_path == base_dir:
+                continue
+
+            # Check if directory is empty (no files and no subdirs with files)
+            try:
+                if not any(dir_path.iterdir()):
+                    logger.info(f"Removing empty directory: {dir_path}")
+                    dir_path.rmdir()
+                    removed_count += 1
+            except OSError as e:
+                logger.debug(f"Could not remove directory {dir_path}: {e}")
+
+        if removed_count > 0:
+            logger.info(f"Removed {removed_count} empty directories from {base_dir}")
+
+        return removed_count
