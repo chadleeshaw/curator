@@ -486,6 +486,8 @@ class FileOrganizer:
         logger.info(f"Found {len(magazines)} magazine records in database for category {category}")
 
         for magazine in magazines:
+            # Store original path for error messages (before any DB operations)
+            original_file_path = magazine.file_path
             try:
                 files_found += 1
                 current_path = Path(magazine.file_path)
@@ -505,8 +507,9 @@ class FileOrganizer:
                 # Build full title with country (e.g., "Magazine US", "Magazine Germany")
                 full_title = magazine.title
                 if country:
-                    # Use country code directly (e.g., "US", "DE", "GB")
-                    full_title = f"{magazine.title} {country}"
+                    # Only append country if not already in title
+                    if not magazine.title.endswith(f" {country}"):
+                        full_title = f"{magazine.title} {country}"
 
                 # Build expected path based on pattern
                 metadata = {
@@ -568,6 +571,16 @@ class FileOrganizer:
                     # Get unique target path if file exists
                     final_path = self._get_unique_target_path(target_dir, filename)
 
+                    # Check if target path already exists in database (to avoid UNIQUE constraint error)
+                    existing_record = db_session.query(Magazine).filter_by(file_path=str(final_path)).first()
+                    if existing_record and existing_record.id != magazine.id:
+                        logger.warning(
+                            f"Target path already exists in database for different record: {final_path}. "
+                            f"Skipping reorganization of {current_path}"
+                        )
+                        files_skipped += 1
+                        continue
+
                     # Track old directory for cleanup
                     old_dir = current_path.parent
                     old_directories.add(old_dir)
@@ -594,7 +607,9 @@ class FileOrganizer:
                 files_reorganized += 1
 
             except Exception as e:
-                error_msg = f"Error reorganizing {magazine.file_path}: {e}"
+                # Rollback the session to clear any pending changes
+                db_session.rollback()
+                error_msg = f"Error reorganizing {original_file_path}: {e}"
                 logger.error(error_msg, exc_info=True)
                 errors.append(error_msg)
 
