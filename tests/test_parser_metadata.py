@@ -264,7 +264,6 @@ class TestMetadataExtractorMultiMonth:
         assert result["issue_date"].year == 2023
         assert result["issue_date"].month == 3
 
-
     def test_seasonal_still_works(self):
         """Test that seasonal parsing still works."""
         extractor = MetadataExtractor()

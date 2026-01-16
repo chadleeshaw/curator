@@ -105,32 +105,50 @@ async def list_periodicals(
 
             # For grouping, use tracking.title when tracking_id exists, otherwise use magazine.title
             # This ensures merged items show under the primary tracking title
-            # Subquery to find the max issue_date AND max id (as tiebreaker) for each group
-            # The max id ensures that if multiple issues have the same date, we only show one
-            subquery = (
+            # Subquery 1: Find the max issue_date for each group
+            date_subquery = (
                 db_session.query(
                     case((Magazine.tracking_id.isnot(None), Magazine.tracking_id), else_=Magazine.id).label(
                         "group_key"
                     ),
                     Magazine.language,
                     func.max(Magazine.issue_date).label("max_date"),
+                )
+                .group_by("group_key", Magazine.language)
+                .subquery()
+            )
+
+            # Subquery 2: Among rows with max_date, find the max id (tiebreaker for same date)
+            id_subquery = (
+                db_session.query(
+                    case((Magazine.tracking_id.isnot(None), Magazine.tracking_id), else_=Magazine.id).label(
+                        "group_key"
+                    ),
+                    Magazine.language,
                     func.max(Magazine.id).label("max_id"),
+                )
+                .join(
+                    date_subquery,
+                    (
+                        case((Magazine.tracking_id.isnot(None), Magazine.tracking_id), else_=Magazine.id)
+                        == date_subquery.c.group_key
+                    )
+                    & (Magazine.language == date_subquery.c.language)
+                    & (Magazine.issue_date == date_subquery.c.max_date),
                 )
                 .group_by("group_key", Magazine.language)
                 .subquery()
             )
 
             # Join to get full magazine record for each group's latest issue
-            # Use both date AND id to ensure only one row per group (handles multiple issues with same date)
             query = db_session.query(Magazine).join(
-                subquery,
+                id_subquery,
                 (
                     case((Magazine.tracking_id.isnot(None), Magazine.tracking_id), else_=Magazine.id)
-                    == subquery.c.group_key
+                    == id_subquery.c.group_key
                 )
-                & (Magazine.language == subquery.c.language)
-                & (Magazine.issue_date == subquery.c.max_date)
-                & (Magazine.id == subquery.c.max_id),
+                & (Magazine.language == id_subquery.c.language)
+                & (Magazine.id == id_subquery.c.max_id),
             )
 
             # Left join with tracking to get the primary title for display

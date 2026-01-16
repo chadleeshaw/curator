@@ -74,9 +74,8 @@ class TestSpecialEditionDetection:
         assert not is_special_edition("Esquire South Africa")
         assert not is_special_edition("GQ Africa")
         assert not is_special_edition("Cosmopolitan South Africa")
-        
+
         # Other regional editions
         assert not is_special_edition("Wired UK")
         assert not is_special_edition("National Geographic Europe")
         assert not is_special_edition("Time Asia")
-
