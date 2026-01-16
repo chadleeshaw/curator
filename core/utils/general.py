@@ -6,6 +6,7 @@ This module provides common utility functions used across the application.
 
 import hashlib
 import logging
+import shutil
 from pathlib import Path
 from typing import Optional
 
@@ -35,8 +36,9 @@ def cleanup_empty_directories(start_path: Path, base_dir: Path) -> None:
     """
     Remove empty directories from start_path up to base_dir.
 
-    Recursively removes empty parent directories starting from start_path
-    and working upward until reaching base_dir or encountering a non-empty directory.
+    Recursively removes empty directories (including nested empty subdirectories)
+    starting from start_path and working upward until reaching base_dir or
+    encountering a directory with files.
 
     Args:
         start_path: Starting directory to check for emptiness
@@ -47,18 +49,25 @@ def cleanup_empty_directories(start_path: Path, base_dir: Path) -> None:
 
     Examples:
         >>> cleanup_empty_directories(Path("/data/magazines/title/2024"), Path("/data"))
-        # Removes /data/magazines/title/2024 if empty, then /data/magazines/title if empty, etc.
+        # Removes /data/magazines/title/2024 if empty (including nested empty dirs),
+        # then /data/magazines/title if empty, etc.
     """
     try:
         current = start_path
         while current != base_dir and current.exists():
-            # Only delete if directory is empty
-            if current.is_dir() and not any(current.iterdir()):
-                logger.info(f"Removing empty directory: {current}")
-                current.rmdir()
-                current = current.parent
+            if current.is_dir():
+                # Check if directory contains any files (recursively)
+                has_files = any(item.is_file() for item in current.rglob("*"))
+
+                if not has_files:
+                    # Directory only contains empty subdirectories or is completely empty
+                    logger.info(f"Removing empty directory tree: {current}")
+                    shutil.rmtree(current)
+                    current = current.parent
+                else:
+                    # Stop if we find a directory with files
+                    break
             else:
-                # Stop if we find a non-empty directory
                 break
     except Exception as e:
         logger.warning(f"Error cleaning up empty directories: {e}")

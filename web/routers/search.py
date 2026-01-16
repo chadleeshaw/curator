@@ -14,6 +14,7 @@ from web.schemas import APIError, SearchRequest
 from core.constants.country import LANGUAGE_TO_COUNTRY, COUNTRY_INDICATORS
 from core.constants.language import LANGUAGE_KEYWORDS
 from core.utils import run_in_thread
+from core.parsers.date import normalize_month_name
 
 router = APIRouter(prefix="/api", tags=["search"])
 logger = logging.getLogger(__name__)
@@ -37,6 +38,30 @@ def set_dependencies(
     _metadata_providers = metadata_providers
     _title_matcher = title_matcher
     _session_factory = session_factory
+
+
+def _get_fuzzy_group_id(title: str) -> str:
+    """
+    Get a normalized group ID for fuzzy matching duplicates.
+    Uses title matching to create consistent grouping.
+
+    Args:
+        title: Title to normalize
+
+    Returns:
+        Group ID string
+    """
+    # Normalize title: lowercase, remove special chars, collapse spaces
+    normalized = " ".join(title.lower().split())
+
+    # Normalize common month abbreviations to full names for better matching
+    words = []
+    for word in normalized.split():
+        words.append(normalize_month_name(word))
+
+    # Keep first few significant words as group ID
+    group_words = [w for w in words if len(w) > 2][:3]
+    return "-".join(group_words)
 
 
 def _filter_edition_variants(results: List[Dict[str, Any]], query: str) -> List[Dict[str, Any]]:
@@ -386,13 +411,34 @@ async def search_periodical_providers(
             finally:
                 db_session.close()
 
+        def _get_failed_downloads_from_db():
+            db_session = _session_factory()
+            try:
+                from models.database import DownloadSubmission
+
+                # Get failed downloads (status=failed or attempt_count >= 2)
+                failed_downloads = (
+                    db_session.query(DownloadSubmission)
+                    .filter(
+                        (DownloadSubmission.status == DownloadSubmission.StatusEnum.FAILED)
+                        | (DownloadSubmission.attempt_count >= 2)
+                    )
+                    .all()
+                )
+                return failed_downloads
+            finally:
+                db_session.close()
+
         all_magazines_in_db = await run_in_thread(_get_magazines_from_db)
+        all_failed_downloads = await run_in_thread(_get_failed_downloads_from_db)
 
         # For "in library" detection: scope to tracking_id if specified
         if tracking_id:
             scoped_magazines = [m for m in all_magazines_in_db if m.tracking_id == tracking_id]
+            scoped_failed = [d for d in all_failed_downloads if d.tracking_id == tracking_id]
         else:
             scoped_magazines = all_magazines_in_db
+            scoped_failed = all_failed_downloads
 
         # Create a more specific set: title + date for exact matching (scoped to tracking)
         existing_title_dates = {
@@ -404,6 +450,9 @@ async def search_periodical_providers(
         }
         # Also keep simple title set for backward compatibility (scoped to tracking)
         existing_titles = {m.title.lower() for m in scoped_magazines}
+
+        # Create set of failed downloads using fuzzy match groups (scoped to tracking)
+        failed_fuzzy_groups = {d.fuzzy_match_group for d in scoped_failed if d.fuzzy_match_group}
 
         # Search library for matching titles using fuzzy matching (scoped to tracking)
         matching_library_issues = []
@@ -429,6 +478,10 @@ async def search_periodical_providers(
             title_lower = result.title.lower()
             is_downloaded = (title_lower, pub_date_str) in existing_title_dates
 
+            # Check if this download has failed before
+            fuzzy_group = _get_fuzzy_group_id(result.title)
+            has_failed = fuzzy_group in failed_fuzzy_groups
+
             result_dicts.append(
                 {
                     "title": result.title,
@@ -437,6 +490,7 @@ async def search_periodical_providers(
                     "publication_date": (result.publication_date.isoformat() if result.publication_date else None),
                     "metadata": result.raw_metadata or {},
                     "already_downloaded": is_downloaded,
+                    "download_failed": has_failed,
                     "from_provider": True,
                 }
             )
@@ -527,6 +581,7 @@ async def search_periodical_providers(
                         "publication_date": lib_pub_date,
                         "metadata": mag.extra_metadata or {},
                         "already_downloaded": True,
+                        "download_failed": False,  # Library items never failed
                         "from_provider": False,
                     }
                 )

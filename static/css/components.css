@@ -1418,8 +1418,18 @@
   border-left: 3px solid var(--success-500);
 }
 
+.btn-variant-failed {
+  background: rgba(244, 67, 54, 0.1);
+  border-left: 3px solid #f44336;
+}
+
 .variant-in-library {
   color: var(--success-500);
+  font-weight: 600;
+}
+
+.variant-failed {
+  color: #f44336;
   font-weight: 600;
 }
 

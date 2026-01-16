@@ -16,7 +16,12 @@ import pytest
 
 # Path setup handled by conftest.py
 
-from core.utils.general import hash_file_in_chunks, is_special_edition, find_pdf_epub_files
+from core.utils.general import (
+    hash_file_in_chunks,
+    is_special_edition,
+    find_pdf_epub_files,
+    cleanup_empty_directories,
+)
 
 
 class TestHashFileInChunks:
@@ -368,3 +373,159 @@ class TestUtilsIntegration:
         assert len(special_editions) == 2
         regular_issues = [f for f in found_files if not is_special_edition(f.stem)]
         assert len(regular_issues) == 1
+
+
+class TestCleanupEmptyDirectories:
+    """Test empty directory cleanup utility"""
+
+    def test_removes_empty_directory(self, tmp_path):
+        """Test removing a single empty directory."""
+        empty_dir = tmp_path / "empty"
+        empty_dir.mkdir()
+
+        cleanup_empty_directories(empty_dir, tmp_path)
+
+        assert not empty_dir.exists()
+
+    def test_removes_nested_empty_directories(self, tmp_path):
+        """Test removing nested empty subdirectories."""
+        parent = tmp_path / "parent"
+        child = parent / "child"
+        grandchild = child / "grandchild"
+        grandchild.mkdir(parents=True)
+
+        cleanup_empty_directories(grandchild, tmp_path)
+
+        # All nested empty directories should be removed
+        assert not grandchild.exists()
+        assert not child.exists()
+        assert not parent.exists()
+
+    def test_stops_at_directory_with_files(self, tmp_path):
+        """Test that cleanup stops when it encounters a directory with files."""
+        parent = tmp_path / "parent"
+        child = parent / "child"
+        grandchild = child / "grandchild"
+        grandchild.mkdir(parents=True)
+
+        # Add a file in the parent directory
+        (parent / "keep.txt").write_text("important")
+
+        cleanup_empty_directories(grandchild, tmp_path)
+
+        # Empty subdirectories removed, but parent with file remains
+        assert not grandchild.exists()
+        assert not child.exists()
+        assert parent.exists()
+        assert (parent / "keep.txt").exists()
+
+    def test_removes_directory_tree_with_only_empty_subdirs(self, tmp_path):
+        """Test removing directory tree that only contains empty subdirectories."""
+        root = tmp_path / "root"
+        sub1 = root / "sub1"
+        sub2 = root / "sub2"
+        nested = sub1 / "nested"
+
+        # Create nested empty structure
+        nested.mkdir(parents=True)
+        sub2.mkdir()
+
+        cleanup_empty_directories(root, tmp_path)
+
+        # Entire tree removed since no files anywhere
+        assert not root.exists()
+
+    def test_preserves_directories_with_hidden_files(self, tmp_path):
+        """Test that directories with hidden files are preserved."""
+        parent = tmp_path / "parent"
+        child = parent / "child"
+        child.mkdir(parents=True)
+
+        # Add hidden file in child
+        (child / ".hidden").write_text("secret")
+
+        cleanup_empty_directories(child, tmp_path)
+
+        # Directory with hidden file should be preserved
+        assert child.exists()
+        assert parent.exists()
+        assert (child / ".hidden").exists()
+
+    def test_stops_at_base_directory(self, tmp_path):
+        """Test that cleanup stops at the base directory."""
+        base = tmp_path / "base"
+        subdir = base / "subdir"
+        subdir.mkdir(parents=True)
+
+        cleanup_empty_directories(subdir, base)
+
+        # Subdir removed but base remains
+        assert not subdir.exists()
+        assert base.exists()
+
+    def test_does_not_remove_base_directory(self, tmp_path):
+        """Test that base directory itself is never removed."""
+        base = tmp_path / "base"
+        base.mkdir()
+
+        cleanup_empty_directories(base, base)
+
+        # Base directory should still exist
+        assert base.exists()
+
+    def test_handles_nonexistent_directory(self, tmp_path):
+        """Test that function handles nonexistent directories gracefully."""
+        nonexistent = tmp_path / "nonexistent"
+
+        # Should not raise exception
+        cleanup_empty_directories(nonexistent, tmp_path)
+
+        assert not nonexistent.exists()
+
+    def test_complex_nested_structure(self, tmp_path):
+        """Test cleanup with complex nested structure."""
+        # Create structure:
+        # parent/
+        #   ├── empty_branch/
+        #   │   └── empty_leaf/
+        #   └── has_files/
+        #       ├── file.txt
+        #       └── empty_sub/
+
+        parent = tmp_path / "parent"
+        empty_branch = parent / "empty_branch"
+        empty_leaf = empty_branch / "empty_leaf"
+        has_files = parent / "has_files"
+        empty_sub = has_files / "empty_sub"
+
+        empty_leaf.mkdir(parents=True)
+        empty_sub.mkdir(parents=True)
+        (has_files / "file.txt").write_text("content")
+
+        # Clean from empty_leaf
+        cleanup_empty_directories(empty_leaf, tmp_path)
+
+        # Empty branch completely removed up to parent
+        assert not empty_leaf.exists()
+        assert not empty_branch.exists()
+
+        # Parent still exists because has_files directory contains a file
+        assert parent.exists()
+        assert has_files.exists()
+        assert (has_files / "file.txt").exists()
+
+    def test_cleanup_after_file_move(self, tmp_path):
+        """Test cleanup scenario similar to merge operation."""
+        # Simulate merge scenario: files moved, leaving empty structure
+        source_root = tmp_path / "Pb 15-01-02 United States"
+        year_dir = source_root / "2015"
+        year_dir.mkdir(parents=True)
+
+        # Simulate that files were moved out
+        # Now we have empty nested directories
+
+        cleanup_empty_directories(year_dir, tmp_path)
+
+        # All empty directories should be removed
+        assert not year_dir.exists()
+        assert not source_root.exists()

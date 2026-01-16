@@ -1104,14 +1104,17 @@ export class TrackingManager {
 
         const isLibraryOnly = !issue.url || issue.url === '';
         const isDownloaded = issue.already_downloaded;
+        const hasFailed = issue.download_failed || false;
 
         const backgroundColor = isLibraryOnly ? 'var(--surface)' : 'var(--surface-variant)';
         const borderColor = isLibraryOnly
           ? 'var(--border-color)'
           : isDownloaded
             ? '#4caf50'
-            : 'transparent';
-        const opacity = isLibraryOnly ? '0.85' : isDownloaded ? '0.7' : '1';
+            : hasFailed
+              ? '#f44336'
+              : 'transparent';
+        const opacity = isLibraryOnly ? '0.85' : isDownloaded ? '0.7' : hasFailed ? '0.85' : '1';
         const textColor = isLibraryOnly ? 'var(--text-secondary)' : 'var(--text-primary)';
 
         const providerDisplay = isLibraryOnly
@@ -1121,7 +1124,9 @@ export class TrackingManager {
           ? '<div style="font-size: 10px; margin-top: 6px; color: var(--text-secondary); font-weight: 600;">📚 In Library</div>'
           : isDownloaded
             ? '<div style="font-size: 10px; margin-top: 6px; color: #4caf50; font-weight: 600;">✓ Have</div>'
-            : '';
+            : hasFailed
+              ? '<div style="font-size: 10px; margin-top: 6px; color: #f44336; font-weight: 600;">✗ Failed</div>'
+              : '';
 
         // Show language variants badge if multiple editions exist
         const variantsBadge =
@@ -1149,7 +1154,7 @@ export class TrackingManager {
           window.issueVariants = window.issueVariants || {};
           window.issueVariants[issueKey] = issue.variants;
 
-          cardHtml += ` onclick='selectIssueWithVariants("${issueKey}", ${isDownloaded})'`;
+          cardHtml += ` onclick='selectIssueWithVariants("${issueKey}", ${isDownloaded}, ${hasFailed})'`;
         }
 
         cardHtml += `>
@@ -1304,7 +1309,7 @@ window.saveEditedTracking = async function () {
 };
 
 // Select and download issue with language variant selection
-window.selectIssueWithVariants = function (issueKey, alreadyDownloaded) {
+window.selectIssueWithVariants = function (issueKey, alreadyDownloaded, hasFailed) {
   const variants = window.issueVariants[issueKey];
 
   if (!variants || variants.length === 0) {
@@ -1319,7 +1324,8 @@ window.selectIssueWithVariants = function (issueKey, alreadyDownloaded) {
       variant.title,
       variant.provider,
       variant.url,
-      variant.already_downloaded || alreadyDownloaded
+      variant.already_downloaded || alreadyDownloaded,
+      variant.download_failed || hasFailed
     );
     return;
   }
@@ -1376,22 +1382,35 @@ window.selectIssueWithVariants = function (issueKey, alreadyDownloaded) {
     }
 
     const isDownloaded = variant.already_downloaded || alreadyDownloaded;
-    const downloaded = isDownloaded ? ' <span class="variant-in-library">✓ In Library</span>' : '';
+    const downloadFailed = variant.download_failed || hasFailed || false;
+    const statusBadge = isDownloaded
+      ? ' <span class="variant-in-library">✓ In Library</span>'
+      : downloadFailed
+        ? ' <span class="variant-failed">✗ Failed</span>'
+        : '';
 
     const btn = document.createElement('button');
-    // Different styling for re-download vs new download
+    // Different styling for re-download vs new download vs failed
     if (isDownloaded) {
       btn.className = 'btn-variant btn-variant-downloaded';
+    } else if (downloadFailed) {
+      btn.className = 'btn-variant btn-variant-failed';
     } else {
       btn.className = 'btn-variant btn-variant-new';
     }
     btn.innerHTML = `
-      <div class="variant-label">${displayLabel}${downloaded}</div>
+      <div class="variant-label">${displayLabel}${statusBadge}</div>
       <div class="variant-title">${variant.title}</div>
     `;
     btn.onclick = () => {
       window.closeLangVariantModal();
-      window.selectIssue(variant.title, variant.provider, variant.url, isDownloaded);
+      window.selectIssue(
+        variant.title,
+        variant.provider,
+        variant.url,
+        isDownloaded,
+        downloadFailed
+      );
     };
     optionsDiv.appendChild(btn);
   });
@@ -1403,7 +1422,7 @@ window.closeLangVariantModal = function () {
 };
 
 // Select and download issue
-window.selectIssue = async function (title, provider, url, alreadyDownloaded) {
+window.selectIssue = async function (title, provider, url, alreadyDownloaded, downloadFailed) {
   const isLibraryOnly = !url || url === '';
 
   if (isLibraryOnly) {
@@ -1421,6 +1440,9 @@ window.selectIssue = async function (title, provider, url, alreadyDownloaded) {
   if (alreadyDownloaded) {
     confirmMessage +=
       '<p style="color: #ff9800; margin-top: 10px;">⚠️ You already have this issue in your library.</p><p>Re-download it anyway?</p>';
+  } else if (downloadFailed) {
+    confirmMessage +=
+      '<p style="color: #f44336; margin-top: 10px;">⚠️ This download failed previously.</p><p>The file may be corrupt or unavailable. Try again anyway?</p>';
   } else {
     confirmMessage += '<p style="margin-top: 10px;">Download this issue?</p>';
   }
