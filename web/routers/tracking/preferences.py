@@ -41,11 +41,7 @@ async def save_tracking_preferences(
             db_session = _shared._session_factory()
             try:
                 olid = request.olid or generate_olid(request.title)
-                existing = (
-                    db_session.query(MagazineTracking)
-                    .filter(MagazineTracking.olid == olid)
-                    .first()
-                )
+                existing = db_session.query(MagazineTracking).filter(MagazineTracking.olid == olid).first()
 
                 if existing:
                     existing.title = request.title
@@ -85,9 +81,7 @@ async def save_tracking_preferences(
                     "track_all_editions": tracking.track_all_editions,
                     "track_new_only": tracking.track_new_only,
                     "selected_editions": tracking.selected_editions,
-                    "selected_count": len(
-                        [v for v in tracking.selected_editions.values() if v]
-                    ),
+                    "selected_count": len([v for v in tracking.selected_editions.values() if v]),
                 }
             finally:
                 db_session.close()
@@ -98,18 +92,13 @@ async def save_tracking_preferences(
         if _shared._auto_download_task_func and (
             result["track_all_editions"]
             or result["track_new_only"]
-            or (
-                result["selected_editions"]
-                and any(result["selected_editions"].values())
-            )
+            or (result["selected_editions"] and any(result["selected_editions"].values()))
         ):
             import asyncio
 
             try:
                 asyncio.create_task(_shared._auto_download_task_func())
-                logger.info(
-                    f"Triggered immediate auto-download check after saving tracking for '{result['title']}'"
-                )
+                logger.info(f"Triggered immediate auto-download check after saving tracking for '{result['title']}'")
             except Exception as e:
                 logger.warning(f"Could not trigger immediate auto-download: {e}")
 
@@ -133,15 +122,9 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
         def _update():
             db_session = _shared._session_factory()
             try:
-                tracking = (
-                    db_session.query(MagazineTracking)
-                    .filter(MagazineTracking.id == tracking_id)
-                    .first()
-                )
+                tracking = db_session.query(MagazineTracking).filter(MagazineTracking.id == tracking_id).first()
                 if not tracking:
-                    raise HTTPException(
-                        status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND
-                    )
+                    raise HTTPException(status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND)
 
                 # Store old title for file reorganization if title is being changed
                 old_title = tracking.title
@@ -162,9 +145,7 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
                 if "track_new_only" in updates:
                     tracking.track_new_only = updates["track_new_only"]
                 if "delete_from_client_on_completion" in updates:
-                    tracking.delete_from_client_on_completion = updates[
-                        "delete_from_client_on_completion"
-                    ]
+                    tracking.delete_from_client_on_completion = updates["delete_from_client_on_completion"]
 
                 # If title changed, reorganize all files for this tracking record
                 files_reorganized = 0
@@ -175,28 +156,17 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
                     from models.database import Magazine
 
                     # Get organize directory from config
-                    organize_base_dir = Path(
-                        _shared._storage_config.get("organize_dir", "./local/data")
-                    ).resolve()
+                    organize_base_dir = Path(_shared._storage_config.get("organize_dir", "./local/data")).resolve()
                     category_prefix = _shared._import_config.get("category_prefix", "_")
 
                     # Get all magazines linked to this tracking record
-                    magazines = (
-                        db_session.query(Magazine)
-                        .filter(Magazine.tracking_id == tracking_id)
-                        .all()
-                    )
+                    magazines = db_session.query(Magazine).filter(Magazine.tracking_id == tracking_id).all()
 
                     for magazine in magazines:
                         # Check if this is a special edition
                         is_special = False
-                        if magazine.extra_metadata and isinstance(
-                            magazine.extra_metadata, dict
-                        ):
-                            is_special = (
-                                magazine.extra_metadata.get("special_edition")
-                                is not None
-                            )
+                        if magazine.extra_metadata and isinstance(magazine.extra_metadata, dict):
+                            is_special = magazine.extra_metadata.get("special_edition") is not None
                         if not is_special:
                             is_special = is_special_edition(magazine.title)
 
@@ -264,16 +234,12 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
             )
 
         # Trigger immediate auto-download check if tracking settings changed
-        if _shared._auto_download_task_func and any(
-            k in updates for k in ["track_all_editions", "track_new_only"]
-        ):
+        if _shared._auto_download_task_func and any(k in updates for k in ["track_all_editions", "track_new_only"]):
             import asyncio
 
             try:
                 asyncio.create_task(_shared._auto_download_task_func())
-                logger.info(
-                    f"Triggered immediate auto-download check after updating tracking for '{tracking.title}'"
-                )
+                logger.info(f"Triggered immediate auto-download check after updating tracking for '{tracking.title}'")
             except Exception as e:
                 logger.warning(f"Could not trigger immediate auto-download: {e}")
 
@@ -291,9 +257,7 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
 
         if title_changed:
             response["files_reorganized"] = files_reorganized
-            response["message"] = (
-                f"Tracking updated successfully. Reorganized {files_reorganized} files."
-            )
+            response["message"] = f"Tracking updated successfully. Reorganized {files_reorganized} files."
 
         return response
     except HTTPException:

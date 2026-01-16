@@ -29,9 +29,7 @@ def test_db():
         db_path = tmp_file.name
 
     try:
-        engine = create_engine(
-            f"sqlite:///{db_path}", connect_args={"check_same_thread": False}
-        )
+        engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
         Base.metadata.create_all(engine)
         session_factory = sessionmaker(bind=engine)
         yield engine, session_factory
@@ -107,17 +105,13 @@ class TestTitleNormalization:
         if len(imported_titles) == 0:
             pytest.skip("No files imported - PDF extraction failed with test files")
 
-        assert len(unique_titles) == 1, (
-            f"Expected 1 unique title, got {len(unique_titles)}: {unique_titles}"
-        )
+        assert len(unique_titles) == 1, f"Expected 1 unique title, got {len(unique_titles)}: {unique_titles}"
 
         # The normalized title should contain "Wired" - UK
         normalized_title = list(unique_titles)[0]
         # Be lenient - metadata extraction from test files may use temp dir names
         if "Tmp" in normalized_title:
-            pytest.skip(
-                "Title extracted from temp directory - PDF metadata extraction failed"
-            )
+            pytest.skip("Title extracted from temp directory - PDF metadata extraction failed")
         assert "Wired" in normalized_title or "wired" in normalized_title.lower()
         assert "UK" in normalized_title.upper()  # Case-insensitive check
         # Should NOT contain issue numbers or dates
@@ -158,9 +152,7 @@ class TestTitleNormalization:
         # Simulate library view query (groups by title)
         # This is what the /api/periodicals endpoint does
         subquery = (
-            session.query(
-                Magazine.title, func.max(Magazine.issue_date).label("max_date")
-            )
+            session.query(Magazine.title, func.max(Magazine.issue_date).label("max_date"))
             .group_by(Magazine.title)
             .subquery()
         )
@@ -169,26 +161,19 @@ class TestTitleNormalization:
             session.query(Magazine)
             .join(
                 subquery,
-                (Magazine.title == subquery.c.title)
-                & (Magazine.issue_date == subquery.c.max_date),
+                (Magazine.title == subquery.c.title) & (Magazine.issue_date == subquery.c.max_date),
             )
             .all()
         )
 
         # Should have only 1 group (all grouped under same title)
         if len(grouped_periodicals) > 0 and "Tmp" in grouped_periodicals[0].title:
-            pytest.skip(
-                "Title extracted from temp directory - PDF metadata extraction failed"
-            )
-        assert len(grouped_periodicals) == 1, (
-            f"Expected 1 periodical group, got {len(grouped_periodicals)}"
-        )
+            pytest.skip("Title extracted from temp directory - PDF metadata extraction failed")
+        assert len(grouped_periodicals) == 1, f"Expected 1 periodical group, got {len(grouped_periodicals)}"
 
         # Get issue count for the group
         periodical = grouped_periodicals[0]
-        issue_count = (
-            session.query(Magazine).filter(Magazine.title == periodical.title).count()
-        )
+        issue_count = session.query(Magazine).filter(Magazine.title == periodical.title).count()
         assert issue_count == 3, f"Expected 3 issues in group, got {issue_count}"
 
         session.close()
@@ -205,9 +190,7 @@ class TestTitleNormalization:
         )
 
         # Import a file with messy title
-        test_file = (
-            temp_dirs["download_dir"] / "Unpack Wired No 11 2024 UK Hybrid Magazine.pdf"
-        )
+        test_file = temp_dirs["download_dir"] / "Unpack Wired No 11 2024 UK Hybrid Magazine.pdf"
         test_file.write_text("test content")
 
         success = importer.import_pdf(test_file, session, auto_track=True)
@@ -221,18 +204,14 @@ class TestTitleNormalization:
 
         # Check the organized file path
         organized_path = Path(magazine.file_path)
-        assert organized_path.exists(), (
-            f"Organized file should exist at {organized_path}"
-        )
+        assert organized_path.exists(), f"Organized file should exist at {organized_path}"
 
         # The path should contain the normalized title (not the messy one)
         path_str = str(organized_path)
 
         # Skip if title was extracted from temp directory
         if "Tmp" in str(magazine.title) or "tmp" in str(magazine.title).lower():
-            pytest.skip(
-                "Title extracted from temp directory - PDF metadata extraction failed"
-            )
+            pytest.skip("Title extracted from temp directory - PDF metadata extraction failed")
 
         # Should contain "Wired"
         assert "Wired" in path_str or "wired" in path_str.lower()
@@ -259,9 +238,7 @@ class TestTitleNormalization:
         test_file = temp_dirs["download_dir"] / "Wired No 5 2024 UK Hybrid Magazine.pdf"
         test_file.write_text("test content")
 
-        success = importer.import_pdf(
-            test_file, session, auto_track=True, tracking_mode="all"
-        )
+        success = importer.import_pdf(test_file, session, auto_track=True, tracking_mode="all")
         assert success, "Import should succeed"
 
         session.commit()
@@ -272,9 +249,7 @@ class TestTitleNormalization:
 
         # Skip if title was extracted from temp directory
         if "Tmp" in tracking.title or "tmp" in tracking.title.lower():
-            pytest.skip(
-                "Title extracted from temp directory - PDF metadata extraction failed"
-            )
+            pytest.skip("Title extracted from temp directory - PDF metadata extraction failed")
 
         # Tracking title should be normalized
         assert "Wired" in tracking.title or "wired" in tracking.title.lower()
@@ -316,16 +291,14 @@ class TestTitleNormalization:
         unique_titles_list = [t[0] for t in unique_titles]
 
         # All should be grouped under one title containing "2600"
-        assert len(unique_titles_list) == 1, (
-            f"Expected 1 unique title for 2600, got {len(unique_titles_list)}: {unique_titles_list}"
-        )
+        assert (
+            len(unique_titles_list) == 1
+        ), f"Expected 1 unique title for 2600, got {len(unique_titles_list)}: {unique_titles_list}"
 
         normalized_title = unique_titles_list[0]
         # Skip if title was extracted from temp directory
         if "Tmp" in normalized_title or "tmp" in normalized_title.lower():
-            pytest.skip(
-                "Title extracted from temp directory - PDF metadata extraction failed"
-            )
+            pytest.skip("Title extracted from temp directory - PDF metadata extraction failed")
         assert "2600" in normalized_title
 
         session.close()
@@ -348,9 +321,9 @@ class TestTitleNormalization:
 
         for input_title, expected_output in test_cases:
             cleaned = matcher.clean_release_title(input_title)
-            assert cleaned == expected_output, (
-                f"Expected '{expected_output}', got '{cleaned}' for input '{input_title}'"
-            )
+            assert (
+                cleaned == expected_output
+            ), f"Expected '{expected_output}', got '{cleaned}' for input '{input_title}'"
 
     def test_grouping_consistency(self):
         """Test that titles with similar content are normalized consistently for grouping"""
@@ -368,13 +341,9 @@ class TestTitleNormalization:
         # All should contain "Wired" and "UK" (case-insensitive)
         for cleaned in cleaned_titles:
             assert "Wired" in cleaned, f"'{cleaned}' should contain 'Wired'"
-            assert "UK" in cleaned.upper(), (
-                f"'{cleaned}' should contain 'UK' (case-insensitive)"
-            )
+            assert "UK" in cleaned.upper(), f"'{cleaned}' should contain 'UK' (case-insensitive)"
             # Should NOT contain issue numbers or metadata
-            assert (
-                "No" not in cleaned or "Nov" in cleaned
-            )  # "Nov" is OK, "No 11" is not
+            assert "No" not in cleaned or "Nov" in cleaned  # "Nov" is OK, "No 11" is not
             assert "Issue" not in cleaned
             assert "Hybrid" not in cleaned
             assert "Digital" not in cleaned

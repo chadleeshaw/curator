@@ -49,9 +49,7 @@ class OCRProcessor:
             "last_process_time": None,
         }
 
-        logger.info(
-            f"OCR processor initialized with {max_workers} workers, batch size {batch_size}"
-        )
+        logger.info(f"OCR processor initialized with {max_workers} workers, batch size {batch_size}")
 
     async def run(self) -> Dict[str, Any]:
         """

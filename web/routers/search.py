@@ -39,9 +39,7 @@ def set_dependencies(
     _session_factory = session_factory
 
 
-def _filter_edition_variants(
-    results: List[Dict[str, Any]], query: str
-) -> List[Dict[str, Any]]:
+def _filter_edition_variants(results: List[Dict[str, Any]], query: str) -> List[Dict[str, Any]]:
     """
     Filter out edition variants (kids, traveller, uk, etc.) from search results.
     Prioritizes the main edition when multiple variants of the same periodical are found.
@@ -170,8 +168,7 @@ def _filter_by_language_and_country(
             if detected_language in LANGUAGE_TO_COUNTRY:
                 detected_country = LANGUAGE_TO_COUNTRY[detected_language]
                 logger.debug(
-                    f"Inferred country {detected_country} from language {detected_language}: "
-                    f"{result['title'][:50]}"
+                    f"Inferred country {detected_country} from language {detected_language}: " f"{result['title'][:50]}"
                 )
 
         # If we detected a country but no language, infer language from country
@@ -179,8 +176,7 @@ def _filter_by_language_and_country(
             if detected_country in country_to_language:
                 detected_language = country_to_language[detected_country]
                 logger.debug(
-                    f"Inferred language {detected_language} from country {detected_country}: "
-                    f"{result['title'][:50]}"
+                    f"Inferred language {detected_language} from country {detected_country}: " f"{result['title'][:50]}"
                 )
 
         # Default to US/English if no indicators found (most common)
@@ -202,10 +198,7 @@ def _filter_by_language_and_country(
         # Keep result if it matches all specified filters
         if language_match and country_match:
             filtered.append(result)
-            logger.debug(
-                f"Match: '{result['title'][:50]}' - "
-                f"Detected: {detected_language}/{detected_country}"
-            )
+            logger.debug(f"Match: '{result['title'][:50]}' - " f"Detected: {detected_language}/{detected_country}")
         else:
             logger.debug(
                 f"Filtered out: '{result['title'][:50]}' - "
@@ -270,9 +263,7 @@ async def search(request: SearchRequest) -> Dict[str, Any]:
                             "url": result.url,
                             "provider": result.provider,
                             "publication_date": (
-                                result.publication_date.isoformat()
-                                if result.publication_date
-                                else None
+                                result.publication_date.isoformat() if result.publication_date else None
                             ),
                             "raw_metadata": result.raw_metadata,
                         }
@@ -288,9 +279,7 @@ async def search(request: SearchRequest) -> Dict[str, Any]:
             grouped_results = []
             for group_id, results in deduplicated.items():
                 if results:
-                    best = sorted(
-                        results, key=lambda x: x.get("match_score", 0), reverse=True
-                    )[0]
+                    best = sorted(results, key=lambda x: x.get("match_score", 0), reverse=True)[0]
                     grouped_results.append(best)
             return {
                 "mode": "automatic",
@@ -335,16 +324,10 @@ async def search(request: SearchRequest) -> Dict[str, Any]:
 )
 async def search_periodical_providers(
     query: str = Query(...),
-    language: str = Query(
-        None, description="Filter by language (e.g., English, German)"
-    ),
+    language: str = Query(None, description="Filter by language (e.g., English, German)"),
     country: str = Query(None, description="Filter by country code (e.g., US, UK, DE)"),
-    category: str = Query(
-        None, description="Filter by category (e.g., Magazines, Comics)"
-    ),
-    tracking_id: int = Query(
-        None, description="Scope library status to specific tracking ID"
-    ),
+    category: str = Query(None, description="Filter by category (e.g., Magazines, Comics)"),
+    tracking_id: int = Query(None, description="Scope library status to specific tracking ID"),
 ) -> Dict[str, Any]:
     """
     Search for periodical issues by querying SEARCH providers only (Newsnab, RSS).
@@ -362,9 +345,7 @@ async def search_periodical_providers(
     """
     try:
         if not query or len(query.strip()) < 2:
-            raise HTTPException(
-                status_code=400, detail="Query must be at least 2 characters"
-            )
+            raise HTTPException(status_code=400, detail="Query must be at least 2 characters")
 
         logger.debug(f"Searching for issues: {query}")
 
@@ -385,9 +366,7 @@ async def search_periodical_providers(
 
             # If category filter was used but no results found, try again without category
             if category and len(all_results) == 0:
-                logger.info(
-                    f"No results with category '{category}', expanding search to all categories"
-                )
+                logger.info(f"No results with category '{category}', expanding search to all categories")
                 for provider in _search_providers:
                     try:
                         provider_results = provider.search(query.strip(), category=None)
@@ -411,9 +390,7 @@ async def search_periodical_providers(
 
         # For "in library" detection: scope to tracking_id if specified
         if tracking_id:
-            scoped_magazines = [
-                m for m in all_magazines_in_db if m.tracking_id == tracking_id
-            ]
+            scoped_magazines = [m for m in all_magazines_in_db if m.tracking_id == tracking_id]
         else:
             scoped_magazines = all_magazines_in_db
 
@@ -438,9 +415,7 @@ async def search_periodical_providers(
         else:
             # Fallback to substring matching if no matcher available
             query_lower = query.strip().lower()
-            matching_library_issues = [
-                m for m in scoped_magazines if query_lower in m.title.lower()
-            ]
+            matching_library_issues = [m for m in scoped_magazines if query_lower in m.title.lower()]
 
         # Convert provider results to dictionaries
         result_dicts = []
@@ -459,11 +434,7 @@ async def search_periodical_providers(
                     "title": result.title,
                     "url": result.url,
                     "provider": result.provider,
-                    "publication_date": (
-                        result.publication_date.isoformat()
-                        if result.publication_date
-                        else None
-                    ),
+                    "publication_date": (result.publication_date.isoformat() if result.publication_date else None),
                     "metadata": result.raw_metadata or {},
                     "already_downloaded": is_downloaded,
                     "from_provider": True,
@@ -474,9 +445,7 @@ async def search_periodical_providers(
         # Default to US/English if not specified
         filter_language = language if language else "English"
         filter_country = country if country else "US"
-        result_dicts = _filter_by_language_and_country(
-            result_dicts, filter_language, filter_country
-        )
+        result_dicts = _filter_by_language_and_country(result_dicts, filter_language, filter_country)
         logger.debug(
             f"After language/country filter: {len(result_dicts)} results "
             f"(language={filter_language}, country={filter_country})"
@@ -544,9 +513,7 @@ async def search_periodical_providers(
             for provider_result in result_dicts:
                 provider_title = provider_result["title"].lower()
                 provider_date = provider_result.get("publication_date", "")
-                title_match, score = _title_matcher.match(
-                    mag.title.lower(), provider_title
-                )
+                title_match, score = _title_matcher.match(mag.title.lower(), provider_title)
                 if title_match and lib_pub_date == provider_date:
                     is_duplicate = True
                     break
@@ -565,9 +532,7 @@ async def search_periodical_providers(
                 )
 
         # Apply same language/country filter to library items
-        library_items_to_add = _filter_by_language_and_country(
-            library_items_to_add, filter_language, filter_country
-        )
+        library_items_to_add = _filter_by_language_and_country(library_items_to_add, filter_language, filter_country)
         result_dicts.extend(library_items_to_add)
 
         if result_dicts:
@@ -592,9 +557,7 @@ async def search_periodical_providers(
 
             # For "in library" detection: scope to tracking_id if specified
             if tracking_id:
-                scoped_magazines = [
-                    m for m in all_magazines_in_db if m.tracking_id == tracking_id
-                ]
+                scoped_magazines = [m for m in all_magazines_in_db if m.tracking_id == tracking_id]
             else:
                 scoped_magazines = all_magazines_in_db
 
@@ -619,9 +582,7 @@ async def search_periodical_providers(
             else:
                 # Fallback to substring matching if no matcher available
                 query_lower = query.strip().lower()
-                matching_library_issues = [
-                    m for m in scoped_magazines if query_lower in m.title.lower()
-                ]
+                matching_library_issues = [m for m in scoped_magazines if query_lower in m.title.lower()]
 
             # Convert provider results to dictionaries
             result_dicts = []
@@ -640,11 +601,7 @@ async def search_periodical_providers(
                         "title": result.title,
                         "url": result.url,
                         "provider": result.provider,
-                        "publication_date": (
-                            result.publication_date.isoformat()
-                            if result.publication_date
-                            else None
-                        ),
+                        "publication_date": (result.publication_date.isoformat() if result.publication_date else None),
                         "metadata": result.raw_metadata or {},
                         "already_downloaded": is_downloaded,
                         "from_provider": True,
@@ -655,9 +612,7 @@ async def search_periodical_providers(
             # Default to US/English if not specified
             filter_language = language if language else "English"
             filter_country = country if country else "US"
-            result_dicts = _filter_by_language_and_country(
-                result_dicts, filter_language, filter_country
-            )
+            result_dicts = _filter_by_language_and_country(result_dicts, filter_language, filter_country)
             logger.debug(
                 f"After language/country filter: {len(result_dicts)} results "
                 f"(language={filter_language}, country={filter_country})"
@@ -675,9 +630,7 @@ async def search_periodical_providers(
 
             # Sort by score (higher is better) and keep top results
             scored_results.sort(key=lambda x: x[1], reverse=True)
-            result_dicts = [
-                r[0] for r in scored_results[:50]
-            ]  # Keep top 50 by fuzzy score
+            result_dicts = [r[0] for r in scored_results[:50]]  # Keep top 50 by fuzzy score
 
             # Deduplicate results by title and date similarity
             # Group similar titles together and keep only the best result per group
@@ -701,9 +654,7 @@ async def search_periodical_providers(
                 for seen_key in seen_groups:
                     seen_title, seen_date = seen_key
                     # If titles match closely and dates match, it's a duplicate
-                    title_match, score = _title_matcher.match(
-                        normalized_title, seen_title
-                    )
+                    title_match, score = _title_matcher.match(normalized_title, seen_title)
                     if title_match and seen_date == pub_date:
                         is_duplicate = True
                         break
@@ -729,9 +680,7 @@ async def search_periodical_providers(
                 for provider_result in result_dicts:
                     provider_title = provider_result["title"].lower()
                     provider_date = provider_result.get("publication_date", "")
-                    title_match, score = _title_matcher.match(
-                        mag.title.lower(), provider_title
-                    )
+                    title_match, score = _title_matcher.match(mag.title.lower(), provider_title)
                     if title_match and lib_pub_date == provider_date:
                         is_duplicate = True
                         break
@@ -793,9 +742,7 @@ async def search_periodical_providers(
                 "application/json": {
                     "example": {
                         "periodical": "Wired",
-                        "editions": [
-                            {"title": "Wired - Jan 2024", "url": "http://..."}
-                        ],
+                        "editions": [{"title": "Wired - Jan 2024", "url": "http://..."}],
                         "total": 1,
                     }
                 }
@@ -824,9 +771,7 @@ async def get_periodical_editions(magazine_title: str) -> Dict[str, Any]:
 
         if not _search_providers:
             logger.error(ErrorMessages.SEARCH_PROVIDERS_UNAVAILABLE)
-            raise HTTPException(
-                status_code=503, detail=ErrorMessages.SEARCH_PROVIDERS_UNAVAILABLE
-            )
+            raise HTTPException(status_code=503, detail=ErrorMessages.SEARCH_PROVIDERS_UNAVAILABLE)
 
         # Search across search providers for specific editions
         results = []
@@ -835,16 +780,12 @@ async def get_periodical_editions(magazine_title: str) -> Dict[str, Any]:
                 provider_results = provider.search(magazine_title.strip())
                 results.extend(provider_results)
             except Exception as e:
-                logger.warning(
-                    f"Error searching provider {provider.__class__.__name__}: {e}"
-                )
+                logger.warning(f"Error searching provider {provider.__class__.__name__}: {e}")
 
         if results:
             return {"success": True, "results": results}
         else:
-            raise HTTPException(
-                status_code=404, detail=f"Could not find editions for {magazine_title}"
-            )
+            raise HTTPException(status_code=404, detail=f"Could not find editions for {magazine_title}")
 
     except HTTPException:
         raise

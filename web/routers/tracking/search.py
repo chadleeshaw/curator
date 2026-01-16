@@ -35,15 +35,9 @@ async def search_tracked_periodical_issues(tracking_id: int) -> Dict[str, Any]:
         def _search():
             db_session = _shared._session_factory()
             try:
-                tracking = (
-                    db_session.query(MagazineTracking)
-                    .filter(MagazineTracking.id == tracking_id)
-                    .first()
-                )
+                tracking = db_session.query(MagazineTracking).filter(MagazineTracking.id == tracking_id).first()
                 if not tracking:
-                    raise HTTPException(
-                        status_code=404, detail="Tracked magazine not found"
-                    )
+                    raise HTTPException(status_code=404, detail="Tracked magazine not found")
 
                 if not _shared._search_providers:
                     raise HTTPException(
@@ -57,9 +51,7 @@ async def search_tracked_periodical_issues(tracking_id: int) -> Dict[str, Any]:
                         results = provider.search(tracking.title)
                         all_results.extend(results)
                     except Exception as e:
-                        logger.warning(
-                            f"Provider {provider.__class__.__name__} error: {e}"
-                        )
+                        logger.warning(f"Provider {provider.__class__.__name__} error: {e}")
 
                 if all_results:
                     result_dicts = []
@@ -80,9 +72,7 @@ async def search_tracked_periodical_issues(tracking_id: int) -> Dict[str, Any]:
                                     "url": result.url,
                                     "provider": result.provider,
                                     "publication_date": (
-                                        result.publication_date.isoformat()
-                                        if result.publication_date
-                                        else None
+                                        result.publication_date.isoformat() if result.publication_date else None
                                     ),
                                     "metadata": result.raw_metadata or {},
                                 }

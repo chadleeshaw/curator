@@ -39,35 +39,23 @@ async def get_failed_downloads(include_bad: bool = True) -> Dict[str, Any]:
     """Get all failed downloads and bad files"""
     try:
         if not _shared._download_manager:
-            raise HTTPException(
-                status_code=503, detail=ErrorMessages.DOWNLOAD_MANAGER_UNAVAILABLE
-            )
+            raise HTTPException(status_code=503, detail=ErrorMessages.DOWNLOAD_MANAGER_UNAVAILABLE)
 
         def _query():
             db_session = _shared._session_factory()
             try:
                 # Get failed downloads (not yet marked as bad)
-                failed = _shared._download_manager.get_failed_downloads(
-                    db_session, include_bad_files=False
-                )
+                failed = _shared._download_manager.get_failed_downloads(db_session, include_bad_files=False)
 
                 # Get bad files (failed 3+ times)
-                bad_files = (
-                    _shared._download_manager.get_bad_files(db_session)
-                    if include_bad
-                    else []
-                )
+                bad_files = _shared._download_manager.get_bad_files(db_session) if include_bad else []
 
                 # Get tracking info for magazine names
                 tracking_map = {}
                 all_items = list(failed) + list(bad_files)
                 tracking_ids = {d.tracking_id for d in all_items if d.tracking_id}
                 if tracking_ids:
-                    trackings = (
-                        db_session.query(MagazineTracking)
-                        .filter(MagazineTracking.id.in_(tracking_ids))
-                        .all()
-                    )
+                    trackings = db_session.query(MagazineTracking).filter(MagazineTracking.id.in_(tracking_ids)).all()
                     tracking_map = {t.id: t.title for t in trackings}
 
                 return {
@@ -81,9 +69,7 @@ async def get_failed_downloads(include_bad: bool = True) -> Dict[str, Any]:
                             "url": d.source_url,
                             "attempt_count": d.attempt_count or 0,
                             "last_error": d.last_error,
-                            "failed_at": d.updated_at.isoformat()
-                            if d.updated_at
-                            else None,
+                            "failed_at": d.updated_at.isoformat() if d.updated_at else None,
                         }
                         for d in failed
                     ],
@@ -96,9 +82,7 @@ async def get_failed_downloads(include_bad: bool = True) -> Dict[str, Any]:
                             "url": d.source_url,
                             "attempt_count": d.attempt_count,
                             "last_error": d.last_error,
-                            "failed_at": d.updated_at.isoformat()
-                            if d.updated_at
-                            else None,
+                            "failed_at": d.updated_at.isoformat() if d.updated_at else None,
                         }
                         for d in bad_files
                     ],
@@ -128,16 +112,10 @@ async def delete_failed_download(submission_id: int) -> Dict[str, Any]:
         def _delete():
             db_session = _shared._session_factory()
             try:
-                submission = (
-                    db_session.query(DownloadSubmission)
-                    .filter(DownloadSubmission.id == submission_id)
-                    .first()
-                )
+                submission = db_session.query(DownloadSubmission).filter(DownloadSubmission.id == submission_id).first()
 
                 if not submission:
-                    raise HTTPException(
-                        status_code=404, detail=ErrorMessages.SUBMISSION_NOT_FOUND
-                    )
+                    raise HTTPException(status_code=404, detail=ErrorMessages.SUBMISSION_NOT_FOUND)
 
                 if submission.status != DownloadSubmission.StatusEnum.FAILED:
                     raise HTTPException(

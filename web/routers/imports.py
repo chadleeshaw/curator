@@ -22,9 +22,7 @@ _file_importer = None
 _storage_config = None
 
 
-def set_dependencies(
-    session_factory: Callable, file_importer: Any, storage_config: Dict[str, Any]
-) -> None:
+def set_dependencies(session_factory: Callable, file_importer: Any, storage_config: Dict[str, Any]) -> None:
     """Set dependencies from main app"""
     global _session_factory, _file_importer, _storage_config
     _session_factory = session_factory
@@ -48,9 +46,7 @@ async def import_from_downloads(
     """
     try:
         if not _file_importer:
-            raise HTTPException(
-                status_code=503, detail=ErrorMessages.FILE_IMPORTER_UNAVAILABLE
-            )
+            raise HTTPException(status_code=503, detail=ErrorMessages.FILE_IMPORTER_UNAVAILABLE)
 
         def process_imports():
             """Background task to process imports"""
@@ -127,16 +123,12 @@ async def import_from_organize_dir(
     """
     try:
         if not _file_importer:
-            raise HTTPException(
-                status_code=503, detail=ErrorMessages.FILE_IMPORTER_UNAVAILABLE
-            )
+            raise HTTPException(status_code=503, detail=ErrorMessages.FILE_IMPORTER_UNAVAILABLE)
 
         organize_dir = Path(_storage_config.get("organize_dir", "./local/data"))
 
         if not organize_dir.exists():
-            raise HTTPException(
-                status_code=400, detail=f"Organize directory not found: {organize_dir}"
-            )
+            raise HTTPException(status_code=400, detail=f"Organize directory not found: {organize_dir}")
 
         # Count PDFs available
         all_files = find_pdf_epub_files(organize_dir, recursive=True)
@@ -153,17 +145,14 @@ async def import_from_organize_dir(
             """Background task to process imports from organize directory"""
             try:
                 logger.info(
-                    f"Import settings: auto_track={options.auto_track}, "
-                    f"tracking_mode={options.tracking_mode}"
+                    f"Import settings: auto_track={options.auto_track}, " f"tracking_mode={options.tracking_mode}"
                 )
                 db_session = _session_factory()
                 try:
                     # Temporarily override organization pattern if provided
                     original_pattern = _file_importer.organization_pattern
                     if options.organization_pattern:
-                        _file_importer.organization_pattern = (
-                            options.organization_pattern
-                        )
+                        _file_importer.organization_pattern = options.organization_pattern
 
                     results = _file_importer.process_organized_files(
                         db_session,
@@ -176,18 +165,14 @@ async def import_from_organize_dir(
                     imported = data.get("imported", 0)
                     failed = data.get("failed", 0)
 
-                    logger.info(
-                        f"Organize directory import results: {imported} imported, {failed} failed"
-                    )
+                    logger.info(f"Organize directory import results: {imported} imported, {failed} failed")
 
                     # Restore original pattern
                     _file_importer.organization_pattern = original_pattern
                 finally:
                     db_session.close()
             except Exception as e:
-                logger.error(
-                    f"Error processing organize directory imports: {e}", exc_info=True
-                )
+                logger.error(f"Error processing organize directory imports: {e}", exc_info=True)
 
         background_tasks.add_task(process_organize_dir_imports)
 

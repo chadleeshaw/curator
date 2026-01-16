@@ -42,9 +42,7 @@ def test_db():
         db_path = tmp_file.name
 
     try:
-        engine = create_engine(
-            f"sqlite:///{db_path}", connect_args={"check_same_thread": False}
-        )
+        engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
         Base.metadata.create_all(engine)
         session_factory = sessionmaker(bind=engine)
         yield engine, session_factory
@@ -75,9 +73,7 @@ def temp_downloads_dir(tmp_path):
     (downloads_dir / "test1.pdf").write_bytes(b"%PDF-1.4\ntest content")
     (downloads_dir / "test2.epub").write_bytes(b"PK\x03\x04epub content")
     (downloads_dir / "magazines" / "mag1.pdf").write_bytes(b"%PDF-1.4\ntest content")
-    (downloads_dir / "magazines" / "science" / "science1.pdf").write_bytes(
-        b"%PDF-1.4\ntest content"
-    )
+    (downloads_dir / "magazines" / "science" / "science1.pdf").write_bytes(b"%PDF-1.4\ntest content")
     (downloads_dir / "comics" / "comic1.epub").write_bytes(b"PK\x03\x04epub content")
 
     # Create non-target files (should be ignored)
@@ -128,9 +124,7 @@ class TestFolderScanning:
     """Test recursive folder scanning functionality"""
 
     @pytest.mark.asyncio
-    async def test_scan_finds_pdf_files(
-        self, test_db, temp_downloads_dir, download_manager, mock_file_importer
-    ):
+    async def test_scan_finds_pdf_files(self, test_db, temp_downloads_dir, download_manager, mock_file_importer):
         """Test scanning finds all PDF files recursively"""
         engine, session_factory = test_db
         session = session_factory()
@@ -152,9 +146,7 @@ class TestFolderScanning:
         session.close()
 
     @pytest.mark.asyncio
-    async def test_scan_finds_epub_files(
-        self, test_db, temp_downloads_dir, download_manager, mock_file_importer
-    ):
+    async def test_scan_finds_epub_files(self, test_db, temp_downloads_dir, download_manager, mock_file_importer):
         """Test scanning finds all EPUB files recursively"""
         engine, session_factory = test_db
         session = session_factory()
@@ -198,9 +190,7 @@ class TestFolderScanning:
         session.close()
 
     @pytest.mark.asyncio
-    async def test_scan_handles_empty_directory(
-        self, test_db, tmp_path, download_manager, mock_file_importer
-    ):
+    async def test_scan_handles_empty_directory(self, test_db, tmp_path, download_manager, mock_file_importer):
         """Test scanning handles empty directory gracefully"""
         engine, session_factory = test_db
         session = session_factory()
@@ -222,9 +212,7 @@ class TestFolderScanning:
         session.close()
 
     @pytest.mark.asyncio
-    async def test_scan_handles_missing_directory(
-        self, test_db, tmp_path, download_manager, mock_file_importer
-    ):
+    async def test_scan_handles_missing_directory(self, test_db, tmp_path, download_manager, mock_file_importer):
         """Test scanning handles missing directory gracefully"""
         engine, session_factory = test_db
         session = session_factory()
@@ -273,14 +261,12 @@ class TestStatisticsTracking:
         await monitor.run()
 
         # Verify mock was called (files were found)
-        assert mock_file_importer.process_downloads.called, (
-            "process_downloads should have been called"
-        )
+        assert mock_file_importer.process_downloads.called, "process_downloads should have been called"
 
         # Stats should be updated after full run
-        assert monitor.stats["folder_files_imported"] == initial_count + 5, (
-            f"Expected {initial_count + 5}, got {monitor.stats['folder_files_imported']}"
-        )
+        assert (
+            monitor.stats["folder_files_imported"] == initial_count + 5
+        ), f"Expected {initial_count + 5}, got {monitor.stats['folder_files_imported']}"
 
     @pytest.mark.asyncio
     async def test_statistics_persist_across_runs(
@@ -402,9 +388,7 @@ class TestFileImporterIntegration:
         session.close()
 
     @pytest.mark.asyncio
-    async def test_passes_correct_file_paths(
-        self, test_db, temp_downloads_dir, download_manager, mock_file_importer
-    ):
+    async def test_passes_correct_file_paths(self, test_db, temp_downloads_dir, download_manager, mock_file_importer):
         """Test passes correct absolute file paths to importer"""
         engine, session_factory = test_db
         session = session_factory()
@@ -428,9 +412,7 @@ class TestFileImporterIntegration:
 class TestMonitorTaskInitialization:
     """Test DownloadMonitor initialization"""
 
-    def test_requires_downloads_dir_parameter(
-        self, test_db, test_config, download_manager, mock_file_importer
-    ):
+    def test_requires_downloads_dir_parameter(self, test_db, test_config, download_manager, mock_file_importer):
         """Test initialization requires downloads_dir parameter"""
         engine, session_factory = test_db
         downloads_dir = Path(test_config.get_storage()["download_dir"])
@@ -446,9 +428,7 @@ class TestMonitorTaskInitialization:
         assert monitor.downloads_dir is not None
         assert monitor.downloads_dir.name == "downloads"
 
-    def test_converts_string_to_path(
-        self, test_db, test_config, download_manager, mock_file_importer
-    ):
+    def test_converts_string_to_path(self, test_db, test_config, download_manager, mock_file_importer):
         """Test initialization converts string to Path object"""
         engine, session_factory = test_db
         downloads_dir = test_config.get_storage()["download_dir"]

@@ -27,9 +27,7 @@ def test_db():
         db_path = tmp_file.name
 
     try:
-        engine = create_engine(
-            f"sqlite:///{db_path}", connect_args={"check_same_thread": False}
-        )
+        engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
         Base.metadata.create_all(engine)
         session_factory = sessionmaker(bind=engine)
         yield engine, session_factory
@@ -139,9 +137,7 @@ class TestTrackingMergeIntegration:
             .all()
         )
 
-        assert len(library_groups_before) == 3, (
-            "Should show 3 separate groups before merge"
-        )
+        assert len(library_groups_before) == 3, "Should show 3 separate groups before merge"
         library_titles_before = {mag.title for mag in library_groups_before}
         assert library_titles_before == {"Wired", "Wired Magazine", "Wired UK"}
 
@@ -152,9 +148,7 @@ class TestTrackingMergeIntegration:
         result = asyncio.run(
             merge_tracking(
                 target_id=tracking_wired.id,
-                source_ids={
-                    "source_ids": [tracking_wired_mag.id, tracking_wired_uk.id]
-                },
+                source_ids={"source_ids": [tracking_wired_mag.id, tracking_wired_uk.id]},
             )
         )
 
@@ -177,9 +171,7 @@ class TestTrackingMergeIntegration:
             .all()
         )
 
-        assert len(library_groups_after) == 1, (
-            "Should show 1 consolidated group after merge"
-        )
+        assert len(library_groups_after) == 1, "Should show 1 consolidated group after merge"
         assert library_groups_after[0].title == "Wired"
 
         # Verify all magazines are grouped together
@@ -187,16 +179,10 @@ class TestTrackingMergeIntegration:
         assert len(all_mags) == 5
         for mag in all_mags:
             assert mag.title == "Wired", "All magazines should have normalized title"
-            assert mag.tracking_id == tracking_wired.id, (
-                "All should link to target tracking"
-            )
+            assert mag.tracking_id == tracking_wired.id, "All should link to target tracking"
 
         # Verify issue count for the group
-        wired_count = (
-            session.query(Magazine)
-            .filter(Magazine.title == "Wired", Magazine.language == "English")
-            .count()
-        )
+        wired_count = session.query(Magazine).filter(Magazine.title == "Wired", Magazine.language == "English").count()
         assert wired_count == 5, "Should have all 5 issues under one title"
 
         session.close()
@@ -251,11 +237,7 @@ class TestTrackingMergeIntegration:
         # Merge tracking records
         import asyncio
 
-        asyncio.run(
-            merge_tracking(
-                target_id=tracking_en.id, source_ids={"source_ids": [tracking_fr.id]}
-            )
-        )
+        asyncio.run(merge_tracking(target_id=tracking_en.id, source_ids={"source_ids": [tracking_fr.id]}))
 
         session.expire_all()
 
@@ -265,9 +247,7 @@ class TestTrackingMergeIntegration:
             assert mag.title == "Le Monde Diplomatique"
 
         # But library should still show 2 groups (different languages)
-        language_groups = (
-            session.query(Magazine.title, Magazine.language).distinct().all()
-        )
+        language_groups = session.query(Magazine.title, Magazine.language).distinct().all()
 
         assert len(language_groups) == 2, "Should maintain language-based grouping"
         languages = {group[1] for group in language_groups}
@@ -291,9 +271,7 @@ class TestTrackingMergeIntegration:
 
             # Create source folder structures
             wired_dir = tmpdir_path / "_Magazines" / "Wired" / "English" / "2024"
-            wired_mag_dir = (
-                tmpdir_path / "_Magazines" / "Wired Magazine" / "English" / "2024"
-            )
+            wired_mag_dir = tmpdir_path / "_Magazines" / "Wired Magazine" / "English" / "2024"
             wired_dir.mkdir(parents=True, exist_ok=True)
             wired_mag_dir.mkdir(parents=True, exist_ok=True)
 
@@ -364,11 +342,7 @@ class TestTrackingMergeIntegration:
                     from models.database import Magazine as Mag
 
                     # Get target tracking record
-                    target = (
-                        db_session.query(MagazineTracking)
-                        .filter(MagazineTracking.id == target_id)
-                        .first()
-                    )
+                    target = db_session.query(MagazineTracking).filter(MagazineTracking.id == target_id).first()
                     sources = (
                         db_session.query(MagazineTracking)
                         .filter(MagazineTracking.id.in_(source_ids["source_ids"]))
@@ -386,11 +360,7 @@ class TestTrackingMergeIntegration:
                     from core.utils.general import cleanup_empty_directories
 
                     for source in sources:
-                        magazines = (
-                            db_session.query(Mag)
-                            .filter(Mag.tracking_id == source.id)
-                            .all()
-                        )
+                        magazines = db_session.query(Mag).filter(Mag.tracking_id == source.id).all()
                         for magazine in magazines:
                             magazine.tracking_id = target.id
 
@@ -451,42 +421,24 @@ class TestTrackingMergeIntegration:
             assert result["files_reorganized"] == 1
 
             # Verify files were moved to new location (without language folder)
-            expected_new_pdf = (
-                tmpdir_path
-                / "_Magazines"
-                / "Wired"
-                / "2024"
-                / "Wired - February2024.pdf"
-            )
-            expected_new_jpg = (
-                tmpdir_path
-                / "_Magazines"
-                / "Wired"
-                / "2024"
-                / "Wired - February2024.jpg"
-            )
+            expected_new_pdf = tmpdir_path / "_Magazines" / "Wired" / "2024" / "Wired - February2024.pdf"
+            expected_new_jpg = tmpdir_path / "_Magazines" / "Wired" / "2024" / "Wired - February2024.jpg"
 
             assert expected_new_pdf.exists(), f"File should exist at {expected_new_pdf}"
-            assert expected_new_jpg.exists(), (
-                f"Cover should exist at {expected_new_jpg}"
-            )
+            assert expected_new_jpg.exists(), f"Cover should exist at {expected_new_jpg}"
 
             # Verify old files no longer exist
             assert not wired_mag_feb_pdf.exists(), "Old PDF should be moved"
             assert not wired_mag_feb_jpg.exists(), "Old cover should be moved"
 
             # Verify database paths were updated
-            mag2_updated = (
-                session.query(Magazine).filter(Magazine.id == mag2.id).first()
-            )
+            mag2_updated = session.query(Magazine).filter(Magazine.id == mag2.id).first()
             assert mag2_updated.file_path == str(expected_new_pdf)
             assert mag2_updated.cover_path == str(expected_new_jpg)
             assert mag2_updated.title == "Wired"
 
             # Verify empty source directory was cleaned up
-            assert not wired_mag_dir.exists(), (
-                "Empty source directory should be removed"
-            )
+            assert not wired_mag_dir.exists(), "Empty source directory should be removed"
 
             session.close()
 

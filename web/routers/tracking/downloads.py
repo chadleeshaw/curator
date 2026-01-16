@@ -49,24 +49,16 @@ logger = _shared.logger
         500: {"description": "Failed to update tracking", "model": APIError},
     },
 )
-async def track_single_issue(
-    tracking_id: int, edition_id: str, track: bool = Query(True)
-) -> Dict[str, Any]:
+async def track_single_issue(tracking_id: int, edition_id: str, track: bool = Query(True)) -> Dict[str, Any]:
     """Track or untrack a single issue/edition"""
     try:
 
         def _update():
             db_session = _shared._session_factory()
             try:
-                tracking = (
-                    db_session.query(MagazineTracking)
-                    .filter(MagazineTracking.id == tracking_id)
-                    .first()
-                )
+                tracking = db_session.query(MagazineTracking).filter(MagazineTracking.id == tracking_id).first()
                 if not tracking:
-                    raise HTTPException(
-                        status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND
-                    )
+                    raise HTTPException(status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND)
 
                 # Initialize selected_editions if None
                 if tracking.selected_editions is None:
@@ -88,18 +80,12 @@ async def track_single_issue(
 
                     try:
                         asyncio.create_task(_shared._auto_download_task_func())
-                        logger.info(
-                            f"Triggered immediate auto-download check after tracking edition {edition_id}"
-                        )
+                        logger.info(f"Triggered immediate auto-download check after tracking edition {edition_id}")
                     except Exception as e:
-                        logger.warning(
-                            f"Could not trigger immediate auto-download: {e}"
-                        )
+                        logger.warning(f"Could not trigger immediate auto-download: {e}")
 
                 action = "marked for tracking" if track else "unmarked from tracking"
-                logger.info(
-                    f"Issue {edition_id} {action} for periodical '{tracking.title}'"
-                )
+                logger.info(f"Issue {edition_id} {action} for periodical '{tracking.title}'")
 
                 return {
                     "success": True,
@@ -107,9 +93,7 @@ async def track_single_issue(
                     "tracking_id": tracking.id,
                     "edition_id": edition_id,
                     "tracked": track,
-                    "total_selected": len(
-                        [v for v in tracking.selected_editions.values() if v]
-                    ),
+                    "total_selected": len([v for v in tracking.selected_editions.values() if v]),
                 }
             finally:
                 db_session.close()

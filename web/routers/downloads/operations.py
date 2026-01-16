@@ -19,26 +19,16 @@ async def retry_download(submission_id: int) -> Dict[str, Any]:
     """Retry a failed download submission"""
     try:
         if not _shared._download_manager:
-            raise HTTPException(
-                status_code=503, detail=ErrorMessages.DOWNLOAD_MANAGER_UNAVAILABLE
-            )
+            raise HTTPException(status_code=503, detail=ErrorMessages.DOWNLOAD_MANAGER_UNAVAILABLE)
 
         def _retry():
             db_session = _shared._session_factory()
             try:
-                submission = (
-                    db_session.query(DownloadSubmission)
-                    .filter(DownloadSubmission.id == submission_id)
-                    .first()
-                )
+                submission = db_session.query(DownloadSubmission).filter(DownloadSubmission.id == submission_id).first()
                 if not submission:
-                    raise HTTPException(
-                        status_code=404, detail=ErrorMessages.SUBMISSION_NOT_FOUND
-                    )
+                    raise HTTPException(status_code=404, detail=ErrorMessages.SUBMISSION_NOT_FOUND)
 
-                result = _shared._download_manager.retry_submission(
-                    submission_id, db_session
-                )
+                result = _shared._download_manager.retry_submission(submission_id, db_session)
                 return {
                     "success": result["success"],
                     "message": result.get("message", "Retry submitted"),
@@ -63,15 +53,9 @@ async def delete_from_queue(submission_id: int) -> Dict[str, Any]:
         def _delete():
             db_session = _shared._session_factory()
             try:
-                submission = (
-                    db_session.query(DownloadSubmission)
-                    .filter(DownloadSubmission.id == submission_id)
-                    .first()
-                )
+                submission = db_session.query(DownloadSubmission).filter(DownloadSubmission.id == submission_id).first()
                 if not submission:
-                    raise HTTPException(
-                        status_code=404, detail=ErrorMessages.SUBMISSION_NOT_FOUND
-                    )
+                    raise HTTPException(status_code=404, detail=ErrorMessages.SUBMISSION_NOT_FOUND)
 
                 title = submission.result_title
                 db_session.delete(submission)
@@ -90,9 +74,7 @@ async def delete_from_queue(submission_id: int) -> Dict[str, Any]:
 
 
 @_shared.router.post("/queue/cleanup")
-async def cleanup_old_submissions(
-    days_old: int = 30, status_filter: str = None
-) -> Dict[str, Any]:
+async def cleanup_old_submissions(days_old: int = 30, status_filter: str = None) -> Dict[str, Any]:
     """Clean up old download submissions"""
     try:
 
@@ -101,13 +83,10 @@ async def cleanup_old_submissions(
             try:
                 cutoff_date = datetime.now(UTC) - timedelta(days=days_old)
 
-                query = db_session.query(DownloadSubmission).filter(
-                    DownloadSubmission.created_at < cutoff_date
-                )
+                query = db_session.query(DownloadSubmission).filter(DownloadSubmission.created_at < cutoff_date)
                 if status_filter:
                     query = query.filter(
-                        DownloadSubmission.status
-                        == DownloadSubmission.StatusEnum[status_filter.upper()]
+                        DownloadSubmission.status == DownloadSubmission.StatusEnum[status_filter.upper()]
                     )
 
                 count = query.count()

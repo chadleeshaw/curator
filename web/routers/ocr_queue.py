@@ -50,9 +50,7 @@ async def get_ocr_queue(status: Optional[str] = None):
                     status_enum = OCRJob.StatusEnum[status.upper()]
                     query = query.filter(OCRJob.status == status_enum)
                 except KeyError:
-                    raise HTTPException(
-                        status_code=400, detail=f"Invalid status: {status}"
-                    )
+                    raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
 
             # Order by priority (highest first) and creation time
             jobs = query.order_by(OCRJob.priority.desc(), OCRJob.created_at).all()
@@ -60,9 +58,7 @@ async def get_ocr_queue(status: Optional[str] = None):
             # Build response with magazine details
             result = []
             for job in jobs:
-                magazine = (
-                    db.query(Magazine).filter(Magazine.id == job.magazine_id).first()
-                )
+                magazine = db.query(Magazine).filter(Magazine.id == job.magazine_id).first()
                 if not magazine:
                     continue
 
@@ -77,9 +73,7 @@ async def get_ocr_queue(status: Optional[str] = None):
                         "magazine_id": job.magazine_id,
                         "magazine_title": magazine.title,
                         "magazine_issue": issue_display,
-                        "magazine_year": (
-                            magazine.issue_date.year if magazine.issue_date else None
-                        ),
+                        "magazine_year": (magazine.issue_date.year if magazine.issue_date else None),
                         "status": job.status.value,
                         "priority": job.priority,
                         "language": job.language,
@@ -87,15 +81,9 @@ async def get_ocr_queue(status: Optional[str] = None):
                         "last_error": job.last_error,
                         "ocr_metadata": job.ocr_metadata,
                         "processing_time_seconds": job.processing_time_seconds,
-                        "created_at": (
-                            job.created_at.isoformat() if job.created_at else None
-                        ),
-                        "started_at": (
-                            job.started_at.isoformat() if job.started_at else None
-                        ),
-                        "completed_at": (
-                            job.completed_at.isoformat() if job.completed_at else None
-                        ),
+                        "created_at": (job.created_at.isoformat() if job.created_at else None),
+                        "started_at": (job.started_at.isoformat() if job.started_at else None),
+                        "completed_at": (job.completed_at.isoformat() if job.completed_at else None),
                     }
                 )
 
@@ -155,9 +143,7 @@ async def retry_ocr_job(job_id: int):
             job = db.query(OCRJob).filter(OCRJob.id == job_id).first()
 
             if not job:
-                raise HTTPException(
-                    status_code=404, detail=ErrorMessages.OCR_JOB_NOT_FOUND
-                )
+                raise HTTPException(status_code=404, detail=ErrorMessages.OCR_JOB_NOT_FOUND)
 
             if job.status != OCRJob.StatusEnum.FAILED:
                 raise HTTPException(
@@ -216,21 +202,15 @@ async def delete_ocr_job(job_id: int):
             job = db.query(OCRJob).filter(OCRJob.id == job_id).first()
 
             if not job:
-                raise HTTPException(
-                    status_code=404, detail=ErrorMessages.OCR_JOB_NOT_FOUND
-                )
+                raise HTTPException(status_code=404, detail=ErrorMessages.OCR_JOB_NOT_FOUND)
 
             # Log appropriate message based on status
-            action = (
-                "cancelled" if job.status == OCRJob.StatusEnum.PROCESSING else "deleted"
-            )
+            action = "cancelled" if job.status == OCRJob.StatusEnum.PROCESSING else "deleted"
 
             db.delete(job)
             db.commit()
 
-            logger.info(
-                f"{action.capitalize()} OCR job {job_id} (status: {job.status.value})"
-            )
+            logger.info(f"{action.capitalize()} OCR job {job_id} (status: {job.status.value})")
 
             return {"message": f"Job {action} successfully"}
 
@@ -247,9 +227,7 @@ async def delete_ocr_job(job_id: int):
 
 
 @router.post("/queue/{magazine_id}")
-async def queue_magazine_ocr(
-    magazine_id: int, priority: int = OCRJob.PriorityEnum.NORMAL.value
-):
+async def queue_magazine_ocr(magazine_id: int, priority: int = OCRJob.PriorityEnum.NORMAL.value):
     """
     Manually queue OCR for a magazine.
 
@@ -285,9 +263,7 @@ async def queue_magazine_ocr(
                     db.query(OCRJob)
                     .filter(
                         OCRJob.magazine_id == magazine_id,
-                        OCRJob.status.in_(
-                            [OCRJob.StatusEnum.PENDING, OCRJob.StatusEnum.PROCESSING]
-                        ),
+                        OCRJob.status.in_([OCRJob.StatusEnum.PENDING, OCRJob.StatusEnum.PROCESSING]),
                     )
                     .first()
                 )
@@ -308,9 +284,7 @@ async def queue_magazine_ocr(
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(
-                f"Error queueing OCR for magazine {magazine_id}: {e}", exc_info=True
-            )
+            logger.error(f"Error queueing OCR for magazine {magazine_id}: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=str(e))
         finally:
             db.close()

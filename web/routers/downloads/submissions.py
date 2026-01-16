@@ -51,26 +51,16 @@ async def download_all_periodical_issues(
     """Search for and download all available issues of a tracked periodical"""
     try:
         if not _shared._download_manager:
-            raise HTTPException(
-                status_code=503, detail=ErrorMessages.DOWNLOAD_MANAGER_UNAVAILABLE
-            )
+            raise HTTPException(status_code=503, detail=ErrorMessages.DOWNLOAD_MANAGER_UNAVAILABLE)
 
         def _download():
             db_session = _shared._session_factory()
             try:
-                tracking = (
-                    db_session.query(MagazineTracking)
-                    .filter(MagazineTracking.id == request.tracking_id)
-                    .first()
-                )
+                tracking = db_session.query(MagazineTracking).filter(MagazineTracking.id == request.tracking_id).first()
                 if not tracking:
-                    raise HTTPException(
-                        status_code=404, detail="Tracking record not found"
-                    )
+                    raise HTTPException(status_code=404, detail="Tracking record not found")
 
-                results = _shared._download_manager.download_all_periodical_issues(
-                    request.tracking_id, db_session
-                )
+                results = _shared._download_manager.download_all_periodical_issues(request.tracking_id, db_session)
                 return {
                     "success": True,
                     "tracking_id": request.tracking_id,
@@ -98,31 +88,21 @@ async def download_single_issue(
     """Download a single issue"""
     try:
         if not _shared._download_manager:
-            raise HTTPException(
-                status_code=503, detail=ErrorMessages.DOWNLOAD_MANAGER_UNAVAILABLE
-            )
+            raise HTTPException(status_code=503, detail=ErrorMessages.DOWNLOAD_MANAGER_UNAVAILABLE)
 
         def _download():
             db_session = _shared._session_factory()
             try:
-                tracking = (
-                    db_session.query(MagazineTracking)
-                    .filter(MagazineTracking.id == request.tracking_id)
-                    .first()
-                )
+                tracking = db_session.query(MagazineTracking).filter(MagazineTracking.id == request.tracking_id).first()
                 if not tracking:
-                    raise HTTPException(
-                        status_code=404, detail="Tracking record not found"
-                    )
+                    raise HTTPException(status_code=404, detail="Tracking record not found")
 
                 search_result = {
                     "title": request.title,
                     "url": request.url,
                     "provider": request.provider or "manual",
                     "publication_date": (
-                        datetime.fromisoformat(request.publication_date)
-                        if request.publication_date
-                        else None
+                        datetime.fromisoformat(request.publication_date) if request.publication_date else None
                     ),
                     "raw_metadata": {},
                 }
@@ -131,9 +111,7 @@ async def download_single_issue(
                     request.tracking_id, search_result, db_session
                 )
                 if not submission:
-                    raise HTTPException(
-                        status_code=500, detail="Failed to submit download"
-                    )
+                    raise HTTPException(status_code=500, detail="Failed to submit download")
 
                 return DownloadSubmissionResponse(
                     submission_id=submission.id,

@@ -20,15 +20,9 @@ async def get_download_status_for_tracking(tracking_id: int) -> Dict[str, Any]:
         def _query():
             db_session = _shared._session_factory()
             try:
-                tracking = (
-                    db_session.query(MagazineTracking)
-                    .filter(MagazineTracking.id == tracking_id)
-                    .first()
-                )
+                tracking = db_session.query(MagazineTracking).filter(MagazineTracking.id == tracking_id).first()
                 if not tracking:
-                    raise HTTPException(
-                        status_code=404, detail="Tracking record not found"
-                    )
+                    raise HTTPException(status_code=404, detail="Tracking record not found")
 
                 submissions = (
                     db_session.query(DownloadSubmission)
@@ -42,9 +36,7 @@ async def get_download_status_for_tracking(tracking_id: int) -> Dict[str, Any]:
                     client_status = None
                     if _shared._download_client and sub.job_id:
                         try:
-                            client_status = _shared._download_client.get_status(
-                                sub.job_id
-                            )
+                            client_status = _shared._download_client.get_status(sub.job_id)
                         except Exception:
                             pass
 
@@ -54,13 +46,9 @@ async def get_download_status_for_tracking(tracking_id: int) -> Dict[str, Any]:
                             "title": sub.result_title,
                             "status": sub.status.value,
                             "job_id": sub.job_id,
-                            "progress": (
-                                client_status.get("progress", 0) if client_status else 0
-                            ),
+                            "progress": (client_status.get("progress", 0) if client_status else 0),
                             "file_path": sub.file_path,
-                            "created_at": (
-                                sub.created_at.isoformat() if sub.created_at else None
-                            ),
+                            "created_at": (sub.created_at.isoformat() if sub.created_at else None),
                         }
                     )
 
@@ -92,10 +80,7 @@ async def get_completed_downloads() -> Dict[str, Any]:
             try:
                 completed = (
                     db_session.query(DownloadSubmission)
-                    .filter(
-                        DownloadSubmission.status
-                        == DownloadSubmission.StatusEnum.COMPLETED
-                    )
+                    .filter(DownloadSubmission.status == DownloadSubmission.StatusEnum.COMPLETED)
                     .order_by(DownloadSubmission.updated_at.desc())
                     .limit(100)
                     .all()
@@ -109,9 +94,7 @@ async def get_completed_downloads() -> Dict[str, Any]:
                             "title": d.result_title,
                             "tracking_id": d.tracking_id,
                             "file_path": d.file_path,
-                            "completed_at": (
-                                d.updated_at.isoformat() if d.updated_at else None
-                            ),
+                            "completed_at": (d.updated_at.isoformat() if d.updated_at else None),
                         }
                         for d in completed
                     ],

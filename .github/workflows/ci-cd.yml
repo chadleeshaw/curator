@@ -63,8 +63,7 @@ jobs:
 
       - name: Check Python formatting
         run: |
-          PYTHON_FILES=$(find . -name '*.py' -not -path './.venv/*' -not -path './node_modules/*')
-          .venv/bin/python -m black --check --line-length=120 $PYTHON_FILES
+          find . -name '*.py' -not -path './.venv/*' -not -path './node_modules/*' -print0 | xargs -0 .venv/bin/python -m black --check --line-length=120
 
       - name: Run JavaScript linting
         run: npx eslint static/js/*.js
