@@ -75,7 +75,7 @@ for explicit_param, env_value, expected, description in test_cases:
     print(f"  Expected: {expected}, Got: {result}")
 
     if result != expected:
-        print(f"  ❌ FAILED")
+        print("  ❌ FAILED")
 
     print()
 
