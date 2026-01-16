@@ -1,5 +1,4 @@
 """Helper utilities for running blocking operations asynchronously."""
-""" You done messed up, aasync """
 
 import asyncio
 from typing import Callable, TypeVar

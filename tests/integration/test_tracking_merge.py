@@ -265,8 +265,6 @@ class TestTrackingMergeIntegration:
             assert mag.title == "Le Monde Diplomatique"
 
         # But library should still show 2 groups (different languages)
-        from sqlalchemy import func
-
         language_groups = (
             session.query(Magazine.title, Magazine.language).distinct().all()
         )
@@ -362,7 +360,8 @@ class TestTrackingMergeIntegration:
                 # Temporarily patch the organize_base_dir
                 db_session = session_factory()
                 try:
-                    from models.database import Magazine as Mag, DownloadSubmission
+                    from models.database import DownloadSubmission
+                    from models.database import Magazine as Mag
 
                     # Get target tracking record
                     target = (

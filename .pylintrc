@@ -37,7 +37,8 @@ disable=
     ungrouped-imports,
     consider-using-dict-items,
     line-too-long,
-    bare-except
+    bare-except,
+    no-name-in-module
     
 [FORMAT]
 max-line-length=120

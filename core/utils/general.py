@@ -64,7 +64,9 @@ def cleanup_empty_directories(start_path: Path, base_dir: Path) -> None:
         logger.warning(f"Error cleaning up empty directories: {e}")
 
 
-def hash_file_in_chunks(file_path: str, algorithm=hashlib.sha256, chunk_size: int = 8192) -> Optional[str]:
+def hash_file_in_chunks(
+    file_path: str, algorithm=hashlib.sha256, chunk_size: int = 8192
+) -> Optional[str]:
     """
     Calculate the hash of a file without loading the entire file into memory.
 
@@ -93,9 +95,6 @@ def hash_file_in_chunks(file_path: str, algorithm=hashlib.sha256, chunk_size: in
                 file_hash.update(chunk)
         return file_hash.hexdigest()
     except IOError as e:
-        import logging
-
-        logger = logging.getLogger(__name__)
         logger.error(f"Error hashing file {file_path}: {e}")
         return None
 
