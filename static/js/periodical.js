@@ -64,12 +64,6 @@ document.addEventListener('click', (event) => {
   }
 });
 
-// Extract base title without year/issue code
-function extractBaseTitleFromMagazineTitle(fullTitle) {
-  // Remove patterns like " 2000-01", " 2024-12", etc.
-  return fullTitle.replace(/\s+\d{4}-\d{2}$/i, '').trim();
-}
-
 function renderIssues() {
   const container = document.getElementById('issues-container');
 
@@ -81,19 +75,8 @@ function renderIssues() {
     return;
   }
 
-  // Extract and display clean title
-  const sampleIssues =
-    yearsData.length > 0 && yearsData[0].issues.length > 0
-      ? yearsData[0].issues
-      : specialEditionsData;
-
-  if (sampleIssues && sampleIssues.length > 0) {
-    const firstIssueTitle = sampleIssues[0].title;
-    const baseTitleElement = document.getElementById('periodical-title');
-    if (baseTitleElement && firstIssueTitle) {
-      baseTitleElement.textContent = extractBaseTitleFromMagazineTitle(firstIssueTitle);
-    }
-  }
+  // Title is already set correctly by the backend from MagazineTracking.title
+  // No need to extract it from issue titles
 
   // Render special editions section first, if any exist
   if (specialEditionsData && specialEditionsData.length > 0) {

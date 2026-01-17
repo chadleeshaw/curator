@@ -18,7 +18,7 @@ export class OCRQueueManager {
     /** @type {number} Maximum OCR retry attempts */
     this.maxRetries = 3; // Default value, will be loaded from API
     /** @type {string} Current filter (all, active, failed, completed) */
-    this.currentFilter = 'active';
+    this.currentFilter = 'all';
 
     // Load constants from API
     this.loadConstants();
@@ -417,79 +417,6 @@ export class OCRQueueManager {
    */
   closeJobDetailsModal() {
     document.getElementById('ocr-job-details-modal')?.classList.add(CSS_CLASSES.HIDDEN);
-  }
-
-  /**
-   * Show detailed information for a specific OCR job
-   * @param {number} jobId - OCR job ID
-   */
-  async showJobDetails(jobId) {
-    try {
-      const response = await APIClient.authenticatedFetch('/api/ocr/queue');
-      const data = await response.json();
-      const job = data.jobs.find((j) => j.id === jobId);
-
-      if (!job) {
-        UIUtils.showToast('Job not found', 'error');
-        return;
-      }
-
-      const modal = UIUtils.createModal();
-
-      // Format metadata for display
-      let metadataHtml = '<p style="color: var(--text-secondary);">No OCR metadata available</p>';
-      if (job.ocr_metadata) {
-        metadataHtml = `<pre style="background: var(--surface-variant); padding: 12px; border-radius: 4px; overflow-x: auto; font-size: 0.85em; max-height: 400px; overflow-y: auto;">${JSON.stringify(job.ocr_metadata, null, 2)}</pre>`;
-      }
-
-      // Format error if present
-      let errorHtml = '';
-      if (job.last_error) {
-        errorHtml = `
-          <div style="margin-top: 20px;">
-            <h4 style="color: var(--status-failed); margin-bottom: 10px;">❌ Error Details</h4>
-            <pre style="background: var(--surface-variant); padding: 12px; border-radius: 4px; overflow-x: auto; font-size: 0.85em; color: var(--text-secondary);">${job.last_error}</pre>
-          </div>
-        `;
-      }
-
-      const html = `
-        <div class="modal-header">
-          <h3>OCR Job Details</h3>
-          <p style="font-weight: 600; margin-top: 10px;">${job.magazine_title}</p>
-          <p style="color: var(--text-secondary); font-size: 0.9em;">${job.magazine_issue || 'Unknown Issue'} ${job.magazine_year ? `(${job.magazine_year})` : ''}</p>
-        </div>
-        <div class="modal-body" style="max-height: 500px; overflow-y: auto; margin: 20px 0;">
-          <div style="display: grid; grid-template-columns: auto 1fr; gap: 10px 20px; margin-bottom: 20px;">
-            <strong>Status:</strong>
-            <span>${job.status}</span>
-            <strong>Priority:</strong>
-            <span>${this.getPriorityBadge(job.priority)}</span>
-            <strong>Language:</strong>
-            <span>${job.language || 'N/A'}</span>
-            <strong>Attempts:</strong>
-            <span>${job.attempt_count}/${this.maxRetries}</span>
-            ${job.processing_time_seconds ? `<strong>Processing Time:</strong><span>${job.processing_time_seconds}s</span>` : ''}
-            ${job.created_at ? `<strong>Created:</strong><span>${new Date(job.created_at).toLocaleString()}</span>` : ''}
-            ${job.completed_at ? `<strong>Completed:</strong><span>${new Date(job.completed_at).toLocaleString()}</span>` : ''}
-          </div>
-
-          <h4 style="margin-bottom: 10px;">📄 Extracted Metadata</h4>
-          ${metadataHtml}
-
-          ${errorHtml}
-        </div>
-        <div class="modal-footer" style="display: flex; gap: 10px; justify-content: flex-end; padding-top: 20px; border-top: 1px solid var(--border-color);">
-          ${job.status === 'failed' ? `<button onclick="ocrQueue.retryJob(${job.id}); UIUtils.closeModal();" class="btn-primary">🔄 Retry</button>` : ''}
-          <button onclick="UIUtils.closeModal()" class="btn-secondary">Close</button>
-        </div>
-      `;
-
-      modal.innerHTML = html;
-    } catch (error) {
-      console.error('[OCR Queue] Error loading job details:', error);
-      UIUtils.showToast('Failed to load job details', 'error');
-    }
   }
 
   /**

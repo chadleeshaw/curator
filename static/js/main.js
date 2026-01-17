@@ -164,10 +164,11 @@ function showQueueView(queueType) {
 
   // Load data and start refresh for active queue
   if (queueType === 'download') {
-    downloads.setFilter('all'); // Always default to 'all' filter when viewing download queue
+    downloads.setFilter('all');
     downloads.loadDownloadQueue();
     downloads.startAutoRefresh();
   } else if (queueType === 'ocr') {
+    ocrQueue.setFilter('all');
     ocrQueue.loadQueue();
     ocrQueue.startAutoRefresh();
   }

@@ -196,6 +196,80 @@ export class UIUtils {
   }
 
   /**
+   * Show a toast notification (temporary popup message)
+   *
+   * @param {string} message - The message to display
+   * @param {string} type - The type of message ('success', 'error', 'warning', 'info')
+   * @param {number} duration - How long to show the toast in milliseconds (default: 3000)
+   *
+   * @example
+   * UIUtils.showToast('Item saved successfully', 'success');
+   * UIUtils.showToast('An error occurred', 'error', 5000);
+   */
+  static showToast(message, type = 'info', duration = 3000) {
+    // Create toast container if it doesn't exist
+    let toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+      toastContainer = document.createElement('div');
+      toastContainer.id = 'toast-container';
+      toastContainer.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 10000;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      `;
+      document.body.appendChild(toastContainer);
+    }
+
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+
+    // Set color based on type
+    const colors = {
+      success: 'var(--status-completed)',
+      error: 'var(--status-failed)',
+      warning: 'var(--status-pending)',
+      info: 'var(--primary)',
+    };
+    const bgColor = colors[type] || colors.info;
+
+    toast.style.cssText = `
+      background: ${bgColor};
+      color: white;
+      padding: 12px 20px;
+      border-radius: 4px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      min-width: 250px;
+      max-width: 400px;
+      animation: slide-in-right 0.3s ease-out;
+      cursor: pointer;
+      font-size: 0.9em;
+    `;
+
+    toast.textContent = message;
+
+    // Add click to dismiss
+    toast.onclick = () => {
+      toast.style.animation = 'slide-out-right 0.3s ease-out';
+      setTimeout(() => toast.remove(), 300);
+    };
+
+    toastContainer.appendChild(toast);
+
+    // Auto-dismiss after duration
+    setTimeout(() => {
+      if (toast.parentElement) {
+        toast.style.animation = 'slide-out-right 0.3s ease-out';
+        setTimeout(() => toast.remove(), 300);
+      }
+    }, duration);
+  }
+
+  /**
    * Show a confirmation modal with Yes/No buttons
    *
    * @param {string} title - The title of the confirmation dialog
