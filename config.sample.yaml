@@ -50,6 +50,52 @@ import:
       - daily
       - newspaper
 
+metadata:
+  # Metadata aggregation settings - controls how metadata from different sources is combined
+  # When multiple sources provide conflicting metadata (e.g. OCR says 2024, filename says 2023),
+  # this configuration determines which source wins based on priority order and confidence scores.
+
+  # Source priority order for metadata aggregation (first = highest priority)
+  # Available sources:
+  #   - ocr: Optical Character Recognition from cover images (has per-field confidence scores)
+  #   - text_scan: Direct text extraction from native PDFs/EPUBs (always 100% confidence)
+  #   - filename: Metadata parsed from the filename (always 100% confidence)
+  # Default: OCR first (most accurate for scanned magazines), then text_scan, then filename
+  source_priority:
+    - ocr
+    - text_scan
+    - filename
+
+  # Minimum confidence thresholds (0-100) for each source
+  # Source must meet or exceed threshold for its value to be used
+  # If a source's confidence is below threshold, the next source in priority order is tried
+  confidence_thresholds:
+    ocr: 70 # OCR must be 70%+ confident (has per-field confidence scores)
+    text_scan: 50 # Text scan usually high quality (no confidence scores, treated as 100%)
+    filename: 0 # Always accept filename parsing (no confidence scores, treated as 100%)
+
+  # Per-field confidence overrides (optional)
+  # Allows fine-tuning thresholds for specific metadata fields
+  # If not specified, uses the general source threshold from confidence_thresholds above
+  field_overrides:
+    year:
+      ocr: 80 # Years are critical - require higher confidence from OCR
+    month:
+      ocr: 60 # Month names are easier to OCR - lower threshold is acceptable
+    issue_number:
+      ocr: 75 # Issue numbers are moderately important
+    volume:
+      ocr: 75 # Volume numbers are moderately important
+    # special_edition: No override, uses general ocr threshold (70%)
+
+  # Notes:
+  # - If this metadata section is not present, system uses OCR-first defaults shown above
+  # - Each metadata field (year, month, issue_number, etc.) is evaluated independently
+  # - Different fields can come from different sources based on which source passes first
+  # - To revert to old behavior (filename always wins), use:
+  #     source_priority: [filename, text_scan, ocr]
+  #     confidence_thresholds: {filename: 0, text_scan: 0, ocr: 0}
+
 matching:
   # Fuzzy matching threshold (0-100) for duplicate detection
   # Higher = stricter matching, Lower = more lenient

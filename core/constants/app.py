@@ -57,9 +57,6 @@ DOWNLOAD_MONITOR_INTERVAL = 30
 CLEANUP_COVERS_INTERVAL = 86400
 """Interval for cleaning up orphaned covers (24 hours)"""
 
-OCR_COVER_GENERATOR_INTERVAL = 300
-"""Interval for generating high-res cover PNGs for OCR (5 minutes)"""
-
 OCR_PROCESSOR_INTERVAL = 10
 """Interval for running OCR text extraction on queued covers (10 seconds)"""
 

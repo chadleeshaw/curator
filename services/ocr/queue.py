@@ -12,6 +12,7 @@ os.environ["USE_GPU"] = "0"
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 from core import constants
+from core.config import ConfigLoader
 from core.constants.date import NUMBER_TO_MONTH
 from models.database import OCRJob, Magazine
 from .service import OCRService
@@ -19,17 +20,33 @@ from .service import OCRService
 logger = logging.getLogger(__name__)
 
 
-def _apply_scan_metadata_to_magazine(magazine: Magazine, scan_metadata: Dict[str, Any]) -> bool:
+def _apply_scan_metadata_to_magazine(
+    magazine: Magazine,
+    scan_metadata: Dict[str, Any],
+    metadata_config: Optional[Dict[str, Any]] = None,
+) -> bool:
     """
-    Apply scan/OCR metadata to magazine fields if not already present.
-    Only fills in missing data, never overwrites existing metadata from filename parsing.
+    Apply scan/OCR metadata to magazine using priority order + confidence thresholds.
+
+    This function implements intelligent metadata aggregation:
+    - Tries sources in priority order (default: ocr → text_scan → filename)
+    - Checks confidence threshold for each source
+    - First source meeting criteria wins for each field
+    - Different fields can come from different sources
 
     Args:
         magazine: Magazine record to update
-        scan_metadata: Metadata extracted from text scan or OCR
+        scan_metadata: Metadata extracted from OCR or text scan
+        metadata_config: Optional config with source_priority, confidence_thresholds, field_overrides
+                        If None, uses defaults (backward compatible)
 
     Returns:
         True if any field was updated
+
+    Examples:
+        >>> # OCR finds year with high confidence, filename has issue number
+        >>> result = _apply_scan_metadata_to_magazine(magazine, ocr_data, config)
+        >>> # Result: year from OCR (85% conf), issue_number from filename
     """
     if not scan_metadata:
         return False
@@ -39,57 +56,120 @@ def _apply_scan_metadata_to_magazine(magazine: Magazine, scan_metadata: Dict[str
     if not magazine.extra_metadata:
         magazine.extra_metadata = {}
 
-    # Year - only if not already set
-    if scan_metadata.get("year") and not magazine.extra_metadata.get("year"):
-        magazine.extra_metadata["year"] = scan_metadata["year"]
-        updated = True
-        logger.debug(f"Applied year {scan_metadata['year']} from scan to {magazine.title}")
+    # Get configuration with defaults
+    if metadata_config is None:
+        from core.constants.metadata import (
+            DEFAULT_METADATA_SOURCE_PRIORITY,
+            DEFAULT_METADATA_CONFIDENCE_THRESHOLDS,
+            DEFAULT_FIELD_CONFIDENCE_OVERRIDES,
+        )
 
-    # Month - only if not already set
-    if scan_metadata.get("month") and not magazine.extra_metadata.get("month"):
-        month_name = NUMBER_TO_MONTH.get(scan_metadata["month"], "")
+        metadata_config = {
+            "source_priority": DEFAULT_METADATA_SOURCE_PRIORITY,
+            "confidence_thresholds": DEFAULT_METADATA_CONFIDENCE_THRESHOLDS,
+            "field_overrides": DEFAULT_FIELD_CONFIDENCE_OVERRIDES,
+        }
+
+    source_priority = metadata_config.get(
+        "source_priority", ["ocr", "text_scan", "filename"]
+    )
+    confidence_thresholds = metadata_config.get(
+        "confidence_thresholds", {"ocr": 70, "text_scan": 50, "filename": 0}
+    )
+    field_overrides = metadata_config.get("field_overrides", {})
+
+    # Gather metadata from all sources
+    sources = {
+        "filename": magazine.extra_metadata.copy(),  # Already populated by filename parsing
+        "text_scan": magazine.extra_metadata.get("text_scan", {}),
+        "ocr": scan_metadata or {},  # Current scan/OCR result
+    }
+
+    # Fields to aggregate
+    fields_to_process = ["year", "month", "volume", "issue_number", "special_edition"]
+
+    # Process each field independently
+    for field in fields_to_process:
+        # Get field-specific threshold overrides
+        field_config = field_overrides.get(field, {})
+
+        # Try each source in priority order
+        for source_name in source_priority:
+            source_data = sources.get(source_name, {})
+            value = source_data.get(field)
+
+            if value is None:
+                continue  # This source doesn't have this field
+
+            # Get confidence score (if available)
+            confidence_key = f"{field}_confidence"
+            confidence = source_data.get(
+                confidence_key, 100
+            )  # Default 100 if no confidence
+
+            # Get threshold for this source/field combination
+            threshold = field_config.get(
+                source_name, confidence_thresholds.get(source_name, 0)
+            )
+
+            # Check if confidence meets threshold
+            if confidence is None or confidence >= threshold:
+                # This source wins! Use its value
+                if field == "month" and isinstance(value, int):
+                    # Convert month number to name
+                    month_name = NUMBER_TO_MONTH.get(value, "")
+                    if month_name and magazine.extra_metadata.get(field) != month_name:
+                        magazine.extra_metadata[field] = month_name
+                        updated = True
+                        logger.info(
+                            f"Applied {field}={month_name} from {source_name} "
+                            f"(confidence={confidence}%, threshold={threshold}%) to {magazine.title}"
+                        )
+                else:
+                    if magazine.extra_metadata.get(field) != value:
+                        magazine.extra_metadata[field] = value
+                        updated = True
+                        logger.info(
+                            f"Applied {field}={value} from {source_name} "
+                            f"(confidence={confidence}%, threshold={threshold}%) to {magazine.title}"
+                        )
+                break  # Stop trying other sources for this field
+            else:
+                logger.debug(
+                    f"Skipped {source_name} for {field}: confidence {confidence}% < threshold {threshold}%"
+                )
+
+    # Update issue_date if we have year
+    if updated and magazine.extra_metadata.get("year"):
+        year = magazine.extra_metadata["year"]
+        # Convert month name to number if present
+        month_name = magazine.extra_metadata.get("month")
+        month = 1  # Default to January
         if month_name:
-            magazine.extra_metadata["month"] = month_name
-            updated = True
-            logger.debug(f"Applied month {month_name} from scan to {magazine.title}")
+            # Reverse lookup month name to number
+            from core.constants.date import MONTH_TO_NUMBER
 
-    # Volume - only if not already set
-    if scan_metadata.get("volume") and not magazine.extra_metadata.get("volume"):
-        magazine.extra_metadata["volume"] = scan_metadata["volume"]
-        updated = True
-        logger.debug(f"Applied volume {scan_metadata['volume']} from scan to {magazine.title}")
-
-    # Issue number - only if not already set
-    if scan_metadata.get("issue_number") and not magazine.extra_metadata.get("issue_number"):
-        magazine.extra_metadata["issue_number"] = scan_metadata["issue_number"]
-        updated = True
-        logger.debug(f"Applied issue number {scan_metadata['issue_number']} from scan to {magazine.title}")
-
-    # Special edition - only if not already set
-    if scan_metadata.get("special_edition") and not magazine.extra_metadata.get("special_edition"):
-        magazine.extra_metadata["special_edition"] = scan_metadata["special_edition"]
-        updated = True
-        logger.debug(f"Applied special edition flag from scan to {magazine.title}")
-
-    # Update issue_date if we found year and current date seems like a placeholder
-    if updated and scan_metadata.get("year"):
-        year = scan_metadata["year"]
-        month = scan_metadata.get("month", 1)
+            month = MONTH_TO_NUMBER.get(month_name.lower(), 1)
 
         try:
-            new_date = datetime(year, month, 1)
+            new_date = datetime(int(year), month, 1)
             # Only update if current issue_date appears to be a placeholder/default
-            # (same as created_at or outside reasonable range)
             current_year = magazine.issue_date.year if magazine.issue_date else 1900
-            # Check if current date is placeholder or invalid
             if current_year < 1900 or (  # noqa: W504
                 magazine.created_at  # noqa: W504
-                and abs((magazine.issue_date - magazine.created_at).total_seconds()) < 60
+                and abs((magazine.issue_date - magazine.created_at).total_seconds())
+                < 60
             ):
                 magazine.issue_date = new_date
-                logger.info(f"Updated issue_date to {new_date.strftime('%Y-%m')} for {magazine.title}")
-        except ValueError as e:
-            logger.warning(f"Invalid date from scan metadata (year={year}, month={month}): {e}")
+                logger.info(
+                    f"Updated issue_date to {new_date.strftime('%Y-%m')} for {magazine.title}"
+                )
+        except (ValueError, TypeError) as e:
+            logger.warning(
+                f"Invalid date from metadata (year={year}, month={month}): {e}"
+            )
+
+    return updated
 
     return updated
 
@@ -165,7 +245,9 @@ class OCRQueueService:
             db.query(OCRJob)
             .filter(
                 OCRJob.magazine_id == magazine_id,
-                OCRJob.status.in_([OCRJob.StatusEnum.PENDING, OCRJob.StatusEnum.PROCESSING]),
+                OCRJob.status.in_(
+                    [OCRJob.StatusEnum.PENDING, OCRJob.StatusEnum.PROCESSING]
+                ),
             )
             .first()
         )
@@ -185,10 +267,14 @@ class OCRQueueService:
         db.commit()
         db.refresh(job)
 
-        logger.info(f"Queued OCR job {job.id} for magazine {magazine_id} (priority={priority})")
+        logger.info(
+            f"Queued OCR job {job.id} for magazine {magazine_id} (priority={priority})"
+        )
         return job
 
-    def process_queue(self, db: Session, batch_size: int = 1, max_retries: int = 1) -> Dict[str, int]:
+    def process_queue(
+        self, db: Session, batch_size: int = 1, max_retries: int = 1
+    ) -> Dict[str, int]:
         """
         Process pending OCR jobs from the queue in batches.
 
@@ -216,7 +302,9 @@ class OCRQueueService:
         )
 
         if stuck_jobs:
-            logger.warning(f"Found {len(stuck_jobs)} stuck OCR jobs, resetting to PENDING")
+            logger.warning(
+                f"Found {len(stuck_jobs)} stuck OCR jobs, resetting to PENDING"
+            )
             for job in stuck_jobs:
                 job.status = OCRJob.StatusEnum.PENDING
                 job.started_at = None
@@ -238,7 +326,13 @@ class OCRQueueService:
             logger.debug("No pending OCR jobs to process")
             return stats
 
-        logger.info(f"Processing {len(pending_jobs)} OCR jobs (batch_size={batch_size})")
+        logger.info(
+            f"Processing {len(pending_jobs)} OCR jobs (batch_size={batch_size})"
+        )
+
+        # Load metadata aggregation configuration
+        config_loader = ConfigLoader()
+        metadata_config = config_loader.get_metadata()
 
         # Prepare jobs for processing
         job_data = []
@@ -247,7 +341,9 @@ class OCRQueueService:
             magazine = db.query(Magazine).filter(Magazine.id == job.magazine_id).first()
 
             if not magazine:
-                logger.warning(f"Magazine {job.magazine_id} not found for OCR job {job.id}")
+                logger.warning(
+                    f"Magazine {job.magazine_id} not found for OCR job {job.id}"
+                )
                 job.status = OCRJob.StatusEnum.FAILED
                 job.last_error = "Magazine not found"
                 stats["failed"] += 1
@@ -299,17 +395,25 @@ class OCRQueueService:
 
                                 if max(img.size) > OCR_IMAGE_MAX_DIMENSION:
                                     ratio = OCR_IMAGE_MAX_DIMENSION / max(img.size)
-                                    new_size = tuple(int(dim * ratio) for dim in img.size)
+                                    new_size = tuple(
+                                        int(dim * ratio) for dim in img.size
+                                    )
                                     img = img.resize(new_size, Image.Resampling.LANCZOS)
-                                    logger.debug(f"Resized OCR PNG from {images[0].size} to {new_size}")
+                                    logger.debug(
+                                        f"Resized OCR PNG from {images[0].size} to {new_size}"
+                                    )
 
                                 img.save(str(png_path), "PNG")
                                 png_generated = True
                                 logger.debug(f"Generated OCR PNG: {png_path}")
                             else:
-                                logger.warning(f"Failed to generate OCR PNG from {pdf_path}")
+                                logger.warning(
+                                    f"Failed to generate OCR PNG from {pdf_path}"
+                                )
                         except Exception as e:
-                            logger.error(f"Error generating OCR PNG for magazine {magazine.id}: {e}")
+                            logger.error(
+                                f"Error generating OCR PNG for magazine {magazine.id}: {e}"
+                            )
 
                     if png_path.exists():
                         cover_path = str(png_path)
@@ -362,13 +466,19 @@ class OCRQueueService:
                 magazine = db.query(Magazine).filter(Magazine.id == magazine_id).first()
 
                 if not job or not magazine:
-                    logger.error(f"Job or magazine not found after processing: job={job_id}, magazine={magazine_id}")
+                    logger.error(
+                        f"Job or magazine not found after processing: job={job_id}, magazine={magazine_id}"
+                    )
                     stats["failed"] += 1
                     stats["processed"] += 1
                     continue
 
                 # Ensure started_at is timezone-aware (SQLite stores naive datetimes)
-                started_at = job.started_at.replace(tzinfo=UTC) if job.started_at.tzinfo is None else job.started_at
+                started_at = (
+                    job.started_at.replace(tzinfo=UTC)
+                    if job.started_at.tzinfo is None
+                    else job.started_at
+                )
                 processing_time = (datetime.now(UTC) - started_at).total_seconds()
 
                 if result.get("success"):
@@ -392,12 +502,18 @@ class OCRQueueService:
                         )
                     else:
                         magazine.extra_metadata["ocr_metadata"] = metadata
-                        logger.info(f"Stored OCR metadata for {magazine.title} (method: {extraction_method})")
+                        logger.info(
+                            f"Stored OCR metadata for {magazine.title} (method: {extraction_method})"
+                        )
 
                     # Apply scan/OCR metadata to main magazine fields if missing
-                    fields_updated = _apply_scan_metadata_to_magazine(magazine, metadata)
+                    fields_updated = _apply_scan_metadata_to_magazine(
+                        magazine, metadata, metadata_config
+                    )
                     if fields_updated:
-                        logger.info(f"Enhanced {magazine.title} with metadata from scan/OCR")
+                        logger.info(
+                            f"Enhanced {magazine.title} with metadata from scan/OCR"
+                        )
 
                     # Flag the JSON field as modified so SQLAlchemy persists it
                     from sqlalchemy.orm.attributes import flag_modified
@@ -406,17 +522,27 @@ class OCRQueueService:
 
                     # Clean up OCR PNG file immediately after successful processing
                     try:
-                        cover_dir = Path(magazine.cover_path).parent if magazine.cover_path else None
+                        cover_dir = (
+                            Path(magazine.cover_path).parent
+                            if magazine.cover_path
+                            else None
+                        )
                         if cover_dir:
                             ocr_covers_dir = cover_dir.parent / ".ocr_covers"
                             png_path = ocr_covers_dir / f"{magazine.id}_ocr.png"
                             if png_path.exists():
                                 png_path.unlink()
-                                logger.debug(f"Cleaned up OCR PNG after successful processing: {png_path}")
+                                logger.debug(
+                                    f"Cleaned up OCR PNG after successful processing: {png_path}"
+                                )
                     except Exception as cleanup_error:
-                        logger.warning(f"Failed to cleanup OCR PNG for magazine {magazine_id}: {cleanup_error}")
+                        logger.warning(
+                            f"Failed to cleanup OCR PNG for magazine {magazine_id}: {cleanup_error}"
+                        )
 
-                    logger.info(f"OCR job {job_id} completed in {processing_time:.1f}s for {magazine.title}")
+                    logger.info(
+                        f"OCR job {job_id} completed in {processing_time:.1f}s for {magazine.title}"
+                    )
                     stats["succeeded"] += 1
                 else:
                     # Worker reported error
@@ -427,15 +553,23 @@ class OCRQueueService:
 
                     # Clean up OCR PNG file after failed processing too
                     try:
-                        cover_dir = Path(magazine.cover_path).parent if magazine.cover_path else None
+                        cover_dir = (
+                            Path(magazine.cover_path).parent
+                            if magazine.cover_path
+                            else None
+                        )
                         if cover_dir:
                             ocr_covers_dir = cover_dir.parent / ".ocr_covers"
                             png_path = ocr_covers_dir / f"{magazine.id}_ocr.png"
                             if png_path.exists():
                                 png_path.unlink()
-                                logger.debug(f"Cleaned up OCR PNG after failed processing: {png_path}")
+                                logger.debug(
+                                    f"Cleaned up OCR PNG after failed processing: {png_path}"
+                                )
                     except Exception as cleanup_error:
-                        logger.warning(f"Failed to cleanup OCR PNG for magazine {magazine_id}: {cleanup_error}")
+                        logger.warning(
+                            f"Failed to cleanup OCR PNG for magazine {magazine_id}: {cleanup_error}"
+                        )
 
                     logger.error(f"OCR job {job_id} failed: {error_msg}")
                     stats["failed"] += 1
@@ -455,7 +589,9 @@ class OCRQueueService:
                         job.last_error = f"{error_type}: {error_msg[:500]}"
                         job.completed_at = datetime.now(UTC)
                 except Exception as update_error:
-                    logger.error(f"Failed to update job status for {job_id}: {update_error}")
+                    logger.error(
+                        f"Failed to update job status for {job_id}: {update_error}"
+                    )
                 stats["failed"] += 1
 
             stats["processed"] += 1
@@ -493,23 +629,40 @@ class OCRQueueService:
         )
 
         if stuck_jobs:
-            logger.warning(f"Found {len(stuck_jobs)} stuck OCR jobs, resetting to PENDING")
+            logger.warning(
+                f"Found {len(stuck_jobs)} stuck OCR jobs, resetting to PENDING"
+            )
             for job in stuck_jobs:
                 job.status = OCRJob.StatusEnum.PENDING
                 job.started_at = None
             db.commit()
 
-        pending_count = db.query(OCRJob).filter(OCRJob.status == OCRJob.StatusEnum.PENDING).count()
+        pending_count = (
+            db.query(OCRJob).filter(OCRJob.status == OCRJob.StatusEnum.PENDING).count()
+        )
 
-        processing_count = db.query(OCRJob).filter(OCRJob.status == OCRJob.StatusEnum.PROCESSING).count()
+        processing_count = (
+            db.query(OCRJob)
+            .filter(OCRJob.status == OCRJob.StatusEnum.PROCESSING)
+            .count()
+        )
 
-        completed_count = db.query(OCRJob).filter(OCRJob.status == OCRJob.StatusEnum.COMPLETED).count()
+        completed_count = (
+            db.query(OCRJob)
+            .filter(OCRJob.status == OCRJob.StatusEnum.COMPLETED)
+            .count()
+        )
 
-        failed_count = db.query(OCRJob).filter(OCRJob.status == OCRJob.StatusEnum.FAILED).count()
+        failed_count = (
+            db.query(OCRJob).filter(OCRJob.status == OCRJob.StatusEnum.FAILED).count()
+        )
 
         # Get oldest pending job
         oldest_pending = (
-            db.query(OCRJob).filter(OCRJob.status == OCRJob.StatusEnum.PENDING).order_by(OCRJob.created_at).first()
+            db.query(OCRJob)
+            .filter(OCRJob.status == OCRJob.StatusEnum.PENDING)
+            .order_by(OCRJob.created_at)
+            .first()
         )
 
         return {
@@ -553,7 +706,9 @@ class OCRQueueService:
         deleted = (
             db.query(OCRJob)
             .filter(
-                OCRJob.status.in_([OCRJob.StatusEnum.COMPLETED, OCRJob.StatusEnum.FAILED]),
+                OCRJob.status.in_(
+                    [OCRJob.StatusEnum.COMPLETED, OCRJob.StatusEnum.FAILED]
+                ),
                 OCRJob.completed_at < cutoff,
             )
             .delete()

@@ -55,7 +55,7 @@ def test_apply_volume_from_scan():
 
 
 def test_dont_overwrite_existing_year():
-    """Test that existing year from filename parsing is not overwritten"""
+    """Test that existing year from filename parsing is not overridden by low-confidence OCR"""
     magazine = Magazine(
         id=3,
         title="Science Weekly",
@@ -68,18 +68,24 @@ def test_dont_overwrite_existing_year():
         },  # Already has year from filename
     )
 
-    scan_metadata = {"year": 2022, "month": 12}  # Different year from OCR (wrong)
+    # OCR provides different year but with low confidence (below 70% threshold)
+    scan_metadata = {
+        "year": 2022,
+        "year_confidence": 50,  # Below 70% general threshold and 80% year-specific threshold
+        "month": 12,
+        "month_confidence": 50,  # Below 60% month-specific threshold
+    }
 
     updated = _apply_scan_metadata_to_magazine(magazine, scan_metadata)
 
-    # Should NOT update because year already exists
+    # Should NOT update because OCR confidence too low, falls back to filename values
     assert updated is False
     assert magazine.extra_metadata["year"] == 2023  # Original preserved
     assert magazine.extra_metadata["month"] == "March"  # Original preserved
 
 
 def test_dont_overwrite_existing_issue_number():
-    """Test that existing issue number from filename is not overwritten"""
+    """Test that existing issue number from filename is preserved when OCR confidence is low"""
     magazine = Magazine(
         id=4,
         title="Gaming Magazine",
@@ -89,14 +95,24 @@ def test_dont_overwrite_existing_issue_number():
         extra_metadata={"issue_number": 405},  # Already has issue number
     )
 
-    scan_metadata = {"issue_number": 404, "year": 2024}  # Different from OCR
+    # OCR provides different issue number but with low confidence
+    scan_metadata = {
+        "issue_number": 404,
+        "issue_number_confidence": 65,  # Below default 70% threshold
+        "year": 2024,
+        "year_confidence": 85,  # Above threshold - will be used
+    }
 
     updated = _apply_scan_metadata_to_magazine(magazine, scan_metadata)
 
-    # Should only update year, not issue_number
+    # Should only update year (high confidence), not issue_number (low confidence)
     assert updated is True
-    assert magazine.extra_metadata["issue_number"] == 405  # Original preserved
-    assert magazine.extra_metadata["year"] == 2024  # New value applied
+    assert (
+        magazine.extra_metadata["issue_number"] == 405
+    )  # Original preserved (OCR rejected)
+    assert (
+        magazine.extra_metadata["year"] == 2024
+    )  # OCR value applied (high confidence)
 
 
 def test_apply_special_edition_flag():
@@ -148,7 +164,7 @@ def test_partial_metadata_enhancement():
 
 
 def test_no_update_when_all_fields_present():
-    """Test that nothing is updated when all fields already exist"""
+    """Test that filename values are preserved when OCR confidence is low"""
     magazine = Magazine(
         id=7,
         title="Complete Magazine",
@@ -163,11 +179,21 @@ def test_no_update_when_all_fields_present():
         },
     )
 
-    scan_metadata = {"year": 2023, "month": 4, "volume": 9, "issue_number": 122}
+    # OCR provides different values but all with low confidence (below thresholds)
+    scan_metadata = {
+        "year": 2023,
+        "year_confidence": 50,  # Below 80% year threshold
+        "month": 4,
+        "month_confidence": 50,  # Below 60% month threshold
+        "volume": 9,
+        "volume_confidence": 50,  # Below 75% volume threshold
+        "issue_number": 122,
+        "issue_number_confidence": 50,  # Below 75% issue_number threshold
+    }
 
     updated = _apply_scan_metadata_to_magazine(magazine, scan_metadata)
 
-    # Nothing should be updated
+    # Nothing should be updated (all OCR values rejected due to low confidence)
     assert updated is False
     assert magazine.extra_metadata["year"] == 2024
     assert magazine.extra_metadata["month"] == "May"

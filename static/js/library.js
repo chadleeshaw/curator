@@ -56,12 +56,21 @@ export class LibraryManager {
       const { periodicals } = data;
       if (periodicals.length === 0) {
         grid.innerHTML = '<p>No periodicals in library yet</p>';
+        // Update header stats
+        if (window.updateHeaderStats) {
+          window.updateHeaderStats();
+        }
         return;
       }
 
       periodicals.forEach((periodical) => {
         grid.appendChild(this.createPeriodicalCard(periodical));
       });
+
+      // Update header stats
+      if (window.updateHeaderStats) {
+        window.updateHeaderStats();
+      }
     } catch (error) {
       console.error('[Library] Failed to load periodicals:', error);
     }

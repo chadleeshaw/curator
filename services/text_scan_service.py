@@ -85,108 +85,28 @@ class TextScanService:
         """
         Extract metadata from scanned text.
 
+        Uses OCRService's extraction logic for consistency and better error handling
+        (handles spaces in years, O/0 confusion, etc.)
+
+        NOTE: Text scan doesn't provide word-level confidence data, so confidence
+        scores will be None. This is expected - text scan is for native PDFs with
+        clean embedded text, which doesn't need confidence scoring.
+
         Args:
             text: Extracted text from document
 
         Returns:
-            Dictionary containing extracted metadata
+            Dictionary containing extracted metadata (without confidence scores)
         """
-        import re
+        from services.ocr.service import OCRService
 
-        metadata = {
-            "issue_number": None,
-            "year": None,
-            "month": None,
-            "volume": None,
-            "special_edition": False,
-            "detected_text": text,
-        }
+        # Use OCR's extraction logic (without word confidence data)
+        # This gives us better year detection, consistent patterns, etc.
+        metadata = OCRService.extract_metadata_from_text(text, words_data=None)
 
-        # Clean up text
-        text_upper = text.upper()
-        # Also create a version with newlines replaced by spaces for multi-word phrase matching
-        text_upper_spaced = text_upper.replace("\n", " ")
-
-        # Detect issue number patterns
-        issue_patterns = [
-            r"#(\d+)",  # #123
-            r"ISSUE\s+(\d+)",  # Issue 123
-            r"NO\.?\s*(\d+)",  # No. 123 or No 123
-            r"NUMBER\s+(\d+)",  # Number 123
-        ]
-
-        for pattern in issue_patterns:
-            match = re.search(pattern, text_upper)
-            if match:
-                metadata["issue_number"] = int(match.group(1))
-                break
-
-        # Detect year (4-digit number between 1900-2099)
-        year_match = re.search(r"\b(19\d{2}|20\d{2})\b", text)
-        if year_match:
-            metadata["year"] = int(year_match.group(1))
-
-        # Detect month names
-        months = {
-            "JANUARY": 1,
-            "FEBRUARY": 2,
-            "MARCH": 3,
-            "APRIL": 4,
-            "MAY": 5,
-            "JUNE": 6,
-            "JULY": 7,
-            "AUGUST": 8,
-            "SEPTEMBER": 9,
-            "OCTOBER": 10,
-            "NOVEMBER": 11,
-            "DECEMBER": 12,
-            "JAN": 1,
-            "FEB": 2,
-            "MAR": 3,
-            "APR": 4,
-            "JUN": 6,
-            "JUL": 7,
-            "AUG": 8,
-            "SEP": 9,
-            "SEPT": 9,
-            "OCT": 10,
-            "NOV": 11,
-            "DEC": 12,
-        }
-
-        for month_name, month_num in months.items():
-            if month_name in text_upper:
-                metadata["month"] = month_num
-                break
-
-        # Detect volume
-        volume_patterns = [
-            r"VOL\.?\s*(\d+)",  # Vol. 1 or Vol 1
-            r"VOLUME\s+(\d+)",  # Volume 1
-            r"V\.?\s*(\d+)",  # V. 1 or V 1
-        ]
-
-        for pattern in volume_patterns:
-            match = re.search(pattern, text_upper)
-            if match:
-                metadata["volume"] = int(match.group(1))
-                break
-
-        # Detect special edition indicators
-        # Use text_upper_spaced to handle multi-word phrases that may be split across lines
-        special_indicators = [
-            "SPECIAL EDITION",
-            "SPECIAL ISSUE",
-            "LIMITED EDITION",
-            "COLLECTOR",
-            "ANNIVERSARY",
-            "EXCLUSIVE",
-        ]
-
-        for indicator in special_indicators:
-            if indicator in text_upper_spaced:
-                metadata["special_edition"] = True
-                break
+        # OCRService adds confidence fields (all None for text_scan)
+        # We can keep them or remove them - keeping them makes output consistent
+        # between text_scan and OCR, which is useful for the aggregation logic
 
         return metadata
 
@@ -202,7 +122,9 @@ class TextScanService:
             True if metadata has year/month/volume, False otherwise
         """
         return (
-            metadata.get("year") is not None or metadata.get("month") is not None or metadata.get("volume") is not None
+            metadata.get("year") is not None
+            or metadata.get("month") is not None
+            or metadata.get("volume") is not None
         )
 
     @staticmethod
@@ -253,6 +175,8 @@ class TextScanService:
 
         metadata["scanned"] = True  # Text scan was performed
         metadata["text_found"] = True
-        metadata["has_sufficient_metadata"] = TextScanService._has_sufficient_metadata(metadata)
+        metadata["has_sufficient_metadata"] = TextScanService._has_sufficient_metadata(
+            metadata
+        )
 
         return metadata

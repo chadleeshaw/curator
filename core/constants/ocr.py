@@ -68,8 +68,8 @@ OCR_MAX_WORKERS = 1
 OCR_BATCH_SIZE = 1
 """Default maximum number of OCR jobs to process per batch"""
 
-OCR_MIN_MEMORY_MB = 4096
-"""Minimum available memory in MB required for PaddleOCR initialization (4GB)"""
+OCR_MAX_PAGES = 2
+"""Maximum number of PDF pages to scan for OCR (default: 2 - cover may be on page 2)"""
 
-PDF_COVER_DPI_OCR = 180
-"""Optimal DPI for OCR text extraction (balances quality and performance, ~1360x1760 for 8.5x11")"""
+PDF_COVER_DPI_OCR = 300
+"""Optimal DPI for OCR text extraction (balances quality and performance, ~2267x2933 for 8.5x11")"""

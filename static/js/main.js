@@ -68,6 +68,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   tracking.loadTrackedPeriodicals();
   settings.loadSettings();
 
+  // Load initial header stats
+  updateHeaderStats();
+
   // Close delete modal when clicking outside of it
   const modal = document.getElementById('delete-modal');
   if (modal) {
@@ -195,9 +198,26 @@ async function updateQueueBadges() {
   }
 }
 
+/**
+ * Update header stats (periodicals count)
+ */
+async function updateHeaderStats() {
+  try {
+    // Get periodicals count from stats endpoint
+    const response = await fetch('/api/periodicals/stats/count', {
+      headers: { Authorization: `Bearer ${AuthManager.getToken()}` },
+    });
+    const data = await response.json();
+    document.getElementById('header-periodicals-count').textContent = data.total || 0;
+  } catch (error) {
+    console.error('[Main] Error updating header stats:', error);
+  }
+}
+
 // Make functions globally available
 window.showQueueView = showQueueView;
 window.updateQueueBadges = updateQueueBadges;
+window.updateHeaderStats = updateHeaderStats;
 
 // Make module instances globally available for inline event handlers
 window.ocrQueue = ocrQueue;
