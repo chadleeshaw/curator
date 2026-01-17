@@ -21,6 +21,9 @@ class TestOCRImageWordsExtraction:
     @patch("services.ocr.service.Image")
     def test_extract_text_and_words_from_image(self, mock_image, mock_pytesseract):
         """Test extracting text and words with confidence from image"""
+        # Mock Tesseract availability
+        mock_pytesseract.get_tesseract_version.return_value = "5.0.0"
+
         # Mock image
         mock_img = MagicMock()
         mock_image.open.return_value = mock_img
@@ -74,6 +77,9 @@ class TestOCRImageWordsExtraction:
     @patch("services.ocr.service.Image")
     def test_extract_with_confidence_threshold(self, mock_image, mock_pytesseract):
         """Test that words below confidence threshold are filtered out"""
+        # Mock Tesseract availability
+        mock_pytesseract.get_tesseract_version.return_value = "5.0.0"
+
         mock_img = MagicMock()
         mock_image.open.return_value = mock_img
 
@@ -101,6 +107,9 @@ class TestOCRImageWordsExtraction:
     @patch("services.ocr.service.Image")
     def test_extract_with_empty_result(self, mock_image, mock_pytesseract):
         """Test handling of empty OCR results"""
+        # Mock Tesseract availability
+        mock_pytesseract.get_tesseract_version.return_value = "5.0.0"
+
         mock_img = MagicMock()
         mock_image.open.return_value = mock_img
 
@@ -125,6 +134,9 @@ class TestOCRImageWordsExtraction:
     @patch("services.ocr.service.Image")
     def test_analyze_cover_uses_words_for_images(self, mock_image, mock_pytesseract):
         """Test that analyze_cover passes words data for image files"""
+        # Mock Tesseract availability
+        mock_pytesseract.get_tesseract_version.return_value = "5.0.0"
+
         mock_img = MagicMock()
         mock_image.open.return_value = mock_img
 
