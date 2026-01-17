@@ -126,8 +126,9 @@ def _apply_scan_metadata_to_magazine(
                             f"(confidence={confidence}%, threshold={threshold}%) to {magazine.title}"
                         )
                 break  # Stop trying other sources for this field
-            else:
-                logger.debug(f"Skipped {source_name} for {field}: confidence {confidence}% < threshold {threshold}%")
+
+            # Confidence didn't meet threshold
+            logger.debug(f"Skipped {source_name} for {field}: confidence {confidence}% < threshold {threshold}%")
 
     # Update issue_date if we have year
     if updated and magazine.extra_metadata.get("year"):

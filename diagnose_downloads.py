@@ -39,6 +39,7 @@ def diagnose_downloads():
         # Count downloads by status
         from sqlalchemy import func
 
+        # pylint: disable=not-callable
         status_counts = (
             db_session.query(DownloadSubmission.status, func.count(DownloadSubmission.id))
             .group_by(DownloadSubmission.status)

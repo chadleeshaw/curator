@@ -43,27 +43,6 @@ def validate_pdf(pdf_path: Path) -> bool:
         logger.warning(f"PDF validation error for {pdf_path}: {e}")
         return False
 
-        # Try a basic pdf2image operation to validate
-        try:
-            # Just try to get page count without actually converting
-            from pdf2image import pdfinfo_from_path
-
-            info = pdfinfo_from_path(str(pdf_path))
-            if info.get("Pages", 0) == 0:
-                logger.warning(f"PDF has no pages: {pdf_path}")
-                return False
-            return True
-        except Exception as e:
-            logger.warning(f"PDF validation error for {pdf_path}: {e}")
-            return False
-        except Exception as e:
-            logger.warning(f"PDF validation failed for {pdf_path}: {e}")
-            return False
-
-    except Exception as e:
-        logger.warning(f"PDF validation error for {pdf_path}: {e}")
-        return False
-
 
 def extract_cover_from_pdf(
     pdf_path: Path,
