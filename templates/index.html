@@ -293,28 +293,61 @@
 
           <!-- Download Queue Section -->
           <div id="download-queue-view" class="queue-view">
-            <div
-              style="
-                display: flex;
-                justify-content: space-between;
-                align-items: start;
-                margin-bottom: 15px;
-              "
-            >
-              <div>
-                <h2 style="margin-bottom: 10px">📥 Download Queue</h2>
-                <p style="color: var(--text-secondary); margin: 0">
-                  Monitor and manage your periodical downloads. Auto-refreshes every 5 seconds.
-                </p>
-              </div>
+            <div>
+              <h2 style="margin-bottom: 10px">📥 Download Queue</h2>
+              <p style="color: var(--text-secondary); margin: 0 0 20px 0">
+                Monitor and manage your periodical downloads. Auto-refreshes every 5 seconds.
+              </p>
+            </div>
+
+            <!-- Filter Buttons -->
+            <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap">
               <button
-                onclick="clearPendingDownloads()"
+                id="download-filter-all"
+                class="filter-btn"
+                onclick="window.downloads.setFilter('all')"
+              >
+                All
+              </button>
+              <button
+                id="download-filter-active"
+                class="filter-btn active"
+                onclick="window.downloads.setFilter('active')"
+              >
+                Active
+              </button>
+              <button
+                id="download-filter-failed"
+                class="filter-btn"
+                onclick="window.downloads.setFilter('failed')"
+              >
+                Failed
+              </button>
+              <button
+                id="download-filter-completed"
+                class="filter-btn"
+                onclick="window.downloads.setFilter('completed')"
+              >
+                Completed
+              </button>
+              <button
+                id="download-clear-pending-btn"
                 class="btn-secondary"
-                style="background: var(--status-failed); color: white; flex-shrink: 0"
+                onclick="window.downloads.clearPendingDownloads()"
+                style="margin-left: auto; background: var(--status-warning); color: white"
               >
                 🗑️ Clear Pending
               </button>
+              <button
+                id="download-clear-failed-btn"
+                class="btn-secondary"
+                onclick="window.downloads.clearFailedDownloads()"
+                style="background: var(--status-failed); color: white"
+              >
+                🗑️ Clear Failed
+              </button>
             </div>
+
             <div id="downloads-status" class="hidden"></div>
 
             <div id="queue-stats" style="margin-bottom: 30px">

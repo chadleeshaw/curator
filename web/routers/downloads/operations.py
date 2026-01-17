@@ -87,6 +87,48 @@ async def clear_pending_downloads() -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@_shared.router.delete("/queue/failed")
+async def clear_failed_downloads() -> Dict[str, Any]:
+    """Clear all failed downloads from the queue"""
+    try:
+
+        def _clear():
+            db_session = _shared._session_factory()
+            try:
+                # Get all failed downloads
+                failed_query = db_session.query(DownloadSubmission).filter(
+                    DownloadSubmission.status == DownloadSubmission.StatusEnum.FAILED
+                )
+
+                count = failed_query.count()
+
+                if count == 0:
+                    return {
+                        "success": True,
+                        "deleted": 0,
+                        "message": "No failed downloads to clear",
+                    }
+
+                # Delete all failed downloads
+                failed_query.delete()
+                db_session.commit()
+
+                _shared.logger.info(f"Cleared {count} failed downloads from queue")
+
+                return {
+                    "success": True,
+                    "deleted": count,
+                    "message": f"Cleared {count} failed download(s) from queue",
+                }
+            finally:
+                db_session.close()
+
+        return await run_in_thread(_clear)
+    except Exception as e:
+        _shared.logger.error(f"Error clearing failed downloads: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @_shared.router.delete("/queue/{submission_id}")
 async def delete_from_queue(submission_id: int) -> Dict[str, Any]:
     """Remove a submission from the download queue"""

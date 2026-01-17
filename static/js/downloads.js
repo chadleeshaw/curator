@@ -57,6 +57,8 @@ export class DownloadsManager {
     this.currentModalPeriodical = null;
     /** @type {string} Current filter in modal */
     this.currentModalFilter = 'all';
+    /** @type {string} Current filter for queue view (all, active, failed, completed) */
+    this.currentFilter = 'active';
 
     // Load constants from API
     this.loadConstants();
@@ -353,14 +355,34 @@ export class DownloadsManager {
       `;
     }
 
-    // Filter to show only active downloads (pending and downloading)
-    const activeDownloads = data.queue.filter(
-      ({ status }) => status === 'pending' || status === 'downloading'
-    );
+    // Filter downloads based on current filter
+    let filteredDownloads = data.queue;
+    if (this.currentFilter === 'active') {
+      filteredDownloads = data.queue.filter(
+        ({ status }) => status === 'pending' || status === 'downloading'
+      );
+    } else if (this.currentFilter === 'failed') {
+      filteredDownloads = data.queue.filter(({ status }) => status === 'failed');
+    } else if (this.currentFilter === 'completed') {
+      filteredDownloads = data.queue.filter(({ status }) => status === 'completed');
+    }
+    // 'all' filter shows everything
 
-    if (activeDownloads.length === 0) {
+    if (filteredDownloads.length === 0) {
       emptyDiv.classList.remove(CSS_CLASSES.HIDDEN);
       tableContainer.classList.add(CSS_CLASSES.HIDDEN);
+
+      // Update empty message based on filter
+      const emptyMessage = emptyDiv.querySelector('p:first-of-type');
+      if (emptyMessage) {
+        const messages = {
+          all: 'No downloads in queue',
+          active: 'No active downloads',
+          failed: 'No failed downloads',
+          completed: 'No completed downloads',
+        };
+        emptyMessage.textContent = messages[this.currentFilter] || 'No downloads in queue';
+      }
       return;
     }
 
@@ -368,7 +390,7 @@ export class DownloadsManager {
     tableContainer.classList.remove(CSS_CLASSES.HIDDEN);
 
     // Group by periodical
-    const grouped = this.groupQueueByPeriodical(activeDownloads);
+    const grouped = this.groupQueueByPeriodical(filteredDownloads);
 
     tbody.innerHTML = '';
     grouped.forEach((group) => {
@@ -1137,6 +1159,72 @@ export class DownloadsManager {
       }
     } catch (error) {
       console.error('[Downloads] Error clearing pending downloads:', error);
+      UIUtils.showStatus('downloads-status', `Error: ${error.message}`, 'error');
+    }
+  }
+
+  /**
+   * Set the current filter for the download queue
+   *
+   * @param {string} filter - Filter type (all, active, failed, completed)
+   * @returns {void}
+   */
+  setFilter(filter) {
+    this.currentFilter = filter;
+
+    // Update button states
+    document.querySelectorAll('#download-queue-view .filter-btn').forEach((btn) => {
+      btn.classList.remove('active');
+    });
+    const activeBtn = document.getElementById(`download-filter-${filter}`);
+    if (activeBtn) {
+      activeBtn.classList.add('active');
+    }
+
+    // Reload queue with new filter
+    this.loadDownloadQueue();
+  }
+
+  /**
+   * Clear all failed downloads from the queue
+   *
+   * @returns {Promise<void>}
+   */
+  async clearFailedDownloads() {
+    try {
+      // Confirm before clearing
+      const confirmed = await UIUtils.confirm(
+        'Clear Failed Downloads',
+        'Are you sure you want to clear all failed downloads? This cannot be undone.'
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      UIUtils.showStatus('downloads-status', '🗑️ Clearing failed downloads...', 'info');
+
+      const response = await APIClient.authenticatedFetch('/api/downloads/queue/failed', {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        UIUtils.showStatus('downloads-status', data.message, 'success');
+        setTimeout(() => {
+          UIUtils.hideStatus('downloads-status');
+          this.loadDownloadQueue(); // Refresh the queue
+        }, 2000);
+      } else {
+        UIUtils.showStatus(
+          'downloads-status',
+          data.message || 'Failed to clear failed downloads',
+          'error'
+        );
+      }
+    } catch (error) {
+      console.error('[Downloads] Error clearing failed downloads:', error);
       UIUtils.showStatus('downloads-status', `Error: ${error.message}`, 'error');
     }
   }

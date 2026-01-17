@@ -23,6 +23,7 @@ from .queue import (
 from .operations import (
     retry_download,
     clear_pending_downloads,
+    clear_failed_downloads,
     delete_from_queue,
     cleanup_old_submissions,
 )
@@ -40,6 +41,7 @@ __all__ = [
     "get_download_queue_status",
     "retry_download",
     "clear_pending_downloads",
+    "clear_failed_downloads",
     "delete_from_queue",
     "cleanup_old_submissions",
     "get_failed_downloads",
