@@ -222,7 +222,6 @@ async def lifespan(app: FastAPI):
                             .filter(
                                 DownloadSubmission.status.in_(
                                     [
-                                        DownloadSubmission.StatusEnum.QUEUED,
                                         DownloadSubmission.StatusEnum.PENDING,
                                         DownloadSubmission.StatusEnum.DOWNLOADING,
                                     ]

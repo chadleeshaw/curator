@@ -117,6 +117,19 @@ class DownloadMonitor:
             self.stats["folder_files_imported"] += folder_imported
             self.stats["last_folder_scan"] = datetime.now()
 
+            # Warn if no files found but there are active downloads (potential config mismatch)
+            # Use the active_count from queue processing above
+            try:
+                if folder_imported == 0 and queue_result.get("active_count", 0) > 0:
+                    logger.warning(
+                        f"[DownloadMonitor] No files found in downloads folder ({self.downloads_dir}) "
+                        f"but {queue_result.get('active_count', 0)} downloads are active. Check CURATOR_DOWNLOAD_DIR "
+                        "environment variable or storage.download_dir config matches your download client's output directory."
+                    )
+            except NameError:
+                # queue_result may not be defined if queue processing failed
+                pass
+
             logger.debug(
                 f"[DownloadMonitor] Run completed - Client: {client_processed} processed, "
                 f"Folder: {folder_imported} imported"
@@ -436,10 +449,12 @@ class DownloadMonitor:
 
             if not file_path:
                 logger.warning(
-                    f"Downloaded file not found in downloads directory: {submission.file_path}"
+                    f"Downloaded file not found in downloads directory: {submission.file_path} "
+                    f"(searched in: {self.downloads_dir}). "
+                    f"Check CURATOR_DOWNLOAD_DIR environment variable matches your download client's output directory."
                 )
                 submission.status = DownloadSubmission.StatusEnum.FAILED
-                submission.last_error = f"File not found in downloads directory: {Path(submission.file_path).name}"
+                submission.last_error = f"File not found in downloads directory: {Path(submission.file_path).name} (searched: {self.downloads_dir})"
                 session.commit()
                 continue
 
