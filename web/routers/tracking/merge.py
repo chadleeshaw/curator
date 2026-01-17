@@ -208,13 +208,32 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
 
                             # Update database paths if reorganization succeeded
                             if new_pdf_path:
-                                magazine.file_path = new_pdf_path
-                                if new_cover_path:
-                                    magazine.cover_path = new_cover_path
-                                files_reorganized += 1
-                                logger.info(
-                                    f"Reorganized files for: {magazine.title} ({magazine.issue_date.strftime('%b %Y')})"
-                                )
+                                # Check if target path already exists in database (UNIQUE constraint check)
+                                existing_record = db_session.query(Magazine).filter_by(file_path=new_pdf_path).first()
+                                if existing_record and existing_record.id != magazine.id:
+                                    logger.error(
+                                        f"Cannot update magazine {magazine.id}: Target path {new_pdf_path} "
+                                        f"already exists in database for magazine {existing_record.id}. "
+                                        f"This is a data integrity issue that needs manual resolution."
+                                    )
+                                    # Roll back the file move since we can't update the database
+                                    try:
+                                        old_pdf_path = Path(magazine.file_path)
+                                        if Path(new_pdf_path).exists() and not old_pdf_path.exists():
+                                            shutil.move(new_pdf_path, str(old_pdf_path))
+                                            logger.info(f"Rolled back file move: {new_pdf_path} -> {old_pdf_path}")
+                                    except Exception as rollback_error:
+                                        logger.error(
+                                            f"Failed to rollback file move for magazine {magazine.id}: {rollback_error}"
+                                        )
+                                else:
+                                    magazine.file_path = new_pdf_path
+                                    if new_cover_path:
+                                        magazine.cover_path = new_cover_path
+                                    files_reorganized += 1
+                                    logger.info(
+                                        f"Reorganized files for: {magazine.title} ({magazine.issue_date.strftime('%b %Y')})"
+                                    )
                             else:
                                 logger.warning(
                                     f"Failed to reorganize files for magazine ID {magazine.id}, keeping original paths"
