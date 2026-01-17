@@ -24,6 +24,26 @@ python main.py
 
 The project uses a virtual environment in `.venv/` with all dependencies installed.
 
+## Git Hooks
+
+The project includes a pre-push hook that automatically runs `make ci-lint` before allowing pushes. This ensures all code passes CI checks before reaching GitHub.
+
+**Install hooks:**
+
+```bash
+make install-hooks
+# or
+./setup-hooks.sh
+```
+
+**Skip hook (not recommended):**
+
+```bash
+git push --no-verify
+```
+
+The hook is version-controlled in `.githooks/` and automatically configured by `make install-hooks`.
+
 ## Build & Test Commands
 
 ### Running Tests
@@ -61,6 +81,9 @@ make test-quick            # Syntax check only
 # Lint all code (Python + JS + CSS)
 make lint
 
+# CI linting (matches GitHub Actions exactly - recommended before pushing)
+make ci-lint               # Run all linters exactly as CI does (fails on errors)
+
 # Lint individual languages
 make lint-python           # pylint + flake8
 make lint-js               # ESLint
@@ -79,6 +102,8 @@ make format-css            # Prettier
 npx prettier --write <files>
 npx eslint <files>
 ```
+
+**Important**: Always run `make ci-lint` before pushing to ensure your code will pass GitHub CI checks. The regular `make lint` command suppresses errors, but `make ci-lint` fails exactly like CI does.
 
 ### Running the Application
 

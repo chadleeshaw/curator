@@ -110,9 +110,7 @@ async def list_periodicals(
                 )
 
                 # Left join with tracking to get the primary title for display
-                query = query.outerjoin(
-                    MagazineTracking, Magazine.tracking_id == MagazineTracking.id
-                )
+                query = query.outerjoin(MagazineTracking, Magazine.tracking_id == MagazineTracking.id)
 
                 # Apply sorting - use tracking title when available
                 if sort_by == "category":
@@ -133,11 +131,7 @@ async def list_periodicals(
                         func.coalesce(MagazineTracking.title, Magazine.title).asc(),
                     )
                 elif sort_by == "issue_date":
-                    sort_expr = (
-                        Magazine.issue_date.desc()
-                        if is_descending
-                        else Magazine.issue_date.asc()
-                    )
+                    sort_expr = Magazine.issue_date.desc() if is_descending else Magazine.issue_date.asc()
                     query = query.order_by(sort_expr)
                 else:  # Default to title
                     sort_expr = (
@@ -205,9 +199,7 @@ async def list_periodicals(
                 for mag in magazines:
                     if mag.tracking_id and mag.tracking_id not in tracking_titles:
                         tracking = (
-                            db_session.query(MagazineTracking)
-                            .filter(MagazineTracking.id == mag.tracking_id)
-                            .first()
+                            db_session.query(MagazineTracking).filter(MagazineTracking.id == mag.tracking_id).first()
                         )
                         if tracking:
                             tracking_titles[mag.tracking_id] = tracking.title
@@ -216,27 +208,15 @@ async def list_periodicals(
                     "periodicals": [
                         {
                             "id": m.id,
-                            "title": (
-                                tracking_titles.get(m.tracking_id, m.title)
-                                if m.tracking_id
-                                else m.title
-                            ),
+                            "title": (tracking_titles.get(m.tracking_id, m.title) if m.tracking_id else m.title),
                             "language": m.language or "English",
-                            "issue_date": (
-                                m.issue_date.date().isoformat()
-                                if m.issue_date
-                                else None
-                            ),
+                            "issue_date": (m.issue_date.date().isoformat() if m.issue_date else None),
                             "file_path": m.file_path,
                             "cover_path": m.cover_path,
                             "content_hash": m.content_hash,
                             "tracking_id": m.tracking_id,
-                            "created_at": (
-                                m.created_at.isoformat() if m.created_at else None
-                            ),
-                            "updated_at": (
-                                m.updated_at.isoformat() if m.updated_at else None
-                            ),
+                            "created_at": (m.created_at.isoformat() if m.created_at else None),
+                            "updated_at": (m.updated_at.isoformat() if m.updated_at else None),
                             "metadata": m.extra_metadata,
                             "issue_count": issue_counts.get(
                                 (
@@ -271,36 +251,22 @@ async def get_magazine(magazine_id: int) -> MagazineResponse:
         def _db_operation():
             db_session = _shared._session_factory()
             try:
-                magazine = (
-                    db_session.query(Magazine)
-                    .filter(Magazine.id == magazine_id)
-                    .first()
-                )
+                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
 
                 if not magazine:
-                    raise HTTPException(
-                        status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND
-                    )
+                    raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
 
                 return {
                     "id": magazine.id,
                     "title": magazine.title,
                     "language": magazine.language,
-                    "issue_date": (
-                        magazine.issue_date.date().isoformat()
-                        if magazine.issue_date
-                        else None
-                    ),
+                    "issue_date": (magazine.issue_date.date().isoformat() if magazine.issue_date else None),
                     "file_path": magazine.file_path,
                     "cover_path": magazine.cover_path,
                     "content_hash": magazine.content_hash,
                     "tracking_id": magazine.tracking_id,
-                    "created_at": (
-                        magazine.created_at.isoformat() if magazine.created_at else None
-                    ),
-                    "updated_at": (
-                        magazine.updated_at.isoformat() if magazine.updated_at else None
-                    ),
+                    "created_at": (magazine.created_at.isoformat() if magazine.created_at else None),
+                    "updated_at": (magazine.updated_at.isoformat() if magazine.updated_at else None),
                     "metadata": magazine.extra_metadata,
                 }
             finally:
@@ -334,16 +300,10 @@ async def delete_periodical(
         def _db_operation():
             db_session = _shared._session_factory()
             try:
-                magazine = (
-                    db_session.query(Magazine)
-                    .filter(Magazine.id == magazine_id)
-                    .first()
-                )
+                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
 
                 if not magazine:
-                    raise HTTPException(
-                        status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND
-                    )
+                    raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
 
                 # Store title and language for potential deletion of all issues
                 title = magazine.title
@@ -353,9 +313,7 @@ async def delete_periodical(
                 if delete_all_issues:
                     # Get all magazines with the same title and language
                     magazines_to_delete = (
-                        db_session.query(Magazine)
-                        .filter(Magazine.title == title, Magazine.language == language)
-                        .all()
+                        db_session.query(Magazine).filter(Magazine.title == title, Magazine.language == language).all()
                     )
                 else:
                     # Only delete the single specified magazine
@@ -380,11 +338,7 @@ async def delete_periodical(
                     from models.database import MagazineTracking
 
                     olid = generate_olid(title)
-                    tracking = (
-                        db_session.query(MagazineTracking)
-                        .filter(MagazineTracking.olid == olid)
-                        .first()
-                    )
+                    tracking = db_session.query(MagazineTracking).filter(MagazineTracking.olid == olid).first()
                     if tracking:
                         db_session.delete(tracking)
                         db_session.commit()
@@ -407,13 +361,9 @@ async def delete_periodical(
                                 cover_path.unlink()
                                 logger.info(f"Deleted cover file: {cover_path}")
                         except Exception as e:
-                            logger.warning(
-                                f"Could not delete cover file {cover_path}: {e}"
-                            )
+                            logger.warning(f"Could not delete cover file {cover_path}: {e}")
 
-                    logger.info(
-                        f"Deleted {deleted_count} issue(s) and files from disk: {title}"
-                    )
+                    logger.info(f"Deleted {deleted_count} issue(s) and files from disk: {title}")
                     if deleted_count > 1:
                         message = f"Deleted {deleted_count} issues of '{title}' and their files from disk"
                     else:
@@ -425,15 +375,11 @@ async def delete_periodical(
                         "message": message,
                     }
                 else:
-                    logger.info(
-                        f"Deleted {deleted_count} issue(s) from library (files retained): {title}"
-                    )
+                    logger.info(f"Deleted {deleted_count} issue(s) from library (files retained): {title}")
                     if deleted_count > 1:
                         message = f"Removed {deleted_count} issues of '{title}' from library (files retained on disk)"
                     else:
-                        message = (
-                            f"Removed '{title}' from library (files retained on disk)"
-                        )
+                        message = f"Removed '{title}' from library (files retained on disk)"
                     if remove_tracking:
                         message += " (tracking removed)"
                     return {
@@ -483,16 +429,12 @@ async def purge_database() -> Dict[str, Any]:
 
                 # Delete all download submissions
                 db_session.query(DownloadSubmission).delete()
-                logger.info(
-                    f"Purged {download_count} download submissions from database"
-                )
+                logger.info(f"Purged {download_count} download submissions from database")
 
                 # Commit all deletions
                 db_session.commit()
 
-                logger.warning(
-                    "Database purged successfully. All library and tracking data removed."
-                )
+                logger.warning("Database purged successfully. All library and tracking data removed.")
 
                 return {
                     "success": True,

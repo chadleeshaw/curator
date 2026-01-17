@@ -226,6 +226,9 @@ For local development without Docker:
 pip install -r requirements.txt
 npm install
 
+# Install Git hooks (runs ci-lint before push)
+make install-hooks
+
 # Copy config
 cp config.sample.yaml local/config/config.yaml
 
@@ -239,7 +242,22 @@ python main.py
 make test           # All tests
 make test-unit      # Fast unit tests only
 make lint           # Check code style
+make ci-lint        # CI linters (run before push)
 make format         # Auto-format code
+```
+
+**Git Hooks:**
+
+The project includes a pre-push hook that automatically runs `make ci-lint` to ensure code quality before pushing. Install with:
+
+```bash
+make install-hooks
+```
+
+To bypass the hook (not recommended):
+
+```bash
+git push --no-verify
 ```
 
 ## Requirements

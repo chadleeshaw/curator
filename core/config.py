@@ -76,16 +76,12 @@ def _validate_directory(dir_path: Path, dir_name: str) -> None:
     try:
         dir_path.mkdir(parents=True, exist_ok=True)
         if not dir_path.is_dir():
-            raise ValueError(
-                f"{dir_name} path exists but is not a directory: {dir_path}"
-            )
+            raise ValueError(f"{dir_name} path exists but is not a directory: {dir_path}")
         if not os.access(dir_path, os.W_OK):
             raise ValueError(f"{dir_name} directory is not writable: {dir_path}")
         logger.debug(f"Validated {dir_name}: {dir_path}")
     except PermissionError as e:
-        raise ValueError(
-            f"Permission denied creating {dir_name} directory: {dir_path}"
-        ) from e
+        raise ValueError(f"Permission denied creating {dir_name} directory: {dir_path}") from e
 
 
 def _validate_database_path(db_path: Path) -> None:
@@ -106,9 +102,7 @@ def _validate_database_path(db_path: Path) -> None:
             raise ValueError(f"Database directory is not writable: {db_dir}")
         logger.debug(f"Validated db_path: {db_path}")
     except PermissionError as e:
-        raise ValueError(
-            f"Permission denied creating database directory: {db_dir}"
-        ) from e
+        raise ValueError(f"Permission denied creating database directory: {db_dir}") from e
 
 
 def _apply_storage_env_overrides(storage: Dict[str, Any]) -> None:
@@ -224,8 +218,7 @@ class ConfigLoader:
             test_config_path = Path(DEFAULT_TEST_CONFIG_PATH)
             if test_config_path.exists():
                 logger.warning(
-                    f"Config file not found at {self.config_path}, "
-                    f"using test config: {test_config_path}"
+                    f"Config file not found at {self.config_path}, " f"using test config: {test_config_path}"
                 )
                 self.config_path = test_config_path
             else:
@@ -353,9 +346,7 @@ class ConfigLoader:
 
     def get_logging(self) -> Dict[str, Any]:
         """Get logging configuration with environment variable overrides"""
-        logging_config = self.config.get(
-            CONFIG_KEY_LOGGING, {"level": DEFAULT_LOG_LEVEL}
-        ).copy()
+        logging_config = self.config.get(CONFIG_KEY_LOGGING, {"level": DEFAULT_LOG_LEVEL}).copy()
 
         # Environment variables override YAML config
         if os.environ.get(ENV_CURATOR_LOG_FILE):

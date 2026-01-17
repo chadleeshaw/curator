@@ -79,9 +79,7 @@ class OCRServiceConfig:
             return True
         except Exception as e:
             logger.warning(f"Tesseract binary not found: {e}")
-            logger.warning(
-                "Install with: apt-get install tesseract-ocr (Docker) or brew install tesseract (Mac)"
-            )
+            logger.warning("Install with: apt-get install tesseract-ocr (Docker) or brew install tesseract (Mac)")
             return False
 
 
@@ -111,12 +109,7 @@ def _check_ocr_available():
     except ImportError:
         pytesseract_ok = False
 
-    return (
-        _ocr_config.tesseract_available
-        and not _ocr_config.ocr_disabled
-        and pymupdf_ok
-        and pytesseract_ok
-    )
+    return _ocr_config.tesseract_available and not _ocr_config.ocr_disabled and pymupdf_ok and pytesseract_ok
 
 
 OCR_AVAILABLE = _check_ocr_available()
@@ -237,15 +230,11 @@ def _extract_year(text: str) -> Optional[int]:
     # Step 1: Remove spaces within 4-digit year patterns
     # Match 4 individual characters with optional spaces: "2 0 2 4" or "200 0"
     # Must start with 1 or 2, second char must be 9, 0, or O
-    cleaned_text = re.sub(
-        r"([12])\s*([09O])\s*([0-9O])\s*([0-9O])", r"\1\2\3\4", cleaned_text
-    )
+    cleaned_text = re.sub(r"([12])\s*([09O])\s*([0-9O])\s*([0-9O])", r"\1\2\3\4", cleaned_text)
 
     # Step 2: Handle O → 0 confusion
     # Match sequences like: 2OOO, 20OO, 2O00, 19OO, etc.
-    potential_years = re.finditer(
-        r"(?<![0-9])([12][09O])([0-9O]{2})(?![0-9])", cleaned_text
-    )
+    potential_years = re.finditer(r"(?<![0-9])([12][09O])([0-9O]{2})(?![0-9])", cleaned_text)
     for match in potential_years:
         cleaned_year = match.group(0).replace("O", "0")
         try:
@@ -316,9 +305,7 @@ def _is_special_edition(text_upper_spaced: str) -> bool:
     return False
 
 
-def _get_word_confidence(
-    search_text: str, words_data: List[Dict[str, Any]]
-) -> Optional[int]:
+def _get_word_confidence(search_text: str, words_data: List[Dict[str, Any]]) -> Optional[int]:
     """
     Find average confidence score for a specific text in OCR words.
 
@@ -381,20 +368,14 @@ def _calculate_field_confidence(
         if month_number:
             # Find all OCR month name variations that map to this number
             # e.g., for January: ["JANUARY", "JAN"]
-            month_search_terms = [
-                name for name, num in OCR_MONTH_NAMES.items() if num == month_number
-            ]
+            month_search_terms = [name for name, num in OCR_MONTH_NAMES.items() if num == month_number]
             if month_search_terms:
-                confidences["month_confidence"] = _get_word_confidence(
-                    month_search_terms[0], all_words
-                )
+                confidences["month_confidence"] = _get_word_confidence(month_search_terms[0], all_words)
 
     # Issue number confidence
     if metadata.get("issue_number"):
         issue_str = str(metadata["issue_number"])
-        confidences["issue_number_confidence"] = _get_word_confidence(
-            issue_str, all_words
-        )
+        confidences["issue_number_confidence"] = _get_word_confidence(issue_str, all_words)
 
     # Volume confidence
     if metadata.get("volume"):
@@ -404,9 +385,7 @@ def _calculate_field_confidence(
     # Overall confidence (average of all valid words)
     all_confidences = [w["confidence"] for w in all_words if w.get("confidence", 0) > 0]
     if all_confidences:
-        confidences["overall_confidence"] = int(
-            sum(all_confidences) / len(all_confidences)
-        )
+        confidences["overall_confidence"] = int(sum(all_confidences) / len(all_confidences))
 
     return confidences
 
@@ -466,9 +445,7 @@ class OCRService:
                 img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
 
                 # Get structured OCR data as a dict
-                data = pytesseract.image_to_data(
-                    img, output_type=pytesseract.Output.DICT, lang=lang_code
-                )
+                data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT, lang=lang_code)
 
                 # Filter out low-confidence or empty detections
                 words = []
@@ -504,9 +481,7 @@ class OCRService:
                     }
                 )
 
-                logger.debug(
-                    f"OCR extracted {len(words)} words from page {page_num + 1} of {pdf_path}"
-                )
+                logger.debug(f"OCR extracted {len(words)} words from page {page_num + 1} of {pdf_path}")
 
             doc.close()
 
@@ -517,9 +492,7 @@ class OCRService:
             return results
 
         except Exception as e:
-            logger.error(
-                f"Error extracting text from PDF {pdf_path}: {e}", exc_info=True
-            )
+            logger.error(f"Error extracting text from PDF {pdf_path}: {e}", exc_info=True)
             return {"pages": [], "error": str(e)}
 
     @staticmethod
@@ -543,9 +516,7 @@ class OCRService:
         """
         if not OCR_AVAILABLE:
             if not _ocr_config.warning_logged:
-                logger.warning(
-                    "Tesseract OCR not available. Install with: apt-get install tesseract-ocr"
-                )
+                logger.warning("Tesseract OCR not available. Install with: apt-get install tesseract-ocr")
                 _ocr_config.warning_logged = True
             return ""
 
@@ -557,9 +528,7 @@ class OCRService:
             img = Image.open(image_path)
 
             # Get structured OCR data
-            data = pytesseract.image_to_data(
-                img, output_type=pytesseract.Output.DICT, lang=lang_code
-            )
+            data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT, lang=lang_code)
 
             # Filter and extract text
             text_parts = []
@@ -571,9 +540,7 @@ class OCRService:
                     text_parts.append(text)
 
             full_text = " ".join(text_parts)
-            logger.debug(
-                f"Tesseract extracted {len(text_parts)} words from {image_path}"
-            )
+            logger.debug(f"Tesseract extracted {len(text_parts)} words from {image_path}")
             return full_text.strip()
 
         except Exception as e:
@@ -602,9 +569,7 @@ class OCRService:
         """
         if not OCR_AVAILABLE:
             if not _ocr_config.warning_logged:
-                logger.warning(
-                    "Tesseract OCR not available. Install with: apt-get install tesseract-ocr"
-                )
+                logger.warning("Tesseract OCR not available. Install with: apt-get install tesseract-ocr")
                 _ocr_config.warning_logged = True
             return {"text": "", "words": [], "word_count": 0}
 
@@ -616,9 +581,7 @@ class OCRService:
             img = Image.open(image_path)
 
             # Get structured OCR data
-            data = pytesseract.image_to_data(
-                img, output_type=pytesseract.Output.DICT, lang=lang_code
-            )
+            data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT, lang=lang_code)
 
             # Filter and extract text + words
             text_parts = []
@@ -656,9 +619,7 @@ class OCRService:
             return {"text": "", "words": [], "word_count": 0, "error": str(e)}
 
     @staticmethod
-    def extract_metadata_from_text(
-        text: str, words_data: Optional[List[Dict[str, Any]]] = None
-    ) -> Dict[str, any]:
+    def extract_metadata_from_text(text: str, words_data: Optional[List[Dict[str, Any]]] = None) -> Dict[str, any]:
         """
         Extract metadata from OCR text with optional confidence scores.
 
@@ -704,9 +665,7 @@ class OCRService:
         return metadata
 
     @staticmethod
-    def analyze_cover(
-        cover_path: str, language: Optional[str] = None
-    ) -> Dict[str, any]:
+    def analyze_cover(cover_path: str, language: Optional[str] = None) -> Dict[str, any]:
         """
         Analyze a cover image or PDF using OCR to extract metadata.
         For PDFs, scans the first 2 pages (some PDFs have cover on page 2).
@@ -731,9 +690,7 @@ class OCRService:
 
         # Skip EPUB files - they are text-based and should use TextScanService
         if path.suffix.lower() == ".epub":
-            logger.info(
-                f"Skipping OCR for EPUB file (use TextScanService instead): {cover_path}"
-            )
+            logger.info(f"Skipping OCR for EPUB file (use TextScanService instead): {cover_path}")
             return {
                 "ocr_available": True,
                 "text_found": False,
@@ -742,17 +699,13 @@ class OCRService:
                 "reason": "EPUB files are text-based, use TextScanService.scan_document() instead",
             }
 
-        logger.info(
-            f"Analyzing cover with OCR: {cover_path} (language: {language or 'English'})"
-        )
+        logger.info(f"Analyzing cover with OCR: {cover_path} (language: {language or 'English'})")
         text = ""
         metadata = {}
 
         # For PDF, scan first N pages (configurable via OCR_MAX_PAGES)
         if path.suffix.lower() == ".pdf":
-            logger.debug(
-                f"Extracting text from first {OCR_MAX_PAGES} pages of PDF using OCR"
-            )
+            logger.debug(f"Extracting text from first {OCR_MAX_PAGES} pages of PDF using OCR")
             ocr_results = OCRService.extract_text_from_pdf_pages(
                 str(path),
                 max_pages=OCR_MAX_PAGES,
@@ -789,9 +742,7 @@ class OCRService:
         else:
             # It's already an image file, use OCR directly
             logger.debug("Using OCR for text extraction on image file")
-            ocr_result = OCRService.extract_text_and_words_from_image(
-                cover_path, language=language
-            )
+            ocr_result = OCRService.extract_text_and_words_from_image(cover_path, language=language)
             text = ocr_result.get("text", "")
             all_words = ocr_result.get("words", [])
             metadata["extraction_method"] = "ocr_image"
@@ -803,9 +754,7 @@ class OCRService:
         logger.debug(f"Extracted text: {text[:200]}...")  # Log first 200 chars
 
         # Extract metadata from text with confidence scores
-        extracted_metadata = OCRService.extract_metadata_from_text(
-            text, words_data=all_words if all_words else None
-        )
+        extracted_metadata = OCRService.extract_metadata_from_text(text, words_data=all_words if all_words else None)
         metadata.update(extracted_metadata)
         metadata["ocr_available"] = True
         metadata["text_found"] = True

@@ -107,12 +107,8 @@ def test_dont_overwrite_existing_issue_number():
 
     # Should only update year (high confidence), not issue_number (low confidence)
     assert updated is True
-    assert (
-        magazine.extra_metadata["issue_number"] == 405
-    )  # Original preserved (OCR rejected)
-    assert (
-        magazine.extra_metadata["year"] == 2024
-    )  # OCR value applied (high confidence)
+    assert magazine.extra_metadata["issue_number"] == 405  # Original preserved (OCR rejected)
+    assert magazine.extra_metadata["year"] == 2024  # OCR value applied (high confidence)
 
 
 def test_apply_special_edition_flag():

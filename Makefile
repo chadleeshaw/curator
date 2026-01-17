@@ -1,4 +1,4 @@
-.PHONY: help lint format lint-python lint-js lint-css format-python format-js format-css test test-unit test-integration test-e2e test-routers test-coverage test-quick install run clean
+.PHONY: help lint format lint-python lint-js lint-css format-python format-js format-css test test-unit test-integration test-e2e test-routers test-coverage test-quick install install-hooks run clean ci-lint
 
 PYTHON_FILES := $(shell find . -name '*.py' -not -path './.venv/*' -not -path './node_modules/*' -not -path './.node_modules/*')
 JS_FILES := static/js/*.js
@@ -9,11 +9,13 @@ help:
 	@echo ""
 	@echo "Setup:"
 	@echo "  make install          Install all dependencies"
+	@echo "  make install-hooks    Install Git pre-push hooks"
 	@echo ""
 	@echo "Development:"
 	@echo "  make run              Start the application"
 	@echo "  make format           Format all code (Python, JS, CSS)"
 	@echo "  make lint             Run all linters"
+	@echo "  make ci-lint          Run CI linters (matches GitHub exactly)"
 	@echo ""
 	@echo "Linting:"
 	@echo "  make lint-python      Lint Python files (pylint + flake8)"
@@ -44,6 +46,9 @@ install:
 	npm install > /dev/null 2>&1
 	@echo "✓ Dependencies installed"
 
+install-hooks:
+	@./setup-hooks.sh
+
 # Running the app
 run:
 	@echo "🚀 Starting application..."
@@ -65,6 +70,27 @@ lint-js:
 lint-css:
 	@echo "🎨 Linting CSS files..."
 	@npx stylelint $(CSS_FILES) 2>/dev/null || echo "  ⚠ Some CSS issues found"
+
+# CI Linting (matches GitHub Actions exactly)
+ci-lint:
+	@echo "🔍 Running CI linters (matches GitHub exactly)..."
+	@echo ""
+	@echo "📝 Running pylint..."
+	@.venv/bin/python -m pylint --fail-under=7.0 --recursive=y . --ignore=.venv,node_modules || true
+	@echo ""
+	@echo "📝 Running flake8..."
+	@find . -name '*.py' -not -path './.venv/*' -not -path './node_modules/*' -print0 | xargs -0 .venv/bin/python -m flake8
+	@echo ""
+	@echo "🐍 Checking Black formatting..."
+	@find . -name '*.py' -not -path './.venv/*' -not -path './node_modules/*' -print0 | xargs -0 .venv/bin/python -m black --check --line-length=120
+	@echo ""
+	@echo "📜 Running eslint..."
+	@npx eslint $(JS_FILES)
+	@echo ""
+	@echo "🎨 Running stylelint..."
+	@npx stylelint $(CSS_FILES)
+	@echo ""
+	@echo "✅ All CI linters passed!"
 
 # Formatting
 format: format-python format-js format-css

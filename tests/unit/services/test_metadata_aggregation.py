@@ -41,9 +41,7 @@ class TestMetadataAggregation:
             "field_overrides": {},
         }
 
-        result = _apply_scan_metadata_to_magazine(
-            self.magazine, scan_metadata, metadata_config
-        )
+        result = _apply_scan_metadata_to_magazine(self.magazine, scan_metadata, metadata_config)
 
         assert result is True
         assert self.magazine.extra_metadata["year"] == 2024  # Should use OCR value
@@ -66,14 +64,10 @@ class TestMetadataAggregation:
             "field_overrides": {},
         }
 
-        result = _apply_scan_metadata_to_magazine(
-            self.magazine, scan_metadata, metadata_config
-        )
+        result = _apply_scan_metadata_to_magazine(self.magazine, scan_metadata, metadata_config)
 
         # OCR should be rejected, filename value should be preserved
-        assert (
-            self.magazine.extra_metadata["year"] == 2023
-        )  # Should keep filename value
+        assert self.magazine.extra_metadata["year"] == 2023  # Should keep filename value
 
     def test_per_field_aggregation_different_sources(self):
         """Test that different fields can come from different sources"""
@@ -95,15 +89,11 @@ class TestMetadataAggregation:
             "field_overrides": {},
         }
 
-        result = _apply_scan_metadata_to_magazine(
-            self.magazine, scan_metadata, metadata_config
-        )
+        result = _apply_scan_metadata_to_magazine(self.magazine, scan_metadata, metadata_config)
 
         assert result is True
         assert self.magazine.extra_metadata["year"] == 2024  # From OCR
-        assert (
-            self.magazine.extra_metadata["month"] == "January"
-        )  # From OCR, converted to name
+        assert self.magazine.extra_metadata["month"] == "January"  # From OCR, converted to name
         assert self.magazine.extra_metadata.get("issue_number") == 5  # From filename
 
     def test_field_specific_overrides(self):
@@ -125,9 +115,7 @@ class TestMetadataAggregation:
             "field_overrides": {"year": {"ocr": 80}},  # Higher threshold for year
         }
 
-        result = _apply_scan_metadata_to_magazine(
-            self.magazine, scan_metadata, metadata_config
-        )
+        result = _apply_scan_metadata_to_magazine(self.magazine, scan_metadata, metadata_config)
 
         # Year should be rejected (75% < 80% required), so no updates made
         assert result is False
@@ -155,9 +143,7 @@ class TestMetadataAggregation:
             "field_overrides": {},
         }
 
-        result = _apply_scan_metadata_to_magazine(
-            self.magazine, scan_metadata, metadata_config
-        )
+        result = _apply_scan_metadata_to_magazine(self.magazine, scan_metadata, metadata_config)
 
         # Should use OCR (first in priority, meets threshold)
         assert self.magazine.extra_metadata["year"] == 2024
@@ -197,9 +183,7 @@ class TestMetadataAggregation:
             "field_overrides": {},
         }
 
-        result = _apply_scan_metadata_to_magazine(
-            self.magazine, scan_metadata, metadata_config
-        )
+        result = _apply_scan_metadata_to_magazine(self.magazine, scan_metadata, metadata_config)
 
         # Should accept text_scan even though no confidence field
         # (treated as 100% which exceeds 50% threshold)
@@ -222,14 +206,10 @@ class TestMetadataAggregation:
             "field_overrides": {},
         }
 
-        result = _apply_scan_metadata_to_magazine(
-            self.magazine, scan_metadata, metadata_config
-        )
+        result = _apply_scan_metadata_to_magazine(self.magazine, scan_metadata, metadata_config)
 
         assert result is True
-        assert (
-            self.magazine.extra_metadata["month"] == "January"
-        )  # Month converted to name
+        assert self.magazine.extra_metadata["month"] == "January"  # Month converted to name
         assert self.magazine.extra_metadata["month"] == "January"
 
     def test_all_fields_below_threshold(self):
@@ -249,9 +229,7 @@ class TestMetadataAggregation:
             "field_overrides": {},
         }
 
-        result = _apply_scan_metadata_to_magazine(
-            self.magazine, scan_metadata, metadata_config
-        )
+        result = _apply_scan_metadata_to_magazine(self.magazine, scan_metadata, metadata_config)
 
         # No field should be updated (all rejected)
         assert result is False
@@ -284,18 +262,12 @@ class TestMetadataAggregation:
             },
         }
 
-        result = _apply_scan_metadata_to_magazine(
-            self.magazine, scan_metadata, metadata_config
-        )
+        result = _apply_scan_metadata_to_magazine(self.magazine, scan_metadata, metadata_config)
 
         assert result is True
         assert self.magazine.extra_metadata["year"] == 2024  # Passed (85% >= 70%)
-        assert (
-            self.magazine.extra_metadata["month"] == "June"
-        )  # Passed (65% >= 60% override), converted to name
-        assert (
-            self.magazine.extra_metadata.get("issue_number") is None
-        )  # Failed (65% < 75%)
+        assert self.magazine.extra_metadata["month"] == "June"  # Passed (65% >= 60% override), converted to name
+        assert self.magazine.extra_metadata.get("issue_number") is None  # Failed (65% < 75%)
         assert self.magazine.extra_metadata.get("volume") == 10  # Passed (80% >= 75%)
 
     def test_priority_order_filename_first(self):
@@ -317,9 +289,7 @@ class TestMetadataAggregation:
             "field_overrides": {},
         }
 
-        result = _apply_scan_metadata_to_magazine(
-            self.magazine, scan_metadata, metadata_config
-        )
+        result = _apply_scan_metadata_to_magazine(self.magazine, scan_metadata, metadata_config)
 
         # Should use filename (first in priority)
         assert self.magazine.extra_metadata["year"] == 2022
@@ -337,9 +307,7 @@ class TestMetadataAggregation:
             "field_overrides": {},
         }
 
-        result = _apply_scan_metadata_to_magazine(
-            self.magazine, scan_metadata, metadata_config
-        )
+        result = _apply_scan_metadata_to_magazine(self.magazine, scan_metadata, metadata_config)
 
         # Should return False (no updates made)
         assert result is False
@@ -363,9 +331,7 @@ class TestMetadataAggregation:
             "field_overrides": {},
         }
 
-        result = _apply_scan_metadata_to_magazine(
-            self.magazine, scan_metadata, metadata_config
-        )
+        result = _apply_scan_metadata_to_magazine(self.magazine, scan_metadata, metadata_config)
 
         assert result is True
         assert self.magazine.extra_metadata.get("special_edition") is True

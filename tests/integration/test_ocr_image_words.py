@@ -37,9 +37,7 @@ class TestOCRImageWordsExtraction:
         mock_pytesseract.Output = MagicMock(DICT=1)
 
         # Extract text and words
-        result = OCRService.extract_text_and_words_from_image(
-            "/path/to/cover.jpg", language="English"
-        )
+        result = OCRService.extract_text_and_words_from_image("/path/to/cover.jpg", language="English")
 
         # Verify structure
         assert "text" in result
@@ -90,9 +88,7 @@ class TestOCRImageWordsExtraction:
         }
         mock_pytesseract.Output = MagicMock(DICT=1)
 
-        result = OCRService.extract_text_and_words_from_image(
-            "/path/to/cover.jpg", confidence_threshold=30
-        )
+        result = OCRService.extract_text_and_words_from_image("/path/to/cover.jpg", confidence_threshold=30)
 
         # Only high-confidence words should be included
         assert result["word_count"] == 2

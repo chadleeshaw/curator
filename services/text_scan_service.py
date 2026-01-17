@@ -122,9 +122,7 @@ class TextScanService:
             True if metadata has year/month/volume, False otherwise
         """
         return (
-            metadata.get("year") is not None
-            or metadata.get("month") is not None
-            or metadata.get("volume") is not None
+            metadata.get("year") is not None or metadata.get("month") is not None or metadata.get("volume") is not None
         )
 
     @staticmethod
@@ -175,8 +173,6 @@ class TextScanService:
 
         metadata["scanned"] = True  # Text scan was performed
         metadata["text_found"] = True
-        metadata["has_sufficient_metadata"] = TextScanService._has_sufficient_metadata(
-            metadata
-        )
+        metadata["has_sufficient_metadata"] = TextScanService._has_sufficient_metadata(metadata)
 
         return metadata
