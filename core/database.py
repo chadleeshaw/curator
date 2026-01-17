@@ -50,7 +50,8 @@ class DatabaseManager:
             logger.info(f"Creating missing tables: {', '.join(sorted(missing_tables))}")
             # Create only the missing tables
             Base.metadata.create_all(
-                self.engine, tables=[Base.metadata.tables[table_name] for table_name in missing_tables]
+                self.engine,
+                tables=[Base.metadata.tables[table_name] for table_name in missing_tables],
             )
             logger.info(f"✓ Created {len(missing_tables)} missing table(s)")
             # Refresh inspector after creating tables
@@ -74,6 +75,9 @@ class DatabaseManager:
                 ("content_hash", "VARCHAR(64)"),
                 ("created_at", "DATETIME"),
                 ("updated_at", "DATETIME"),
+            ],
+            "download_submissions": [
+                ("extra_status", "VARCHAR(512)"),
             ],
         }
 

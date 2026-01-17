@@ -120,31 +120,66 @@ async def get_tasks_status():
         else:
             logger.debug("Tasks Status - OCR Processor task not available")
 
+        # Get scheduler status if available
+        scheduler_status = None
+        if _task_scheduler:
+            scheduler_status = _task_scheduler.get_status()
+
         # Auto-download task (from task scheduler if available)
-        tasks.append(
-            {
-                "id": "auto_download",
-                "name": "Auto-Download",
-                "description": "Automatically searches for and downloads new issues of tracked periodicals",
-                "interval": 1800,
-                "last_run": None,
-                "next_run": None,
-                "last_status": None,
-            }
-        )
+        auto_download_info = {
+            "id": "auto_download",
+            "name": "Auto-Download",
+            "description": "Automatically searches for and downloads new issues of tracked periodicals",
+            "interval": 1800,
+            "last_run": None,
+            "next_run": None,
+            "last_status": None,
+        }
+        if scheduler_status and "auto_download" in scheduler_status.get("tasks", {}):
+            task_data = scheduler_status["tasks"]["auto_download"]
+            last_run = task_data.get("last_run")
+            failure_count = task_data.get("failure_count", 0)
+            # Only set status if task has run at least once
+            status = None
+            if last_run:
+                status = "failed" if failure_count > 0 else "success"
+            auto_download_info.update(
+                {
+                    "interval": task_data.get("interval", 1800),
+                    "last_run": last_run,
+                    "next_run": task_data.get("next_run"),
+                    "last_status": status,
+                }
+            )
+        tasks.append(auto_download_info)
 
         # Cleanup covers task
-        tasks.append(
-            {
-                "id": "cleanup_orphaned_covers",
-                "name": "Auto-Thumbnail",
-                "description": "Automatically generates and manages thumbnail images for periodicals",
-                "interval": 86400,
-                "last_run": None,
-                "next_run": None,
-                "last_status": None,
-            }
-        )
+        cleanup_covers_info = {
+            "id": "cleanup_orphaned_covers",
+            "name": "Auto-Thumbnail",
+            "description": "Automatically generates and manages thumbnail images for periodicals",
+            "interval": 86400,
+            "last_run": None,
+            "next_run": None,
+            "last_status": None,
+        }
+        if scheduler_status and "cleanup_orphaned_covers" in scheduler_status.get("tasks", {}):
+            task_data = scheduler_status["tasks"]["cleanup_orphaned_covers"]
+            last_run = task_data.get("last_run")
+            failure_count = task_data.get("failure_count", 0)
+            # Only set status if task has run at least once
+            status = None
+            if last_run:
+                status = "failed" if failure_count > 0 else "success"
+            cleanup_covers_info.update(
+                {
+                    "interval": task_data.get("interval", 86400),
+                    "last_run": last_run,
+                    "next_run": task_data.get("next_run"),
+                    "last_status": status,
+                }
+            )
+        tasks.append(cleanup_covers_info)
 
         logger.debug(f"Tasks Status - Returning {len(tasks)} tasks to client")
 

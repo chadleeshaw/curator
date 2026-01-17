@@ -167,101 +167,6 @@
               <!-- Will be populated by JavaScript -->
             </div>
           </div>
-
-          <!-- File Maintenance Section -->
-          <div class="file-maintenance-section">
-            <h2>🗂️ File Maintenance</h2>
-            <p style="color: var(--text-secondary); margin-bottom: 25px">
-              Tools for reorganizing and maintaining your library files.
-            </p>
-
-            <!-- Reorganization Card -->
-            <div
-              style="
-                padding: 20px;
-                background: var(--surface-variant);
-                border-radius: 8px;
-                border: 1px solid var(--border);
-                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-              "
-            >
-              <h3 style="margin-top: 0; margin-bottom: 15px; color: var(--text-primary)">
-                📁 Reorganize Library Files
-              </h3>
-              <p style="color: var(--text-secondary); margin-bottom: 20px">
-                Clean up messy folder structures and reorganize files to match your current
-                organization pattern. This will move files to proper locations and remove old
-                directories.
-              </p>
-
-              <div style="display: grid; gap: 15px; margin-bottom: 20px">
-                <div class="settings-field">
-                  <label
-                    for="reorganize-category"
-                    style="display: block; margin-bottom: 8px; font-weight: 500"
-                    >Category:</label
-                  >
-                  <select
-                    id="reorganize-category"
-                    style="
-                      width: 100%;
-                      padding: 8px 12px;
-                      border: 1px solid var(--border);
-                      border-radius: 4px;
-                      background: var(--background);
-                      color: var(--text-primary);
-                    "
-                  >
-                    <option value="Magazines">Magazines</option>
-                    <option value="Comics">Comics</option>
-                    <option value="News">News</option>
-                    <option value="Articles">Articles</option>
-                  </select>
-                </div>
-
-                <div class="settings-field">
-                  <label
-                    for="reorganize-pattern"
-                    style="display: block; margin-bottom: 8px; font-weight: 500"
-                    >Organization Pattern (optional):</label
-                  >
-                  <input
-                    type="text"
-                    id="reorganize-pattern"
-                    placeholder="{category}/{title}/{year}/"
-                    style="
-                      width: 100%;
-                      padding: 8px 12px;
-                      border: 1px solid var(--border);
-                      border-radius: 4px;
-                      background: var(--background);
-                      color: var(--text-primary);
-                    "
-                  />
-                  <p class="text-sm text-hint mt-8">
-                    Leave empty to use config default. Available tags: {category}, {title}, {year},
-                    {month}, {day}
-                  </p>
-                </div>
-              </div>
-
-              <div style="display: flex; gap: 10px; flex-wrap: wrap">
-                <button onclick="runReorganizePreview()" class="btn-primary">
-                  🔍 Preview Changes
-                </button>
-                <button
-                  onclick="runReorganize()"
-                  class="btn-secondary"
-                  style="background: var(--status-warning); color: white"
-                >
-                  ▶️ Reorganize Files
-                </button>
-              </div>
-
-              <div id="reorganize-status" class="hidden" style="margin-top: 20px"></div>
-              <div id="reorganize-results" style="margin-top: 20px"></div>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -475,8 +380,8 @@
                 No OCR jobs in queue
               </p>
               <p style="color: var(--text-secondary); font-size: 0.95em">
-                💡 Tip: High-res PNG covers are generated every 5 minutes and queued for OCR
-                processing
+                💡 Tip: OCR jobs are queued automatically when magazines are imported and processed
+                in the background
               </p>
             </div>
 
@@ -752,6 +657,101 @@
             </p>
             <button onclick="saveImportSettings()" class="save-btn">Save Import Settings</button>
             <div id="import-message" class="hidden"></div>
+          </div>
+
+          <!-- File Maintenance Section -->
+          <div id="file-maintenance-section" class="settings-section">
+            <h3>🗂️ File Maintenance</h3>
+            <p class="text-base text-muted mb-15">
+              Tools for reorganizing and maintaining your library files.
+            </p>
+
+            <!-- Reorganization Card -->
+            <div
+              style="
+                padding: 20px;
+                background: var(--surface-variant);
+                border-radius: 8px;
+                border: 1px solid var(--border);
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+              "
+            >
+              <h4 style="margin-top: 0; margin-bottom: 15px; color: var(--text-primary)">
+                📁 Reorganize Library Files
+              </h4>
+              <p style="color: var(--text-secondary); margin-bottom: 20px">
+                Clean up messy folder structures and reorganize files to match your current
+                organization pattern. This will move files to proper locations and remove old
+                directories.
+              </p>
+
+              <div style="display: grid; gap: 15px; margin-bottom: 20px">
+                <div class="settings-field">
+                  <label
+                    for="reorganize-category"
+                    style="display: block; margin-bottom: 8px; font-weight: 500"
+                    >Category:</label
+                  >
+                  <select
+                    id="reorganize-category"
+                    style="
+                      width: 100%;
+                      padding: 8px 12px;
+                      border: 1px solid var(--border);
+                      border-radius: 4px;
+                      background: var(--background);
+                      color: var(--text-primary);
+                    "
+                  >
+                    <option value="Magazines">Magazines</option>
+                    <option value="Comics">Comics</option>
+                    <option value="News">News</option>
+                    <option value="Articles">Articles</option>
+                  </select>
+                </div>
+
+                <div class="settings-field">
+                  <label
+                    for="reorganize-pattern"
+                    style="display: block; margin-bottom: 8px; font-weight: 500"
+                    >Organization Pattern (optional):</label
+                  >
+                  <input
+                    type="text"
+                    id="reorganize-pattern"
+                    placeholder="{category}/{title}/{year}/"
+                    style="
+                      width: 100%;
+                      padding: 8px 12px;
+                      border: 1px solid var(--border);
+                      border-radius: 4px;
+                      background: var(--background);
+                      color: var(--text-primary);
+                    "
+                  />
+                  <p class="text-sm text-hint mt-8">
+                    Leave empty to use config default. Available tags: {category}, {title}, {year},
+                    {month}, {day}
+                  </p>
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 10px; flex-wrap: wrap">
+                <button onclick="runReorganizePreview()" class="btn-primary">
+                  🔍 Preview Changes
+                </button>
+                <button
+                  onclick="runReorganize()"
+                  class="btn-secondary"
+                  style="background: var(--status-warning); color: white"
+                >
+                  ▶️ Reorganize Files
+                </button>
+              </div>
+
+              <div id="reorganize-status" class="hidden" style="margin-top: 20px"></div>
+              <div id="reorganize-results" style="margin-top: 20px"></div>
+            </div>
           </div>
 
           <!-- User Account Settings -->
