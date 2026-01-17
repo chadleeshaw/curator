@@ -9,6 +9,10 @@ search_providers:
     enabled: true
     categories: '7000,7010,7020,7030'
 
+    # Rate limiting settings (to avoid provider bans)
+    max_requests_per_hour: 100 # Self-imposed limit (default: 100 requests/hour)
+    request_delay_seconds: 1.0 # Delay between requests (default: 1 second)
+
 download_client:
   type: sabnzbd
   name: SABnzbd
@@ -127,7 +131,12 @@ tasks:
   # How often each background task runs
 
   # Auto-download: Search for and download new tracked issues
-  auto_download_interval: 1800 # 30 minutes
+  # IMPORTANT: Set this based on how many periodicals you track:
+  #   - 5-10 tracked: 3600 (1 hour) = ~240 searches/day
+  #   - 10-20 tracked: 7200 (2 hours) = ~240 searches/day
+  #   - 20+ tracked: 10800 (3 hours) or higher to avoid rate limits
+  # Formula: (24 hours / interval_hours) × tracked_count = daily_searches
+  auto_download_interval: 7200 # 2 hours (recommended for most users)
 
   # Download monitor: Check download status and import completed files
   download_monitor_interval: 30 # 30 seconds
