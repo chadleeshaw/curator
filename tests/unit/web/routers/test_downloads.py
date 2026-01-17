@@ -28,9 +28,7 @@ def test_db():
         db_path = tmp_file.name
 
     try:
-        engine = create_engine(
-            f"sqlite:///{db_path}", connect_args={"check_same_thread": False}
-        )
+        engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
         Base.metadata.create_all(engine)
         session_factory = sessionmaker(bind=engine)
         yield engine, session_factory
@@ -46,9 +44,7 @@ def mock_download_client():
     client.name = "TestClient"
     client.type = "test"
     client.submit = Mock(return_value="job_123")
-    client.get_status = Mock(
-        return_value={"status": "completed", "progress": 100, "file_path": "/test/path"}
-    )
+    client.get_status = Mock(return_value={"status": "completed", "progress": 100, "file_path": "/test/path"})
     return client
 
 
@@ -99,9 +95,7 @@ class TestDownloadSubmission:
             "raw_metadata": {},
         }
 
-        submission = download_manager.submit_download(
-            tracking.id, search_result, session
-        )
+        submission = download_manager.submit_download(tracking.id, search_result, session)
 
         assert submission is not None
         assert submission.job_id == "job_123"
@@ -132,9 +126,7 @@ class TestDownloadSubmission:
             "publication_date": None,
             "raw_metadata": {},
         }
-        submission1 = download_manager.submit_download(
-            tracking.id, search_result1, session
-        )
+        submission1 = download_manager.submit_download(tracking.id, search_result1, session)
         assert submission1 is not None
 
         # Try to submit similar issue (should be detected as duplicate)
@@ -145,9 +137,7 @@ class TestDownloadSubmission:
             "publication_date": None,
             "raw_metadata": {},
         }
-        submission2 = download_manager.submit_download(
-            tracking.id, search_result2, session
-        )
+        submission2 = download_manager.submit_download(tracking.id, search_result2, session)
         assert submission2 is None  # Should be rejected as duplicate
 
         # Verify duplicate was recorded as SKIPPED
@@ -294,9 +284,7 @@ class TestDownloadCompletion:
         completed = download_manager.get_completed_downloads(session)
 
         assert len(completed) == 2
-        assert all(
-            s.status == DownloadSubmission.StatusEnum.COMPLETED for s in completed
-        )
+        assert all(s.status == DownloadSubmission.StatusEnum.COMPLETED for s in completed)
         assert all(s.file_path is not None for s in completed)
 
         session.close()
