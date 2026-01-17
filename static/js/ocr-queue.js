@@ -17,6 +17,8 @@ export class OCRQueueManager {
     this.refreshInterval = null;
     /** @type {number} Maximum OCR retry attempts */
     this.maxRetries = 3; // Default value, will be loaded from API
+    /** @type {string} Current filter (all, active, failed, completed) */
+    this.currentFilter = 'active';
 
     // Load constants from API
     this.loadConstants();
@@ -120,14 +122,34 @@ export class OCRQueueManager {
       `;
     }
 
-    // Filter to show only pending and processing jobs
-    const activeJobs = queueData.jobs.filter(
-      (job) => job.status === 'pending' || job.status === 'processing'
-    );
+    // Filter jobs based on current filter
+    let filteredJobs = queueData.jobs;
+    if (this.currentFilter === 'active') {
+      filteredJobs = queueData.jobs.filter(
+        (job) => job.status === 'pending' || job.status === 'processing'
+      );
+    } else if (this.currentFilter === 'failed') {
+      filteredJobs = queueData.jobs.filter((job) => job.status === 'failed');
+    } else if (this.currentFilter === 'completed') {
+      filteredJobs = queueData.jobs.filter((job) => job.status === 'completed');
+    }
+    // 'all' filter shows everything
 
-    if (activeJobs.length === 0) {
+    if (filteredJobs.length === 0) {
       emptyDiv.classList.remove(CSS_CLASSES.HIDDEN);
       tableContainer.classList.add(CSS_CLASSES.HIDDEN);
+
+      // Update empty message based on filter
+      const emptyMessage = emptyDiv.querySelector('p:first-of-type');
+      if (emptyMessage) {
+        const messages = {
+          all: 'No OCR jobs in queue',
+          active: 'No active OCR jobs',
+          failed: 'No failed OCR jobs',
+          completed: 'No completed OCR jobs',
+        };
+        emptyMessage.textContent = messages[this.currentFilter] || 'No OCR jobs in queue';
+      }
       return;
     }
 
@@ -136,7 +158,7 @@ export class OCRQueueManager {
 
     // Build table rows
     tbody.innerHTML = '';
-    activeJobs.forEach((job) => {
+    filteredJobs.forEach((job) => {
       const row = document.createElement('tr');
       row.style.borderBottom = '1px solid var(--border)';
 
@@ -418,7 +440,115 @@ export class OCRQueueManager {
       this.refreshInterval = null;
     }
   }
+
+  /**
+   * Set filter and reload queue
+   * @param {string} filter - Filter type (all, active, failed, completed)
+   */
+  setFilter(filter) {
+    this.currentFilter = filter;
+
+    // Update button states
+    document.querySelectorAll('.filter-btn').forEach((btn) => {
+      btn.classList.remove('active');
+    });
+    const activeBtn = document.getElementById(`ocr-filter-${filter}`);
+    if (activeBtn) {
+      activeBtn.classList.add('active');
+    }
+
+    // Reload queue with new filter
+    this.loadQueue();
+  }
+
+  /**
+   * Clear all failed OCR jobs
+   */
+  async clearFailedJobs() {
+    try {
+      // Show confirmation modal
+      const modal = document.createElement('div');
+      modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+      `;
+
+      const modalContent = document.createElement('div');
+      modalContent.style.cssText =
+        'background: var(--surface); border-radius: 8px; padding: 24px; max-width: 500px; width: 90%; box-shadow: 0 4px 20px rgba(0,0,0,0.3);';
+
+      modalContent.innerHTML = `
+        <h3 style="margin: 0 0 16px 0; color: var(--text-primary);">⚠️ Clear All Failed Jobs</h3>
+        <p style="margin: 0 0 12px 0; color: var(--text-secondary);">Are you sure you want to remove all failed OCR jobs from the queue?</p>
+        <p style="margin: 0 0 20px 0; color: var(--status-failed); font-weight: 600;">This action cannot be undone.</p>
+        <div style="display: flex; gap: 10px; justify-content: flex-end;"></div>
+      `;
+
+      const buttonContainer = modalContent.querySelector('div[style*="display: flex"]');
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.textContent = 'Cancel';
+      cancelBtn.style.cssText =
+        'background: var(--surface-variant); color: var(--text-primary); padding: 8px 16px; border-radius: 4px; border: 1px solid var(--border); cursor: pointer;';
+      cancelBtn.addEventListener('click', () => modal.remove());
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.textContent = 'Clear All Failed';
+      deleteBtn.style.cssText =
+        'background: var(--status-failed); color: white; padding: 8px 16px; border-radius: 4px; border: none; cursor: pointer;';
+      deleteBtn.addEventListener('click', async () => {
+        modal.remove();
+        await this.executeClearFailedJobs();
+      });
+
+      buttonContainer.appendChild(cancelBtn);
+      buttonContainer.appendChild(deleteBtn);
+      modal.appendChild(modalContent);
+
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.remove();
+      });
+
+      document.body.appendChild(modal);
+    } catch (error) {
+      console.error('[OCR Queue] Error showing clear failed modal:', error);
+    }
+  }
+
+  /**
+   * Execute bulk delete of failed jobs
+   */
+  async executeClearFailedJobs() {
+    try {
+      const response = await APIClient.authenticatedFetch('/api/ocr/queue/failed', {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        UIUtils.showToast(`Cleared ${result.count || 0} failed OCR jobs`, 'success');
+        await this.loadQueue();
+      } else {
+        const error = await response.json();
+        UIUtils.showToast(error.detail || 'Failed to clear jobs', 'error');
+      }
+    } catch (error) {
+      console.error('[OCR Queue] Error clearing failed jobs:', error);
+      UIUtils.showToast('Error clearing failed jobs', 'error');
+    }
+  }
 }
 
 // Export singleton instance
 export const ocrQueue = new OCRQueueManager();
+
+// Expose to window for HTML onclick handlers
+window.ocrQueue = ocrQueue;

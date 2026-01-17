@@ -265,6 +265,45 @@ async def clear_pending_ocr_jobs():
     return await run_in_thread(_db_operation)
 
 
+@router.delete("/queue/failed")
+async def clear_failed_ocr_jobs():
+    """
+    Clear all failed OCR jobs from the queue.
+    This is useful for cleaning up jobs that have repeatedly failed.
+
+    Returns:
+        Number of jobs cleared
+    """
+    if _session_factory is None:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+
+    def _db_operation():
+        db = _session_factory()
+        try:
+            # Delete all failed jobs
+            failed_jobs = db.query(OCRJob).filter(OCRJob.status == OCRJob.StatusEnum.FAILED).all()
+
+            count = len(failed_jobs)
+
+            for job in failed_jobs:
+                db.delete(job)
+
+            db.commit()
+
+            logger.info(f"Cleared {count} failed OCR jobs from queue")
+
+            return {"message": f"Cleared {count} failed OCR jobs", "count": count}
+
+        except Exception as e:
+            logger.error(f"Error clearing failed OCR jobs: {e}", exc_info=True)
+            db.rollback()
+            raise HTTPException(status_code=500, detail=str(e))
+        finally:
+            db.close()
+
+    return await run_in_thread(_db_operation)
+
+
 @router.post("/queue/{magazine_id}")
 async def queue_magazine_ocr(magazine_id: int, priority: int = OCRJob.PriorityEnum.NORMAL.value):
     """

@@ -367,6 +367,46 @@
               Monitor OCR text extraction jobs. Auto-refreshes every 5 seconds.
             </p>
 
+            <!-- Filter tabs -->
+            <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap">
+              <button
+                id="ocr-filter-all"
+                class="filter-btn active"
+                onclick="window.ocrQueue.setFilter('all')"
+              >
+                All
+              </button>
+              <button
+                id="ocr-filter-active"
+                class="filter-btn"
+                onclick="window.ocrQueue.setFilter('active')"
+              >
+                Active
+              </button>
+              <button
+                id="ocr-filter-failed"
+                class="filter-btn"
+                onclick="window.ocrQueue.setFilter('failed')"
+              >
+                Failed
+              </button>
+              <button
+                id="ocr-filter-completed"
+                class="filter-btn"
+                onclick="window.ocrQueue.setFilter('completed')"
+              >
+                Completed
+              </button>
+              <button
+                id="ocr-clear-failed-btn"
+                class="btn-secondary"
+                onclick="window.ocrQueue.clearFailedJobs()"
+                style="margin-left: auto"
+              >
+                🗑️ Clear Failed
+              </button>
+            </div>
+
             <div id="ocr-queue-stats" style="margin-bottom: 30px">
               <!-- Will be populated by JavaScript -->
             </div>
