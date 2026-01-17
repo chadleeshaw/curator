@@ -87,9 +87,7 @@ class DownloadMonitor:
         try:
             self.last_run_time = datetime.now()
             self.stats["total_runs"] += 1
-            logger.debug(
-                f"[DownloadMonitor] Monitor run #{self.stats['total_runs']} started"
-            )
+            logger.debug(f"[DownloadMonitor] Monitor run #{self.stats['total_runs']} started")
 
             # Part 1: Monitor download client submissions
             logger.debug("[DownloadMonitor] Checking download client...")
@@ -158,9 +156,7 @@ class DownloadMonitor:
             files.extend(directory.glob("**/*.epub"))
         return files
 
-    def _find_file_in_downloads(
-        self, file_path: str, max_depth: int = DOWNLOAD_FILE_SEARCH_DEPTH
-    ) -> Optional[Path]:
+    def _find_file_in_downloads(self, file_path: str, max_depth: int = DOWNLOAD_FILE_SEARCH_DEPTH) -> Optional[Path]:
         """
         Find a file in the downloads folder, checking multiple possible locations.
         Searches recursively up to max_depth subdirectories.
@@ -242,14 +238,9 @@ class DownloadMonitor:
                 # Check for bad files (failed 2+ times)
                 bad_files = self.download_manager.get_bad_files(session)
                 if bad_files:
-                    logger.error(
-                        f"[DownloadMonitor] {len(bad_files)} files marked as bad (failed 2+ times):"
-                    )
+                    logger.error(f"[DownloadMonitor] {len(bad_files)} files marked as bad (failed 2+ times):")
                     for bad in bad_files[:5]:  # Show first 5
-                        logger.error(
-                            f"  - {bad.result_title}: {bad.last_error} "
-                            f"(attempts: {bad.attempt_count})"
-                        )
+                        logger.error(f"  - {bad.result_title}: {bad.last_error} " f"(attempts: {bad.attempt_count})")
                     if len(bad_files) > 5:
                         logger.error(f"  ... and {len(bad_files) - 5} more bad files")
 
@@ -276,9 +267,7 @@ class DownloadMonitor:
 
         try:
             if not self.downloads_dir.exists():
-                logger.debug(
-                    f"Downloads directory does not exist: {self.downloads_dir}"
-                )
+                logger.debug(f"Downloads directory does not exist: {self.downloads_dir}")
                 return 0
 
             # Check for PDFs and EPUBs recursively
@@ -297,18 +286,13 @@ class DownloadMonitor:
                 imported_count = data.get("imported", 0)
 
                 if imported_count > 0:
-                    logger.info(
-                        f"[DownloadMonitor] Successfully imported {imported_count} files from folder"
-                    )
+                    logger.info(f"[DownloadMonitor] Successfully imported {imported_count} files from folder")
 
                 if data.get("failed", 0) > 0:
                     errors = results.get("errors", [])
-                    error_messages = (
-                        [e.get("message", str(e)) for e in errors] if errors else []
-                    )
+                    error_messages = [e.get("message", str(e)) for e in errors] if errors else []
                     logger.warning(
-                        f"[DownloadMonitor] Failed to import {data['failed']} files. "
-                        f"Errors: {error_messages}"
+                        f"[DownloadMonitor] Failed to import {data['failed']} files. " f"Errors: {error_messages}"
                     )
             else:
                 logger.debug("[DownloadMonitor] No files found in downloads folder")
@@ -339,32 +323,22 @@ class DownloadMonitor:
 
         for submission in pending:
             if not submission.job_id:
-                logger.debug(
-                    f"[DownloadMonitor] Skipping submission {submission.id} - no job_id"
-                )
+                logger.debug(f"[DownloadMonitor] Skipping submission {submission.id} - no job_id")
                 continue
 
             try:
                 logger.debug(f"[DownloadMonitor] Checking job {submission.job_id}")
                 previous_status = submission.status
-                result = self.download_manager.update_submission_status(
-                    submission.job_id, session
-                )
+                result = self.download_manager.update_submission_status(submission.job_id, session)
                 if result:
-                    logger.debug(
-                        f"[DownloadMonitor] Status updated: {result.status.value}"
-                    )
+                    logger.debug(f"[DownloadMonitor] Status updated: {result.status.value}")
 
                     # Special handling when status is PENDING but client returned "unknown"
                     # This happens when job was deleted from client (e.g., due to delete_from_client_on_completion)
-                    if (
-                        result.status == DownloadSubmission.StatusEnum.PENDING
-                        and previous_status
-                        in [
-                            DownloadSubmission.StatusEnum.DOWNLOADING,
-                            DownloadSubmission.StatusEnum.COMPLETED,
-                        ]
-                    ):
+                    if result.status == DownloadSubmission.StatusEnum.PENDING and previous_status in [
+                        DownloadSubmission.StatusEnum.DOWNLOADING,
+                        DownloadSubmission.StatusEnum.COMPLETED,
+                    ]:
                         # Job might have been deleted from client after completion
                         # Check if file exists in downloads folder
                         found_path = self._find_file_in_downloads(result.file_path)
@@ -392,9 +366,7 @@ class DownloadMonitor:
                             )
                             if tracking and tracking.delete_from_client_on_completion:
                                 try:
-                                    if self.download_manager.download_client.delete(
-                                        submission.job_id
-                                    ):
+                                    if self.download_manager.download_client.delete(submission.job_id):
                                         logger.info(
                                             f"[DownloadMonitor] Deleted failed job {submission.job_id} "
                                             f"from download client"
@@ -428,15 +400,11 @@ class DownloadMonitor:
             logger.debug("[DownloadMonitor] No completed downloads from client")
             return 0
 
-        logger.info(
-            f"[DownloadMonitor] Processing {len(completed)} completed downloads from client..."
-        )
+        logger.info(f"[DownloadMonitor] Processing {len(completed)} completed downloads from client...")
         processed_count = 0
 
         for submission in completed:
-            logger.debug(
-                f"[DownloadMonitor] Processing submission {submission.id}: {submission.result_title}"
-            )
+            logger.debug(f"[DownloadMonitor] Processing submission {submission.id}: {submission.result_title}")
 
             if not submission.file_path:
                 logger.warning(f"Submission {submission.id} has no file path")
@@ -464,11 +432,7 @@ class DownloadMonitor:
             # This preserves the tracking association even if the filename is ambiguous
             if submission.tracking_id:
                 try:
-                    tracking = (
-                        session.query(MagazineTracking)
-                        .filter_by(id=submission.tracking_id)
-                        .first()
-                    )
+                    tracking = session.query(MagazineTracking).filter_by(id=submission.tracking_id).first()
                     if tracking:
                         create_sidecar_file(
                             file_path,
@@ -480,25 +444,17 @@ class DownloadMonitor:
                             country=tracking.country,
                         )
                 except Exception as e:
-                    logger.warning(
-                        f"Failed to create sidecar file for {file_path.name}: {e}"
-                    )
+                    logger.warning(f"Failed to create sidecar file for {file_path.name}: {e}")
 
             try:
-                logger.debug(
-                    f"[DownloadMonitor] Importing file from client download: {file_path}"
-                )
+                logger.debug(f"[DownloadMonitor] Importing file from client download: {file_path}")
 
                 # Use file importer to process the file, passing the tracking_id from the submission
                 # This ensures the file is linked to the tracking that requested it
-                result = self.file_importer.import_pdf(
-                    file_path, session, tracking_id=submission.tracking_id
-                )
+                result = self.file_importer.import_pdf(file_path, session, tracking_id=submission.tracking_id)
 
                 if result:
-                    logger.info(
-                        f"[DownloadMonitor] Successfully imported from client: {file_path.name}"
-                    )
+                    logger.info(f"[DownloadMonitor] Successfully imported from client: {file_path.name}")
                     processed_count += 1
 
                     # Mark submission as processed
@@ -513,26 +469,20 @@ class DownloadMonitor:
                         )
                         if tracking and tracking.delete_from_client_on_completion:
                             try:
-                                if self.download_manager.download_client.delete(
-                                    submission.job_id
-                                ):
+                                if self.download_manager.download_client.delete(submission.job_id):
                                     logger.info(
                                         f"[DownloadMonitor] Deleted completed job {submission.job_id} "
                                         f"from download client"
                                     )
                             except Exception as e:
-                                logger.error(
-                                    f"Error deleting from client: {e}", exc_info=True
-                                )
+                                logger.error(f"Error deleting from client: {e}", exc_info=True)
 
                     # Call optional callback (e.g., for database updates)
                     if self.import_callback:
                         try:
                             self.import_callback(file_path, result, submission, session)
                         except Exception as e:
-                            logger.error(
-                                f"Error in import callback: {e}", exc_info=True
-                            )
+                            logger.error(f"Error in import callback: {e}", exc_info=True)
                 else:
                     logger.warning(f"Import failed for: {file_path}")
                     submission.status = DownloadSubmission.StatusEnum.FAILED

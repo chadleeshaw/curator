@@ -16,9 +16,7 @@ from core.config import ConfigLoader
 from core.database import DatabaseManager
 from models.database import DownloadSubmission
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -42,9 +40,7 @@ def diagnose_downloads():
         from sqlalchemy import func
 
         status_counts = (
-            db_session.query(
-                DownloadSubmission.status, func.count(DownloadSubmission.id)
-            )
+            db_session.query(DownloadSubmission.status, func.count(DownloadSubmission.id))
             .group_by(DownloadSubmission.status)
             .all()
         )
@@ -88,25 +84,17 @@ def diagnose_downloads():
             print("-" * 40)
 
             for download in stuck_pending:
-                age_hours = (
-                    datetime.now() - download.created_at
-                ).total_seconds() / 3600
+                age_hours = (datetime.now() - download.created_at).total_seconds() / 3600
                 print(f"    PENDING: {download.result_title} ({age_hours:.1f}h old)")
             for download in stuck_downloading:
-                age_hours = (
-                    datetime.now() - download.created_at
-                ).total_seconds() / 3600
-                print(
-                    f"    DOWNLOADING: {download.result_title} ({age_hours:.1f}h old)"
-                )
+                age_hours = (datetime.now() - download.created_at).total_seconds() / 3600
+                print(f"    DOWNLOADING: {download.result_title} ({age_hours:.1f}h old)")
             print()
 
         # Show recent activity
         recent = (
             db_session.query(DownloadSubmission)
-            .filter(
-                DownloadSubmission.created_at > datetime.now() - timedelta(minutes=30)
-            )
+            .filter(DownloadSubmission.created_at > datetime.now() - timedelta(minutes=30))
             .order_by(DownloadSubmission.created_at.desc())
             .limit(5)
             .all()
@@ -200,15 +188,9 @@ def clear_stuck_downloads():
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Diagnose and fix download queue issues"
-    )
-    parser.add_argument(
-        "--clear-stuck", action="store_true", help="Clear stuck downloads"
-    )
-    parser.add_argument(
-        "--diagnose", action="store_true", help="Show download queue status"
-    )
+    parser = argparse.ArgumentParser(description="Diagnose and fix download queue issues")
+    parser.add_argument("--clear-stuck", action="store_true", help="Clear stuck downloads")
+    parser.add_argument("--diagnose", action="store_true", help="Show download queue status")
 
     args = parser.parse_args()
 

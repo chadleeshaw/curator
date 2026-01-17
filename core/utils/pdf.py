@@ -54,6 +54,9 @@ def validate_pdf(pdf_path: Path) -> bool:
                 return False
             return True
         except Exception as e:
+            logger.warning(f"PDF validation error for {pdf_path}: {e}")
+            return False
+        except Exception as e:
             logger.warning(f"PDF validation failed for {pdf_path}: {e}")
             return False
 
@@ -91,9 +94,7 @@ def extract_cover_from_pdf(
         output_dir.mkdir(parents=True, exist_ok=True)
         cover_path = output_dir / f"{pdf_path.stem}.jpg"
 
-        images = convert_from_path(
-            str(pdf_path), first_page=page_number, last_page=page_number, dpi=dpi
-        )
+        images = convert_from_path(str(pdf_path), first_page=page_number, last_page=page_number, dpi=dpi)
         if not images:
             logger.warning(f"Could not extract images from PDF: {pdf_path}")
             return None
@@ -104,9 +105,7 @@ def extract_cover_from_pdf(
 
     except ImportError as e:
         if "pdf2image" in str(e):
-            logger.warning(
-                "pdf2image not available. Install with: pip install pdf2image"
-            )
+            logger.warning("pdf2image not available. Install with: pip install pdf2image")
         elif "pypdf" in str(e):
             logger.warning("pypdf not available. Install with: pip install pypdf")
         else:
@@ -122,7 +121,4 @@ def extract_cover_from_pdf(
             logger.error(f"File is not a valid PDF: {pdf_path}")
         else:
             logger.error(f"Error extracting cover from {pdf_path}: {e}")
-        return None
-    except Exception as e:
-        logger.error(f"Error extracting cover from {pdf_path}: {e}")
         return None
