@@ -35,7 +35,9 @@ def test_db():
         db_path = tmp_file.name
 
     try:
-        engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
+        engine = create_engine(
+            f"sqlite:///{db_path}", connect_args={"check_same_thread": False}
+        )
         Base.metadata.create_all(engine)
         session_factory = sessionmaker(bind=engine)
         yield engine, session_factory
@@ -70,7 +72,9 @@ def download_manager(mock_download_client):
 class TestAttemptCounting:
     """Test that attempt_count increments on failures"""
 
-    def test_attempt_count_increments_on_failure(self, test_db, download_manager, mock_download_client):
+    def test_attempt_count_increments_on_failure(
+        self, test_db, download_manager, mock_download_client
+    ):
         """Test attempt count increases each time download fails"""
         engine, session_factory = test_db
         session = session_factory()
@@ -131,14 +135,18 @@ class TestAttemptCounting:
             "provider": "test",
         }
 
-        submission = download_manager.submit_download(tracking.id, search_result, session)
+        submission = download_manager.submit_download(
+            tracking.id, search_result, session
+        )
 
         assert submission is not None
         assert submission.attempt_count == 1
 
         session.close()
 
-    def test_multiple_failures_increment_count(self, test_db, download_manager, mock_download_client):
+    def test_multiple_failures_increment_count(
+        self, test_db, download_manager, mock_download_client
+    ):
         """Test attempt count increases with each failure"""
         engine, session_factory = test_db
         session = session_factory()
@@ -208,7 +216,9 @@ class TestBadFileDetection:
 
         session.close()
 
-    def test_get_failed_downloads_excludes_bad_files_by_default(self, test_db, download_manager):
+    def test_get_failed_downloads_excludes_bad_files_by_default(
+        self, test_db, download_manager
+    ):
         """Test get_failed_downloads excludes bad files by default"""
         engine, session_factory = test_db
         session = session_factory()
@@ -240,7 +250,9 @@ class TestBadFileDetection:
 
         session.close()
 
-    def test_get_failed_downloads_includes_bad_files_when_requested(self, test_db, download_manager):
+    def test_get_failed_downloads_includes_bad_files_when_requested(
+        self, test_db, download_manager
+    ):
         """Test get_failed_downloads includes bad files when include_bad_files=True"""
         engine, session_factory = test_db
         session = session_factory()
@@ -275,7 +287,7 @@ class TestRetryPrevention:
     """Test that bad files are not retried"""
 
     def test_bad_files_skipped_on_submit(self, test_db, download_manager):
-        """Test submit_download skips URLs that have failed 2+ times"""
+        """Test submit_download skips files with same fuzzy_match_group that have failed 2+ times"""
         engine, session_factory = test_db
         session = session_factory()
 
@@ -296,21 +308,24 @@ class TestRetryPrevention:
         session.add(bad_submission)
         session.commit()
 
-        # Try to submit the same URL again
+        # Try to submit the same file again (same fuzzy group, different URL)
+        # This simulates a provider returning a different URL for the same file
         search_result = {
-            "title": "Bad File Retry",
-            "url": "http://example.com/bad.nzb",
+            "title": "Bad File",  # Same title = same fuzzy_match_group
+            "url": "http://example.com/bad.nzb?token=different",  # Different URL
             "provider": "test",
         }
 
         result = download_manager.submit_download(tracking.id, search_result, session)
 
-        # Should be rejected (None)
+        # Should be rejected (None) because fuzzy_match_group matches a bad file
         assert result is None
 
         session.close()
 
-    def test_two_failures_still_allows_retry(self, test_db, download_manager, mock_download_client):
+    def test_two_failures_still_allows_retry(
+        self, test_db, download_manager, mock_download_client
+    ):
         """Test files with <2 failures can still be retried"""
         engine, session_factory = test_db
         session = session_factory()
@@ -345,7 +360,9 @@ class TestRetryPrevention:
 
         session.close()
 
-    def test_max_retries_logged(self, test_db, download_manager, mock_download_client, caplog):
+    def test_max_retries_logged(
+        self, test_db, download_manager, mock_download_client, caplog
+    ):
         """Test that reaching max retries is logged"""
         engine, session_factory = test_db
         session = session_factory()
