@@ -1493,7 +1493,7 @@ window.openMergeModal = async function () {
         <input type="checkbox" id="merge-check-${item.id}" value="${item.id}" class="merge-selection-checkbox">
         <label for="merge-check-${item.id}">
           <strong>${item.title}</strong><br>
-          <span style="font-size: 12px; color: var(--text-secondary);">Publisher: ${item.publisher || 'Unknown'} | ISSN: ${item.issn || 'N/A'}</span>
+          <span style="font-size: 12px; color: var(--text-secondary);">Language: ${item.language || 'Unknown'} | Country: ${item.country || 'N/A'}</span>
         </label>
       </div>
     `
@@ -1573,7 +1573,8 @@ window.showMergeTargetSelection = async function () {
 
   const options = selectedItems
     .map(
-      (item) => `<option value="${item.id}">${item.title} (${item.publisher || 'Unknown'})</option>`
+      (item) =>
+        `<option value="${item.id}">${item.title} (${item.language || 'Unknown'} - ${item.country || 'N/A'})</option>`
     )
     .join('');
 
