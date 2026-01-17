@@ -28,7 +28,7 @@ MAX_PAGE_SIZE = 100
 # Downloads and Retries
 # ==============================================================================
 
-MAX_DOWNLOAD_RETRIES = 2
+MAX_DOWNLOAD_RETRIES = 1
 """Maximum number of retry attempts for failed downloads"""
 
 MAX_DOWNLOADS = 10

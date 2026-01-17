@@ -120,7 +120,8 @@ pdf:
 
 downloads:
   # Maximum number of retry attempts for failed downloads
-  max_retries: 3
+  # Note: Currently not configurable via YAML - hardcoded in core/constants/app.py
+  max_retries: 1
 
   # Maximum number of concurrent downloads allowed system-wide
   # This is the total limit across all tracked periodicals, not per batch
