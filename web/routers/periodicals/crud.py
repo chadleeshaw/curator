@@ -285,6 +285,7 @@ async def delete_periodical(
     delete_files: bool = False,
     remove_tracking: bool = False,
     delete_all_issues: bool = False,
+    mark_as_bad: bool = False,
 ) -> Dict[str, Any]:
     """
     Delete a periodical from the library
@@ -294,6 +295,7 @@ async def delete_periodical(
         delete_files: If True, also delete the PDF and cover files from disk. If False, only remove from database.
         remove_tracking: If True, also remove the tracking record for this periodical.
         delete_all_issues: If True, delete all issues with the same title and language. If False, only delete the single issue.
+        mark_as_bad: If True, mark related download submission as bad file (sets attempt_count to max to prevent re-download).
     """
     try:
 
@@ -329,6 +331,28 @@ async def delete_periodical(
                 # Delete database entries
                 for mag in magazines_to_delete:
                     db_session.delete(mag)
+
+                # Mark download submissions as bad file if requested
+                if mark_as_bad:
+                    from models.database import DownloadSubmission
+                    from core import constants
+
+                    # Find download submissions for the deleted magazine(s)
+                    mag_ids = [mag.id for mag in magazines_to_delete]
+                    submissions = (
+                        db_session.query(DownloadSubmission).filter(DownloadSubmission.magazine_id.in_(mag_ids)).all()
+                    )
+
+                    marked_count = 0
+                    for submission in submissions:
+                        # Set attempt_count to max to prevent re-download
+                        submission.attempt_count = constants.MAX_DOWNLOAD_RETRIES
+                        submission.status = DownloadSubmission.StatusEnum.FAILED
+                        marked_count += 1
+
+                    if marked_count > 0:
+                        logger.info(f"Marked {marked_count} download submission(s) as bad file for: {title}")
+
                 db_session.commit()
 
                 deleted_count = len(magazines_to_delete)
@@ -368,6 +392,8 @@ async def delete_periodical(
                         message = f"Deleted {deleted_count} issues of '{title}' and their files from disk"
                     else:
                         message = f"Deleted '{title}' and files from disk"
+                    if mark_as_bad:
+                        message += " (marked as bad file)"
                     if remove_tracking:
                         message += " (tracking removed)"
                     return {
@@ -380,6 +406,8 @@ async def delete_periodical(
                         message = f"Removed {deleted_count} issues of '{title}' from library (files retained on disk)"
                     else:
                         message = f"Removed '{title}' from library (files retained on disk)"
+                    if mark_as_bad:
+                        message += " (marked as bad file)"
                     if remove_tracking:
                         message += " (tracking removed)"
                     return {

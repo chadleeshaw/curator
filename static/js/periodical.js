@@ -580,6 +580,7 @@ async function confirmDeleteIssue() {
   }
 
   const deleteFiles = deleteOption.value === 'delete-files';
+  const markAsBad = document.getElementById('mark-as-bad-file')?.checked || false;
 
   // Count total issues before deletion
   const issueCards = document.querySelectorAll('.issue-card');
@@ -587,7 +588,7 @@ async function confirmDeleteIssue() {
 
   try {
     const response = await APIClient.delete(
-      `/api/periodicals/${pendingDeleteId}?delete_files=${deleteFiles}`
+      `/api/periodicals/${pendingDeleteId}?delete_files=${deleteFiles}&mark_as_bad=${markAsBad}`
     );
 
     const result = await response.json();
