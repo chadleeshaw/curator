@@ -59,7 +59,7 @@ export class DownloadsManager {
     /** @type {string} Current filter in modal */
     this.currentModalFilter = 'all';
     /** @type {string} Current filter for queue view (all, active, failed, completed) */
-    this.currentFilter = 'active';
+    this.currentFilter = 'all';
 
     // Load constants from API
     this.loadConstants();

@@ -74,6 +74,8 @@ async def get_ocr_queue(status: Optional[str] = None):
                         "magazine_title": magazine.title,
                         "magazine_issue": issue_display,
                         "magazine_year": (magazine.issue_date.year if magazine.issue_date else None),
+                        "tracking_id": magazine.tracking_id,
+                        "tracking_title": None,  # Will be populated below
                         "status": job.status.value,
                         "priority": job.priority,
                         "language": job.language,
@@ -86,6 +88,23 @@ async def get_ocr_queue(status: Optional[str] = None):
                         "completed_at": (job.completed_at.isoformat() if job.completed_at else None),
                     }
                 )
+
+            # Get tracking titles for all jobs with tracking_id
+            from models.database import MagazineTracking
+
+            tracking_ids = {j["tracking_id"] for j in result if j["tracking_id"]}
+            if tracking_ids:
+                trackings = db.query(MagazineTracking).filter(MagazineTracking.id.in_(tracking_ids)).all()
+                tracking_map = {t.id: t.title for t in trackings}
+
+                # Update tracking_title in results
+                for job_data in result:
+                    if job_data["tracking_id"]:
+                        job_data["tracking_title"] = tracking_map.get(
+                            job_data["tracking_id"], job_data["magazine_title"]
+                        )
+                    else:
+                        job_data["tracking_title"] = job_data["magazine_title"]
 
             return {"jobs": result, "count": len(result)}
 

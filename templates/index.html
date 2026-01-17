@@ -209,7 +209,7 @@
             <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap">
               <button
                 id="download-filter-all"
-                class="filter-btn"
+                class="filter-btn active"
                 onclick="window.downloads.setFilter('all')"
               >
                 All
@@ -223,7 +223,7 @@
               </button>
               <button
                 id="download-filter-active"
-                class="filter-btn active"
+                class="filter-btn"
                 onclick="window.downloads.setFilter('active')"
               >
                 Active
@@ -1366,6 +1366,26 @@
       <div class="modal-content" style="max-width: 900px">
         <span class="close" onclick="downloads.closeManageQueueModal()">&times;</span>
         <div id="manage-queue-modal-content">
+          <!-- Content will be dynamically populated by JavaScript -->
+        </div>
+      </div>
+    </div>
+
+    <!-- OCR Periodical Modal -->
+    <div id="ocr-periodical-modal" class="modal hidden">
+      <div class="modal-content" style="max-width: 900px">
+        <span class="close" onclick="ocrQueue.closePeriodicModal()">&times;</span>
+        <div id="ocr-periodical-modal-content">
+          <!-- Content will be dynamically populated by JavaScript -->
+        </div>
+      </div>
+    </div>
+
+    <!-- OCR Job Details Modal -->
+    <div id="ocr-job-details-modal" class="modal hidden">
+      <div class="modal-content" style="max-width: 800px">
+        <span class="close" onclick="ocrQueue.closeJobDetailsModal()">&times;</span>
+        <div id="ocr-job-details-modal-content">
           <!-- Content will be dynamically populated by JavaScript -->
         </div>
       </div>

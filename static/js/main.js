@@ -54,6 +54,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       tasks.loadScheduledTasks();
     } else if (tabName === 'queue') {
       initQueueSwitcher();
+      // Set download queue filter to 'all' when navigating to queue tab
+      downloads.setFilter('all');
       // Restore last active queue view or default to download
       const lastQueueView = localStorage.getItem('lastQueueView') || 'download';
       showQueueView(lastQueueView);
@@ -114,6 +116,8 @@ window.addEventListener('hashchange', () => {
       tasks.loadScheduledTasks();
     } else if (tabName === 'queue') {
       initQueueSwitcher();
+      // Set download queue filter to 'all' when navigating to queue tab
+      downloads.setFilter('all');
       // Restore last active queue view or default to download
       const lastQueueView = localStorage.getItem('lastQueueView') || 'download';
       showQueueView(lastQueueView);
@@ -160,6 +164,7 @@ function showQueueView(queueType) {
 
   // Load data and start refresh for active queue
   if (queueType === 'download') {
+    downloads.setFilter('all'); // Always default to 'all' filter when viewing download queue
     downloads.loadDownloadQueue();
     downloads.startAutoRefresh();
   } else if (queueType === 'ocr') {

@@ -156,92 +156,335 @@ export class OCRQueueManager {
     emptyDiv.classList.add(CSS_CLASSES.HIDDEN);
     tableContainer.classList.remove(CSS_CLASSES.HIDDEN);
 
-    // Build table rows
-    tbody.innerHTML = '';
-    filteredJobs.forEach((job) => {
-      const row = document.createElement('tr');
-      row.style.borderBottom = '1px solid var(--border)';
+    // Group jobs by periodical (tracking_title)
+    const grouped = this.groupJobsByPeriodical(filteredJobs);
 
-      // Periodical title
-      const titleCell = document.createElement('td');
-      titleCell.style.padding = '12px';
-      titleCell.innerHTML = `
-        <div style="font-weight: 600;">${job.magazine_title || 'Unknown'}</div>
-        <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 2px;">
-          ${job.magazine_issue ? `Issue ${job.magazine_issue}` : ''} ${job.magazine_year ? `(${job.magazine_year})` : ''}
+    // Build grouped table rows
+    tbody.innerHTML = '';
+    grouped.forEach((group) => {
+      const { periodical, jobs } = group;
+
+      // Create periodical header row
+      const headerRow = document.createElement('tr');
+      headerRow.style.background = 'var(--surface)';
+      headerRow.style.cursor = 'pointer';
+      headerRow.style.borderBottom = '2px solid var(--border-color)';
+      headerRow.onclick = () => this.openPeriodicalModal(periodical, jobs);
+
+      const statusCounts = this.getJobStatusCounts(jobs);
+      const statusBadges = Object.entries(statusCounts)
+        .filter(([, count]) => count > 0)
+        .map(([status, count]) => {
+          const color = this.getStatusColor(status);
+          return `<span style="background: ${color}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.85em; margin-right: 5px;">${count} ${status}</span>`;
+        })
+        .join('');
+
+      headerRow.innerHTML = `
+        <td colspan="3" style="padding: 12px; font-weight: bold;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <span style="font-size: 1.1em;">📋 ${periodical}</span>
+              <span style="margin-left: 15px; font-size: 0.9em; color: var(--text-secondary);">${jobs.length} issue${jobs.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div style="display: flex; gap: 10px; align-items: center;">
+              ${statusBadges}
+              <span style="font-size: 1.2em; color: var(--text-secondary);">→</span>
+            </div>
+          </div>
+        </td>
+      `;
+      tbody.appendChild(headerRow);
+    });
+  }
+
+  /**
+   * Group OCR jobs by periodical (tracking_title)
+   * @param {Array} jobs - Array of OCR job objects
+   * @returns {Array} Array of {periodical, jobs} objects
+   */
+  groupJobsByPeriodical(jobs) {
+    const map = new Map();
+
+    jobs.forEach((job) => {
+      const key = job.tracking_title || job.magazine_title || 'Unknown';
+      if (!map.has(key)) {
+        map.set(key, { periodical: key, jobs: [] });
+      }
+      map.get(key).jobs.push(job);
+    });
+
+    // Convert to array and sort by periodical name
+    return Array.from(map.values()).sort((a, b) => a.periodical.localeCompare(b.periodical));
+  }
+
+  /**
+   * Get status counts for a group of jobs
+   * @param {Array} jobs - Array of job objects
+   * @returns {Object} Status counts
+   */
+  getJobStatusCounts(jobs) {
+    const counts = {
+      pending: 0,
+      processing: 0,
+      completed: 0,
+      failed: 0,
+    };
+
+    jobs.forEach((job) => {
+      if (counts.hasOwnProperty(job.status)) {
+        counts[job.status]++;
+      }
+    });
+
+    return counts;
+  }
+
+  /**
+   * Get color for status badge
+   * @param {string} status - Job status
+   * @returns {string} CSS color variable
+   */
+  getStatusColor(status) {
+    const colors = {
+      pending: 'var(--status-pending)',
+      processing: 'var(--status-downloading)',
+      completed: 'var(--status-completed)',
+      failed: 'var(--status-failed)',
+    };
+    return colors[status] || 'var(--text-secondary)';
+  }
+
+  /**
+   * Open modal showing all issues for a periodical
+   * @param {string} periodical - Periodical name
+   * @param {Array} jobs - Array of job objects for this periodical
+   */
+  openPeriodicalModal(periodical, jobs) {
+    // Build status summary
+    const statusCounts = this.getJobStatusCounts(jobs);
+    const statusList = Object.entries(statusCounts)
+      .filter(([, count]) => count > 0)
+      .map(([status, count]) => `${count} ${status}`)
+      .join(', ');
+
+    // Build table rows for jobs
+    const tableRows = jobs
+      .map((job) => {
+        const statusColor = this.getStatusColor(job.status);
+        const issueInfo =
+          `${job.magazine_issue || 'Unknown Issue'} ${job.magazine_year ? `(${job.magazine_year})` : ''}`.trim();
+
+        return `
+        <tr style="cursor: pointer;" onclick="ocrQueue.showJobDetails(${job.id})">
+          <td style="padding: 10px; border-bottom: 1px solid var(--border-color);">
+            <div style="font-weight: 600;">${job.magazine_title}</div>
+            <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 2px;">${issueInfo}</div>
+          </td>
+          <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
+            <span style="background: ${statusColor}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.85em;">${job.status}</span>
+            ${job.status === 'completed' && job.processing_time_seconds ? `<div style="font-size: 0.75em; color: var(--text-secondary); margin-top: 4px;">${job.processing_time_seconds}s</div>` : ''}
+            ${job.status === 'failed' && job.attempt_count ? `<div style="font-size: 0.75em; color: var(--text-secondary); margin-top: 4px;">Attempt ${job.attempt_count}/${this.maxRetries}</div>` : ''}
+          </td>
+          <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
+            ${this.getPriorityBadge(job.priority)}
+          </td>
+        </tr>
+      `;
+      })
+      .join('');
+
+    const html = `
+      <div class="modal-header">
+        <h3>OCR Queue: ${periodical}</h3>
+        <p style="color: var(--text-secondary); margin-top: 10px;">${jobs.length} issue${jobs.length !== 1 ? 's' : ''} - ${statusList}</p>
+      </div>
+      <div class="modal-body" style="max-height: 400px; overflow-y: auto; margin: 20px 0;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead style="position: sticky; top: 0; background: var(--surface); z-index: 1;">
+            <tr>
+              <th style="text-align: left; padding: 10px; border-bottom: 2px solid var(--border-color);">Issue</th>
+              <th style="text-align: center; padding: 10px; border-bottom: 2px solid var(--border-color);">Status</th>
+              <th style="text-align: center; padding: 10px; border-bottom: 2px solid var(--border-color);">Priority</th>
+            </tr>
+          </thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+      </div>
+      <div class="modal-footer" style="display: flex; gap: 10px; justify-content: flex-end; padding-top: 20px; border-top: 1px solid var(--border-color);">
+        <button onclick="ocrQueue.closePeriodicalModal()" class="btn-secondary">Close</button>
+      </div>
+    `;
+
+    const container = document.getElementById('ocr-periodical-modal-content');
+    if (container) {
+      container.innerHTML = html;
+      document.getElementById('ocr-periodical-modal')?.classList.remove(CSS_CLASSES.HIDDEN);
+    }
+  }
+
+  /**
+   * Close periodical modal
+   * @returns {void}
+   */
+  closePeriodicalModal() {
+    document.getElementById('ocr-periodical-modal')?.classList.add(CSS_CLASSES.HIDDEN);
+  }
+
+  /**
+   * Show detailed information for a specific OCR job
+   * @param {number} jobId - OCR job ID
+   */
+  async showJobDetails(jobId) {
+    try {
+      const response = await APIClient.authenticatedFetch('/api/ocr/queue');
+      const data = await response.json();
+      const job = data.jobs.find((j) => j.id === jobId);
+
+      if (!job) {
+        UIUtils.showToast('Job not found', 'error');
+        return;
+      }
+
+      // Format metadata for display
+      let metadataHtml = '<p style="color: var(--text-secondary);">No OCR metadata available</p>';
+      if (job.ocr_metadata) {
+        metadataHtml = `<pre style="background: var(--surface-variant); padding: 12px; border-radius: 4px; overflow-x: auto; font-size: 0.85em; max-height: 400px; overflow-y: auto;">${JSON.stringify(job.ocr_metadata, null, 2)}</pre>`;
+      }
+
+      // Format error if present
+      let errorHtml = '';
+      if (job.last_error) {
+        errorHtml = `
+          <div style="margin-top: 20px;">
+            <h4 style="color: var(--status-failed); margin-bottom: 10px;">❌ Error Details</h4>
+            <pre style="background: var(--surface-variant); padding: 12px; border-radius: 4px; overflow-x: auto; font-size: 0.85em; color: var(--text-secondary);">${job.last_error}</pre>
+          </div>
+        `;
+      }
+
+      const html = `
+        <div class="modal-header">
+          <h3>OCR Job Details</h3>
+          <p style="font-weight: 600; margin-top: 10px;">${job.magazine_title}</p>
+          <p style="color: var(--text-secondary); font-size: 0.9em;">${job.magazine_issue || 'Unknown Issue'} ${job.magazine_year ? `(${job.magazine_year})` : ''}</p>
+        </div>
+        <div class="modal-body" style="max-height: 500px; overflow-y: auto; margin: 20px 0;">
+          <div style="display: grid; grid-template-columns: auto 1fr; gap: 10px 20px; margin-bottom: 20px;">
+            <strong>Status:</strong>
+            <span>${job.status}</span>
+            <strong>Priority:</strong>
+            <span>${this.getPriorityBadge(job.priority)}</span>
+            <strong>Language:</strong>
+            <span>${job.language || 'N/A'}</span>
+            <strong>Attempts:</strong>
+            <span>${job.attempt_count}/${this.maxRetries}</span>
+            ${job.processing_time_seconds ? `<strong>Processing Time:</strong><span>${job.processing_time_seconds}s</span>` : ''}
+            ${job.created_at ? `<strong>Created:</strong><span>${new Date(job.created_at).toLocaleString()}</span>` : ''}
+            ${job.completed_at ? `<strong>Completed:</strong><span>${new Date(job.completed_at).toLocaleString()}</span>` : ''}
+          </div>
+
+          <h4 style="margin-bottom: 10px;">📄 Extracted Metadata</h4>
+          ${metadataHtml}
+
+          ${errorHtml}
+        </div>
+        <div class="modal-footer" style="display: flex; gap: 10px; justify-content: flex-end; padding-top: 20px; border-top: 1px solid var(--border-color);">
+          ${job.status === 'failed' ? `<button onclick="ocrQueue.retryJob(${job.id}); ocrQueue.closeJobDetailsModal();" class="btn-primary">🔄 Retry</button>` : ''}
+          <button onclick="ocrQueue.closeJobDetailsModal()" class="btn-secondary">Close</button>
         </div>
       `;
-      row.appendChild(titleCell);
 
-      // Status with additional info
-      const statusCell = document.createElement('td');
-      statusCell.style.padding = '12px';
-      statusCell.style.textAlign = 'center';
+      const container = document.getElementById('ocr-job-details-modal-content');
+      if (container) {
+        container.innerHTML = html;
+        document.getElementById('ocr-job-details-modal')?.classList.remove(CSS_CLASSES.HIDDEN);
+      }
+    } catch (error) {
+      console.error('[OCR Queue] Error loading job details:', error);
+      UIUtils.showToast('Failed to load job details', 'error');
+    }
+  }
 
-      let statusContent = this.getStatusBadge(job.status);
+  /**
+   * Close job details modal
+   * @returns {void}
+   */
+  closeJobDetailsModal() {
+    document.getElementById('ocr-job-details-modal')?.classList.add(CSS_CLASSES.HIDDEN);
+  }
 
-      // Add additional context based on status (but not for processing since badge already says it)
-      if (job.status === 'failed' && job.attempt_count) {
-        statusContent += `<div style="font-size: 0.8em; color: var(--text-secondary); margin-top: 4px;">Attempt ${job.attempt_count}/${this.maxRetries}</div>`;
-      } else if (job.status === 'completed' && job.processing_time_seconds) {
-        statusContent += `<div style="font-size: 0.8em; color: var(--text-secondary); margin-top: 4px;">${job.processing_time_seconds}s</div>`;
+  /**
+   * Show detailed information for a specific OCR job
+   * @param {number} jobId - OCR job ID
+   */
+  async showJobDetails(jobId) {
+    try {
+      const response = await APIClient.authenticatedFetch('/api/ocr/queue');
+      const data = await response.json();
+      const job = data.jobs.find((j) => j.id === jobId);
+
+      if (!job) {
+        UIUtils.showToast('Job not found', 'error');
+        return;
       }
 
-      statusCell.innerHTML = statusContent;
-      row.appendChild(statusCell);
+      const modal = UIUtils.createModal();
 
-      // Priority
-      const priorityCell = document.createElement('td');
-      priorityCell.style.padding = '12px';
-      priorityCell.style.textAlign = 'center';
-      priorityCell.innerHTML = this.getPriorityBadge(job.priority);
-      row.appendChild(priorityCell);
-
-      // Actions
-      const actionsCell = document.createElement('td');
-      actionsCell.style.padding = '12px';
-      actionsCell.style.textAlign = 'right';
-
-      // Retry button for failed jobs
-      if (job.status === 'failed') {
-        const retryBtn = document.createElement('button');
-        retryBtn.className = 'action-btn';
-        retryBtn.textContent = '🔄 Retry';
-        retryBtn.title = 'Retry this job';
-        retryBtn.style.cssText =
-          'background: var(--primary); color: white; padding: 6px 12px; border-radius: 4px; border: none; cursor: pointer; margin-right: 5px;';
-        retryBtn.addEventListener('click', () => this.retryJob(job.id));
-        actionsCell.appendChild(retryBtn);
+      // Format metadata for display
+      let metadataHtml = '<p style="color: var(--text-secondary);">No OCR metadata available</p>';
+      if (job.ocr_metadata) {
+        metadataHtml = `<pre style="background: var(--surface-variant); padding: 12px; border-radius: 4px; overflow-x: auto; font-size: 0.85em; max-height: 400px; overflow-y: auto;">${JSON.stringify(job.ocr_metadata, null, 2)}</pre>`;
       }
 
-      // Delete button for all jobs
-      const deleteTitle =
-        job.status === 'processing' ? 'Cancel OCR processing' : 'Remove from queue';
-      const deleteBtn = document.createElement('button');
-      deleteBtn.className = 'action-btn';
-      deleteBtn.textContent = '🗑️';
-      deleteBtn.title = deleteTitle;
-      deleteBtn.style.cssText =
-        'background: var(--surface-variant); color: var(--status-failed); padding: 6px 12px; border-radius: 4px; border: 1px solid var(--border); cursor: pointer;';
-      deleteBtn.addEventListener('click', () => this.deleteJob(job.id, job.magazine_title));
-
-      // Also add info button if there's an error
+      // Format error if present
+      let errorHtml = '';
       if (job.last_error) {
-        const infoBtn = document.createElement('button');
-        infoBtn.className = 'action-btn';
-        infoBtn.textContent = 'ℹ️ Info';
-        infoBtn.title = 'View error details';
-        infoBtn.style.cssText =
-          'background: var(--surface-variant); padding: 6px 12px; border-radius: 4px; border: 1px solid var(--border); cursor: pointer; margin-right: 5px;';
-        infoBtn.addEventListener('click', () => this.showError(job.magazine_title, job.last_error));
-        actionsCell.appendChild(infoBtn);
+        errorHtml = `
+          <div style="margin-top: 20px;">
+            <h4 style="color: var(--status-failed); margin-bottom: 10px;">❌ Error Details</h4>
+            <pre style="background: var(--surface-variant); padding: 12px; border-radius: 4px; overflow-x: auto; font-size: 0.85em; color: var(--text-secondary);">${job.last_error}</pre>
+          </div>
+        `;
       }
 
-      actionsCell.appendChild(deleteBtn);
-      row.appendChild(actionsCell);
+      const html = `
+        <div class="modal-header">
+          <h3>OCR Job Details</h3>
+          <p style="font-weight: 600; margin-top: 10px;">${job.magazine_title}</p>
+          <p style="color: var(--text-secondary); font-size: 0.9em;">${job.magazine_issue || 'Unknown Issue'} ${job.magazine_year ? `(${job.magazine_year})` : ''}</p>
+        </div>
+        <div class="modal-body" style="max-height: 500px; overflow-y: auto; margin: 20px 0;">
+          <div style="display: grid; grid-template-columns: auto 1fr; gap: 10px 20px; margin-bottom: 20px;">
+            <strong>Status:</strong>
+            <span>${job.status}</span>
+            <strong>Priority:</strong>
+            <span>${this.getPriorityBadge(job.priority)}</span>
+            <strong>Language:</strong>
+            <span>${job.language || 'N/A'}</span>
+            <strong>Attempts:</strong>
+            <span>${job.attempt_count}/${this.maxRetries}</span>
+            ${job.processing_time_seconds ? `<strong>Processing Time:</strong><span>${job.processing_time_seconds}s</span>` : ''}
+            ${job.created_at ? `<strong>Created:</strong><span>${new Date(job.created_at).toLocaleString()}</span>` : ''}
+            ${job.completed_at ? `<strong>Completed:</strong><span>${new Date(job.completed_at).toLocaleString()}</span>` : ''}
+          </div>
 
-      tbody.appendChild(row);
-    });
+          <h4 style="margin-bottom: 10px;">📄 Extracted Metadata</h4>
+          ${metadataHtml}
+
+          ${errorHtml}
+        </div>
+        <div class="modal-footer" style="display: flex; gap: 10px; justify-content: flex-end; padding-top: 20px; border-top: 1px solid var(--border-color);">
+          ${job.status === 'failed' ? `<button onclick="ocrQueue.retryJob(${job.id}); UIUtils.closeModal();" class="btn-primary">🔄 Retry</button>` : ''}
+          <button onclick="UIUtils.closeModal()" class="btn-secondary">Close</button>
+        </div>
+      `;
+
+      modal.innerHTML = html;
+    } catch (error) {
+      console.error('[OCR Queue] Error loading job details:', error);
+      UIUtils.showToast('Failed to load job details', 'error');
+    }
   }
 
   /**
