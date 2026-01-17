@@ -17,6 +17,7 @@ from services.ocr.service import OCRService
 class TestOCRImageWordsExtraction:
     """Test OCR word-level data extraction from image files"""
 
+    @patch("services.ocr.service.PYTESSERACT_AVAILABLE", True)
     @patch("services.ocr.service.pytesseract")
     @patch("services.ocr.service.Image")
     def test_extract_text_and_words_from_image(self, mock_image, mock_pytesseract):
@@ -73,6 +74,7 @@ class TestOCRImageWordsExtraction:
         assert words[2]["text"] == "MAGAZINE"
         assert words[2]["confidence"] == 78
 
+    @patch("services.ocr.service.PYTESSERACT_AVAILABLE", True)
     @patch("services.ocr.service.pytesseract")
     @patch("services.ocr.service.Image")
     def test_extract_with_confidence_threshold(self, mock_image, mock_pytesseract):
@@ -103,6 +105,7 @@ class TestOCRImageWordsExtraction:
         assert result["words"][0]["text"] == "GOOD"
         assert result["words"][1]["text"] == "GREAT"
 
+    @patch("services.ocr.service.PYTESSERACT_AVAILABLE", True)
     @patch("services.ocr.service.pytesseract")
     @patch("services.ocr.service.Image")
     def test_extract_with_empty_result(self, mock_image, mock_pytesseract):
@@ -130,6 +133,7 @@ class TestOCRImageWordsExtraction:
         assert result["word_count"] == 0
         assert len(result["words"]) == 0
 
+    @patch("services.ocr.service.PYTESSERACT_AVAILABLE", True)
     @patch("services.ocr.service.pytesseract")
     @patch("services.ocr.service.Image")
     def test_analyze_cover_uses_words_for_images(self, mock_image, mock_pytesseract):
