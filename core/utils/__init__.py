@@ -23,7 +23,7 @@ from .general import (
 )
 
 # PDF utilities
-from .pdf import extract_cover_from_pdf
+from .pdf import extract_cover_from_pdf, validate_pdf
 
 # Provider utilities
 from .provider import handle_provider_errors
@@ -53,6 +53,7 @@ __all__ = [
     "is_special_edition",
     # PDF utilities
     "extract_cover_from_pdf",
+    "validate_pdf",
     # Provider utilities
     "handle_provider_errors",
     # Thumbnail utilities

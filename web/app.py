@@ -81,7 +81,16 @@ scheduler_task = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown"""
-    global download_client, download_manager, download_monitor_task, cover_cleanup_task, title_matcher, file_processor, file_importer, task_scheduler, scheduler_task
+    global \
+        download_client, \
+        download_manager, \
+        download_monitor_task, \
+        cover_cleanup_task, \
+        title_matcher, \
+        file_processor, \
+        file_importer, \
+        task_scheduler, \
+        scheduler_task
 
     # Startup
     try:
@@ -90,7 +99,9 @@ async def lifespan(app: FastAPI):
         for provider_config in search_provider_configs:
             try:
                 if not provider_config.get("type"):
-                    logger.warning(f"Skipping provider with no type: {provider_config.get('name')}")
+                    logger.warning(
+                        f"Skipping provider with no type: {provider_config.get('name')}"
+                    )
                     continue
 
                 # Check if provider is properly configured
@@ -102,7 +113,9 @@ async def lifespan(app: FastAPI):
                     logger.warning("Skipping RSS provider: Feed URL not configured")
                     continue
 
-                logger.debug(f"Creating search provider: {provider_config.get('name')} (type: {provider_type})")
+                logger.debug(
+                    f"Creating search provider: {provider_config.get('name')} (type: {provider_type})"
+                )
                 provider = ProviderFactory.create(provider_config)
                 search_providers.append(provider)
                 logger.info(f"Loaded search provider: {provider.name}")
@@ -116,13 +129,17 @@ async def lifespan(app: FastAPI):
         try:
             client_config = config_loader.get_download_client()
             if not client_config.get("api_key"):
-                logger.warning("Download client not available: API key not configured (configure in Settings)")
+                logger.warning(
+                    "Download client not available: API key not configured (configure in Settings)"
+                )
                 download_client = None
             else:
                 download_client = ClientFactory.create(client_config)
                 logger.info(f"Loaded download client: {download_client.name}")
         except Exception as e:
-            logger.warning(f"Download client not available (configure in Settings): {e}")
+            logger.warning(
+                f"Download client not available (configure in Settings): {e}"
+            )
             download_client = None
 
         # Initialize other components
@@ -162,7 +179,9 @@ async def lifespan(app: FastAPI):
             )
             logger.info("Download monitor task initialized")
         else:
-            logger.warning("Download manager not initialized: missing download client or search providers")
+            logger.warning(
+                "Download manager not initialized: missing download client or search providers"
+            )
 
         # Initialize cover cleanup task
         cover_cleanup_task = CoverCleanup(
@@ -191,7 +210,9 @@ async def lifespan(app: FastAPI):
                 db_session = session_factory()
                 try:
                     if download_manager:
-                        logger.debug("Auto-download: Checking tracked periodicals for new issues")
+                        logger.debug(
+                            "Auto-download: Checking tracked periodicals for new issues"
+                        )
 
                         # Check how many downloads are currently pending or downloading
                         from models.database import DownloadSubmission
@@ -210,13 +231,12 @@ async def lifespan(app: FastAPI):
                             .count()
                         )
 
-                        if pending_count >= download_manager.max_downloads:
-                            logger.info(
-                                f"Auto-download: Skipping - already at max downloads ({pending_count}/{download_manager.max_downloads})"
-                            )
-                            return
-
-                        remaining_slots = download_manager.max_downloads - pending_count
+                        remaining_slots = max(
+                            0, download_manager.max_downloads - pending_count
+                        )
+                        logger.info(
+                            f"Auto-download: {remaining_slots} download slots available, {pending_count} already active"
+                        )
                         logger.info(
                             f"Auto-download: {remaining_slots} download slots available ({pending_count} already queued)"
                         )
@@ -247,21 +267,34 @@ async def lifespan(app: FastAPI):
                                     all_tracked[t.id] = t
 
                         if all_tracked:
-                            logger.info(f"Auto-download: Found {len(all_tracked)} periodicals to check")
+                            logger.info(
+                                f"Auto-download: Found {len(all_tracked)} periodicals to check"
+                            )
 
                             for periodical in all_tracked.values():
                                 try:
-                                    logger.debug(f"Auto-download: Checking '{periodical.title}' for new issues")
+                                    logger.debug(
+                                        f"Auto-download: Checking '{periodical.title}' for new issues"
+                                    )
 
                                     # Determine which download method to use
-                                    if periodical.track_all_editions or periodical.track_new_only:
+                                    if (
+                                        periodical.track_all_editions
+                                        or periodical.track_new_only
+                                    ):
                                         # Download all available issues
                                         results = download_manager.download_all_periodical_issues(
                                             periodical.id, db_session
                                         )
-                                    elif periodical.selected_editions and any(periodical.selected_editions.values()):
+                                    elif periodical.selected_editions and any(
+                                        periodical.selected_editions.values()
+                                    ):
                                         # Download only selected editions
-                                        results = download_manager.download_selected_editions(periodical.id, db_session)
+                                        results = (
+                                            download_manager.download_selected_editions(
+                                                periodical.id, db_session
+                                            )
+                                        )
                                     else:
                                         continue
 
@@ -270,7 +303,9 @@ async def lifespan(app: FastAPI):
                                             f"Auto-download: Submitted {results['submitted']} issues for '{periodical.title}'"
                                         )
                                 except Exception as e:
-                                    logger.error(f"Auto-download: Error checking '{periodical.title}': {e}")
+                                    logger.error(
+                                        f"Auto-download: Error checking '{periodical.title}': {e}"
+                                    )
                 finally:
                     db_session.close()
             except Exception as e:
@@ -284,8 +319,12 @@ async def lifespan(app: FastAPI):
                     from datetime import datetime, timedelta
 
                     # Update next run time before execution
-                    interval = tasks_config.get("download_monitor_interval", constants.DOWNLOAD_MONITOR_INTERVAL)
-                    download_monitor_task.next_run_time = datetime.now() + timedelta(seconds=interval)
+                    interval = tasks_config.get(
+                        "download_monitor_interval", constants.DOWNLOAD_MONITOR_INTERVAL
+                    )
+                    download_monitor_task.next_run_time = datetime.now() + timedelta(
+                        seconds=interval
+                    )
 
                     await download_monitor_task.run()
                 except Exception as e:
@@ -303,8 +342,12 @@ async def lifespan(app: FastAPI):
                 from datetime import datetime, timedelta
 
                 # Update next run time before execution
-                interval = tasks_config.get("ocr_processor_interval", constants.OCR_PROCESSOR_INTERVAL)
-                ocr_processor_task.next_run_time = datetime.now() + timedelta(seconds=interval)
+                interval = tasks_config.get(
+                    "ocr_processor_interval", constants.OCR_PROCESSOR_INTERVAL
+                )
+                ocr_processor_task.next_run_time = datetime.now() + timedelta(
+                    seconds=interval
+                )
 
                 stats = await ocr_processor_task.run()
                 if stats.get("processed", 0) > 0:
@@ -316,25 +359,33 @@ async def lifespan(app: FastAPI):
         task_scheduler.schedule_periodic(
             "auto-download",
             auto_download_task,
-            tasks_config.get("auto_download_interval", constants.AUTO_DOWNLOAD_INTERVAL),
+            tasks_config.get(
+                "auto_download_interval", constants.AUTO_DOWNLOAD_INTERVAL
+            ),
         )
 
         task_scheduler.schedule_periodic(
             "auto-import",
             download_monitoring_task,
-            tasks_config.get("download_monitor_interval", constants.DOWNLOAD_MONITOR_INTERVAL),
+            tasks_config.get(
+                "download_monitor_interval", constants.DOWNLOAD_MONITOR_INTERVAL
+            ),
         )
 
         task_scheduler.schedule_periodic(
             "auto-covers",
             cleanup_orphaned_covers_task,
-            tasks_config.get("cleanup_covers_interval", constants.CLEANUP_COVERS_INTERVAL),
+            tasks_config.get(
+                "cleanup_covers_interval", constants.CLEANUP_COVERS_INTERVAL
+            ),
         )
 
         task_scheduler.schedule_periodic(
             "auto-OCR",
             ocr_processing_task,
-            tasks_config.get("ocr_processor_interval", constants.OCR_PROCESSOR_INTERVAL),
+            tasks_config.get(
+                "ocr_processor_interval", constants.OCR_PROCESSOR_INTERVAL
+            ),
         )
 
         # Start scheduler in background
@@ -344,8 +395,12 @@ async def lifespan(app: FastAPI):
         # Set auth manager and middleware in app state for FastAPI dependency injection
         app.state.auth_manager = auth_manager
         app.state.auth_middleware = AuthMiddleware(auth_manager)
-        search.set_dependencies(search_providers, metadata_providers, title_matcher, session_factory)
-        periodicals.set_dependencies(session_factory, storage_config.get("organize_dir", "./"))
+        search.set_dependencies(
+            search_providers, metadata_providers, title_matcher, session_factory
+        )
+        periodicals.set_dependencies(
+            session_factory, storage_config.get("organize_dir", "./")
+        )
         tracking.set_dependencies(
             session_factory,
             search_providers,
@@ -367,7 +422,9 @@ async def lifespan(app: FastAPI):
         pages.set_dependencies(session_factory)
         ocr_queue.set_dependencies(session_factory)
 
-        logger.info("Curator initialized successfully with auto-import and download monitoring enabled")
+        logger.info(
+            "Curator initialized successfully with auto-import and download monitoring enabled"
+        )
 
     except Exception as e:
         logger.error(f"Startup error: {e}")
@@ -461,7 +518,9 @@ async def get_status():
     return {
         "status": "running",
         "providers": [p.get_provider_info() for p in search_providers],
-        "download_client": (download_client.get_client_info() if download_client else None),
+        "download_client": (
+            download_client.get_client_info() if download_client else None
+        ),
     }
 
 
@@ -490,4 +549,6 @@ if __name__ == "__main__":
     import uvicorn
 
     server_config = config_loader.get_server()
-    uvicorn.run(app, host=server_config["host"], port=server_config["port"], access_log=False)
+    uvicorn.run(
+        app, host=server_config["host"], port=server_config["port"], access_log=False
+    )
