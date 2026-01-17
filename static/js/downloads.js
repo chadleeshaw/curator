@@ -317,6 +317,7 @@ export class DownloadsManager {
     const getColor = (name) => getComputedStyle(root).getPropertyValue(name).trim();
 
     const colors = {
+      queued: getColor('--status-queued') || getColor('--status-pending'),
       pending: getColor('--status-pending'),
       downloading: getColor('--status-downloading'),
       completed: getColor('--status-completed'),
@@ -327,10 +328,21 @@ export class DownloadsManager {
     // Display status counts
     const { status_counts: statusCounts } = data;
     if (statusCounts) {
-      const { pending = 0, downloading = 0, completed = 0, failed = 0, skipped = 0 } = statusCounts;
+      const {
+        queued = 0,
+        pending = 0,
+        downloading = 0,
+        completed = 0,
+        failed = 0,
+        skipped = 0,
+      } = statusCounts;
 
       statsDiv.innerHTML = `
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px;">
+          <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <div class="queue-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.queued};">${queued}</div>
+            <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Queued</div>
+          </div>
           <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             <div class="queue-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.pending};">${pending}</div>
             <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Pending</div>
@@ -357,7 +369,9 @@ export class DownloadsManager {
 
     // Filter downloads based on current filter
     let filteredDownloads = data.queue;
-    if (this.currentFilter === 'active') {
+    if (this.currentFilter === 'queued') {
+      filteredDownloads = data.queue.filter(({ status }) => status === 'queued');
+    } else if (this.currentFilter === 'active') {
       filteredDownloads = data.queue.filter(
         ({ status }) => status === 'pending' || status === 'downloading'
       );
@@ -377,6 +391,7 @@ export class DownloadsManager {
       if (emptyMessage) {
         const messages = {
           all: 'No downloads in queue',
+          queued: 'No queued downloads',
           active: 'No active downloads',
           failed: 'No failed downloads',
           completed: 'No completed downloads',
@@ -1185,6 +1200,46 @@ export class DownloadsManager {
 
     // Reload queue with new filter
     this.loadDownloadQueue();
+  }
+
+  /**
+   * Clear all queued downloads from the queue
+   *
+   * @returns {Promise<void>}
+   */
+  async clearQueuedDownloads() {
+    try {
+      // Confirm before clearing
+      const confirmed = await UIUtils.confirm(
+        'Clear Queued Downloads',
+        'Are you sure you want to clear all queued downloads? This cannot be undone.'
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      UIUtils.showStatus('downloads-status', '🗑️ Clearing queued downloads...', 'info');
+
+      const response = await APIClient.authenticatedFetch('/api/downloads/queue/queued', {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        UIUtils.showStatus('downloads-status', data.message, 'success');
+        setTimeout(() => {
+          UIUtils.hideStatus('downloads-status');
+          this.loadDownloadQueue(); // Refresh the queue
+        }, 2000);
+      } else {
+        throw new Error(data.message ?? 'Failed to clear queued downloads');
+      }
+    } catch (error) {
+      console.error('[Downloads] Failed to clear queued downloads:', error);
+      UIUtils.showStatus('downloads-status', `Error: ${error.message}`, 'error');
+    }
   }
 
   /**

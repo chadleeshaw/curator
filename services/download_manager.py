@@ -357,7 +357,7 @@ class DownloadManager:
         if active_count >= self.max_downloads:
             logger.info(
                 f"[DownloadManager] At download limit ({active_count}/{self.max_downloads}), "
-                f"skipping download of '{search_result['title']}'"
+                f"queuing download: '{search_result['title']}'"
             )
             submission = self._create_submission_record(
                 tracking_id,
@@ -367,7 +367,7 @@ class DownloadManager:
                 search_result_db_id=search_result_db_id,
                 attempt_count=0,  # Not attempted yet
             )
-            logger.info(f"Queued download: {search_result['title']} (tracking_id: {tracking_id})")
+            logger.info(f"Download queued: {search_result['title']} (tracking_id: {tracking_id})")
             return submission
 
         # Submit to download client

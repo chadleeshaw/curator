@@ -310,6 +310,13 @@
                 All
               </button>
               <button
+                id="download-filter-queued"
+                class="filter-btn"
+                onclick="window.downloads.setFilter('queued')"
+              >
+                Queued
+              </button>
+              <button
                 id="download-filter-active"
                 class="filter-btn active"
                 onclick="window.downloads.setFilter('active')"
@@ -331,10 +338,18 @@
                 Completed
               </button>
               <button
+                id="download-clear-queued-btn"
+                class="btn-secondary"
+                onclick="window.downloads.clearQueuedDownloads()"
+                style="margin-left: auto; background: var(--status-info); color: white"
+              >
+                🗑️ Clear Queued
+              </button>
+              <button
                 id="download-clear-pending-btn"
                 class="btn-secondary"
                 onclick="window.downloads.clearPendingDownloads()"
-                style="margin-left: auto; background: var(--status-warning); color: white"
+                style="background: var(--status-warning); color: white"
               >
                 🗑️ Clear Pending
               </button>

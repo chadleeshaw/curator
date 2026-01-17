@@ -36,6 +36,7 @@ async def get_download_queue_default(status: str = None) -> Dict[str, Any]:
 
                 # Count by status
                 status_counts = {
+                    "queued": 0,
                     "pending": 0,
                     "downloading": 0,
                     "completed": 0,
@@ -98,6 +99,7 @@ async def get_download_queue_all(status: str = None) -> Dict[str, Any]:
 
                 # Count by status
                 status_counts = {
+                    "queued": 0,
                     "pending": 0,
                     "downloading": 0,
                     "completed": 0,
@@ -164,6 +166,9 @@ async def get_download_queue_status() -> Dict[str, Any]:
 
                 # Count all statuses
                 status_counts = {
+                    "queued": db_session.query(DownloadSubmission)
+                    .filter(DownloadSubmission.status == DownloadSubmission.StatusEnum.QUEUED)
+                    .count(),
                     "pending": db_session.query(DownloadSubmission)
                     .filter(DownloadSubmission.status == DownloadSubmission.StatusEnum.PENDING)
                     .count(),
