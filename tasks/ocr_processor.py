@@ -1,6 +1,8 @@
 """Background task for processing OCR queue."""
 
+import asyncio
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any
 
 from sqlalchemy.orm import sessionmaker
@@ -37,6 +39,12 @@ class OCRProcessor:
         self.batch_size = batch_size
         self.ocr_service = OCRQueueService(max_workers=max_workers)
 
+        # Thread pool executor for CPU-intensive operations (PNG generation, OCR)
+        # This prevents blocking the FastAPI event loop
+        self.executor = ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="OCRProcessor"
+        )
+
         # Task tracking attributes (for API status)
         self.last_run_time = None
         self.next_run_time = None
@@ -48,16 +56,16 @@ class OCRProcessor:
             "last_process_time": None,
         }
 
-        logger.info(f"OCR processor initialized with {max_workers} workers, batch size {batch_size}")
+        logger.info(
+            f"OCR processor initialized with {max_workers} workers, batch size {batch_size}"
+        )
 
     async def run(self) -> Dict[str, Any]:
         """
         Process pending OCR jobs from the queue.
 
-        OCR processing must run synchronously without threading because:
-        - Tesseract OCR uses native C libraries incompatible with thread pools
-        - pdf2image spawns poppler subprocesses that crash in ThreadPoolExecutor
-        - Python's GIL and native library interactions cause process termination
+        Runs CPU-intensive operations (PNG generation, OCR) in a thread pool
+        to avoid blocking the FastAPI event loop and freezing the web interface.
 
         Returns:
             Dictionary with processing statistics
@@ -80,10 +88,10 @@ class OCRProcessor:
             self.last_run_time = datetime.now()
             self.stats["total_runs"] += 1
 
-            # Run OCR processing synchronously (no thread executor)
-            # This prevents "process pool terminated abruptly" errors from
-            # Tesseract and pdf2image subprocess interactions
-            result = self._process_sync()
+            # Run OCR processing in thread pool to avoid blocking the event loop
+            # This prevents the web interface from freezing during PNG generation and OCR
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(self.executor, self._process_sync)
 
             # Update stats
             if "processed" in result:
@@ -105,8 +113,8 @@ class OCRProcessor:
         """
         Synchronous OCR processing method.
 
-        Processes OCR jobs directly in the main thread to avoid subprocess
-        crashes from Tesseract and pdf2image when run in thread pools.
+        This runs in a separate thread via ThreadPoolExecutor to prevent blocking
+        the FastAPI event loop during CPU-intensive PNG generation and OCR operations.
 
         Returns:
             Dictionary with processing statistics
@@ -114,6 +122,9 @@ class OCRProcessor:
         db = self.session_factory()
         try:
             # Process batch of jobs
+            # This includes CPU-intensive operations:
+            # - PDF to PNG conversion (via pdf2image/poppler)
+            # - OCR processing (via Tesseract)
             stats = self.ocr_service.process_queue(
                 db=db,
                 batch_size=self.batch_size,
@@ -151,3 +162,6 @@ class OCRProcessor:
         """Shutdown the OCR processor gracefully."""
         logger.info("Shutting down OCR processor")
         self.ocr_service.shutdown()
+        # Shutdown the thread pool executor
+        self.executor.shutdown(wait=True)
+        logger.info("OCR processor thread pool executor shutdown complete")
