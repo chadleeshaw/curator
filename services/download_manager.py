@@ -300,11 +300,17 @@ class DownloadManager:
         """
         logger.debug(f"[DownloadManager] submit_download called for: {search_result['title']}")
 
-        # Check if this URL has failed too many times (bad file)
+        # Create fuzzy match group for this result
+        fuzzy_group = self._get_fuzzy_group_id(search_result["title"])
+
+        # Check if this title/group has failed too many times (bad file)
+        # Use fuzzy_match_group instead of URL because providers may return different URLs
+        # for the same file (e.g., different tokens/timestamps)
         previous_failures = (
             session.query(DownloadSubmission)
             .filter(
-                DownloadSubmission.source_url == search_result["url"],
+                DownloadSubmission.tracking_id == tracking_id,
+                DownloadSubmission.fuzzy_match_group == fuzzy_group,
                 DownloadSubmission.status == DownloadSubmission.StatusEnum.FAILED,
                 DownloadSubmission.attempt_count > MAX_DOWNLOAD_RETRIES,
             )

@@ -17,7 +17,7 @@ from . import _shared
 @_shared.router.get(
     "/failed",
     summary="Get failed downloads",
-    description="Retrieve downloads that have failed, optionally including files marked as bad (2+ failures).",
+    description="Retrieve downloads that have failed, optionally including files marked as bad (failed >MAX_DOWNLOAD_RETRIES times).",
     responses={
         200: {
             "description": "List of failed downloads",
@@ -44,10 +44,10 @@ async def get_failed_downloads(include_bad: bool = True) -> Dict[str, Any]:
         def _query():
             db_session = _shared._session_factory()
             try:
-                # Get failed downloads (not yet marked as bad)
+                # Get failed downloads (not marked as bad - retriable)
                 failed = _shared._download_manager.get_failed_downloads(db_session, include_bad_files=False)
 
-                # Get bad files (failed 2+ times)
+                # Get bad files (failed >MAX_DOWNLOAD_RETRIES times - won't retry)
                 bad_files = _shared._download_manager.get_bad_files(db_session) if include_bad else []
 
                 # Get tracking info for magazine names

@@ -677,12 +677,14 @@ export class DownloadsManager {
       .map((item) => {
         const { id, title, attempt_count: attemptCount, last_error: lastError, isBad } = item;
         const color = isBad ? 'var(--status-failed)' : 'orange';
+        // maxRetries means "max retries allowed" so total attempts = maxRetries + 1
+        const maxAttempts = this.maxRetries + 1;
 
         return `
         <tr>
           <td style="padding: 10px; border-bottom: 1px solid var(--border-color);">${title}</td>
           <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
-            <span style="background: ${color}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.85em;">${attemptCount}/${this.maxRetries}</span>
+            <span style="background: ${color}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.85em;">${attemptCount}/${maxAttempts}</span>
           </td>
           <td style="padding: 10px; border-bottom: 1px solid var(--border-color); font-size: 0.85em;">${lastError ?? 'Unknown'}</td>
           <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
