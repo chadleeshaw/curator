@@ -4,18 +4,10 @@
 # Stage 1: Builder
 FROM python:3.13-slim AS builder
 
-# Install build dependencies and Tesseract OCR
+# Install build dependencies
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     gcc \
     g++ \
-    tesseract-ocr \
-    libtesseract-dev \
-    tesseract-ocr-eng \
-    tesseract-ocr-fra \
-    tesseract-ocr-deu \
-    tesseract-ocr-spa \
-    tesseract-ocr-ita \
-    tesseract-ocr-por \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements
