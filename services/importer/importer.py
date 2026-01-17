@@ -498,17 +498,26 @@ class FileImporter:
 
                             # Only move if paths are different
                             if organized_path != new_pdf_path:
-                                shutil.move(str(organized_path), str(new_pdf_path))
-                                organized_path = new_pdf_path
-                                magazine.file_path = str(new_pdf_path)
-                                logger.info(f"Moved file to match tracking title: {new_pdf_path}")
+                                # Check if target path already exists in database (UNIQUE constraint check)
+                                existing_record = session.query(Magazine).filter_by(file_path=str(new_pdf_path)).first()
+                                if existing_record and existing_record.id != magazine.id:
+                                    logger.warning(
+                                        f"Cannot reorganize magazine {magazine.id}: Target path {new_pdf_path} "
+                                        f"already exists in database for magazine {existing_record.id}. "
+                                        f"Keeping original path: {organized_path}"
+                                    )
+                                else:
+                                    shutil.move(str(organized_path), str(new_pdf_path))
+                                    organized_path = new_pdf_path
+                                    magazine.file_path = str(new_pdf_path)
+                                    logger.info(f"Moved file to match tracking title: {new_pdf_path}")
 
-                                # Also move cover if it exists
-                                if cover_path and cover_path.exists():
-                                    new_cover_path = new_target_dir / f"{filename_base}.jpg"
-                                    shutil.move(str(cover_path), str(new_cover_path))
-                                    magazine.cover_path = str(new_cover_path)
-                                    logger.info(f"Moved cover to match tracking title: {new_cover_path}")
+                                    # Also move cover if it exists
+                                    if cover_path and cover_path.exists():
+                                        new_cover_path = new_target_dir / f"{filename_base}.jpg"
+                                        shutil.move(str(cover_path), str(new_cover_path))
+                                        magazine.cover_path = str(new_cover_path)
+                                        logger.info(f"Moved cover to match tracking title: {new_cover_path}")
                         except Exception as e:
                             logger.warning(f"Failed to reorganize file to match tracking title: {e}")
                             # Continue with import even if reorganization fails
