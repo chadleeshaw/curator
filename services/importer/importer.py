@@ -615,38 +615,23 @@ class FileImporter:
                 except Exception as e:
                     logger.debug(f"Direct text extraction failed for {magazine.id}: {e}")
 
-            # Queue OCR job if:
-            # 1. OCR is enabled (should_queue_ocr), AND
-            # 2. Either text extraction failed/wasn't attempted OR text extraction didn't yield sufficient metadata
+            # Queue OCR job if OCR is enabled and available
+            # OCR is the highest priority metadata source (see metadata.source_priority config)
+            # It should be queued regardless of whether text extraction succeeded, so that
+            # OCR results can override text_scan results during metadata aggregation
             if should_queue_ocr:
-                should_queue_for_ocr = False
-
-                if not text_extracted:
-                    # No text was extracted at all
-                    should_queue_for_ocr = True
-                    logger.debug(f"Queueing OCR for {magazine.id}: no text extracted")
-                else:
-                    # Text was extracted, but check if it has sufficient metadata
-                    text_scan_metadata = magazine.extra_metadata.get("text_scan", {})
-                    if not text_scan_metadata.get("has_sufficient_metadata", False):
-                        should_queue_for_ocr = True
-                        logger.debug(f"Queueing OCR for {magazine.id}: insufficient metadata from text scan")
-
-                if should_queue_for_ocr:
-                    try:
-                        priority = (
-                            OCRJob.PriorityEnum.HIGH.value if not skip_organize else OCRJob.PriorityEnum.NORMAL.value
-                        )
-                        ocr_job = OCRQueueService.queue_ocr_job(
-                            db=session,
-                            magazine_id=magazine.id,
-                            priority=priority,
-                            language=parsed.language,
-                        )
-                        if ocr_job:
-                            logger.info(f"Queued OCR job {ocr_job.id} for magazine {magazine.id}")
-                    except Exception as e:
-                        logger.warning(f"Failed to queue OCR job for magazine {magazine.id}: {e}")
+                try:
+                    priority = OCRJob.PriorityEnum.HIGH.value if not skip_organize else OCRJob.PriorityEnum.NORMAL.value
+                    ocr_job = OCRQueueService.queue_ocr_job(
+                        db=session,
+                        magazine_id=magazine.id,
+                        priority=priority,
+                        language=parsed.language,
+                    )
+                    if ocr_job:
+                        logger.info(f"Queued OCR job {ocr_job.id} for magazine {magazine.id}")
+                except Exception as e:
+                    logger.warning(f"Failed to queue OCR job for magazine {magazine.id}: {e}")
 
             if not skip_organize:
                 self._cleanup_download_file(pdf_path)

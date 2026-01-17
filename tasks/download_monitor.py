@@ -424,8 +424,83 @@ class DownloadMonitor:
             logger.debug(f"[DownloadMonitor] Processing submission {submission.id}: {submission.result_title}")
 
             if not submission.file_path:
-                logger.warning(f"Submission {submission.id} has no file path")
-                continue
+                # Enhanced diagnostic logging for orphaned completed submissions
+                age_hours = (
+                    (datetime.now() - submission.updated_at).total_seconds() / 3600 if submission.updated_at else 0
+                )
+                logger.warning(
+                    f"[DownloadMonitor] Orphaned completed submission detected:\n"
+                    f"  ID: {submission.id}\n"
+                    f"  Title: {submission.result_title}\n"
+                    f"  Job ID: {submission.job_id}\n"
+                    f"  Status: {submission.status.value}\n"
+                    f"  Created: {submission.created_at}\n"
+                    f"  Updated: {submission.updated_at} ({age_hours:.1f} hours ago)\n"
+                    f"  Attempt Count: {submission.attempt_count}\n"
+                    f"  Last Error: {submission.last_error}\n"
+                    f"  Reason: Download client marked job as completed but file_path is NULL.\n"
+                    f"  This typically happens when SABnzbd history was purged or storage field was empty."
+                )
+
+                # Auto-recovery: Mark as SKIPPED if older than 24 hours, otherwise retry
+                if age_hours > 24:
+                    logger.info(
+                        f"[DownloadMonitor] Marking submission {submission.id} as SKIPPED "
+                        f"(age: {age_hours:.1f} hours > 24 hours threshold)"
+                    )
+                    submission.status = DownloadSubmission.StatusEnum.SKIPPED
+                    submission.last_error = (
+                        f"Orphaned: Completed without file_path after {age_hours:.1f} hours. "
+                        "Likely SABnzbd history purged or storage field empty."
+                    )
+                    session.commit()
+                else:
+                    # For recent submissions, check if job still exists in client
+                    logger.info(
+                        f"[DownloadMonitor] Attempting recovery for submission {submission.id} "
+                        f"(age: {age_hours:.1f} hours < 24 hours threshold)"
+                    )
+                    try:
+                        # Try to get fresh status from client
+                        if submission.job_id:
+                            logger.debug(f"[DownloadMonitor] Checking client for job {submission.job_id}")
+                            updated_submission = self.download_manager.update_submission_status(
+                                submission.job_id, session
+                            )
+                            if updated_submission and updated_submission.file_path:
+                                logger.info(
+                                    f"[DownloadMonitor] Recovery successful! "
+                                    f"Found file_path: {updated_submission.file_path}"
+                                )
+                                # Continue processing with updated submission
+                                submission = updated_submission
+                            else:
+                                logger.warning(
+                                    f"[DownloadMonitor] Recovery failed - client has no file_path for job {submission.job_id}. "
+                                    f"Marking as FAILED for manual review."
+                                )
+                                submission.status = DownloadSubmission.StatusEnum.FAILED
+                                submission.last_error = (
+                                    "Orphaned: Completed without file_path. Client returned no storage location. "
+                                    "Job may have been deleted from client or storage was empty."
+                                )
+                                submission.attempt_count += 1
+                                session.commit()
+                                continue
+                    except Exception as e:
+                        logger.error(
+                            f"[DownloadMonitor] Error during recovery attempt for submission {submission.id}: {e}",
+                            exc_info=True,
+                        )
+                        submission.status = DownloadSubmission.StatusEnum.FAILED
+                        submission.last_error = f"Recovery attempt failed: {str(e)}"
+                        submission.attempt_count += 1
+                        session.commit()
+                        continue
+
+                # If we still don't have a file_path after recovery attempt, skip
+                if not submission.file_path:
+                    continue
 
             # Map the client path to Curator's download directory
             # The client returns a path like "/downloads/Books/Magazine.Name" which is the client's view
