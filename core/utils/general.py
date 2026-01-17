@@ -6,6 +6,7 @@ This module provides common utility functions used across the application.
 
 import hashlib
 import logging
+import os
 import shutil
 from pathlib import Path
 from typing import Optional
@@ -36,9 +37,9 @@ def cleanup_empty_directories(start_path: Path, base_dir: Path) -> None:
     """
     Remove empty directories from start_path up to base_dir.
 
-    Recursively removes empty directories (including nested empty subdirectories)
-    starting from start_path and working upward until reaching base_dir or
-    encountering a directory with files.
+    Uses efficient `find -type d -empty -delete` command to remove all empty
+    directories in one pass, then walks upward from start_path to base_dir
+    removing any newly-empty parent directories.
 
     Args:
         start_path: Starting directory to check for emptiness
@@ -53,24 +54,91 @@ def cleanup_empty_directories(start_path: Path, base_dir: Path) -> None:
         # then /data/magazines/title if empty, etc.
     """
     try:
-        current = start_path
-        while current != base_dir and current.exists():
-            if current.is_dir():
-                # Check if directory contains any files (recursively)
-                has_files = any(item.is_file() for item in current.rglob("*"))
+        if not start_path.exists() or not start_path.is_dir():
+            return
 
-                if not has_files:
-                    # Directory only contains empty subdirectories or is completely empty
-                    logger.info(f"Removing empty directory tree: {current}")
-                    shutil.rmtree(current)
-                    current = current.parent
-                else:
-                    # Stop if we find a directory with files
+        # Don't delete the base directory itself
+        if start_path == base_dir:
+            return
+
+        # First pass: Use efficient find command to remove all empty directories under start_path
+        # This is much faster than Python iteration for large directory trees
+        try:
+            import subprocess
+
+            # Only run find if start_path exists and is not the base_dir
+            result = subprocess.run(
+                ["find", str(start_path), "-depth", "-type", "d", "-empty", "-delete"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                # Fall back to Python implementation if find command fails
+                logger.debug(f"Find command failed, using Python fallback: {result.stderr}")
+                _cleanup_empty_directories_python(start_path, base_dir)
+        except FileNotFoundError:
+            # find command not available (e.g., Windows), use Python implementation
+            logger.debug("Find command not available, using Python fallback")
+            _cleanup_empty_directories_python(start_path, base_dir)
+
+        # Second pass: Walk upward from start_path to base_dir removing newly-empty parents
+        # This handles the case where start_path itself or its parents became empty
+        current = start_path
+        while current not in (
+            base_dir,
+            current.parent,
+        ):  # Prevent infinite loop at root
+            if not current.exists():
+                # Directory was already removed, move to parent
+                current = current.parent
+                continue
+
+            if current.is_dir():
+                # Check if directory is now empty
+                try:
+                    if not any(current.iterdir()):
+                        logger.info(f"Removing empty parent directory: {current}")
+                        current.rmdir()
+                        current = current.parent
+                    else:
+                        # Stop if directory has contents
+                        break
+                except OSError:
+                    # Can't iterate or remove, stop here
                     break
             else:
                 break
     except Exception as e:
         logger.warning(f"Error cleaning up empty directories: {e}")
+
+
+def _cleanup_empty_directories_python(start_path: Path, base_dir: Path) -> None:
+    """
+    Python fallback for cleanup_empty_directories when find command unavailable.
+
+    Args:
+        start_path: Starting directory to clean up
+        base_dir: Base directory to stop at (won't delete this)
+    """
+    try:
+        # Walk directory tree bottom-up so we can remove empty parent dirs
+        for dirpath, dirnames, filenames in os.walk(str(start_path), topdown=False):
+            dir_path = Path(dirpath)
+
+            # Don't remove base directory
+            if dir_path == base_dir:
+                continue
+
+            # Check if directory is empty (no files and no subdirs)
+            try:
+                if not any(dir_path.iterdir()):
+                    logger.debug(f"Removing empty directory: {dir_path}")
+                    dir_path.rmdir()
+            except OSError:
+                pass  # Directory not empty or can't be removed
+    except Exception as e:
+        logger.debug(f"Error in Python directory cleanup: {e}")
 
 
 def hash_file_in_chunks(file_path: str, algorithm=hashlib.sha256, chunk_size: int = 8192) -> Optional[str]:

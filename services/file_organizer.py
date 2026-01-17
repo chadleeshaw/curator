@@ -916,7 +916,44 @@ class FileOrganizer:
 
     def _cleanup_empty_directories(self, base_dir: Path) -> int:
         """
-        Remove empty directories recursively.
+        Remove empty directories recursively using efficient find command.
+
+        Uses `find -type d -empty -delete` for fast cleanup of large directory trees.
+        Falls back to Python implementation if find command is unavailable.
+
+        Args:
+            base_dir: Base directory to start cleanup from
+
+        Returns:
+            Number of directories removed (0 when using find command, as it doesn't return count)
+        """
+        try:
+            import subprocess
+
+            # Use efficient find command to remove all empty directories
+            result = subprocess.run(
+                ["find", str(base_dir), "-type", "d", "-empty", "-delete"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            if result.returncode == 0:
+                logger.info(f"Cleaned up empty directories in {base_dir}")
+                return 0  # find command doesn't return count
+            else:
+                # Fall back to Python implementation
+                logger.debug(f"Find command failed, using Python fallback: {result.stderr}")
+                return self._cleanup_empty_directories_python(base_dir)
+
+        except FileNotFoundError:
+            # find command not available (e.g., Windows), use Python implementation
+            logger.debug("Find command not available, using Python fallback")
+            return self._cleanup_empty_directories_python(base_dir)
+
+    def _cleanup_empty_directories_python(self, base_dir: Path) -> int:
+        """
+        Python fallback for _cleanup_empty_directories.
 
         Args:
             base_dir: Base directory to start cleanup from
