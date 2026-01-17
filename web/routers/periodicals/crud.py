@@ -338,20 +338,24 @@ async def delete_periodical(
                     from core import constants
 
                     # Find download submissions for the deleted magazine(s)
-                    mag_ids = [mag.id for mag in magazines_to_delete]
-                    submissions = (
-                        db_session.query(DownloadSubmission).filter(DownloadSubmission.magazine_id.in_(mag_ids)).all()
-                    )
+                    # Match by tracking_id (periodicals.tracking_id -> download_submissions.tracking_id)
+                    tracking_ids = [mag.tracking_id for mag in magazines_to_delete if mag.tracking_id]
+                    if tracking_ids:
+                        submissions = (
+                            db_session.query(DownloadSubmission)
+                            .filter(DownloadSubmission.tracking_id.in_(tracking_ids))
+                            .all()
+                        )
 
-                    marked_count = 0
-                    for submission in submissions:
-                        # Set attempt_count to max to prevent re-download
-                        submission.attempt_count = constants.MAX_DOWNLOAD_RETRIES
-                        submission.status = DownloadSubmission.StatusEnum.FAILED
-                        marked_count += 1
+                        marked_count = 0
+                        for submission in submissions:
+                            # Set attempt_count to max to prevent re-download
+                            submission.attempt_count = constants.MAX_DOWNLOAD_RETRIES
+                            submission.status = DownloadSubmission.StatusEnum.FAILED
+                            marked_count += 1
 
-                    if marked_count > 0:
-                        logger.info(f"Marked {marked_count} download submission(s) as bad file for: {title}")
+                        if marked_count > 0:
+                            logger.info(f"Marked {marked_count} download submission(s) as bad file for: {title}")
 
                 db_session.commit()
 
