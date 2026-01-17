@@ -722,6 +722,19 @@ class DownloadManager:
             client_status = self.download_client.get_status(job_id)
             logger.debug(f"[DownloadManager] Client status for {job_id}: {client_status}")
 
+            # Check if download client is waiting due to provider rate limit
+            if client_status.get("rate_limited"):
+                wait_time = client_status.get("wait_time", 0)
+                message = client_status.get("message", f"Rate limited, waiting {wait_time}s")
+                logger.info(f"[DownloadManager] Job {job_id} is rate limited: {message}")
+
+                # Update submission with rate limit info but don't mark as failed
+                submission.status = DownloadSubmission.StatusEnum.PENDING
+                submission.last_error = message
+                submission.updated_at = utc_now()
+                session.commit()
+                return submission
+
             # Map client status to our status
             status_map = {
                 "completed": DownloadSubmission.StatusEnum.COMPLETED,

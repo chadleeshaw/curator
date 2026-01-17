@@ -4,7 +4,8 @@ Handles NZB submissions and status tracking for SABnzbd.
 """
 
 import logging
-from typing import Any, Dict, List
+import re
+from typing import Any, Dict, List, Optional
 
 import requests
 
@@ -23,6 +24,30 @@ class SABnzbdClient(DownloadClient):
 
         if not self.api_key:
             raise ValueError("SABnzbd client requires api_key")
+
+    def _parse_wait_time(self, extra_status: str) -> Optional[int]:
+        """
+        Parse wait time from SABnzbd extra_status field.
+
+        SABnzbd returns messages like:
+        - "WAIT 3600 seconds until retry"
+        - "WAIT 13887 seconds until retry"
+
+        Args:
+            extra_status: The extra_status field from SABnzbd queue slot
+
+        Returns:
+            Wait time in seconds, or None if not a WAIT message
+        """
+        if not extra_status:
+            return None
+
+        # Pattern: "WAIT X seconds until retry"
+        match = re.search(r"WAIT\s+(\d+)\s+seconds?", extra_status, re.IGNORECASE)
+        if match:
+            return int(match.group(1))
+
+        return None
 
     def _api_call(self, action: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
         """Make API call to SABnzbd"""
@@ -109,6 +134,26 @@ class SABnzbdClient(DownloadClient):
             for slot in slots:
                 if slot.get("nzo_id") == job_id:
                     logger.info(f"[SABnzbd] Found {job_id} in queue")
+
+                    # Check for rate limit WAIT status
+                    extra_status = slot.get("extra_status", "")
+                    wait_time = self._parse_wait_time(extra_status)
+
+                    if wait_time:
+                        # Provider rate limited - SABnzbd is waiting to retry
+                        logger.warning(
+                            f"[SABnzbd] Job {job_id} is rate limited by provider. "
+                            f"Waiting {wait_time} seconds (~{wait_time / 3600:.1f} hours) before retry. "
+                            f"Extra status: {extra_status}"
+                        )
+                        return {
+                            "status": "pending",  # Keep as pending, not failed
+                            "progress": 0,
+                            "rate_limited": True,
+                            "wait_time": wait_time,
+                            "message": f"Provider rate limit: waiting {wait_time}s (~{wait_time / 3600:.1f}h)",
+                        }
+
                     status = "downloading" if slot.get("status") == "Downloading" else "pending"
                     return {
                         "status": status,
