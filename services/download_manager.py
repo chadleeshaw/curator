@@ -306,7 +306,7 @@ class DownloadManager:
             .filter(
                 DownloadSubmission.source_url == search_result["url"],
                 DownloadSubmission.status == DownloadSubmission.StatusEnum.FAILED,
-                DownloadSubmission.attempt_count >= MAX_DOWNLOAD_RETRIES,
+                DownloadSubmission.attempt_count > MAX_DOWNLOAD_RETRIES,
             )
             .first()
         )
@@ -765,11 +765,11 @@ class DownloadManager:
 
                 logger.warning(
                     f"[DownloadManager] Download failed for {job_id}: {submission.last_error} "
-                    f"(attempt {submission.attempt_count}/{MAX_DOWNLOAD_RETRIES})"
+                    f"(attempt {submission.attempt_count}/{MAX_DOWNLOAD_RETRIES + 1})"
                 )
 
                 # Check if max retries reached
-                if submission.attempt_count >= MAX_DOWNLOAD_RETRIES:
+                if submission.attempt_count > MAX_DOWNLOAD_RETRIES:
                     logger.error(
                         f"[DownloadManager] Max retries reached for '{submission.result_title}' "
                         f"- marking as bad file (will not retry)"
@@ -879,7 +879,7 @@ class DownloadManager:
 
         if not include_bad_files:
             # Exclude submissions that have failed too many times (bad files)
-            query = query.filter(DownloadSubmission.attempt_count < MAX_DOWNLOAD_RETRIES)
+            query = query.filter(DownloadSubmission.attempt_count <= MAX_DOWNLOAD_RETRIES)
 
         failed = query.all()
         logger.debug(
@@ -902,11 +902,11 @@ class DownloadManager:
             session.query(DownloadSubmission)
             .filter(
                 DownloadSubmission.status == DownloadSubmission.StatusEnum.FAILED,
-                DownloadSubmission.attempt_count >= MAX_DOWNLOAD_RETRIES,
+                DownloadSubmission.attempt_count > MAX_DOWNLOAD_RETRIES,
             )
             .all()
         )
-        logger.debug(f"Found {len(bad_files)} bad files (failed {MAX_DOWNLOAD_RETRIES}+ times)")
+        logger.debug(f"Found {len(bad_files)} bad files (failed >{MAX_DOWNLOAD_RETRIES} times)")
         return bad_files
 
     def retry_submission(self, submission_id: int, session: Session) -> Dict[str, Any]:
@@ -936,14 +936,14 @@ class DownloadManager:
             }
 
         # Check if this is a bad file (failed MAX_DOWNLOAD_RETRIES+ times)
-        if submission.attempt_count >= MAX_DOWNLOAD_RETRIES:
+        if submission.attempt_count > MAX_DOWNLOAD_RETRIES:
             logger.warning(
                 f"Cannot retry bad file (failed {submission.attempt_count} times): "
                 f"{submission.result_title} (ID: {submission_id})"
             )
             return {
                 "success": False,
-                "message": f"Cannot retry: file has failed {submission.attempt_count} times (max {MAX_DOWNLOAD_RETRIES})",
+                "message": f"Cannot retry: file has failed {submission.attempt_count} times (max {MAX_DOWNLOAD_RETRIES + 1})",
             }
 
         try:
