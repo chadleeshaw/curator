@@ -1080,6 +1080,33 @@
   }
 }
 
+/* Filter buttons (for OCR queue filtering) */
+.filter-btn {
+  padding: 8px 16px;
+  background: rgba(60, 60, 60, 0.5);
+  color: var(--text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.filter-btn:hover {
+  background: rgba(80, 80, 80, 0.6);
+  border-color: var(--primary-color);
+  transform: translateY(-1px);
+}
+
+.filter-btn.active {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
 /* ==========================================================================
    Status Messages (Added for JS Refactoring - Phase 1)
    ========================================================================== */
