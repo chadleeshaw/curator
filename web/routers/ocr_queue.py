@@ -181,17 +181,14 @@ async def retry_ocr_job(job_id: int):
     return await run_in_thread(_db_operation)
 
 
-@router.delete("/queue/{job_id}")
-async def delete_ocr_job(job_id: int):
+@router.delete("/queue/failed")
+async def clear_failed_ocr_jobs():
     """
-    Delete an OCR job from the queue.
-    This will cancel processing jobs and remove pending/failed jobs.
-
-    Args:
-        job_id: OCR job ID to delete
+    Clear all failed OCR jobs from the queue.
+    This is useful for cleaning up jobs that have repeatedly failed.
 
     Returns:
-        Success message
+        Number of jobs cleared
     """
     if _session_factory is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
@@ -199,25 +196,22 @@ async def delete_ocr_job(job_id: int):
     def _db_operation():
         db = _session_factory()
         try:
-            job = db.query(OCRJob).filter(OCRJob.id == job_id).first()
+            # Delete all failed jobs
+            failed_jobs = db.query(OCRJob).filter(OCRJob.status == OCRJob.StatusEnum.FAILED).all()
 
-            if not job:
-                raise HTTPException(status_code=404, detail=ErrorMessages.OCR_JOB_NOT_FOUND)
+            count = len(failed_jobs)
 
-            # Log appropriate message based on status
-            action = "cancelled" if job.status == OCRJob.StatusEnum.PROCESSING else "deleted"
+            for job in failed_jobs:
+                db.delete(job)
 
-            db.delete(job)
             db.commit()
 
-            logger.info(f"{action.capitalize()} OCR job {job_id} (status: {job.status.value})")
+            logger.info(f"Cleared {count} failed OCR jobs from queue")
 
-            return {"message": f"Job {action} successfully"}
+            return {"message": f"Cleared {count} failed OCR jobs", "count": count}
 
-        except HTTPException:
-            raise
         except Exception as e:
-            logger.error(f"Error deleting OCR job {job_id}: {e}", exc_info=True)
+            logger.error(f"Error clearing failed OCR jobs: {e}", exc_info=True)
             db.rollback()
             raise HTTPException(status_code=500, detail=str(e))
         finally:
@@ -265,14 +259,17 @@ async def clear_pending_ocr_jobs():
     return await run_in_thread(_db_operation)
 
 
-@router.delete("/queue/failed")
-async def clear_failed_ocr_jobs():
+@router.delete("/queue/{job_id}")
+async def delete_ocr_job(job_id: int):
     """
-    Clear all failed OCR jobs from the queue.
-    This is useful for cleaning up jobs that have repeatedly failed.
+    Delete an OCR job from the queue.
+    This will cancel processing jobs and remove pending/failed jobs.
+
+    Args:
+        job_id: OCR job ID to delete
 
     Returns:
-        Number of jobs cleared
+        Success message
     """
     if _session_factory is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
@@ -280,22 +277,25 @@ async def clear_failed_ocr_jobs():
     def _db_operation():
         db = _session_factory()
         try:
-            # Delete all failed jobs
-            failed_jobs = db.query(OCRJob).filter(OCRJob.status == OCRJob.StatusEnum.FAILED).all()
+            job = db.query(OCRJob).filter(OCRJob.id == job_id).first()
 
-            count = len(failed_jobs)
+            if not job:
+                raise HTTPException(status_code=404, detail=ErrorMessages.OCR_JOB_NOT_FOUND)
 
-            for job in failed_jobs:
-                db.delete(job)
+            # Log appropriate message based on status
+            action = "cancelled" if job.status == OCRJob.StatusEnum.PROCESSING else "deleted"
 
+            db.delete(job)
             db.commit()
 
-            logger.info(f"Cleared {count} failed OCR jobs from queue")
+            logger.info(f"{action.capitalize()} OCR job {job_id} (status: {job.status.value})")
 
-            return {"message": f"Cleared {count} failed OCR jobs", "count": count}
+            return {"message": f"Job {action} successfully"}
 
+        except HTTPException:
+            raise
         except Exception as e:
-            logger.error(f"Error clearing failed OCR jobs: {e}", exc_info=True)
+            logger.error(f"Error deleting OCR job {job_id}: {e}", exc_info=True)
             db.rollback()
             raise HTTPException(status_code=500, detail=str(e))
         finally:
