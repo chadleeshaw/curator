@@ -1,6 +1,5 @@
 """Background task for processing OCR queue."""
 
-import asyncio
 import logging
 from typing import Dict, Any
 
@@ -55,8 +54,10 @@ class OCRProcessor:
         """
         Process pending OCR jobs from the queue.
 
-        Runs in a thread executor to avoid blocking the event loop during
-        long-running operations (like model downloads).
+        OCR processing must run synchronously without threading because:
+        - Tesseract OCR uses native C libraries incompatible with thread pools
+        - pdf2image spawns poppler subprocesses that crash in ThreadPoolExecutor
+        - Python's GIL and native library interactions cause process termination
 
         Returns:
             Dictionary with processing statistics
@@ -79,10 +80,10 @@ class OCRProcessor:
             self.last_run_time = datetime.now()
             self.stats["total_runs"] += 1
 
-            # Run the synchronous processing in a thread executor
-            # This prevents blocking the event loop during model downloads or OCR processing
-            loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(None, self._process_sync)
+            # Run OCR processing synchronously (no thread executor)
+            # This prevents "process pool terminated abruptly" errors from
+            # Tesseract and pdf2image subprocess interactions
+            result = self._process_sync()
 
             # Update stats
             if "processed" in result:
@@ -102,7 +103,10 @@ class OCRProcessor:
 
     def _process_sync(self) -> Dict[str, Any]:
         """
-        Synchronous processing method that runs in thread executor.
+        Synchronous OCR processing method.
+
+        Processes OCR jobs directly in the main thread to avoid subprocess
+        crashes from Tesseract and pdf2image when run in thread pools.
 
         Returns:
             Dictionary with processing statistics
