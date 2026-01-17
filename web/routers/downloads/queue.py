@@ -58,6 +58,7 @@ async def get_download_queue_default(status: str = None) -> Dict[str, Any]:
                             "status": s.status.value,
                             "job_id": s.job_id,
                             "error": s.last_error,
+                            "extra_status": s.extra_status,
                             "attempts": s.attempt_count,
                             "created_at": (s.created_at.isoformat() if s.created_at else None),
                             "updated_at": (s.updated_at.isoformat() if s.updated_at else None),
@@ -113,14 +114,15 @@ async def get_download_queue_all(status: str = None) -> Dict[str, Any]:
                     "success": True,
                     "queue": [
                         {
-                            "submission_id": s.id,  # Changed from 'id' to match frontend
+                            "submission_id": s.id,
                             "tracking_id": s.tracking_id,
                             "title": s.result_title,
-                            "magazine": tracking_map.get(s.tracking_id, "Unknown"),  # Added
-                            "url": s.source_url or "",  # Added
+                            "magazine": tracking_map.get(s.tracking_id, "Unknown"),
+                            "url": s.source_url or "",
                             "status": s.status.value,
                             "job_id": s.job_id,
                             "error": s.last_error,
+                            "extra_status": s.extra_status,
                             "attempts": s.attempt_count,
                             "created_at": (s.created_at.isoformat() if s.created_at else None),
                             "updated_at": (s.updated_at.isoformat() if s.updated_at else None),
@@ -128,7 +130,7 @@ async def get_download_queue_all(status: str = None) -> Dict[str, Any]:
                         for s in submissions
                     ],
                     "count": len(submissions),
-                    "status_counts": status_counts,  # Added for stats display
+                    "status_counts": status_counts,
                 }
             finally:
                 db_session.close()

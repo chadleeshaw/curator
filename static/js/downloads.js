@@ -22,6 +22,7 @@ import {
  * @property {string} status - Current status (pending, downloading, completed, failed, skipped)
  * @property {number} [attempt_count] - Number of download attempts
  * @property {string} [last_error] - Last error message
+ * @property {string} [extra_status] - Additional status information (e.g., "Rate limited, waiting 60s")
  * @property {string} [created_at] - Creation timestamp
  * @property {string} [updated_at] - Last update timestamp
  * @property {boolean} [isBad] - Whether marked as a bad file
@@ -426,6 +427,13 @@ export class DownloadsManager {
         })
         .join('');
 
+      // Check if any items have extra_status (e.g., rate limiting)
+      const extraStatusItems = items.filter((item) => item.extra_status);
+      const extraStatusNote =
+        extraStatusItems.length > 0
+          ? `<div style="font-size: 0.75em; color: var(--text-secondary); margin-top: 4px; font-style: italic;">⏱️ ${extraStatusItems[0].extra_status}</div>`
+          : '';
+
       headerRow.innerHTML = `
         <td colspan="5" style="padding: 12px; font-weight: bold; border-bottom: 2px solid var(--border-color);">
           <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -433,9 +441,12 @@ export class DownloadsManager {
               <span style="font-size: 1.1em;">\uD83D\uDCF0 ${periodical}</span>
               <span style="margin-left: 15px; font-size: 0.9em; color: var(--text-secondary);">${items.length} issues</span>
             </div>
-            <div style="display: flex; gap: 10px; align-items: center;">
-              ${statusBadges}
-              <span style="font-size: 1.2em; color: var(--text-secondary);">\u2192</span>
+            <div style="display: flex; flex-direction: column; gap: 5px; align-items: flex-end;">
+              <div style="display: flex; gap: 10px; align-items: center;">
+                ${statusBadges}
+                <span style="font-size: 1.2em; color: var(--text-secondary);">\u2192</span>
+              </div>
+              ${extraStatusNote}
             </div>
           </div>
         </td>
@@ -594,6 +605,7 @@ export class DownloadsManager {
             <td style="padding: 10px; border-bottom: 1px solid var(--border-color);">${displayTitle}</td>
             <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
               <span style="background: ${statusColor}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.85em;">${status}</span>
+              ${item.extra_status ? `<div style="font-size: 0.75em; color: var(--text-secondary); margin-top: 4px; font-style: italic;">⏱️ ${item.extra_status}</div>` : ''}
             </td>
             <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
               ${this.getQueueActionButtons(item)}

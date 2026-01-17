@@ -737,6 +737,7 @@ class DownloadManager:
                 # Update submission with rate limit info but don't mark as failed
                 submission.status = DownloadSubmission.StatusEnum.PENDING
                 submission.last_error = message
+                submission.extra_status = message  # Store rate limit info in extra_status
                 submission.updated_at = utc_now()
                 session.commit()
                 return submission
@@ -759,6 +760,10 @@ class DownloadManager:
             # Update submission
             submission.status = new_status
             submission.updated_at = utc_now()
+
+            # Clear extra_status if no longer rate limited and status changed
+            if not client_status.get("rate_limited") and submission.extra_status:
+                submission.extra_status = None
 
             if "file_path" in client_status:
                 submission.file_path = client_status["file_path"]

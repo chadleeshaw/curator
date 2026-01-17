@@ -215,6 +215,7 @@ class DownloadSubmission(Base):
     client_name = Column(String(100), nullable=True)  # Which client handled this
     attempt_count = Column(Integer, default=0)  # Number of download attempts
     last_error = Column(String(512), nullable=True)  # Last error message
+    extra_status = Column(String(512), nullable=True)  # Additional status info (e.g., rate limiting)
     file_path = Column(String(512), nullable=True)  # Path where file was downloaded
     created_at = Column(DateTime, default=utcnow, index=True)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
@@ -233,6 +234,7 @@ class DownloadSubmission(Base):
             "client_name": self.client_name,
             "attempt_count": self.attempt_count,
             "last_error": self.last_error,
+            "extra_status": self.extra_status,
             "file_path": self.file_path,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
