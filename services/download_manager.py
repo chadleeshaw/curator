@@ -228,6 +228,7 @@ class DownloadManager:
         fuzzy_group = self._get_fuzzy_group_id(result_title)
 
         # Check for similar results already submitted
+        # Include QUEUED status to prevent duplicate queueing
         existing = (
             session.query(DownloadSubmission)
             .filter(
@@ -235,6 +236,7 @@ class DownloadManager:
                 DownloadSubmission.fuzzy_match_group == fuzzy_group,
                 DownloadSubmission.status.in_(
                     [
+                        DownloadSubmission.StatusEnum.QUEUED,
                         DownloadSubmission.StatusEnum.PENDING,
                         DownloadSubmission.StatusEnum.DOWNLOADING,
                         DownloadSubmission.StatusEnum.COMPLETED,

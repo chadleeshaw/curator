@@ -276,7 +276,7 @@ export class OCRQueueManager {
           `${job.magazine_issue || 'Unknown Issue'} ${job.magazine_year ? `(${job.magazine_year})` : ''}`.trim();
 
         return `
-        <tr style="cursor: pointer;" onclick="ocrQueue.showJobDetails(${job.id})">
+        <tr>
           <td style="padding: 10px; border-bottom: 1px solid var(--border-color);">
             <div style="font-weight: 600;">${job.magazine_title}</div>
             <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 2px;">${issueInfo}</div>
@@ -288,6 +288,10 @@ export class OCRQueueManager {
           </td>
           <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
             ${this.getPriorityBadge(job.priority)}
+          </td>
+          <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
+            <button onclick="event.stopPropagation(); ocrQueue.showJobDetails(${job.id})" class="btn-secondary" style="padding: 4px 8px; margin-right: 5px; font-size: 0.85em;">📄 Metadata</button>
+            <button onclick="event.stopPropagation(); ocrQueue.deleteJob(${job.id})" class="btn-secondary" style="padding: 4px 8px; background: var(--status-failed); font-size: 0.85em;">🗑️ Delete</button>
           </td>
         </tr>
       `;
@@ -306,6 +310,7 @@ export class OCRQueueManager {
               <th style="text-align: left; padding: 10px; border-bottom: 2px solid var(--border-color);">Issue</th>
               <th style="text-align: center; padding: 10px; border-bottom: 2px solid var(--border-color);">Status</th>
               <th style="text-align: center; padding: 10px; border-bottom: 2px solid var(--border-color);">Priority</th>
+              <th style="text-align: center; padding: 10px; border-bottom: 2px solid var(--border-color);">Actions</th>
             </tr>
           </thead>
           <tbody>${tableRows}</tbody>
@@ -607,6 +612,9 @@ export class OCRQueueManager {
 
       if (response.ok) {
         UIUtils.showToast('OCR job removed', 'success');
+        // Close the periodical modal if open
+        this.closePeriodicalModal();
+        // Reload the queue
         await this.loadQueue();
       } else {
         const error = await response.json();
@@ -620,9 +628,27 @@ export class OCRQueueManager {
 
   /**
    * Delete an OCR job (shows confirmation modal)
+   * Fetches job details to show title in confirmation
    */
-  deleteJob(jobId, jobTitle = 'Unknown Job') {
-    this.showDeleteConfirmation(jobId, jobTitle);
+  async deleteJob(jobId) {
+    try {
+      // Fetch job details to get the title
+      const response = await APIClient.authenticatedFetch('/api/ocr/queue');
+      const data = await response.json();
+      const job = data.jobs.find((j) => j.id === jobId);
+
+      if (!job) {
+        UIUtils.showToast('Job not found', 'error');
+        return;
+      }
+
+      const jobTitle = `${job.magazine_title} - ${job.magazine_issue || 'Unknown Issue'}`;
+      this.showDeleteConfirmation(jobId, jobTitle);
+    } catch (error) {
+      console.error('[OCR Queue] Error fetching job for delete:', error);
+      // Fallback to showing confirmation without title
+      this.showDeleteConfirmation(jobId, 'Unknown Job');
+    }
   }
 
   /**
