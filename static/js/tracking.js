@@ -1669,11 +1669,17 @@ window.downloadIssue = async function (title, url, provider) {
     const data = await response.json();
 
     if (response.ok) {
-      UIUtils.showStatus(
-        ELEMENT_IDS.TRACKING_STATUS,
-        `✓ Download queued! Job ID: ${data.job_id}`,
-        'success'
-      );
+      // Handle different submission statuses
+      let message;
+      if (data.status === 'queued') {
+        message = '✓ Download queued (will be submitted when slot available)';
+      } else if (data.job_id) {
+        message = `✓ Download submitted! Job ID: ${data.job_id}`;
+      } else {
+        message = `✓ Download ${data.status}`;
+      }
+
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, message, 'success');
       setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), TIMEOUTS.AUTO_HIDE_LONG);
       window.closeSearchIssuesModal();
     } else {
