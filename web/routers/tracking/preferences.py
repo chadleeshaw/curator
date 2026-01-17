@@ -88,19 +88,9 @@ async def save_tracking_preferences(
 
         result = await run_in_thread(_save)
 
-        # Trigger immediate auto-download check if tracking settings enabled
-        if _shared._auto_download_task_func and (
-            result["track_all_editions"]
-            or result["track_new_only"]
-            or (result["selected_editions"] and any(result["selected_editions"].values()))
-        ):
-            import asyncio
-
-            try:
-                asyncio.create_task(_shared._auto_download_task_func())
-                logger.info(f"Triggered immediate auto-download check after saving tracking for '{result['title']}'")
-            except Exception as e:
-                logger.warning(f"Could not trigger immediate auto-download: {e}")
+        # Note: We don't trigger immediate auto-download here to avoid blocking the response.
+        # The scheduled auto-download task will pick up changes on its next run.
+        # This keeps the API response fast (<100ms instead of 5-6 seconds).
 
         return {
             "success": True,
@@ -264,17 +254,9 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
                 f"Title changed from '{old_title}' to '{tracking_data['title']}', reorganized {files_reorganized} files"
             )
 
-        # Trigger immediate auto-download check if tracking settings changed
-        if _shared._auto_download_task_func and any(k in updates for k in ["track_all_editions", "track_new_only"]):
-            import asyncio
-
-            try:
-                asyncio.create_task(_shared._auto_download_task_func())
-                logger.info(
-                    f"Triggered immediate auto-download check after updating tracking for '{tracking_data['title']}'"
-                )
-            except Exception as e:
-                logger.warning(f"Could not trigger immediate auto-download: {e}")
+        # Note: We don't trigger immediate auto-download here to avoid blocking the response.
+        # The scheduled auto-download task will pick up changes on its next run.
+        # This keeps the API response fast (<100ms instead of 5-6 seconds).
 
         response = {
             "success": True,
