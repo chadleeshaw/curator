@@ -7,7 +7,7 @@ search_providers:
     api_url: https://your-newsnab-server.com/api
     api_key: your-api-key-here
     enabled: true
-    categories: "7000,7010,7020,7030"
+    categories: '7000,7010,7020,7030'
 
 download_client:
   type: sabnzbd
@@ -23,10 +23,10 @@ storage:
   cache_dir: ./local/cache
 
 import:
-  organization_pattern: "{category}/{title}/{year}/"
+  organization_pattern: '{category}/{title}/{year}/'
   auto_track_imports: true
-  enable_text_scan: true  # Enable direct text extraction from PDF/EPUB during import (fast)
-  enable_ocr: true  # Enable OCR for image-based text extraction (slower, queued)
+  enable_text_scan: true # Enable direct text extraction from PDF/EPUB during import (fast)
+  enable_ocr: true # Enable OCR for image-based text extraction (slower, queued)
   category_prefix: _
   category_keywords:
     Magazines:
@@ -61,12 +61,12 @@ matching:
 
 pdf:
   # DPI settings for cover extraction (higher = better quality, slower)
-  cover_dpi_low: 60        # For thumbnails/previews
-  cover_dpi_high: 200      # For high-quality covers
+  cover_dpi_low: 60 # For thumbnails/previews
+  cover_dpi_high: 200 # For high-quality covers
 
   # JPEG quality (1-100) for cover images
-  cover_quality_low: 50    # For thumbnails
-  cover_quality_high: 85   # For high-quality covers
+  cover_quality_low: 50 # For thumbnails
+  cover_quality_high: 85 # For high-quality covers
 
 downloads:
   # Maximum number of retry attempts for failed downloads
@@ -74,30 +74,30 @@ downloads:
 
   # Maximum number of concurrent downloads allowed system-wide
   # This is the total limit across all tracked periodicals, not per batch
-  max_per_batch: 10
+  max_concurrent: 10
 
 tasks:
   # Task interval settings (in seconds)
   # How often each background task runs
 
   # Auto-download: Search for and download new tracked issues
-  auto_download_interval: 1800    # 30 minutes
+  auto_download_interval: 1800 # 30 minutes
 
   # Download monitor: Check download status and import completed files
-  download_monitor_interval: 30   # 30 seconds
+  download_monitor_interval: 30 # 30 seconds
 
   # Cover cleanup: Remove orphaned covers and generate missing ones
-  cleanup_covers_interval: 86400  # 24 hours
+  cleanup_covers_interval: 86400 # 24 hours
 
   # OCR cover generator: Generate high-res cover PNGs for OCR processing
-  ocr_cover_generator_interval: 300  # 5 minutes
+  ocr_cover_generator_interval: 300 # 5 minutes
 
   # OCR processor: Run OCR text extraction on queued covers
-  ocr_processor_interval: 10    # 10 seconds
+  ocr_processor_interval: 10 # 10 seconds
 
   # OCR worker settings
-  ocr_max_workers: 1         # Number of parallel OCR processes
-  ocr_batch_size: 1         # Max jobs to process per batch
+  ocr_max_workers: 1 # Number of parallel OCR processes
+  ocr_batch_size: 1 # Max jobs to process per batch
 
 logging:
   level: INFO

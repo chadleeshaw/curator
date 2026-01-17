@@ -6,7 +6,7 @@ from typing import Any, Dict
 
 from fastapi import HTTPException
 
-from core.constants.app import MAX_DOWNLOADS
+
 from models.database import DownloadSubmission, MagazineTracking
 from core.utils import run_in_thread
 
@@ -23,7 +23,10 @@ async def get_download_queue_default(status: str = None) -> Dict[str, Any]:
             try:
                 query = db_session.query(DownloadSubmission)
                 if status:
-                    query = query.filter(DownloadSubmission.status == DownloadSubmission.StatusEnum[status.upper()])
+                    query = query.filter(
+                        DownloadSubmission.status
+                        == DownloadSubmission.StatusEnum[status.upper()]
+                    )
 
                 submissions = query.order_by(DownloadSubmission.created_at.desc()).all()
 
@@ -31,7 +34,11 @@ async def get_download_queue_default(status: str = None) -> Dict[str, Any]:
                 tracking_map = {}
                 tracking_ids = {s.tracking_id for s in submissions if s.tracking_id}
                 if tracking_ids:
-                    trackings = db_session.query(MagazineTracking).filter(MagazineTracking.id.in_(tracking_ids)).all()
+                    trackings = (
+                        db_session.query(MagazineTracking)
+                        .filter(MagazineTracking.id.in_(tracking_ids))
+                        .all()
+                    )
                     tracking_map = {t.id: t.title for t in trackings}
 
                 # Count by status
@@ -43,7 +50,9 @@ async def get_download_queue_default(status: str = None) -> Dict[str, Any]:
                     "skipped": 0,
                 }
                 for s in submissions:
-                    status_counts[s.status.value] = status_counts.get(s.status.value, 0) + 1
+                    status_counts[s.status.value] = (
+                        status_counts.get(s.status.value, 0) + 1
+                    )
 
                 return {
                     "success": True,
@@ -58,8 +67,12 @@ async def get_download_queue_default(status: str = None) -> Dict[str, Any]:
                             "job_id": s.job_id,
                             "error": s.last_error,
                             "attempts": s.attempt_count,
-                            "created_at": (s.created_at.isoformat() if s.created_at else None),
-                            "updated_at": (s.updated_at.isoformat() if s.updated_at else None),
+                            "created_at": (
+                                s.created_at.isoformat() if s.created_at else None
+                            ),
+                            "updated_at": (
+                                s.updated_at.isoformat() if s.updated_at else None
+                            ),
                         }
                         for s in submissions
                     ],
@@ -85,7 +98,10 @@ async def get_download_queue_all(status: str = None) -> Dict[str, Any]:
             try:
                 query = db_session.query(DownloadSubmission)
                 if status:
-                    query = query.filter(DownloadSubmission.status == DownloadSubmission.StatusEnum[status.upper()])
+                    query = query.filter(
+                        DownloadSubmission.status
+                        == DownloadSubmission.StatusEnum[status.upper()]
+                    )
 
                 submissions = query.order_by(DownloadSubmission.created_at.desc()).all()
 
@@ -93,7 +109,11 @@ async def get_download_queue_all(status: str = None) -> Dict[str, Any]:
                 tracking_map = {}
                 tracking_ids = {s.tracking_id for s in submissions if s.tracking_id}
                 if tracking_ids:
-                    trackings = db_session.query(MagazineTracking).filter(MagazineTracking.id.in_(tracking_ids)).all()
+                    trackings = (
+                        db_session.query(MagazineTracking)
+                        .filter(MagazineTracking.id.in_(tracking_ids))
+                        .all()
+                    )
                     tracking_map = {t.id: t.title for t in trackings}
 
                 # Count by status
@@ -105,7 +125,9 @@ async def get_download_queue_all(status: str = None) -> Dict[str, Any]:
                     "skipped": 0,
                 }
                 for s in submissions:
-                    status_counts[s.status.value] = status_counts.get(s.status.value, 0) + 1
+                    status_counts[s.status.value] = (
+                        status_counts.get(s.status.value, 0) + 1
+                    )
 
                 return {
                     "success": True,
@@ -114,14 +136,20 @@ async def get_download_queue_all(status: str = None) -> Dict[str, Any]:
                             "submission_id": s.id,  # Changed from 'id' to match frontend
                             "tracking_id": s.tracking_id,
                             "title": s.result_title,
-                            "magazine": tracking_map.get(s.tracking_id, "Unknown"),  # Added
+                            "magazine": tracking_map.get(
+                                s.tracking_id, "Unknown"
+                            ),  # Added
                             "url": s.source_url or "",  # Added
                             "status": s.status.value,
                             "job_id": s.job_id,
                             "error": s.last_error,
                             "attempts": s.attempt_count,
-                            "created_at": (s.created_at.isoformat() if s.created_at else None),
-                            "updated_at": (s.updated_at.isoformat() if s.updated_at else None),
+                            "created_at": (
+                                s.created_at.isoformat() if s.created_at else None
+                            ),
+                            "updated_at": (
+                                s.updated_at.isoformat() if s.updated_at else None
+                            ),
                         }
                         for s in submissions
                     ],
@@ -160,30 +188,47 @@ async def get_download_queue_status() -> Dict[str, Any]:
                 )
 
                 # Calculate available slots
-                available_slots = max(0, MAX_DOWNLOADS - active_downloads)
+                available_slots = max(
+                    0, _shared._download_manager.max_downloads - active_downloads
+                )
 
                 # Count all statuses
                 status_counts = {
                     "pending": db_session.query(DownloadSubmission)
-                    .filter(DownloadSubmission.status == DownloadSubmission.StatusEnum.PENDING)
+                    .filter(
+                        DownloadSubmission.status
+                        == DownloadSubmission.StatusEnum.PENDING
+                    )
                     .count(),
                     "downloading": db_session.query(DownloadSubmission)
-                    .filter(DownloadSubmission.status == DownloadSubmission.StatusEnum.DOWNLOADING)
+                    .filter(
+                        DownloadSubmission.status
+                        == DownloadSubmission.StatusEnum.DOWNLOADING
+                    )
                     .count(),
                     "completed": db_session.query(DownloadSubmission)
-                    .filter(DownloadSubmission.status == DownloadSubmission.StatusEnum.COMPLETED)
+                    .filter(
+                        DownloadSubmission.status
+                        == DownloadSubmission.StatusEnum.COMPLETED
+                    )
                     .count(),
                     "failed": db_session.query(DownloadSubmission)
-                    .filter(DownloadSubmission.status == DownloadSubmission.StatusEnum.FAILED)
+                    .filter(
+                        DownloadSubmission.status
+                        == DownloadSubmission.StatusEnum.FAILED
+                    )
                     .count(),
                     "skipped": db_session.query(DownloadSubmission)
-                    .filter(DownloadSubmission.status == DownloadSubmission.StatusEnum.SKIPPED)
+                    .filter(
+                        DownloadSubmission.status
+                        == DownloadSubmission.StatusEnum.SKIPPED
+                    )
                     .count(),
                 }
 
                 return {
                     "success": True,
-                    "max_concurrent": MAX_DOWNLOADS,
+                    "max_concurrent": _shared._download_manager.max_downloads,
                     "active": active_downloads,
                     "available_slots": available_slots,
                     "status_counts": status_counts,
