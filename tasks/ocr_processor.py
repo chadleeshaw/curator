@@ -41,9 +41,7 @@ class OCRProcessor:
 
         # Thread pool executor for CPU-intensive operations (PNG generation, OCR)
         # This prevents blocking the FastAPI event loop
-        self.executor = ThreadPoolExecutor(
-            max_workers=1, thread_name_prefix="OCRProcessor"
-        )
+        self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="OCRProcessor")
 
         # Task tracking attributes (for API status)
         self.last_run_time = None
@@ -56,9 +54,7 @@ class OCRProcessor:
             "last_process_time": None,
         }
 
-        logger.info(
-            f"OCR processor initialized with {max_workers} workers, batch size {batch_size}"
-        )
+        logger.info(f"OCR processor initialized with {max_workers} workers, batch size {batch_size}")
 
     async def run(self) -> Dict[str, Any]:
         """
