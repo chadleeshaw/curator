@@ -406,13 +406,18 @@ export class OCRQueueManager {
         <p style="font-weight: 600; margin-bottom: 12px;">${title}</p>
         <pre style="background: var(--surface-variant); padding: 12px; border-radius: 4px; overflow-x: auto; font-size: 0.9em; color: var(--text-secondary);">${errorMessage}</pre>
         <button
-          onclick="this.closest('[style*=\\"position: fixed\\"]').remove()"
+          id="close-error-modal"
           style="margin-top: 16px; background: var(--primary); color: white; padding: 8px 16px; border-radius: 4px; border: none; cursor: pointer; float: right;">
           Close
         </button>
       </div>
     `;
 
+    // Add click handler for close button
+    const closeBtn = modal.querySelector('#close-error-modal');
+    closeBtn.addEventListener('click', () => modal.remove());
+
+    // Close modal when clicking outside
     modal.onclick = (e) => {
       if (e.target === modal) modal.remove();
     };
