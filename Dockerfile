@@ -30,9 +30,16 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
-# Install runtime dependencies (without cache mount to avoid lock issues)
+# Install runtime dependencies including Tesseract OCR (without cache mount to avoid lock issues)
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     poppler-utils \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    tesseract-ocr-fra \
+    tesseract-ocr-deu \
+    tesseract-ocr-spa \
+    tesseract-ocr-ita \
+    tesseract-ocr-por \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Python packages from builder
