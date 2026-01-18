@@ -17,7 +17,7 @@
 
 header {
   background: var(--surface);
-  padding: 24px 32px;
+  padding: 16px 32px;
   border-radius: 12px;
   box-shadow: var(--shadow-md);
   margin-bottom: 28px;
@@ -26,7 +26,8 @@ header {
 
 header h1 {
   color: var(--primary-color);
-  margin-bottom: 4px;
+  margin-bottom: 2px;
+  margin-top: 2px;
   font-size: 36px;
   font-weight: 700;
   letter-spacing: -0.5px;
@@ -84,7 +85,7 @@ header p {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 0px;
   flex: 1;
 }
 

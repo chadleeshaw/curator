@@ -175,24 +175,34 @@ class FileImporter:
                 except Exception as cleanup_error:
                     logger.warning(f"Failed to cleanup {pdf_path.name}: {cleanup_error}")
 
-        # Process EPUB files (convert to PDF first)
+        # Process EPUB files
         for epub_path in epub_files:
             try:
-                logger.info(f"Converting EPUB to PDF: {epub_path.name}")
-                result.data["skipped"] += 1
-                result.add_error(
-                    ErrorCodes.PROCESSING_FAILED,
-                    f"EPUB support coming soon: {epub_path.name}",
-                    retryable=False,
+                import_result = self.import_pdf(
+                    epub_path,
+                    session,
+                    organization_pattern=organization_pattern,
+                    use_ocr=True,
                 )
-                logger.warning(f"EPUB files not yet supported, skipping: {epub_path.name}")
-                # Cleanup unsupported file to prevent folder clutter
-                self._cleanup_download_file(epub_path)
+                if import_result:
+                    result.data["imported"] += 1
+                    logger.info(f"Successfully imported EPUB: {epub_path.name}")
+                else:
+                    result.data["failed"] += 1
+                    result.add_error(
+                        ErrorCodes.IMPORT_FAILED,
+                        f"Failed to import EPUB {epub_path.name}",
+                        retryable=True,
+                    )
+                    # Cleanup failed import to prevent folder clutter
+                    logger.info(f"Cleaning up failed EPUB import: {epub_path.name}")
+                    self._cleanup_download_file(epub_path)
             except Exception as e:
-                error_msg = f"Error processing EPUB {epub_path.name}: {str(e)}"
-                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=False)
+                result.data["failed"] += 1
+                error_msg = f"Error importing EPUB {epub_path.name}: {str(e)}"
+                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
                 logger.error(error_msg, exc_info=True)
-                # Cleanup failed file to prevent folder clutter
+                # Cleanup failed import to prevent folder clutter
                 try:
                     self._cleanup_download_file(epub_path)
                 except Exception as cleanup_error:

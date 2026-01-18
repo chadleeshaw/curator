@@ -205,8 +205,25 @@ function createIssueCard(issue) {
   return issueCard;
 }
 
-function openPDF(magazineId) {
-  window.open(`/api/periodicals/${magazineId}/pdf`, '_blank');
+async function openPDF(magazineId) {
+  try {
+    // Get magazine metadata to check file type
+    const response = await APIClient.get(`/api/periodicals/${magazineId}`);
+    const data = await response.json();
+
+    // Check if the file is an EPUB
+    if (data.file_path && data.file_path.toLowerCase().endsWith('.epub')) {
+      // Open EPUB reader
+      window.open(`/epub-reader?id=${magazineId}`, '_blank');
+    } else {
+      // Open PDF normally
+      window.open(`/api/periodicals/${magazineId}/pdf`, '_blank');
+    }
+  } catch (error) {
+    console.error('[Periodical] Error checking file type:', error);
+    // Fallback to opening as PDF
+    window.open(`/api/periodicals/${magazineId}/pdf`, '_blank');
+  }
 }
 
 // View metadata - opens the metadata modal

@@ -91,19 +91,21 @@ class FileOrganizer:
         safe_title = sanitize_filename(title)
         filename_base = f"{safe_title}{ORGANIZED_FILENAME_SEPARATOR}{month}{year}"
 
-        pdf_path = self.organize_dir / f"{filename_base}.pdf"
+        # Preserve file extension (PDF or EPUB)
+        extension = source.suffix.lower()
+        file_path = self.organize_dir / f"{filename_base}{extension}"
         jpg_path = self.organize_dir / f"{filename_base}.jpg"
 
-        if source.suffix.lower() == ".pdf":
+        if extension in [".pdf", ".epub"]:
             try:
-                source.rename(pdf_path)
-                logger.info(f"Organized PDF: {pdf_path}")
+                source.rename(file_path)
+                logger.info(f"Organized file: {file_path}")
             except (OSError, PermissionError) as e:
-                logger.error(f"Error moving PDF: {e}", exc_info=True)
-                pdf_path = None
+                logger.error(f"Error moving file: {e}", exc_info=True)
+                file_path = None
         else:
-            logger.warning(f"Source file is not PDF: {source}")
-            pdf_path = None
+            logger.warning(f"Unsupported file type: {source} (extension: {extension})")
+            file_path = None
 
         if cover_path and Path(cover_path).exists():
             try:
@@ -113,7 +115,7 @@ class FileOrganizer:
                 logger.error(f"Error moving cover: {e}", exc_info=True)
                 jpg_path = None
 
-        return str(pdf_path), str(jpg_path)
+        return str(file_path), str(jpg_path)
 
     def _build_filename(  # pylint: disable=too-many-positional-arguments
         self,
@@ -122,6 +124,7 @@ class FileOrganizer:
         issue_number: Optional[int],
         month: str,
         year: str,
+        extension: str = ".pdf",
     ) -> str:
         """
         Build organized filename with optional volume and issue information.
@@ -132,9 +135,10 @@ class FileOrganizer:
             issue_number: Issue number (optional)
             month: Month abbreviation (e.g., "Dec")
             year: Year (e.g., "2006")
+            extension: File extension (default: ".pdf")
 
         Returns:
-            Filename with .pdf extension
+            Filename with specified extension
 
         Examples:
             >>> organizer._build_filename("Wired", 5, 12, "Dec", "2024")
@@ -142,6 +146,9 @@ class FileOrganizer:
 
             >>> organizer._build_filename("Nature", None, None, "Jan", "2023")
             'Nature - Jan2023.pdf'
+
+            >>> organizer._build_filename("Pride", None, None, "Jan", "2026", ".epub")
+            'Pride - Jan2026.epub'
         """
         filename_parts = [safe_title]
 
@@ -160,7 +167,7 @@ class FileOrganizer:
 
         # Join with separator to create final filename
         # Example: "Wired - Vol5 - No12 - Dec2024.pdf"
-        return f"{ORGANIZED_FILENAME_SEPARATOR.join(filename_parts)}.pdf"
+        return f"{ORGANIZED_FILENAME_SEPARATOR.join(filename_parts)}{extension}"
 
     def _build_default_directory(
         self,
@@ -309,8 +316,11 @@ class FileOrganizer:
             year = issue_date.strftime("%Y")
             day = issue_date.strftime("%d")
 
-            # Build filename
-            filename = self._build_filename(safe_title, volume, issue_number, month, year)
+            # Preserve file extension (PDF or EPUB)
+            extension = pdf_path.suffix.lower()
+
+            # Build filename with preserved extension
+            filename = self._build_filename(safe_title, volume, issue_number, month, year, extension)
 
             # Apply category prefix
             category_with_prefix = f"{self.category_prefix}{category}"

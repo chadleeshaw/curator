@@ -7,13 +7,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict
 
-from fastapi import HTTPException
-from fastapi.responses import FileResponse
+from fastapi import HTTPException, Query
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 from core.constants.errors import ErrorMessages
 from core.parsers import sanitize_filename
 from core.utils.general import is_special_edition, cleanup_empty_directories
 from core.utils import run_in_thread
+from core.utils.epub_reader import get_epub_metadata, get_epub_chapter, get_epub_image
 from models.database import Magazine
 
 from . import _shared
@@ -69,6 +70,162 @@ async def get_pdf(magazine_id: int):
         raise
     except Exception as e:
         logger.error(f"Get file error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/periodicals/{magazine_id}/epub/metadata")
+async def get_epub_metadata_endpoint(magazine_id: int) -> Dict[str, Any]:
+    """
+    Get EPUB metadata and chapter list.
+
+    Returns:
+        Dictionary with title, author, chapters list, and chapter count
+    """
+    try:
+
+        def _db_operation():
+            db_session = _shared._session_factory()
+            try:
+                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+
+                if not magazine:
+                    raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
+
+                file_path = Path(magazine.file_path)
+                if not file_path.exists():
+                    raise HTTPException(status_code=404, detail="File not found")
+
+                # Verify it's an EPUB file
+                if file_path.suffix.lower() != ".epub":
+                    raise HTTPException(status_code=400, detail="File is not an EPUB")
+
+                return file_path
+            finally:
+                db_session.close()
+
+        file_path = await run_in_thread(_db_operation)
+
+        # Get EPUB metadata (this may take a moment for large EPUBs)
+        metadata = await run_in_thread(lambda: get_epub_metadata(file_path))
+
+        if not metadata:
+            raise HTTPException(status_code=500, detail="Failed to extract EPUB metadata")
+
+        return JSONResponse(content=metadata)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get EPUB metadata error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/periodicals/{magazine_id}/epub/chapter/{chapter_index}")
+async def get_epub_chapter_endpoint(magazine_id: int, chapter_index: int) -> HTMLResponse:
+    """
+    Get specific EPUB chapter content as HTML.
+
+    Args:
+        magazine_id: The periodical ID
+        chapter_index: Zero-based chapter index
+
+    Returns:
+        HTML content of the chapter
+    """
+    try:
+
+        def _db_operation():
+            db_session = _shared._session_factory()
+            try:
+                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+
+                if not magazine:
+                    raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
+
+                file_path = Path(magazine.file_path)
+                if not file_path.exists():
+                    raise HTTPException(status_code=404, detail="File not found")
+
+                # Verify it's an EPUB file
+                if file_path.suffix.lower() != ".epub":
+                    raise HTTPException(status_code=400, detail="File is not an EPUB")
+
+                return file_path
+            finally:
+                db_session.close()
+
+        file_path = await run_in_thread(_db_operation)
+
+        # Get chapter content with magazine_id for image URL rewriting
+        chapter_html = await run_in_thread(lambda: get_epub_chapter(file_path, chapter_index, magazine_id))
+
+        if chapter_html is None:
+            raise HTTPException(status_code=404, detail="Chapter not found")
+
+        return HTMLResponse(content=chapter_html)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get EPUB chapter error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/periodicals/{magazine_id}/epub/image/{image_name}")
+async def get_epub_image_endpoint(magazine_id: int, image_name: str):
+    """
+    Get an image from an EPUB file.
+
+    Args:
+        magazine_id: The periodical ID
+        image_name: Name of the image file (e.g., 'cover.jpg')
+
+    Returns:
+        Image data with appropriate content type
+    """
+    try:
+
+        def _db_operation():
+            db_session = _shared._session_factory()
+            try:
+                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+
+                if not magazine:
+                    raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
+
+                file_path = Path(magazine.file_path)
+                if not file_path.exists():
+                    raise HTTPException(status_code=404, detail="File not found")
+
+                # Verify it's an EPUB file
+                if file_path.suffix.lower() != ".epub":
+                    raise HTTPException(status_code=400, detail="File is not an EPUB")
+
+                return file_path
+            finally:
+                db_session.close()
+
+        file_path = await run_in_thread(_db_operation)
+
+        # Get image content
+        image_data = await run_in_thread(lambda: get_epub_image(file_path, image_name))
+
+        if image_data is None:
+            raise HTTPException(status_code=404, detail="Image not found")
+
+        # Determine content type from file extension
+        import mimetypes
+
+        content_type = mimetypes.guess_type(image_name)[0] or "application/octet-stream"
+
+        from fastapi.responses import Response
+
+        return Response(content=image_data, media_type=content_type)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get EPUB image error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

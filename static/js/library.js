@@ -362,17 +362,34 @@ export class LibraryManager {
   }
 
   /**
-   * Open PDF in new tab
+   * View a magazine's PDF/EPUB file
    *
    * @param {number} magazineId - The ID of the magazine
    * @param {string} _title - The title (unused, for logging)
-   * @returns {void}
+   * @returns {Promise<void>}
    *
    * @example
    * library.viewPDF(123, 'PC Gamer Issue 1');
    */
-  viewPDF(magazineId, _title) {
-    window.open(`/api/periodicals/${magazineId}/pdf`, '_blank');
+  async viewPDF(magazineId, _title) {
+    try {
+      // Get magazine metadata to check file type
+      const response = await APIClient.get(`/api/periodicals/${magazineId}`);
+      const data = await response.json();
+
+      // Check if the file is an EPUB
+      if (data.file_path && data.file_path.toLowerCase().endsWith('.epub')) {
+        // Open EPUB reader
+        window.open(`/epub-reader?id=${magazineId}`, '_blank');
+      } else {
+        // Open PDF normally
+        window.open(`/api/periodicals/${magazineId}/pdf`, '_blank');
+      }
+    } catch (error) {
+      console.error('[Library] Error checking file type:', error);
+      // Fallback to opening as PDF
+      window.open(`/api/periodicals/${magazineId}/pdf`, '_blank');
+    }
   }
 
   /**

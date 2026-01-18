@@ -46,15 +46,18 @@ OCR_VOLUME_PATTERNS = [
 """Regex patterns for detecting volume numbers in OCR text"""
 
 OCR_SPECIAL_EDITION_INDICATORS = [
-    "SPECIAL EDITION",
-    "SPECIAL ISSUE",
-    "LIMITED EDITION",
-    "COLLECTOR",
-    "ANNIVERSARY",
-    "EXCLUSIVE",
-    "HOLIDAY",
+    " SPECIAL EDITION",
+    " SPECIAL ISSUE",
+    " LIMITED EDITION",
+    " COLLECTOR EDITION",
+    " COLLECTOR'S EDITION",
+    " ANNIVERSARY EDITION",
+    " ANNIVERSARY ISSUE",
+    " EXCLUSIVE EDITION",
+    " HOLIDAY EDITION",
+    " HOLIDAY ISSUE",
 ]
-"""Keywords indicating special edition in OCR text"""
+"""Keywords indicating special edition in OCR text (with leading space to avoid false positives like 'non-exclusive')"""
 
 OCR_IMAGE_MAX_DIMENSION = 1200
 """Maximum dimension (width or height) for OCR processing images in pixels"""

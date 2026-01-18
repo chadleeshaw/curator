@@ -46,6 +46,12 @@ async def login_page():
     return FileResponse("templates/login.html")
 
 
+@router.get("/epub-reader")
+async def epub_reader_page(id: int = Query(...)):
+    """Serve EPUB reader page for a specific periodical"""
+    return FileResponse("templates/epub-reader.html")
+
+
 @router.get("/periodical")
 async def view_periodical_by_id(id: int = Query(...)):
     """View all published issues of a periodical by periodical ID"""
