@@ -24,7 +24,11 @@ logger = _shared.logger
 
 @router.get("/periodicals/{magazine_id}/pdf")
 async def get_pdf(magazine_id: int):
-    """Get magazine file (PDF or EPUB)"""
+    """
+    Get magazine file (PDF or EPUB).
+
+    PDFs are served inline for browser viewing, EPUBs are served as downloads.
+    """
     try:
 
         def _db_operation():
@@ -45,17 +49,22 @@ async def get_pdf(magazine_id: int):
 
         file_path = await run_in_thread(_db_operation)
 
-        # Detect file type and set appropriate media type
+        # Detect file type and set appropriate media type and headers
         file_extension = file_path.suffix.lower()
         if file_extension == ".epub":
             media_type = "application/epub+zip"
+            # Force download for EPUBs (most browsers can't display them inline)
+            headers = {"Content-Disposition": f'attachment; filename="{file_path.name}"'}
         elif file_extension == ".pdf":
             media_type = "application/pdf"
+            # Allow inline viewing for PDFs
+            headers = {"Content-Disposition": f'inline; filename="{file_path.name}"'}
         else:
             # Fallback to octet-stream for unknown types
             media_type = "application/octet-stream"
+            headers = {"Content-Disposition": f'attachment; filename="{file_path.name}"'}
 
-        return FileResponse(file_path, media_type=media_type)
+        return FileResponse(file_path, media_type=media_type, headers=headers)
 
     except HTTPException:
         raise
