@@ -18,9 +18,6 @@ OCR_DENOISE_H = 30
 OCR_SHARPEN_KERNEL = [[0, -1, 0], [-1, 5, -1], [0, -1, 0]]
 """Default sharpening kernel for OCR (2D list)"""
 
-MAX_IMAGE_PIXELS = 200000000
-"""Maximum image pixels for Pillow decompression (200 megapixels)"""
-
 OCR_DISABLE_ENV_VALUES = ("true", "1", "yes")
 """Environment variable values that disable OCR"""
 

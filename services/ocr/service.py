@@ -34,8 +34,8 @@ from core.constants.date import OCR_MONTH_NAMES, NUMBER_TO_MONTH, MONTH_TO_NUMBE
 from core.constants.language import (
     LANGUAGE_TO_PADDLEOCR,
 )  # Will rename to LANGUAGE_TO_TESSERACT
+from core.constants.files import PIL_MAX_IMAGE_PIXELS
 from core.constants.ocr import (
-    MAX_IMAGE_PIXELS,
     OCR_DISABLE_ENV_VALUES,
     OCR_ISSUE_PATTERNS,
     OCR_MAX_PAGES,
@@ -46,7 +46,7 @@ from core.constants.ocr import (
 )
 
 # Increase Pillow's decompression bomb limit for high-res images
-Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
+Image.MAX_IMAGE_PIXELS = PIL_MAX_IMAGE_PIXELS
 
 logger = logging.getLogger(__name__)
 

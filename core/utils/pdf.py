@@ -4,19 +4,24 @@ Centralized PDF cover extraction logic.
 """
 
 import logging
+from io import BytesIO
 from pathlib import Path
 from typing import Optional
 
+import fitz  # PyMuPDF
 from pdf2image import convert_from_path
 from PIL import Image
 
-from core.constants.files import PDF_COVER_DPI_LOW, PDF_COVER_QUALITY
+from core.constants.files import (
+    PIL_MAX_IMAGE_PIXELS,
+    PDF_COVER_DPI_LOW,
+    PDF_COVER_QUALITY,
+)
 
 logger = logging.getLogger(__name__)
 
-# Increase Pillow's decompression bomb limit for high-res PDFs
-# Needed for 300 DPI magazine covers which can be ~130 MP
-Image.MAX_IMAGE_PIXELS = 200000000  # 200 megapixels
+# Increase Pillow's decompression bomb limit for high-res covers
+Image.MAX_IMAGE_PIXELS = PIL_MAX_IMAGE_PIXELS
 
 
 def validate_pdf(pdf_path: Path) -> bool:

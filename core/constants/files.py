@@ -3,6 +3,14 @@ File processing and organization constants
 """
 
 # ==============================================================================
+# File Processing - Image Handling
+# ==============================================================================
+
+PIL_MAX_IMAGE_PIXELS = 200000000
+"""Maximum image size in pixels for PIL (200 megapixels). Prevents decompression bomb attacks."""
+
+
+# ==============================================================================
 # File Processing - PDF Cover Extraction
 # ==============================================================================
 
@@ -20,6 +28,9 @@ PDF_COVER_QUALITY = 50
 
 PDF_COVER_QUALITY_HIGH = 85
 """JPEG quality for high resolution covers (1-100)"""
+
+EPUB_COVER_QUALITY = 85
+"""JPEG quality for EPUB cover extraction (1-100)"""
 
 
 # ==============================================================================

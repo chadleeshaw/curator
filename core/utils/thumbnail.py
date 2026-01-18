@@ -9,10 +9,12 @@ from typing import Optional
 
 from PIL import Image
 
+from core.constants.files import PIL_MAX_IMAGE_PIXELS
+
 logger = logging.getLogger(__name__)
 
 # Increase Pillow's decompression bomb limit for processing high-res covers
-Image.MAX_IMAGE_PIXELS = 200000000  # 200 megapixels
+Image.MAX_IMAGE_PIXELS = PIL_MAX_IMAGE_PIXELS
 
 # Thumbnail settings
 THUMBNAIL_MAX_WIDTH = 400

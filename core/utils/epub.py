@@ -9,10 +9,12 @@ from typing import Optional
 
 from PIL import Image
 
+from core.constants.files import PIL_MAX_IMAGE_PIXELS, EPUB_COVER_QUALITY
+
 logger = logging.getLogger(__name__)
 
 # Increase Pillow's decompression bomb limit for high-res EPUB covers
-Image.MAX_IMAGE_PIXELS = 200000000  # 200 megapixels
+Image.MAX_IMAGE_PIXELS = PIL_MAX_IMAGE_PIXELS
 
 
 def extract_text_from_epub(epub_path: Path, max_items: int = 3) -> str:
@@ -64,14 +66,14 @@ def extract_text_from_epub(epub_path: Path, max_items: int = 3) -> str:
         return ""
 
 
-def extract_cover_from_epub(epub_path: Path, output_dir: Path, quality: int = 85) -> Optional[Path]:
+def extract_cover_from_epub(epub_path: Path, output_dir: Path, quality: int = EPUB_COVER_QUALITY) -> Optional[Path]:
     """
     Extract cover image from EPUB file.
 
     Args:
         epub_path: Path to EPUB file
         output_dir: Directory to save cover image
-        quality: JPEG quality (1-100)
+        quality: JPEG quality (1-100, default from EPUB_COVER_QUALITY constant)
 
     Returns:
         Path to extracted cover image, or None if failed

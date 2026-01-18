@@ -53,6 +53,7 @@ from .date import (
 )
 from .files import (
     DEFAULT_ORGANIZATION_PATTERN,
+    EPUB_COVER_QUALITY,
     ISSUE_PREFIX,
     MAX_FILENAME_LENGTH,
     ORGANIZED_FILENAME_PATTERN,
@@ -62,6 +63,7 @@ from .files import (
     PDF_COVER_DPI_LOW,
     PDF_COVER_QUALITY,
     PDF_COVER_QUALITY_HIGH,
+    PIL_MAX_IMAGE_PIXELS,
     VOLUME_PREFIX,
 )
 from .language import (
@@ -72,7 +74,6 @@ from .language import (
     SUPPORTED_LANGUAGES,
 )
 from .ocr import (
-    MAX_IMAGE_PIXELS,
     OCR_BATCH_SIZE,
     OCR_CONTRAST_ENHANCE,
     OCR_DENOISE_H,
@@ -90,6 +91,9 @@ from .ocr import (
     OCR_YEAR_PATTERN,
     PDF_COVER_DPI_OCR,
 )
+
+# Backward compatibility alias for code that imports MAX_IMAGE_PIXELS from constants
+MAX_IMAGE_PIXELS = PIL_MAX_IMAGE_PIXELS
 
 # Define __all__ for wildcard imports
 __all__ = [
@@ -138,6 +142,7 @@ __all__ = [
     "OCR_MONTH_NAMES",
     # File constants
     "DEFAULT_ORGANIZATION_PATTERN",
+    "EPUB_COVER_QUALITY",
     "ISSUE_PREFIX",
     "MAX_FILENAME_LENGTH",
     "ORGANIZED_FILENAME_PATTERN",
@@ -147,6 +152,7 @@ __all__ = [
     "PDF_COVER_DPI_LOW",
     "PDF_COVER_QUALITY",
     "PDF_COVER_QUALITY_HIGH",
+    "PIL_MAX_IMAGE_PIXELS",
     "VOLUME_PREFIX",
     # Language constants
     "DEFAULT_LANGUAGE",
