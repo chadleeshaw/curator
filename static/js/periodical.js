@@ -172,7 +172,7 @@ function createIssueCard(issue) {
   const openButton = document.createElement('button');
   openButton.className = 'open-pdf-btn';
   openButton.textContent = '📖';
-  openButton.title = 'View PDF';
+  openButton.title = 'Open file';
   openButton.onclick = (e) => {
     e.stopPropagation();
     openPDF(issue.id);

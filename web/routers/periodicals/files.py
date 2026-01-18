@@ -24,7 +24,7 @@ logger = _shared.logger
 
 @router.get("/periodicals/{magazine_id}/pdf")
 async def get_pdf(magazine_id: int):
-    """Get magazine PDF file"""
+    """Get magazine file (PDF or EPUB)"""
     try:
 
         def _db_operation():
@@ -35,21 +35,32 @@ async def get_pdf(magazine_id: int):
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
 
-                pdf_path = Path(magazine.file_path)
-                if not pdf_path.exists():
-                    raise HTTPException(status_code=404, detail="PDF file not found")
+                file_path = Path(magazine.file_path)
+                if not file_path.exists():
+                    raise HTTPException(status_code=404, detail="File not found")
 
-                return pdf_path
+                return file_path
             finally:
                 db_session.close()
 
-        pdf_path = await run_in_thread(_db_operation)
-        return FileResponse(pdf_path, media_type="application/pdf")
+        file_path = await run_in_thread(_db_operation)
+
+        # Detect file type and set appropriate media type
+        file_extension = file_path.suffix.lower()
+        if file_extension == ".epub":
+            media_type = "application/epub+zip"
+        elif file_extension == ".pdf":
+            media_type = "application/pdf"
+        else:
+            # Fallback to octet-stream for unknown types
+            media_type = "application/octet-stream"
+
+        return FileResponse(file_path, media_type=media_type)
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Get PDF error: {e}")
+        logger.error(f"Get file error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
