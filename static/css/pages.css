@@ -108,6 +108,80 @@
   align-items: center;
 }
 
+/* ==========================================================================
+   Track New Periodical Modal - Compact Layout
+   ========================================================================== */
+
+#track-new-periodical-modal .modal-content {
+  max-width: 700px;
+}
+
+#track-new-periodical-modal h2 {
+  font-size: 22px;
+  margin-bottom: 6px;
+}
+
+#track-new-periodical-modal > div > p:first-of-type,
+#track-new-periodical-modal .modal-content > p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+/* Compact settings fields in modal */
+#track-new-periodical-modal .settings-field {
+  margin-bottom: 10px;
+}
+
+#track-new-periodical-modal .settings-field label {
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#track-new-periodical-modal .settings-field input,
+#track-new-periodical-modal .settings-field select {
+  padding: 7px 10px;
+  font-size: 14px;
+}
+
+#track-new-periodical-modal .settings-field small {
+  font-size: 11px;
+  line-height: 1.3;
+  margin-top: 3px;
+}
+
+/* Tracking Details section */
+#track-new-periodical-modal h3 {
+  font-size: 18px;
+  margin-bottom: 4px;
+  color: var(--text-primary);
+}
+
+#track-new-periodical-modal h3 + p {
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+/* Two-column layout for compact fields */
+#track-new-periodical-modal .field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+#track-new-periodical-modal .field-row .settings-field {
+  margin-bottom: 0;
+}
+
+/* Reduce spacing in tracking details section */
+#track-new-periodical-modal div[style*='margin-top: 30px'] {
+  margin-top: 20px !important;
+  padding-top: 15px !important;
+}
+
 .editions-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
@@ -366,6 +440,24 @@
   color: var(--text-secondary);
 }
 
+/* Library header and controls */
+.library-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.library-controls-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
 /* ==========================================================================
    Responsive Design
    ========================================================================== */
@@ -373,6 +465,7 @@
 @media (max-width: 768px) {
   .container {
     padding: 10px;
+    overflow-x: hidden;
   }
 
   header {
@@ -389,6 +482,8 @@
 
   .tab {
     padding: 15px;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   .periodical-grid {
@@ -411,6 +506,34 @@
     margin-right: 5px;
   }
 
+  /* Tracking page - mobile layout */
+  .tracked-header {
+    gap: 20px;
+  }
+
+  .tracked-header h2 {
+    text-align: center;
+    font-size: 20px;
+  }
+
+  .tracked-header-row {
+    flex-direction: column;
+    gap: 15px;
+    align-items: stretch;
+  }
+
+  .tracked-actions {
+    width: 100%;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .tracked-actions button {
+    width: 100%;
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+
   .tracked-item {
     flex-direction: column;
     align-items: flex-start;
@@ -426,6 +549,37 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 15px;
+    padding: 16px;
+    max-width: 100%;
+    box-sizing: border-box;
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  /* Override inline styles on task cards */
+  #scheduled-tasks-list > div {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  #scheduled-tasks-list > div > div {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  #scheduled-tasks-list > div > div > div {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow-wrap: break-word;
+  }
+
+  .task-info h4 {
+    font-size: 15px;
+  }
+
+  .task-info p {
+    font-size: 12px;
+    line-height: 1.5;
   }
 
   .task-actions {
@@ -434,11 +588,836 @@
 
   .task-actions button {
     width: 100%;
+    padding: 10px 14px;
   }
 
-  /* Queue Stats - Smaller numbers on mobile */
-  .ocr-stat-number,
-  .queue-stat-number {
-    font-size: 1.2em !important;
+  /* Tasks page - mobile layout */
+  .tasks-container {
+    padding: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .scheduled-tasks-section {
+    padding: 0;
+    max-width: 100%;
+  }
+
+  .scheduled-tasks-section h2 {
+    text-align: center;
+    font-size: 20px;
+  }
+
+  .scheduled-tasks-section > p {
+    text-align: center;
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 0 10px;
+  }
+
+  #scheduled-tasks-list {
+    max-width: 100%;
+    padding: 0;
+  }
+
+  /* Queue page - mobile layout */
+  .queue-switcher {
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .queue-switch-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 14px 20px;
+    font-size: 15px;
+  }
+
+  /* Queue view headers */
+  #download-queue-view h2,
+  #ocr-queue-view h2 {
+    text-align: center;
+    font-size: 20px;
+  }
+
+  #download-queue-view > div > p,
+  #ocr-queue-view > div > p {
+    text-align: center;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  /* Filter buttons - create grid layout */
+  #download-queue-view > div:nth-of-type(2),
+  #ocr-queue-view > div:first-of-type {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  .filter-btn {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 13px;
+    text-align: center;
+    margin: 0 !important;
+  }
+
+  /* Clear buttons - full width below filters */
+  #download-clear-queued-btn,
+  #download-clear-pending-btn,
+  #download-clear-failed-btn,
+  #ocr-clear-processing-btn,
+  #ocr-clear-failed-btn,
+  #ocr-clear-completed-btn {
+    width: 100%;
+    grid-column: 1 / -1;
+    margin: 0 !important;
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+
+  /* Queue stats grid - override inline styles */
+  #queue-stats > div,
+  #ocr-queue-stats > div {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+    margin-bottom: 20px;
+  }
+
+  #queue-stats > div > div,
+  #ocr-queue-stats > div > div {
+    padding: 12px 8px !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .queue-stat-number,
+  .ocr-stat-number {
+    font-size: 1.5em !important;
+  }
+
+  #queue-stats > div > div > div:last-child,
+  #ocr-queue-stats > div > div > div:last-child {
+    font-size: 11px !important;
+    margin-top: 4px !important;
+  }
+
+  /* Queue tables - mobile responsive */
+  .queue-table {
+    font-size: 12px;
+  }
+
+  .queue-table th,
+  .queue-table td {
+    padding: 8px 6px;
+    font-size: 12px;
+  }
+
+  /* Hide less important columns on mobile */
+  .queue-table th:nth-child(3),
+  .queue-table td:nth-child(3),
+  .queue-table th:nth-child(4),
+  .queue-table td:nth-child(4) {
+    display: none;
+  }
+
+  /* Make first column (title) wrap */
+  .queue-table td:first-child {
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Stack action buttons in queue table */
+  .queue-table td:last-child {
+    white-space: normal;
+  }
+
+  .queue-table td:last-child button {
+    font-size: 11px;
+    padding: 4px 8px;
+    margin: 2px;
+  }
+
+  /* Queue empty state */
+  #queue-empty {
+    padding: 40px 15px !important;
+  }
+
+  #queue-empty > div:first-child {
+    font-size: 3em !important;
+  }
+
+  #queue-empty p {
+    font-size: 0.95em !important;
+  }
+
+  /* Queue table container */
+  #queue-table-container,
+  #ocr-queue-table-container {
+    padding: 12px !important;
+    overflow-x: auto;
+  }
+
+  /* Modal improvements */
+  .modal-content {
+    width: 95% !important;
+    max-width: 95% !important;
+    padding: 15px !important;
+    max-height: 90vh !important;
+  }
+
+  .modal-content h2 {
+    font-size: 18px;
+    padding-right: 40px;
+    margin-top: 0;
+    line-height: 1.3;
+    overflow-wrap: break-word;
+  }
+
+  .modal-content .close {
+    right: 10px !important;
+    top: 10px !important;
+    font-size: 32px;
+    width: 32px;
+    height: 32px;
+    line-height: 32px;
+    text-align: center;
+  }
+
+  /* Modal tables */
+  .modal-content table {
+    font-size: 11px;
+    display: block;
+    overflow-x: auto;
+  }
+
+  .modal-content table thead,
+  .modal-content table tbody,
+  .modal-content table tr {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+  }
+
+  .modal-content table th,
+  .modal-content table td {
+    padding: 8px 4px;
+    font-size: 11px;
+  }
+
+  /* Adjust column widths for OCR modal */
+  .modal-content table th:nth-child(1),
+  .modal-content table td:nth-child(1) {
+    width: 35%;
+  }
+
+  .modal-content table th:nth-child(2),
+  .modal-content table td:nth-child(2) {
+    width: 25%;
+  }
+
+  .modal-content table th:nth-child(3),
+  .modal-content table td:nth-child(3) {
+    width: 20%;
+  }
+
+  .modal-content table th:nth-child(4),
+  .modal-content table td:nth-child(4) {
+    width: 20%;
+  }
+
+  /* Truncate long issue names */
+  .modal-content table td:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Status badges smaller */
+  .modal-content .status-badge {
+    font-size: 9px;
+    padding: 3px 8px;
+  }
+
+  /* Modal buttons */
+  .modal-content button {
+    font-size: 11px;
+    padding: 6px 10px;
+  }
+
+  /* Modal action buttons at bottom */
+  .modal-content > button:last-child {
+    width: 100%;
+    margin-top: 15px;
+    padding: 12px;
+    font-size: 14px;
+  }
+
+  /* Tracking cards - mobile layout */
+  .tracked-card {
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 16px !important;
+    gap: 12px !important;
+    grid-template-columns: unset !important;
+  }
+
+  .tracked-card .merge-checkbox {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    width: 24px;
+    height: 24px;
+  }
+
+  .tracked-card-main {
+    width: 100%;
+  }
+
+  .tracked-card h5 {
+    font-size: 16px !important;
+    padding-right: 0;
+  }
+
+  .tracked-card-header {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
+
+  .tracking-badge {
+    font-size: 11px !important;
+    padding: 4px 10px !important;
+  }
+
+  .tracked-card-meta {
+    font-size: 12px !important;
+    gap: 8px !important;
+  }
+
+  .meta-item {
+    font-size: 12px !important;
+  }
+
+  .tracked-card-buttons {
+    width: 100%;
+    justify-content: space-between !important;
+    gap: 8px !important;
+    margin-top: 8px;
+  }
+
+  .btn-icon {
+    flex: 1 !important;
+    min-width: 0 !important;
+    width: auto !important;
+    height: 44px !important;
+    font-size: 20px !important;
+    padding: 10px 8px !important;
+  }
+
+  /* Empty state in tracking */
+  .empty-state {
+    padding: 40px 20px !important;
+  }
+
+  .empty-state-icon {
+    font-size: 3em !important;
+  }
+
+  .empty-state h3 {
+    font-size: 18px !important;
+  }
+
+  .empty-state p {
+    font-size: 14px !important;
+  }
+
+  /* OCR Queue grouped rows - mobile */
+  #ocr-queue-table-container table tr[style*='cursor: pointer'] td > div,
+  #queue-table-container table tr[style*='cursor: pointer'] td > div {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
+
+  /* Periodical name and count */
+  #ocr-queue-table-container table tr[style*='cursor: pointer'] td > div > div:first-child,
+  #queue-table-container table tr[style*='cursor: pointer'] td > div > div:first-child {
+    width: 100%;
+  }
+
+  #ocr-queue-table-container
+    table
+    tr[style*='cursor: pointer']
+    td
+    > div
+    > div:first-child
+    span:first-child,
+  #queue-table-container
+    table
+    tr[style*='cursor: pointer']
+    td
+    > div
+    > div:first-child
+    span:first-child {
+    font-size: 14px !important;
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  #ocr-queue-table-container
+    table
+    tr[style*='cursor: pointer']
+    td
+    > div
+    > div:first-child
+    span:last-child,
+  #queue-table-container
+    table
+    tr[style*='cursor: pointer']
+    td
+    > div
+    > div:first-child
+    span:last-child {
+    font-size: 12px !important;
+    margin-left: 0 !important;
+  }
+
+  /* Status badges and arrow */
+  #ocr-queue-table-container table tr[style*='cursor: pointer'] td > div > div:last-child,
+  #queue-table-container table tr[style*='cursor: pointer'] td > div > div:last-child {
+    width: 100%;
+    justify-content: flex-start !important;
+    flex-wrap: wrap;
+  }
+
+  #ocr-queue-table-container table tr[style*='cursor: pointer'] td > div > div:last-child span,
+  #queue-table-container table tr[style*='cursor: pointer'] td > div > div:last-child span {
+    font-size: 10px !important;
+    padding: 3px 8px !important;
+    margin-right: 4px !important;
+    margin-bottom: 4px;
+  }
+
+  /* Arrow at the end */
+  #ocr-queue-table-container
+    table
+    tr[style*='cursor: pointer']
+    td
+    > div
+    > div:last-child
+    > span:last-child,
+  #queue-table-container
+    table
+    tr[style*='cursor: pointer']
+    td
+    > div
+    > div:last-child
+    > span:last-child {
+    margin-left: auto;
+    font-size: 18px !important;
+  }
+
+  /* Periodical cards - mobile optimizations */
+  .periodical-card {
+    border-radius: 10px;
+  }
+
+  .periodical-cover {
+    height: 180px !important;
+    padding: 12px !important;
+    font-size: 11px !important;
+  }
+
+  .periodical-info {
+    padding: 12px !important;
+  }
+
+  .periodical-info h4 {
+    font-size: 14px !important;
+    margin-bottom: 6px !important;
+  }
+
+  .periodical-info p {
+    font-size: 12px !important;
+    margin-bottom: 3px !important;
+  }
+
+  .periodical-info p:last-of-type {
+    margin-bottom: 10px !important;
+  }
+
+  .language-badge {
+    font-size: 10px !important;
+    padding: 3px 8px !important;
+    margin-top: 4px !important;
+    margin-bottom: 6px !important;
+  }
+
+  .periodical-actions {
+    flex-direction: column !important;
+    gap: 6px !important;
+    margin-top: 8px !important;
+  }
+
+  .periodical-actions button {
+    width: 100% !important;
+    padding: 10px 12px !important;
+    font-size: 13px !important;
+    justify-content: center;
+  }
+
+  /* Periodical detail page - mobile */
+  .back-button {
+    width: 100%;
+    text-align: center;
+    padding: 12px 20px !important;
+    font-size: 14px;
+    margin-bottom: 15px !important;
+  }
+
+  .periodical-header {
+    padding: 30px 16px !important;
+    margin-bottom: 20px !important;
+  }
+
+  .periodical-header h1 {
+    font-size: 1.8em !important;
+    line-height: 1.2;
+  }
+
+  .periodical-header p {
+    font-size: 0.95em !important;
+  }
+
+  .year-section {
+    margin-bottom: 35px !important;
+  }
+
+  .year-title {
+    font-size: 1.3em !important;
+    padding-bottom: 8px !important;
+    margin-bottom: 16px !important;
+  }
+
+  .issues-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)) !important;
+    gap: 16px !important;
+    margin-bottom: 30px !important;
+  }
+
+  .issue-card {
+    border-radius: 10px;
+  }
+
+  .issue-cover {
+    height: 150px !important;
+  }
+
+  .issue-cover-placeholder {
+    font-size: 10px !important;
+    padding: 10px !important;
+  }
+
+  .issue-info {
+    padding: 10px !important;
+  }
+
+  .issue-date {
+    font-size: 11px !important;
+    margin-bottom: 4px !important;
+  }
+
+  .issue-title {
+    font-size: 12px !important;
+    margin-bottom: 8px !important;
+  }
+
+  .issue-actions {
+    flex-direction: row !important;
+    gap: 6px !important;
+    margin-top: 8px !important;
+  }
+
+  .open-pdf-btn {
+    flex: 1 !important;
+    padding: 8px 6px !important;
+    font-size: 16px !important;
+    min-width: 0 !important;
+  }
+
+  .metadata-btn,
+  .delete-issue-btn {
+    width: 36px !important;
+    height: 36px !important;
+    font-size: 16px !important;
+    padding: 6px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .no-issues {
+    padding: 30px 20px !important;
+    font-size: 0.95em !important;
+  }
+
+  /* Special edition section - mobile */
+  .special-edition-section {
+    padding: 16px !important;
+    margin-bottom: 40px !important;
+  }
+
+  .special-edition-title {
+    font-size: 1.3em !important;
+  }
+
+  /* Library controls - stack on mobile */
+  .library-header-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .library-header-row h2 {
+    text-align: center;
+    margin-bottom: 10px;
+  }
+
+  .library-controls-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sort-controls {
+    width: 100%;
+    justify-content: center;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .sort-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    flex: 1;
+    max-width: 350px;
+  }
+
+  .sort-btn {
+    font-size: 13px;
+    padding: 10px 12px;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .sort-toggle-btn {
+    width: 48px;
+    height: auto;
+    min-height: 80px;
+    padding: 10px;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+
+  .import-button-group {
+    font-size: 13px;
+    padding: 10px 14px;
+    width: 100%;
+  }
+
+  /* Settings page - mobile layout */
+  .settings-container {
+    padding: 15px !important;
+  }
+
+  .settings-container .flex.justify-between.items-center {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 12px;
+    margin-bottom: 20px !important;
+  }
+
+  .settings-container h2 {
+    font-size: 20px !important;
+    text-align: center;
+    margin-bottom: 0 !important;
+  }
+
+  .btn-danger {
+    width: 100%;
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+
+  /* Settings navigation - grid layout */
+  .settings-nav {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 12px;
+    margin-bottom: 20px !important;
+  }
+
+  .settings-nav-btn {
+    width: 100%;
+    padding: 12px 10px;
+    font-size: 13px;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Settings sections */
+  .settings-section {
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+
+  .settings-section h3 {
+    font-size: 18px;
+    margin-bottom: 10px;
+  }
+
+  .settings-section > p {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  /* Settings fields */
+  .settings-field {
+    margin-bottom: 15px;
+  }
+
+  .settings-field label {
+    font-size: 13px;
+    margin-bottom: 6px;
+  }
+
+  .settings-field input,
+  .settings-field select {
+    font-size: 14px;
+    padding: 10px 12px;
+  }
+
+  /* Settings buttons */
+  .settings-section button,
+  .save-btn {
+    width: 100%;
+    padding: 12px 16px;
+    font-size: 14px;
+    margin-top: 10px;
+  }
+
+  /* Provider blocks */
+  .settings-provider-block {
+    padding: 16px;
+    margin-bottom: 15px;
+  }
+
+  .settings-provider-block h4 {
+    font-size: 16px;
+    margin-bottom: 12px;
+  }
+
+  /* Track New Periodical Modal - mobile layout */
+  #track-new-periodical-modal .modal-content {
+    max-width: 95% !important;
+    padding: 16px !important;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  #track-new-periodical-modal h2 {
+    font-size: 18px;
+    margin-bottom: 8px;
+  }
+
+  #track-new-periodical-modal h3 {
+    font-size: 16px;
+    margin-bottom: 6px;
+  }
+
+  #track-new-periodical-modal p {
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  /* Break two-column grid to single column on mobile */
+  #track-new-periodical-modal .field-row {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  #track-new-periodical-modal .field-row .settings-field {
+    margin-bottom: 10px !important;
+  }
+
+  /* Search section - stack vertically */
+  #track-new-periodical-modal .settings-field > div[style*='display: flex'] {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+
+  #track-new-periodical-modal .settings-field input[type='text'] {
+    width: 100% !important;
+    flex: none !important;
+  }
+
+  #track-new-periodical-modal .settings-field button {
+    width: 100%;
+    padding: 10px 14px;
+    font-size: 14px;
+  }
+
+  /* Language/Country filters - stack vertically */
+  #track-new-periodical-modal .settings-field > div[style*='display: flex'] > div {
+    flex: none !important;
+    width: 100%;
+  }
+
+  #track-new-periodical-modal .settings-field label {
+    font-size: 12px;
+    margin-bottom: 5px;
+  }
+
+  #track-new-periodical-modal .settings-field select {
+    font-size: 13px;
+    padding: 8px 10px;
+  }
+
+  #track-new-periodical-modal .settings-field small {
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  #track-new-periodical-modal .settings-field input {
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
+  /* Tracking Details section */
+  #track-new-periodical-modal > div > div[style*='margin-top: 30px'] {
+    margin-top: 20px !important;
+    padding-top: 15px !important;
+  }
+
+  /* Bottom buttons */
+  #track-new-periodical-modal .flex.gap-10 {
+    flex-direction: column !important;
+    gap: 8px !important;
+    margin-top: 16px !important;
+  }
+
+  #track-new-periodical-modal .flex.gap-10 button {
+    width: 100% !important;
+    flex: none !important;
+    padding: 11px 16px;
+    font-size: 14px;
   }
 }

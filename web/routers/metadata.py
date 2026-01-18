@@ -8,6 +8,7 @@ from typing import Any, Dict
 from fastapi import APIRouter
 
 from core.constants.app import MAX_DOWNLOAD_RETRIES
+from core.constants.category import CATEGORIES
 from core.constants.country import (
     ISO_COUNTRIES,
     LANGUAGE_TO_COUNTRY,
@@ -28,6 +29,12 @@ async def get_supported_languages() -> Dict[str, Any]:
     return {"success": True, "languages": SUPPORTED_LANGUAGES}
 
 
+@router.get("/constants/categories")
+async def get_categories() -> Dict[str, Any]:
+    """Get list of content categories"""
+    return {"success": True, "categories": CATEGORIES}
+
+
 @router.get("/constants/countries")
 async def get_iso_countries() -> Dict[str, Any]:
     """Get ISO country codes and names"""
@@ -40,6 +47,7 @@ async def get_all_constants() -> Dict[str, Any]:
     return {
         "success": True,
         "languages": SUPPORTED_LANGUAGES,
+        "categories": CATEGORIES,
         "countries": ISO_COUNTRIES,
         "language_to_country": LANGUAGE_TO_COUNTRY,
         "country_indicators": COUNTRY_INDICATORS,

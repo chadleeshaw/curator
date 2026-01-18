@@ -184,13 +184,11 @@ async def list_tracked_magazines(
                         query = query.order_by(
                             MagazineTracking.track_all_editions.asc(),
                             MagazineTracking.track_new_only.asc(),
-                            MagazineTracking.title.desc(),
                         )
                     else:
                         query = query.order_by(
                             MagazineTracking.track_all_editions.desc(),
                             MagazineTracking.track_new_only.desc(),
-                            MagazineTracking.title.asc(),
                         )
                 else:
                     sort_expr = MagazineTracking.title.desc() if is_descending else MagazineTracking.title.asc()

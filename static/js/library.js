@@ -25,12 +25,59 @@ export class LibraryManager {
   constructor() {
     /** @type {SortManager} Manager for library sorting */
     this.sortManager = new SortManager('title', 'asc', () => this.loadPeriodicals());
+    /** @type {string} Current category filter */
+    this.categoryFilter = 'all';
     /** @type {number|null} ID of periodical pending deletion */
     this.pendingDeleteId = null;
     /** @type {string|null} Title of periodical pending deletion */
     this.pendingDeleteTitle = null;
     /** @type {number|null} Issue count of periodical pending deletion */
     this.pendingDeleteIssueCount = null;
+
+    // Load categories on initialization
+    this.loadCategories();
+  }
+
+  /**
+   * Load categories from API and populate dropdown
+   *
+   * @returns {Promise<void>}
+   * @throws {Error} When API request fails
+   */
+  async loadCategories() {
+    try {
+      const response = await APIClient.get('/api/constants/categories');
+      const data = await response.json();
+
+      if (data.success && data.categories) {
+        this.populateCategoryDropdown(data.categories);
+      }
+    } catch (error) {
+      console.error('[Library] Failed to load categories:', error);
+      // If loading fails, dropdown will keep the hardcoded defaults
+    }
+  }
+
+  /**
+   * Populate the category filter dropdown with categories
+   *
+   * @param {string[]} categories - Array of category names
+   * @returns {void}
+   */
+  populateCategoryDropdown(categories) {
+    const dropdown = document.getElementById('library-category-filter');
+    if (!dropdown) return;
+
+    // Keep the "All" option
+    dropdown.innerHTML = '<option value="all">All</option>';
+
+    // Add each category as an option
+    categories.forEach((category) => {
+      const option = document.createElement('option');
+      option.value = category;
+      option.textContent = category;
+      dropdown.appendChild(option);
+    });
   }
 
   /**
@@ -53,9 +100,19 @@ export class LibraryManager {
       const grid = document.getElementById('periodicals-grid');
       grid.innerHTML = '';
 
-      const { periodicals } = data;
+      let { periodicals } = data;
+
+      // Apply category filter
+      if (this.categoryFilter !== 'all') {
+        periodicals = periodicals.filter((p) => {
+          const category = p.metadata?.category || 'Unknown';
+          return category === this.categoryFilter;
+        });
+      }
+
       if (periodicals.length === 0) {
-        grid.innerHTML = '<p>No periodicals in library yet</p>';
+        const filterText = this.categoryFilter !== 'all' ? ` in ${this.categoryFilter}` : '';
+        grid.innerHTML = `<p>No periodicals${filterText} in library yet</p>`;
         // Update header stats
         if (window.updateHeaderStats) {
           window.updateHeaderStats();
@@ -90,10 +147,10 @@ export class LibraryManager {
     this.sortManager.order = 'asc';
 
     // Update button active states
-    document.querySelectorAll('.library-controls .sort-btn').forEach((btn) => {
+    document.querySelectorAll('.sort-controls .sort-btn').forEach((btn) => {
       btn.classList.remove('active');
     });
-    const activeBtn = document.querySelector(`.library-controls [data-lib-sort="${field}"]`);
+    const activeBtn = document.querySelector(`.sort-controls [data-lib-sort="${field}"]`);
     activeBtn?.classList.add('active');
 
     this.updateLibrarySortToggleButton();
@@ -129,6 +186,27 @@ export class LibraryManager {
           ? 'Ascending (click to descend)'
           : 'Descending (click to ascend)';
     }
+  }
+
+  /**
+   * Set the category filter for the library
+   *
+   * @param {string} category - The category to filter by ('all', 'Magazines', 'Comics', 'News', 'Articles')
+   * @returns {void}
+   *
+   * @example
+   * library.setLibraryFilter('Comics');
+   */
+  setLibraryFilter(category) {
+    this.categoryFilter = category;
+
+    // Update dropdown selection
+    const dropdown = document.getElementById('library-category-filter');
+    if (dropdown) {
+      dropdown.value = category;
+    }
+
+    this.loadPeriodicals();
   }
 
   /**
@@ -442,6 +520,7 @@ console.log('[Library] LibraryManager singleton created:', library);
 // Expose functions globally for onclick handlers
 window.setLibrarySortField = (field) => library.setLibrarySortField(field);
 window.toggleLibrarySortOrder = () => library.toggleLibrarySortOrder();
+window.setLibraryFilter = (category) => library.setLibraryFilter(category);
 window.deletePeriodical = (id, title, issueCount) => {
   console.log('[Library] window.deletePeriodical called with:', id, title, issueCount);
   return library.deletePeriodical(id, title, issueCount);

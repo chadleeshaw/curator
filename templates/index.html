@@ -47,17 +47,12 @@
       <!-- Library Tab -->
       <div id="library-tab" class="tab active">
         <div class="library-container">
-          <h2>📚 Library</h2>
-          <div class="library-header flex justify-between items-center gap-30 mb-40 flex-wrap">
-            <div class="flex gap-10 flex-wrap">
-              <button onclick="checkAndImportDownloads()" class="btn-primary import-button-group">
-                📁 Import Downloads Folder
-              </button>
-              <button onclick="importFromOrganizeDir()" class="btn-primary import-button-group">
-                📁 Import Data Folder
-              </button>
-            </div>
-            <div class="library-controls flex gap-15">
+          <!-- Header with Sort Controls -->
+          <div class="library-header-row">
+            <h2 style="margin: 0">📚 Library</h2>
+
+            <!-- Sort Controls -->
+            <div class="sort-controls">
               <div class="sort-buttons">
                 <button
                   class="sort-btn active"
@@ -80,6 +75,13 @@
                 >
                   Issue Date
                 </button>
+                <button
+                  class="sort-btn"
+                  data-lib-sort="created_at"
+                  onclick="setLibrarySortField('created_at')"
+                >
+                  Added Date
+                </button>
               </div>
               <button
                 id="library-sort-toggle"
@@ -91,6 +93,52 @@
               </button>
             </div>
           </div>
+
+          <!-- Import Buttons with Filter -->
+          <div class="library-controls-row mb-40">
+            <div style="display: flex; gap: 10px; flex-wrap: wrap">
+              <button onclick="checkAndImportDownloads()" class="btn-primary import-button-group">
+                📁 Import Downloads Folder
+              </button>
+              <button onclick="importFromOrganizeDir()" class="btn-primary import-button-group">
+                📁 Import Data Folder
+              </button>
+            </div>
+
+            <!-- Category Filter Dropdown -->
+            <div style="display: flex; gap: 10px; align-items: center">
+              <label
+                for="library-category-filter"
+                style="color: var(--text-secondary); font-size: 0.9em; font-weight: 500"
+                >Filter:</label
+              >
+              <select
+                id="library-category-filter"
+                onchange="setLibraryFilter(this.value)"
+                style="
+                  padding: 8px 12px;
+                  border: 1px solid var(--border-color);
+                  border-radius: 6px;
+                  background: var(--surface);
+                  color: var(--text-primary);
+                  font-size: 14px;
+                  cursor: pointer;
+                  -webkit-appearance: none;
+                  -moz-appearance: none;
+                  appearance: none;
+                  background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23f0f0f0%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3e%3cpolyline points=%226 9 12 15 18 9%22%3e%3c/polyline%3e%3c/svg%3e');
+                  background-repeat: no-repeat;
+                  background-position: right 10px center;
+                  background-size: 16px;
+                  padding-right: 35px;
+                "
+              >
+                <option value="all">All</option>
+                <!-- Categories loaded dynamically from API -->
+              </select>
+            </div>
+          </div>
+
           <div id="import-status" class="hidden import-status bg-success"></div>
           <div id="periodicals-grid" class="periodical-grid"></div>
         </div>
@@ -136,7 +184,7 @@
                     </button>
                   </div>
                   <button
-                    id="sort-toggle"
+                    id="tracking-sort-toggle"
                     class="sort-toggle-btn"
                     onclick="toggleSortOrder()"
                     title="Toggle ascending/descending"
@@ -1195,39 +1243,43 @@
             <input type="text" id="new-tracking-title" placeholder="Enter periodical title..." />
           </div>
 
-          <div class="settings-field">
-            <label>Category:</label>
-            <select id="new-tracking-category" class="w-full">
-              <option value="">Auto-detect from title</option>
-              <option value="Magazines">Magazines</option>
-              <option value="Comics">Comics</option>
-              <option value="Articles">Articles</option>
-              <option value="News">News</option>
-            </select>
+          <div class="field-row">
+            <div class="settings-field">
+              <label>Category:</label>
+              <select id="new-tracking-category" class="w-full">
+                <option value="">Auto-detect from title</option>
+                <option value="Magazines">Magazines</option>
+                <option value="Comics">Comics</option>
+                <option value="Articles">Articles</option>
+                <option value="News">News</option>
+              </select>
+            </div>
+
+            <div class="settings-field">
+              <label>Language:</label>
+              <select id="new-tracking-language" class="w-full"></select>
+            </div>
           </div>
 
-          <div class="settings-field">
-            <label>Language:</label>
-            <select id="new-tracking-language" class="w-full"></select>
-          </div>
+          <div class="field-row">
+            <div class="settings-field">
+              <label>Country:</label>
+              <select id="new-tracking-country" class="w-full">
+                <option value="">None (International)</option>
+              </select>
+            </div>
 
-          <div class="settings-field">
-            <label>Country:</label>
-            <select id="new-tracking-country" class="w-full">
-              <option value="">None (International)</option>
-            </select>
-          </div>
-
-          <div class="settings-field">
-            <label>Download Category:</label>
-            <input
-              type="text"
-              id="new-tracking-download-category"
-              placeholder="e.g., books, magazines (optional)"
-            />
-            <small style="color: var(--text-secondary); display: block; margin-top: 5px"
-              >Category to use in download client (SABnzbd/NZBGet)</small
-            >
+            <div class="settings-field">
+              <label>Download Category:</label>
+              <input
+                type="text"
+                id="new-tracking-download-category"
+                placeholder="e.g., books, magazines (optional)"
+              />
+              <small style="color: var(--text-secondary); display: block; margin-top: 3px"
+                >For download client (SABnzbd/NZBGet)</small
+              >
+            </div>
           </div>
 
           <div class="settings-field">

@@ -29,6 +29,7 @@ from .app import (
     TOKEN_EXPIRATION_HOURS,
 )
 from .category import (
+    CATEGORIES,
     CATEGORY_ARTICLES,
     CATEGORY_COMICS,
     CATEGORY_KEYWORDS,
@@ -121,6 +122,7 @@ __all__ = [
     "TITLE_MATCH_THRESHOLD",
     "TOKEN_EXPIRATION_HOURS",
     # Category constants
+    "CATEGORIES",
     "CATEGORY_ARTICLES",
     "CATEGORY_COMICS",
     "CATEGORY_KEYWORDS",
