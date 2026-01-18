@@ -89,31 +89,20 @@ def extract_cover_from_epub(epub_path: Path, output_dir: Path, quality: int = 85
         cover_image_data = None
         cover_item = None
 
-        # Method 1: Try to get cover via metadata
+        # Method 1: Search for cover by name (most reliable for most EPUBs)
         for item in book.get_items():
-            if item.get_type() == 9:  # EBOOKLIB.ITEM_COVER
-                cover_item = item
-                break
+            if "cover" in item.get_name().lower():
+                if item.media_type and item.media_type.startswith("image/"):
+                    cover_item = item
+                    logger.debug(f"Found cover via filename: {item.get_name()}")
+                    break
 
-        # Method 2: Look for cover in metadata
-        if not cover_item:
-            for item in book.get_items_of_type(9):  # Cover items
-                cover_item = item
-                break
-
-        # Method 3: Search for cover by name
-        if not cover_item:
-            for item in book.get_items():
-                if item.get_type() == 9 or "cover" in item.get_name().lower():
-                    if item.media_type and item.media_type.startswith("image/"):
-                        cover_item = item
-                        break
-
-        # Method 4: Try first image in the book
+        # Method 2: Try first image in the book
         if not cover_item:
             for item in book.get_items():
                 if item.media_type and item.media_type.startswith("image/"):
                     cover_item = item
+                    logger.debug(f"Found cover as first image: {item.get_name()}")
                     break
 
         if cover_item:
