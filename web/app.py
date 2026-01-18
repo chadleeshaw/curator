@@ -210,10 +210,7 @@ async def lifespan(app: FastAPI):
                         )
 
                         remaining_slots = max(0, download_manager.max_downloads - pending_count)
-                        logger.info(
-                            f"Auto-download: {remaining_slots} download slots available, {pending_count} already active"
-                        )
-                        logger.info(
+                        logger.debug(
                             f"Auto-download: {remaining_slots} download slots available ({pending_count} already queued)"
                         )
 

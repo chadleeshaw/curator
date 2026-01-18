@@ -733,18 +733,21 @@ class FileImporter:
             return result.to_dict()
 
         all_files = find_pdf_epub_files(self.organize_base_dir, recursive=True)
-        pdf_files = [f for f in all_files if f.suffix == ".pdf"]
 
-        if not pdf_files:
-            logger.info(f"No PDF files found in organized folders: {self.organize_base_dir}")
+        if not all_files:
+            logger.info(f"No PDF or EPUB files found in organized folders: {self.organize_base_dir}")
             return result.to_dict()
 
+        pdf_files = [f for f in all_files if f.suffix.lower() == ".pdf"]
+        epub_files = [f for f in all_files if f.suffix.lower() == ".epub"]
+
         logger.info(
-            f"[DATA IMPORT] Found {len(pdf_files)} PDF files in organized folders to process from {self.organize_base_dir}"
+            f"[DATA IMPORT] Found {len(all_files)} files in organized folders to process "
+            f"from {self.organize_base_dir} ({len(pdf_files)} PDFs, {len(epub_files)} EPUBs)"
         )
         logger.info("[DATA IMPORT] Text extraction enabled, OCR queued only for image-based files")
 
-        for pdf_path in pdf_files:
+        for pdf_path in all_files:
             try:
                 import_result = self.import_pdf(
                     pdf_path,

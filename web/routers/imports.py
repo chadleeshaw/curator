@@ -113,7 +113,7 @@ async def import_from_organize_dir(
     options: ImportOptionsRequest,
 ) -> Dict[str, Any]:
     """
-    Import PDFs from the organized data directory back into the library.
+    Import PDF and EPUB files from the organized data directory back into the library.
     Useful for syncing files that exist in the organize directory but aren't in the database.
 
     Args:
@@ -131,15 +131,14 @@ async def import_from_organize_dir(
         if not organize_dir.exists():
             raise HTTPException(status_code=400, detail=f"Organize directory not found: {organize_dir}")
 
-        # Count PDFs available
+        # Count files available for import (PDFs and EPUBs)
         all_files = find_pdf_epub_files(organize_dir, recursive=True)
-        pdf_files = [f for f in all_files if f.suffix == ".pdf"]
 
-        if not pdf_files:
+        if not all_files:
             return {
                 "success": True,
                 "imported": 0,
-                "message": f"No PDFs found in organize directory: {organize_dir}",
+                "message": f"No PDF or EPUB files found in organize directory: {organize_dir}",
             }
 
         def process_organize_dir_imports():
@@ -179,8 +178,8 @@ async def import_from_organize_dir(
 
         return {
             "success": True,
-            "imported": len(pdf_files),
-            "message": f"Started importing {len(pdf_files)} PDFs from organize directory",
+            "imported": len(all_files),
+            "message": f"Started importing {len(all_files)} files from organize directory",
         }
 
     except HTTPException:
