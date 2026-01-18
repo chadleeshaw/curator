@@ -472,8 +472,9 @@ class TitleMatcher:
         if len(words) >= 3:
             # Scan from the end to find where special identifiers start
             # Special identifiers are 2+ consecutive words that are NOT common periodical words
-            # BUT: Always keep at least the first 1-2 words as the base title
-            min_base_words = 2 if len(words) >= 4 else 1
+            # BUT: Always keep at least 2 words as the base title (never split 3-word titles)
+            # For longer titles (5+ words), we can be more aggressive
+            min_base_words = 2
 
             special_start_idx = None
             consecutive_non_common = 0
@@ -494,6 +495,7 @@ class TitleMatcher:
                 special_start_idx = i
 
             # If we found 2+ special words at the end, split the title
+            # But only if we'd have at least min_base_words remaining
             if consecutive_non_common >= 2 and special_start_idx is not None:
                 base_words = words[:special_start_idx]
                 special_words = words[special_start_idx:]
