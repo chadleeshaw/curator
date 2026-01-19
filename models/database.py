@@ -121,8 +121,8 @@ class MagazineTracking(Base):
     selected_editions = Column(JSON, default={})  # Dict: {olid: True/False, ...}
     selected_years = Column(JSON, default=[])  # List of years to track
     delete_from_client_on_completion = Column(
-        Boolean, default=False
-    )  # Delete from download client after completion or failure
+        Boolean, default=True
+    )  # Delete from download client after completion or failure (True = auto-remove)
     category = Column(String(100), nullable=True)  # Content category: Magazines, Comics, Articles, News
     download_category = Column(String(100), nullable=True)  # Download client category (e.g., "books", "magazines")
 

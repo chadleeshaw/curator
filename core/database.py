@@ -63,7 +63,7 @@ class DatabaseManager:
                 ("api_token", "VARCHAR(255)"),
             ],
             "periodical_tracking": [
-                ("delete_from_client_on_completion", "BOOLEAN DEFAULT 0"),
+                ("delete_from_client_on_completion", "BOOLEAN DEFAULT 1"),
                 ("language", "VARCHAR(50) DEFAULT 'English'"),
                 ("category", "VARCHAR(100)"),
                 ("download_category", "VARCHAR(100)"),

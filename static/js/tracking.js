@@ -786,9 +786,9 @@ export class TrackingManager {
         else if (t.track_new_only) mode = 'new';
         document.getElementById('edit-tracking-mode').value = mode;
 
-        // Set delete from client checkbox
+        // Set delete from client checkbox (inverted: checked = keep history, unchecked = auto-remove)
         document.getElementById('edit-delete-from-client').checked =
-          t.delete_from_client_on_completion || false;
+          !t.delete_from_client_on_completion;
 
         // Set organization pattern
         document.getElementById('edit-tracking-org-pattern').value = t.organization_pattern || '';
@@ -1318,7 +1318,7 @@ window.saveEditedTracking = async function () {
   const downloadCategory = document.getElementById('edit-tracking-download-category').value.trim();
   const country = document.getElementById('edit-tracking-country').value;
   const mode = document.getElementById('edit-tracking-mode').value;
-  const deleteFromClient = document.getElementById('edit-delete-from-client').checked;
+  const keepHistory = document.getElementById('edit-delete-from-client').checked;
   const orgPattern = document.getElementById('edit-tracking-org-pattern').value.trim();
 
   try {
@@ -1330,7 +1330,7 @@ window.saveEditedTracking = async function () {
       download_category: downloadCategory || null,
       track_all_editions: mode === 'all',
       track_new_only: mode === 'new',
-      delete_from_client_on_completion: deleteFromClient,
+      delete_from_client_on_completion: !keepHistory, // Inverted: checked = keep, unchecked = auto-remove
       organization_pattern: orgPattern || null, // Send null if empty to use global default
     });
 
