@@ -47,7 +47,7 @@ async def list_periodicals(
                 # Group by tracking_id (when present) OR title+language (for untracked items)
                 # This allows merged tracking records to show as one entry while preserving
                 # separate entries for untracked items
-                from sqlalchemy import func, case
+                from sqlalchemy import func, case, String, cast
                 from models.database import MagazineTracking
 
                 # For grouping, use tracking.title when tracking_id exists, otherwise use magazine.title
@@ -118,12 +118,12 @@ async def list_periodicals(
                     sort_expr = (
                         func.coalesce(
                             MagazineTracking.category,
-                            Magazine.extra_metadata["category"].astext,
+                            cast(Magazine.extra_metadata["category"], String),
                         ).desc()
                         if is_descending
                         else func.coalesce(
                             MagazineTracking.category,
-                            Magazine.extra_metadata["category"].astext,
+                            cast(Magazine.extra_metadata["category"], String),
                         ).asc()
                     )
                     query = query.order_by(

@@ -143,8 +143,20 @@ class TextScanService:
         text = ""
         metadata = {}
 
+        extension = path.suffix.lower()
+
+        # CBZ/CBR files contain images, not text - they should use OCR instead
+        if extension in [".cbz", ".cbr"]:
+            logger.info(f"Skipping text scan for {extension.upper()} file (use OCR instead): {file_path}")
+            return {
+                "scanned": True,
+                "text_found": False,
+                "has_sufficient_metadata": False,
+                "reason": f"{extension.upper()} files contain images, use OCR service instead",
+            }
+
         # Try direct PDF text extraction
-        if path.suffix.lower() == ".pdf" and PDF_TEXT_AVAILABLE:
+        if extension == ".pdf" and PDF_TEXT_AVAILABLE:
             logger.debug("Attempting direct PDF text extraction")
             text = TextScanService.extract_text_from_pdf(file_path, max_pages=1)
             if text:
@@ -153,7 +165,7 @@ class TextScanService:
                 metadata["extraction_method"] = "pdf_text"
 
         # Try direct EPUB text extraction
-        elif path.suffix.lower() == ".epub":
+        elif extension == ".epub":
             logger.debug("Attempting direct EPUB text extraction")
             text = TextScanService.extract_text_from_epub(path, max_items=2)
             if text:

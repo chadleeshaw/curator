@@ -10,6 +10,7 @@ from . import crud
 from . import covers
 from . import metadata
 from . import files
+from . import progress
 
 # Re-export all route functions for backward compatibility
 from .crud import (

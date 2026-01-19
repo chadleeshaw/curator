@@ -22,6 +22,8 @@ from core.constants.files import (
 from core.constants.language import DEFAULT_LANGUAGE
 from core.parsers import month_abbr_to_number
 from core.utils.pdf import extract_cover_from_pdf as extract_cover_util
+from core.utils.epub import extract_cover_from_epub
+from core.utils.cbz import extract_cover_from_cbz, extract_cover_from_cbr
 from core.parsers import sanitize_filename
 from services.importer.sidecar import read_sidecar_file
 
@@ -91,12 +93,12 @@ class FileOrganizer:
         safe_title = sanitize_filename(title)
         filename_base = f"{safe_title}{ORGANIZED_FILENAME_SEPARATOR}{month}{year}"
 
-        # Preserve file extension (PDF or EPUB)
+        # Preserve file extension (PDF, EPUB, CBZ, or CBR)
         extension = source.suffix.lower()
         file_path = self.organize_dir / f"{filename_base}{extension}"
         jpg_path = self.organize_dir / f"{filename_base}.jpg"
 
-        if extension in [".pdf", ".epub"]:
+        if extension in [".pdf", ".epub", ".cbz", ".cbr"]:
             try:
                 source.rename(file_path)
                 logger.info(f"Organized file: {file_path}")
@@ -316,7 +318,7 @@ class FileOrganizer:
             year = issue_date.strftime("%Y")
             day = issue_date.strftime("%d")
 
-            # Preserve file extension (PDF or EPUB)
+            # Preserve file extension (PDF, EPUB, CBZ, or CBR)
             extension = pdf_path.suffix.lower()
 
             # Build filename with preserved extension
@@ -356,25 +358,50 @@ class FileOrganizer:
 
     def extract_cover_from_pdf(self, pdf_path: str, output_path: str) -> bool:
         """
-        Extract first page of PDF as JPG cover art.
+        Extract cover from periodical file (PDF, EPUB, CBZ, or CBR).
 
         Args:
-            pdf_path: Path to PDF file
+            pdf_path: Path to periodical file
             output_path: Where to save the cover JPG
 
         Returns:
             True if successful, False otherwise
         """
-        pdf_path_obj = Path(pdf_path)
+        file_path_obj = Path(pdf_path)
         output_path_obj = Path(output_path)
         output_dir = output_path_obj.parent
+        extension = file_path_obj.suffix.lower()
 
-        result = extract_cover_util(
-            pdf_path_obj,
-            output_dir,
-            dpi=PDF_COVER_DPI_HIGH,
-            quality=PDF_COVER_QUALITY_HIGH,
-        )
+        result = None
+
+        if extension == ".pdf":
+            result = extract_cover_util(
+                file_path_obj,
+                output_dir,
+                dpi=PDF_COVER_DPI_HIGH,
+                quality=PDF_COVER_QUALITY_HIGH,
+            )
+        elif extension == ".epub":
+            result = extract_cover_from_epub(
+                file_path_obj,
+                output_dir,
+                quality=PDF_COVER_QUALITY_HIGH,
+            )
+        elif extension == ".cbz":
+            result = extract_cover_from_cbz(
+                file_path_obj,
+                output_dir,
+                quality=PDF_COVER_QUALITY_HIGH,
+            )
+        elif extension == ".cbr":
+            result = extract_cover_from_cbr(
+                file_path_obj,
+                output_dir,
+                quality=PDF_COVER_QUALITY_HIGH,
+            )
+        else:
+            logger.warning(f"Unsupported file type for cover extraction: {extension}")
+            return False
 
         if result:
             if result != output_path_obj:
@@ -420,12 +447,12 @@ class FileOrganizer:
         files_reorganized = 0
         errors = []
 
-        # Find all PDF and EPUB files recursively
+        # Find all PDF, EPUB, CBZ, and CBR files recursively
         for file_path in category_dir.rglob("*"):
             if not file_path.is_file():
                 continue
 
-            if file_path.suffix.lower() not in [".pdf", ".epub"]:
+            if file_path.suffix.lower() not in [".pdf", ".epub", ".cbz", ".cbr"]:
                 continue
 
             files_found.append(str(file_path))
@@ -709,12 +736,12 @@ class FileOrganizer:
         files_skipped = 0
         errors = []
 
-        # Find all PDF and EPUB files in the category directory
+        # Find all PDF, EPUB, CBZ, and CBR files in the category directory
         for file_path in category_dir.rglob("*"):
             if not file_path.is_file():
                 continue
 
-            if file_path.suffix.lower() not in [".pdf", ".epub"]:
+            if file_path.suffix.lower() not in [".pdf", ".epub", ".cbz", ".cbr"]:
                 continue
 
             # Skip if file is already in database

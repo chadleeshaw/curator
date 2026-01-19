@@ -17,6 +17,7 @@ pytesseract>=0.3.10
 bcrypt>=4.1.0
 PyJWT>=2.8.0
 setuptools>=75.0.0
+rarfile>=4.0
 ebooklib>=0.18
 beautifulsoup4>=4.12.0
 lxml>=6.0.0

@@ -26,6 +26,7 @@ from services.importer.matcher import TrackingMatcher
 from services.importer.sidecar import read_sidecar_file, delete_sidecar_file
 from core.utils.pdf import extract_cover_from_pdf
 from core.utils.epub import extract_cover_from_epub
+from core.utils.cbz import extract_cover_from_cbz, extract_cover_from_cbr
 from core.utils.general import find_pdf_epub_files, hash_file_in_chunks
 from services.response_models import OperationResult
 from models.database import Magazine, MagazineTracking, OCRJob
@@ -116,6 +117,8 @@ class FileImporter:
         all_files = find_pdf_epub_files(self.downloads_dir, recursive=True)
         pdf_files = [f for f in all_files if f.suffix == ".pdf"]
         epub_files = [f for f in all_files if f.suffix == ".epub"]
+        cbz_files = [f for f in all_files if f.suffix == ".cbz"]
+        cbr_files = [f for f in all_files if f.suffix == ".cbr"]
 
         # Filter out files that are within the organize_dir to prevent overlap
         # This prevents scanning the same files if organize_dir is somehow nested in downloads_dir
@@ -131,15 +134,18 @@ class FileImporter:
 
         pdf_files = [f for f in pdf_files if not is_in_organize_dir(f)]
         epub_files = [f for f in epub_files if not is_in_organize_dir(f)]
+        cbz_files = [f for f in cbz_files if not is_in_organize_dir(f)]
+        cbr_files = [f for f in cbr_files if not is_in_organize_dir(f)]
 
-        all_files = pdf_files + epub_files
+        all_files = pdf_files + epub_files + cbz_files + cbr_files
 
         if not all_files:
             logger.info(f"No PDF or EPUB files found in downloads folder: {self.downloads_dir}")
             return result.to_dict()
 
         logger.info(
-            f"[DOWNLOADS IMPORT] Found {len(all_files)} files to process from {self.downloads_dir} ({len(pdf_files)} PDFs, {len(epub_files)} EPUBs)"
+            f"[DOWNLOADS IMPORT] Found {len(all_files)} files to process from {self.downloads_dir} "
+            f"({len(pdf_files)} PDFs, {len(epub_files)} EPUBs, {len(cbz_files)} CBZs, {len(cbr_files)} CBRs)"
         )
         logger.info("[DOWNLOADS IMPORT] Text extraction enabled, OCR queued only for image-based files")
 
@@ -207,6 +213,72 @@ class FileImporter:
                     self._cleanup_download_file(epub_path)
                 except Exception as cleanup_error:
                     logger.warning(f"Failed to cleanup {epub_path.name}: {cleanup_error}")
+
+        # Process CBZ files
+        for cbz_path in cbz_files:
+            try:
+                import_result = self.import_pdf(
+                    cbz_path,
+                    session,
+                    organization_pattern=organization_pattern,
+                    use_ocr=True,
+                )
+                if import_result:
+                    result.data["imported"] += 1
+                    logger.info(f"Successfully imported CBZ: {cbz_path.name}")
+                else:
+                    result.data["failed"] += 1
+                    result.add_error(
+                        ErrorCodes.IMPORT_FAILED,
+                        f"Failed to import CBZ {cbz_path.name}",
+                        retryable=True,
+                    )
+                    # Cleanup failed import to prevent folder clutter
+                    logger.info(f"Cleaning up failed CBZ import: {cbz_path.name}")
+                    self._cleanup_download_file(cbz_path)
+            except Exception as e:
+                result.data["failed"] += 1
+                error_msg = f"Error importing CBZ {cbz_path.name}: {str(e)}"
+                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
+                logger.error(error_msg, exc_info=True)
+                # Cleanup failed import to prevent folder clutter
+                try:
+                    self._cleanup_download_file(cbz_path)
+                except Exception as cleanup_error:
+                    logger.warning(f"Failed to cleanup {cbz_path.name}: {cleanup_error}")
+
+        # Process CBR files
+        for cbr_path in cbr_files:
+            try:
+                import_result = self.import_pdf(
+                    cbr_path,
+                    session,
+                    organization_pattern=organization_pattern,
+                    use_ocr=True,
+                )
+                if import_result:
+                    result.data["imported"] += 1
+                    logger.info(f"Successfully imported CBR: {cbr_path.name}")
+                else:
+                    result.data["failed"] += 1
+                    result.add_error(
+                        ErrorCodes.IMPORT_FAILED,
+                        f"Failed to import CBR {cbr_path.name}",
+                        retryable=True,
+                    )
+                    # Cleanup failed import to prevent folder clutter
+                    logger.info(f"Cleaning up failed CBR import: {cbr_path.name}")
+                    self._cleanup_download_file(cbr_path)
+            except Exception as e:
+                result.data["failed"] += 1
+                error_msg = f"Error importing CBR {cbr_path.name}: {str(e)}"
+                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
+                logger.error(error_msg, exc_info=True)
+                # Cleanup failed import to prevent folder clutter
+                try:
+                    self._cleanup_download_file(cbr_path)
+                except Exception as cleanup_error:
+                    logger.warning(f"Failed to cleanup {cbr_path.name}: {cleanup_error}")
 
         return result.to_dict()
 
@@ -697,7 +769,9 @@ class FileImporter:
         from core.constants.ocr import PDF_COVER_DPI_OCR
 
         cover_dir = self.organize_base_dir / ".covers"
-        if file_path.suffix.lower() == ".pdf":
+        extension = file_path.suffix.lower()
+
+        if extension == ".pdf":
             # Use higher DPI for OCR if available
             if OCRService.is_available():
                 return extract_cover_from_pdf(
@@ -707,8 +781,12 @@ class FileImporter:
                     quality=PDF_COVER_QUALITY_HIGH,
                 )
             return extract_cover_from_pdf(file_path, cover_dir)
-        elif file_path.suffix.lower() == ".epub":
+        elif extension == ".epub":
             return extract_cover_from_epub(file_path, cover_dir)
+        elif extension == ".cbz":
+            return extract_cover_from_cbz(file_path, cover_dir)
+        elif extension == ".cbr":
+            return extract_cover_from_cbr(file_path, cover_dir)
         else:
             logger.warning(f"Unsupported file type for cover extraction: {file_path.suffix}")
             return None
@@ -745,15 +823,18 @@ class FileImporter:
         all_files = find_pdf_epub_files(self.organize_base_dir, recursive=True)
 
         if not all_files:
-            logger.info(f"No PDF or EPUB files found in organized folders: {self.organize_base_dir}")
+            logger.info(f"No periodical files found in organized folders: {self.organize_base_dir}")
             return result.to_dict()
 
         pdf_files = [f for f in all_files if f.suffix.lower() == ".pdf"]
         epub_files = [f for f in all_files if f.suffix.lower() == ".epub"]
+        cbz_files = [f for f in all_files if f.suffix.lower() == ".cbz"]
+        cbr_files = [f for f in all_files if f.suffix.lower() == ".cbr"]
 
         logger.info(
             f"[DATA IMPORT] Found {len(all_files)} files in organized folders to process "
-            f"from {self.organize_base_dir} ({len(pdf_files)} PDFs, {len(epub_files)} EPUBs)"
+            f"from {self.organize_base_dir} ({len(pdf_files)} PDFs, {len(epub_files)} EPUBs, "
+            f"{len(cbz_files)} CBZs, {len(cbr_files)} CBRs)"
         )
         logger.info("[DATA IMPORT] Text extraction enabled, OCR queued only for image-based files")
 

@@ -1,0 +1,522 @@
+/**
+ * Comic Reader Module
+ * Handles loading and displaying CBZ/CBR content page by page
+ */
+
+/* global URL, Image */
+
+import { APIClient } from './api.js';
+
+class ComicReader {
+  constructor() {
+    this.magazineId = null;
+    this.metadata = null;
+    this.currentPageIndex = 0;
+    this.loading = false;
+    this.fitMode = 'fit-width'; // fit-width, fit-height, original
+    this.zoomLevel = 100; // 50-200%
+    this.spreadMode = false; // Two-page spread
+    this.isFullscreen = false;
+    this.progressSaveTimer = null;
+  }
+
+  /**
+   * Initialize the reader with a magazine ID from URL params
+   */
+  async init() {
+    const urlParams = new URLSearchParams(window.location.search);
+    this.magazineId = urlParams.get('id');
+
+    if (!this.magazineId) {
+      this.showError('No periodical ID provided');
+      return;
+    }
+
+    // Setup fullscreen listeners
+    this.setupFullscreenListeners();
+
+    // Load metadata and initialize UI
+    await this.loadMetadata();
+
+    // Load saved progress
+    await this.loadProgress();
+  }
+
+  /**
+   * Load comic metadata including page list
+   */
+  async loadMetadata() {
+    try {
+      const response = await APIClient.get(`/api/periodicals/${this.magazineId}/comic/metadata`);
+      this.metadata = await response.json();
+
+      // Update UI with metadata
+      document.getElementById('comic-title').textContent = this.metadata.title || 'Comic Reader';
+
+      // Render page list
+      this.renderPageList();
+
+      // Load first page by default or from URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const pageParam = urlParams.get('page');
+      const startPage = pageParam ? parseInt(pageParam, 10) : 0;
+      await this.loadPage(startPage);
+    } catch (error) {
+      console.error('Failed to load comic metadata:', error);
+      this.showError('Failed to load comic metadata: ' + error.message);
+    }
+  }
+
+  /**
+   * Render the page list in the sidebar
+   */
+  renderPageList() {
+    const pageList = document.getElementById('page-list');
+
+    if (!this.metadata || !this.metadata.pages || this.metadata.pages.length === 0) {
+      pageList.innerHTML = '<div class="error">No pages found</div>';
+      return;
+    }
+
+    pageList.innerHTML = this.metadata.pages
+      .map(
+        (page, index) => `
+        <div 
+          class="page-item ${index === this.currentPageIndex ? 'active' : ''}" 
+          data-index="${index}"
+          onclick="comicReader.loadPage(${index})"
+        >
+          <img 
+            src="/api/periodicals/${this.magazineId}/comic/page/${index}/thumbnail" 
+            alt="Page ${index + 1}"
+            class="page-thumbnail"
+            loading="lazy"
+          />
+          <span class="page-number">Page ${index + 1}</span>
+        </div>
+      `
+      )
+      .join('');
+  }
+
+  /**
+   * Load and display a specific page
+   * @param {number} index - Page index (0-based)
+   */
+  async loadPage(index) {
+    if (this.loading) return;
+    if (!this.metadata || index < 0 || index >= this.metadata.pages.length) return;
+
+    this.loading = true;
+    this.currentPageIndex = index;
+
+    // Update UI
+    this.updatePageUI();
+
+    const contentDiv = document.getElementById('page-content');
+    contentDiv.innerHTML =
+      '<div class="loading"><div style="text-align: center"><div class="spinner"></div><div>Loading page...</div></div></div>';
+
+    try {
+      if (this.spreadMode && index < this.metadata.pages.length - 1) {
+        // Load two pages side by side
+        await this.loadSpreadPages(index);
+      } else {
+        // Load single page
+        await this.loadSinglePage(index);
+      }
+
+      // Save progress after page loads
+      this.saveProgressDebounced();
+    } catch (error) {
+      console.error('Failed to load page:', error);
+      contentDiv.innerHTML = `<div class="error">Failed to load page: ${this.escapeHtml(error.message)}</div>`;
+      this.loading = false;
+    }
+  }
+
+  /**
+   * Load a single page
+   * @param {number} index - Page index
+   */
+  async loadSinglePage(index) {
+    const contentDiv = document.getElementById('page-content');
+    const imageUrl = `/api/periodicals/${this.magazineId}/comic/page/${index}`;
+    const img = new Image();
+
+    return new Promise((resolve, reject) => {
+      img.onload = () => {
+        const scale = this.zoomLevel / 100;
+        const transformStyle =
+          scale !== 1 ? `transform: scale(${scale}); transform-origin: center;` : '';
+
+        contentDiv.innerHTML = `
+          <div class="page-image-container ${this.fitMode}">
+            <img src="${imageUrl}" alt="Page ${index + 1}" class="page-image" id="page-image" style="${transformStyle}" />
+          </div>
+        `;
+
+        // Scroll to top
+        contentDiv.scrollTop = 0;
+
+        // Update URL without reload
+        this.updateURL(index);
+
+        this.loading = false;
+        resolve();
+      };
+
+      img.onerror = () => {
+        contentDiv.innerHTML = `<div class="error">Failed to load page image</div>`;
+        this.loading = false;
+        reject(new Error('Failed to load image'));
+      };
+
+      img.src = imageUrl;
+    });
+  }
+
+  /**
+   * Load two pages side by side (spread mode)
+   * @param {number} index - Starting page index
+   */
+  async loadSpreadPages(index) {
+    const contentDiv = document.getElementById('page-content');
+    const imageUrl1 = `/api/periodicals/${this.magazineId}/comic/page/${index}`;
+    const imageUrl2 = `/api/periodicals/${this.magazineId}/comic/page/${index + 1}`;
+
+    const img1 = new Image();
+    const img2 = new Image();
+
+    return new Promise((resolve, reject) => {
+      let loaded = 0;
+      const checkBothLoaded = () => {
+        loaded++;
+        if (loaded === 2) {
+          contentDiv.innerHTML = `
+            <div class="page-spread-container ${this.fitMode}">
+              <img src="${imageUrl1}" alt="Page ${index + 1}" class="spread-image" />
+              <img src="${imageUrl2}" alt="Page ${index + 2}" class="spread-image" />
+            </div>
+          `;
+
+          // Apply zoom after images are loaded using CSS transform
+          const images = contentDiv.querySelectorAll('.spread-image');
+          const scale = this.zoomLevel / 100;
+          images.forEach((img) => {
+            if (scale !== 1) {
+              img.style.transform = `scale(${scale})`;
+              img.style.transformOrigin = 'center';
+            }
+          });
+
+          contentDiv.scrollTop = 0;
+          this.updateURL(index);
+          this.loading = false;
+          resolve();
+        }
+      };
+
+      img1.onload = checkBothLoaded;
+      img2.onload = checkBothLoaded;
+
+      img1.onerror = img2.onerror = () => {
+        contentDiv.innerHTML = `<div class="error">Failed to load page images</div>`;
+        this.loading = false;
+        reject(new Error('Failed to load images'));
+      };
+
+      img1.src = imageUrl1;
+      img2.src = imageUrl2;
+    });
+  }
+
+  /**
+   * Update page selection UI (sidebar, title, nav buttons)
+   */
+  updatePageUI() {
+    // Update sidebar active state
+    document.querySelectorAll('.page-item').forEach((item, idx) => {
+      item.classList.toggle('active', idx === this.currentPageIndex);
+    });
+
+    // Scroll active page into view in sidebar
+    const activeItem = document.querySelector('.page-item.active');
+    if (activeItem) {
+      activeItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    // Update page title display
+    document.getElementById('current-page-title').textContent =
+      `Page ${this.currentPageIndex + 1} of ${this.metadata.pages.length}`;
+
+    // Update navigation buttons
+    const prevBtn = document.getElementById('prev-btn');
+    const nextBtn = document.getElementById('next-btn');
+
+    prevBtn.disabled = this.currentPageIndex === 0;
+    nextBtn.disabled = this.currentPageIndex === this.metadata.pages.length - 1;
+  }
+
+  /**
+   * Navigate to previous page
+   */
+  async previousPage() {
+    if (this.currentPageIndex > 0) {
+      await this.loadPage(this.currentPageIndex - 1);
+    }
+  }
+
+  /**
+   * Navigate to next page
+   */
+  async nextPage() {
+    if (this.currentPageIndex < this.metadata.pages.length - 1) {
+      await this.loadPage(this.currentPageIndex + 1);
+    }
+  }
+
+  /**
+   * Change image fit mode
+   * @param {string} mode - fit-width, fit-height, or original
+   */
+  setFitMode(mode) {
+    this.fitMode = mode;
+
+    // Update container class for both single and spread mode
+    const singleContainer = document.querySelector('.page-image-container');
+    const spreadContainer = document.querySelector('.page-spread-container');
+
+    if (singleContainer) {
+      singleContainer.className = `page-image-container ${mode}`;
+    }
+    if (spreadContainer) {
+      spreadContainer.className = `page-spread-container ${mode}`;
+    }
+
+    // Update button states
+    document.querySelectorAll('.fit-btn').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.mode === mode);
+    });
+  }
+
+  /**
+   * Update URL with current page (for bookmarking/sharing)
+   * @param {number} pageIndex
+   */
+  updateURL(pageIndex) {
+    const url = new URL(window.location);
+    url.searchParams.set('page', pageIndex);
+    window.history.replaceState({}, '', url);
+  }
+
+  /**
+   * Show error message
+   * @param {string} message
+   */
+  showError(message) {
+    const contentDiv = document.getElementById('page-content');
+    contentDiv.innerHTML = `<div class="error">${this.escapeHtml(message)}</div>`;
+
+    const pageList = document.getElementById('page-list');
+    pageList.innerHTML = `<div class="error">${this.escapeHtml(message)}</div>`;
+  }
+
+  /**
+   * Escape HTML to prevent XSS
+   * @param {string} text
+   * @returns {string}
+   */
+  escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  /**
+   * Load saved reading progress
+   */
+  async loadProgress() {
+    try {
+      const response = await APIClient.get(`/api/periodicals/${this.magazineId}/progress`);
+      const data = await response.json();
+
+      if (data.progress && data.progress.current_page !== null) {
+        // Load the saved page (unless URL specifies a different page)
+        const urlParams = new URLSearchParams(window.location.search);
+        if (!urlParams.has('page')) {
+          await this.loadPage(data.progress.current_page);
+        }
+      }
+    } catch (error) {
+      console.log('No saved progress found or error loading progress:', error.message);
+    }
+  }
+
+  /**
+   * Save reading progress (debounced to avoid excessive API calls)
+   */
+  saveProgressDebounced() {
+    // Clear existing timer
+    if (this.progressSaveTimer) {
+      clearTimeout(this.progressSaveTimer);
+    }
+
+    // Set new timer to save after 2 seconds of inactivity
+    this.progressSaveTimer = setTimeout(() => {
+      this.saveProgress();
+    }, 2000);
+  }
+
+  /**
+   * Save current reading progress to server
+   */
+  async saveProgress() {
+    if (!this.metadata) return;
+
+    try {
+      await APIClient.post(`/api/periodicals/${this.magazineId}/progress`, {
+        current_page: this.currentPageIndex,
+        total_pages: this.metadata.pages.length,
+      });
+      console.log(
+        `Progress saved: page ${this.currentPageIndex + 1}/${this.metadata.pages.length}`
+      );
+    } catch (error) {
+      console.error('Failed to save progress:', error);
+    }
+  }
+
+  /**
+   * Adjust zoom level
+   * @param {number} delta - Amount to change zoom (+/- 10)
+   */
+  adjustZoom(delta) {
+    this.zoomLevel = Math.max(50, Math.min(200, this.zoomLevel + delta));
+    document.getElementById('zoom-level').textContent = `${this.zoomLevel}%`;
+
+    // Apply zoom using CSS transform scale for compatibility with fit modes
+    const images = document.querySelectorAll('.page-image, .spread-image');
+    const scale = this.zoomLevel / 100;
+    images.forEach((img) => {
+      img.style.transform = `scale(${scale})`;
+      img.style.transformOrigin = 'center';
+    });
+
+    // Adjust container to accommodate scaled content
+    const containers = document.querySelectorAll('.page-image-container, .page-spread-container');
+    containers.forEach((container) => {
+      if (scale > 1) {
+        container.style.overflow = 'auto';
+      } else {
+        container.style.overflow = '';
+      }
+    });
+  }
+
+  /**
+   * Reset zoom to 100%
+   */
+  resetZoom() {
+    this.zoomLevel = 100;
+    document.getElementById('zoom-level').textContent = '100%';
+
+    const images = document.querySelectorAll('.page-image, .spread-image');
+    images.forEach((img) => {
+      img.style.transform = 'scale(1)';
+    });
+
+    const containers = document.querySelectorAll('.page-image-container, .page-spread-container');
+    containers.forEach((container) => {
+      container.style.overflow = '';
+    });
+  }
+
+  /**
+   * Toggle two-page spread mode
+   */
+  async toggleSpreadMode() {
+    this.spreadMode = !this.spreadMode;
+    const btn = document.getElementById('spread-btn');
+    btn.classList.toggle('active', this.spreadMode);
+    btn.textContent = this.spreadMode ? '📖' : '📄';
+    btn.title = this.spreadMode ? 'Single page mode' : 'Two-page spread mode';
+
+    // Reload current page with new mode
+    await this.loadPage(this.currentPageIndex);
+  }
+
+  /**
+   * Toggle fullscreen mode
+   */
+  toggleFullscreen() {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
+    } else {
+      document.exitFullscreen();
+    }
+  }
+
+  /**
+   * Setup fullscreen change listeners
+   */
+  setupFullscreenListeners() {
+    document.addEventListener('fullscreenchange', () => {
+      this.isFullscreen = !!document.fullscreenElement;
+      const btn = document.getElementById('fullscreen-btn');
+      const sidebar = document.getElementById('sidebar');
+
+      if (btn) {
+        btn.classList.toggle('active', this.isFullscreen);
+        btn.textContent = this.isFullscreen ? '⛶' : '⛶';
+        btn.title = this.isFullscreen ? 'Exit fullscreen' : 'Fullscreen';
+      }
+
+      // Hide sidebar in fullscreen mode
+      if (sidebar) {
+        sidebar.style.display = this.isFullscreen ? 'none' : 'flex';
+      }
+    });
+  }
+}
+
+// Create global instance
+const comicReader = new ComicReader();
+window.comicReader = comicReader;
+
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+  comicReader.init();
+});
+
+// Handle keyboard navigation
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowLeft') {
+    comicReader.previousPage();
+  } else if (e.key === 'ArrowRight') {
+    comicReader.nextPage();
+  } else if (e.key === '+' || e.key === '=') {
+    e.preventDefault();
+    comicReader.adjustZoom(10);
+  } else if (e.key === '-' || e.key === '_') {
+    e.preventDefault();
+    comicReader.adjustZoom(-10);
+  } else if (e.key === '0') {
+    e.preventDefault();
+    comicReader.resetZoom();
+  } else if (e.key === 'f' || e.key === 'F') {
+    e.preventDefault();
+    comicReader.toggleFullscreen();
+  } else if (e.key === 's' || e.key === 'S') {
+    e.preventDefault();
+    comicReader.toggleSpreadMode();
+  }
+});
+
+// Mobile sidebar toggle
+window.toggleSidebar = function () {
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('mobile-overlay');
+  sidebar.classList.toggle('open');
+  overlay.classList.toggle('active');
+};

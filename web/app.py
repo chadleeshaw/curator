@@ -307,25 +307,25 @@ async def lifespan(app: FastAPI):
 
         # Schedule tasks with intervals from config
         task_scheduler.schedule_periodic(
-            "auto-download",
+            "auto_download",
             auto_download_task,
             tasks_config.get("auto_download_interval", constants.AUTO_DOWNLOAD_INTERVAL),
         )
 
         task_scheduler.schedule_periodic(
-            "auto-import",
+            "download_monitor",
             download_monitoring_task,
             tasks_config.get("download_monitor_interval", constants.DOWNLOAD_MONITOR_INTERVAL),
         )
 
         task_scheduler.schedule_periodic(
-            "auto-covers",
+            "cleanup_orphaned_covers",
             cleanup_orphaned_covers_task,
             tasks_config.get("cleanup_covers_interval", constants.CLEANUP_COVERS_INTERVAL),
         )
 
         task_scheduler.schedule_periodic(
-            "auto-OCR",
+            "ocr_processor",
             ocr_processing_task,
             tasks_config.get("ocr_processor_interval", constants.OCR_PROCESSOR_INTERVAL),
         )

@@ -703,8 +703,10 @@ class OCRService:
         text = ""
         metadata = {}
 
+        extension = path.suffix.lower()
+
         # For PDF, scan first N pages (configurable via OCR_MAX_PAGES)
-        if path.suffix.lower() == ".pdf":
+        if extension == ".pdf":
             logger.debug(f"Extracting text from first {OCR_MAX_PAGES} pages of PDF using OCR")
             ocr_results = OCRService.extract_text_from_pdf_pages(
                 str(path),
@@ -738,6 +740,241 @@ class OCRService:
             all_words = []
             for page in ocr_results.get("pages", []):
                 all_words.extend(page.get("words", []))
+
+        elif extension in [".cbz", ".cbr"]:
+            # Comic book archives - extract and OCR first N images
+            logger.debug(f"Extracting text from first {OCR_MAX_PAGES} images of {extension.upper()} using OCR")
+            try:
+                import zipfile
+
+                # Get list of image files
+                from core.utils.cbz import _get_sorted_image_files
+
+                # Open archive and get sorted list of image files
+                if extension == ".cbz":
+                    with zipfile.ZipFile(path, "r") as archive:
+                        image_files = _get_sorted_image_files(archive, extension)
+
+                        if not image_files:
+                            logger.warning(f"No images found in {extension.upper()}: {path}")
+                            return {
+                                "ocr_available": True,
+                                "text_found": False,
+                                "used_ocr": False,
+                            }
+
+                        # Process first N images
+                        pages_to_scan = min(len(image_files), OCR_MAX_PAGES)
+                        all_words = []
+                        text_parts = []
+                        pages_data = []
+
+                        for i in range(pages_to_scan):
+                            image_name = image_files[i]
+                            try:
+                                from PIL import Image
+                                from io import BytesIO
+
+                                # Read image from archive
+                                image_data = archive.read(image_name)
+
+                                # Create temporary image for OCR
+                                img = Image.open(BytesIO(image_data))
+
+                                # Save to temp file for OCR
+                                import tempfile
+
+                                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                                    img.save(tmp.name, "PNG")
+                                    tmp_path = tmp.name
+
+                                try:
+                                    # Run OCR on image
+                                    ocr_result = OCRService.extract_text_and_words_from_image(
+                                        tmp_path, language=language
+                                    )
+                                    page_text = ocr_result.get("text", "")
+                                    page_words = ocr_result.get("words", [])
+
+                                    if page_text:
+                                        text_parts.append(page_text)
+                                        all_words.extend(page_words)
+                                        pages_data.append(
+                                            {
+                                                "page_number": i + 1,
+                                                "word_count": len(page_words),
+                                            }
+                                        )
+                                finally:
+                                    # Clean up temp file
+                                    import os
+
+                                    os.unlink(tmp_path)
+
+                            except Exception as e:
+                                logger.warning(f"Failed to OCR image {image_name}: {e}")
+                                continue
+
+                        text = "\n".join(text_parts)
+                        metadata["extraction_method"] = f"ocr_{extension[1:]}_images"
+                        metadata["pages_scanned"] = len(pages_data)
+                        metadata["ocr_details"] = {
+                            "total_pages": len(image_files),
+                            "pages": pages_data,
+                        }
+                else:  # .cbr
+                    import rarfile
+
+                    with rarfile.RarFile(path, "r") as archive:
+                        image_files = _get_sorted_image_files(archive, extension)
+
+                        if not image_files:
+                            logger.warning(f"No images found in {extension.upper()}: {path}")
+                            return {
+                                "ocr_available": True,
+                                "text_found": False,
+                                "used_ocr": False,
+                            }
+
+                        # Process first N images
+                        pages_to_scan = min(len(image_files), OCR_MAX_PAGES)
+                        all_words = []
+                        text_parts = []
+                        pages_data = []
+
+                        for i in range(pages_to_scan):
+                            image_name = image_files[i]
+                            try:
+                                from PIL import Image
+                                from io import BytesIO
+
+                                # Read image from archive
+                                image_data = archive.read(image_name)
+
+                                # Create temporary image for OCR
+                                img = Image.open(BytesIO(image_data))
+
+                                # Save to temp file for OCR
+                                import tempfile
+
+                                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                                    img.save(tmp.name, "PNG")
+                                    tmp_path = tmp.name
+
+                                try:
+                                    # Run OCR on image
+                                    ocr_result = OCRService.extract_text_and_words_from_image(
+                                        tmp_path, language=language
+                                    )
+                                    page_text = ocr_result.get("text", "")
+                                    page_words = ocr_result.get("words", [])
+
+                                    if page_text:
+                                        text_parts.append(page_text)
+                                        all_words.extend(page_words)
+                                        pages_data.append(
+                                            {
+                                                "page_number": i + 1,
+                                                "word_count": len(page_words),
+                                            }
+                                        )
+                                finally:
+                                    # Clean up temp file
+                                    import os
+
+                                    os.unlink(tmp_path)
+
+                            except Exception as e:
+                                logger.warning(f"Failed to OCR image {image_name}: {e}")
+                                continue
+
+                        text = "\n".join(text_parts)
+                        metadata["extraction_method"] = f"ocr_{extension[1:]}_images"
+                        metadata["pages_scanned"] = len(pages_data)
+                        metadata["ocr_details"] = {
+                            "total_pages": len(image_files),
+                            "pages": pages_data,
+                        }
+
+                # Process first N images
+                pages_to_scan = min(len(image_files), OCR_MAX_PAGES)
+                all_words = []
+                text_parts = []
+                pages_data = []
+
+                for i in range(pages_to_scan):
+                    image_name = image_files[i]
+                    try:
+                        from PIL import Image
+                        from io import BytesIO
+
+                        # Read image from archive
+                        if extension == ".cbz":
+                            image_data = archive.read(image_name)
+                        else:
+                            image_data = archive.read(image_name)
+
+                        # Create temporary image for OCR
+                        img = Image.open(BytesIO(image_data))
+
+                        # Save to temp file for OCR
+                        import tempfile
+
+                        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                            img.save(tmp.name, "PNG")
+                            tmp_path = tmp.name
+
+                        try:
+                            # Run OCR on image
+                            ocr_result = OCRService.extract_text_and_words_from_image(tmp_path, language=language)
+                            page_text = ocr_result.get("text", "")
+                            page_words = ocr_result.get("words", [])
+
+                            if page_text:
+                                text_parts.append(page_text)
+                                all_words.extend(page_words)
+                                pages_data.append(
+                                    {
+                                        "page_number": i + 1,
+                                        "word_count": len(page_words),
+                                    }
+                                )
+                        finally:
+                            # Clean up temp file
+                            import os
+
+                            os.unlink(tmp_path)
+
+                    except Exception as e:
+                        logger.warning(f"Failed to OCR image {image_name}: {e}")
+                        continue
+
+                archive.close()
+
+                text = "\n".join(text_parts)
+                metadata["extraction_method"] = f"ocr_{extension[1:]}_images"
+                metadata["pages_scanned"] = len(pages_data)
+                metadata["ocr_details"] = {
+                    "total_pages": len(image_files),
+                    "pages": pages_data,
+                }
+
+            except ImportError as e:
+                logger.error(f"Missing dependency for {extension.upper()} processing: {e}")
+                return {
+                    "ocr_available": True,
+                    "text_found": False,
+                    "used_ocr": False,
+                    "error": str(e),
+                }
+            except Exception as e:
+                logger.error(f"Error processing {extension.upper()} file: {e}")
+                return {
+                    "ocr_available": True,
+                    "text_found": False,
+                    "used_ocr": True,
+                    "error": str(e),
+                }
 
         else:
             # It's already an image file, use OCR directly

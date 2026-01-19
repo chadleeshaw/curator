@@ -165,12 +165,14 @@ class DownloadMonitor:
             directory: Directory to search
 
         Returns:
-            List of Path objects for PDF/EPUB files found
+            List of Path objects for PDF/EPUB/CBZ/CBR files found
         """
         files = []
         if directory.exists() and directory.is_dir():
             files.extend(directory.glob("**/*.pdf"))
             files.extend(directory.glob("**/*.epub"))
+            files.extend(directory.glob("**/*.cbz"))
+            files.extend(directory.glob("**/*.cbr"))
         return files
 
     def _find_file_in_downloads(self, file_path: str, max_depth: int = DOWNLOAD_FILE_SEARCH_DEPTH) -> Optional[Path]:
@@ -272,7 +274,7 @@ class DownloadMonitor:
 
     def _scan_downloads_folder(self, session: Session) -> int:
         """
-        Scan downloads folder recursively for PDF and EPUB files and import them.
+        Scan downloads folder recursively for periodical files and import them.
 
         Args:
             session: Database session
@@ -287,16 +289,19 @@ class DownloadMonitor:
                 logger.debug(f"Downloads directory does not exist: {self.downloads_dir}")
                 return 0
 
-            # Check for PDFs and EPUBs recursively
+            # Check for PDFs, EPUBs, CBZs, and CBRs recursively
             all_files = self._find_pdf_epub_files(self.downloads_dir)
             pdf_files = [f for f in all_files if f.suffix.lower() == ".pdf"]
             epub_files = [f for f in all_files if f.suffix.lower() == ".epub"]
+            cbz_files = [f for f in all_files if f.suffix.lower() == ".cbz"]
+            cbr_files = [f for f in all_files if f.suffix.lower() == ".cbr"]
             file_count = len(all_files)
 
             if file_count > 0:
                 logger.info(
                     f"[DownloadMonitor] Found {file_count} files in downloads folder "
-                    f"({len(pdf_files)} PDFs, {len(epub_files)} EPUBs)"
+                    f"({len(pdf_files)} PDFs, {len(epub_files)} EPUBs, "
+                    f"{len(cbz_files)} CBZs, {len(cbr_files)} CBRs)"
                 )
                 results = self.file_importer.process_downloads(session)
                 data = results.get("data", {})

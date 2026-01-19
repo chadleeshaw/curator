@@ -52,6 +52,18 @@ async def epub_reader_page(id: int = Query(...)):
     return FileResponse("templates/epub-reader.html")
 
 
+@router.get("/comic-reader")
+async def comic_reader_page(id: int = Query(...)):
+    """Serve Comic reader page for a specific CBZ/CBR periodical"""
+    return FileResponse("templates/comic-reader.html")
+
+
+@router.get("/pdf-reader")
+async def pdf_reader_page(id: int = Query(...)):
+    """Serve PDF reader page for a specific PDF periodical"""
+    return FileResponse("templates/pdf-reader.html")
+
+
 @router.get("/periodical")
 async def view_periodical_by_id(id: int = Query(...)):
     """View all published issues of a periodical by periodical ID"""
@@ -63,16 +75,22 @@ async def view_periodical_by_id(id: int = Query(...)):
                 from models.database import MagazineTracking
 
                 # Query the periodical to get its title and tracking info
-                periodical = db_session.query(Magazine).filter(Magazine.id == id).first()
+                periodical = (
+                    db_session.query(Magazine).filter(Magazine.id == id).first()
+                )
 
                 if not periodical:
-                    raise HTTPException(status_code=404, detail=f"Periodical with ID {id} not found")
+                    raise HTTPException(
+                        status_code=404, detail=f"Periodical with ID {id} not found"
+                    )
 
                 # Determine the title to display and how to query
                 if periodical.tracking_id:
                     # Use tracking title for display and query by tracking_id
                     tracking = (
-                        db_session.query(MagazineTracking).filter(MagazineTracking.id == periodical.tracking_id).first()
+                        db_session.query(MagazineTracking)
+                        .filter(MagazineTracking.id == periodical.tracking_id)
+                        .first()
                     )
                     display_title = tracking.title if tracking else periodical.title
 
@@ -107,7 +125,11 @@ async def view_periodical_by_id(id: int = Query(...)):
                         {
                             "id": p.id,
                             "title": p.title,
-                            "issue_date": (p.issue_date.date().isoformat() if p.issue_date else None),
+                            "issue_date": (
+                                p.issue_date.date().isoformat()
+                                if p.issue_date
+                                else None
+                            ),
                             "cover_path": p.cover_path,
                             "file_path": p.file_path,
                         }
@@ -121,7 +143,9 @@ async def view_periodical_by_id(id: int = Query(...)):
             finally:
                 db_session.close()
 
-        display_title, sorted_years, periodicals_by_year = await run_in_thread(_get_periodical_data)
+        display_title, sorted_years, periodicals_by_year = await run_in_thread(
+            _get_periodical_data
+        )
 
         # Read the periodical template
         try:
@@ -151,9 +175,9 @@ async def view_periodical_by_id(id: int = Query(...)):
         # Replace template variables
         import html
 
-        html_content = template_content.replace("{{PERIODICAL_TITLE}}", display_title).replace(
-            "{{YEARS_DATA}}", html.escape(json.dumps(years_data))
-        )
+        html_content = template_content.replace(
+            "{{PERIODICAL_TITLE}}", display_title
+        ).replace("{{YEARS_DATA}}", html.escape(json.dumps(years_data)))
 
         return HTMLResponse(content=html_content)
 
@@ -165,7 +189,9 @@ async def view_periodical_by_id(id: int = Query(...)):
 
 
 @router.get("/periodicals/{periodical_title}")
-async def view_periodical(periodical_title: str, language: str = Query(None), tracking_id: int = Query(None)):
+async def view_periodical(
+    periodical_title: str, language: str = Query(None), tracking_id: int = Query(None)
+):
     """View all published issues of a periodical organized by year"""
     try:
 
@@ -179,25 +205,37 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
 
                 # If tracking_id is provided, query by that (includes merged items)
                 if tracking_id:
-                    query = db_session.query(Magazine).filter(Magazine.tracking_id == tracking_id)
+                    query = db_session.query(Magazine).filter(
+                        Magazine.tracking_id == tracking_id
+                    )
                     # Get the tracking title for display
-                    tracking = db_session.query(MagazineTracking).filter(MagazineTracking.id == tracking_id).first()
+                    tracking = (
+                        db_session.query(MagazineTracking)
+                        .filter(MagazineTracking.id == tracking_id)
+                        .first()
+                    )
                     if tracking:
                         display_title = tracking.title
                 else:
                     # Try to find a tracking record by title first
                     tracking = (
-                        db_session.query(MagazineTracking).filter(MagazineTracking.title == periodical_title).first()
+                        db_session.query(MagazineTracking)
+                        .filter(MagazineTracking.title == periodical_title)
+                        .first()
                     )
 
                     if tracking:
                         # Query all magazines with this tracking_id
-                        query = db_session.query(Magazine).filter(Magazine.tracking_id == tracking.id)
+                        query = db_session.query(Magazine).filter(
+                            Magazine.tracking_id == tracking.id
+                        )
                         display_title = tracking.title
                     else:
                         # No tracking found by that title - try querying magazines by title
                         # and if they have a tracking_id, use that tracking title instead
-                        query = db_session.query(Magazine).filter(Magazine.title == periodical_title)
+                        query = db_session.query(Magazine).filter(
+                            Magazine.title == periodical_title
+                        )
                         sample_mag = query.first()
                         if sample_mag and sample_mag.tracking_id:
                             # This magazine has tracking - use the tracking title
@@ -209,7 +247,9 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
                             if tracking:
                                 display_title = tracking.title
                                 # Re-query using tracking_id to get all issues
-                                query = db_session.query(Magazine).filter(Magazine.tracking_id == tracking.id)
+                                query = db_session.query(Magazine).filter(
+                                    Magazine.tracking_id == tracking.id
+                                )
 
                 # Add language filter if provided
                 if language:
@@ -231,7 +271,9 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
                     periodical_data = {
                         "id": p.id,
                         "title": p.title,
-                        "issue_date": (p.issue_date.date().isoformat() if p.issue_date else None),
+                        "issue_date": (
+                            p.issue_date.date().isoformat() if p.issue_date else None
+                        ),
                         "cover_path": p.cover_path,
                         "file_path": p.file_path,
                         "extra_metadata": p.extra_metadata or {},
@@ -246,7 +288,9 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
                             is_special = True
                             # Store the special edition name if it's a string, otherwise empty
                             if isinstance(special_edition_value, str):
-                                periodical_data["special_edition_name"] = special_edition_value
+                                periodical_data["special_edition_name"] = (
+                                    special_edition_value
+                                )
                             else:
                                 periodical_data["special_edition_name"] = ""
 
@@ -320,8 +364,12 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
         # Replace template variables
         import html
 
-        html_content = template_content.replace("{{PERIODICAL_TITLE}}", periodical_title)
-        html_content = html_content.replace("{{YEARS_DATA}}", html.escape(json.dumps(years_data)))
+        html_content = template_content.replace(
+            "{{PERIODICAL_TITLE}}", periodical_title
+        )
+        html_content = html_content.replace(
+            "{{YEARS_DATA}}", html.escape(json.dumps(years_data))
+        )
         html_content = html_content.replace(
             "{{SPECIAL_EDITIONS_DATA}}",
             html.escape(json.dumps(special_editions_data)),

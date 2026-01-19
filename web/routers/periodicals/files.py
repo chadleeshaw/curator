@@ -15,6 +15,12 @@ from core.parsers import sanitize_filename
 from core.utils.general import is_special_edition, cleanup_empty_directories
 from core.utils import run_in_thread
 from core.utils.epub_reader import get_epub_metadata, get_epub_chapter, get_epub_image
+from core.utils.comic_reader import (
+    get_comic_metadata,
+    get_comic_page,
+    get_comic_page_thumbnail,
+)
+from core.utils.pdf_reader import get_pdf_metadata, get_pdf_page, get_pdf_page_thumbnail
 from models.database import Magazine
 
 from . import _shared
@@ -26,7 +32,7 @@ logger = _shared.logger
 @router.get("/periodicals/{magazine_id}/pdf")
 async def get_pdf(magazine_id: int):
     """
-    Get magazine file (PDF or EPUB).
+    Get magazine file (PDF, EPUB, CBZ, or CBR).
 
     Files are served inline for browser viewing. Users with EPUB browser extensions
     can view EPUBs directly; others will get a download prompt.
@@ -57,6 +63,10 @@ async def get_pdf(magazine_id: int):
             media_type = "application/epub+zip"
         elif file_extension == ".pdf":
             media_type = "application/pdf"
+        elif file_extension == ".cbz":
+            media_type = "application/vnd.comicbook+zip"
+        elif file_extension == ".cbr":
+            media_type = "application/vnd.comicbook-rar"
         else:
             # Fallback to octet-stream for unknown types
             media_type = "application/octet-stream"
@@ -226,6 +236,323 @@ async def get_epub_image_endpoint(magazine_id: int, image_name: str):
         raise
     except Exception as e:
         logger.error(f"Get EPUB image error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Comic Reader Endpoints (CBZ/CBR)
+# ============================================================================
+
+
+@router.get("/periodicals/{magazine_id}/comic/metadata")
+async def get_comic_metadata_endpoint(magazine_id: int) -> Dict[str, Any]:
+    """
+    Get comic metadata and page list.
+
+    Returns:
+        Dictionary with title, format, page_count, and pages list
+    """
+    try:
+
+        def _db_operation():
+            db_session = _shared._session_factory()
+            try:
+                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+
+                if not magazine:
+                    raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
+
+                file_path = Path(magazine.file_path)
+                if not file_path.exists():
+                    raise HTTPException(status_code=404, detail="File not found")
+
+                # Verify it's a comic file
+                if file_path.suffix.lower() not in [".cbz", ".cbr"]:
+                    raise HTTPException(status_code=400, detail="File is not a comic (CBZ/CBR)")
+
+                return file_path
+            finally:
+                db_session.close()
+
+        file_path = await run_in_thread(_db_operation)
+
+        # Get comic metadata
+        metadata = await run_in_thread(lambda: get_comic_metadata(file_path))
+
+        return metadata
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get comic metadata error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/periodicals/{magazine_id}/comic/page/{page_index}")
+async def get_comic_page_endpoint(magazine_id: int, page_index: int):
+    """
+    Get specific comic page as image.
+
+    Args:
+        magazine_id: The periodical ID
+        page_index: Zero-based page index
+
+    Returns:
+        Image data with appropriate content type
+    """
+    try:
+
+        def _db_operation():
+            db_session = _shared._session_factory()
+            try:
+                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+
+                if not magazine:
+                    raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
+
+                file_path = Path(magazine.file_path)
+                if not file_path.exists():
+                    raise HTTPException(status_code=404, detail="File not found")
+
+                # Verify it's a comic file
+                if file_path.suffix.lower() not in [".cbz", ".cbr"]:
+                    raise HTTPException(status_code=400, detail="File is not a comic (CBZ/CBR)")
+
+                return file_path
+            finally:
+                db_session.close()
+
+        file_path = await run_in_thread(_db_operation)
+
+        # Get page image
+        image_data = await run_in_thread(lambda: get_comic_page(file_path, page_index))
+
+        if image_data is None:
+            raise HTTPException(status_code=404, detail="Page not found")
+
+        # Determine content type from image data
+        import mimetypes
+
+        # Try to guess from magic bytes
+        content_type = "image/jpeg"  # Default
+        if image_data.startswith(b"\x89PNG"):
+            content_type = "image/png"
+        elif image_data.startswith(b"GIF"):
+            content_type = "image/gif"
+        elif image_data.startswith(b"RIFF") and b"WEBP" in image_data[:20]:
+            content_type = "image/webp"
+
+        from fastapi.responses import Response
+
+        return Response(content=image_data, media_type=content_type)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get comic page error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/periodicals/{magazine_id}/comic/page/{page_index}/thumbnail")
+async def get_comic_page_thumbnail_endpoint(magazine_id: int, page_index: int):
+    """
+    Get thumbnail of a specific comic page.
+
+    Args:
+        magazine_id: The periodical ID
+        page_index: Zero-based page index
+
+    Returns:
+        Thumbnail image data as JPEG
+    """
+    try:
+
+        def _db_operation():
+            db_session = _shared._session_factory()
+            try:
+                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+
+                if not magazine:
+                    raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
+
+                file_path = Path(magazine.file_path)
+                if not file_path.exists():
+                    raise HTTPException(status_code=404, detail="File not found")
+
+                # Verify it's a comic file
+                if file_path.suffix.lower() not in [".cbz", ".cbr"]:
+                    raise HTTPException(status_code=400, detail="File is not a comic (CBZ/CBR)")
+
+                return file_path
+            finally:
+                db_session.close()
+
+        file_path = await run_in_thread(_db_operation)
+
+        # Get thumbnail
+        thumbnail_data = await run_in_thread(lambda: get_comic_page_thumbnail(file_path, page_index))
+
+        if thumbnail_data is None:
+            raise HTTPException(status_code=404, detail="Page not found or thumbnail creation failed")
+
+        from fastapi.responses import Response
+
+        return Response(content=thumbnail_data, media_type="image/jpeg")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get comic page thumbnail error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/periodicals/{magazine_id}/pdf/metadata")
+async def get_pdf_metadata_endpoint(magazine_id: int) -> Dict[str, Any]:
+    """
+    Get PDF metadata and page list.
+
+    Returns:
+        Dictionary with PDF title, format, page count, and pages list
+    """
+    try:
+
+        def _db_operation():
+            db_session = _shared._session_factory()
+            try:
+                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+
+                if not magazine:
+                    raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
+
+                file_path = Path(magazine.file_path)
+                if not file_path.exists():
+                    raise HTTPException(status_code=404, detail="File not found")
+
+                # Check if file is PDF
+                if not file_path.suffix.lower() == ".pdf":
+                    raise HTTPException(status_code=400, detail="File is not a PDF")
+
+                return file_path
+            finally:
+                db_session.close()
+
+        file_path = await run_in_thread(_db_operation)
+
+        # Get PDF metadata
+        metadata = await run_in_thread(lambda: get_pdf_metadata(file_path))
+
+        return metadata
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get PDF metadata error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/periodicals/{magazine_id}/pdf/page/{page_index}")
+async def get_pdf_page_endpoint(magazine_id: int, page_index: int):
+    """
+    Get a specific page from a PDF as an image.
+
+    Args:
+        magazine_id: ID of the magazine
+        page_index: Page index (0-based)
+
+    Returns:
+        Page image as JPEG
+    """
+    try:
+
+        def _db_operation():
+            db_session = _shared._session_factory()
+            try:
+                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+
+                if not magazine:
+                    raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
+
+                file_path = Path(magazine.file_path)
+                if not file_path.exists():
+                    raise HTTPException(status_code=404, detail="File not found")
+
+                # Check if file is PDF
+                if not file_path.suffix.lower() == ".pdf":
+                    raise HTTPException(status_code=400, detail="File is not a PDF")
+
+                return file_path
+            finally:
+                db_session.close()
+
+        file_path = await run_in_thread(_db_operation)
+
+        # Get page image
+        page_data = await run_in_thread(lambda: get_pdf_page(file_path, page_index))
+
+        if page_data is None:
+            raise HTTPException(status_code=404, detail="Page not found or extraction failed")
+
+        from fastapi.responses import Response
+
+        return Response(content=page_data, media_type="image/jpeg")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get PDF page error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/periodicals/{magazine_id}/pdf/page/{page_index}/thumbnail")
+async def get_pdf_page_thumbnail_endpoint(magazine_id: int, page_index: int):
+    """
+    Get a thumbnail of a specific page from a PDF.
+
+    Args:
+        magazine_id: ID of the magazine
+        page_index: Page index (0-based)
+
+    Returns:
+        Thumbnail image as JPEG (200px height)
+    """
+    try:
+
+        def _db_operation():
+            db_session = _shared._session_factory()
+            try:
+                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+
+                if not magazine:
+                    raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
+
+                file_path = Path(magazine.file_path)
+                if not file_path.exists():
+                    raise HTTPException(status_code=404, detail="File not found")
+
+                # Check if file is PDF
+                if not file_path.suffix.lower() == ".pdf":
+                    raise HTTPException(status_code=400, detail="File is not a PDF")
+
+                return file_path
+            finally:
+                db_session.close()
+
+        file_path = await run_in_thread(_db_operation)
+
+        # Get thumbnail
+        thumbnail_data = await run_in_thread(lambda: get_pdf_page_thumbnail(file_path, page_index))
+
+        if thumbnail_data is None:
+            raise HTTPException(status_code=404, detail="Page not found or thumbnail creation failed")
+
+        from fastapi.responses import Response
+
+        return Response(content=thumbnail_data, media_type="image/jpeg")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get PDF page thumbnail error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

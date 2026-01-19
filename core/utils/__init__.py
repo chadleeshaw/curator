@@ -10,6 +10,14 @@ from .aasync import run_in_thread
 # Database utilities
 from .db import get_db_session
 
+# CBZ/CBR utilities
+from .cbz import (
+    extract_cover_from_cbz,
+    extract_cover_from_cbr,
+    validate_cbz,
+    validate_cbr,
+)
+
 # EPUB utilities
 from .epub import extract_cover_from_epub, extract_text_from_epub
 
@@ -40,6 +48,11 @@ from .thumbnail import (
 __all__ = [
     # Async utilities
     "run_in_thread",
+    # CBZ/CBR utilities
+    "extract_cover_from_cbz",
+    "extract_cover_from_cbr",
+    "validate_cbz",
+    "validate_cbr",
     # Database utilities
     "get_db_session",
     # EPUB utilities

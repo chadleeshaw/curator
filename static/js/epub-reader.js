@@ -13,6 +13,9 @@ class EPUBReader {
     this.metadata = null;
     this.currentChapterIndex = 0;
     this.loading = false;
+    this.zoomLevel = 100; // 50-200%
+    this.isFullscreen = false;
+    this.progressSaveTimer = null;
   }
 
   /**
@@ -27,8 +30,14 @@ class EPUBReader {
       return;
     }
 
+    // Setup fullscreen listeners
+    this.setupFullscreenListeners();
+
     // Load metadata and initialize UI
     await this.loadMetadata();
+
+    // Load saved progress
+    await this.loadProgress();
   }
 
   /**
@@ -108,13 +117,16 @@ class EPUBReader {
       const html = await response.text();
 
       // Display chapter content
-      contentDiv.innerHTML = `<div class="chapter-content-inner">${html}</div>`;
+      contentDiv.innerHTML = `<div class="chapter-content-inner" style="font-size: ${this.zoomLevel}%;">${html}</div>`;
 
       // Scroll to top
       contentDiv.scrollTop = 0;
 
       // Update URL without reload
       this.updateURL(index);
+
+      // Save progress
+      this.saveProgressDebounced();
     } catch (error) {
       console.error('Failed to load chapter:', error);
       contentDiv.innerHTML = `<div class="error">Failed to load chapter: ${this.escapeHtml(error.message)}</div>`;
@@ -194,6 +206,121 @@ class EPUBReader {
     div.textContent = text;
     return div.innerHTML;
   }
+
+  /**
+   * Load saved reading progress
+   */
+  async loadProgress() {
+    try {
+      const response = await APIClient.get(`/api/periodicals/${this.magazineId}/progress`);
+      const data = await response.json();
+
+      if (data.progress && data.progress.current_chapter !== null) {
+        // Load the saved chapter (unless URL specifies a different chapter)
+        const urlParams = new URLSearchParams(window.location.search);
+        if (!urlParams.has('chapter')) {
+          await this.loadChapter(data.progress.current_chapter);
+        }
+      }
+    } catch (error) {
+      console.log('No saved progress found or error loading progress:', error.message);
+    }
+  }
+
+  /**
+   * Save reading progress (debounced to avoid excessive API calls)
+   */
+  saveProgressDebounced() {
+    // Clear existing timer
+    if (this.progressSaveTimer) {
+      clearTimeout(this.progressSaveTimer);
+    }
+
+    // Set new timer to save after 2 seconds of inactivity
+    this.progressSaveTimer = setTimeout(() => {
+      this.saveProgress();
+    }, 2000);
+  }
+
+  /**
+   * Save current reading progress to server
+   */
+  async saveProgress() {
+    if (!this.metadata) return;
+
+    try {
+      await APIClient.post(`/api/periodicals/${this.magazineId}/progress`, {
+        current_chapter: this.currentChapterIndex,
+        total_pages: this.metadata.chapters.length,
+      });
+      console.log(
+        `Progress saved: chapter ${this.currentChapterIndex + 1}/${this.metadata.chapters.length}`
+      );
+    } catch (error) {
+      console.error('Failed to save progress:', error);
+    }
+  }
+
+  /**
+   * Adjust zoom level
+   * @param {number} delta - Amount to change zoom (+/- 10)
+   */
+  adjustZoom(delta) {
+    this.zoomLevel = Math.max(50, Math.min(200, this.zoomLevel + delta));
+    document.getElementById('zoom-level').textContent = `${this.zoomLevel}%`;
+
+    // Apply zoom to current content
+    const content = document.querySelector('.chapter-content-inner');
+    if (content) {
+      content.style.fontSize = `${this.zoomLevel}%`;
+    }
+  }
+
+  /**
+   * Reset zoom to 100%
+   */
+  resetZoom() {
+    this.zoomLevel = 100;
+    document.getElementById('zoom-level').textContent = '100%';
+
+    const content = document.querySelector('.chapter-content-inner');
+    if (content) {
+      content.style.fontSize = '100%';
+    }
+  }
+
+  /**
+   * Toggle fullscreen mode
+   */
+  toggleFullscreen() {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
+    } else {
+      document.exitFullscreen();
+    }
+  }
+
+  /**
+   * Setup fullscreen change listeners
+   */
+  setupFullscreenListeners() {
+    document.addEventListener('fullscreenchange', () => {
+      this.isFullscreen = !!document.fullscreenElement;
+      const btn = document.getElementById('fullscreen-btn');
+      const sidebar = document.getElementById('sidebar');
+
+      if (btn) {
+        btn.classList.toggle('active', this.isFullscreen);
+        btn.textContent = this.isFullscreen ? '⛶' : '⛶';
+        btn.title = this.isFullscreen ? 'Exit fullscreen' : 'Fullscreen';
+      }
+
+      // Hide sidebar in fullscreen mode
+      if (sidebar) {
+        sidebar.style.display = this.isFullscreen ? 'none' : 'flex';
+      }
+    });
+  }
 }
 
 // Create global instance
@@ -211,6 +338,18 @@ document.addEventListener('keydown', (e) => {
     epubReader.previousChapter();
   } else if (e.key === 'ArrowRight') {
     epubReader.nextChapter();
+  } else if (e.key === '+' || e.key === '=') {
+    e.preventDefault();
+    epubReader.adjustZoom(10);
+  } else if (e.key === '-' || e.key === '_') {
+    e.preventDefault();
+    epubReader.adjustZoom(-10);
+  } else if (e.key === '0') {
+    e.preventDefault();
+    epubReader.resetZoom();
+  } else if (e.key === 'f' || e.key === 'F') {
+    e.preventDefault();
+    epubReader.toggleFullscreen();
   }
 });
 

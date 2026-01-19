@@ -222,14 +222,14 @@ def is_special_edition(title: str) -> bool:
 
 def find_pdf_epub_files(directory: Path, recursive: bool = True) -> list[Path]:
     """
-    Search for PDF and EPUB files in a directory.
+    Search for PDF, EPUB, CBZ, and CBR files in a directory.
 
     Args:
         directory: Directory to search
         recursive: If True, search recursively with glob("**/*.ext"), else use glob("*.ext")
 
     Returns:
-        List of Path objects for all PDF and EPUB files found
+        List of Path objects for all PDF, EPUB, CBZ, and CBR files found
 
     Examples:
         >>> files = find_pdf_epub_files(Path("/downloads"))
@@ -241,5 +241,7 @@ def find_pdf_epub_files(directory: Path, recursive: bool = True) -> list[Path]:
     pattern = "**/*" if recursive else "*"
     pdf_files = list(directory.glob(f"{pattern}.pdf"))
     epub_files = list(directory.glob(f"{pattern}.epub"))
+    cbz_files = list(directory.glob(f"{pattern}.cbz"))
+    cbr_files = list(directory.glob(f"{pattern}.cbr"))
 
-    return pdf_files + epub_files
+    return pdf_files + epub_files + cbz_files + cbr_files

@@ -133,7 +133,7 @@ class SABnzbdClient(DownloadClient):
 
             for slot in slots:
                 if slot.get("nzo_id") == job_id:
-                    logger.info(f"[SABnzbd] Found {job_id} in queue")
+                    logger.debug(f"[SABnzbd] Found {job_id} in queue")
 
                     # Check for rate limit WAIT status
                     extra_status = slot.get("extra_status", "")

@@ -324,3 +324,33 @@ class OCRJob(Base):
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+
+
+class ReadingProgress(Base):
+    """Track reading progress for periodicals across different formats"""
+
+    __tablename__ = "reading_progress"
+
+    id = Column(Integer, primary_key=True)
+    magazine_id = Column(Integer, ForeignKey("periodicals.id"), nullable=False, index=True, unique=True)
+    current_page = Column(Integer, nullable=True)  # For comics/PDFs (0-indexed)
+    current_chapter = Column(Integer, nullable=True)  # For EPUBs (0-indexed)
+    total_pages = Column(Integer, nullable=True)  # Total pages/chapters
+    progress_percent = Column(Integer, nullable=True)  # 0-100
+    last_read_at = Column(DateTime, default=utcnow, index=True)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize ReadingProgress to dictionary for API responses"""
+        return {
+            "id": self.id,
+            "magazine_id": self.magazine_id,
+            "current_page": self.current_page,
+            "current_chapter": self.current_chapter,
+            "total_pages": self.total_pages,
+            "progress_percent": self.progress_percent,
+            "last_read_at": self.last_read_at.isoformat() if self.last_read_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }

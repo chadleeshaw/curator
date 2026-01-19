@@ -1633,7 +1633,7 @@ window.confirmMerge = async function () {
         data.files_reorganized > 0 ? `, reorganized ${data.files_reorganized} files` : '';
       UIUtils.showStatus(
         ELEMENT_IDS.TRACKING_STATUS,
-        `✓ ${data.message}. Moved ${data.magazines_moved} magazines and ${data.submissions_moved} downloads${filesMsg}.`,
+        `${data.message}. Moved ${data.magazines_moved} magazines and ${data.submissions_moved} downloads${filesMsg}.`,
         'success'
       );
       window.closeMergeModal();
