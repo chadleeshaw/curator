@@ -121,6 +121,45 @@ class NZBGetClient(DownloadClient):
             for group in result:
                 if str(group.get("NZBID")) == job_id:
                     status_str = group.get("Status", "")
+
+                    # Check for encryption/password protection in failed downloads
+                    if status_str in ["FAILURE", "WARNING"]:
+                        failure_message = group.get("Message", "")
+                        critical_message = group.get("CriticalMessage", "")
+                        unpack_status = group.get("UnpackStatus", "")
+
+                        encryption_indicators = [
+                            "encrypted",
+                            "password",
+                            "password protected",
+                            "archive requires a password",
+                            "unpack failed",
+                            "all passwords were tried",
+                        ]
+
+                        combined_messages = f"{failure_message} {critical_message} {unpack_status}".lower()
+                        is_encrypted = any(indicator in combined_messages for indicator in encryption_indicators)
+
+                        if is_encrypted:
+                            logger.warning(
+                                f"[NZBGet] Job {job_id} failed due to encryption/password protection. "
+                                f"Status: {status_str}, Message: {failure_message}, Unpack: {unpack_status}"
+                            )
+                            return {
+                                "status": "failed",
+                                "progress": 0,
+                                "error": f"{failure_message or unpack_status or 'Archive is encrypted or password protected'}",
+                                "encrypted": True,
+                            }
+
+                        # Generic failure
+                        logger.warning(f"[NZBGet] Job {job_id} failed: {status_str} - {failure_message}")
+                        return {
+                            "status": "failed",
+                            "progress": 0,
+                            "error": failure_message or "Download failed",
+                        }
+
                     if status_str == "SUCCESS":
                         return {
                             "status": "completed",

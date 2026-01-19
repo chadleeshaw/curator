@@ -135,8 +135,40 @@ class SABnzbdClient(DownloadClient):
                 if slot.get("nzo_id") == job_id:
                     logger.debug(f"[SABnzbd] Found {job_id} in queue")
 
-                    # Check for rate limit WAIT status
+                    # Check for paused job due to encryption
+                    slot_status = slot.get("status", "")
                     extra_status = slot.get("extra_status", "")
+                    msg = slot.get("msg", "")
+                    status_line = slot.get("status_line", "")
+
+                    # Check if paused due to encryption
+                    encryption_indicators = [
+                        "encrypted rar",
+                        "encrypted archive",
+                        "archive requires a password",
+                        "password protected",
+                        "all passwords were tried",
+                    ]
+
+                    is_encrypted = slot_status == "Paused" and any(
+                        indicator in text.lower()
+                        for text in [extra_status, msg, status_line]
+                        for indicator in encryption_indicators
+                    )
+
+                    if is_encrypted:
+                        logger.warning(
+                            f"[SABnzbd] Job {job_id} is paused due to encryption/password protection. "
+                            f"Status: {slot_status}, Extra: {extra_status}, Msg: {msg}"
+                        )
+                        return {
+                            "status": "failed",
+                            "progress": 0,
+                            "error": "Archive is encrypted or password protected",
+                            "encrypted": True,
+                        }
+
+                    # Check for rate limit WAIT status
                     wait_time = self._parse_wait_time(extra_status)
 
                     if wait_time:
@@ -187,11 +219,26 @@ class SABnzbdClient(DownloadClient):
                             "file_path": slot.get("storage"),
                         }
                     elif "fail" in slot_status or "abort" in slot_status:
-                        logger.warning(f"[SABnzbd] Job {job_id} failed: {slot_status}")
+                        fail_message = slot.get("fail_message", "No details available")
+                        logger.warning(f"[SABnzbd] Job {job_id} failed: {slot_status} - {fail_message}")
+
+                        # Check if failure was due to encryption
+                        encryption_indicators = [
+                            "encrypted rar",
+                            "encrypted archive",
+                            "archive requires a password",
+                            "password protected",
+                            "unpacking failed",
+                            "all passwords were tried",
+                        ]
+
+                        is_encrypted = any(indicator in fail_message.lower() for indicator in encryption_indicators)
+
                         return {
                             "status": "failed",
                             "progress": 0,
-                            "error": f"Download {slot_status}: {slot.get('fail_message', 'No details available')}",
+                            "error": f"Download {slot_status}: {fail_message}",
+                            "encrypted": is_encrypted,
                         }
                     else:
                         logger.warning(f"[SABnzbd] Job {job_id} has unknown status: {slot_status}")
