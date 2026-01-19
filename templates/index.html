@@ -515,410 +515,519 @@
             </button>
           </div>
 
-          <!-- Settings Navigation Shortcuts -->
-          <div class="settings-nav mb-30">
-            <button class="settings-nav-btn" onclick="scrollToSection('search-providers-section')">
-              🔍 Search Providers
+          <!-- Settings Sub-Tab Navigation -->
+          <div class="settings-tabs-nav">
+            <button class="settings-tab-btn active" onclick="showSettingsTab('providers', event)">
+              🔍 Providers
             </button>
-            <button class="settings-nav-btn" onclick="scrollToSection('download-client-section')">
-              ⬇️ Download Client
+            <button class="settings-tab-btn" onclick="showSettingsTab('storage', event)">
+              💾 Storage & Paths
             </button>
-            <button class="settings-nav-btn" onclick="scrollToSection('storage-section')">
-              💾 Storage
+            <button class="settings-tab-btn" onclick="showSettingsTab('matching', event)">
+              🎯 Matching & Metadata
             </button>
-            <button class="settings-nav-btn" onclick="scrollToSection('matching-section')">
-              🎯 Matching
+            <button class="settings-tab-btn" onclick="showSettingsTab('tasks', event)">
+              📦 Downloads & Tasks
             </button>
-            <button class="settings-nav-btn" onclick="scrollToSection('logging-section')">
-              📝 Logging
+            <button class="settings-tab-btn" onclick="showSettingsTab('pdf-ocr', event)">
+              📝 PDF & OCR
             </button>
-            <button class="settings-nav-btn" onclick="scrollToSection('theme-section')">
-              🎨 Theme
+            <button class="settings-tab-btn" onclick="showSettingsTab('appearance', event)">
+              🎨 Appearance
             </button>
-            <button class="settings-nav-btn" onclick="scrollToSection('import-section')">
-              📁 Import
+            <button class="settings-tab-btn" onclick="showSettingsTab('account', event)">
+              👤 Account & Security
             </button>
-            <button class="settings-nav-btn" onclick="scrollToSection('user-account-section')">
-              👤 Account
-            </button>
-            <button class="settings-nav-btn" onclick="scrollToSection('api-token-section')">
-              🔑 API Token
-            </button>
-            <button
-              class="settings-nav-btn"
-              onclick="scrollToSection('database-section')"
-              style="color: #f44336"
-            >
-              🗑️ Database
+            <button class="settings-tab-btn" onclick="showSettingsTab('advanced', event)">
+              ⚙️ Advanced
             </button>
           </div>
 
           <div id="settings-status" class="hidden"></div>
 
-          <!-- Search Providers -->
-          <div id="search-providers-section" class="settings-section">
-            <h3>Search Providers</h3>
-            <p class="text-base text-muted mb-15">
-              For finding and downloading periodical issues (Newsnab, RSS, etc.)
-            </p>
-            <div id="search-providers-list"></div>
-            <button onclick="addSearchProvider()" class="save-btn">+ Add Search Provider</button>
-            <div id="search-providers-message" class="hidden"></div>
-          </div>
-
-          <!-- Download Client Settings -->
-          <div id="download-client-section" class="settings-section">
-            <h3>Download Client</h3>
-            <div class="settings-field">
-              <label for="download-client-type">Type:</label>
-              <select id="download-client-type">
-                <option value="sabnzbd">SABnzbd</option>
-                <option value="nzbget">NZBGet</option>
-              </select>
-            </div>
-            <div class="settings-field">
-              <label for="download-client-name">Name:</label>
-              <input type="text" id="download-client-name" placeholder="e.g., SABnzbd" />
-            </div>
-            <div class="settings-field">
-              <label for="download-client-url">API URL:</label>
-              <input type="text" id="download-client-url" placeholder="http://192.168.1.112:9080" />
-            </div>
-            <div class="settings-field">
-              <label for="download-client-apikey">API Key:</label>
-              <input type="password" id="download-client-apikey" placeholder="Enter your API key" />
-            </div>
-            <button onclick="saveDownloadClientSettings()" class="save-btn">
-              Save Download Client
-            </button>
-            <div id="download-client-message" class="hidden"></div>
-          </div>
-
-          <!-- Storage Settings -->
-          <div id="storage-section" class="settings-section">
-            <h3>Storage Settings</h3>
-            <div class="settings-field">
-              <label for="storage-db-path">Database Path:</label>
-              <input type="text" id="storage-db-path" placeholder="./data/periodicals.db" />
-            </div>
-            <div class="settings-field">
-              <label for="storage-download-dir">Download Directory:</label>
-              <input type="text" id="storage-download-dir" placeholder="./downloads" />
-            </div>
-            <div class="settings-field">
-              <label for="storage-organize-dir">Organize Directory:</label>
-              <input type="text" id="storage-organize-dir" placeholder="./periodicals" />
-            </div>
-            <div class="settings-field">
-              <label for="storage-cache-dir">Cache Directory:</label>
-              <input type="text" id="storage-cache-dir" placeholder="./cache" />
-            </div>
-            <button onclick="saveStorageSettings()" class="save-btn">Save Storage Settings</button>
-            <div id="storage-message" class="hidden"></div>
-          </div>
-
-          <!-- Matching Settings -->
-          <div id="matching-section" class="settings-section">
-            <h3>Matching Settings</h3>
-            <div class="settings-field">
-              <label for="matching-fuzzy-threshold">Fuzzy Match Threshold (%):</label>
-              <input
-                type="number"
-                id="matching-fuzzy-threshold"
-                placeholder="80"
-                min="0"
-                max="100"
-              />
-            </div>
-            <button onclick="saveMatchingSettings()" class="save-btn">
-              Save Matching Settings
-            </button>
-            <div id="matching-message" class="hidden"></div>
-          </div>
-
-          <!-- Logging Settings -->
-          <div id="logging-section" class="settings-section">
-            <h3>Logging Settings</h3>
-            <div class="settings-field">
-              <label for="logging-level">Log Level:</label>
-              <select id="logging-level">
-                <option value="DEBUG">DEBUG</option>
-                <option value="INFO">INFO</option>
-                <option value="WARNING">WARNING</option>
-                <option value="ERROR">ERROR</option>
-              </select>
-            </div>
-            <div class="settings-field">
-              <label for="logging-file">Log File:</label>
-              <input type="text" id="logging-file" placeholder="./logs/periodical_manager.log" />
-            </div>
-            <button onclick="saveLoggingSettings()" class="save-btn">Save Logging Settings</button>
-            <div id="logging-message" class="hidden"></div>
-          </div>
-
-          <!-- Theme Settings -->
-          <div id="theme-section" class="settings-section">
-            <h3>Theme Settings</h3>
-            <div class="settings-field">
-              <label for="theme-mode">Color Mode:</label>
-              <select id="theme-mode">
-                <option value="light">Light</option>
-                <option value="dark">Dark</option>
-              </select>
-            </div>
-            <button onclick="saveThemeSettings()" class="save-btn">Save Theme Settings</button>
-            <div id="theme-message" class="hidden"></div>
-          </div>
-
-          <!-- Import & Organization Settings -->
-          <div id="import-section" class="settings-section">
-            <h3>Import & Organization</h3>
-            <div class="settings-field">
-              <label for="import-organize-pattern">File Organization Pattern:</label>
-              <input
-                type="text"
-                id="import-organize-pattern"
-                placeholder="data/{category}/{title}/{year}/"
-                class="w-full mt-8"
-              />
-              <p class="text-sm text-hint mt-8">
-                Available tags: {category}, {title}, {year}, {month}, {day}. Leave empty to disable
-                organization.
+          <!-- Providers Settings Tab -->
+          <div id="settings-providers-tab" class="settings-sub-tab active">
+            <!-- Search Providers -->
+            <div id="search-providers-section" class="settings-section">
+              <h3>Search Providers</h3>
+              <p class="text-base text-muted mb-15">
+                For finding and downloading periodical issues (Newsnab, RSS, etc.)
               </p>
+              <div id="search-providers-list"></div>
+              <button onclick="addSearchProvider()" class="save-btn">+ Add Search Provider</button>
+              <div id="search-providers-message" class="hidden"></div>
             </div>
-            <div class="settings-field">
-              <label>
-                <input type="checkbox" id="import-enable-text-scan" />
-                Enable Text Scanning (PDF/EPUB)
-              </label>
-              <p class="text-sm text-hint mt-8">
-                Extract text directly from PDF/EPUB files during import (fast, synchronous).
-              </p>
-            </div>
-            <div class="settings-field">
-              <label>
-                <input type="checkbox" id="import-enable-ocr" />
-                Enable OCR Text Extraction
-              </label>
-              <p class="text-sm text-hint mt-8">
-                Use OCR on cover images for text extraction (slower, runs in background queue).
-              </p>
-            </div>
-            <p class="text-base text-muted mt-10">
-              Nested folder scanning in Downloads is always enabled.
-            </p>
-            <button onclick="saveImportSettings()" class="save-btn">Save Import Settings</button>
-            <div id="import-message" class="hidden"></div>
-          </div>
 
-          <!-- File Maintenance Section -->
-          <div id="file-maintenance-section" class="settings-section">
-            <h3>🗂️ File Maintenance</h3>
-            <p class="text-base text-muted mb-15">
-              Tools for reorganizing and maintaining your library files.
-            </p>
-
-            <!-- Reorganization Card -->
-            <div
-              style="
-                padding: 20px;
-                background: var(--surface-variant);
-                border-radius: 8px;
-                border: 1px solid var(--border);
-                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-              "
-            >
-              <h4 style="margin-top: 0; margin-bottom: 15px; color: var(--text-primary)">
-                📁 Reorganize Library Files
-              </h4>
-              <p style="color: var(--text-secondary); margin-bottom: 20px">
-                Clean up messy folder structures and reorganize files to match your current
-                organization pattern. This will move files to proper locations and remove old
-                directories.
-              </p>
-
-              <div style="display: grid; gap: 15px; margin-bottom: 20px">
-                <div class="settings-field">
-                  <label
-                    for="reorganize-category"
-                    style="display: block; margin-bottom: 8px; font-weight: 500"
-                    >Category:</label
-                  >
-                  <select
-                    id="reorganize-category"
-                    style="
-                      width: 100%;
-                      padding: 8px 12px;
-                      border: 1px solid var(--border);
-                      border-radius: 4px;
-                      background: var(--background);
-                      color: var(--text-primary);
-                    "
-                  >
-                    <option value="Magazines">Magazines</option>
-                    <option value="Comics">Comics</option>
-                    <option value="News">News</option>
-                    <option value="Articles">Articles</option>
-                  </select>
-                </div>
-
-                <div class="settings-field">
-                  <label
-                    for="reorganize-pattern"
-                    style="display: block; margin-bottom: 8px; font-weight: 500"
-                    >Organization Pattern (optional):</label
-                  >
-                  <input
-                    type="text"
-                    id="reorganize-pattern"
-                    placeholder="{category}/{title}/{year}/"
-                    style="
-                      width: 100%;
-                      padding: 8px 12px;
-                      border: 1px solid var(--border);
-                      border-radius: 4px;
-                      background: var(--background);
-                      color: var(--text-primary);
-                    "
-                  />
-                  <p class="text-sm text-hint mt-8">
-                    Leave empty to use config default. Available tags: {category}, {title}, {year},
-                    {month}, {day}
-                  </p>
-                </div>
+            <!-- Download Client Settings -->
+            <div id="download-client-section" class="settings-section">
+              <h3>Download Client</h3>
+              <div class="settings-field">
+                <label for="download-client-type">Type:</label>
+                <select id="download-client-type">
+                  <option value="sabnzbd">SABnzbd</option>
+                  <option value="nzbget">NZBGet</option>
+                </select>
               </div>
-
-              <div style="display: flex; gap: 10px; flex-wrap: wrap">
-                <button onclick="runReorganizePreview()" class="btn-primary">
-                  🔍 Preview Changes
-                </button>
-                <button
-                  onclick="runReorganize()"
-                  class="btn-secondary"
-                  style="background: var(--status-warning); color: white"
-                >
-                  ▶️ Reorganize Files
-                </button>
+              <div class="settings-field">
+                <label for="download-client-name">Name:</label>
+                <input type="text" id="download-client-name" placeholder="e.g., SABnzbd" />
               </div>
-
-              <div id="reorganize-status" class="hidden" style="margin-top: 20px"></div>
-              <div id="reorganize-results" style="margin-top: 20px"></div>
-            </div>
-          </div>
-
-          <!-- User Account Settings -->
-          <div id="user-account-section" class="settings-section">
-            <h3>User Account</h3>
-            <p class="text-base text-muted mb-15">Update your login credentials</p>
-            <div class="settings-field">
-              <label for="account-username">Username:</label>
-              <input type="text" id="account-username" placeholder="Loading..." />
-            </div>
-            <div class="settings-field">
-              <label for="account-current-password">Current Password:</label>
-              <input
-                type="password"
-                id="account-current-password"
-                placeholder="Enter current password to make changes"
-              />
-            </div>
-            <div class="settings-field">
-              <label for="account-new-password">New Password:</label>
-              <input
-                type="password"
-                id="account-new-password"
-                placeholder="Leave blank to keep current password"
-              />
-            </div>
-            <div class="settings-field">
-              <label for="account-confirm-password">Confirm New Password:</label>
-              <input
-                type="password"
-                id="account-confirm-password"
-                placeholder="Confirm new password"
-              />
-            </div>
-            <button onclick="saveAccountSettings()" class="save-btn">Save Account Settings</button>
-          </div>
-
-          <!-- API Token Management -->
-          <div id="api-token-section" class="settings-section">
-            <h3>🔑 API Token</h3>
-            <p class="text-base text-muted mb-15">
-              Use this token to authenticate API requests. Treat it like a password and keep it
-              secret.
-            </p>
-            <div class="settings-field">
-              <label for="api-token-display">Your API Token:</label>
-              <div class="flex gap-10 items-center">
+              <div class="settings-field">
+                <label for="download-client-url">API URL:</label>
+                <input
+                  type="text"
+                  id="download-client-url"
+                  placeholder="http://192.168.1.112:9080"
+                />
+              </div>
+              <div class="settings-field">
+                <label for="download-client-apikey">API Key:</label>
                 <input
                   type="password"
-                  id="api-token-display"
-                  placeholder="Loading token..."
-                  readonly
-                  style="flex: 1"
+                  id="download-client-apikey"
+                  placeholder="Enter your API key"
                 />
-                <button
-                  id="api-token-toggle-btn"
-                  onclick="toggleAPITokenVisibility()"
-                  class="btn-secondary"
-                  title="Show/hide token"
-                >
-                  👁️
-                </button>
-                <button onclick="copyAPIToken()" class="btn-secondary" title="Copy to clipboard">
-                  📋
-                </button>
               </div>
+              <button onclick="saveDownloadClientSettings()" class="save-btn">
+                Save Download Client
+              </button>
+              <div id="download-client-message" class="hidden"></div>
             </div>
-            <div class="text-sm text-hint mb-15">
-              <strong>Usage:</strong> Include in API calls as:
-              <code>Authorization: Bearer &lt;token&gt;</code>
-            </div>
-            <button onclick="regenerateAPIToken()" class="save-btn" style="background: #ff9800">
-              🔄 Regenerate Token
-            </button>
-            <div id="api-token-message" class="hidden mt-10"></div>
           </div>
 
-          <!-- Database Management -->
-          <div id="database-section" class="settings-section">
-            <h3>Database Management</h3>
-            <p class="text-base text-muted mb-15">Manage your library database</p>
-
-            <div class="bg-warning rounded-lg p-15 mb-20">
-              <strong>⚠️ Danger Zone</strong>
-              <p class="mt-8 mb-0">These actions cannot be undone. Use with caution.</p>
+          <!-- Storage & Paths Settings Tab -->
+          <div id="settings-storage-tab" class="settings-sub-tab">
+            <!-- Storage Settings -->
+            <div id="storage-section" class="settings-section">
+              <h3>Storage Settings</h3>
+              <div class="settings-field">
+                <label for="storage-db-path">Database Path:</label>
+                <input type="text" id="storage-db-path" placeholder="./data/periodicals.db" />
+              </div>
+              <div class="settings-field">
+                <label for="storage-download-dir">Download Directory:</label>
+                <input type="text" id="storage-download-dir" placeholder="./downloads" />
+              </div>
+              <div class="settings-field">
+                <label for="storage-organize-dir">Organize Directory:</label>
+                <input type="text" id="storage-organize-dir" placeholder="./periodicals" />
+              </div>
+              <div class="settings-field">
+                <label for="storage-cache-dir">Cache Directory:</label>
+                <input type="text" id="storage-cache-dir" placeholder="./cache" />
+              </div>
+              <button onclick="saveStorageSettings()" class="save-btn">
+                Save Storage Settings
+              </button>
+              <div id="storage-message" class="hidden"></div>
             </div>
 
-            <div class="settings-field">
-              <label>Purge Database:</label>
-              <p class="text-sm text-hint mb-10">
-                Remove all library entries and tracking records from the database. Files on disk
-                will remain untouched.
+            <!-- Import & Organization Settings -->
+            <div id="import-section" class="settings-section">
+              <h3>Import & Organization</h3>
+              <div class="settings-field">
+                <label for="import-organize-pattern">File Organization Pattern:</label>
+                <input
+                  type="text"
+                  id="import-organize-pattern"
+                  placeholder="data/{category}/{title}/{year}/"
+                  class="w-full mt-8"
+                />
+                <p class="text-sm text-hint mt-8">
+                  Available tags: {category}, {title}, {year}, {month}, {day}. Leave empty to
+                  disable organization.
+                </p>
+              </div>
+              <div class="settings-field">
+                <label>
+                  <input type="checkbox" id="import-enable-text-scan" />
+                  Enable Text Scanning (PDF/EPUB)
+                </label>
+                <p class="text-sm text-hint mt-8">
+                  Extract text directly from PDF/EPUB files during import (fast, synchronous).
+                </p>
+              </div>
+              <div class="settings-field">
+                <label>
+                  <input type="checkbox" id="import-enable-ocr" />
+                  Enable OCR Text Extraction
+                </label>
+                <p class="text-sm text-hint mt-8">
+                  Use OCR on cover images for text extraction (slower, runs in background queue).
+                </p>
+              </div>
+              <p class="text-base text-muted mt-10">
+                Nested folder scanning in Downloads is always enabled.
               </p>
-              <button
-                onclick="openPurgeModal()"
-                class="save-btn btn-delete"
-                style="background: #f44336"
+              <button onclick="saveImportSettings()" class="save-btn">Save Import Settings</button>
+              <div id="import-message" class="hidden"></div>
+            </div>
+
+            <!-- File Maintenance Section -->
+            <div id="file-maintenance-section" class="settings-section">
+              <h3>🗂️ File Maintenance</h3>
+              <p class="text-base text-muted mb-15">
+                Tools for reorganizing and maintaining your library files.
+              </p>
+
+              <div
+                style="
+                  padding: 20px;
+                  background: var(--surface-variant);
+                  border-radius: 8px;
+                  border: 1px solid var(--border);
+                  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+                "
               >
-                🗑️ Purge Database
+                <h4 style="margin-top: 0; margin-bottom: 15px; color: var(--text-primary)">
+                  📁 Reorganize Library Files
+                </h4>
+                <p style="color: var(--text-secondary); margin-bottom: 20px">
+                  Clean up messy folder structures and reorganize files to match your current
+                  organization pattern. This will move files to proper locations and remove old
+                  directories.
+                </p>
+
+                <div style="display: grid; gap: 15px; margin-bottom: 20px">
+                  <div class="settings-field">
+                    <label
+                      for="reorganize-category"
+                      style="display: block; margin-bottom: 8px; font-weight: 500"
+                      >Category:</label
+                    >
+                    <select
+                      id="reorganize-category"
+                      style="
+                        width: 100%;
+                        padding: 8px 12px;
+                        border: 1px solid var(--border);
+                        border-radius: 4px;
+                        background: var(--background);
+                        color: var(--text-primary);
+                      "
+                    >
+                      <option value="Magazines">Magazines</option>
+                      <option value="Comics">Comics</option>
+                      <option value="News">News</option>
+                      <option value="Articles">Articles</option>
+                    </select>
+                  </div>
+
+                  <div class="settings-field">
+                    <label
+                      for="reorganize-pattern"
+                      style="display: block; margin-bottom: 8px; font-weight: 500"
+                      >Organization Pattern (optional):</label
+                    >
+                    <input
+                      type="text"
+                      id="reorganize-pattern"
+                      placeholder="{category}/{title}/{year}/"
+                      style="
+                        width: 100%;
+                        padding: 8px 12px;
+                        border: 1px solid var(--border);
+                        border-radius: 4px;
+                        background: var(--background);
+                        color: var(--text-primary);
+                      "
+                    />
+                    <p class="text-sm text-hint mt-8">
+                      Leave empty to use config default. Available tags: {category}, {title},
+                      {year}, {month}, {day}
+                    </p>
+                  </div>
+                </div>
+
+                <div style="display: flex; gap: 10px; flex-wrap: wrap">
+                  <button onclick="runReorganizePreview()" class="btn-primary">
+                    🔍 Preview Changes
+                  </button>
+                  <button
+                    onclick="runReorganize()"
+                    class="btn-secondary"
+                    style="background: var(--status-warning); color: white"
+                  >
+                    ▶️ Reorganize Files
+                  </button>
+                </div>
+
+                <div id="reorganize-status" class="hidden" style="margin-top: 20px"></div>
+                <div id="reorganize-results" style="margin-top: 20px"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Matching & Metadata Settings Tab -->
+          <div id="settings-matching-tab" class="settings-sub-tab">
+            <!-- Matching Settings -->
+            <div id="matching-section" class="settings-section">
+              <h3>Fuzzy Matching Settings</h3>
+              <div class="settings-field">
+                <label for="matching-fuzzy-threshold">Fuzzy Match Threshold (%):</label>
+                <input
+                  type="number"
+                  id="matching-fuzzy-threshold"
+                  placeholder="80"
+                  min="0"
+                  max="100"
+                />
+                <p class="text-sm text-hint mt-8">
+                  Higher values = stricter matching. Used for duplicate detection and title
+                  matching.
+                </p>
+              </div>
+              <div class="settings-field">
+                <label for="matching-duplicate-threshold">Duplicate Date Threshold (days):</label>
+                <input
+                  type="number"
+                  id="matching-duplicate-threshold"
+                  placeholder="5"
+                  min="0"
+                  max="365"
+                />
+                <p class="text-sm text-hint mt-8">
+                  Publications with same title within this many days are considered duplicates.
+                </p>
+              </div>
+              <button onclick="saveMatchingSettings()" class="save-btn">
+                Save Matching Settings
+              </button>
+              <div id="matching-message" class="hidden"></div>
+            </div>
+
+            <!-- Metadata Aggregation Settings (placeholder for future) -->
+            <div class="settings-section">
+              <h3>Metadata Aggregation</h3>
+              <p class="text-base text-muted mb-15">
+                Control how metadata from different sources (OCR, text scan, filename) is combined.
+              </p>
+              <p class="text-sm text-hint">
+                Advanced metadata aggregation settings coming soon. Currently managed via
+                config.yaml.
+              </p>
+            </div>
+          </div>
+
+          <!-- Downloads & Tasks Settings Tab -->
+          <div id="settings-tasks-tab" class="settings-sub-tab">
+            <!-- Download Settings (placeholder for future) -->
+            <div class="settings-section">
+              <h3>Download Settings</h3>
+              <p class="text-base text-muted mb-15">
+                Configure download limits and concurrent downloads.
+              </p>
+              <p class="text-sm text-hint">
+                Download settings coming soon. Currently managed via config.yaml:
+                <br />• max_retries: Maximum retry attempts for failed downloads <br />•
+                max_concurrent: Maximum concurrent downloads system-wide
+              </p>
+            </div>
+
+            <!-- Task Intervals (placeholder for future) -->
+            <div class="settings-section">
+              <h3>Background Task Intervals</h3>
+              <p class="text-base text-muted mb-15">
+                Control how often background tasks run (discovery, OCR, cleanup, etc.).
+              </p>
+              <p class="text-sm text-hint">
+                Task interval settings coming soon. Currently managed via config.yaml in the tasks
+                section.
+              </p>
+            </div>
+          </div>
+
+          <!-- PDF & OCR Settings Tab -->
+          <div id="settings-pdf-ocr-tab" class="settings-sub-tab">
+            <!-- PDF Settings (placeholder for future) -->
+            <div class="settings-section">
+              <h3>PDF Cover Extraction</h3>
+              <p class="text-base text-muted mb-15">
+                Configure DPI and quality for PDF cover extraction.
+              </p>
+              <p class="text-sm text-hint">
+                PDF settings coming soon. Currently managed via config.yaml:
+                <br />• cover_dpi_low/high: DPI for thumbnail vs high-quality covers <br />•
+                cover_quality_low/high: JPEG quality for cover images
+              </p>
+            </div>
+
+            <!-- OCR Settings (placeholder for future) -->
+            <div class="settings-section">
+              <h3>OCR Preprocessing</h3>
+              <p class="text-base text-muted mb-15">
+                Configure image preprocessing for better OCR accuracy.
+              </p>
+              <p class="text-sm text-hint">
+                OCR settings coming soon. Currently managed via config.yaml:
+                <br />• resize_width: Image resize width for OCR processing <br />•
+                contrast_enhance: Contrast enhancement factor <br />• denoise_h: Denoise strength
+                <br />• sharpen_kernel: Sharpening kernel size
+              </p>
+            </div>
+          </div>
+
+          <!-- Appearance Settings Tab -->
+          <div id="settings-appearance-tab" class="settings-sub-tab">
+            <!-- Theme Settings -->
+            <div id="theme-section" class="settings-section">
+              <h3>Theme Settings</h3>
+              <div class="settings-field">
+                <label for="theme-mode">Color Mode:</label>
+                <select id="theme-mode">
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                </select>
+              </div>
+              <button onclick="saveThemeSettings()" class="save-btn">Save Theme Settings</button>
+              <div id="theme-message" class="hidden"></div>
+            </div>
+          </div>
+
+          <!-- Account & Security Settings Tab -->
+          <div id="settings-account-tab" class="settings-sub-tab">
+            <!-- User Account Settings -->
+            <div id="user-account-section" class="settings-section">
+              <h3>User Account</h3>
+              <p class="text-base text-muted mb-15">Update your login credentials</p>
+              <div class="settings-field">
+                <label for="account-username">Username:</label>
+                <input type="text" id="account-username" placeholder="Loading..." />
+              </div>
+              <div class="settings-field">
+                <label for="account-current-password">Current Password:</label>
+                <input
+                  type="password"
+                  id="account-current-password"
+                  placeholder="Enter current password to make changes"
+                />
+              </div>
+              <div class="settings-field">
+                <label for="account-new-password">New Password:</label>
+                <input
+                  type="password"
+                  id="account-new-password"
+                  placeholder="Leave blank to keep current password"
+                />
+              </div>
+              <div class="settings-field">
+                <label for="account-confirm-password">Confirm New Password:</label>
+                <input
+                  type="password"
+                  id="account-confirm-password"
+                  placeholder="Confirm new password"
+                />
+              </div>
+              <button onclick="saveAccountSettings()" class="save-btn">
+                Save Account Settings
               </button>
             </div>
 
-            <div class="settings-field">
-              <label>Purge Search Cache:</label>
-              <p class="text-sm text-hint mb-10">
-                Clear all cached search results. Next searches will fetch fresh data from providers.
-                <span id="cache-stats-text" class="text-hint"></span>
+            <!-- API Token Management -->
+            <div id="api-token-section" class="settings-section">
+              <h3>🔑 API Token</h3>
+              <p class="text-base text-muted mb-15">
+                Use this token to authenticate API requests. Treat it like a password and keep it
+                secret.
               </p>
-              <button
-                onclick="openPurgeCacheModal()"
-                class="save-btn btn-warning"
-                style="background: #ff9800"
-              >
-                🗑️ Purge Cache
+              <div class="settings-field">
+                <label for="api-token-display">Your API Token:</label>
+                <div class="flex gap-10 items-center">
+                  <input
+                    type="password"
+                    id="api-token-display"
+                    placeholder="Loading token..."
+                    readonly
+                    style="flex: 1"
+                  />
+                  <button
+                    id="api-token-toggle-btn"
+                    onclick="toggleAPITokenVisibility()"
+                    class="btn-secondary"
+                    title="Show/hide token"
+                  >
+                    👁️
+                  </button>
+                  <button onclick="copyAPIToken()" class="btn-secondary" title="Copy to clipboard">
+                    📋
+                  </button>
+                </div>
+              </div>
+              <div class="text-sm text-hint mb-15">
+                <strong>Usage:</strong> Include in API calls as:
+                <code>Authorization: Bearer &lt;token&gt;</code>
+              </div>
+              <button onclick="regenerateAPIToken()" class="save-btn" style="background: #ff9800">
+                🔄 Regenerate Token
               </button>
+              <div id="api-token-message" class="hidden mt-10"></div>
+            </div>
+          </div>
+
+          <!-- Advanced Settings Tab -->
+          <div id="settings-advanced-tab" class="settings-sub-tab">
+            <!-- Logging Settings -->
+            <div id="logging-section" class="settings-section">
+              <h3>Logging Settings</h3>
+              <div class="settings-field">
+                <label for="logging-level">Log Level:</label>
+                <select id="logging-level">
+                  <option value="DEBUG">DEBUG</option>
+                  <option value="INFO">INFO</option>
+                  <option value="WARNING">WARNING</option>
+                  <option value="ERROR">ERROR</option>
+                </select>
+              </div>
+              <div class="settings-field">
+                <label for="logging-file">Log File:</label>
+                <input type="text" id="logging-file" placeholder="./logs/periodical_manager.log" />
+              </div>
+              <button onclick="saveLoggingSettings()" class="save-btn">
+                Save Logging Settings
+              </button>
+              <div id="logging-message" class="hidden"></div>
+            </div>
+
+            <!-- Database Management -->
+            <div id="database-section" class="settings-section">
+              <h3>Database Management</h3>
+              <p class="text-base text-muted mb-15">Manage your library database</p>
+
+              <div class="bg-warning rounded-lg p-15 mb-20">
+                <strong>⚠️ Danger Zone</strong>
+                <p class="mt-8 mb-0">These actions cannot be undone. Use with caution.</p>
+              </div>
+
+              <div class="settings-field">
+                <label>Purge Database:</label>
+                <p class="text-sm text-hint mb-10">
+                  Remove all library entries and tracking records from the database. Files on disk
+                  will remain untouched.
+                </p>
+                <button
+                  onclick="openPurgeModal()"
+                  class="save-btn btn-delete"
+                  style="background: #f44336"
+                >
+                  🗑️ Purge Database
+                </button>
+              </div>
+
+              <div class="settings-field">
+                <label>Purge Search Cache:</label>
+                <p class="text-sm text-hint mb-10">
+                  Clear all cached search results. Next searches will fetch fresh data from
+                  providers.
+                  <span id="cache-stats-text" class="text-hint"></span>
+                </p>
+                <button
+                  onclick="openPurgeCacheModal()"
+                  class="save-btn btn-warning"
+                  style="background: #ff9800"
+                >
+                  🗑️ Purge Cache
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -556,6 +556,34 @@ export class SortManager {
 window.showTab = (tabName, event) => UIUtils.showTab(tabName, event);
 
 /**
+ * Show a specific settings sub-tab within the settings page
+ *
+ * @param {string} tabName - The name of the settings tab to show (e.g., 'providers', 'storage')
+ * @param {Event} event - The click event
+ * @returns {void}
+ */
+window.showSettingsTab = (tabName, event) => {
+  // Remove active class from all settings tab buttons
+  const buttons = document.querySelectorAll('.settings-tab-btn');
+  buttons.forEach((btn) => btn.classList.remove('active'));
+
+  // Add active class to clicked button
+  if (event && event.currentTarget) {
+    event.currentTarget.classList.add('active');
+  }
+
+  // Hide all settings sub-tabs
+  const tabs = document.querySelectorAll('.settings-sub-tab');
+  tabs.forEach((tab) => tab.classList.remove('active'));
+
+  // Show the selected settings sub-tab
+  const selectedTab = document.getElementById(`settings-${tabName}-tab`);
+  if (selectedTab) {
+    selectedTab.classList.add('active');
+  }
+};
+
+/**
  * Scroll to a specific section within the settings page
  *
  * @param {string} sectionId - The ID of the section to scroll to

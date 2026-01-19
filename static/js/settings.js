@@ -218,7 +218,12 @@ export class SettingsManager {
    */
   displayMatchingSettings(matchingConfig) {
     const threshold = document.getElementById('matching-fuzzy-threshold');
+    const duplicateThreshold = document.getElementById('matching-duplicate-threshold');
+
     if (threshold) threshold.value = matchingConfig.fuzzy_threshold || 80;
+    if (duplicateThreshold) {
+      duplicateThreshold.value = matchingConfig.duplicate_date_threshold_days || 5;
+    }
   }
 
   /**
@@ -543,9 +548,11 @@ export class SettingsManager {
   async saveMatchingSettings() {
     try {
       const threshold = document.getElementById('matching-fuzzy-threshold')?.value;
+      const duplicateThreshold = document.getElementById('matching-duplicate-threshold')?.value;
 
       const matchingConfig = {
         fuzzy_threshold: parseInt(threshold) || 80,
+        duplicate_date_threshold_days: parseInt(duplicateThreshold) || 5,
       };
 
       const response = await APIClient.post('/api/config', { matching: matchingConfig });
