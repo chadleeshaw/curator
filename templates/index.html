@@ -1003,9 +1003,10 @@
 
             <!-- Task Intervals -->
             <div class="settings-section">
-              <h3>Background Task Intervals</h3>
+              <h3>Scheduled Task Intervals</h3>
               <p class="text-base text-muted mb-15">
-                Control how often background tasks run (in seconds).
+                Control how often scheduled tasks run (in seconds). These intervals match the tasks
+                shown in the Tasks tab.
               </p>
 
               <div class="settings-field">
@@ -1018,14 +1019,13 @@
                   max="86400"
                 />
                 <p class="text-sm text-hint mt-8">
-                  How often to search for and download new tracked issues (recommended: 1800-3600).
+                  How often to search for and download new tracked issues (default: 1800 = 30
+                  minutes).
                 </p>
               </div>
 
               <div class="settings-field">
-                <label for="tasks-download-monitor-interval"
-                  >Download Monitor Interval (seconds):</label
-                >
+                <label for="tasks-download-monitor-interval">Auto-Import Interval (seconds):</label>
                 <input
                   type="number"
                   id="tasks-download-monitor-interval"
@@ -1034,13 +1034,14 @@
                   max="300"
                 />
                 <p class="text-sm text-hint mt-8">
-                  How often to check download status and import completed files.
+                  How often to check download status and import completed files (default: 30
+                  seconds).
                 </p>
               </div>
 
               <div class="settings-field">
                 <label for="tasks-cleanup-covers-interval"
-                  >Cleanup Covers Interval (seconds):</label
+                  >Auto-Thumbnail Interval (seconds):</label
                 >
                 <input
                   type="number"
@@ -1050,13 +1051,13 @@
                   max="604800"
                 />
                 <p class="text-sm text-hint mt-8">
-                  How often to remove orphaned covers and generate missing ones (recommended: 86400
-                  = 24 hours).
+                  How often to remove orphaned covers and generate missing ones (default: 86400 = 24
+                  hours).
                 </p>
               </div>
 
               <div class="settings-field">
-                <label for="tasks-ocr-processor-interval">OCR Processor Interval (seconds):</label>
+                <label for="tasks-ocr-processor-interval">Auto-OCR Interval (seconds):</label>
                 <input
                   type="number"
                   id="tasks-ocr-processor-interval"
@@ -1064,7 +1065,9 @@
                   min="5"
                   max="300"
                 />
-                <p class="text-sm text-hint mt-8">How often to process queued OCR jobs.</p>
+                <p class="text-sm text-hint mt-8">
+                  How often to process queued OCR jobs (default: 10 seconds).
+                </p>
               </div>
 
               <button onclick="saveTasksSettings()" class="save-btn">Save Task Settings</button>
@@ -1075,7 +1078,9 @@
             <div class="settings-section">
               <h3>Issue Discovery Settings</h3>
               <p class="text-base text-muted mb-15">
-                Configure adaptive search scheduling for tracked periodicals.
+                Configure adaptive search scheduling for tracked periodicals. Instead of searching
+                ALL tracked periodicals every run (which would overwhelm providers), the system
+                searches a small batch per run and adjusts intervals based on discovery success.
               </p>
 
               <div class="settings-field">
@@ -1088,7 +1093,10 @@
                   max="10"
                 />
                 <p class="text-sm text-hint mt-8">
-                  How many periodicals to search per auto-download run (lower = less provider load).
+                  How many periodicals to search per auto-download run (default: 2). This does NOT
+                  search all periodicals—it searches a small batch and adapts intervals based on
+                  success. Higher values = more provider load but faster discovery. Lower values =
+                  gentler on providers but slower discovery.
                 </p>
               </div>
 
@@ -1102,7 +1110,10 @@
                   max="24"
                   step="0.5"
                 />
-                <p class="text-sm text-hint mt-8">Search frequency when finding new issues.</p>
+                <p class="text-sm text-hint mt-8">
+                  How often to search periodicals that are actively finding new issues (default: 1
+                  hour).
+                </p>
               </div>
 
               <div class="settings-field">
@@ -1114,7 +1125,10 @@
                   min="1"
                   max="48"
                 />
-                <p class="text-sm text-hint mt-8">Default search frequency.</p>
+                <p class="text-sm text-hint mt-8">
+                  Default search frequency for periodicals with 1-2 consecutive empty searches
+                  (default: 6 hours).
+                </p>
               </div>
 
               <div class="settings-field">
@@ -1127,7 +1141,8 @@
                   max="168"
                 />
                 <p class="text-sm text-hint mt-8">
-                  Search frequency when no new issues found (daily).
+                  How often to search periodicals with 3-5 consecutive empty searches (default: 24
+                  hours = daily).
                 </p>
               </div>
 
@@ -1143,7 +1158,8 @@
                   max="720"
                 />
                 <p class="text-sm text-hint mt-8">
-                  Search frequency for very quiet periodicals (weekly).
+                  How often to search very quiet periodicals with 6+ consecutive empty searches
+                  (default: 168 hours = weekly).
                 </p>
               </div>
 
