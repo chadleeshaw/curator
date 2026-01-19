@@ -114,6 +114,11 @@ export class SettingsManager {
       this.displayMatchingSettings(config.config.matching);
     }
 
+    // Display metadata settings
+    if (config.config?.metadata) {
+      this.displayMetadataSettings(config.config.metadata);
+    }
+
     // Display logging settings
     if (config.config?.logging) {
       this.displayLoggingSettings(config.config.logging);
@@ -243,6 +248,55 @@ export class SettingsManager {
     if (threshold) threshold.value = matchingConfig.fuzzy_threshold || 80;
     if (duplicateThreshold) {
       duplicateThreshold.value = matchingConfig.duplicate_date_threshold_days || 5;
+    }
+  }
+
+  /**
+   * Display metadata aggregation settings
+   */
+  displayMetadataSettings(metadataConfig) {
+    // Confidence thresholds
+    const ocrConfidence = document.getElementById('metadata-confidence-ocr');
+    const textScanConfidence = document.getElementById('metadata-confidence-text-scan');
+    const filenameConfidence = document.getElementById('metadata-confidence-filename');
+
+    if (ocrConfidence) {
+      ocrConfidence.value = metadataConfig.confidence_thresholds?.ocr || 70;
+    }
+    if (textScanConfidence) {
+      textScanConfidence.value = metadataConfig.confidence_thresholds?.text_scan || 50;
+    }
+    if (filenameConfidence) {
+      filenameConfidence.value = metadataConfig.confidence_thresholds?.filename || 0;
+    }
+
+    // Field overrides
+    const yearField = document.getElementById('metadata-field-year');
+    const monthField = document.getElementById('metadata-field-month');
+    const issueNumberField = document.getElementById('metadata-field-issue-number');
+    const volumeField = document.getElementById('metadata-field-volume');
+
+    if (yearField) {
+      yearField.value = metadataConfig.field_overrides?.year?.ocr || 80;
+    }
+    if (monthField) {
+      monthField.value = metadataConfig.field_overrides?.month?.ocr || 60;
+    }
+    if (issueNumberField) {
+      issueNumberField.value = metadataConfig.field_overrides?.issue_number?.ocr || 75;
+    }
+    if (volumeField) {
+      volumeField.value = metadataConfig.field_overrides?.volume?.ocr || 75;
+    }
+
+    // Source priority (display only - editing not yet implemented)
+    const prioritySelect = document.getElementById('metadata-source-priority');
+    if (prioritySelect && metadataConfig.source_priority) {
+      // Clear and re-add in priority order
+      Array.from(prioritySelect.options).forEach((option) => {
+        option.selected = false;
+      });
+      // Note: Actual reordering UI is a TODO
     }
   }
 
@@ -652,14 +706,64 @@ export class SettingsManager {
       const data = await response.json();
 
       if (data.success) {
-        UIUtils.showStatus('settings-status', 'Matching settings saved', 'success');
-        setTimeout(() => UIUtils.hideStatus('settings-status'), 3000);
+        UIUtils.showStatus('matching-message', 'Matching settings saved', 'success');
+        setTimeout(() => UIUtils.hideStatus('matching-message'), 3000);
       } else {
-        UIUtils.showStatus('settings-status', data.message || 'Error saving settings', 'error');
+        UIUtils.showStatus('matching-message', data.message || 'Error saving settings', 'error');
       }
     } catch (error) {
       console.error('Error saving matching settings:', error);
-      UIUtils.showStatus('settings-status', 'Error: ' + error.message, 'error');
+      UIUtils.showStatus('matching-message', 'Error: ' + error.message, 'error');
+    }
+  }
+
+  /**
+   * Save metadata aggregation settings
+   */
+  async saveMetadataSettings() {
+    try {
+      const ocrConfidence = document.getElementById('metadata-confidence-ocr')?.value;
+      const textScanConfidence = document.getElementById('metadata-confidence-text-scan')?.value;
+      const filenameConfidence = document.getElementById('metadata-confidence-filename')?.value;
+
+      const yearField = document.getElementById('metadata-field-year')?.value;
+      const monthField = document.getElementById('metadata-field-month')?.value;
+      const issueNumberField = document.getElementById('metadata-field-issue-number')?.value;
+      const volumeField = document.getElementById('metadata-field-volume')?.value;
+
+      const metadataConfig = {
+        confidence_thresholds: {
+          ocr: parseInt(ocrConfidence) || 70,
+          text_scan: parseInt(textScanConfidence) || 50,
+          filename: parseInt(filenameConfidence) || 0,
+        },
+        field_overrides: {
+          year: { ocr: parseInt(yearField) || 80 },
+          month: { ocr: parseInt(monthField) || 60 },
+          issue_number: { ocr: parseInt(issueNumberField) || 75 },
+          volume: { ocr: parseInt(volumeField) || 75 },
+        },
+      };
+
+      // Preserve source_priority from current config (not editable in UI yet)
+      if (this.currentConfig?.config?.metadata?.source_priority) {
+        metadataConfig.source_priority = this.currentConfig.config.metadata.source_priority;
+      } else {
+        metadataConfig.source_priority = ['ocr', 'text_scan', 'filename'];
+      }
+
+      const response = await APIClient.post('/api/config', { metadata: metadataConfig });
+      const data = await response.json();
+
+      if (data.success) {
+        UIUtils.showStatus('metadata-message', 'Metadata settings saved', 'success');
+        setTimeout(() => UIUtils.hideStatus('metadata-message'), 3000);
+      } else {
+        UIUtils.showStatus('metadata-message', data.message || 'Error saving settings', 'error');
+      }
+    } catch (error) {
+      console.error('Error saving metadata settings:', error);
+      UIUtils.showStatus('metadata-message', 'Error: ' + error.message, 'error');
     }
   }
 
@@ -1311,6 +1415,7 @@ window.addSearchProvider = () => settings.addSearchProvider();
 window.closeAddProviderModal = () => settings.closeAddProviderModal();
 window.saveStorageSettings = () => settings.saveStorageSettings();
 window.saveMatchingSettings = () => settings.saveMatchingSettings();
+window.saveMetadataSettings = () => settings.saveMetadataSettings();
 window.saveLoggingSettings = () => settings.saveLoggingSettings();
 window.saveThemeSettings = () => settings.saveThemeSettings();
 window.saveAccountSettings = () => settings.saveAccountSettings();

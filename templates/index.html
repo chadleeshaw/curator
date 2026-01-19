@@ -796,16 +796,140 @@
               <div id="matching-message" class="hidden"></div>
             </div>
 
-            <!-- Metadata Aggregation Settings (placeholder for future) -->
+            <!-- Metadata Aggregation Settings -->
             <div class="settings-section">
               <h3>Metadata Aggregation</h3>
               <p class="text-base text-muted mb-15">
                 Control how metadata from different sources (OCR, text scan, filename) is combined.
               </p>
-              <p class="text-sm text-hint">
-                Advanced metadata aggregation settings coming soon. Currently managed via
-                config.yaml.
+
+              <div class="settings-field">
+                <label for="metadata-source-priority">Source Priority Order:</label>
+                <select
+                  id="metadata-source-priority"
+                  multiple
+                  size="3"
+                  style="
+                    width: 100%;
+                    padding: 8px;
+                    border: 1px solid var(--border-color);
+                    border-radius: 4px;
+                    background: var(--input-bg);
+                    color: var(--text-primary);
+                  "
+                >
+                  <option value="ocr">OCR (Optical Character Recognition)</option>
+                  <option value="text_scan">Text Scan (Direct PDF/EPUB extraction)</option>
+                  <option value="filename">Filename Parsing</option>
+                </select>
+                <p class="text-sm text-hint mt-8">
+                  Drag to reorder or use Ctrl+Click to select. First = highest priority. Currently:
+                  OCR → Text Scan → Filename.
+                </p>
+                <p class="text-sm text-hint mt-8" style="color: var(--status-warning)">
+                  Note: Reordering via drag-and-drop not yet implemented. Edit config.yaml to change
+                  order.
+                </p>
+              </div>
+
+              <h4 style="margin: 20px 0 10px 0; font-size: 16px">Minimum Confidence Thresholds</h4>
+              <p class="text-sm text-muted mb-15">
+                Source must meet threshold (0-100%) for its value to be used.
               </p>
+
+              <div class="settings-field">
+                <label for="metadata-confidence-ocr">OCR Confidence (%):</label>
+                <input
+                  type="number"
+                  id="metadata-confidence-ocr"
+                  placeholder="70"
+                  min="0"
+                  max="100"
+                />
+                <p class="text-sm text-hint mt-8">
+                  OCR must be this confident for values to be used (default: 70%).
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="metadata-confidence-text-scan">Text Scan Confidence (%):</label>
+                <input
+                  type="number"
+                  id="metadata-confidence-text-scan"
+                  placeholder="50"
+                  min="0"
+                  max="100"
+                />
+                <p class="text-sm text-hint mt-8">
+                  Text scan confidence threshold (default: 50%, treated as 100% if available).
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="metadata-confidence-filename">Filename Confidence (%):</label>
+                <input
+                  type="number"
+                  id="metadata-confidence-filename"
+                  placeholder="0"
+                  min="0"
+                  max="100"
+                />
+                <p class="text-sm text-hint mt-8">
+                  Filename parsing threshold (default: 0%, always accept).
+                </p>
+              </div>
+
+              <h4 style="margin: 20px 0 10px 0; font-size: 16px">Per-Field Confidence Overrides</h4>
+              <p class="text-sm text-muted mb-15">
+                Fine-tune OCR confidence for specific metadata fields.
+              </p>
+
+              <div class="settings-field">
+                <label for="metadata-field-year">Year OCR Confidence (%):</label>
+                <input type="number" id="metadata-field-year" placeholder="80" min="0" max="100" />
+                <p class="text-sm text-hint mt-8">
+                  Years are critical - higher confidence recommended (default: 80%).
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="metadata-field-month">Month OCR Confidence (%):</label>
+                <input type="number" id="metadata-field-month" placeholder="60" min="0" max="100" />
+                <p class="text-sm text-hint mt-8">Month names are easier to OCR (default: 60%).</p>
+              </div>
+
+              <div class="settings-field">
+                <label for="metadata-field-issue-number">Issue Number OCR Confidence (%):</label>
+                <input
+                  type="number"
+                  id="metadata-field-issue-number"
+                  placeholder="75"
+                  min="0"
+                  max="100"
+                />
+                <p class="text-sm text-hint mt-8">
+                  Issue numbers are moderately important (default: 75%).
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="metadata-field-volume">Volume OCR Confidence (%):</label>
+                <input
+                  type="number"
+                  id="metadata-field-volume"
+                  placeholder="75"
+                  min="0"
+                  max="100"
+                />
+                <p class="text-sm text-hint mt-8">
+                  Volume numbers are moderately important (default: 75%).
+                </p>
+              </div>
+
+              <button onclick="saveMetadataSettings()" class="save-btn">
+                Save Metadata Settings
+              </button>
+              <div id="metadata-message" class="hidden"></div>
             </div>
           </div>
 

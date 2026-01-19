@@ -245,6 +245,24 @@ window.showSettingsTab = (tabName, event) => {
   if (selectedTab) {
     selectedTab.classList.add('active');
   }
+
+  // Save the current tab to localStorage
+  localStorage.setItem('curator-settings-tab', tabName);
+};
+
+// Restore last active settings tab on page load
+window.restoreSettingsTab = () => {
+  const savedTab = localStorage.getItem('curator-settings-tab');
+  if (savedTab) {
+    // Find the button for the saved tab
+    const buttons = document.querySelectorAll('.settings-tab-btn');
+    buttons.forEach((btn) => {
+      const onclick = btn.getAttribute('onclick');
+      if (onclick && onclick.includes(`'${savedTab}'`)) {
+        btn.click();
+      }
+    });
+  }
 };
 
 // Make module instances globally available for inline event handlers

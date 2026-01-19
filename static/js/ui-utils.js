@@ -61,6 +61,12 @@ export class UIUtils {
       });
     }
 
+    // If switching to settings tab, restore the last active settings sub-tab
+    if (tabName === 'settings' && window.restoreSettingsTab) {
+      // Use setTimeout to ensure DOM is ready
+      setTimeout(() => window.restoreSettingsTab(), 0);
+    }
+
     return tabName;
   }
 

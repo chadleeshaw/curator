@@ -1022,6 +1022,8 @@
 }
 
 .settings-tab-btn {
+  flex: 1 1 auto;
+  min-width: 140px;
   padding: 10px 16px;
   background: var(--surface);
   color: var(--text-secondary);
@@ -1032,7 +1034,19 @@
   font-weight: 500;
   transition: all 0.2s ease;
   white-space: nowrap;
-  flex-shrink: 0;
+  text-align: center;
+}
+
+/* Mobile responsive - stack vertically on small screens */
+@media (max-width: 768px) {
+  .settings-tabs-nav {
+    flex-direction: column;
+  }
+
+  .settings-tab-btn {
+    width: 100%;
+    min-width: unset;
+  }
 }
 
 .settings-tab-btn:hover {
