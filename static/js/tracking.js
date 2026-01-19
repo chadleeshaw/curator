@@ -688,7 +688,8 @@ export class TrackingManager {
       let issues = (discoveryData.issues || []).map((issue) => ({
         id: issue.id,
         title: issue.title,
-        download_attempts: issue.download_attempts,
+        download_attempts: issue.attempt_count, // DiscoveredIssue uses attempt_count
+        max_retries: issue.max_retries, // Also get max_retries for accurate display
         last_error: issue.last_error,
         download_status: issue.download_status,
         isPermanentlyFailed: issue.download_status === 'permanently_failed',
@@ -710,6 +711,7 @@ export class TrackingManager {
           id: submission.submission_id,
           title: submission.title,
           download_attempts: submission.attempts || 0,
+          max_retries: 1, // Legacy submissions use default max_retries
           last_error: submission.error || 'Unknown error',
           download_status: 'failed',
           isPermanentlyFailed: false,

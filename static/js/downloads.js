@@ -717,12 +717,15 @@ export class DownloadsManager {
           id,
           title,
           download_attempts: attemptCount,
+          max_retries: itemMaxRetries,
           last_error: lastError,
           isPermanentlyFailed,
         } = item;
         const color = isPermanentlyFailed ? 'var(--status-failed)' : 'orange';
+        // Use per-issue max_retries if available, otherwise fall back to global
         // maxRetries means "max retries allowed" so total attempts = maxRetries + 1
-        const maxAttempts = this.maxRetries + 1;
+        const maxRetries = itemMaxRetries !== undefined ? itemMaxRetries : this.maxRetries;
+        const maxAttempts = maxRetries + 1;
 
         return `
         <tr>
