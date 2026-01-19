@@ -149,6 +149,10 @@ downloads:
   # This is the total limit across all tracked periodicals, not per batch
   max_concurrent: 10
 
+  # Maximum number of downloads to process per batch run
+  # Controls how many downloads are submitted in a single auto-download task execution
+  max_per_batch: 5
+
 # OCR (Optical Character Recognition) Configuration
 # Controls image preprocessing for OCR text extraction
 ocr:
@@ -237,9 +241,12 @@ server:
   host: 0.0.0.0
   port: 8000
 
-# JWT Authentication (optional)
-# If not specified, a secret will be auto-generated and saved to this file
-# jwt_secret: your-secret-key-here
+# JWT Authentication Secret
+# Used for signing JWT tokens for user authentication
+# If not specified, a secret will be auto-generated on first run and saved to config
+# IMPORTANT: Keep this secret! Anyone with this can create valid authentication tokens
+jwt_secret: null # Auto-generated if null/empty
+
 
 # ==============================================================================
 # Advanced Configuration Notes
