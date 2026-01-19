@@ -3,6 +3,7 @@ uvicorn==0.24.0
 httpx<0.28.0
 sqlalchemy==2.0.45
 pyyaml==6.0.2
+ruamel.yaml>=0.18.0
 fuzzywuzzy==0.18.0
 python-Levenshtein>=0.25.0
 Pillow>=11.0.0

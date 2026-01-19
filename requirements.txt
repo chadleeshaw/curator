@@ -3,6 +3,7 @@ uvicorn==0.24.0
 httpx<0.28.0  # Pin httpx for compatibility with starlette test client
 sqlalchemy==2.0.45
 pyyaml==6.0.2
+ruamel.yaml>=0.18.0  # For config sync with comment preservation
 fuzzywuzzy==0.18.0
 python-Levenshtein>=0.25.0
 Pillow>=11.0.0

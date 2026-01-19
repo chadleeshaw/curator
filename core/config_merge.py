@@ -14,7 +14,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Set, Tuple
 
-from ruamel.yaml import YAML
+try:
+    from ruamel.yaml import YAML
+
+    HAS_RUAMEL = True
+except ImportError:
+    HAS_RUAMEL = False
+    YAML = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +145,11 @@ def merge_config_with_sample(
         FileNotFoundError: If template config doesn't exist
         ValueError: If config files are invalid
     """
+    # Check if ruamel.yaml is available
+    if not HAS_RUAMEL:
+        logger.warning("Config sync skipped: ruamel.yaml not installed (run: pip install ruamel.yaml)")
+        return False, "ruamel.yaml not installed"
+
     # Validate inputs
     if not template_path.exists():
         raise FileNotFoundError(f"Template config not found: {template_path}")
