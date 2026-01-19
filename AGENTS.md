@@ -6,6 +6,33 @@ This guide provides essential information for AI coding agents working in the Cu
 
 Curator is a modular system for discovering, downloading, and organizing periodicals (magazines, comics, newspapers) using Newsnab APIs and download clients. Built with Python 3.13 + FastAPI backend and vanilla JavaScript ES6 frontend.
 
+## Configuration System
+
+### Config Synchronization
+
+The application automatically synchronizes user configuration with `config.template.yaml` on startup. This ensures:
+
+- **User values preserved**: All custom settings are maintained
+- **New options added**: Latest configuration options with defaults and documentation
+- **Deprecated keys removed**: Invalid/unsupported options are cleaned up
+- **Automatic backups**: `.bak` files created before modifications (format: `config.YYYYMMDD_HHMMSS.bak`)
+
+**How it works:**
+
+1. On startup, `ConfigLoader` calls `sync_config_on_startup()`
+2. Deep merges user config into sample config structure
+3. Preserves all user values while adding missing keys from sample
+4. Removes deprecated top-level keys not in `VALID_CONFIG_KEYS`
+5. Creates timestamped backup if changes are made
+
+**Skipped scenarios:**
+
+- Test config files (containing "test" in path)
+- Config file doesn't exist yet
+- Config is already synchronized
+
+See `core/config_merge.py` for implementation details and `tests/unit/core/test_config_merge.py` for behavior examples.
+
 ## ⚠️ Python Environment
 
 **CRITICAL**: Always use `.venv/bin/python` to run Python commands in this project.
@@ -309,6 +336,54 @@ try {
 }
 ```
 
+#### User Confirmation Dialogs
+
+- **NEVER use JavaScript `confirm()`, `alert()`, or `prompt()`**
+- **ALWAYS use modal dialogs** from `UIUtils` for confirmations
+- Modals provide better UX and match the application's design system
+- Example:
+
+```javascript
+// ❌ WRONG - Do not use JavaScript confirm()
+if (!confirm('Are you sure?')) {
+  return;
+}
+
+// ✅ CORRECT - Use modal dialogs
+openConfirmationModal() {
+  UIUtils.showModal('my-confirmation-modal');
+}
+
+closeConfirmationModal() {
+  UIUtils.closeModal('my-confirmation-modal');
+}
+
+async confirmAction() {
+  this.closeConfirmationModal();
+  // Perform the action
+}
+```
+
+Modal HTML structure:
+
+```html
+<div id="my-confirmation-modal" class="modal hidden">
+  <div class="modal-content delete-modal-content" style="max-width: 600px">
+    <h3 class="delete-modal-title">⚠️ Confirm Action</h3>
+    <p class="delete-modal-subtitle">Are you sure you want to do this?</p>
+
+    <div class="flex gap-10 justify-end">
+      <button type="button" onclick="closeConfirmationModal()" class="save-btn btn-cancel flex-0">
+        Cancel
+      </button>
+      <button type="button" onclick="confirmAction()" class="save-btn btn-delete flex-0">
+        Confirm
+      </button>
+    </div>
+  </div>
+</div>
+```
+
 ## Architecture Patterns
 
 ### Project Structure
@@ -488,7 +563,7 @@ The error is handled in services/file_importer.py:142
 
 ### Config Files
 
-- `config.sample.yaml`: Sample configuration template
+- `config.template.yaml`: Sample configuration template
 - `local/config/config.yaml`: Active configuration (gitignored)
 - `tests/config.test.yaml`: Test configuration (do not edit)
 

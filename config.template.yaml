@@ -1,17 +1,39 @@
-# Sample configuration file for Curator
+# Configuration template for Curator
 # Copy this to local/config/config.yaml and update with your settings
 
+# ==============================================================================
+# Search Providers
+# ==============================================================================
+# Providers used to search for and download periodical issues
+# You can configure multiple providers (Newsnab indexers, RSS feeds)
+
 search_providers:
+  # Newsnab Provider (e.g., NZBHydra2, NZBGeek, etc.)
   - type: newsnab
     name: Newsnab Provider
     api_url: https://your-newsnab-server.com/api
     api_key: your-api-key-here
     enabled: true
+
+    # Newsnab categories to search
+    # 7000 = Other Misc, 7010 = Magazines, 7020 = Ebooks, 7030 = Comics
+    # 6000 = Adult, 8000 = Other (varies by indexer)
     categories: '7000,7010,7020,7030'
 
     # Rate limiting settings (to avoid provider bans)
     max_requests_per_hour: 100 # Self-imposed limit (default: 100 requests/hour)
     request_delay_seconds: 1.0 # Delay between requests (default: 1 second)
+
+  # RSS Provider (optional - for fast new release discovery)
+  # Uncomment and configure to enable RSS-based searching
+  # - type: rss
+  #   name: RSS Feed Provider
+  #   feed_url: https://your-indexer.com/rss
+  #   enabled: true
+  #
+  #   # RSS caching settings (dramatically speeds up searches)
+  #   cache_ttl: 3600 # Cache TTL in seconds (1 hour)
+  #   enable_cache: true # Enable/disable caching
 
 download_client:
   type: sabnzbd
@@ -127,42 +149,28 @@ downloads:
   # This is the total limit across all tracked periodicals, not per batch
   max_concurrent: 10
 
-# Issue Discovery & Tracking System
-# Controls adaptive search scheduling and issue discovery behavior
-discovery:
-  # Maximum number of periodicals to search per auto_download_task run
-  # Lower = less provider load, higher = faster discovery of new issues
-  # Recommended: 1-2 for most setups (prevents overwhelming providers)
-  max_periodicals_per_run: 2
+# OCR (Optical Character Recognition) Configuration
+# Controls image preprocessing for OCR text extraction
+ocr:
+  # Image resize width for OCR processing (pixels)
+  # Smaller = faster processing, larger = better accuracy
+  # Default: 1200 pixels balances speed and quality
+  resize_width: 1200
 
-  # Search interval settings (in hours)
-  # The system adapts search frequency based on discovery success:
-  # - Finds new issues → rapid interval (searches more often)
-  # - No new issues for 1-2 searches → normal interval
-  # - No new issues for 3-5 searches → slow interval
-  # - No new issues for 6+ searches → very slow interval
-  rapid_interval_hours: 1 # Search frequently when finding new issues
-  normal_interval_hours: 6 # Default search interval
-  slow_interval_hours: 24 # Search daily when no new issues
-  very_slow_interval_hours: 168 # Search weekly (7 days) when very quiet
+  # Contrast enhancement factor
+  # Higher values increase contrast for better text recognition
+  # Range: 1.0-2.0, Default: 1.5
+  contrast_enhance: 1.5
 
-  # Threshold for slowing down searches
-  # After this many consecutive empty searches, interval increases
-  empty_search_threshold: 3
+  # Denoise strength (h parameter for fastNlMeansDenoising)
+  # Higher values remove more noise but may blur text
+  # Range: 5-15, Default: 10
+  denoise_h: 10
 
-  # RSS feed caching (dramatically speeds up searches)
-  rss:
-    # Cache TTL in seconds (how long to keep RSS feed data)
-    # Multiple searches within this window use cached data
-    # Recommended: 3600 (1 hour) balances freshness and performance
-    cache_ttl_seconds: 3600
-
-    # Whether to enable caching (set to false to disable)
-    cache_enabled: true
-
-    # Prefer RSS for new releases (faster than Newsnab searches)
-    # When true, RSS providers are searched before Newsnab
-    prefer_for_new_releases: true
+  # Sharpening kernel size (must be odd number)
+  # Larger values create stronger sharpening effect
+  # Common values: 3, 5, 7. Default: 5
+  sharpen_kernel: 5
 
 tasks:
   # Task interval settings (in seconds)
@@ -186,7 +194,8 @@ tasks:
   cleanup_covers_interval: 86400 # 24 hours
 
   # OCR cover generator: Generate high-res cover PNGs for OCR processing
-  ocr_cover_generator_interval: 300 # 5 minutes
+  # Note: This task runs as part of the import process, interval not currently used
+  # ocr_cover_generator_interval: 300 # 5 minutes
 
   # OCR processor: Run OCR text extraction on queued covers
   ocr_processor_interval: 10 # 10 seconds
@@ -195,6 +204,31 @@ tasks:
   ocr_max_workers: 1 # Number of parallel OCR processes
   ocr_batch_size: 1 # Max jobs to process per batch
 
+  # ==============================================================================
+  # Issue Discovery & Tracking System
+  # Controls adaptive search scheduling and issue discovery behavior
+  # ==============================================================================
+
+  # Maximum number of periodicals to search per auto_download_task run
+  # Lower = less provider load, higher = faster discovery of new issues
+  # Recommended: 1-2 for most setups (prevents overwhelming providers)
+  max_periodicals_per_search: 2
+
+  # Search interval settings (in hours)
+  # The system adapts search frequency based on discovery success:
+  # - Finds new issues → rapid interval (searches more often)
+  # - No new issues for 1-2 searches → normal interval
+  # - No new issues for 3-5 searches → slow interval
+  # - No new issues for 6+ searches → very slow interval
+  rapid_search_interval: 1 # Search frequently when finding new issues
+  normal_search_interval: 6 # Default search interval
+  slow_search_interval: 24 # Search daily when no new issues
+  very_slow_search_interval: 168 # Search weekly (7 days) when very quiet
+
+  # Note: empty_search_threshold is hardcoded in SearchScheduler (currently 3)
+  # After 3 consecutive empty searches, interval increases to slow
+  # After 6 consecutive empty searches, interval increases to very_slow
+
 logging:
   level: INFO
   log_file: ./local/logs/periodical_manager.log
@@ -202,3 +236,34 @@ logging:
 server:
   host: 0.0.0.0
   port: 8000
+
+# JWT Authentication (optional)
+# If not specified, a secret will be auto-generated and saved to this file
+# jwt_secret: your-secret-key-here
+
+# ==============================================================================
+# Advanced Configuration Notes
+# ==============================================================================
+
+# Environment Variable Overrides:
+# The following environment variables can override config file settings:
+#
+# Storage paths:
+#   CURATOR_CONFIG_PATH - Path to config file (default: local/config/config.yaml)
+#   CURATOR_DB_PATH - Database file path
+#   CURATOR_DOWNLOAD_DIR - Download directory
+#   CURATOR_ORGANIZE_DIR - Organization directory
+#   CURATOR_CACHE_DIR - Cache directory
+#
+# Logging:
+#   CURATOR_LOG_FILE - Log file path
+#   CURATOR_LOG_LEVEL - Log level (DEBUG, INFO, WARNING, ERROR)
+#
+# Server:
+#   CURATOR_HOST - Server host (default: 0.0.0.0)
+#   CURATOR_PORT - Server port (default: 8000)
+#
+# Special modes:
+#   CURATOR_DRY_RUN - Set to "true" for dry run mode (no file moves)
+#   DISABLE_OCR - Set to "true" to disable OCR features
+#   USE_GPU - Set to "0" for CPU-only mode (default)

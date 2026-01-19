@@ -209,7 +209,37 @@ class ConfigLoader:
         if config_path is None:
             config_path = os.environ.get(ENV_CURATOR_CONFIG_PATH, DEFAULT_CONFIG_PATH)
         self.config_path = Path(config_path)
+
+        # Sync config with sample before loading (preserves user values, adds new options)
+        self._sync_config_with_sample()
+
+        # Load the config
         self.config = self._load_config()
+
+    def _sync_config_with_sample(self) -> None:
+        """
+        Sync user config with sample config on startup.
+
+        This ensures the user's config file always has the latest options
+        and documentation while preserving their custom values.
+
+        Skips sync in these cases:
+        - Test config is being used (tests/config.test.yaml)
+        - Config file doesn't exist yet
+        """
+        # Don't sync test config
+        if "test" in str(self.config_path).lower():
+            logger.debug("Skipping config sync for test config")
+            return
+
+        # Import here to avoid circular dependency
+        try:
+            from core.config_merge import sync_config_on_startup
+
+            sync_config_on_startup(self.config_path)
+        except Exception as e:
+            # Don't fail startup if sync fails - just log and continue
+            logger.warning(f"Config sync skipped: {e}")
 
     def _load_config(self) -> Dict[str, Any]:
         """Load config from YAML file"""
@@ -224,7 +254,7 @@ class ConfigLoader:
             else:
                 raise FileNotFoundError(f"Config file not found: {self.config_path}")
 
-        with open(self.config_path, "r") as f:
+        with open(self.config_path, "r", encoding="utf-8") as f:
             config = yaml.safe_load(f)
 
         if not config:
