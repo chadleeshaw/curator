@@ -11,7 +11,7 @@ import shutil
 from pathlib import Path
 from typing import Optional
 
-from core.constants.files import DEFAULT_HASH_CHUNK_SIZE
+from core.constants.files import BLACKLISTED_FILE_EXTENSIONS, DEFAULT_HASH_CHUNK_SIZE
 from core.constants.title import SPECIAL_EDITION_KEYWORDS
 
 logger = logging.getLogger(__name__)
@@ -78,7 +78,9 @@ def cleanup_empty_directories(start_path: Path, base_dir: Path) -> None:
             )
             if result.returncode != 0:
                 # Fall back to Python implementation if find command fails
-                logger.debug(f"Find command failed, using Python fallback: {result.stderr}")
+                logger.debug(
+                    f"Find command failed, using Python fallback: {result.stderr}"
+                )
                 _cleanup_empty_directories_python(start_path, base_dir)
         except FileNotFoundError:
             # find command not available (e.g., Windows), use Python implementation
@@ -144,7 +146,9 @@ def _cleanup_empty_directories_python(start_path: Path, base_dir: Path) -> None:
         logger.debug(f"Error in Python directory cleanup: {e}")
 
 
-def hash_file_in_chunks(file_path: str, algorithm=hashlib.sha256, chunk_size: int = 8192) -> Optional[str]:
+def hash_file_in_chunks(
+    file_path: str, algorithm=hashlib.sha256, chunk_size: int = 8192
+) -> Optional[str]:
     """
     Calculate the hash of a file without loading the entire file into memory.
 
@@ -207,14 +211,14 @@ def is_special_edition(title: str) -> bool:
 
 def find_pdf_epub_files(directory: Path, recursive: bool = True) -> list[Path]:
     """
-    Search for PDF, EPUB, CBZ, and CBR files in a directory.
+    Search for PDF, EPUB, CBZ, and CBR files in a directory, filtering out blacklisted extensions.
 
     Args:
         directory: Directory to search
         recursive: If True, search recursively with glob("**/*.ext"), else use glob("*.ext")
 
     Returns:
-        List of Path objects for all PDF, EPUB, CBZ, and CBR files found
+        List of Path objects for all PDF, EPUB, CBZ, and CBR files found (excluding blacklisted files)
 
     Examples:
         >>> files = find_pdf_epub_files(Path("/downloads"))
@@ -229,4 +233,16 @@ def find_pdf_epub_files(directory: Path, recursive: bool = True) -> list[Path]:
     cbz_files = list(directory.glob(f"{pattern}.cbz"))
     cbr_files = list(directory.glob(f"{pattern}.cbr"))
 
-    return pdf_files + epub_files + cbz_files + cbr_files
+    all_files = pdf_files + epub_files + cbz_files + cbr_files
+
+    # Filter out any files with blacklisted extensions and log them
+    filtered_files = []
+    for file in all_files:
+        if file.suffix.lower() in BLACKLISTED_FILE_EXTENSIONS:
+            logger.warning(
+                f"Skipping blacklisted file extension '{file.suffix}': {file.name}"
+            )
+        else:
+            filtered_files.append(file)
+
+    return filtered_files

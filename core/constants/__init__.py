@@ -84,6 +84,7 @@ from .files import (
     PDF_COVER_QUALITY_HIGH,
     PIL_MAX_IMAGE_PIXELS,
     SUPPORTED_FILE_EXTENSIONS,
+    BLACKLISTED_FILE_EXTENSIONS,
     VOLUME_PREFIX,
 )
 from .language import (
@@ -203,6 +204,7 @@ __all__ = [
     "PDF_COVER_QUALITY_HIGH",
     "PIL_MAX_IMAGE_PIXELS",
     "SUPPORTED_FILE_EXTENSIONS",
+    "BLACKLISTED_FILE_EXTENSIONS",
     "VOLUME_PREFIX",
     # Language constants
     "DEFAULT_LANGUAGE",

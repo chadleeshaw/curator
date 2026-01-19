@@ -63,6 +63,47 @@ ORGANIZED_FILENAME_SEPARATOR = " - "
 SUPPORTED_FILE_EXTENSIONS = {".pdf", ".epub", ".cbz", ".cbr"}
 """Set of file extensions that Curator can process"""
 
+BLACKLISTED_FILE_EXTENSIONS = {
+    # Video files
+    ".mp4",
+    ".avi",
+    ".mkv",
+    ".mov",
+    ".wmv",
+    ".flv",
+    ".webm",
+    ".m4v",
+    ".mpg",
+    ".mpeg",
+    # Audio files
+    ".mp3",
+    ".flac",
+    ".wav",
+    ".aac",
+    ".ogg",
+    ".m4a",
+    # Archives (not comics)
+    ".zip",
+    ".rar",
+    ".7z",
+    ".tar",
+    ".gz",
+    # Executables
+    ".exe",
+    ".dll",
+    ".so",
+    ".bin",
+    # Other
+    ".txt",
+    ".nfo",
+    ".sfv",
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+}
+"""Set of file extensions to explicitly ignore during import"""
+
 
 # ==============================================================================
 # File Hashing
