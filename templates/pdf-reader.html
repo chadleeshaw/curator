@@ -18,7 +18,9 @@
     <div class="reader-header">
       <h1 class="reader-title" id="pdf-title">Loading...</h1>
       <div class="header-actions">
-        <button class="btn" onclick="window.location.href = '/'">← Back to Library</button>
+        <button class="btn" id="back-btn" onclick="pdfReader.goBackToPeriodical()">
+          ← Back to Periodical
+        </button>
       </div>
     </div>
 
@@ -44,14 +46,14 @@
           <div class="fit-controls">
             <span class="fit-controls-label">Fit:</span>
             <button
-              class="fit-btn active"
+              class="fit-btn"
               data-mode="fit-width"
               onclick="pdfReader.setFitMode('fit-width')"
             >
               Width
             </button>
             <button
-              class="fit-btn"
+              class="fit-btn active"
               data-mode="fit-height"
               onclick="pdfReader.setFitMode('fit-height')"
             >

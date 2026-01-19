@@ -161,11 +161,12 @@ async def view_periodical_by_id(id: int = Query(...)):
             years_data.append({"year": year, "issues": year_issues})
 
         # Replace template variables
-        import html
+        # For JSON in HTML attributes, escape quotes properly
+        years_json = json.dumps(years_data).replace('"', "&quot;")
 
-        html_content = template_content.replace("{{PERIODICAL_TITLE}}", display_title).replace(
-            "{{YEARS_DATA}}", html.escape(json.dumps(years_data))
-        )
+        html_content = template_content.replace("{{PERIODICAL_TITLE}}", display_title)
+        html_content = html_content.replace("{{YEARS_DATA}}", years_json)
+        html_content = html_content.replace("{{SPECIAL_EDITIONS_DATA}}", "[]")
 
         return HTMLResponse(content=html_content)
 
@@ -332,12 +333,13 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
         # Replace template variables
         import html
 
-        html_content = template_content.replace("{{PERIODICAL_TITLE}}", periodical_title)
-        html_content = html_content.replace("{{YEARS_DATA}}", html.escape(json.dumps(years_data)))
-        html_content = html_content.replace(
-            "{{SPECIAL_EDITIONS_DATA}}",
-            html.escape(json.dumps(special_editions_data)),
-        )
+        # For JSON in HTML attributes, escape quotes properly
+        years_json = json.dumps(years_data).replace('"', "&quot;")
+        special_editions_json = json.dumps(special_editions_data).replace('"', "&quot;")
+
+        html_content = template_content.replace("{{PERIODICAL_TITLE}}", display_title)
+        html_content = html_content.replace("{{YEARS_DATA}}", years_json)
+        html_content = html_content.replace("{{SPECIAL_EDITIONS_DATA}}", special_editions_json)
 
         return HTMLResponse(content=html_content)
 

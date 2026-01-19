@@ -13,11 +13,12 @@ class ComicReader {
     this.metadata = null;
     this.currentPageIndex = 0;
     this.loading = false;
-    this.fitMode = 'fit-width'; // fit-width, fit-height, original
+    this.fitMode = 'fit-height'; // fit-width, fit-height, original
     this.zoomLevel = 100; // 50-200%
     this.spreadMode = false; // Two-page spread
     this.isFullscreen = false;
     this.progressSaveTimer = null;
+    this.coverPageIndex = 0; // Index of the cover page (default 0)
   }
 
   /**
@@ -49,6 +50,9 @@ class ComicReader {
     try {
       const response = await APIClient.get(`/api/periodicals/${this.magazineId}/comic/metadata`);
       this.metadata = await response.json();
+
+      // Store cover page index from metadata (defaults to 0)
+      this.coverPageIndex = this.metadata.cover_page || 0;
 
       // Update UI with metadata
       document.getElementById('comic-title').textContent = this.metadata.title || 'Comic Reader';
@@ -118,7 +122,12 @@ class ComicReader {
       '<div class="loading"><div style="text-align: center"><div class="spinner"></div><div>Loading page...</div></div></div>';
 
     try {
-      if (this.spreadMode && index < this.metadata.pages.length - 1) {
+      // In spread mode: cover page is always single, then pair pages after cover (cover+1 & cover+2, etc.)
+      if (
+        this.spreadMode &&
+        index !== this.coverPageIndex &&
+        index < this.metadata.pages.length - 1
+      ) {
         // Load two pages side by side
         await this.loadSpreadPages(index);
       } else {
@@ -263,7 +272,19 @@ class ComicReader {
    */
   async previousPage() {
     if (this.currentPageIndex > 0) {
-      await this.loadPage(this.currentPageIndex - 1);
+      let targetPage;
+      if (this.spreadMode) {
+        // In spread mode: Navigate by 2 pages, except when going to/from cover
+        const firstContentPage = this.coverPageIndex + 1;
+        if (this.currentPageIndex === firstContentPage) {
+          targetPage = this.coverPageIndex; // Go to cover
+        } else {
+          targetPage = Math.max(firstContentPage, this.currentPageIndex - 2);
+        }
+      } else {
+        targetPage = this.currentPageIndex - 1;
+      }
+      await this.loadPage(targetPage);
     }
   }
 
@@ -272,7 +293,18 @@ class ComicReader {
    */
   async nextPage() {
     if (this.currentPageIndex < this.metadata.pages.length - 1) {
-      await this.loadPage(this.currentPageIndex + 1);
+      let targetPage;
+      if (this.spreadMode) {
+        // In spread mode: Navigate by 2 pages, except when going from cover
+        if (this.currentPageIndex === this.coverPageIndex) {
+          targetPage = this.coverPageIndex + 1; // From cover to first content page
+        } else {
+          targetPage = Math.min(this.metadata.pages.length - 1, this.currentPageIndex + 2);
+        }
+      } else {
+        targetPage = this.currentPageIndex + 1;
+      }
+      await this.loadPage(targetPage);
     }
   }
 
@@ -447,6 +479,18 @@ class ComicReader {
   }
 
   /**
+   * Navigate back to the periodical detail page
+   */
+  goBackToPeriodical() {
+    if (this.magazineId) {
+      window.location.href = `/periodical?id=${this.magazineId}`;
+    } else {
+      // Fallback to home if no ID available
+      window.location.href = '/';
+    }
+  }
+
+  /**
    * Toggle fullscreen mode
    */
   toggleFullscreen() {
@@ -461,6 +505,7 @@ class ComicReader {
    * Setup fullscreen change listeners
    */
   setupFullscreenListeners() {
+    // Fullscreen change handler
     document.addEventListener('fullscreenchange', () => {
       this.isFullscreen = !!document.fullscreenElement;
       const btn = document.getElementById('fullscreen-btn');
@@ -476,7 +521,105 @@ class ComicReader {
       if (sidebar) {
         sidebar.style.display = this.isFullscreen ? 'none' : 'flex';
       }
+
+      // Setup auto-hide toolbar in fullscreen
+      if (this.isFullscreen) {
+        this.setupAutoHideToolbar();
+      } else {
+        this.cleanupAutoHideToolbar();
+      }
     });
+  }
+
+  /**
+   * Setup auto-hide toolbar behavior in fullscreen
+   */
+  setupAutoHideToolbar() {
+    const readerHeader = document.querySelector('.reader-header');
+    const contentHeader = document.querySelector('.content-header');
+    let hideTimer = null;
+
+    // Calculate proper positioning for content header below reader header
+    if (readerHeader && contentHeader) {
+      // Wait a tick for fullscreen padding to apply, then measure
+      setTimeout(() => {
+        // offsetHeight includes padding and border, subtract 1px to overlap the border
+        const readerHeaderHeight = readerHeader.offsetHeight;
+        contentHeader.style.setProperty('--reader-header-offset', `${readerHeaderHeight - 1}px`);
+      }, 50);
+    }
+
+    // Function to show toolbars
+    const showToolbars = () => {
+      if (readerHeader) readerHeader.classList.add('show-toolbar');
+      if (contentHeader) contentHeader.classList.add('show-toolbar');
+
+      // Auto-hide after 3 seconds of inactivity
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(() => {
+        if (readerHeader) readerHeader.classList.remove('show-toolbar');
+        if (contentHeader) contentHeader.classList.remove('show-toolbar');
+      }, 3000);
+    };
+
+    // Function to hide toolbars immediately
+    const hideToolbars = () => {
+      clearTimeout(hideTimer);
+      if (readerHeader) readerHeader.classList.remove('show-toolbar');
+      if (contentHeader) contentHeader.classList.remove('show-toolbar');
+    };
+
+    // Show toolbars when mouse moves near top of screen (but not at very top to avoid browser UI)
+    const handleMouseMove = (e) => {
+      // Show toolbar when mouse is between 50-150px from top (avoiding browser UI at 0-50px)
+      if (e.clientY >= 50 && e.clientY < 150) {
+        showToolbars();
+      } else if (e.clientY > 250) {
+        // Hide if mouse moves away from toolbar area
+        clearTimeout(hideTimer);
+        hideTimer = setTimeout(hideToolbars, 1000);
+      }
+    };
+
+    // Show toolbars on touch near top of screen (avoiding very top for browser UI)
+    const handleTouchStart = (e) => {
+      const touch = e.touches[0];
+      // Show toolbar when touch is between 50-150px from top
+      if (touch.clientY >= 50 && touch.clientY < 150) {
+        showToolbars();
+      }
+    };
+
+    // Store handlers for cleanup
+    this._toolbarMouseMove = handleMouseMove;
+    this._toolbarTouchStart = handleTouchStart;
+
+    // Add event listeners
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('touchstart', handleTouchStart);
+
+    // Initially hide toolbars after a delay
+    hideTimer = setTimeout(hideToolbars, 2000);
+  }
+
+  /**
+   * Cleanup auto-hide toolbar listeners
+   */
+  cleanupAutoHideToolbar() {
+    if (this._toolbarMouseMove) {
+      document.removeEventListener('mousemove', this._toolbarMouseMove);
+      this._toolbarMouseMove = null;
+    }
+    if (this._toolbarTouchStart) {
+      document.removeEventListener('touchstart', this._toolbarTouchStart);
+      this._toolbarTouchStart = null;
+    }
+
+    // Show toolbars when exiting fullscreen
+    const readerHeader = document.querySelector('.reader-header');
+    const contentHeader = document.querySelector('.content-header');
+    if (readerHeader) readerHeader.classList.remove('show-toolbar');
+    if (contentHeader) contentHeader.classList.remove('show-toolbar');
   }
 }
 

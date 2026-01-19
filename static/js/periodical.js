@@ -217,29 +217,29 @@ async function openPDF(magazineId) {
       console.log('[Periodical] Opening file:', filePath);
       if (filePath.endsWith('.epub')) {
         console.log('[Periodical] Detected EPUB, opening EPUB reader');
-        // Open EPUB reader
-        window.open(`/epub-reader?id=${magazineId}`, '_blank');
+        // Open EPUB reader in same window
+        window.location.href = `/epub-reader?id=${magazineId}`;
       } else if (filePath.endsWith('.cbz') || filePath.endsWith('.cbr')) {
         console.log('[Periodical] Detected comic file, opening comic reader');
-        // Open comic reader
-        window.open(`/comic-reader?id=${magazineId}`, '_blank');
+        // Open comic reader in same window
+        window.location.href = `/comic-reader?id=${magazineId}`;
       } else if (filePath.endsWith('.pdf')) {
         console.log('[Periodical] Detected PDF, opening PDF reader');
-        // Open PDF reader
-        window.open(`/pdf-reader?id=${magazineId}`, '_blank');
+        // Open PDF reader in same window
+        window.location.href = `/pdf-reader?id=${magazineId}`;
       } else {
         console.log('[Periodical] Unknown file type, opening directly');
-        // Open file directly
+        // Open file directly in new tab (for non-reader files)
         window.open(`/api/periodicals/${magazineId}/pdf`, '_blank');
       }
     } else {
       console.log('[Periodical] No file_path, opening directly');
-      // Fallback to opening directly
+      // Fallback to opening directly in new tab
       window.open(`/api/periodicals/${magazineId}/pdf`, '_blank');
     }
   } catch (error) {
     console.error('[Periodical] Error checking file type:', error);
-    // Fallback to opening as PDF
+    // Fallback to opening as PDF in new tab
     window.open(`/api/periodicals/${magazineId}/pdf`, '_blank');
   }
 }

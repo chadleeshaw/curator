@@ -121,7 +121,7 @@ async def get_epub_metadata_endpoint(magazine_id: int) -> Dict[str, Any]:
         if not metadata:
             raise HTTPException(status_code=500, detail="Failed to extract EPUB metadata")
 
-        return JSONResponse(content=metadata)
+        return metadata
 
     except HTTPException:
         raise
@@ -250,7 +250,7 @@ async def get_comic_metadata_endpoint(magazine_id: int) -> Dict[str, Any]:
     Get comic metadata and page list.
 
     Returns:
-        Dictionary with title, format, page_count, and pages list
+        Dictionary with title, format, page_count, pages list, and cover_page index
     """
     try:
 
@@ -270,14 +270,23 @@ async def get_comic_metadata_endpoint(magazine_id: int) -> Dict[str, Any]:
                 if file_path.suffix.lower() not in [".cbz", ".cbr"]:
                     raise HTTPException(status_code=400, detail="File is not a comic (CBZ/CBR)")
 
-                return file_path
+                # Get cover page index from extra_metadata (defaults to 0)
+                cover_page = 0
+                if magazine.extra_metadata and "cover_page" in magazine.extra_metadata:
+                    # Convert from 1-based (stored) to 0-based (used by frontend)
+                    cover_page = magazine.extra_metadata["cover_page"] - 1
+
+                return file_path, cover_page
             finally:
                 db_session.close()
 
-        file_path = await run_in_thread(_db_operation)
+        file_path, cover_page = await run_in_thread(_db_operation)
 
         # Get comic metadata
         metadata = await run_in_thread(lambda: get_comic_metadata(file_path))
+
+        # Add cover page index to metadata
+        metadata["cover_page"] = cover_page
 
         return metadata
 
@@ -409,10 +418,10 @@ async def get_comic_page_thumbnail_endpoint(magazine_id: int, page_index: int):
 @router.get("/periodicals/{magazine_id}/pdf/metadata")
 async def get_pdf_metadata_endpoint(magazine_id: int) -> Dict[str, Any]:
     """
-    Get PDF metadata and page list.
+    Get PDF metadata including page count and cover page index.
 
     Returns:
-        Dictionary with PDF title, format, page count, and pages list
+        Dictionary with title, page_count, pages list, and cover_page index
     """
     try:
 
@@ -432,14 +441,23 @@ async def get_pdf_metadata_endpoint(magazine_id: int) -> Dict[str, Any]:
                 if file_path.suffix.lower() != ".pdf":
                     raise HTTPException(status_code=400, detail="File is not a PDF")
 
-                return file_path
+                # Get cover page index from extra_metadata (defaults to 0)
+                cover_page = 0
+                if magazine.extra_metadata and "cover_page" in magazine.extra_metadata:
+                    # Convert from 1-based (stored) to 0-based (used by frontend)
+                    cover_page = magazine.extra_metadata["cover_page"] - 1
+
+                return file_path, cover_page
             finally:
                 db_session.close()
 
-        file_path = await run_in_thread(_db_operation)
+        file_path, cover_page = await run_in_thread(_db_operation)
 
         # Get PDF metadata
         metadata = await run_in_thread(lambda: get_pdf_metadata(file_path))
+
+        # Add cover page index to metadata
+        metadata["cover_page"] = cover_page
 
         return metadata
 

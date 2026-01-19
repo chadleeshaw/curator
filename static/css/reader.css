@@ -647,3 +647,45 @@ body {
     padding: 2px;
   }
 }
+
+/* Fullscreen Mode - Auto-hide Toolbar */
+:fullscreen .reader-header,
+:fullscreen .content-header {
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  transition: transform 0.3s ease-in-out;
+}
+
+:fullscreen .reader-header {
+  top: 0;
+  transform: translateY(-100%);
+  padding-top: 12px;
+}
+
+:fullscreen .content-header {
+  /* Position content-header to start hidden above the viewport */
+  top: 0;
+  transform: translateY(-200%);
+}
+
+/* Show toolbars on hover/tap in fullscreen - they slide down together */
+:fullscreen .reader-header.show-toolbar {
+  transform: translateY(0);
+}
+
+:fullscreen .content-header.show-toolbar {
+  /* Slide down to position directly below reader-header using calculated offset */
+  transform: translateY(var(--reader-header-offset, 61px));
+}
+
+/* Adjust content area in fullscreen to use full height */
+:fullscreen .content-area {
+  padding-top: 0;
+}
+
+:fullscreen .page-content,
+:fullscreen .chapter-content {
+  height: 100vh;
+}
