@@ -18,6 +18,9 @@ from .crud import (
     get_magazine,
     delete_periodical,
     purge_database,
+    purge_cache,
+    get_cache_stats,
+    get_periodicals_count,
 )
 from .covers import (
     get_cover,
@@ -41,6 +44,9 @@ __all__ = [
     "get_magazine",
     "delete_periodical",
     "purge_database",
+    "purge_cache",
+    "get_cache_stats",
+    "get_periodicals_count",
     # Cover operations
     "get_cover",
     "regenerate_cover",

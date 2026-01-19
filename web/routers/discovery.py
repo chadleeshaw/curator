@@ -56,7 +56,7 @@ async def list_discovered_issues(
 
     Query Parameters:
     - tracking_id: Filter by specific periodical
-    - status: Filter by download status (discovered, wanted, queued, downloading, completed, failed, permanently_failed, ignored)
+    - status: Filter by download status (can be single or comma-separated: discovered, wanted, queued, downloading, completed, failed, permanently_failed, ignored)
     - limit: Max results (1-500, default 50)
     - offset: Skip results (for pagination)
     - sort: Sort by priority (default), first_seen, or last_seen
@@ -75,7 +75,7 @@ async def list_discovered_issues(
                 query = query.filter(DiscoveredIssue.tracking_id == tracking_id)
 
             if status:
-                # Validate status
+                # Validate status (can be single or comma-separated)
                 valid_statuses = [
                     "discovered",
                     "wanted",
@@ -86,12 +86,23 @@ async def list_discovered_issues(
                     "permanently_failed",
                     "ignored",
                 ]
-                if status not in valid_statuses:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}",
-                    )
-                query = query.filter(DiscoveredIssue.download_status == status)
+
+                # Handle comma-separated statuses
+                statuses = [s.strip() for s in status.split(",")]
+
+                # Validate all statuses
+                for s in statuses:
+                    if s not in valid_statuses:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}",
+                        )
+
+                # Filter by status(es)
+                if len(statuses) == 1:
+                    query = query.filter(DiscoveredIssue.download_status == statuses[0])
+                else:
+                    query = query.filter(DiscoveredIssue.download_status.in_(statuses))
 
             # Get total count before pagination
             total_count = query.count()

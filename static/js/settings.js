@@ -45,6 +45,7 @@ export class SettingsManager {
    */
   async loadSettingsTab() {
     await this.loadAPIToken();
+    await this.loadCacheStats();
   }
 
   /**
@@ -942,6 +943,66 @@ export class SettingsManager {
       UIUtils.showStatus('settings-status', `Error: ${error.message}`, 'error');
     }
   }
+
+  /**
+   * Load and display cache statistics
+   */
+  async loadCacheStats() {
+    try {
+      const response = await APIClient.authenticatedFetch('/api/cache/stats');
+      const stats = await response.json();
+
+      const statsText = document.getElementById('cache-stats-text');
+      if (statsText && stats.total_entries) {
+        const entryText = stats.total_entries === 1 ? 'entry' : 'entries';
+        const queryText = stats.unique_queries === 1 ? 'query' : 'queries';
+        statsText.textContent = `Currently ${stats.total_entries} ${entryText} from ${stats.unique_queries} ${queryText}.`;
+      }
+    } catch (error) {
+      console.warn('Error loading cache stats:', error);
+    }
+  }
+
+  /**
+   * Open purge cache confirmation modal
+   */
+  openPurgeCacheModal() {
+    UIUtils.showModal('purge-cache-modal');
+  }
+
+  /**
+   * Close purge cache modal
+   */
+  closePurgeCacheModal() {
+    UIUtils.closeModal('purge-cache-modal');
+  }
+
+  /**
+   * Confirm and execute cache purge
+   */
+  async confirmPurgeCache() {
+    try {
+      UIUtils.showStatus('settings-status', 'Purging cache...', 'info');
+
+      const response = await APIClient.authenticatedFetch('/api/purge-cache', {
+        method: 'POST',
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        this.closePurgeCacheModal();
+        UIUtils.showStatus('settings-status', result.message, 'success');
+        // Reload cache stats
+        this.loadCacheStats();
+      } else {
+        UIUtils.showStatus('settings-status', result.message || 'Cache purge failed', 'error');
+      }
+    } catch (error) {
+      console.error('Error purging cache:', error);
+      UIUtils.showStatus('settings-status', `Error: ${error.message}`, 'error');
+    }
+  }
 }
 
 // Create singleton instance
@@ -969,3 +1030,6 @@ window.loadSettingsTab = () => settings.loadSettingsTab();
 window.toggleAPITokenVisibility = () => settings.toggleAPITokenVisibility();
 window.copyAPIToken = () => settings.copyAPIToken();
 window.regenerateAPIToken = () => settings.regenerateAPIToken();
+window.openPurgeCacheModal = () => settings.openPurgeCacheModal();
+window.closePurgeCacheModal = () => settings.closePurgeCacheModal();
+window.confirmPurgeCache = () => settings.confirmPurgeCache();

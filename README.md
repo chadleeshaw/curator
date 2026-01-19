@@ -19,7 +19,7 @@ Automatically discover, download, and organize periodicals (magazines, comics, n
 mkdir -p local/config local/data local/downloads
 
 # Copy sample config
-cp config.sample.yaml local/config/config.yaml
+cp config.template.yaml local/config/config.yaml
 
 # Edit with your API keys
 nano local/config/config.yaml
@@ -230,7 +230,7 @@ npm install
 make install-hooks
 
 # Copy config
-cp config.sample.yaml local/config/config.yaml
+cp config.template.yaml local/config/config.yaml
 
 # Run application
 python main.py

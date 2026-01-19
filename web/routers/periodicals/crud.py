@@ -455,20 +455,20 @@ async def purge_database() -> Dict[str, Any]:
 
                 # Delete all library entries
                 db_session.query(Magazine).delete()
-                logger.info(f"Purged {magazine_count} magazine entries from database")
 
                 # Delete all tracking records
                 db_session.query(MagazineTracking).delete()
-                logger.info(f"Purged {tracking_count} tracking records from database")
 
                 # Delete all download submissions
                 db_session.query(DownloadSubmission).delete()
-                logger.info(f"Purged {download_count} download submissions from database")
 
                 # Commit all deletions
                 db_session.commit()
 
-                logger.warning("Database purged successfully. All library and tracking data removed.")
+                logger.warning(
+                    f"Database purged successfully. Removed {magazine_count} library entries, "
+                    f"{tracking_count} tracking records, and {download_count} download submissions."
+                )
 
                 return {
                     "success": True,
@@ -489,6 +489,103 @@ async def purge_database() -> Dict[str, Any]:
 
     except Exception as e:
         logger.error(f"Purge database error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/purge-cache")
+async def purge_cache() -> Dict[str, Any]:
+    """
+    Purge all cached search results from the database.
+    This will force fresh searches from providers on next query.
+
+    Returns:
+        Success message with count of deleted cache entries
+    """
+    try:
+
+        def _db_operation():
+            db_session = _shared._session_factory()
+            try:
+                from models.database import SearchResult as DBSearchResult
+
+                # Count cache entries before deletion
+                cache_count = db_session.query(DBSearchResult).count()
+
+                # Delete all search result cache entries
+                db_session.query(DBSearchResult).delete()
+
+                # Commit deletion
+                db_session.commit()
+
+                logger.info(f"Search cache purged successfully. Removed {cache_count} cached search results.")
+
+                return {
+                    "success": True,
+                    "message": f"Search cache purged successfully. Removed {cache_count} cached search results.",
+                    "count": cache_count,
+                }
+
+            finally:
+                db_session.close()
+
+        return await run_in_thread(_db_operation)
+
+    except Exception as e:
+        logger.error(f"Purge cache error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/cache/stats")
+async def get_cache_stats() -> Dict[str, Any]:
+    """
+    Get statistics about the search result cache.
+
+    Returns:
+        Dictionary with cache statistics including total entries, oldest/newest entries
+    """
+    try:
+
+        def _db_operation():
+            db_session = _shared._session_factory()
+            try:
+                from models.database import SearchResult as DBSearchResult
+                from sqlalchemy import func
+
+                # Get total count
+                total = db_session.query(DBSearchResult).count()
+
+                # Get oldest and newest entries
+                oldest = db_session.query(func.min(DBSearchResult.created_at)).scalar()
+                newest = db_session.query(func.max(DBSearchResult.created_at)).scalar()
+
+                # Get unique query count
+                unique_queries = db_session.query(func.distinct(DBSearchResult.query)).count()
+
+                # Get provider breakdown
+                provider_counts = (
+                    db_session.query(
+                        DBSearchResult.provider,
+                        func.count(DBSearchResult.id),  # pylint: disable=not-callable
+                    )
+                    .group_by(DBSearchResult.provider)
+                    .all()
+                )
+
+                return {
+                    "total_entries": total,
+                    "unique_queries": unique_queries,
+                    "oldest_entry": oldest.isoformat() if oldest else None,
+                    "newest_entry": newest.isoformat() if newest else None,
+                    "providers": dict(provider_counts),
+                }
+
+            finally:
+                db_session.close()
+
+        return await run_in_thread(_db_operation)
+
+    except Exception as e:
+        logger.error(f"Get cache stats error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

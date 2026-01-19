@@ -1595,3 +1595,64 @@
   font-size: 1.5em;
   color: var(--primary-color);
 }
+
+/* ============================================
+   Search Results & Status Badges
+   ============================================ */
+
+/* Search Summary Header */
+.search-summary {
+  padding: 16px;
+  background: var(--surface-variant);
+  border-radius: 8px;
+  margin-bottom: 20px;
+  border-left: 4px solid var(--primary-color);
+}
+
+.search-summary h3 {
+  margin: 0 0 12px 0;
+  font-size: 1.2em;
+  color: var(--text-primary);
+}
+
+.summary-stats {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.summary-stats .stat {
+  font-size: 0.95em;
+  color: var(--text-secondary);
+}
+
+.summary-stats .stat strong {
+  color: var(--primary-color);
+  font-size: 1.1em;
+}
+
+/* Status Badge Inline (within issue cards) */
+.status-badge-inline {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+/* Issue card hover effects based on status */
+[data-status='available']:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(23, 162, 184, 0.3);
+}
+
+[data-status='failed']:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(255, 193, 7, 0.3);
+}
+
+[data-status='in_library'] {
+  cursor: default;
+}

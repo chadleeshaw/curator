@@ -45,14 +45,14 @@ try:
     if newsnab_config:
         # Test with configured categories
         provider = NewsnabProvider(newsnab_config)
-        assert provider.categories == "7000,7010,7020,7030"
+        assert provider.categories == "7000,7010,7020,7030,6000,8000"
 
         # Test with default categories (no categories in config)
         config_no_categories = newsnab_config.copy()
         if "categories" in config_no_categories:
             del config_no_categories["categories"]
         provider_default = NewsnabProvider(config_no_categories)
-        assert provider_default.categories == "7000,7010,7020,7030"
+        assert provider_default.categories == "7000,7010,7020,7030,6000,8000"
 
         print("✓ PASS")
         results["NewsnabProvider categories config"] = True

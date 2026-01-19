@@ -836,6 +836,13 @@ export class TrackingManager {
       const data = await response.json();
 
       if (data.found && data.results.length > 0) {
+        // Store summary stats for display
+        this.libraryCount = data.library_matches || 0;
+        this.availableCount = data.available_to_download || 0;
+        this.totalCount = data.total_results || 0;
+        this.fromCache = data.from_cache || false;
+        this.cacheAgeDays = data.cache_age_days || 0;
+
         // Parse and curate results
         const curatedIssues = this.parseAndCurateIssues(data.results);
         this.displayCuratedIssues(curatedIssues, title);
@@ -894,6 +901,9 @@ export class TrackingManager {
             url: result.url,
             publication_date: result.publication_date,
             already_downloaded: result.already_downloaded || false,
+            download_failed: result.download_failed || false,
+            status: result.status || 'available',
+            status_badge: result.status_badge || '📥 Available',
             language: language,
             variants: [result], // Store all variants
           });
@@ -902,9 +912,21 @@ export class TrackingManager {
           const existing = issueMap.get(key);
           existing.variants.push(result);
 
+          // Preserve library status - if any variant is in library, mark as in library
+          if (result.status === 'in_library') {
+            existing.status = 'in_library';
+            existing.status_badge = '📚 In Library';
+            existing.already_downloaded = true;
+          }
+
           // If already downloaded, mark the combined entry as downloaded
           if (result.already_downloaded) {
             existing.already_downloaded = true;
+          }
+
+          // If any variant failed, mark as failed (unless already in library)
+          if (result.download_failed && existing.status !== 'in_library') {
+            existing.download_failed = true;
           }
         }
       }
@@ -1054,7 +1076,22 @@ export class TrackingManager {
       return;
     }
 
-    let html = `<h3>Available Issues for "${title}"</h3><div style="max-height: 70vh; overflow-y: auto;">`;
+    // Add search summary header
+    let cacheInfo = '';
+    if (this.fromCache) {
+      cacheInfo = ` <span style="font-size: 0.85em; color: var(--text-secondary);">(cached ${this.cacheAgeDays}d ago)</span>`;
+    }
+
+    let html = `
+      <div class="search-summary">
+        <h3>Search Results for "${title}"${cacheInfo}</h3>
+        <div class="summary-stats">
+          <span class="stat">📚 <strong>${this.libraryCount || 0}</strong> in library</span>
+          <span class="stat">📥 <strong>${this.availableCount || 0}</strong> available</span>
+          <span class="stat">🎯 <strong>${this.totalCount || 0}</strong> total</span>
+        </div>
+      </div>
+      <div style="max-height: 70vh; overflow-y: auto;">`;
 
     const years = Object.keys(groupedByYear).sort((a, b) => b - a);
 
@@ -1062,7 +1099,7 @@ export class TrackingManager {
       const issues = groupedByYear[year];
       html += `<div style="margin-bottom: 20px;">
         <h4 style="color: var(--primary-color); margin-bottom: 10px;">📅 ${year}</h4>
-        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px;">`;
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px;">`;
 
       issues.forEach((issue) => {
         // Create display label based on available information
@@ -1089,31 +1126,40 @@ export class TrackingManager {
           displayLabel = `${issue.year}`;
         }
 
-        const isLibraryOnly = !issue.url || issue.url === '';
-        const isDownloaded = issue.already_downloaded;
-        const hasFailed = issue.download_failed || false;
+        // Determine status from API response
+        const status = issue.status || 'available'; // 'in_library', 'available', 'failed'
+        const isLibraryItem = status === 'in_library';
+        const hasFailed = status === 'failed';
 
-        const backgroundColor = isLibraryOnly ? 'var(--surface)' : 'var(--surface-variant)';
-        const borderColor = isLibraryOnly
-          ? 'var(--border-color)'
-          : isDownloaded
-            ? '#4caf50'
-            : hasFailed
-              ? '#f44336'
-              : 'transparent';
-        const opacity = isLibraryOnly ? '0.85' : isDownloaded ? '0.7' : hasFailed ? '0.85' : '1';
-        const textColor = isLibraryOnly ? 'var(--text-secondary)' : 'var(--text-primary)';
+        // Status-based styling with color-coded left borders
+        let backgroundColor, borderColor, opacity, textColor, statusIcon, statusText;
 
-        const providerDisplay = isLibraryOnly
-          ? ''
-          : `<div style="font-size: 10px; color: var(--text-secondary); margin-top: 6px;">${issue.provider}</div>`;
-        const statusBadge = isLibraryOnly
-          ? '<div style="font-size: 10px; margin-top: 6px; color: var(--text-secondary); font-weight: 600;">📚 In Library</div>'
-          : isDownloaded
-            ? '<div style="font-size: 10px; margin-top: 6px; color: #4caf50; font-weight: 600;">✓ Have</div>'
-            : hasFailed
-              ? '<div style="font-size: 10px; margin-top: 6px; color: #f44336; font-weight: 600;">✗ Failed</div>'
-              : '';
+        if (isLibraryItem) {
+          backgroundColor = '#d4edda';
+          borderColor = '#28a745';
+          opacity = '0.95';
+          textColor = '#155724';
+          statusIcon = '📚';
+          statusText = 'In Library';
+        } else if (hasFailed) {
+          backgroundColor = '#fff3cd';
+          borderColor = '#ffc107';
+          opacity = '0.9';
+          textColor = '#856404';
+          statusIcon = '⚠️';
+          statusText = 'Failed';
+        } else {
+          backgroundColor = '#d1ecf1';
+          borderColor = '#17a2b8';
+          opacity = '1';
+          textColor = '#0c5460';
+          statusIcon = '📥';
+          statusText = 'Available';
+        }
+
+        const providerDisplay = !isLibraryItem
+          ? `<div style="font-size: 10px; color: var(--text-secondary); margin-top: 6px;">${issue.provider || ''}</div>`
+          : '';
 
         // Show language variants badge if multiple editions exist
         const variantsBadge =
@@ -1126,28 +1172,36 @@ export class TrackingManager {
         let cardHtml = `<div style="
           padding: 12px;
           background: ${backgroundColor};
-          border-radius: 5px;
+          border-radius: 8px;
           text-align: center;
-          cursor: ${isLibraryOnly ? 'default' : 'pointer'};
+          cursor: ${isLibraryItem ? 'default' : 'pointer'};
           transition: all 0.2s;
-          border: 2px solid ${borderColor};
+          border-left: 4px solid ${borderColor};
           opacity: ${opacity};
           color: ${textColor};
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         "`;
 
-        if (!isLibraryOnly) {
-          // Store variants globally for selection
+        // Store variants globally for selection
+        if (!isLibraryItem) {
           const issueKey = `${issue.year}-${issue.month}-${issue.issue}`;
           window.issueVariants = window.issueVariants || {};
           window.issueVariants[issueKey] = issue.variants;
-
-          cardHtml += ` onclick='selectIssueWithVariants("${issueKey}", ${isDownloaded}, ${hasFailed})'`;
+          cardHtml += ` onclick='selectIssueWithVariants("${issueKey}", ${issue.already_downloaded || false}, ${issue.download_failed || false})'`;
         }
 
         cardHtml += `>
+          <div class="status-badge-inline" style="
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 600;
+            margin-bottom: 6px;
+            background: rgba(255,255,255,0.7);
+          ">${statusIcon} ${statusText}</div>
           <div style="font-weight: 600; font-size: 14px;">${displayLabel}</div>
           ${providerDisplay}
-          ${statusBadge}
           ${variantsBadge}
         </div>`;
 

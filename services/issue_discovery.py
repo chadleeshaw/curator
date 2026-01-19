@@ -89,7 +89,7 @@ class IssueDiscoveryService:
                 # Parse the search result title
                 title = result.get("title", "")
                 if not title:
-                    logger.warning("Search result missing title, skipping")
+                    logger.debug("Search result missing title, skipping")
                     stats["errors"] += 1
                     continue
 
@@ -191,7 +191,7 @@ class IssueDiscoveryService:
                     )
                     session.add(new_issue)
                     stats["new"] += 1
-                    logger.info(f"Discovered new issue: {fuzzy_group}")
+                    logger.debug(f"Discovered new issue: {fuzzy_group}")
 
             except Exception as e:
                 logger.error(f"Error processing search result '{title}': {e}")

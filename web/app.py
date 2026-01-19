@@ -32,7 +32,7 @@ from tasks import (
 from web.routers import (
     auth,
     config,
-    discovered_issues,
+    discovery,
     downloads,
     imports,
     metadata,
@@ -438,7 +438,7 @@ async def lifespan(app: FastAPI):
         config.set_dependencies(config_loader)
         pages.set_dependencies(session_factory)
         ocr_queue.set_dependencies(session_factory)
-        discovered_issues.set_dependencies(
+        discovery.set_dependencies(
             session_factory,
             issue_discovery_service,
             search_scheduler,
@@ -556,7 +556,7 @@ app.include_router(tasks.router)
 app.include_router(config.router)
 app.include_router(pages.router)
 app.include_router(ocr_queue.router)
-app.include_router(discovered_issues.router)
+app.include_router(discovery.router)
 
 # Mount static files
 try:

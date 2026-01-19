@@ -54,3 +54,19 @@ ISSUE_PREFIX = "No"
 
 ORGANIZED_FILENAME_SEPARATOR = " - "
 """Separator used in organized filenames between components"""
+
+
+# ==============================================================================
+# File Extensions and Types
+# ==============================================================================
+
+SUPPORTED_FILE_EXTENSIONS = {".pdf", ".epub", ".cbz", ".cbr"}
+"""Set of file extensions that Curator can process"""
+
+
+# ==============================================================================
+# File Hashing
+# ==============================================================================
+
+DEFAULT_HASH_CHUNK_SIZE = 8192
+"""Default chunk size in bytes for reading files during hashing (8KB)"""

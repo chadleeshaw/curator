@@ -2,11 +2,29 @@
 
 import logging
 import re
+from datetime import datetime
 from typing import Dict, List, Tuple, Optional
 
 from fuzzywuzzy import fuzz
 
-from core.constants.country import REGIONAL_EDITION_INDICATORS
+from core.constants.country import ISO_COUNTRIES
+from core.constants.edition import (
+    REGIONAL_EDITION_INDICATORS,
+    EDITION_VARIANT_INDICATORS,
+)
+from core.constants.title import (
+    DEFAULT_FUZZY_MATCH_THRESHOLD,
+    FUZZY_DELIMITER_THRESHOLD,
+    DEFAULT_DATE_TOLERANCE_DAYS,
+    DATE_PENALTY_MULTIPLIER,
+    MAX_DATE_PENALTY,
+    MIN_BASE_TITLE_WORDS,
+    MULTI_WORD_REGIONAL_INDICATORS,
+    MULTI_WORD_EDITION_VARIANTS,
+    COMMON_PERIODICAL_WORDS,
+    COUNTRY_CODE_NORMALIZATIONS,
+    KNOWN_PERIODICAL_TITLES,
+)
 from core.parsers.language import LANGUAGE_INDICATORS
 
 logger = logging.getLogger(__name__)
@@ -63,7 +81,7 @@ class TitleMatcher:
         (r"^(?P<title>.+?)$", "generic"),
     ]
 
-    def __init__(self, threshold: int = 80):
+    def __init__(self, threshold: int = DEFAULT_FUZZY_MATCH_THRESHOLD):
         self.threshold = threshold
         # Compile regex patterns once for performance
         self._compiled_hash_patterns = [re.compile(p) for p in self.HASHED_RELEASE_PATTERNS]
@@ -216,20 +234,7 @@ class TitleMatcher:
 
         # Normalize common country code variations (USA -> US, etc.)
         # Note: UK is kept as UK (not normalized to GB) for better user readability
-        country_normalizations = {
-            "USA": "US",
-            "U S A": "US",
-            "U.S.A": "US",
-            "U.S.A.": "US",
-            "U.S": "US",
-            "U.S.": "US",
-            "United States": "US",
-            "U K": "UK",
-            "U.K": "UK",
-            "U.K.": "UK",
-            "United Kingdom": "UK",
-        }
-        for long_form, short_form in country_normalizations.items():
+        for long_form, short_form in COUNTRY_CODE_NORMALIZATIONS.items():
             # Match whole words only with word boundaries
             title = re.sub(rf"\b{re.escape(long_form)}\b", short_form, title, flags=re.IGNORECASE)
 
@@ -277,19 +282,9 @@ class TitleMatcher:
 
         # Title case (capitalize first letter of each word)
         # But preserve special formatting for common periodicals
-        common_titles = {
-            "national geographic": "National Geographic",
-            "pcgamer": "PC Gamer",
-            "pc gamer": "PC Gamer",
-            "pc world": "PC World",
-            "mac world": "Mac World",
-            "e-news": "E-News",
-            "wired": "Wired",
-        }
-
         title_lower = title.lower()
-        if title_lower in common_titles:
-            return common_titles[title_lower]
+        if title_lower in KNOWN_PERIODICAL_TITLES:
+            return KNOWN_PERIODICAL_TITLES[title_lower]
 
         # Default title case for others
         return title.title()
@@ -314,7 +309,9 @@ class TitleMatcher:
 
         return None
 
-    def fuzzy_match_with_delimiters(self, text: str, pattern: str, threshold: float = 0.6) -> Tuple[int, int, float]:
+    def fuzzy_match_with_delimiters(
+        self, text: str, pattern: str, threshold: float = FUZZY_DELIMITER_THRESHOLD
+    ) -> Tuple[int, int, float]:
         """
         Fuzzy match that respects word delimiters
         Args:
@@ -428,15 +425,7 @@ class TitleMatcher:
         if len(words) >= 2:
             last_word = words[-1].lower()
             # Common two-word regional indicators
-            if len(words) >= 2 and " ".join(words[-2:]).lower() in [
-                "south africa",
-                "north america",
-                "south america",
-                "new zealand",
-                "united kingdom",
-                "united states",
-                "hong kong",
-            ]:
+            if len(words) >= 2 and " ".join(words[-2:]).lower() in MULTI_WORD_REGIONAL_INDICATORS:
                 # This is a regional edition, not a special edition
                 return (title, False, "")
             # Single-word country names at the end
@@ -444,29 +433,7 @@ class TitleMatcher:
                 return (title, False, "")
 
         # Common periodical words that are part of the base title:
-        common_periodical_words = {
-            "magazine",
-            "monthly",
-            "weekly",
-            "daily",
-            "quarterly",
-            "journal",
-            "review",
-            "digest",
-            "times",
-            "post",
-            "news",
-            "illustrated",
-            "geographic",
-            "swimsuit",
-            "beauty",
-            "style",
-            "edition",
-            "issue",
-            "international",
-            "world",
-            "today",
-        }
+        common_periodical_words = COMMON_PERIODICAL_WORDS
 
         # Need at least 3 words: "Base" + "Special" + "Name"
         if len(words) >= 3:
@@ -474,7 +441,7 @@ class TitleMatcher:
             # Special identifiers are 2+ consecutive words that are NOT common periodical words
             # BUT: Always keep at least 2 words as the base title (never split 3-word titles)
             # For longer titles (5+ words), we can be more aggressive
-            min_base_words = 2
+            min_base_words = MIN_BASE_TITLE_WORDS
 
             special_start_idx = None
             consecutive_non_common = 0
@@ -529,6 +496,208 @@ class TitleMatcher:
             is_match = score >= self.threshold
 
         return is_match, score
+
+    def _extract_issue_volume_from_title(self, title: str) -> Tuple[Optional[int], Optional[int]]:
+        """
+        Extract volume and issue numbers from title.
+
+        Args:
+            title: Title string to parse
+
+        Returns:
+            Tuple of (volume, issue) where either can be None
+        """
+        volume = None
+        issue = None
+
+        # Volume patterns: Vol 5, Volume 5, Vol. 5, V5, v5
+        volume_match = re.search(r"(?:vol(?:ume)?\.?\s*|v)(\d+)", title, re.IGNORECASE)
+        if volume_match:
+            volume = int(volume_match.group(1))
+
+        # Issue patterns: #123, Issue 123, No. 123, No 123
+        issue_match = re.search(r"(?:#|issue\s*|no\.?\s*)(\d+)", title, re.IGNORECASE)
+        if issue_match:
+            issue = int(issue_match.group(1))
+
+        return volume, issue
+
+    def _extract_edition_variant(self, title: str) -> Optional[str]:
+        """
+        Extract edition variant indicator from title.
+
+        This identifies if the title contains a variant indicator that distinguishes it
+        as a DIFFERENT publication (not just a special issue).
+
+        This includes:
+        - Age-specific editions: "Kids", "Little Kids", "Junior", "Teen"
+        - Professional editions: "Pro", "Professional", "Business"
+        - Regional editions: "US", "UK", "DE", "France", "Germany"
+        - Format editions: "Digital", "Online", "Print"
+
+        IMPORTANT: This is NOT for special editions/issues of the same publication!
+        - "National Geographic Little Kids" vs "National Geographic" → DIFFERENT publications
+        - "PC Gamer US" vs "PC Gamer UK" → DIFFERENT publications
+        - "Time - Person of the Year" vs "Time" → SAME publication (special issue)
+
+        Args:
+            title: Title string to parse
+
+        Returns:
+            Edition variant string if found, None otherwise
+
+        Examples:
+            >>> _extract_edition_variant("National Geographic Little Kids")
+            "little kids"
+            >>> _extract_edition_variant("PC Gamer US")
+            "us"
+            >>> _extract_edition_variant("PC Gamer UK")
+            "uk"
+            >>> _extract_edition_variant("Forbes Professional")
+            "professional"
+            >>> _extract_edition_variant("Time Person Of The Year")
+            None  # "Person Of The Year" is a special issue, not an edition variant
+        """
+        title_lower = title.lower()
+
+        # Check for multi-word variants first (e.g., "little kids", "young adult")
+        for variant in MULTI_WORD_EDITION_VARIANTS:
+            if variant in title_lower:
+                return variant
+
+        # Check for regional indicators (including ISO country codes)
+        words = title_lower.split()
+        for i, word in enumerate(words):
+            # Clean punctuation from word
+            clean_word = word.strip(".,;:!?()[]{}\"'")
+
+            # Skip if this looks like "No 123" or "Vol 5" (issue/volume numbers, not editions)
+            if i + 1 < len(words):
+                next_word = words[i + 1].strip(".,;:!?()[]{}\"'")
+                if clean_word in ["no", "vol", "volume", "issue", "v"] and next_word.isdigit():
+                    continue
+
+            # Check if it's a country code (US, UK, DE, FR, etc.)
+            clean_word_upper = clean_word.upper()
+            if clean_word_upper in ISO_COUNTRIES:
+                return clean_word
+
+            # Check if it's a regional name (france, germany, etc.)
+            if clean_word in REGIONAL_EDITION_INDICATORS:
+                return clean_word
+
+        # Check for single-word edition variants
+        for word in words:
+            # Clean punctuation from word
+            clean_word = word.strip(".,;:!?()[]{}\"'")
+            if clean_word in EDITION_VARIANT_INDICATORS:
+                return clean_word
+
+        return None
+
+    def matches_library_item_with_date_range(
+        self,
+        provider_title: str,
+        provider_date: Optional[datetime],
+        library_title: str,
+        library_date: datetime,
+        date_tolerance_days: int = DEFAULT_DATE_TOLERANCE_DAYS,
+    ) -> Tuple[bool, int]:
+        """
+        Check if provider result matches library item using fuzzy title + date range + volume/issue.
+
+        Args:
+            provider_title: Title from search provider
+            provider_date: Publication date from provider (may be None)
+            library_title: Title from library
+            library_date: Issue date from library
+            date_tolerance_days: Days within month to consider match (default 7)
+
+        Returns:
+            Tuple of (is_match: bool, confidence_score: int)
+
+        Example:
+            # These would match:
+            matches("PC Gamer US", "2024-01-15", "PC Gamer - United States", "2024-01-01")
+            matches("Magazine - Jan 2024", "2024-01-20", "Magazine January 2024", "2024-01-01")
+            matches("Comic #123", None, "Comic Issue 123", "2024-01-01")  # Issue number match
+
+            # These would NOT match:
+            matches("PC Gamer US", "2024-01-15", "PC Gamer UK", "2024-01-01")  # Different editions
+            matches("Magazine", "2024-01-15", "Magazine", "2024-02-01")  # Different months
+            matches("Comic #123", None, "Comic #124", "2024-01-01")  # Different issue numbers
+        """
+        # Step 1: Fuzzy title matching (using configured threshold)
+        is_title_match, title_score = self.match(provider_title, library_title)
+
+        if not is_title_match:
+            return (False, 0)
+
+        # Step 1.5: Check for edition variant mismatch
+        # If one title has an edition variant and the other doesn't (or has a different one),
+        # they're different publications despite similar base names
+        provider_edition = self._extract_edition_variant(provider_title)
+        library_edition = self._extract_edition_variant(library_title)
+
+        # If both have edition variants, they must match
+        if provider_edition is not None and library_edition is not None:
+            if provider_edition != library_edition:
+                logger.debug(f"Edition variant mismatch: provider '{provider_edition}' vs library '{library_edition}'")
+                return (False, 0)
+        # If only one has an edition variant, they're different publications
+        elif provider_edition is not None or library_edition is not None:
+            logger.debug(
+                f"Edition variant presence mismatch: provider '{provider_edition}' vs library '{library_edition}'"
+            )
+            return (False, 0)
+
+        # Step 2: Extract volume/issue numbers from both titles
+        provider_vol, provider_issue = self._extract_issue_volume_from_title(provider_title)
+        library_vol, library_issue = self._extract_issue_volume_from_title(library_title)
+
+        # Step 3: Check volume/issue match if both have them
+        if provider_vol is not None and library_vol is not None:
+            if provider_vol != library_vol:
+                # Different volumes - not a match
+                logger.debug(f"Volume mismatch: provider vol {provider_vol} vs library vol {library_vol}")
+                return (False, 0)
+
+        if provider_issue is not None and library_issue is not None:
+            if provider_issue != library_issue:
+                # Different issue numbers - not a match
+                logger.debug(f"Issue mismatch: provider issue {provider_issue} vs library issue {library_issue}")
+                return (False, 0)
+
+        # Step 4: Date range matching (if dates available)
+        if provider_date is None:
+            # No date provided - if we have matching volume/issue, that's good enough
+            if (provider_vol is not None and provider_vol == library_vol) or (
+                provider_issue is not None and provider_issue == library_issue
+            ):
+                logger.debug(f"Match by volume/issue: {provider_title}")
+                return (True, title_score)
+            # Otherwise rely on title match only
+            logger.debug(f"No date or volume/issue for '{provider_title}', using title-only match")
+            return (True, title_score)
+
+        # Check if dates are within same month ± tolerance
+        date_diff_days = abs((provider_date - library_date).days)
+
+        # Same month check
+        same_month = provider_date.year == library_date.year and provider_date.month == library_date.month
+
+        # Adjacent dates check (within tolerance, even across month boundaries)
+        within_tolerance = date_diff_days <= date_tolerance_days
+
+        is_date_match = same_month or within_tolerance
+
+        if is_date_match:
+            # Reduce confidence score based on date distance
+            date_penalty = min(date_diff_days * DATE_PENALTY_MULTIPLIER, MAX_DATE_PENALTY)
+            final_score = max(title_score - date_penalty, 0)
+            return (True, final_score)
+        else:
+            return (False, 0)
 
     def deduplicate_results(self, results: List[Dict]) -> Dict[str, List[Dict]]:
         """

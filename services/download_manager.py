@@ -91,7 +91,7 @@ class DownloadManager:
         with ThreadPoolExecutor(max_workers=1) as executor:
             for provider in self.search_providers:
                 try:
-                    logger.info(f"Searching {provider.name} for: {search_title}")
+                    logger.debug(f"Searching {provider.name} for: {search_title}")
 
                     # Execute search with timeout
                     future = executor.submit(provider.search, search_title)
@@ -117,6 +117,30 @@ class DownloadManager:
                         # Apply language filter if specified
                         if language_filter and parsed.language != language_filter:
                             continue  # Skip results that don't match the language filter
+
+                        # Apply edition variant filter to match search behavior
+                        # Normalize title for edition detection (dots → spaces)
+                        normalized_search = search_title.replace(".", " ").replace("_", " ")
+                        normalized_result = parsed.title.replace(".", " ").replace("_", " ")
+
+                        search_variant = self.title_matcher._extract_edition_variant(normalized_search)
+                        result_variant = self.title_matcher._extract_edition_variant(normalized_result)
+
+                        # Skip results with mismatched edition variants
+                        # (e.g., searching "National Geographic" shouldn't return "National Geographic Little Kids")
+                        if not (
+                            (search_variant is None and result_variant is None)
+                            or (
+                                search_variant is not None
+                                and result_variant is not None
+                                and search_variant == result_variant
+                            )
+                        ):
+                            logger.debug(
+                                f"Skipping edition variant mismatch: '{parsed.title}' (variant: {result_variant}) "
+                                f"doesn't match search '{search_title}' (variant: {search_variant})"
+                            )
+                            continue
 
                         all_results.append(
                             {

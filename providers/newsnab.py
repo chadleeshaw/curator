@@ -12,6 +12,18 @@ from typing import List, Optional
 
 import requests
 
+from core.constants.providers import (
+    NEWSNAB_CATEGORY_MAP,
+    NEWSNAB_DEFAULT_API_URL,
+    NEWSNAB_DEFAULT_CATEGORIES,
+    NEWSNAB_DEFAULT_MAX_REQUESTS_PER_HOUR,
+    NEWSNAB_DEFAULT_RATE_LIMIT_WAIT,
+    NEWSNAB_DEFAULT_REQUEST_DELAY,
+    NEWSNAB_REQUEST_TIMEOUT,
+    SECONDS_PER_DAY,
+    SECONDS_PER_HOUR,
+    SECONDS_PER_MINUTE,
+)
 from core.interfaces import SearchProvider, SearchResult
 
 logger = logging.getLogger(__name__)
@@ -22,7 +34,7 @@ class NewsnabProvider(SearchProvider):
 
     def __init__(self, config):
         super().__init__(config)
-        api_url = config.get("api_url", "http://localhost:9696")
+        api_url = config.get("api_url", NEWSNAB_DEFAULT_API_URL)
 
         # Store the original URL - it might include indexer ID like /1/api
         self.api_url_raw = api_url.rstrip("/")
@@ -38,20 +50,14 @@ class NewsnabProvider(SearchProvider):
         self.api_key = config.get("api_key")
 
         # Allow configurable categories (comma-separated) or default to all book-related categories
-        # Common Newznab categories: 7000=Books (all), 7010=Magazines, 7020=Ebooks, 7030=Comics
-        self.categories = config.get("categories", "7000,7010,7020,7030")  # All books including magazines
+        self.categories = config.get("categories", NEWSNAB_DEFAULT_CATEGORIES)
 
         # Category name to Newznab ID mapping
-        self.category_map = {
-            "Magazines": "7010",
-            "Comics": "7030",
-            "Articles": "7020",  # Ebooks
-            "News": "7010",  # Same as magazines
-        }
+        self.category_map = NEWSNAB_CATEGORY_MAP
 
         # Rate limiting configuration
-        self.max_requests_per_hour = config.get("max_requests_per_hour", 100)
-        self.request_delay_seconds = config.get("request_delay_seconds", 1.0)
+        self.max_requests_per_hour = config.get("max_requests_per_hour", NEWSNAB_DEFAULT_MAX_REQUESTS_PER_HOUR)
+        self.request_delay_seconds = config.get("request_delay_seconds", NEWSNAB_DEFAULT_REQUEST_DELAY)
 
         # Rate limit tracking
         self._request_times: List[float] = []
@@ -80,11 +86,11 @@ class NewsnabProvider(SearchProvider):
         # Check if we've exceeded our self-imposed rate limit
         now = time.time()
         # Remove requests older than 1 hour
-        self._request_times = [t for t in self._request_times if now - t < 3600]
+        self._request_times = [t for t in self._request_times if now - t < SECONDS_PER_HOUR]
 
         if len(self._request_times) >= self.max_requests_per_hour:
             oldest_request = min(self._request_times)
-            wait_until = datetime.fromtimestamp(oldest_request + 3600)
+            wait_until = datetime.fromtimestamp(oldest_request + SECONDS_PER_HOUR)
             remaining = (wait_until - datetime.now()).total_seconds()
             logger.warning(
                 f"[{self.name}] Self-imposed rate limit reached "
@@ -124,20 +130,20 @@ class NewsnabProvider(SearchProvider):
         # Pattern 2: "wait X minutes"
         match = re.search(r"wait\s+(\d+)\s+minutes?", error_text, re.IGNORECASE)
         if match:
-            return int(match.group(1)) * 60
+            return int(match.group(1)) * SECONDS_PER_MINUTE
 
         # Pattern 3: "wait X hours"
         match = re.search(r"wait\s+(\d+)\s+hours?", error_text, re.IGNORECASE)
         if match:
-            return int(match.group(1)) * 3600
+            return int(match.group(1)) * SECONDS_PER_HOUR
 
         # Pattern 4: "daily limit exceeded" - assume 24 hour wait
         if re.search(r"daily limit|per day|24.?hour", error_text, re.IGNORECASE):
-            return 86400  # 24 hours
+            return SECONDS_PER_DAY
 
         # Pattern 5: "hourly limit exceeded" - assume 1 hour wait
         if re.search(r"hourly limit|per hour", error_text, re.IGNORECASE):
-            return 3600  # 1 hour
+            return SECONDS_PER_HOUR
 
         return None
 
@@ -204,7 +210,7 @@ class NewsnabProvider(SearchProvider):
 
             logger.debug(f"Newsnab searching: query='{query}', categories={cat_ids}, url={url}")
 
-            response = requests.get(url, params=params, timeout=10)
+            response = requests.get(url, params=params, timeout=NEWSNAB_REQUEST_TIMEOUT)
 
             # Check for rate limit errors (HTTP 429 or specific status codes)
             if response.status_code == 429:  # Too Many Requests
@@ -218,7 +224,7 @@ class NewsnabProvider(SearchProvider):
                         pass
 
                 if not wait_time:
-                    wait_time = 3600  # Default to 1 hour
+                    wait_time = NEWSNAB_DEFAULT_RATE_LIMIT_WAIT
 
                 self._rate_limit_until = datetime.now() + timedelta(seconds=wait_time)
                 self._rate_limit_reason = "HTTP 429 Too Many Requests"
@@ -277,7 +283,9 @@ class NewsnabProvider(SearchProvider):
                     )
                     results.append(result)
 
-            logger.info(f"Newsnab (XML API) found {len(results)} results for '{query}' in categories {self.categories}")
+            logger.debug(
+                f"Newsnab (XML API) found {len(results)} results for '{query}' in categories {self.categories}"
+            )
 
         except requests.exceptions.HTTPError as e:
             # Check if it's a rate limit error in the response text

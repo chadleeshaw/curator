@@ -11,6 +11,9 @@ import shutil
 from pathlib import Path
 from typing import Optional
 
+from core.constants.files import DEFAULT_HASH_CHUNK_SIZE
+from core.constants.title import SPECIAL_EDITION_KEYWORDS
+
 logger = logging.getLogger(__name__)
 
 
@@ -199,25 +202,7 @@ def is_special_edition(title: str) -> bool:
         return False
 
     title_lower = title.lower()
-    special_keywords = [
-        "special",
-        "annual",
-        "collector",
-        "collectors",
-        "holiday",
-        "christmas",
-        "summer special",
-        "winter special",
-        "spring special",
-        "fall special",
-        "collector's edition",
-        "commemorative",
-        "anniversary",
-        "yearbook",
-        "best of",
-    ]
-
-    return any(keyword in title_lower for keyword in special_keywords)
+    return any(keyword in title_lower for keyword in SPECIAL_EDITION_KEYWORDS)
 
 
 def find_pdf_epub_files(directory: Path, recursive: bool = True) -> list[Path]:

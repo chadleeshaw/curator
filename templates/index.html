@@ -905,6 +905,21 @@
                 🗑️ Purge Database
               </button>
             </div>
+
+            <div class="settings-field">
+              <label>Purge Search Cache:</label>
+              <p class="text-sm text-hint mb-10">
+                Clear all cached search results. Next searches will fetch fresh data from providers.
+                <span id="cache-stats-text" class="text-hint"></span>
+              </p>
+              <button
+                onclick="openPurgeCacheModal()"
+                class="save-btn btn-warning"
+                style="background: #ff9800"
+              >
+                🗑️ Purge Cache
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1415,6 +1430,41 @@
             disabled
           >
             🗑️ Purge Database
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Purge Cache Modal -->
+    <div id="purge-cache-modal" class="modal hidden">
+      <div class="modal-content delete-modal-content" style="max-width: 600px">
+        <h3 class="delete-modal-title">🗑️ Purge Search Cache</h3>
+        <p class="delete-modal-subtitle">Are you sure you want to purge the search cache?</p>
+
+        <div class="bg-warning rounded-lg p-15 mb-20">
+          <strong>ℹ️ Info:</strong> This will clear all cached search results.
+        </div>
+
+        <div class="bg-surface-variant rounded-lg p-15 mb-20">
+          <p class="m-0 mb-10 font-bold text-primary">This will:</p>
+          <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary)">
+            <li>Clear all cached search results from the database</li>
+            <li>Force fresh searches from providers on next query</li>
+            <li>Not affect your library or tracking records</li>
+          </ul>
+        </div>
+
+        <div class="flex gap-10 justify-end">
+          <button type="button" onclick="closePurgeCacheModal()" class="save-btn btn-cancel flex-0">
+            Cancel
+          </button>
+          <button
+            type="button"
+            onclick="confirmPurgeCache()"
+            class="save-btn btn-warning flex-0"
+            style="background: #ff9800"
+          >
+            🗑️ Purge Cache
           </button>
         </div>
       </div>
