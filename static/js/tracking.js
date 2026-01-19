@@ -679,43 +679,30 @@ export class TrackingManager {
    */
   async showFailedDownloadsForTracking(trackingId, periodicalTitle) {
     try {
-      // Fetch all failed downloads
-      const response = await APIClient.authenticatedFetch('/api/downloads/failed?include_bad=true');
+      // Fetch failed and permanently_failed issues for this tracking ID
+      const response = await APIClient.authenticatedFetch(
+        `/api/discovered-issues?tracking_id=${trackingId}&status=failed,permanently_failed&limit=500`
+      );
       const data = await response.json();
 
-      // Filter items for this tracking ID
-      const failedItems = data.failed_downloads
-        .filter((item) => item.tracking_id === trackingId)
-        .map((item) => ({
-          id: item.id,
-          title: item.title,
-          attempt_count: item.attempt_count,
-          last_error: item.last_error,
-          status: 'failed',
-          isBad: false,
-        }));
+      // Map issues to expected format
+      const issues = (data.issues || []).map((issue) => ({
+        id: issue.id,
+        title: issue.title,
+        download_attempts: issue.download_attempts,
+        last_error: issue.last_error,
+        download_status: issue.download_status,
+        isPermanentlyFailed: issue.download_status === 'permanently_failed',
+      }));
 
-      const badItems = data.bad_files
-        .filter((item) => item.tracking_id === trackingId)
-        .map((item) => ({
-          id: item.id,
-          title: item.title,
-          attempt_count: item.attempt_count,
-          last_error: item.last_error,
-          status: 'failed',
-          isBad: true,
-        }));
-
-      const allItems = [...failedItems, ...badItems];
-
-      if (allItems.length === 0) {
+      if (issues.length === 0) {
         UIUtils.showToast('No failed downloads found', 'info');
         return;
       }
 
       // Import downloads module and open modal
       const { downloads } = await import('./downloads.js?v=1767733177');
-      downloads.openManageFailedModal(periodicalTitle, allItems);
+      downloads.openManageFailedModal(periodicalTitle, issues);
     } catch (error) {
       console.error('[Tracking] Error loading failed downloads:', error);
       UIUtils.showToast('Error loading failed downloads', 'error');

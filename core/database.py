@@ -68,6 +68,14 @@ class DatabaseManager:
                 ("category", "VARCHAR(100)"),
                 ("download_category", "VARCHAR(100)"),
                 ("country", "VARCHAR(50)"),
+                # Adaptive search scheduling fields
+                ("last_searched", "DATETIME"),
+                ("search_count", "INTEGER DEFAULT 0"),
+                ("search_interval_hours", "INTEGER DEFAULT 6"),
+                ("total_issues_discovered", "INTEGER DEFAULT 0"),
+                ("last_discovery_count", "INTEGER DEFAULT 0"),
+                ("last_discovery_date", "DATETIME"),
+                ("searches_without_new_issues", "INTEGER DEFAULT 0"),
             ],
             "periodicals": [
                 ("language", "VARCHAR(50) DEFAULT 'English'"),

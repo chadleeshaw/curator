@@ -295,7 +295,7 @@ async def delete_periodical(
         delete_files: If True, also delete the PDF and cover files from disk. If False, only remove from database.
         remove_tracking: If True, also remove the tracking record for this periodical.
         delete_all_issues: If True, delete all issues with the same title and language. If False, only delete the single issue.
-        mark_as_bad: If True, mark related download submission as bad file (sets attempt_count to max to prevent re-download).
+        mark_as_bad: If True, mark related discovered issues as permanently_failed to prevent automatic re-download.
     """
     try:
 
@@ -332,30 +332,32 @@ async def delete_periodical(
                 for mag in magazines_to_delete:
                     db_session.delete(mag)
 
-                # Mark download submissions as bad file if requested
+                # Mark related discovered issues as permanently failed if requested
                 if mark_as_bad:
-                    from models.database import DownloadSubmission
-                    from core import constants
+                    from models.database import DiscoveredIssue
 
-                    # Find download submissions for the deleted magazine(s)
-                    # Match by tracking_id (periodicals.tracking_id -> download_submissions.tracking_id)
+                    # Find discovered issues for the deleted magazine(s)
+                    # Match by tracking_id (periodicals.tracking_id -> discovered_issues.tracking_id)
                     tracking_ids = [mag.tracking_id for mag in magazines_to_delete if mag.tracking_id]
                     if tracking_ids:
-                        submissions = (
-                            db_session.query(DownloadSubmission)
-                            .filter(DownloadSubmission.tracking_id.in_(tracking_ids))
+                        # Mark all related discovered issues as permanently_failed to prevent re-download
+                        issues = (
+                            db_session.query(DiscoveredIssue)
+                            .filter(
+                                DiscoveredIssue.tracking_id.in_(tracking_ids),
+                                DiscoveredIssue.download_status.in_(["discovered", "wanted", "failed"]),
+                            )
                             .all()
                         )
 
                         marked_count = 0
-                        for submission in submissions:
-                            # Set attempt_count to max to prevent re-download
-                            submission.attempt_count = constants.MAX_DOWNLOAD_RETRIES
-                            submission.status = DownloadSubmission.StatusEnum.FAILED
+                        for issue in issues:
+                            issue.download_status = "permanently_failed"
+                            issue.last_error = "Manually marked as bad file (user deleted from library)"
                             marked_count += 1
 
                         if marked_count > 0:
-                            logger.info(f"Marked {marked_count} download submission(s) as bad file for: {title}")
+                            logger.info(f"Marked {marked_count} discovered issue(s) as permanently failed for: {title}")
 
                 db_session.commit()
 
@@ -397,7 +399,7 @@ async def delete_periodical(
                     else:
                         message = f"Deleted '{title}' and files from disk"
                     if mark_as_bad:
-                        message += " (marked as bad file)"
+                        message += " (prevented auto-download)"
                     if remove_tracking:
                         message += " (tracking removed)"
                     return {
@@ -411,7 +413,7 @@ async def delete_periodical(
                     else:
                         message = f"Removed '{title}' from library (files retained on disk)"
                     if mark_as_bad:
-                        message += " (marked as bad file)"
+                        message += " (prevented auto-download)"
                     if remove_tracking:
                         message += " (tracking removed)"
                     return {

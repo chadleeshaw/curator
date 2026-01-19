@@ -439,6 +439,151 @@ class DownloadManager:
             )
             return None
 
+    def submit_from_discovered_issue(self, discovered_issue_id: int, session: Session) -> Optional[DownloadSubmission]:
+        """
+        Submit a download from a DiscoveredIssue (new Issue Discovery & Tracking system).
+
+        This method bridges the new DiscoveredIssue system with the existing download submission.
+        It updates the DiscoveredIssue status as it progresses through the download lifecycle.
+
+        Args:
+            discovered_issue_id: DiscoveredIssue ID to download
+            session: Database session
+
+        Returns:
+            DownloadSubmission record if submitted, None if error or already downloading
+        """
+        from models.database import DiscoveredIssue
+
+        # Get the discovered issue
+        issue = session.query(DiscoveredIssue).filter(DiscoveredIssue.id == discovered_issue_id).first()
+
+        if not issue:
+            logger.error(f"DiscoveredIssue not found: {discovered_issue_id}")
+            return None
+
+        # Check if already downloading
+        if issue.download_status == "downloading" and issue.current_submission_id:
+            logger.warning(
+                f"Issue already has active download: {issue.title} (submission_id: {issue.current_submission_id})"
+            )
+            return None
+
+        # Check if this is a bad file
+        if issue.download_status == "permanently_failed":
+            logger.warning(f"Skipping bad file (marked as permanently failed): {issue.title}")
+            return None
+
+        # Validate we have the necessary metadata
+        if not issue.latest_url:
+            logger.error(f"DiscoveredIssue missing URL: {issue.title}")
+            # Mark as failed
+            issue.download_status = "failed"
+            issue.last_error = "Missing URL"
+            session.commit()
+            return None
+
+        # Build search_result dict for compatibility with existing submit_download
+        search_result = {
+            "title": issue.title,
+            "url": issue.latest_url,
+            "provider": issue.latest_provider or "unknown",
+            "pubdate": issue.issue_date.isoformat() if issue.issue_date else None,
+            "guid": str(discovered_issue_id),  # Use discovered issue ID as guid
+            "raw_metadata": issue.extra_metadata or {},
+        }
+
+        # Check if we're at the concurrent download limit
+        active_count = (
+            session.query(DownloadSubmission)
+            .filter(
+                DownloadSubmission.status.in_(
+                    [
+                        DownloadSubmission.StatusEnum.PENDING,
+                        DownloadSubmission.StatusEnum.DOWNLOADING,
+                    ]
+                )
+            )
+            .count()
+        )
+
+        # If at limit, keep in queue (don't change status)
+        if active_count >= self.max_downloads:
+            logger.info(
+                f"At download limit ({active_count}/{self.max_downloads}), " f"keeping in queue: '{issue.title}'"
+            )
+            return None
+
+        # Submit to download client
+        try:
+            # Get tracking for category
+            tracking = session.query(MagazineTracking).filter(MagazineTracking.id == issue.tracking_id).first()
+
+            download_category = None
+            if tracking and tracking.download_category:
+                download_category = tracking.download_category
+            elif self.default_category:
+                download_category = self.default_category
+
+            logger.info(
+                f"Submitting discovered issue to download client: {issue.title} "
+                f"(priority: {issue.download_priority}, category: {download_category})"
+            )
+
+            job_id = self.download_client.submit(
+                nzb_url=issue.latest_url,
+                title=issue.title,
+                category=download_category,
+            )
+
+            if not job_id:
+                logger.warning(f"Download client rejected submission: {issue.title}")
+                # Mark as failed
+                issue.download_status = "failed"
+                issue.last_error = "Client rejected submission"
+                issue.attempt_count += 1
+                issue.last_attempt = utc_now()
+                session.commit()
+                return None
+
+            # Create submission record (using existing helper)
+            submission = self._create_submission_record(
+                issue.tracking_id,
+                search_result,
+                DownloadSubmission.StatusEnum.PENDING,
+                session,
+                job_id=job_id,
+                client_name=self.download_client.name,
+                attempt_count=1,
+            )
+
+            # Update DiscoveredIssue with submission info
+            issue.download_status = "queued"  # Queued in download client
+            issue.current_submission_id = submission.id
+            # Add to submission_ids history
+            if submission.id not in (issue.submission_ids or []):
+                issue.submission_ids = (issue.submission_ids or []) + [submission.id]
+            issue.attempt_count += 1
+            issue.last_attempt = utc_now()
+
+            session.commit()
+
+            logger.info(f"Submitted discovered issue: {issue.title} (job_id: {job_id}, submission_id: {submission.id})")
+            return submission
+
+        except Exception as e:
+            logger.error(
+                f"Error submitting discovered issue '{issue.title}': {e}",
+                exc_info=True,
+            )
+            # Mark as failed
+            issue.download_status = "failed"
+            issue.last_error = str(e)[:512]  # Truncate to column length
+            issue.attempt_count += 1
+            issue.last_attempt = utc_now()
+            session.commit()
+            return None
+
     def download_selected_editions(self, tracking_id: int, session: Session) -> Dict[str, Any]:
         """
         Download only the specific editions marked in selected_editions dict.
@@ -874,53 +1019,6 @@ class DownloadManager:
         )
         logger.debug(f"Found {len(pending)} pending submissions")
         return pending
-
-    def get_failed_downloads(self, session: Session, include_bad_files: bool = False) -> List[DownloadSubmission]:
-        """
-        Get all failed download submissions.
-
-        Args:
-            session: Database session
-            include_bad_files: If True, include files that have exceeded max retries
-
-        Returns:
-            List of failed submissions
-        """
-        query = session.query(DownloadSubmission).filter(
-            DownloadSubmission.status == DownloadSubmission.StatusEnum.FAILED
-        )
-
-        if not include_bad_files:
-            # Exclude submissions that have failed too many times (bad files)
-            query = query.filter(DownloadSubmission.attempt_count <= MAX_DOWNLOAD_RETRIES)
-
-        failed = query.all()
-        logger.debug(
-            f"Found {len(failed)} failed submissions "
-            f"({'including' if include_bad_files else 'excluding'} bad files)"
-        )
-        return failed
-
-    def get_bad_files(self, session: Session) -> List[DownloadSubmission]:
-        """
-        Get submissions marked as bad (failed MAX_DOWNLOAD_RETRIES+ times).
-
-        Args:
-            session: Database session
-
-        Returns:
-            List of bad file submissions
-        """
-        bad_files = (
-            session.query(DownloadSubmission)
-            .filter(
-                DownloadSubmission.status == DownloadSubmission.StatusEnum.FAILED,
-                DownloadSubmission.attempt_count > MAX_DOWNLOAD_RETRIES,
-            )
-            .all()
-        )
-        logger.debug(f"Found {len(bad_files)} bad files (failed >{MAX_DOWNLOAD_RETRIES} times)")
-        return bad_files
 
     def retry_submission(self, submission_id: int, session: Session) -> Dict[str, Any]:
         """

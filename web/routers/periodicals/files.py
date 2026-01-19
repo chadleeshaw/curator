@@ -429,7 +429,7 @@ async def get_pdf_metadata_endpoint(magazine_id: int) -> Dict[str, Any]:
                     raise HTTPException(status_code=404, detail="File not found")
 
                 # Check if file is PDF
-                if not file_path.suffix.lower() == ".pdf":
+                if file_path.suffix.lower() != ".pdf":
                     raise HTTPException(status_code=400, detail="File is not a PDF")
 
                 return file_path
@@ -477,7 +477,7 @@ async def get_pdf_page_endpoint(magazine_id: int, page_index: int):
                     raise HTTPException(status_code=404, detail="File not found")
 
                 # Check if file is PDF
-                if not file_path.suffix.lower() == ".pdf":
+                if file_path.suffix.lower() != ".pdf":
                     raise HTTPException(status_code=400, detail="File is not a PDF")
 
                 return file_path
@@ -530,7 +530,7 @@ async def get_pdf_page_thumbnail_endpoint(magazine_id: int, page_index: int):
                     raise HTTPException(status_code=404, detail="File not found")
 
                 # Check if file is PDF
-                if not file_path.suffix.lower() == ".pdf":
+                if file_path.suffix.lower() != ".pdf":
                     raise HTTPException(status_code=400, detail="File is not a PDF")
 
                 return file_path

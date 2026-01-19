@@ -127,17 +127,57 @@ downloads:
   # This is the total limit across all tracked periodicals, not per batch
   max_concurrent: 10
 
+# Issue Discovery & Tracking System
+# Controls adaptive search scheduling and issue discovery behavior
+discovery:
+  # Maximum number of periodicals to search per auto_download_task run
+  # Lower = less provider load, higher = faster discovery of new issues
+  # Recommended: 1-2 for most setups (prevents overwhelming providers)
+  max_periodicals_per_run: 2
+
+  # Search interval settings (in hours)
+  # The system adapts search frequency based on discovery success:
+  # - Finds new issues → rapid interval (searches more often)
+  # - No new issues for 1-2 searches → normal interval
+  # - No new issues for 3-5 searches → slow interval
+  # - No new issues for 6+ searches → very slow interval
+  rapid_interval_hours: 1 # Search frequently when finding new issues
+  normal_interval_hours: 6 # Default search interval
+  slow_interval_hours: 24 # Search daily when no new issues
+  very_slow_interval_hours: 168 # Search weekly (7 days) when very quiet
+
+  # Threshold for slowing down searches
+  # After this many consecutive empty searches, interval increases
+  empty_search_threshold: 3
+
+  # RSS feed caching (dramatically speeds up searches)
+  rss:
+    # Cache TTL in seconds (how long to keep RSS feed data)
+    # Multiple searches within this window use cached data
+    # Recommended: 3600 (1 hour) balances freshness and performance
+    cache_ttl_seconds: 3600
+
+    # Whether to enable caching (set to false to disable)
+    cache_enabled: true
+
+    # Prefer RSS for new releases (faster than Newsnab searches)
+    # When true, RSS providers are searched before Newsnab
+    prefer_for_new_releases: true
+
 tasks:
   # Task interval settings (in seconds)
   # How often each background task runs
 
   # Auto-download: Search for and download new tracked issues
-  # IMPORTANT: Set this based on how many periodicals you track:
-  #   - 5-10 tracked: 3600 (1 hour) = ~240 searches/day
-  #   - 10-20 tracked: 7200 (2 hours) = ~240 searches/day
-  #   - 20+ tracked: 10800 (3 hours) or higher to avoid rate limits
-  # Formula: (24 hours / interval_hours) × tracked_count = daily_searches
-  auto_download_interval: 7200 # 2 hours (recommended for most users)
+  # IMPORTANT: With the new Issue Discovery & Tracking system, this interval
+  # determines how often the scheduler runs (not how often each periodical is searched).
+  # The system now intelligently selects 1-2 periodicals per run using adaptive scheduling.
+  #
+  # Recommended: 1800-3600 (30 min - 1 hour)
+  # - Runs more frequently to process the download queue
+  # - Each run only searches 1-2 periodicals (not all)
+  # - Individual periodicals have their own adaptive intervals
+  auto_download_interval: 1800 # 30 minutes (recommended with new system)
 
   # Download monitor: Check download status and import completed files
   download_monitor_interval: 30 # 30 seconds

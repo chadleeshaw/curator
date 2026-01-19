@@ -130,6 +130,19 @@ class MagazineTracking(Base):
     periodical_metadata = Column(JSON, nullable=True)  # Full metadata from Open Library
     last_metadata_update = Column(DateTime, nullable=True)
 
+    # Search scheduling (for adaptive search)
+    last_searched = Column(DateTime, nullable=True, index=True)  # When we last searched for this
+    search_count = Column(Integer, default=0)  # Total searches performed
+    search_interval_hours = Column(Integer, default=6)  # How often to search (adaptive)
+
+    # Discovery statistics
+    total_issues_discovered = Column(Integer, default=0)  # Total unique issues found
+    last_discovery_count = Column(Integer, default=0)  # New issues found in last search
+    last_discovery_date = Column(DateTime, nullable=True)  # When we last found new issues
+
+    # Search efficiency tracking
+    searches_without_new_issues = Column(Integer, default=0)  # Consecutive searches finding nothing new
+
     created_at = Column(DateTime, default=utcnow, index=True)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
@@ -152,6 +165,14 @@ class MagazineTracking(Base):
             "download_category": self.download_category,
             "periodical_metadata": self.periodical_metadata,
             "last_metadata_update": self.last_metadata_update.isoformat() if self.last_metadata_update else None,
+            # Search scheduling fields
+            "last_searched": self.last_searched.isoformat() if self.last_searched else None,
+            "search_count": self.search_count,
+            "search_interval_hours": self.search_interval_hours,
+            "total_issues_discovered": self.total_issues_discovered,
+            "last_discovery_count": self.last_discovery_count,
+            "last_discovery_date": self.last_discovery_date.isoformat() if self.last_discovery_date else None,
+            "searches_without_new_issues": self.searches_without_new_issues,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -322,6 +343,107 @@ class OCRJob(Base):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class DiscoveredIssue(Base):
+    """
+    Persistent tracking of all discovered issues from search results.
+
+    Serves as the single source of truth for available issues and download queue.
+    Replaces scattered bad file logic with unified state machine.
+    """
+
+    __tablename__ = "discovered_issues"
+
+    # Primary identification
+    id = Column(Integer, primary_key=True)
+    tracking_id = Column(Integer, ForeignKey("periodical_tracking.id"), nullable=False, index=True)
+
+    # Issue identification (from search results)
+    title = Column(String(255), nullable=False, index=True)  # Original title from search
+    normalized_title = Column(String(255), nullable=False, index=True)  # Normalized for comparison
+    fuzzy_match_group = Column(String(255), nullable=False, index=True)  # For deduplication
+
+    # Issue metadata (parsed from title, may be incomplete)
+    issue_date = Column(DateTime, nullable=True, index=True)
+    issue_number = Column(String(50), nullable=True)
+    year = Column(Integer, nullable=True, index=True)
+    month = Column(Integer, nullable=True, index=True)
+    language = Column(String(50), nullable=True, index=True)
+
+    # Discovery tracking
+    first_seen = Column(DateTime, default=utcnow, index=True)
+    last_seen = Column(DateTime, default=utcnow, index=True)
+    times_seen = Column(Integer, default=1)  # How many times we've seen this in searches
+
+    # Download state machine
+    download_status = Column(String(50), nullable=False, default="discovered", index=True)
+    # Values:
+    # - "discovered": Found in search, not yet evaluated
+    # - "wanted": Matches tracking criteria, ready for download
+    # - "queued": In download queue
+    # - "downloading": Currently being downloaded (has active submission)
+    # - "completed": Successfully downloaded and imported
+    # - "failed": Download failed but can retry (attempt_count <= max_retries)
+    # - "permanently_failed": All retry attempts exhausted (attempt_count > max_retries)
+    # - "ignored": Doesn't match criteria or user skipped
+
+    download_priority = Column(Integer, default=50, index=True)  # 1-100, higher = download first
+
+    # Search result tracking (we may see same issue from multiple providers)
+    latest_url = Column(String(512), nullable=True)  # Most recent NZB/download URL
+    latest_provider = Column(String(100), nullable=True)  # Most recent provider
+    search_result_ids = Column(JSON, default=list)  # List of SearchResult.id we've seen
+
+    # Download tracking
+    current_submission_id = Column(Integer, ForeignKey("download_submissions.id"), nullable=True, index=True)
+    submission_ids = Column(JSON, default=list)  # List of ALL DownloadSubmission IDs
+    magazine_id = Column(Integer, ForeignKey("periodicals.id"), nullable=True, index=True)
+
+    # Failure tracking
+    attempt_count = Column(Integer, default=0)
+    max_retries = Column(Integer, default=1)  # Configurable per-issue
+    last_attempt = Column(DateTime, nullable=True)
+    last_error = Column(String(512), nullable=True)
+
+    # Additional metadata
+    extra_metadata = Column(JSON, nullable=True)
+
+    created_at = Column(DateTime, default=utcnow, index=True)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize to dictionary for API responses"""
+        return {
+            "id": self.id,
+            "tracking_id": self.tracking_id,
+            "title": self.title,
+            "normalized_title": self.normalized_title,
+            "fuzzy_match_group": self.fuzzy_match_group,
+            "issue_date": self.issue_date.isoformat() if self.issue_date else None,
+            "issue_number": self.issue_number,
+            "year": self.year,
+            "month": self.month,
+            "language": self.language,
+            "first_seen": self.first_seen.isoformat() if self.first_seen else None,
+            "last_seen": self.last_seen.isoformat() if self.last_seen else None,
+            "times_seen": self.times_seen,
+            "download_status": self.download_status,
+            "download_priority": self.download_priority,
+            "latest_url": self.latest_url,
+            "latest_provider": self.latest_provider,
+            "search_result_ids": self.search_result_ids,
+            "current_submission_id": self.current_submission_id,
+            "submission_ids": self.submission_ids,
+            "magazine_id": self.magazine_id,
+            "attempt_count": self.attempt_count,
+            "max_retries": self.max_retries,
+            "last_attempt": self.last_attempt.isoformat() if self.last_attempt else None,
+            "last_error": self.last_error,
+            "extra_metadata": self.extra_metadata,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 

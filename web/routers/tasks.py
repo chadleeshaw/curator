@@ -77,7 +77,6 @@ async def get_tasks_status():
                         "client_downloads_processed": dm_stats.get("client_downloads_processed", 0),
                         "client_downloads_failed": dm_stats.get("client_downloads_failed", 0),
                         "folder_files_imported": dm_stats.get("folder_files_imported", 0),
-                        "bad_files_detected": dm_stats.get("bad_files_detected", 0),
                         "last_client_check": dm_stats.get("last_client_check"),
                         "last_folder_scan": dm_stats.get("last_folder_scan"),
                     },

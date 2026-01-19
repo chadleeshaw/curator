@@ -6,7 +6,7 @@ Download management routes package
 from . import _shared
 
 # Import all submodules to register their routes with the router
-from . import submissions, status, queue, operations, failed
+from . import submissions, status, queue, operations
 
 # Re-export the router and set_dependencies for backward compatibility
 router = _shared.router
@@ -27,7 +27,6 @@ from .operations import (
     delete_from_queue,
     cleanup_old_submissions,
 )
-from .failed import get_failed_downloads, delete_failed_download
 
 __all__ = [
     "router",
@@ -44,6 +43,4 @@ __all__ = [
     "clear_failed_downloads",
     "delete_from_queue",
     "cleanup_old_submissions",
-    "get_failed_downloads",
-    "delete_failed_download",
 ]

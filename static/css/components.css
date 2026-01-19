@@ -978,9 +978,9 @@
    ========================================================================== */
 
 .settings-nav {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
   gap: 10px;
-  flex-wrap: wrap;
   padding: 15px;
   background: var(--surface-variant);
   border-radius: 8px;
@@ -998,6 +998,8 @@
   cursor: pointer;
   font-size: 14px;
   transition: all 0.2s;
+  white-space: nowrap;
+  text-align: center;
 }
 
 .settings-nav-btn:hover {

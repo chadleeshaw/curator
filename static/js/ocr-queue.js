@@ -168,7 +168,15 @@ export class OCRQueueManager {
       const headerRow = document.createElement('tr');
       headerRow.style.background = 'var(--surface)';
       headerRow.style.cursor = 'pointer';
-      headerRow.style.borderBottom = '2px solid var(--border-color)';
+      headerRow.style.borderTop = '1px solid var(--border-color)';
+      headerRow.style.borderBottom = '1px solid var(--border-color)';
+      headerRow.style.transition = 'background 0.2s ease';
+      headerRow.onmouseover = () => {
+        headerRow.style.background = 'var(--surface-variant)';
+      };
+      headerRow.onmouseout = () => {
+        headerRow.style.background = 'var(--surface)';
+      };
       headerRow.onclick = () => this.openPeriodicalModal(periodical, jobs);
 
       const statusCounts = this.getJobStatusCounts(jobs);
@@ -181,7 +189,7 @@ export class OCRQueueManager {
         .join('');
 
       headerRow.innerHTML = `
-        <td colspan="3" style="padding: 12px; font-weight: bold;">
+        <td colspan="2" style="padding: 12px; font-weight: bold;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <div>
               <span style="font-size: 1.1em;">📋 ${periodical}</span>

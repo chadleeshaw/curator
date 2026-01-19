@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from core.constants.app import DOWNLOAD_FILE_SEARCH_DEPTH
 from services.importer.sidecar import create_sidecar_file
-from models.database import DownloadSubmission, MagazineTracking
+from models.database import DownloadSubmission, MagazineTracking, DiscoveredIssue
 from services import DownloadManager
 from services import FileImporter
 
@@ -64,7 +64,6 @@ class DownloadMonitor:
             "client_downloads_processed": 0,
             "client_downloads_failed": 0,
             "folder_files_imported": 0,
-            "bad_files_detected": 0,
             "last_client_check": None,
             "last_folder_scan": None,
         }
@@ -96,10 +95,6 @@ class DownloadMonitor:
             self.stats["client_downloads_processed"] += client_processed
             self.stats["client_downloads_failed"] += client_failed
             self.stats["last_client_check"] = datetime.now()
-
-            # Track bad files
-            bad_files_count = len(self.download_manager.get_bad_files(session))
-            self.stats["bad_files_detected"] = bad_files_count
 
             # Part 1.5: Process queued downloads
             logger.debug("[DownloadMonitor] Processing download queue...")
@@ -253,15 +248,6 @@ class DownloadMonitor:
             # Log failed downloads
             if failed_count > 0:
                 logger.warning(f"[DownloadMonitor] {failed_count} downloads failed")
-
-                # Check for bad files (failed 2+ times)
-                bad_files = self.download_manager.get_bad_files(session)
-                if bad_files:
-                    logger.error(f"[DownloadMonitor] {len(bad_files)} files marked as bad (failed 2+ times):")
-                    for bad in bad_files[:5]:  # Show first 5
-                        logger.error(f"  - {bad.result_title}: {bad.last_error} " f"(attempts: {bad.attempt_count})")
-                    if len(bad_files) > 5:
-                        logger.error(f"  ... and {len(bad_files) - 5} more bad files")
 
             # 2. Process completed downloads
             logger.debug("[DownloadMonitor] Processing completed downloads...")
@@ -554,6 +540,9 @@ class DownloadMonitor:
                     logger.info(f"[DownloadMonitor] Successfully imported from client: {file_path.name}")
                     processed_count += 1
 
+                    # Sync DiscoveredIssue status (NEW: Issue Discovery & Tracking)
+                    self._sync_discovered_issue_status(submission, "completed", result.get("magazine_id"), session)
+
                     # Mark submission as processed
                     self.download_manager.mark_processed(submission.id, session)
 
@@ -586,6 +575,9 @@ class DownloadMonitor:
                     submission.last_error = "Import/processing failed"
                     session.commit()
 
+                    # Sync DiscoveredIssue status (NEW: Issue Discovery & Tracking)
+                    self._sync_discovered_issue_status(submission, "failed", None, session)
+
             except Exception as e:
                 logger.error(
                     f"Error processing completed download {submission.id}: {e}",
@@ -595,4 +587,82 @@ class DownloadMonitor:
                 submission.last_error = str(e)
                 session.commit()
 
+                # Sync DiscoveredIssue status (NEW: Issue Discovery & Tracking)
+                self._sync_discovered_issue_status(submission, "failed", None, session)
+
         return processed_count
+
+    def _sync_discovered_issue_status(
+        self,
+        submission: DownloadSubmission,
+        new_status: str,
+        magazine_id: Optional[int],
+        session: Session,
+    ) -> None:
+        """
+        Sync DiscoveredIssue status based on DownloadSubmission changes.
+
+        This bridges the old download system with the new Issue Discovery & Tracking system.
+
+        Args:
+            submission: DownloadSubmission that changed
+            new_status: New status for DiscoveredIssue ("downloading", "completed", "failed", etc.)
+            magazine_id: Magazine ID if successfully imported (for "completed" status)
+            session: Database session
+        """
+        try:
+            # Find the DiscoveredIssue linked to this submission
+            discovered_issue = (
+                session.query(DiscoveredIssue).filter(DiscoveredIssue.current_submission_id == submission.id).first()
+            )
+
+            if not discovered_issue:
+                logger.debug(
+                    f"No DiscoveredIssue found for submission {submission.id} - " f"this may be from the old system"
+                )
+                return
+
+            logger.debug(
+                f"Syncing DiscoveredIssue {discovered_issue.id} status: "
+                f"{discovered_issue.download_status} -> {new_status}"
+            )
+
+            # Update status
+            discovered_issue.download_status = new_status
+
+            # Handle different status transitions
+            if new_status == "completed" and magazine_id:
+                # Successfully completed
+                discovered_issue.magazine_id = magazine_id
+                discovered_issue.download_priority = 0  # No longer needed
+                discovered_issue.current_submission_id = None  # Clear active submission
+                logger.info(f"Marked DiscoveredIssue as completed: {discovered_issue.title}")
+                session.commit()
+
+            elif new_status == "failed":
+                # Failed download - use IssueDiscoveryService to handle retry logic
+                from services import IssueDiscoveryService
+
+                service = IssueDiscoveryService()
+                error_message = submission.last_error or "Unknown error"
+                final_status = service.handle_download_failure(discovered_issue.id, error_message, session)
+                logger.info(
+                    f"Handled download failure for DiscoveredIssue {discovered_issue.id}: "
+                    f"final status = {final_status}"
+                )
+                # Don't commit here - service already commits
+
+            elif new_status == "downloading":
+                # Download is progressing
+                discovered_issue.download_status = "downloading"
+                session.commit()
+
+            else:
+                # Other status changes
+                session.commit()
+
+        except Exception as e:
+            logger.error(
+                f"Error syncing DiscoveredIssue status for submission {submission.id}: {e}",
+                exc_info=True,
+            )

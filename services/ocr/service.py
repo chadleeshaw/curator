@@ -1,5 +1,7 @@
 """OCR service for extracting text from cover art images using PyMuPDF + Tesseract."""
 
+# pylint: disable=too-many-lines
+
 import logging
 import os
 import re

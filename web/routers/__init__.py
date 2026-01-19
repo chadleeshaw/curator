@@ -5,6 +5,7 @@ API routers for the Curator application
 from . import (
     auth,
     config,
+    discovered_issues,
     downloads,
     imports,
     pages,
@@ -16,12 +17,13 @@ from . import (
 
 __all__ = [
     "auth",
-    "search",
-    "periodicals",
-    "tracking",
+    "config",
+    "discovered_issues",
     "downloads",
     "imports",
-    "tasks",
-    "config",
     "pages",
+    "periodicals",
+    "search",
+    "tasks",
+    "tracking",
 ]

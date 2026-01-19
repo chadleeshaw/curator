@@ -14,7 +14,13 @@ from core.database import DatabaseManager
 from core.factories import ClientFactory, ProviderFactory
 from core.parsers import TitleMatcher
 from models.database import MagazineTracking
-from services import DownloadManager, FileImporter, FileOrganizer
+from services import (
+    DownloadManager,
+    FileImporter,
+    FileOrganizer,
+    IssueDiscoveryService,
+    SearchScheduler,
+)
 from tasks import (
     TaskScheduler,
     DownloadMonitor,
@@ -26,6 +32,7 @@ from tasks import (
 from web.routers import (
     auth,
     config,
+    discovered_issues,
     downloads,
     imports,
     metadata,
@@ -181,89 +188,161 @@ async def lifespan(app: FastAPI):
         )
         logger.info("OCR processor task initialized")
 
+        # Initialize Issue Discovery services
+        issue_discovery_service = IssueDiscoveryService(
+            fuzzy_threshold=fuzzy_threshold,
+            default_max_retries=downloads_config.get("max_retries", 1),
+        )
+        search_scheduler = SearchScheduler(
+            max_periodicals_per_run=tasks_config.get("max_periodicals_per_search", 2),
+            rapid_interval_hours=tasks_config.get("rapid_search_interval", 1),
+            normal_interval_hours=tasks_config.get("normal_search_interval", 6),
+            slow_interval_hours=tasks_config.get("slow_search_interval", 24),
+            very_slow_interval_hours=tasks_config.get("very_slow_search_interval", 168),
+        )
+        logger.info("Issue discovery services initialized")
+
         # Initialize task scheduler
         task_scheduler = TaskScheduler()
 
-        # Define auto-download task
+        # Define auto-download task (NEW: uses Issue Discovery & Tracking system)
         async def auto_download_task():
-            """Search and download new issues for tracked periodicals every 30 minutes"""
+            """
+            Adaptive search and download for tracked periodicals.
+
+            New behavior:
+            - Searches 1-2 periodicals per run (not ALL) using adaptive scheduling
+            - Records discovered issues in DiscoveredIssue table
+            - Evaluates issues against tracking rules
+            - Downloads from priority queue
+            """
             try:
                 db_session = session_factory()
                 try:
-                    if download_manager:
-                        logger.debug("Auto-download: Checking tracked periodicals for new issues")
+                    if not download_manager:
+                        return
 
-                        # Check how many downloads are currently pending or downloading
-                        from models.database import DownloadSubmission
+                    logger.debug("Auto-download: Starting Issue Discovery & Tracking run")
 
-                        pending_count = (
-                            db_session.query(DownloadSubmission)
-                            .filter(
-                                DownloadSubmission.status.in_(
-                                    [
-                                        DownloadSubmission.StatusEnum.PENDING,
-                                        DownloadSubmission.StatusEnum.DOWNLOADING,
-                                    ]
+                    # Phase 1: Select periodicals to search (adaptive scheduling)
+                    periodicals_to_search = search_scheduler.select_periodicals_to_search(db_session)
+
+                    if not periodicals_to_search:
+                        logger.debug("Auto-download: No periodicals need searching at this time")
+                        return
+
+                    logger.info(
+                        f"Auto-download: Selected {len(periodicals_to_search)} periodicals to search: "
+                        f"{[p.title for p in periodicals_to_search]}"
+                    )
+
+                    # Phase 2: Search each selected periodical and record results
+                    for periodical in periodicals_to_search:
+                        try:
+                            logger.debug(f"Auto-download: Searching for '{periodical.title}'")
+
+                            # Search all providers for this periodical
+                            search_results = download_manager.search_periodical_issues(periodical.title, db_session)
+
+                            if not search_results:
+                                logger.debug(f"Auto-download: No results found for '{periodical.title}'")
+                                # Update stats with 0 new issues
+                                search_scheduler.update_search_stats(periodical.id, 0, db_session)
+                                continue
+
+                            logger.debug(
+                                f"Auto-download: Found {len(search_results)} search results for '{periodical.title}'"
+                            )
+
+                            # Record search results as discovered issues
+                            record_stats = issue_discovery_service.record_search_results(
+                                periodical.id, search_results, db_session
+                            )
+
+                            # Only log if we found NEW issues (not just updated existing ones)
+                            if record_stats["new"] > 0:
+                                logger.info(
+                                    f"Auto-download: '{periodical.title}' - {record_stats['new']} new issues discovered"
                                 )
+
+                            # Evaluate discovered issues against tracking rules
+                            eval_stats = issue_discovery_service.evaluate_discovered_issues(periodical.id, db_session)
+
+                            # Only log evaluation if we have wanted issues
+                            if eval_stats["wanted"] > 0:
+                                logger.info(
+                                    f"Auto-download: '{periodical.title}' - {eval_stats['wanted']} issues queued for download"
+                                )
+
+                            # Update search statistics (for adaptive scheduling)
+                            search_scheduler.update_search_stats(periodical.id, record_stats["new"], db_session)
+
+                        except Exception as e:
+                            logger.error(
+                                f"Auto-download: Error processing '{periodical.title}': {e}",
+                                exc_info=True,
                             )
-                            .count()
-                        )
 
-                        remaining_slots = max(0, download_manager.max_downloads - pending_count)
-                        logger.debug(
-                            f"Auto-download: {remaining_slots} download slots available ({pending_count} already queued)"
-                        )
+                    # Phase 3: Download from priority queue
+                    logger.debug("Auto-download: Checking download queue")
 
-                        # Get all tracked periodicals with any form of tracking enabled
-                        tracked = (
-                            db_session.query(MagazineTracking)
-                            .filter(
-                                (MagazineTracking.track_all_editions.is_(True))
-                                | (MagazineTracking.track_new_only.is_(True))
+                    # Check how many downloads are currently pending or downloading
+                    from models.database import DownloadSubmission
+
+                    pending_count = (
+                        db_session.query(DownloadSubmission)
+                        .filter(
+                            DownloadSubmission.status.in_(
+                                [
+                                    DownloadSubmission.StatusEnum.PENDING,
+                                    DownloadSubmission.StatusEnum.DOWNLOADING,
+                                ]
                             )
-                            .all()
                         )
+                        .count()
+                    )
 
-                        # Also get periodicals with selected editions
-                        tracked_with_selections = (
-                            db_session.query(MagazineTracking)
-                            .filter(MagazineTracking.selected_editions.isnot(None))
-                            .all()
-                        )
+                    remaining_slots = max(0, download_manager.max_downloads - pending_count)
+                    logger.debug(
+                        f"Auto-download: {remaining_slots} download slots available ({pending_count} in progress)"
+                    )
 
-                        # Combine and deduplicate
-                        all_tracked = {t.id: t for t in tracked}
-                        for t in tracked_with_selections:
-                            if t.id not in all_tracked and t.selected_editions:
-                                # Check if any editions are actually selected (True values)
-                                if any(t.selected_editions.values()):
-                                    all_tracked[t.id] = t
+                    if remaining_slots > 0:
+                        # Get top priority issues from queue
+                        download_queue = issue_discovery_service.get_download_queue(db_session, limit=remaining_slots)
 
-                        if all_tracked:
-                            logger.info(f"Auto-download: Found {len(all_tracked)} periodicals to check")
+                        if download_queue:
+                            logger.info(f"Auto-download: Submitting {len(download_queue)} issues for download")
 
-                            for periodical in all_tracked.values():
+                            submitted_count = 0
+                            for issue in download_queue:
                                 try:
-                                    logger.debug(f"Auto-download: Checking '{periodical.title}' for new issues")
+                                    # Submit download using new method
+                                    submission = download_manager.submit_from_discovered_issue(issue.id, db_session)
 
-                                    # Determine which download method to use
-                                    if periodical.track_all_editions or periodical.track_new_only:
-                                        # Download all available issues
-                                        results = download_manager.download_all_periodical_issues(
-                                            periodical.id, db_session
-                                        )
-                                    elif periodical.selected_editions and any(periodical.selected_editions.values()):
-                                        # Download only selected editions
-                                        results = download_manager.download_selected_editions(periodical.id, db_session)
-                                    else:
-                                        continue
-
-                                    if results.get("submitted", 0) > 0:
+                                    if submission:
+                                        submitted_count += 1
                                         logger.info(
-                                            f"Auto-download: Submitted {results['submitted']} issues for '{periodical.title}'"
+                                            f"Auto-download: Submitted '{issue.title}' "
+                                            f"(priority {issue.download_priority}, job_id: {submission.job_id})"
                                         )
+                                    else:
+                                        logger.debug(
+                                            f"Auto-download: Could not submit '{issue.title}' "
+                                            f"(may be at limit or already queued)"
+                                        )
+
                                 except Exception as e:
-                                    logger.error(f"Auto-download: Error checking '{periodical.title}': {e}")
+                                    logger.error(
+                                        f"Auto-download: Error submitting download for '{issue.title}': {e}",
+                                        exc_info=True,
+                                    )
+
+                            if submitted_count > 0:
+                                logger.info(f"Auto-download: Successfully submitted {submitted_count} downloads")
+
+                    logger.debug("Auto-download: Completed Issue Discovery & Tracking run")
+
                 finally:
                     db_session.close()
             except Exception as e:
@@ -359,6 +438,11 @@ async def lifespan(app: FastAPI):
         config.set_dependencies(config_loader)
         pages.set_dependencies(session_factory)
         ocr_queue.set_dependencies(session_factory)
+        discovered_issues.set_dependencies(
+            session_factory,
+            issue_discovery_service,
+            search_scheduler,
+        )
 
         logger.info("Curator initialized successfully with auto-import and download monitoring enabled")
 
@@ -472,6 +556,7 @@ app.include_router(tasks.router)
 app.include_router(config.router)
 app.include_router(pages.router)
 app.include_router(ocr_queue.router)
+app.include_router(discovered_issues.router)
 
 # Mount static files
 try:

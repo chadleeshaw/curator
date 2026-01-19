@@ -165,14 +165,16 @@
 }
 
 /* Two-column layout for compact fields */
-#track-new-periodical-modal .field-row {
+#track-new-periodical-modal .field-row,
+#edit-tracking-modal .field-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
   margin-bottom: 10px;
 }
 
-#track-new-periodical-modal .field-row .settings-field {
+#track-new-periodical-modal .field-row .settings-field,
+#edit-tracking-modal .field-row .settings-field {
   margin-bottom: 0;
 }
 
@@ -461,6 +463,13 @@
 /* ==========================================================================
    Responsive Design
    ========================================================================== */
+
+/* Tablet/Medium screens - 3 columns */
+@media (max-width: 1200px) and (min-width: 769px) {
+  .settings-nav {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+}
 
 @media (max-width: 768px) {
   .container {
@@ -1349,12 +1358,14 @@
   }
 
   /* Break two-column grid to single column on mobile */
-  #track-new-periodical-modal .field-row {
+  #track-new-periodical-modal .field-row,
+  #edit-tracking-modal .field-row {
     grid-template-columns: 1fr !important;
     gap: 10px !important;
   }
 
-  #track-new-periodical-modal .field-row .settings-field {
+  #track-new-periodical-modal .field-row .settings-field,
+  #edit-tracking-modal .field-row .settings-field {
     margin-bottom: 10px !important;
   }
 

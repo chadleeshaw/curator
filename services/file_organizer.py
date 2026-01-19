@@ -3,6 +3,8 @@ File organization utilities for moving and renaming PDFs.
 Handles both simple and pattern-based organization with metadata extraction.
 """
 
+# pylint: disable=too-many-lines
+
 import logging
 import os
 import re

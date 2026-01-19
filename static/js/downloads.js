@@ -14,26 +14,26 @@ import {
 } from './constants.js';
 
 /**
- * @typedef {Object} DownloadItem
+ * @typedef {Object} DiscoveredIssue
  * @property {number} id - Unique identifier
- * @property {number} submission_id - Submission ID
- * @property {string} title - Download title
- * @property {string} magazine - Associated magazine name
- * @property {string} status - Current status (pending, downloading, completed, failed, skipped)
- * @property {number} [attempt_count] - Number of download attempts
+ * @property {number} tracking_id - Tracking ID for the periodical
+ * @property {string} title - Issue title
+ * @property {string} tracking_title - Associated periodical name
+ * @property {string} download_status - Current status (discovered, wanted, queued, downloading, completed, failed, permanently_failed, ignored)
+ * @property {number} download_attempts - Number of download attempts
  * @property {string} [last_error] - Last error message
- * @property {string} [extra_status] - Additional status information (e.g., "Rate limited, waiting 60s")
- * @property {string} [created_at] - Creation timestamp
- * @property {string} [updated_at] - Last update timestamp
- * @property {boolean} [isBad] - Whether marked as a bad file
+ * @property {string} [first_seen] - First discovery timestamp
+ * @property {string} [last_seen] - Last seen timestamp
+ * @property {number} download_priority - Priority score
+ * @property {boolean} [isPermanentlyFailed] - Whether marked as permanently failed
  */
 
 /**
  * @typedef {Object} DownloadGroup
  * @property {string} periodical - Periodical name
- * @property {DownloadItem[]} items - Download items in this group
- * @property {number} failedCount - Number of failed downloads
- * @property {number} badCount - Number of bad files
+ * @property {DiscoveredIssue[]} items - Issues in this group
+ * @property {number} failedCount - Number of failed issues
+ * @property {number} permanentlyFailedCount - Number of permanently failed issues
  * @property {number} totalCount - Total count of items
  */
 
@@ -48,11 +48,11 @@ export class DownloadsManager {
   constructor() {
     /** @type {number|null} Auto-refresh interval ID */
     this.refreshInterval = null;
-    /** @type {boolean} Whether to include bad files in display */
-    this.showBadFiles = true;
+    /** @type {boolean} Whether to include permanently failed issues in display */
+    this.showPermanentlyFailed = true;
     /** @type {number} Maximum download retry attempts */
     this.maxRetries = 3; // Default value, will be loaded from API
-    /** @type {DownloadItem[]|null} Current items in modal */
+    /** @type {DiscoveredIssue[]|null} Current items in modal */
     this.currentModalItems = null;
     /** @type {string|null} Current periodical in modal */
     this.currentModalPeriodical = null;
@@ -82,7 +82,7 @@ export class DownloadsManager {
   }
 
   /**
-   * Load failed downloads and bad files from the API
+   * Load failed and permanently failed issues from the API
    *
    * @returns {Promise<void>}
    * @throws {Error} When API request fails
@@ -92,31 +92,32 @@ export class DownloadsManager {
    */
   async loadFailedDownloads() {
     try {
+      // Fetch failed and permanently_failed issues
+      const statuses = this.showPermanentlyFailed ? 'failed,permanently_failed' : 'failed';
       const response = await APIClient.authenticatedFetch(
-        `/api/downloads/failed?include_bad=${this.showBadFiles}`
+        `/api/discovered-issues?status=${statuses}&limit=500`
       );
       const data = await response.json();
       this.displayFailedDownloads(data);
     } catch (error) {
-      console.error('[Downloads] Failed to load failed downloads:', error);
-      UIUtils.showStatus('downloads-status', 'Error loading failed downloads', 'error');
+      console.error('[Downloads] Failed to load failed issues:', error);
+      UIUtils.showStatus('downloads-status', 'Error loading failed issues', 'error');
     }
   }
 
   /**
-   * Display failed downloads and bad files grouped by periodical
+   * Display failed and permanently failed issues grouped by periodical
    *
    * @param {Object} data - Response data from API
-   * @param {DownloadItem[]} data.failed_downloads - Array of failed downloads
-   * @param {DownloadItem[]} data.bad_files - Array of bad files
+   * @param {DiscoveredIssue[]} data.issues - Array of discovered issues
    * @returns {void}
    */
   displayFailedDownloads(data) {
     const container = document.getElementById('failed-downloads-container');
     if (!container) return;
 
-    const { failed_downloads: failedDownloads, bad_files: badFiles } = data;
-    const grouped = this.groupDownloadsByPeriodical(failedDownloads, badFiles);
+    const issues = data.issues || [];
+    const grouped = this.groupIssuesByPeriodical(issues);
 
     if (grouped.length === 0) {
       container.innerHTML = `
@@ -131,7 +132,7 @@ export class DownloadsManager {
 
     // Calculate totals
     const totalFailed = grouped.reduce((sum, g) => sum + g.failedCount, 0);
-    const totalBad = grouped.reduce((sum, g) => sum + g.badCount, 0);
+    const totalPermanentlyFailed = grouped.reduce((sum, g) => sum + g.permanentlyFailedCount, 0);
 
     let html = `
       <div class="${CSS_CLASSES.STATS_SUMMARY}">
@@ -141,9 +142,9 @@ export class DownloadsManager {
           <div class="${CSS_CLASSES.STAT_BOX_SUBLABEL}">Can be retried</div>
         </div>
         <div class="${CSS_CLASSES.STAT_BOX}">
-          <div class="${CSS_CLASSES.STAT_BOX_VALUE} stat-box-error">${totalBad}</div>
-          <div class="${CSS_CLASSES.STAT_BOX_LABEL}">Bad Files</div>
-          <div class="${CSS_CLASSES.STAT_BOX_SUBLABEL}">3+ failures, marked as bad</div>
+          <div class="${CSS_CLASSES.STAT_BOX_VALUE} stat-box-error">${totalPermanentlyFailed}</div>
+          <div class="${CSS_CLASSES.STAT_BOX_LABEL}">Permanently Failed</div>
+          <div class="${CSS_CLASSES.STAT_BOX_SUBLABEL}">3+ failures, needs review</div>
         </div>
         <div class="${CSS_CLASSES.STAT_BOX}">
           <div class="${CSS_CLASSES.STAT_BOX_VALUE} stat-box-primary">${grouped.length}</div>
@@ -155,9 +156,9 @@ export class DownloadsManager {
     `;
 
     grouped.forEach((group) => {
-      const { periodical, badCount, failedCount, totalCount, items } = group;
-      const hasBadFiles = badCount > 0;
-      const icon = hasBadFiles ? '\uD83D\uDEAB' : '\u26A0\uFE0F';
+      const { periodical, permanentlyFailedCount, failedCount, totalCount, items } = group;
+      const hasPermanentlyFailed = permanentlyFailedCount > 0;
+      const icon = hasPermanentlyFailed ? '\uD83D\uDEAB' : '\u26A0\uFE0F';
 
       html += `
         <div class="periodical-group-card"
@@ -174,7 +175,7 @@ export class DownloadsManager {
             </div>
             <div class="periodical-group-badges">
               ${failedCount > 0 ? `<span class="badge badge-warning">${failedCount} Failed</span>` : ''}
-              ${hasBadFiles ? `<span class="badge badge-error">${badCount} Bad</span>` : ''}
+              ${hasPermanentlyFailed ? `<span class="badge badge-error">${permanentlyFailedCount} Permanently Failed</span>` : ''}
               <span class="periodical-group-arrow">\u2192</span>
             </div>
           </div>
@@ -187,36 +188,34 @@ export class DownloadsManager {
   }
 
   /**
-   * Group downloads by periodical name
+   * Group discovered issues by periodical name
    *
-   * @param {DownloadItem[]} failed - Array of failed downloads
-   * @param {DownloadItem[]} bad - Array of bad files
-   * @returns {DownloadGroup[]} Grouped downloads sorted by total count
+   * @param {DiscoveredIssue[]} issues - Array of discovered issues
+   * @returns {DownloadGroup[]} Grouped issues sorted by total count
    */
-  groupDownloadsByPeriodical(failed, bad) {
+  groupIssuesByPeriodical(issues) {
     const map = new Map();
 
-    // Process failed downloads
-    failed.forEach((item) => {
-      const key = item.magazine ?? 'Unknown';
+    issues.forEach((issue) => {
+      const key = issue.tracking_title ?? 'Unknown';
       if (!map.has(key)) {
-        map.set(key, { periodical: key, items: [], failedCount: 0, badCount: 0, totalCount: 0 });
+        map.set(key, {
+          periodical: key,
+          items: [],
+          failedCount: 0,
+          permanentlyFailedCount: 0,
+          totalCount: 0,
+        });
       }
       const group = map.get(key);
-      group.items.push({ ...item, isBad: false });
-      group.failedCount++;
-      group.totalCount++;
-    });
+      const isPermanentlyFailed = issue.download_status === 'permanently_failed';
+      group.items.push({ ...issue, isPermanentlyFailed });
 
-    // Process bad files
-    bad.forEach((item) => {
-      const key = item.magazine ?? 'Unknown';
-      if (!map.has(key)) {
-        map.set(key, { periodical: key, items: [], failedCount: 0, badCount: 0, totalCount: 0 });
+      if (isPermanentlyFailed) {
+        group.permanentlyFailedCount++;
+      } else {
+        group.failedCount++;
       }
-      const group = map.get(key);
-      group.items.push({ ...item, isBad: true });
-      group.badCount++;
       group.totalCount++;
     });
 
@@ -224,18 +223,18 @@ export class DownloadsManager {
   }
 
   /**
-   * Delete a failed download from the database
+   * Retry a failed or permanently failed issue
    *
-   * @param {number} submissionId - The submission ID to delete
+   * @param {number} issueId - The discovered issue ID to retry
    * @returns {Promise<void>}
    *
    * @example
-   * await downloads.deleteFailedDownload(123);
+   * await downloads.retryFailedIssue(123);
    */
-  async deleteFailedDownload(submissionId) {
+  async retryFailedIssue(issueId) {
     const confirmed = await UIUtils.confirm(
-      'Remove Download',
-      'Remove this failed download from the database?'
+      'Retry Download',
+      'Reset this issue and attempt to download it again?'
     );
     if (!confirmed) return;
 
@@ -247,19 +246,22 @@ export class DownloadsManager {
         : 'downloads-status';
 
     try {
-      const response = await APIClient.authenticatedFetch(`/api/downloads/failed/${submissionId}`, {
-        method: 'DELETE',
-      });
+      const response = await APIClient.authenticatedFetch(
+        `/api/discovered-issues/${issueId}/retry`,
+        {
+          method: 'POST',
+        }
+      );
       const data = await response.json();
 
       if (data.success) {
-        UIUtils.showStatus(statusId, 'Failed download removed', 'success');
+        UIUtils.showStatus(statusId, 'Issue reset and queued for retry', 'success');
         this.loadFailedDownloads();
       } else {
-        throw new Error(data.message ?? 'Failed to remove');
+        throw new Error(data.message ?? 'Failed to retry');
       }
     } catch (error) {
-      console.error('[Downloads] Failed to delete failed download:', error);
+      console.error('[Downloads] Failed to retry issue:', error);
       UIUtils.showStatus(statusId, `Error: ${error.message}`, 'error');
     }
   }
@@ -416,6 +418,15 @@ export class DownloadsManager {
       const headerRow = document.createElement('tr');
       headerRow.style.background = 'var(--surface)';
       headerRow.style.cursor = 'pointer';
+      headerRow.style.borderTop = '1px solid var(--border-color)';
+      headerRow.style.borderBottom = '1px solid var(--border-color)';
+      headerRow.style.transition = 'background 0.2s ease';
+      headerRow.onmouseover = () => {
+        headerRow.style.background = 'var(--surface-variant)';
+      };
+      headerRow.onmouseout = () => {
+        headerRow.style.background = 'var(--surface)';
+      };
       headerRow.onclick = () => this.openManageQueueModal(periodical, items);
 
       const statusCounts = this.getStatusCounts(items);
@@ -435,7 +446,7 @@ export class DownloadsManager {
           : '';
 
       headerRow.innerHTML = `
-        <td colspan="5" style="padding: 12px; font-weight: bold; border-bottom: 2px solid var(--border-color);">
+        <td colspan="2" style="padding: 12px; font-weight: bold;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <div>
               <span style="font-size: 1.1em;">\uD83D\uDCF0 ${periodical}</span>
@@ -680,7 +691,7 @@ export class DownloadsManager {
    * Open modal to manage failed downloads for a periodical
    *
    * @param {string} periodical - The periodical name
-   * @param {DownloadItem[]|string} items - Array of items or JSON string
+   * @param {DiscoveredIssue[]|string} items - Array of items or JSON string
    * @returns {void}
    */
   openManageFailedModal(periodical, items) {
@@ -697,13 +708,19 @@ export class DownloadsManager {
     this.currentModalItems = items;
     this.currentModalPeriodical = periodical;
 
-    const badCount = items.filter((i) => i.isBad).length;
-    const failedCount = items.filter((i) => !i.isBad).length;
+    const permanentlyFailedCount = items.filter((i) => i.isPermanentlyFailed).length;
+    const failedCount = items.filter((i) => !i.isPermanentlyFailed).length;
 
     const tableRows = items
       .map((item) => {
-        const { id, title, attempt_count: attemptCount, last_error: lastError, isBad } = item;
-        const color = isBad ? 'var(--status-failed)' : 'orange';
+        const {
+          id,
+          title,
+          download_attempts: attemptCount,
+          last_error: lastError,
+          isPermanentlyFailed,
+        } = item;
+        const color = isPermanentlyFailed ? 'var(--status-failed)' : 'orange';
         // maxRetries means "max retries allowed" so total attempts = maxRetries + 1
         const maxAttempts = this.maxRetries + 1;
 
@@ -715,7 +732,7 @@ export class DownloadsManager {
           </td>
           <td style="padding: 10px; border-bottom: 1px solid var(--border-color); font-size: 0.85em;">${lastError ?? 'Unknown'}</td>
           <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
-            <button onclick="downloads.deleteFailedDownload(${id})" class="btn-secondary" style="background: var(--status-failed); padding: 4px 8px;">Remove</button>
+            <button onclick="downloads.retryFailedIssue(${id})" class="btn-primary" style="padding: 4px 8px;">Retry</button>
           </td>
         </tr>
       `;
@@ -725,7 +742,7 @@ export class DownloadsManager {
     const html = `
       <div class="modal-header">
         <h3>Manage Failed Downloads: ${periodical}</h3>
-        <p style="color: var(--text-secondary); margin-top: 10px;">${failedCount} recent failures, ${badCount} bad files</p>
+        <p style="color: var(--text-secondary); margin-top: 10px;">${failedCount} recent failures, ${permanentlyFailedCount} permanently failed</p>
         <div id="modal-failed-status" class="hidden" style="margin-top: 10px;"></div>
       </div>
       <div class="modal-body" style="max-height: 400px; overflow-y: auto; margin: 20px 0;">
@@ -742,7 +759,7 @@ export class DownloadsManager {
         </table>
       </div>
       <div class="modal-footer" style="display: flex; gap: 10px; justify-content: space-between; padding-top: 20px; border-top: 1px solid var(--border-color);">
-        <button onclick="downloads.bulkRemoveFailed()" class="btn-secondary" style="background: var(--status-failed);">\uD83D\uDDD1\uFE0F Remove All</button>
+        <button onclick="downloads.bulkRetryFailed()" class="btn-primary">\u27F3 Retry All</button>
         <button onclick="downloads.closeManageFailedModal()" class="save-btn">Close</button>
       </div>
     `;
@@ -874,32 +891,32 @@ export class DownloadsManager {
   }
 
   /**
-   * Bulk remove all failed downloads for current periodical
+   * Bulk retry all failed issues for current periodical
    *
    * @returns {Promise<void>}
    */
-  async bulkRemoveFailed() {
+  async bulkRetryFailed() {
     if (!this.currentModalItems) return;
 
     const confirmed = await UIUtils.confirm(
-      'Remove All Failed',
-      `Remove ALL ${this.currentModalItems.length} failed downloads for ${this.currentModalPeriodical}? This cannot be undone.`
+      'Retry All Failed',
+      `Retry ALL ${this.currentModalItems.length} failed issues for ${this.currentModalPeriodical}?`
     );
     if (!confirmed) return;
 
     const progress = UIUtils.showProgressModal(
-      'Removing Failed Downloads',
+      'Retrying Failed Issues',
       this.currentModalItems.length
     );
     let succeeded = 0;
     let failed = 0;
 
     for (let i = 0; i < this.currentModalItems.length; i++) {
-      const { id, issue } = this.currentModalItems[i];
+      const { id, title } = this.currentModalItems[i];
       try {
-        progress.update(i + 1, 'Deleting...', `Processing: ${issue ?? 'Unknown'}`);
-        const response = await APIClient.authenticatedFetch(`/api/downloads/failed/${id}`, {
-          method: 'DELETE',
+        progress.update(i + 1, 'Retrying...', `Processing: ${title ?? 'Unknown'}`);
+        const response = await APIClient.authenticatedFetch(`/api/discovered-issues/${id}/retry`, {
+          method: 'POST',
         });
         const data = await response.json();
         if (data.success) {
@@ -908,15 +925,15 @@ export class DownloadsManager {
           failed++;
         }
       } catch (e) {
-        console.error('[Downloads] Remove failed:', e);
+        console.error('[Downloads] Retry failed:', e);
         failed++;
       }
     }
 
     const message =
       failed > 0
-        ? `Removed ${succeeded} of ${this.currentModalItems.length} failed downloads (${failed} failed)`
-        : `Successfully removed all ${succeeded} failed downloads`;
+        ? `Retried ${succeeded} of ${this.currentModalItems.length} issues (${failed} failed)`
+        : `Successfully retried all ${succeeded} issues`;
     progress.complete(message, failed === 0);
 
     UIUtils.showStatus('modal-failed-status', message, failed === 0 ? 'success' : 'warning');
@@ -1307,7 +1324,7 @@ window.downloads = downloads;
 window.loadDownloadQueue = () => downloads.loadDownloadQueue();
 window.retryDownload = (id) => downloads.retryDownload(id);
 window.removeFromQueue = (id) => downloads.removeFromQueue(id);
-window.deleteFailedDownload = (id) => downloads.deleteFailedDownload(id);
+window.retryFailedIssue = (id) => downloads.retryFailedIssue(id);
 window.openCleanupModal = () => downloads.openCleanupModal();
 window.closeCleanupModal = () => downloads.closeCleanupModal();
 window.previewCleanup = () => downloads.previewCleanup();

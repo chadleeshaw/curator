@@ -71,7 +71,7 @@ export class EventHandlers {
       // Downloads actions
       'retry-download': (e, target) => this.retryDownload(target.dataset.id),
       'remove-from-queue': (e, target) => this.removeFromQueue(target.dataset.id),
-      'delete-failed-download': (e, target) => this.deleteFailedDownload(target.dataset.id),
+      'retry-failed-issue': (e, target) => this.retryFailedIssue(target.dataset.id),
       'open-cleanup-modal': () => this.openCleanupModal(),
       'close-cleanup-modal': () => this.closeCleanupModal(),
       'preview-cleanup': () => this.previewCleanup(),
@@ -247,9 +247,9 @@ export class EventHandlers {
     }
   }
 
-  static deleteFailedDownload(downloadId) {
-    if (window.deleteFailedDownload) {
-      window.deleteFailedDownload(downloadId);
+  static retryFailedIssue(issueId) {
+    if (window.retryFailedIssue) {
+      window.retryFailedIssue(issueId);
     }
   }
 

@@ -354,6 +354,32 @@
               "
             >
               <table class="queue-table w-full border-collapse">
+                <thead>
+                  <tr style="border-bottom: 2px solid var(--border)">
+                    <th
+                      style="
+                        text-align: left;
+                        padding: 12px;
+                        color: var(--text-secondary);
+                        font-weight: 500;
+                        font-size: 0.9em;
+                      "
+                    >
+                      Periodical
+                    </th>
+                    <th
+                      style="
+                        text-align: right;
+                        padding: 12px;
+                        color: var(--text-secondary);
+                        font-weight: 500;
+                        font-size: 0.9em;
+                      "
+                    >
+                      Summary
+                    </th>
+                  </tr>
+                </thead>
                 <tbody id="queue-body">
                   <!-- Will be populated by JavaScript with grouped periodical rows -->
                 </tbody>
@@ -459,28 +485,6 @@
                     </th>
                     <th
                       style="
-                        text-align: center;
-                        padding: 12px;
-                        color: var(--text-secondary);
-                        font-weight: 500;
-                        font-size: 0.9em;
-                      "
-                    >
-                      Status
-                    </th>
-                    <th
-                      style="
-                        text-align: center;
-                        padding: 12px;
-                        color: var(--text-secondary);
-                        font-weight: 500;
-                        font-size: 0.9em;
-                      "
-                    >
-                      Priority
-                    </th>
-                    <th
-                      style="
                         text-align: right;
                         padding: 12px;
                         color: var(--text-secondary);
@@ -488,7 +492,7 @@
                         font-size: 0.9em;
                       "
                     >
-                      Actions
+                      Summary
                     </th>
                   </tr>
                 </thead>
@@ -977,7 +981,7 @@
 
     <!-- Edit Tracking Details Modal -->
     <div id="edit-tracking-modal" class="modal hidden">
-      <div class="modal-content">
+      <div class="modal-content" style="max-width: 800px">
         <span class="close" onclick="closeEditTrackingModal()">&times;</span>
         <h2>Edit Tracking Details</h2>
 
@@ -987,54 +991,57 @@
           <input type="text" id="edit-tracking-title" placeholder="Enter title" />
         </div>
 
-        <div class="settings-field">
-          <label>Category:</label>
-          <select id="edit-tracking-category" class="w-full">
-            <option value="">Auto-detect from title</option>
-            <option value="Magazines">Magazines</option>
-            <option value="Comics">Comics</option>
-            <option value="Articles">Articles</option>
-            <option value="News">News</option>
-          </select>
+        <div class="field-row">
+          <div class="settings-field">
+            <label>Category:</label>
+            <select id="edit-tracking-category" class="w-full">
+              <option value="">Auto-detect from title</option>
+              <option value="Magazines">Magazines</option>
+              <option value="Comics">Comics</option>
+              <option value="Articles">Articles</option>
+              <option value="News">News</option>
+            </select>
+          </div>
+
+          <div class="settings-field">
+            <label>Language:</label>
+            <select id="edit-tracking-language" class="w-full">
+              <option value="English">English</option>
+              <option value="German">German</option>
+              <option value="French">French</option>
+              <option value="Spanish">Spanish</option>
+              <option value="Italian">Italian</option>
+              <option value="Portuguese">Portuguese</option>
+              <option value="Dutch">Dutch</option>
+              <option value="Polish">Polish</option>
+              <option value="Russian">Russian</option>
+              <option value="Japanese">Japanese</option>
+              <option value="Chinese">Chinese</option>
+              <option value="Korean">Korean</option>
+            </select>
+          </div>
         </div>
 
-        <div class="settings-field">
-          <label>Language:</label>
-          <select id="edit-tracking-language" class="w-full">
-            <option value="English">English</option>
-            <option value="German">German</option>
-            <option value="French">French</option>
-            <option value="Spanish">Spanish</option>
-            <option value="Italian">Italian</option>
-            <option value="Portuguese">Portuguese</option>
-            <option value="Dutch">Dutch</option>
-            <option value="Polish">Polish</option>
-            <option value="Russian">Russian</option>
-            <option value="Japanese">Japanese</option>
-            <option value="Chinese">Chinese</option>
-            <option value="Korean">Korean</option>
-          </select>
-        </div>
+        <div class="field-row">
+          <div class="settings-field">
+            <label>Country:</label>
+            <select id="edit-tracking-country" class="w-full">
+              <option value="">None (International)</option>
+            </select>
+          </div>
 
-        <div class="settings-field">
-          <label>Country:</label>
-          <select id="edit-tracking-country" class="w-full">
-            <option value="">None (International)</option>
-          </select>
-        </div>
-
-        <div class="settings-field">
-          <label for="edit-tracking-download-category">Download Client Category:</label>
-          <input
-            type="text"
-            id="edit-tracking-download-category"
-            placeholder="Leave empty to use global default"
-            class="w-full"
-          />
-          <p class="text-sm text-hint mt-8">
-            Category to use in your download client (e.g., "books", "magazines"). Separate from
-            content category.
-          </p>
+          <div class="settings-field">
+            <label for="edit-tracking-download-category">Download Category:</label>
+            <input
+              type="text"
+              id="edit-tracking-download-category"
+              placeholder="e.g., books, magazines (optional)"
+              class="w-full"
+            />
+            <small style="color: var(--text-secondary); display: block; margin-top: 3px"
+              >For download client (SABnzbd/NZBGet)</small
+            >
+          </div>
         </div>
 
         <div class="settings-field">
