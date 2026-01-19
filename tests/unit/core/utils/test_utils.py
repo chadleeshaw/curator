@@ -333,6 +333,45 @@ class TestFindPdfEpubFiles:
         assert isinstance(files[0], Path)
         assert files[0].is_file()
 
+    def test_filters_blacklisted_video_extensions(self, tmp_path):
+        """Test that video files are filtered out."""
+        (tmp_path / "magazine.pdf").touch()
+        (tmp_path / "video.mp4").touch()
+        (tmp_path / "movie.avi").touch()
+        (tmp_path / "book.epub").touch()
+
+        files = find_pdf_epub_files(tmp_path, recursive=False)
+
+        # Should only find PDF and EPUB, not video files
+        assert len(files) == 2
+        assert all(f.suffix in [".pdf", ".epub"] for f in files)
+        assert not any(f.suffix in [".mp4", ".avi"] for f in files)
+
+    def test_filters_blacklisted_audio_extensions(self, tmp_path):
+        """Test that audio files are filtered out."""
+        (tmp_path / "magazine.pdf").touch()
+        (tmp_path / "music.mp3").touch()
+        (tmp_path / "audio.flac").touch()
+
+        files = find_pdf_epub_files(tmp_path, recursive=False)
+
+        assert len(files) == 1
+        assert files[0].suffix == ".pdf"
+
+    def test_cbz_cbr_not_blacklisted(self, tmp_path):
+        """Test that CBZ and CBR files are NOT filtered (they're comic archives)."""
+        (tmp_path / "comic.cbz").touch()
+        (tmp_path / "manga.cbr").touch()
+        (tmp_path / "magazine.pdf").touch()
+
+        files = find_pdf_epub_files(tmp_path, recursive=False)
+
+        # All three should be found (CBZ/CBR are supported formats)
+        assert len(files) == 3
+        assert any(f.suffix == ".cbz" for f in files)
+        assert any(f.suffix == ".cbr" for f in files)
+        assert any(f.suffix == ".pdf" for f in files)
+
 
 class TestUtilsIntegration:
     """Integration tests for utility functions"""

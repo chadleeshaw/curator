@@ -19,6 +19,7 @@ from core.constants.app import (
     MAX_DOWNLOAD_RETRIES,
     PROVIDER_SEARCH_TIMEOUT,
 )
+from core.constants.files import BLACKLISTED_FILE_EXTENSIONS
 from core.parsers import normalize_month_name, utc_now
 from core.parsers import LANGUAGE_INDICATORS
 from core.parsers import TitleMatcher, Parser
@@ -325,6 +326,24 @@ class DownloadManager:
             DownloadSubmission record if submitted, None if duplicate or error
         """
         logger.debug(f"[DownloadManager] submit_download called for: {search_result['title']}")
+
+        # Check if the title contains blacklisted file extensions
+        title_lower = search_result["title"].lower()
+        for ext in BLACKLISTED_FILE_EXTENSIONS:
+            if ext in title_lower:
+                logger.warning(
+                    f"[DownloadManager] Skipping download with blacklisted extension '{ext}' in title: "
+                    f"{search_result['title']}"
+                )
+                # Record as SKIPPED to track these attempts
+                self._create_submission_record(
+                    tracking_id,
+                    search_result,
+                    DownloadSubmission.StatusEnum.SKIPPED,
+                    session,
+                    search_result_db_id=search_result_db_id,
+                )
+                return None
 
         # Create fuzzy match group for this result
         fuzzy_group = self._get_fuzzy_group_id(search_result["title"])

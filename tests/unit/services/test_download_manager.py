@@ -642,3 +642,227 @@ class TestEdgeCases:
         assert len(results) == 0  # Kids variant filtered out
 
         session.close()
+
+
+class TestBlacklistFiltering:
+    """Test blacklisted file extension filtering in submit_download()"""
+
+    def test_filters_video_extension_mp4(self, test_db, mock_download_client):
+        """Test that .mp4 extension in title is filtered out"""
+        engine, session_factory = test_db
+        session = session_factory()
+
+        from models.database import MagazineTracking
+
+        # Create tracking record
+        tracking = MagazineTracking(
+            title="Test Magazine",
+            olid="test_magazine",
+            language="en",
+        )
+        session.add(tracking)
+        session.commit()
+
+        provider = MockSearchProvider({"name": "MockProvider", "type": "newsnab"})
+        manager = DownloadManager(
+            search_providers=[provider],
+            download_client=mock_download_client,
+        )
+
+        # Try to submit download with .mp4 in title
+        search_result = {
+            "title": "Test Magazine Jan 2024.mp4",
+            "url": "http://example.com/test.nzb",
+            "provider": "MockProvider",
+        }
+
+        result = manager.submit_download(tracking.id, search_result, session)
+
+        # Should return None (rejected)
+        assert result is None
+
+        # Check that it was recorded as SKIPPED
+        from models.database import DownloadSubmission
+
+        submissions = session.query(DownloadSubmission).all()
+        assert len(submissions) == 1
+        assert submissions[0].status == DownloadSubmission.StatusEnum.SKIPPED
+
+        session.close()
+
+    def test_filters_video_extension_avi(self, test_db, mock_download_client):
+        """Test that .avi extension in title is filtered out"""
+        engine, session_factory = test_db
+        session = session_factory()
+
+        from models.database import MagazineTracking
+
+        tracking = MagazineTracking(
+            title="Test Magazine",
+            olid="test_magazine",
+            language="en",
+        )
+        session.add(tracking)
+        session.commit()
+
+        provider = MockSearchProvider({"name": "MockProvider", "type": "newsnab"})
+        manager = DownloadManager(
+            search_providers=[provider],
+            download_client=mock_download_client,
+        )
+
+        search_result = {
+            "title": "Test.Magazine.2024.avi",
+            "url": "http://example.com/test.nzb",
+            "provider": "MockProvider",
+        }
+
+        result = manager.submit_download(tracking.id, search_result, session)
+
+        assert result is None
+
+        session.close()
+
+    def test_allows_legitimate_pdf_with_mp_in_name(self, test_db, mock_download_client):
+        """Test that magazine names containing 'mp' are NOT filtered (only .mp4 extension)"""
+        engine, session_factory = test_db
+        session = session_factory()
+
+        from models.database import MagazineTracking
+
+        # Magazine with "MP" in name (like "Computer Music" or "Example MP")
+        tracking = MagazineTracking(
+            title="Example MP Magazine",
+            olid="example_mp_magazine",
+            language="en",
+        )
+        session.add(tracking)
+        session.commit()
+
+        provider = MockSearchProvider({"name": "MockProvider", "type": "newsnab"})
+        manager = DownloadManager(
+            search_providers=[provider],
+            download_client=mock_download_client,
+        )
+
+        # Title contains "MP" but NOT the extension ".mp4"
+        search_result = {
+            "title": "Example MP Magazine - Jan 2024",
+            "url": "http://example.com/test.nzb",
+            "provider": "MockProvider",
+        }
+
+        result = manager.submit_download(tracking.id, search_result, session)
+
+        # Should be accepted (not None)
+        assert result is not None
+
+        session.close()
+
+    def test_filters_mkv_extension(self, test_db, mock_download_client):
+        """Test that .mkv extension in title is filtered out"""
+        engine, session_factory = test_db
+        session = session_factory()
+
+        from models.database import MagazineTracking
+
+        tracking = MagazineTracking(
+            title="Test Magazine",
+            olid="test_magazine",
+            language="en",
+        )
+        session.add(tracking)
+        session.commit()
+
+        provider = MockSearchProvider({"name": "MockProvider", "type": "newsnab"})
+        manager = DownloadManager(
+            search_providers=[provider],
+            download_client=mock_download_client,
+        )
+
+        search_result = {
+            "title": "Test Magazine 2024.mkv",
+            "url": "http://example.com/test.nzb",
+            "provider": "MockProvider",
+        }
+
+        result = manager.submit_download(tracking.id, search_result, session)
+
+        assert result is None
+
+        session.close()
+
+    def test_case_insensitive_extension_filtering(self, test_db, mock_download_client):
+        """Test that extension filtering is case-insensitive"""
+        engine, session_factory = test_db
+        session = session_factory()
+
+        from models.database import MagazineTracking
+
+        tracking = MagazineTracking(
+            title="Test Magazine",
+            olid="test_magazine",
+            language="en",
+        )
+        session.add(tracking)
+        session.commit()
+
+        provider = MockSearchProvider({"name": "MockProvider", "type": "newsnab"})
+        manager = DownloadManager(
+            search_providers=[provider],
+            download_client=mock_download_client,
+        )
+
+        # Test uppercase extension
+        search_result = {
+            "title": "Test Magazine 2024.MP4",
+            "url": "http://example.com/test.nzb",
+            "provider": "MockProvider",
+        }
+
+        result = manager.submit_download(tracking.id, search_result, session)
+
+        assert result is None  # Should still be filtered
+
+        session.close()
+
+    def test_allows_normal_pdf_download(self, test_db, mock_download_client):
+        """Test that normal PDF downloads are NOT filtered"""
+        engine, session_factory = test_db
+        session = session_factory()
+
+        from models.database import MagazineTracking
+
+        tracking = MagazineTracking(
+            title="Test Magazine",
+            olid="test_magazine",
+            language="en",
+        )
+        session.add(tracking)
+        session.commit()
+
+        provider = MockSearchProvider({"name": "MockProvider", "type": "newsnab"})
+        manager = DownloadManager(
+            search_providers=[provider],
+            download_client=mock_download_client,
+        )
+
+        # Normal magazine title without blacklisted extensions
+        search_result = {
+            "title": "Test Magazine - January 2024",
+            "url": "http://example.com/test.nzb",
+            "provider": "MockProvider",
+        }
+
+        result = manager.submit_download(tracking.id, search_result, session)
+
+        # Should be accepted
+        assert result is not None
+
+        from models.database import DownloadSubmission
+
+        submissions = session.query(DownloadSubmission).all()
+        assert len(submissions) == 1
+        assert submissions[0].status == DownloadSubmission.StatusEnum.PENDING
+
+        session.close()
