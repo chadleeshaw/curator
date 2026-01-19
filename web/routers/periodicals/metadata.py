@@ -149,6 +149,11 @@ async def update_periodical(magazine_id: int, updates: Dict[str, Any]) -> Dict[s
                     elif "special_edition" in magazine.extra_metadata:
                         del magazine.extra_metadata["special_edition"]
 
+                # Mark the column as modified for SQLAlchemy to detect the change
+                from sqlalchemy.orm.attributes import flag_modified
+
+                flag_modified(magazine, "extra_metadata")
+
                 db_session.commit()
                 db_session.refresh(magazine)
 
