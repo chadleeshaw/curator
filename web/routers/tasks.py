@@ -112,7 +112,6 @@ async def get_tasks_status():
                         "total_runs": ocr_stats.get("total_runs", 0),
                         "jobs_processed": ocr_stats.get("jobs_processed", 0),
                         "jobs_failed": ocr_stats.get("jobs_failed", 0),
-                        "last_process_time": ocr_stats.get("last_process_time"),
                     },
                 }
             )

@@ -79,7 +79,7 @@ export class TasksManager {
                 <div style="margin-bottom: 10px;">${task.description || ''}</div>
                 <div style="display: grid; gap: 4px;">
                   <div>⏱️ Interval: ${task.interval}s</div>
-                  ${!hasDetailedTimestamps ? `<div>✓ Last run: ${lastRun}</div>` : ''}
+                  <div>✓ Last run: ${lastRun}</div>
                   <div>⏭️ Next run: ${nextRun}</div>
                   ${task.last_status ? `<div style="color: ${task.last_status === 'success' ? 'var(--status-completed)' : 'var(--status-failed)'};">Status: ${task.last_status}</div>` : ''}
                 </div>
