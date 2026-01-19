@@ -13,12 +13,20 @@ class ComicReader {
     this.metadata = null;
     this.currentPageIndex = 0;
     this.loading = false;
-    this.fitMode = 'fit-height'; // fit-width, fit-height, original
+    // Mobile portrait: fit-width, Desktop/landscape: fit-height
+    this.fitMode =
+      window.innerWidth <= 768 && window.innerHeight > window.innerWidth
+        ? 'fit-width'
+        : 'fit-height';
     this.zoomLevel = 100; // 50-200%
-    this.spreadMode = false; // Two-page spread
+    // Default to spread mode on desktop or landscape orientation
+    this.spreadMode = window.innerWidth > 768 || window.innerWidth > window.innerHeight;
     this.isFullscreen = false;
     this.progressSaveTimer = null;
     this.coverPageIndex = 0; // Index of the cover page (default 0)
+    this.prefetchCache = new Map(); // Cache for prefetched images
+    this.touchStartDistance = 0; // For pinch-to-zoom gesture
+    this.initialZoomLevel = 100; // Store initial zoom at gesture start
   }
 
   /**
@@ -35,6 +43,15 @@ class ComicReader {
 
     // Setup fullscreen listeners
     this.setupFullscreenListeners();
+
+    // Setup orientation change listener
+    this.setupOrientationListener();
+
+    // Setup pinch-to-zoom gesture
+    this.setupPinchZoom();
+
+    // Setup swipe gestures for navigation
+    this.setupSwipeGestures();
 
     // Load metadata and initialize UI
     await this.loadMetadata();
@@ -56,6 +73,17 @@ class ComicReader {
 
       // Update UI with metadata
       document.getElementById('comic-title').textContent = this.metadata.title || 'Comic Reader';
+
+      // Update spread button to reflect default state
+      const spreadBtn = document.getElementById('spread-btn');
+      spreadBtn.classList.toggle('active', this.spreadMode);
+      spreadBtn.textContent = this.spreadMode ? '📖' : '📄';
+      spreadBtn.title = this.spreadMode ? 'Single page mode (S)' : 'Two-page spread mode (S)';
+
+      // Update fit mode buttons to reflect default state
+      document.querySelectorAll('.fit-btn[data-mode]').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.mode === this.fitMode);
+      });
 
       // Render page list
       this.renderPageList();
@@ -137,6 +165,9 @@ class ComicReader {
 
       // Save progress after page loads
       this.saveProgressDebounced();
+
+      // Prefetch next pages for smoother navigation
+      this.prefetchNextPages();
     } catch (error) {
       console.error('Failed to load page:', error);
       contentDiv.innerHTML = `<div class="error">Failed to load page: ${this.escapeHtml(error.message)}</div>`;
@@ -238,6 +269,75 @@ class ComicReader {
       img1.src = imageUrl1;
       img2.src = imageUrl2;
     });
+  }
+
+  /**
+   * Prefetch next pages for smoother navigation
+   */
+  prefetchNextPages() {
+    if (!this.metadata) return;
+
+    const pagesToPrefetch = [];
+
+    if (this.spreadMode) {
+      // In spread mode, prefetch next spread (2 pages)
+      if (this.currentPageIndex === this.coverPageIndex) {
+        // After cover, prefetch first content spread
+        const firstContent = this.coverPageIndex + 1;
+        if (firstContent < this.metadata.pages.length) {
+          pagesToPrefetch.push(firstContent);
+        }
+        if (firstContent + 1 < this.metadata.pages.length) {
+          pagesToPrefetch.push(firstContent + 1);
+        }
+      } else {
+        // Prefetch next spread (2 pages ahead)
+        const nextPage = this.currentPageIndex + 2;
+        if (nextPage < this.metadata.pages.length) {
+          pagesToPrefetch.push(nextPage);
+        }
+        if (nextPage + 1 < this.metadata.pages.length) {
+          pagesToPrefetch.push(nextPage + 1);
+        }
+      }
+    } else {
+      // In single page mode, prefetch next 2 pages
+      const nextPage = this.currentPageIndex + 1;
+      if (nextPage < this.metadata.pages.length) {
+        pagesToPrefetch.push(nextPage);
+      }
+      if (nextPage + 1 < this.metadata.pages.length) {
+        pagesToPrefetch.push(nextPage + 1);
+      }
+    }
+
+    // Prefetch pages in background
+    pagesToPrefetch.forEach((pageIndex) => {
+      this.prefetchPage(pageIndex);
+    });
+  }
+
+  /**
+   * Prefetch a single page image
+   * @param {number} index - Page index to prefetch
+   */
+  prefetchPage(index) {
+    // Skip if already cached
+    if (this.prefetchCache.has(index)) return;
+
+    const imageUrl = `/api/periodicals/${this.magazineId}/comic/page/${index}`;
+    const img = new Image();
+
+    img.onload = () => {
+      this.prefetchCache.set(index, img);
+      console.log(`Prefetched page ${index + 1}`);
+    };
+
+    img.onerror = () => {
+      console.warn(`Failed to prefetch page ${index + 1}`);
+    };
+
+    img.src = imageUrl;
   }
 
   /**
@@ -529,6 +629,192 @@ class ComicReader {
         this.cleanupAutoHideToolbar();
       }
     });
+  }
+
+  /**
+   * Setup orientation change listener to auto-adjust spread mode and fit mode
+   */
+  setupOrientationListener() {
+    const handleOrientationChange = async () => {
+      const isPortrait = window.innerHeight > window.innerWidth;
+      const isMobile = window.innerWidth <= 768;
+
+      // Determine if spread mode should be enabled based on screen dimensions
+      const shouldBeSpread = window.innerWidth > 768 || !isPortrait;
+
+      // Determine fit mode: mobile portrait = fit-width, else = fit-height
+      const shouldBeFitMode = isMobile && isPortrait ? 'fit-width' : 'fit-height';
+
+      let needsReload = false;
+
+      // Update spread mode if changed
+      if (shouldBeSpread !== this.spreadMode) {
+        this.spreadMode = shouldBeSpread;
+        needsReload = true;
+
+        // Update spread button UI
+        const spreadBtn = document.getElementById('spread-btn');
+        if (spreadBtn) {
+          spreadBtn.classList.toggle('active', this.spreadMode);
+          spreadBtn.textContent = this.spreadMode ? '📖' : '📄';
+          spreadBtn.title = this.spreadMode ? 'Single page mode (S)' : 'Two-page spread mode (S)';
+        }
+      }
+
+      // Update fit mode if changed
+      if (shouldBeFitMode !== this.fitMode) {
+        this.fitMode = shouldBeFitMode;
+        needsReload = true;
+
+        // Update fit mode button UI
+        document.querySelectorAll('.fit-btn[data-mode]').forEach((btn) => {
+          btn.classList.toggle('active', btn.dataset.mode === this.fitMode);
+        });
+      }
+
+      // Reload current page with new mode if anything changed
+      if (needsReload) {
+        await this.loadPage(this.currentPageIndex);
+      }
+    };
+
+    // Listen for orientation changes
+    window.addEventListener('orientationchange', handleOrientationChange);
+
+    // Also listen for resize events (covers more cases)
+    let resizeTimer = null;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(handleOrientationChange, 300);
+    });
+  }
+
+  /**
+   * Setup pinch-to-zoom gesture support for mobile
+   */
+  setupPinchZoom() {
+    const contentDiv = document.getElementById('page-content');
+    if (!contentDiv) return;
+
+    let initialDistance = 0;
+    let initialZoom = 100;
+
+    const getDistance = (touches) => {
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    };
+
+    const handleTouchStart = (e) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        initialDistance = getDistance(e.touches);
+        initialZoom = this.zoomLevel;
+      }
+    };
+
+    const handleTouchMove = (e) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const currentDistance = getDistance(e.touches);
+        const scale = currentDistance / initialDistance;
+        const newZoom = Math.round(initialZoom * scale);
+
+        // Apply zoom constraints (50-200%)
+        this.zoomLevel = Math.max(50, Math.min(200, newZoom));
+        document.getElementById('zoom-level').textContent = `${this.zoomLevel}%`;
+
+        // Apply zoom using CSS transform
+        const images = document.querySelectorAll('.page-image, .spread-image');
+        const zoomScale = this.zoomLevel / 100;
+        images.forEach((img) => {
+          img.style.transform = `scale(${zoomScale})`;
+          img.style.transformOrigin = 'center';
+        });
+
+        // Adjust container to accommodate scaled content
+        const containers = document.querySelectorAll(
+          '.page-image-container, .page-spread-container'
+        );
+        containers.forEach((container) => {
+          if (zoomScale > 1) {
+            container.style.overflow = 'auto';
+          } else {
+            container.style.overflow = '';
+          }
+        });
+      }
+    };
+
+    const handleTouchEnd = (e) => {
+      if (e.touches.length < 2) {
+        initialDistance = 0;
+        initialZoom = 100;
+      }
+    };
+
+    contentDiv.addEventListener('touchstart', handleTouchStart, { passive: false });
+    contentDiv.addEventListener('touchmove', handleTouchMove, { passive: false });
+    contentDiv.addEventListener('touchend', handleTouchEnd);
+  }
+
+  /**
+   * Setup swipe gestures for page navigation
+   */
+  setupSwipeGestures() {
+    const contentDiv = document.getElementById('page-content');
+    if (!contentDiv) return;
+
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchEndX = 0;
+    let touchEndY = 0;
+
+    const handleSwipeStart = (e) => {
+      // Only track single-finger swipes (ignore pinch-to-zoom)
+      if (e.touches.length === 1) {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+      }
+    };
+
+    const handleSwipeMove = (e) => {
+      // Only track single-finger swipes
+      if (e.touches.length === 1) {
+        touchEndX = e.touches[0].clientX;
+        touchEndY = e.touches[0].clientY;
+      }
+    };
+
+    const handleSwipeEnd = () => {
+      // Calculate swipe distance and direction
+      const deltaX = touchEndX - touchStartX;
+      const deltaY = touchEndY - touchStartY;
+
+      // Minimum swipe distance (in pixels)
+      const minSwipeDistance = 50;
+
+      // Check if horizontal swipe is greater than vertical (to avoid interfering with scroll)
+      if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > minSwipeDistance) {
+        if (deltaX > 0) {
+          // Swipe right - go to previous page
+          this.previousPage();
+        } else {
+          // Swipe left - go to next page
+          this.nextPage();
+        }
+      }
+
+      // Reset values
+      touchStartX = 0;
+      touchStartY = 0;
+      touchEndX = 0;
+      touchEndY = 0;
+    };
+
+    contentDiv.addEventListener('touchstart', handleSwipeStart, { passive: true });
+    contentDiv.addEventListener('touchmove', handleSwipeMove, { passive: true });
+    contentDiv.addEventListener('touchend', handleSwipeEnd);
   }
 
   /**

@@ -491,66 +491,101 @@ body {
 
   .content-header {
     flex-wrap: wrap;
-    padding: 8px 10px;
-    gap: 6px;
+    padding: 6px 8px;
+    gap: 4px;
     position: relative;
   }
 
   .page-title-display,
   .chapter-title-display {
     width: 100%;
-    font-size: 0.85em;
+    font-size: 0.8em;
     text-align: center;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
   }
 
-  .fit-controls {
-    order: 2;
-    width: 100%;
-    justify-content: center;
+  /* Single row for all controls on mobile */
+  .zoom-controls,
+  .fit-controls,
+  .view-controls {
+    order: 1;
+    display: flex;
+    flex-direction: row;
     gap: 4px;
+    position: static;
+    width: auto;
+    flex: 0 0 auto;
   }
 
   .zoom-controls {
-    order: 1;
-    flex: 1;
+    justify-content: flex-start;
+  }
+
+  .fit-controls {
     justify-content: center;
-    gap: 4px;
+    flex: 1;
   }
 
   .view-controls {
-    order: 2;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    flex-shrink: 0;
-    position: absolute;
-    right: 10px;
-    bottom: 44px;
+    justify-content: flex-end;
   }
 
+  /* Hide text labels on mobile, show only icons */
   .fit-controls-label,
   .controls-label {
-    font-size: 0.75em;
+    display: none;
   }
 
+  /* Make buttons icon-only and compact */
   .fit-btn,
   .control-btn {
-    padding: 6px 8px;
+    padding: 6px;
+    font-size: 1em;
+    min-height: 32px;
+    min-width: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Hide button text on mobile for fit mode buttons only, convert to icon-only */
+  .fit-controls .fit-btn[data-mode='fit-width']::before {
+    content: '↔️';
+  }
+
+  .fit-controls .fit-btn[data-mode='fit-height']::before {
+    content: '↕️';
+  }
+
+  .fit-controls .fit-btn[data-mode='original']::before {
+    content: '🔍';
+  }
+
+  .fit-controls .fit-btn {
+    font-size: 0;
+  }
+
+  .fit-controls .fit-btn::before {
+    font-size: 16px;
+  }
+
+  /* View controls buttons (spread/fullscreen) keep their emoji content */
+  .view-controls .fit-btn {
+    font-size: 1.2em;
+  }
+
+  #zoom-level {
     font-size: 0.75em;
+    min-width: 40px;
+    padding: 0 4px;
   }
 
   .nav-buttons {
-    order: 3;
-    width: 100%;
-    justify-content: space-between;
-    margin-top: 4px;
+    display: none; /* Hide navigation buttons on mobile - use swipe gestures */
   }
 
   .nav-btn {
-    flex: 1;
-    padding: 8px 12px;
-    font-size: 0.85em;
+    display: none; /* Hide navigation buttons on mobile - use swipe gestures */
   }
 
   .page-content {
