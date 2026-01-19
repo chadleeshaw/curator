@@ -1010,20 +1010,17 @@
 
 /* Settings Sub-Tabs (horizontal tab navigation) */
 .settings-tabs-nav {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 8px;
   margin-bottom: 30px;
   padding: 10px;
   background: var(--surface-variant);
   border-radius: 8px;
   border: 1px solid var(--border-color);
-  overflow-x: auto;
-  flex-wrap: wrap;
-  justify-content: flex-start;
 }
 
 .settings-tab-btn {
-  flex: 0 1 auto;
   padding: 10px 16px;
   background: var(--surface);
   color: var(--text-secondary);
@@ -1037,14 +1034,10 @@
   text-align: center;
 }
 
-/* Mobile responsive - stack vertically on small screens */
+/* Mobile responsive - single column on small screens */
 @media (max-width: 768px) {
   .settings-tabs-nav {
-    flex-direction: column;
-  }
-
-  .settings-tab-btn {
-    width: 100%;
+    grid-template-columns: 1fr;
   }
 }
 
