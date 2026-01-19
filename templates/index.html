@@ -804,31 +804,28 @@
               </p>
 
               <div class="settings-field">
-                <label for="metadata-source-priority">Source Priority Order:</label>
-                <select
-                  id="metadata-source-priority"
-                  multiple
-                  size="3"
-                  style="
-                    width: 100%;
-                    padding: 8px;
-                    border: 1px solid var(--border-color);
-                    border-radius: 4px;
-                    background: var(--input-bg);
-                    color: var(--text-primary);
-                  "
-                >
-                  <option value="ocr">OCR (Optical Character Recognition)</option>
-                  <option value="text_scan">Text Scan (Direct PDF/EPUB extraction)</option>
-                  <option value="filename">Filename Parsing</option>
-                </select>
+                <label>Source Priority Order:</label>
+                <p class="text-sm text-muted mb-10">Drag to reorder. First = highest priority.</p>
+                <div id="metadata-source-priority-list" class="sortable-list">
+                  <div class="sortable-item" draggable="true" data-value="ocr">
+                    <span class="drag-handle">⋮⋮</span>
+                    <span class="item-label">🔍 OCR (Optical Character Recognition)</span>
+                    <span class="priority-badge">Priority 1</span>
+                  </div>
+                  <div class="sortable-item" draggable="true" data-value="text_scan">
+                    <span class="drag-handle">⋮⋮</span>
+                    <span class="item-label">📄 Text Scan (Direct PDF/EPUB extraction)</span>
+                    <span class="priority-badge">Priority 2</span>
+                  </div>
+                  <div class="sortable-item" draggable="true" data-value="filename">
+                    <span class="drag-handle">⋮⋮</span>
+                    <span class="item-label">📝 Filename Parsing</span>
+                    <span class="priority-badge">Priority 3</span>
+                  </div>
+                </div>
                 <p class="text-sm text-hint mt-8">
-                  Drag to reorder or use Ctrl+Click to select. First = highest priority. Currently:
-                  OCR → Text Scan → Filename.
-                </p>
-                <p class="text-sm text-hint mt-8" style="color: var(--status-warning)">
-                  Note: Reordering via drag-and-drop not yet implemented. Edit config.yaml to change
-                  order.
+                  When multiple sources provide metadata, the system tries them in this order until
+                  one meets the confidence threshold.
                 </p>
               </div>
 

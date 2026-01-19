@@ -20,6 +20,95 @@ export class SettingsManager {
   constructor() {
     this.currentConfig = null;
     this.currentUsername = null;
+    this.initSortable();
+  }
+
+  /**
+   * Initialize drag-and-drop for sortable lists
+   */
+  initSortable() {
+    // Defer initialization until DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => this.setupSortable());
+    } else {
+      this.setupSortable();
+    }
+  }
+
+  /**
+   * Setup sortable functionality for metadata source priority
+   */
+  setupSortable() {
+    const list = document.getElementById('metadata-source-priority-list');
+    if (!list) return;
+
+    let draggedElement = null;
+
+    // Add drag event listeners to all sortable items
+    const items = list.querySelectorAll('.sortable-item');
+    items.forEach((item) => {
+      item.addEventListener('dragstart', (e) => {
+        draggedElement = item;
+        item.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+      });
+
+      item.addEventListener('dragend', () => {
+        item.classList.remove('dragging');
+        draggedElement = null;
+        // Update priority badges after reordering
+        this.updatePriorityBadges();
+      });
+
+      item.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+
+        if (draggedElement && draggedElement !== item) {
+          const rect = item.getBoundingClientRect();
+          const midpoint = rect.top + rect.height / 2;
+          const insertBefore = e.clientY < midpoint;
+
+          if (insertBefore) {
+            list.insertBefore(draggedElement, item);
+          } else {
+            list.insertBefore(draggedElement, item.nextSibling);
+          }
+        }
+      });
+
+      item.addEventListener('dragenter', (e) => {
+        e.preventDefault();
+        if (draggedElement !== item) {
+          item.classList.add('drag-over');
+        }
+      });
+
+      item.addEventListener('dragleave', () => {
+        item.classList.remove('drag-over');
+      });
+
+      item.addEventListener('drop', (e) => {
+        e.preventDefault();
+        item.classList.remove('drag-over');
+      });
+    });
+  }
+
+  /**
+   * Update priority badges to reflect current order
+   */
+  updatePriorityBadges() {
+    const list = document.getElementById('metadata-source-priority-list');
+    if (!list) return;
+
+    const items = list.querySelectorAll('.sortable-item');
+    items.forEach((item, index) => {
+      const badge = item.querySelector('.priority-badge');
+      if (badge) {
+        badge.textContent = `Priority ${index + 1}`;
+      }
+    });
   }
 
   /**
@@ -289,15 +378,39 @@ export class SettingsManager {
       volumeField.value = metadataConfig.field_overrides?.volume?.ocr || 75;
     }
 
-    // Source priority (display only - editing not yet implemented)
-    const prioritySelect = document.getElementById('metadata-source-priority');
-    if (prioritySelect && metadataConfig.source_priority) {
-      // Clear and re-add in priority order
-      Array.from(prioritySelect.options).forEach((option) => {
-        option.selected = false;
-      });
-      // Note: Actual reordering UI is a TODO
+    // Source priority - reorder list items based on config
+    if (metadataConfig.source_priority) {
+      this.reorderSourcePriority(metadataConfig.source_priority);
     }
+  }
+
+  /**
+   * Reorder source priority list based on config array
+   */
+  reorderSourcePriority(priorityArray) {
+    const list = document.getElementById('metadata-source-priority-list');
+    if (!list) return;
+
+    // Get all items as a map
+    const items = Array.from(list.querySelectorAll('.sortable-item'));
+    const itemMap = {};
+    items.forEach((item) => {
+      const value = item.getAttribute('data-value');
+      itemMap[value] = item;
+    });
+
+    // Clear the list
+    list.innerHTML = '';
+
+    // Re-add items in priority order
+    priorityArray.forEach((source) => {
+      if (itemMap[source]) {
+        list.appendChild(itemMap[source]);
+      }
+    });
+
+    // Update priority badges
+    this.updatePriorityBadges();
   }
 
   /**
@@ -731,7 +844,11 @@ export class SettingsManager {
       const issueNumberField = document.getElementById('metadata-field-issue-number')?.value;
       const volumeField = document.getElementById('metadata-field-volume')?.value;
 
+      // Get source priority from sortable list
+      const sourcePriority = this.getSourcePriorityOrder();
+
       const metadataConfig = {
+        source_priority: sourcePriority,
         confidence_thresholds: {
           ocr: parseInt(ocrConfidence) || 70,
           text_scan: parseInt(textScanConfidence) || 50,
@@ -744,13 +861,6 @@ export class SettingsManager {
           volume: { ocr: parseInt(volumeField) || 75 },
         },
       };
-
-      // Preserve source_priority from current config (not editable in UI yet)
-      if (this.currentConfig?.config?.metadata?.source_priority) {
-        metadataConfig.source_priority = this.currentConfig.config.metadata.source_priority;
-      } else {
-        metadataConfig.source_priority = ['ocr', 'text_scan', 'filename'];
-      }
 
       const response = await APIClient.post('/api/config', { metadata: metadataConfig });
       const data = await response.json();
@@ -765,6 +875,19 @@ export class SettingsManager {
       console.error('Error saving metadata settings:', error);
       UIUtils.showStatus('metadata-message', 'Error: ' + error.message, 'error');
     }
+  }
+
+  /**
+   * Get current source priority order from sortable list
+   */
+  getSourcePriorityOrder() {
+    const list = document.getElementById('metadata-source-priority-list');
+    if (!list) {
+      return ['ocr', 'text_scan', 'filename']; // Default order
+    }
+
+    const items = list.querySelectorAll('.sortable-item');
+    return Array.from(items).map((item) => item.getAttribute('data-value'));
   }
 
   /**
