@@ -225,6 +225,28 @@ window.showQueueView = showQueueView;
 window.updateQueueBadges = updateQueueBadges;
 window.updateHeaderStats = updateHeaderStats;
 
+// Settings tab switcher
+window.showSettingsTab = (tabName, event) => {
+  // Remove active class from all settings tab buttons
+  const buttons = document.querySelectorAll('.settings-tab-btn');
+  buttons.forEach((btn) => btn.classList.remove('active'));
+
+  // Add active class to clicked button
+  if (event && event.currentTarget) {
+    event.currentTarget.classList.add('active');
+  }
+
+  // Hide all settings sub-tabs
+  const tabs = document.querySelectorAll('.settings-sub-tab');
+  tabs.forEach((tab) => tab.classList.remove('active'));
+
+  // Show the selected settings sub-tab
+  const selectedTab = document.getElementById(`settings-${tabName}-tab`);
+  if (selectedTab) {
+    selectedTab.classList.add('active');
+  }
+};
+
 // Make module instances globally available for inline event handlers
 window.ocrQueue = ocrQueue;
 window.downloads = downloads;
