@@ -353,14 +353,17 @@ body.dark-mode #status-message.status-error {
 
 /* Metadata Edit Form */
 .metadata-edit-form {
-  padding: 20px;
+  padding: 15px 20px;
   background: var(--surface-variant);
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .form-fields {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 12px;
 }
 
 .form-field {
@@ -378,7 +381,7 @@ body.dark-mode #status-message.status-error {
 .form-input,
 .form-select {
   width: 100%;
-  padding: 8px;
+  padding: 6px 8px;
   border-radius: 5px;
   border: 2px solid var(--border-color);
   background: var(--surface);
@@ -387,10 +390,10 @@ body.dark-mode #status-message.status-error {
 
 .form-hint {
   display: block;
-  margin-top: 5px;
+  margin-top: 3px;
   color: var(--text-secondary);
   font-style: italic;
-  font-size: 0.9em;
+  font-size: 0.85em;
 }
 
 /* Metadata Footer */
