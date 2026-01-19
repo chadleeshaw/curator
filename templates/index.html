@@ -975,7 +975,8 @@
                 <label for="downloads-max-retries">Max Retry Attempts:</label>
                 <input type="number" id="downloads-max-retries" placeholder="1" min="0" max="10" />
                 <p class="text-sm text-hint mt-8">
-                  Number of times to retry a failed download before marking it as failed.
+                  Number of times to retry a failed download before marking it as failed (default:
+                  1).
                 </p>
               </div>
 
@@ -989,21 +990,8 @@
                   max="50"
                 />
                 <p class="text-sm text-hint mt-8">
-                  Maximum number of downloads allowed to run simultaneously system-wide.
-                </p>
-              </div>
-
-              <div class="settings-field">
-                <label for="downloads-max-per-batch">Max Per Batch:</label>
-                <input
-                  type="number"
-                  id="downloads-max-per-batch"
-                  placeholder="5"
-                  min="1"
-                  max="20"
-                />
-                <p class="text-sm text-hint mt-8">
-                  Maximum number of downloads to submit in a single auto-download task run.
+                  Maximum number of downloads allowed system-wide across all tracked periodicals
+                  (default: 10).
                 </p>
               </div>
 

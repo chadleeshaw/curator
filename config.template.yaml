@@ -146,12 +146,8 @@ downloads:
   max_retries: 1
 
   # Maximum number of concurrent downloads allowed system-wide
-  # This is the total limit across all tracked periodicals, not per batch
+  # This is the total limit across all tracked periodicals
   max_concurrent: 10
-
-  # Maximum number of downloads to process per batch run
-  # Controls how many downloads are submitted in a single auto-download task execution
-  max_per_batch: 5
 
 # OCR (Optical Character Recognition) Configuration
 # Controls image preprocessing for OCR text extraction

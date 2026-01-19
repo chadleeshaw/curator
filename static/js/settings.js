@@ -444,11 +444,9 @@ export class SettingsManager {
   displayDownloadsSettings(downloadsConfig) {
     const maxRetries = document.getElementById('downloads-max-retries');
     const maxConcurrent = document.getElementById('downloads-max-concurrent');
-    const maxPerBatch = document.getElementById('downloads-max-per-batch');
 
     if (maxRetries) maxRetries.value = downloadsConfig.max_retries || 1;
     if (maxConcurrent) maxConcurrent.value = downloadsConfig.max_concurrent || 10;
-    if (maxPerBatch) maxPerBatch.value = downloadsConfig.max_per_batch || 5;
   }
 
   /**
@@ -943,12 +941,10 @@ export class SettingsManager {
     try {
       const maxRetries = document.getElementById('downloads-max-retries')?.value;
       const maxConcurrent = document.getElementById('downloads-max-concurrent')?.value;
-      const maxPerBatch = document.getElementById('downloads-max-per-batch')?.value;
 
       const downloadsConfig = {
         max_retries: parseInt(maxRetries) || 1,
         max_concurrent: parseInt(maxConcurrent) || 10,
-        max_per_batch: parseInt(maxPerBatch) || 5,
       };
 
       const response = await APIClient.post('/api/config', { downloads: downloadsConfig });
