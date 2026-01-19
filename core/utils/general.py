@@ -78,9 +78,7 @@ def cleanup_empty_directories(start_path: Path, base_dir: Path) -> None:
             )
             if result.returncode != 0:
                 # Fall back to Python implementation if find command fails
-                logger.debug(
-                    f"Find command failed, using Python fallback: {result.stderr}"
-                )
+                logger.debug(f"Find command failed, using Python fallback: {result.stderr}")
                 _cleanup_empty_directories_python(start_path, base_dir)
         except FileNotFoundError:
             # find command not available (e.g., Windows), use Python implementation
@@ -146,9 +144,7 @@ def _cleanup_empty_directories_python(start_path: Path, base_dir: Path) -> None:
         logger.debug(f"Error in Python directory cleanup: {e}")
 
 
-def hash_file_in_chunks(
-    file_path: str, algorithm=hashlib.sha256, chunk_size: int = 8192
-) -> Optional[str]:
+def hash_file_in_chunks(file_path: str, algorithm=hashlib.sha256, chunk_size: int = 8192) -> Optional[str]:
     """
     Calculate the hash of a file without loading the entire file into memory.
 
@@ -239,9 +235,7 @@ def find_pdf_epub_files(directory: Path, recursive: bool = True) -> list[Path]:
     filtered_files = []
     for file in all_files:
         if file.suffix.lower() in BLACKLISTED_FILE_EXTENSIONS:
-            logger.warning(
-                f"Skipping blacklisted file extension '{file.suffix}': {file.name}"
-            )
+            logger.warning(f"Skipping blacklisted file extension '{file.suffix}': {file.name}")
         else:
             filtered_files.append(file)
 
