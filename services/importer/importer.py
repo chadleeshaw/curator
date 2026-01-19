@@ -293,7 +293,7 @@ class FileImporter:
         tracking_mode: str = "watch",
         use_ocr: bool = True,
         tracking_id: Optional[int] = None,
-    ) -> bool:
+    ) -> Dict[str, Any]:
         """
         Import a single PDF file.
 
@@ -308,7 +308,7 @@ class FileImporter:
             tracking_id: Optional tracking ID to associate this file with (from DownloadSubmission)
 
         Returns:
-            True if successful, False otherwise
+            Dictionary with result information including magazine_id, or empty dict if failed
         """
         try:
             # Check for sidecar metadata file first - this provides tracking context
@@ -328,7 +328,7 @@ class FileImporter:
             # Step 1: Validate title before processing (already done in parser for search results)
             if not self.title_matcher.validate_before_parsing(parsed.title):
                 logger.warning(f"Skipping invalid release title: {parsed.title} (from {pdf_path.name})")
-                return False
+                return {}
 
             logger.debug(f"Parsed metadata: '{parsed.title}' (confidence: {parsed.confidence})")
 
@@ -336,7 +336,7 @@ class FileImporter:
             content_hash = hash_file_in_chunks(str(pdf_path))
             if not content_hash:
                 logger.error(f"Failed to hash file {pdf_path}, skipping import", exc_info=True)
-                return False
+                return {}
 
             # First check: hash-based duplicate detection (100% accurate)
             # Only check if we have a valid hash (skip NULL hashes from older imports)
@@ -358,7 +358,7 @@ class FileImporter:
                 # Cleanup duplicate file from downloads if not already organized
                 if not skip_organize:
                     self._cleanup_download_file(pdf_path)
-                return False
+                return {}
 
             # Extract special edition info from parsed data
             base_title = parsed.base_title
@@ -443,7 +443,7 @@ class FileImporter:
                         # Cleanup duplicate file from downloads if not already organized
                         if not skip_organize:
                             self._cleanup_download_file(pdf_path)
-                        return False
+                        return {}
 
             cover_path = self._extract_cover(pdf_path)
 
@@ -468,7 +468,7 @@ class FileImporter:
                 organized_path = self.organizer.organize(pdf_path, metadata, category, organization_pattern)
 
                 if not organized_path:
-                    return False
+                    return {}
 
             # Build extra metadata, including special edition info if applicable
             extra_metadata = {
@@ -718,12 +718,12 @@ class FileImporter:
             if not skip_organize:
                 self._cleanup_download_file(pdf_path)
 
-            return True
+            return {"magazine_id": magazine.id}
 
         except Exception as e:
             session.rollback()
             logger.error(f"Error importing PDF {pdf_path}: {e}", exc_info=True)
-            return False
+            return {}
 
     def _cleanup_download_file(self, pdf_path: Path) -> None:
         """
