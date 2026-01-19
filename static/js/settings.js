@@ -123,6 +123,26 @@ export class SettingsManager {
     if (config.config?.import) {
       this.displayImportSettings(config.config.import);
     }
+
+    // Display downloads settings
+    if (config.config?.downloads) {
+      this.displayDownloadsSettings(config.config.downloads);
+    }
+
+    // Display tasks settings
+    if (config.config?.tasks) {
+      this.displayTasksSettings(config.config.tasks);
+    }
+
+    // Display PDF settings
+    if (config.config?.pdf) {
+      this.displayPDFSettings(config.config.pdf);
+    }
+
+    // Display OCR settings
+    if (config.config?.ocr) {
+      this.displayOCRSettings(config.config.ocr);
+    }
   }
 
   /**
@@ -249,6 +269,79 @@ export class SettingsManager {
       pattern.value = importConfig.organization_pattern || 'data/{category}/{title}/{year}/';
     if (enableTextScan) enableTextScan.checked = importConfig.enable_text_scan ?? true;
     if (enableOcr) enableOcr.checked = importConfig.enable_ocr ?? true;
+  }
+
+  /**
+   * Display download settings
+   */
+  displayDownloadsSettings(downloadsConfig) {
+    const maxRetries = document.getElementById('downloads-max-retries');
+    const maxConcurrent = document.getElementById('downloads-max-concurrent');
+    const maxPerBatch = document.getElementById('downloads-max-per-batch');
+
+    if (maxRetries) maxRetries.value = downloadsConfig.max_retries || 1;
+    if (maxConcurrent) maxConcurrent.value = downloadsConfig.max_concurrent || 10;
+    if (maxPerBatch) maxPerBatch.value = downloadsConfig.max_per_batch || 5;
+  }
+
+  /**
+   * Display tasks settings
+   */
+  displayTasksSettings(tasksConfig) {
+    const autoDownloadInterval = document.getElementById('tasks-auto-download-interval');
+    const downloadMonitorInterval = document.getElementById('tasks-download-monitor-interval');
+    const cleanupCoversInterval = document.getElementById('tasks-cleanup-covers-interval');
+    const ocrProcessorInterval = document.getElementById('tasks-ocr-processor-interval');
+    const maxPeriodicalsPerSearch = document.getElementById('tasks-max-periodicals-per-search');
+    const rapidSearchInterval = document.getElementById('tasks-rapid-search-interval');
+    const normalSearchInterval = document.getElementById('tasks-normal-search-interval');
+    const slowSearchInterval = document.getElementById('tasks-slow-search-interval');
+    const verySlowSearchInterval = document.getElementById('tasks-very-slow-search-interval');
+
+    if (autoDownloadInterval)
+      autoDownloadInterval.value = tasksConfig.auto_download_interval || 1800;
+    if (downloadMonitorInterval)
+      downloadMonitorInterval.value = tasksConfig.download_monitor_interval || 30;
+    if (cleanupCoversInterval)
+      cleanupCoversInterval.value = tasksConfig.cleanup_covers_interval || 86400;
+    if (ocrProcessorInterval) ocrProcessorInterval.value = tasksConfig.ocr_processor_interval || 10;
+    if (maxPeriodicalsPerSearch)
+      maxPeriodicalsPerSearch.value = tasksConfig.max_periodicals_per_search || 2;
+    if (rapidSearchInterval) rapidSearchInterval.value = tasksConfig.rapid_search_interval || 1;
+    if (normalSearchInterval) normalSearchInterval.value = tasksConfig.normal_search_interval || 6;
+    if (slowSearchInterval) slowSearchInterval.value = tasksConfig.slow_search_interval || 24;
+    if (verySlowSearchInterval)
+      verySlowSearchInterval.value = tasksConfig.very_slow_search_interval || 168;
+  }
+
+  /**
+   * Display PDF settings
+   */
+  displayPDFSettings(pdfConfig) {
+    const coverDpiLow = document.getElementById('pdf-cover-dpi-low');
+    const coverDpiHigh = document.getElementById('pdf-cover-dpi-high');
+    const coverQualityLow = document.getElementById('pdf-cover-quality-low');
+    const coverQualityHigh = document.getElementById('pdf-cover-quality-high');
+
+    if (coverDpiLow) coverDpiLow.value = pdfConfig.cover_dpi_low || 60;
+    if (coverDpiHigh) coverDpiHigh.value = pdfConfig.cover_dpi_high || 200;
+    if (coverQualityLow) coverQualityLow.value = pdfConfig.cover_quality_low || 50;
+    if (coverQualityHigh) coverQualityHigh.value = pdfConfig.cover_quality_high || 85;
+  }
+
+  /**
+   * Display OCR settings
+   */
+  displayOCRSettings(ocrConfig) {
+    const resizeWidth = document.getElementById('ocr-resize-width');
+    const contrastEnhance = document.getElementById('ocr-contrast-enhance');
+    const denoiseH = document.getElementById('ocr-denoise-h');
+    const sharpenKernel = document.getElementById('ocr-sharpen-kernel');
+
+    if (resizeWidth) resizeWidth.value = ocrConfig.resize_width || 1200;
+    if (contrastEnhance) contrastEnhance.value = ocrConfig.contrast_enhance || 1.5;
+    if (denoiseH) denoiseH.value = ocrConfig.denoise_h || 10;
+    if (sharpenKernel) sharpenKernel.value = ocrConfig.sharpen_kernel || 5;
   }
 
   /**
@@ -613,6 +706,200 @@ export class SettingsManager {
     } catch (error) {
       console.error('Error saving theme settings:', error);
       UIUtils.showStatus('settings-status', 'Error: ' + error.message, 'error');
+    }
+  }
+
+  /**
+   * Save downloads settings
+   */
+  async saveDownloadsSettings() {
+    try {
+      const maxRetries = document.getElementById('downloads-max-retries')?.value;
+      const maxConcurrent = document.getElementById('downloads-max-concurrent')?.value;
+      const maxPerBatch = document.getElementById('downloads-max-per-batch')?.value;
+
+      const downloadsConfig = {
+        max_retries: parseInt(maxRetries) || 1,
+        max_concurrent: parseInt(maxConcurrent) || 10,
+        max_per_batch: parseInt(maxPerBatch) || 5,
+      };
+
+      const response = await APIClient.post('/api/config', { downloads: downloadsConfig });
+      const data = await response.json();
+
+      if (data.success) {
+        UIUtils.showStatus('downloads-message', 'Downloads settings saved', 'success');
+        setTimeout(() => UIUtils.hideStatus('downloads-message'), 3000);
+      } else {
+        UIUtils.showStatus('downloads-message', data.message || 'Error saving settings', 'error');
+      }
+    } catch (error) {
+      console.error('Error saving downloads settings:', error);
+      UIUtils.showStatus('downloads-message', 'Error: ' + error.message, 'error');
+    }
+  }
+
+  /**
+   * Save tasks settings (background task intervals)
+   */
+  async saveTasksSettings() {
+    try {
+      const autoDownloadInterval = document.getElementById('tasks-auto-download-interval')?.value;
+      const downloadMonitorInterval = document.getElementById(
+        'tasks-download-monitor-interval'
+      )?.value;
+      const cleanupCoversInterval = document.getElementById('tasks-cleanup-covers-interval')?.value;
+      const ocrProcessorInterval = document.getElementById('tasks-ocr-processor-interval')?.value;
+
+      const tasksConfig = {
+        auto_download_interval: parseInt(autoDownloadInterval) || 1800,
+        download_monitor_interval: parseInt(downloadMonitorInterval) || 30,
+        cleanup_covers_interval: parseInt(cleanupCoversInterval) || 86400,
+        ocr_processor_interval: parseInt(ocrProcessorInterval) || 10,
+      };
+
+      // Preserve other task settings that aren't in this form section
+      if (this.currentConfig?.config?.tasks) {
+        const current = this.currentConfig.config.tasks;
+        tasksConfig.max_periodicals_per_search =
+          current.max_periodicals_per_search !== undefined ? current.max_periodicals_per_search : 2;
+        tasksConfig.rapid_search_interval =
+          current.rapid_search_interval !== undefined ? current.rapid_search_interval : 1;
+        tasksConfig.normal_search_interval =
+          current.normal_search_interval !== undefined ? current.normal_search_interval : 6;
+        tasksConfig.slow_search_interval =
+          current.slow_search_interval !== undefined ? current.slow_search_interval : 24;
+        tasksConfig.very_slow_search_interval =
+          current.very_slow_search_interval !== undefined ? current.very_slow_search_interval : 168;
+      }
+
+      const response = await APIClient.post('/api/config', { tasks: tasksConfig });
+      const data = await response.json();
+
+      if (data.success) {
+        UIUtils.showStatus('tasks-message', 'Task settings saved', 'success');
+        setTimeout(() => UIUtils.hideStatus('tasks-message'), 3000);
+      } else {
+        UIUtils.showStatus('tasks-message', data.message || 'Error saving settings', 'error');
+      }
+    } catch (error) {
+      console.error('Error saving tasks settings:', error);
+      UIUtils.showStatus('tasks-message', 'Error: ' + error.message, 'error');
+    }
+  }
+
+  /**
+   * Save discovery settings (adaptive search scheduling)
+   */
+  async saveDiscoverySettings() {
+    try {
+      const maxPeriodicalsPerSearch = document.getElementById(
+        'tasks-max-periodicals-per-search'
+      )?.value;
+      const rapidSearchInterval = document.getElementById('tasks-rapid-search-interval')?.value;
+      const normalSearchInterval = document.getElementById('tasks-normal-search-interval')?.value;
+      const slowSearchInterval = document.getElementById('tasks-slow-search-interval')?.value;
+      const verySlowSearchInterval = document.getElementById(
+        'tasks-very-slow-search-interval'
+      )?.value;
+
+      const tasksConfig = {
+        max_periodicals_per_search: parseInt(maxPeriodicalsPerSearch) || 2,
+        rapid_search_interval: parseFloat(rapidSearchInterval) || 1,
+        normal_search_interval: parseFloat(normalSearchInterval) || 6,
+        slow_search_interval: parseFloat(slowSearchInterval) || 24,
+        very_slow_search_interval: parseFloat(verySlowSearchInterval) || 168,
+      };
+
+      // Preserve other task settings that aren't in this form section
+      if (this.currentConfig?.config?.tasks) {
+        const current = this.currentConfig.config.tasks;
+        tasksConfig.auto_download_interval =
+          current.auto_download_interval !== undefined ? current.auto_download_interval : 1800;
+        tasksConfig.download_monitor_interval =
+          current.download_monitor_interval !== undefined ? current.download_monitor_interval : 30;
+        tasksConfig.cleanup_covers_interval =
+          current.cleanup_covers_interval !== undefined ? current.cleanup_covers_interval : 86400;
+        tasksConfig.ocr_processor_interval =
+          current.ocr_processor_interval !== undefined ? current.ocr_processor_interval : 10;
+      }
+
+      const response = await APIClient.post('/api/config', { tasks: tasksConfig });
+      const data = await response.json();
+
+      if (data.success) {
+        UIUtils.showStatus('discovery-message', 'Discovery settings saved', 'success');
+        setTimeout(() => UIUtils.hideStatus('discovery-message'), 3000);
+      } else {
+        UIUtils.showStatus('discovery-message', data.message || 'Error saving settings', 'error');
+      }
+    } catch (error) {
+      console.error('Error saving discovery settings:', error);
+      UIUtils.showStatus('discovery-message', 'Error: ' + error.message, 'error');
+    }
+  }
+
+  /**
+   * Save PDF settings
+   */
+  async savePDFSettings() {
+    try {
+      const coverDpiLow = document.getElementById('pdf-cover-dpi-low')?.value;
+      const coverDpiHigh = document.getElementById('pdf-cover-dpi-high')?.value;
+      const coverQualityLow = document.getElementById('pdf-cover-quality-low')?.value;
+      const coverQualityHigh = document.getElementById('pdf-cover-quality-high')?.value;
+
+      const pdfConfig = {
+        cover_dpi_low: parseInt(coverDpiLow) || 60,
+        cover_dpi_high: parseInt(coverDpiHigh) || 200,
+        cover_quality_low: parseInt(coverQualityLow) || 50,
+        cover_quality_high: parseInt(coverQualityHigh) || 85,
+      };
+
+      const response = await APIClient.post('/api/config', { pdf: pdfConfig });
+      const data = await response.json();
+
+      if (data.success) {
+        UIUtils.showStatus('pdf-message', 'PDF settings saved', 'success');
+        setTimeout(() => UIUtils.hideStatus('pdf-message'), 3000);
+      } else {
+        UIUtils.showStatus('pdf-message', data.message || 'Error saving settings', 'error');
+      }
+    } catch (error) {
+      console.error('Error saving PDF settings:', error);
+      UIUtils.showStatus('pdf-message', 'Error: ' + error.message, 'error');
+    }
+  }
+
+  /**
+   * Save OCR settings
+   */
+  async saveOCRSettings() {
+    try {
+      const resizeWidth = document.getElementById('ocr-resize-width')?.value;
+      const contrastEnhance = document.getElementById('ocr-contrast-enhance')?.value;
+      const denoiseH = document.getElementById('ocr-denoise-h')?.value;
+      const sharpenKernel = document.getElementById('ocr-sharpen-kernel')?.value;
+
+      const ocrConfig = {
+        resize_width: parseInt(resizeWidth) || 1200,
+        contrast_enhance: parseFloat(contrastEnhance) || 1.5,
+        denoise_h: parseInt(denoiseH) || 10,
+        sharpen_kernel: parseInt(sharpenKernel) || 5,
+      };
+
+      const response = await APIClient.post('/api/config', { ocr: ocrConfig });
+      const data = await response.json();
+
+      if (data.success) {
+        UIUtils.showStatus('ocr-message', 'OCR settings saved', 'success');
+        setTimeout(() => UIUtils.hideStatus('ocr-message'), 3000);
+      } else {
+        UIUtils.showStatus('ocr-message', data.message || 'Error saving settings', 'error');
+      }
+    } catch (error) {
+      console.error('Error saving OCR settings:', error);
+      UIUtils.showStatus('ocr-message', 'Error: ' + error.message, 'error');
     }
   }
 
@@ -1040,3 +1327,8 @@ window.regenerateAPIToken = () => settings.regenerateAPIToken();
 window.openPurgeCacheModal = () => settings.openPurgeCacheModal();
 window.closePurgeCacheModal = () => settings.closePurgeCacheModal();
 window.confirmPurgeCache = () => settings.confirmPurgeCache();
+window.saveDownloadsSettings = () => settings.saveDownloadsSettings();
+window.saveTasksSettings = () => settings.saveTasksSettings();
+window.saveDiscoverySettings = () => settings.saveDiscoverySettings();
+window.savePDFSettings = () => settings.savePDFSettings();
+window.saveOCRSettings = () => settings.saveOCRSettings();

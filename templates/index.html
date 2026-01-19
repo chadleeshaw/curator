@@ -811,59 +811,328 @@
 
           <!-- Downloads & Tasks Settings Tab -->
           <div id="settings-tasks-tab" class="settings-sub-tab">
-            <!-- Download Settings (placeholder for future) -->
+            <!-- Download Settings -->
             <div class="settings-section">
               <h3>Download Settings</h3>
               <p class="text-base text-muted mb-15">
                 Configure download limits and concurrent downloads.
               </p>
-              <p class="text-sm text-hint">
-                Download settings coming soon. Currently managed via config.yaml:
-                <br />• max_retries: Maximum retry attempts for failed downloads <br />•
-                max_concurrent: Maximum concurrent downloads system-wide
-              </p>
+
+              <div class="settings-field">
+                <label for="downloads-max-retries">Max Retry Attempts:</label>
+                <input type="number" id="downloads-max-retries" placeholder="1" min="0" max="10" />
+                <p class="text-sm text-hint mt-8">
+                  Number of times to retry a failed download before marking it as failed.
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="downloads-max-concurrent">Max Concurrent Downloads:</label>
+                <input
+                  type="number"
+                  id="downloads-max-concurrent"
+                  placeholder="10"
+                  min="1"
+                  max="50"
+                />
+                <p class="text-sm text-hint mt-8">
+                  Maximum number of downloads allowed to run simultaneously system-wide.
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="downloads-max-per-batch">Max Per Batch:</label>
+                <input
+                  type="number"
+                  id="downloads-max-per-batch"
+                  placeholder="5"
+                  min="1"
+                  max="20"
+                />
+                <p class="text-sm text-hint mt-8">
+                  Maximum number of downloads to submit in a single auto-download task run.
+                </p>
+              </div>
+
+              <button onclick="saveDownloadsSettings()" class="save-btn">
+                Save Download Settings
+              </button>
+              <div id="downloads-message" class="hidden"></div>
             </div>
 
-            <!-- Task Intervals (placeholder for future) -->
+            <!-- Task Intervals -->
             <div class="settings-section">
               <h3>Background Task Intervals</h3>
               <p class="text-base text-muted mb-15">
-                Control how often background tasks run (discovery, OCR, cleanup, etc.).
+                Control how often background tasks run (in seconds).
               </p>
-              <p class="text-sm text-hint">
-                Task interval settings coming soon. Currently managed via config.yaml in the tasks
-                section.
+
+              <div class="settings-field">
+                <label for="tasks-auto-download-interval">Auto-Download Interval (seconds):</label>
+                <input
+                  type="number"
+                  id="tasks-auto-download-interval"
+                  placeholder="1800"
+                  min="60"
+                  max="86400"
+                />
+                <p class="text-sm text-hint mt-8">
+                  How often to search for and download new tracked issues (recommended: 1800-3600).
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="tasks-download-monitor-interval"
+                  >Download Monitor Interval (seconds):</label
+                >
+                <input
+                  type="number"
+                  id="tasks-download-monitor-interval"
+                  placeholder="30"
+                  min="5"
+                  max="300"
+                />
+                <p class="text-sm text-hint mt-8">
+                  How often to check download status and import completed files.
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="tasks-cleanup-covers-interval"
+                  >Cleanup Covers Interval (seconds):</label
+                >
+                <input
+                  type="number"
+                  id="tasks-cleanup-covers-interval"
+                  placeholder="86400"
+                  min="3600"
+                  max="604800"
+                />
+                <p class="text-sm text-hint mt-8">
+                  How often to remove orphaned covers and generate missing ones (recommended: 86400
+                  = 24 hours).
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="tasks-ocr-processor-interval">OCR Processor Interval (seconds):</label>
+                <input
+                  type="number"
+                  id="tasks-ocr-processor-interval"
+                  placeholder="10"
+                  min="5"
+                  max="300"
+                />
+                <p class="text-sm text-hint mt-8">How often to process queued OCR jobs.</p>
+              </div>
+
+              <button onclick="saveTasksSettings()" class="save-btn">Save Task Settings</button>
+              <div id="tasks-message" class="hidden"></div>
+            </div>
+
+            <!-- Discovery Settings -->
+            <div class="settings-section">
+              <h3>Issue Discovery Settings</h3>
+              <p class="text-base text-muted mb-15">
+                Configure adaptive search scheduling for tracked periodicals.
               </p>
+
+              <div class="settings-field">
+                <label for="tasks-max-periodicals-per-search">Max Periodicals Per Search:</label>
+                <input
+                  type="number"
+                  id="tasks-max-periodicals-per-search"
+                  placeholder="2"
+                  min="1"
+                  max="10"
+                />
+                <p class="text-sm text-hint mt-8">
+                  How many periodicals to search per auto-download run (lower = less provider load).
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="tasks-rapid-search-interval">Rapid Search Interval (hours):</label>
+                <input
+                  type="number"
+                  id="tasks-rapid-search-interval"
+                  placeholder="1"
+                  min="0.5"
+                  max="24"
+                  step="0.5"
+                />
+                <p class="text-sm text-hint mt-8">Search frequency when finding new issues.</p>
+              </div>
+
+              <div class="settings-field">
+                <label for="tasks-normal-search-interval">Normal Search Interval (hours):</label>
+                <input
+                  type="number"
+                  id="tasks-normal-search-interval"
+                  placeholder="6"
+                  min="1"
+                  max="48"
+                />
+                <p class="text-sm text-hint mt-8">Default search frequency.</p>
+              </div>
+
+              <div class="settings-field">
+                <label for="tasks-slow-search-interval">Slow Search Interval (hours):</label>
+                <input
+                  type="number"
+                  id="tasks-slow-search-interval"
+                  placeholder="24"
+                  min="6"
+                  max="168"
+                />
+                <p class="text-sm text-hint mt-8">
+                  Search frequency when no new issues found (daily).
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="tasks-very-slow-search-interval"
+                  >Very Slow Search Interval (hours):</label
+                >
+                <input
+                  type="number"
+                  id="tasks-very-slow-search-interval"
+                  placeholder="168"
+                  min="24"
+                  max="720"
+                />
+                <p class="text-sm text-hint mt-8">
+                  Search frequency for very quiet periodicals (weekly).
+                </p>
+              </div>
+
+              <button onclick="saveDiscoverySettings()" class="save-btn">
+                Save Discovery Settings
+              </button>
+              <div id="discovery-message" class="hidden"></div>
             </div>
           </div>
 
           <!-- PDF & OCR Settings Tab -->
           <div id="settings-pdf-ocr-tab" class="settings-sub-tab">
-            <!-- PDF Settings (placeholder for future) -->
+            <!-- PDF Settings -->
             <div class="settings-section">
               <h3>PDF Cover Extraction</h3>
               <p class="text-base text-muted mb-15">
                 Configure DPI and quality for PDF cover extraction.
               </p>
-              <p class="text-sm text-hint">
-                PDF settings coming soon. Currently managed via config.yaml:
-                <br />• cover_dpi_low/high: DPI for thumbnail vs high-quality covers <br />•
-                cover_quality_low/high: JPEG quality for cover images
-              </p>
+
+              <div class="settings-field">
+                <label for="pdf-cover-dpi-low">Low DPI (thumbnails):</label>
+                <input type="number" id="pdf-cover-dpi-low" placeholder="60" min="30" max="150" />
+                <p class="text-sm text-hint mt-8">
+                  DPI for thumbnail/preview covers (lower = faster, smaller files).
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="pdf-cover-dpi-high">High DPI (quality):</label>
+                <input
+                  type="number"
+                  id="pdf-cover-dpi-high"
+                  placeholder="200"
+                  min="150"
+                  max="600"
+                />
+                <p class="text-sm text-hint mt-8">
+                  DPI for high-quality covers (higher = better quality, larger files).
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="pdf-cover-quality-low">Low JPEG Quality (%):</label>
+                <input
+                  type="number"
+                  id="pdf-cover-quality-low"
+                  placeholder="50"
+                  min="20"
+                  max="100"
+                />
+                <p class="text-sm text-hint mt-8">JPEG quality for thumbnail covers (1-100).</p>
+              </div>
+
+              <div class="settings-field">
+                <label for="pdf-cover-quality-high">High JPEG Quality (%):</label>
+                <input
+                  type="number"
+                  id="pdf-cover-quality-high"
+                  placeholder="85"
+                  min="50"
+                  max="100"
+                />
+                <p class="text-sm text-hint mt-8">JPEG quality for high-quality covers (1-100).</p>
+              </div>
+
+              <button onclick="savePDFSettings()" class="save-btn">Save PDF Settings</button>
+              <div id="pdf-message" class="hidden"></div>
             </div>
 
-            <!-- OCR Settings (placeholder for future) -->
+            <!-- OCR Settings -->
             <div class="settings-section">
               <h3>OCR Preprocessing</h3>
               <p class="text-base text-muted mb-15">
                 Configure image preprocessing for better OCR accuracy.
               </p>
-              <p class="text-sm text-hint">
-                OCR settings coming soon. Currently managed via config.yaml:
-                <br />• resize_width: Image resize width for OCR processing <br />•
-                contrast_enhance: Contrast enhancement factor <br />• denoise_h: Denoise strength
-                <br />• sharpen_kernel: Sharpening kernel size
-              </p>
+
+              <div class="settings-field">
+                <label for="ocr-resize-width">Resize Width (pixels):</label>
+                <input
+                  type="number"
+                  id="ocr-resize-width"
+                  placeholder="1200"
+                  min="600"
+                  max="3000"
+                />
+                <p class="text-sm text-hint mt-8">
+                  Image width for OCR processing (smaller = faster, larger = more accurate).
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="ocr-contrast-enhance">Contrast Enhancement Factor:</label>
+                <input
+                  type="number"
+                  id="ocr-contrast-enhance"
+                  placeholder="1.5"
+                  min="1.0"
+                  max="2.0"
+                  step="0.1"
+                />
+                <p class="text-sm text-hint mt-8">
+                  Contrast boost for better text recognition (1.0-2.0, default: 1.5).
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="ocr-denoise-h">Denoise Strength:</label>
+                <input type="number" id="ocr-denoise-h" placeholder="10" min="0" max="20" />
+                <p class="text-sm text-hint mt-8">
+                  Noise reduction strength (higher = more smoothing, may blur text).
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="ocr-sharpen-kernel">Sharpen Kernel Size:</label>
+                <input
+                  type="number"
+                  id="ocr-sharpen-kernel"
+                  placeholder="5"
+                  min="3"
+                  max="9"
+                  step="2"
+                />
+                <p class="text-sm text-hint mt-8">
+                  Sharpening kernel size (must be odd: 3, 5, 7, or 9).
+                </p>
+              </div>
+
+              <button onclick="saveOCRSettings()" class="save-btn">Save OCR Settings</button>
+              <div id="ocr-message" class="hidden"></div>
             </div>
           </div>
 
