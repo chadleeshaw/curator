@@ -831,8 +831,37 @@
 
               <h4 style="margin: 20px 0 10px 0; font-size: 16px">Minimum Confidence Thresholds</h4>
               <p class="text-sm text-muted mb-15">
-                Source must meet threshold (0-100%) for its value to be used.
+                For each metadata field (year, month, issue number, etc.), the system tries sources
+                in priority order. A source is only used if its confidence score meets or exceeds
+                its threshold.
               </p>
+              <div
+                style="
+                  padding: 12px;
+                  background: var(--surface-variant);
+                  border-left: 3px solid var(--primary-color);
+                  border-radius: 4px;
+                  margin-bottom: 20px;
+                "
+              >
+                <p class="text-sm" style="margin-bottom: 8px">
+                  <strong>Example:</strong> For a file "Magazine - Jan 2024.pdf":
+                </p>
+                <ul class="text-sm text-muted" style="margin-left: 20px; line-height: 1.6">
+                  <li>
+                    <strong>OCR</strong> reads "2023" but only 65% confident → Below 70% threshold →
+                    Skip ❌
+                  </li>
+                  <li><strong>Text Scan</strong> not available (scanned images) → Skip ❌</li>
+                  <li>
+                    <strong>Filename</strong> says "2024" (100% confidence) → Above 0% threshold →
+                    Use ✅
+                  </li>
+                </ul>
+                <p class="text-sm text-hint" style="margin-top: 8px">
+                  Result: Year = 2024 (from filename, since OCR wasn't confident enough)
+                </p>
+              </div>
 
               <div class="settings-field">
                 <label for="metadata-confidence-ocr">OCR Confidence (%):</label>
@@ -844,7 +873,8 @@
                   max="100"
                 />
                 <p class="text-sm text-hint mt-8">
-                  OCR must be this confident for values to be used (default: 70%).
+                  How confident OCR must be before using its values (default: 70%). OCR has
+                  per-field confidence scores based on text recognition quality.
                 </p>
               </div>
 
@@ -858,7 +888,8 @@
                   max="100"
                 />
                 <p class="text-sm text-hint mt-8">
-                  Text scan confidence threshold (default: 50%, treated as 100% if available).
+                  Threshold for direct text extraction from native PDFs/EPUBs (default: 50%). Text
+                  scan is treated as 100% confident when available.
                 </p>
               </div>
 
@@ -872,7 +903,8 @@
                   max="100"
                 />
                 <p class="text-sm text-hint mt-8">
-                  Filename parsing threshold (default: 0%, always accept).
+                  Threshold for filename parsing (default: 0%, always accept as fallback). Filename
+                  parsing is treated as 100% confident.
                 </p>
               </div>
 
