@@ -1019,11 +1019,11 @@
   border: 1px solid var(--border-color);
   overflow-x: auto;
   flex-wrap: wrap;
+  justify-content: flex-start;
 }
 
 .settings-tab-btn {
-  flex: 1 1 auto;
-  min-width: 140px;
+  flex: 0 1 auto;
   padding: 10px 16px;
   background: var(--surface);
   color: var(--text-secondary);
@@ -1045,7 +1045,6 @@
 
   .settings-tab-btn {
     width: 100%;
-    min-width: unset;
   }
 }
 
