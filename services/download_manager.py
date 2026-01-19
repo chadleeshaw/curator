@@ -446,6 +446,7 @@ class DownloadManager:
                     session,
                     search_result_db_id=search_result_db_id,
                     error_message="Client rejected submission",
+                    attempt_count=1,  # Count this as the first failed attempt
                 )
                 return None
 
@@ -459,7 +460,7 @@ class DownloadManager:
                 search_result_db_id=search_result_db_id,
                 job_id=job_id,
                 client_name=self.download_client.name,
-                attempt_count=1,
+                attempt_count=0,  # Will be incremented to 1 when status is updated
             )
             logger.debug(f"[DownloadManager] Created DownloadSubmission record ID: {submission.id}")
 
@@ -479,6 +480,7 @@ class DownloadManager:
                 session,
                 search_result_db_id=search_result_db_id,
                 error_message=str(e),
+                attempt_count=1,  # Count this as the first failed attempt
             )
             return None
 
@@ -863,6 +865,9 @@ class DownloadManager:
         """
         Download a single issue submitted by the user.
 
+        This method now uses the Issue Discovery & Tracking system to ensure
+        all downloads (manual and automatic) flow through the same tracking system.
+
         Args:
             tracking_id: Periodical tracking ID (for tracking/organization)
             search_result: Search result dict with title, url, etc.
@@ -871,8 +876,57 @@ class DownloadManager:
         Returns:
             DownloadSubmission record if successful
         """
+        from models.database import DiscoveredIssue
+        from services import IssueDiscoveryService
+
         logger.info(f"Submitting single issue download: {search_result['title']} (tracking_id: {tracking_id})")
 
+        # Use Issue Discovery service to create/find DiscoveredIssue
+        # This ensures manual downloads go through the same system as automatic ones
+        service = IssueDiscoveryService()
+
+        # Record this as a discovered issue (will be "wanted" if it matches tracking rules)
+        record_result = service.record_search_results(
+            tracking_id=tracking_id,
+            search_results=[search_result],
+            session=session,
+        )
+
+        if record_result["new"] == 0 and record_result["updated"] == 0:
+            logger.warning(f"Failed to record search result for manual download: {search_result['title']}")
+            # Fall back to direct submission for backward compatibility
+            return self._legacy_direct_submission(tracking_id, search_result, session)
+
+        # Find the discovered issue we just created/updated
+        discovered_issue = (
+            session.query(DiscoveredIssue)
+            .filter(
+                DiscoveredIssue.tracking_id == tracking_id,
+                DiscoveredIssue.title == search_result["title"],
+            )
+            .first()
+        )
+
+        if not discovered_issue:
+            logger.error(f"Could not find DiscoveredIssue after recording: {search_result['title']}")
+            return self._legacy_direct_submission(tracking_id, search_result, session)
+
+        # Force status to "wanted" for manual downloads (user explicitly requested it)
+        if discovered_issue.download_status not in ["wanted", "queued", "downloading"]:
+            discovered_issue.download_status = "wanted"
+            discovered_issue.download_priority = 100  # Highest priority for manual downloads
+            session.commit()
+
+        # Submit using the standard Issue Discovery flow
+        return self.submit_from_discovered_issue(discovered_issue.id, session)
+
+    def _legacy_direct_submission(
+        self, tracking_id: int, search_result: Dict[str, Any], session: Session
+    ) -> Optional[DownloadSubmission]:
+        """
+        Legacy direct submission method (bypasses Issue Discovery system).
+        Only used as fallback when Issue Discovery fails.
+        """
         # Create DB search result record
         search_result_db_id = None
         try:

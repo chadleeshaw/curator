@@ -164,12 +164,10 @@ function showQueueView(queueType) {
 
   // Load data and start refresh for active queue
   if (queueType === 'download') {
-    downloads.setFilter('all');
-    downloads.loadDownloadQueue();
+    downloads.setFilter('all'); // setFilter internally calls loadDownloadQueue()
     downloads.startAutoRefresh();
   } else if (queueType === 'ocr') {
-    ocrQueue.setFilter('all');
-    ocrQueue.loadQueue();
+    ocrQueue.setFilter('all'); // setFilter internally calls loadQueue()
     ocrQueue.startAutoRefresh();
   }
 
@@ -182,14 +180,12 @@ function showQueueView(queueType) {
  */
 async function updateQueueBadges() {
   try {
-    // Get download queue stats
-    const downloadResponse = await fetch('/api/downloads/queue', {
+    // Get download queue stats (use efficient status endpoint that only counts)
+    const downloadResponse = await fetch('/api/downloads/queue/status', {
       headers: { Authorization: `Bearer ${AuthManager.getToken()}` },
     });
     const downloadData = await downloadResponse.json();
-    const activeDownloads =
-      downloadData.queue?.filter((d) => d.status === 'pending' || d.status === 'downloading')
-        .length || 0;
+    const activeDownloads = downloadData.active || 0;
     document.getElementById('download-queue-badge').textContent = activeDownloads;
 
     // Get OCR queue stats

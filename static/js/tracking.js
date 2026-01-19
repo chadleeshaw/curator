@@ -679,14 +679,13 @@ export class TrackingManager {
    */
   async showFailedDownloadsForTracking(trackingId, periodicalTitle) {
     try {
-      // Fetch failed and permanently_failed issues for this tracking ID
-      const response = await APIClient.authenticatedFetch(
+      // Try to fetch from new Issue Discovery system first
+      const discoveryResponse = await APIClient.authenticatedFetch(
         `/api/discovered-issues?tracking_id=${trackingId}&status=failed,permanently_failed&limit=500`
       );
-      const data = await response.json();
+      const discoveryData = await discoveryResponse.json();
 
-      // Map issues to expected format
-      const issues = (data.issues || []).map((issue) => ({
+      let issues = (discoveryData.issues || []).map((issue) => ({
         id: issue.id,
         title: issue.title,
         download_attempts: issue.download_attempts,
@@ -694,6 +693,29 @@ export class TrackingManager {
         download_status: issue.download_status,
         isPermanentlyFailed: issue.download_status === 'permanently_failed',
       }));
+
+      // If no issues found in new system, try legacy download submissions
+      if (issues.length === 0) {
+        const submissionResponse = await APIClient.authenticatedFetch(
+          `/api/downloads/queue/all?status=failed`
+        );
+        const submissionData = await submissionResponse.json();
+
+        // Filter by tracking ID and map to expected format
+        const failedSubmissions = (submissionData.queue || []).filter(
+          (item) => item.tracking_id === trackingId && item.status === 'failed'
+        );
+
+        issues = failedSubmissions.map((submission) => ({
+          id: submission.submission_id,
+          title: submission.title,
+          download_attempts: submission.attempts || 0,
+          last_error: submission.error || 'Unknown error',
+          download_status: 'failed',
+          isPermanentlyFailed: false,
+          isLegacy: true, // Mark as legacy submission
+        }));
+      }
 
       if (issues.length === 0) {
         UIUtils.showToast('No failed downloads found', 'info');

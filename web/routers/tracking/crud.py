@@ -198,14 +198,29 @@ async def list_tracked_magazines(
                 total = db_session.query(MagazineTracking).count()
 
                 # Compute library count and failed download count for each tracked periodical
-                from models.database import Magazine, DownloadSubmission
+                from models.database import (
+                    Magazine,
+                    DiscoveredIssue,
+                    DownloadSubmission,
+                )
 
                 tracked_list = []
                 for t in tracked:
                     library_count = db_session.query(Magazine).filter(Magazine.tracking_id == t.id).count()
 
-                    # Count failed downloads (status='failed' and attempt_count < 2) and bad files (attempt_count >= 2)
-                    failed_count = (
+                    # Count failed downloads from both sources for backward compatibility:
+                    # 1. New Issue Discovery system (canonical going forward)
+                    # 2. Legacy DownloadSubmission system (for historical failures)
+                    discovered_failed = (
+                        db_session.query(DiscoveredIssue)
+                        .filter(
+                            DiscoveredIssue.tracking_id == t.id,
+                            DiscoveredIssue.download_status.in_(["failed", "permanently_failed"]),
+                        )
+                        .count()
+                    )
+
+                    legacy_failed = (
                         db_session.query(DownloadSubmission)
                         .filter(
                             DownloadSubmission.tracking_id == t.id,
@@ -213,6 +228,9 @@ async def list_tracked_magazines(
                         )
                         .count()
                     )
+
+                    # Show total of both systems (UI will query both)
+                    failed_count = discovered_failed + legacy_failed
 
                     tracked_list.append(
                         {

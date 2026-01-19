@@ -111,7 +111,38 @@ async def download_single_issue(
 
             submission = _shared._download_manager.download_single_issue(request.tracking_id, search_result, db_session)
             if not submission:
-                raise RuntimeError("Failed to submit download")
+                # Check if there's a failed submission with error details
+                failed_submission = (
+                    db_session.query(DownloadSubmission)
+                    .filter(
+                        DownloadSubmission.tracking_id == request.tracking_id,
+                        DownloadSubmission.result_title == request.title,
+                        DownloadSubmission.status == DownloadSubmission.StatusEnum.FAILED,
+                    )
+                    .order_by(DownloadSubmission.created_at.desc())
+                    .first()
+                )
+
+                if failed_submission and failed_submission.last_error:
+                    raise RuntimeError(f"Failed to submit download: {failed_submission.last_error}")
+
+                # Check if it was skipped
+                skipped_submission = (
+                    db_session.query(DownloadSubmission)
+                    .filter(
+                        DownloadSubmission.tracking_id == request.tracking_id,
+                        DownloadSubmission.result_title == request.title,
+                        DownloadSubmission.status == DownloadSubmission.StatusEnum.SKIPPED,
+                    )
+                    .order_by(DownloadSubmission.created_at.desc())
+                    .first()
+                )
+
+                if skipped_submission:
+                    raise RuntimeError("Download was skipped (duplicate or blacklisted file)")
+
+                # Generic fallback
+                raise RuntimeError("Failed to submit download - check download client connection")
 
             return DownloadSubmissionResponse(
                 submission_id=submission.id,

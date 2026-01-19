@@ -49,14 +49,21 @@ def _deep_merge(user_value: Any, template_value: Any, path: str = "") -> Any:
     Returns:
         Merged value with user settings preserved
     """
-    # If user value doesn't exist, use sample
+    # If user value doesn't exist, use template
     if user_value is None:
         return template_value
+
+    # If template value doesn't exist or is None, keep user value
+    # This handles cases where:
+    # - User has deprecated config that's been removed from template
+    # - Template has null/optional fields (e.g., jwt_secret: null)
+    if template_value is None:
+        return user_value
 
     # For dictionaries, recursively merge (check isinstance, not type equality)
     # This handles both dict and ruamel.yaml CommentedMap
     if isinstance(user_value, dict) and isinstance(template_value, dict):
-        result = template_value.copy()  # Start with sample (includes new keys)
+        result = template_value.copy()  # Start with template (includes new keys)
         for key in user_value:
             result[key] = _deep_merge(user_value.get(key), template_value.get(key), f"{path}.{key}")
         return result
@@ -67,28 +74,14 @@ def _deep_merge(user_value: Any, template_value: Any, path: str = "") -> Any:
         return user_value
 
     # For scalars (str, int, bool), always use user value
-    # But check type compatibility
+    # Only warn about type mismatches for actual type conflicts (not None vs value)
     if type(user_value) is not type(template_value):  # noqa: E721
-        logger.warning(
+        # Only log as debug since this is expected for optional fields
+        logger.debug(
             f"Config type mismatch at '{path}': user={type(user_value).__name__}, "
             f"template={type(template_value).__name__}. Using user value."
         )
 
-    return user_value
-
-    # For dictionaries, recursively merge
-    if isinstance(user_value, dict) and isinstance(template_value, dict):
-        result = template_value.copy()  # Start with sample (includes new keys)
-        for key in user_value:
-            result[key] = _deep_merge(user_value.get(key), template_value.get(key), f"{path}.{key}")
-        return result
-
-    # For lists, prefer user value entirely (don't merge list items)
-    # This is important for things like search_providers where order matters
-    if isinstance(user_value, list):
-        return user_value
-
-    # For scalars (str, int, bool), always use user value
     return user_value
 
 

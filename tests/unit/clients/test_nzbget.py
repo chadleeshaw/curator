@@ -228,8 +228,10 @@ def test_nzbget_get_status_failed():
 
         status = client.get_status("123")
 
-        # Implementation returns "pending" for any non-SUCCESS/DOWNLOADING status
-        assert status["status"] == "pending"
+        # Implementation returns "failed" for FAILURE status
+        assert status["status"] == "failed"
+        assert "error" in status
+        assert status["progress"] == 0
 
 
 def test_nzbget_get_status_unknown():
@@ -366,7 +368,10 @@ def test_nzbget_api_call_with_error_response():
 
     with patch("clients.nzbget.requests.post") as mock_post:
         mock_response = Mock()
-        mock_response.json.return_value = {"result": None, "error": {"code": -1, "message": "Invalid method"}}
+        mock_response.json.return_value = {
+            "result": None,
+            "error": {"code": -1, "message": "Invalid method"},
+        }
         mock_response.raise_for_status = Mock()
         mock_post.return_value = mock_response
 
