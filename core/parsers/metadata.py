@@ -190,10 +190,14 @@ class MetadataExtractor:
         if result:
             return result
 
-        logger.info(f"No date pattern matched in filename: {filename}, using current date")
+        logger.info(
+            f"No date pattern matched in filename: {filename}, using current date"
+        )
         return metadata
 
-    def _try_multi_month_pattern(self, filename: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _try_multi_month_pattern(
+        self, filename: str, metadata: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """
         Pattern: Multi-month periods like "Title - June/July 2024" or "Title Jun/Jul2024".
         """
@@ -222,10 +226,14 @@ class MetadataExtractor:
         logger.info(f"Extracted multi-month: {metadata['month_name']} {year}")
         return metadata
 
-    def _try_dash_month_year_pattern(self, filename: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _try_dash_month_year_pattern(
+        self, filename: str, metadata: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """
         Pattern: "Title - MonYear" (e.g., "National Geographic - Dec2024").
         Also handles: "Title-Month.Year" (e.g., "Esquire.Africa-August.2023").
+
+        IMPORTANT: Strips month names from title to prevent folders with embedded dates
         """
         # Try with year directly after month (no separator)
         pattern = r"(.+?)\s*-\s*([A-Za-z]{3,9})(\d{4})"
@@ -248,13 +256,26 @@ class MetadataExtractor:
             return None
 
         year = int(year_str)
-        metadata["title"] = clean_title(title)
+        cleaned = clean_title(title)
+
+        # Additional safety: Remove trailing month names from title
+        # This catches cases where pattern matched too greedily or filename had redundant month
+        for month_name in MONTH_TO_NUMBER.keys():
+            # Use word boundary to avoid removing parts of words
+            pattern_to_remove = rf"\b{re.escape(month_name)}\b\s*$"
+            cleaned = re.sub(
+                pattern_to_remove, "", cleaned, flags=re.IGNORECASE
+            ).strip()
+
+        metadata["title"] = cleaned
         metadata["issue_date"] = datetime(year, month_num, 1)
         metadata["year"] = year
         metadata["month_name"] = normalized_month
         return metadata
 
-    def _try_dot_separated_pattern(self, filename: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _try_dot_separated_pattern(
+        self, filename: str, metadata: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """
         Pattern: "Title.Month.Year" (e.g., "Wired.January.2024").
         """
@@ -277,35 +298,64 @@ class MetadataExtractor:
         metadata["issue_date"] = datetime(year, month_num, 1)
         metadata["year"] = year
         metadata["month_name"] = normalized_month
-        logger.info(f"Extracted '{metadata['title']}' {month_str} {year_str} from dot-separated filename")
+        logger.info(
+            f"Extracted '{metadata['title']}' {month_str} {year_str} from dot-separated filename"
+        )
         return metadata
 
-    def _try_space_month_year_pattern(self, filename: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _try_space_month_year_pattern(
+        self, filename: str, metadata: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """
         Pattern: "Title Month Year" (e.g., "Wired January 2024").
+        Also handles: "Title Month" (year defaults to current).
+
+        IMPORTANT: Strips month names from title to prevent folders like "Hustler Us February"
         """
+        # First try with year: "Title Month Year"
         pattern = r"(.+?)\s+([A-Za-z]+)\s+(\d{4})"
         match = re.search(pattern, filename)
+
+        has_year = True
+        if not match:
+            # Try without year: "Title Month" (use current year)
+            pattern = r"(.+?)\s+([A-Za-z]+)$"
+            match = re.search(pattern, filename)
+            has_year = False
 
         if not match:
             return None
 
         title = match.group(1).strip()
         month_str = match.group(2)
-        year_str = match.group(3)
+        year = int(match.group(3)) if has_year else datetime.now().year
 
+        # Validate that this is actually a month name (not part of title)
         month_num, normalized_month = parse_multi_month(month_str)
         if not month_num:
             return None
 
-        year = int(year_str)
-        metadata["title"] = clean_title(title)
+        # Clean the title and strip any trailing month names that may have been captured
+        cleaned = clean_title(title)
+
+        # Additional safety: Remove trailing month names from title
+        # This catches cases where pattern matched too greedily
+        for month_name in MONTH_TO_NUMBER.keys():
+            # Use word boundary to avoid removing parts of words
+            pattern_to_remove = rf"\b{re.escape(month_name)}\b\s*$"
+            cleaned = re.sub(
+                pattern_to_remove, "", cleaned, flags=re.IGNORECASE
+            ).strip()
+
+        metadata["title"] = cleaned
         metadata["issue_date"] = datetime(year, month_num, 1)
         metadata["year"] = year
         metadata["month_name"] = normalized_month
         return metadata
 
-    def _try_iso_date_pattern(self, filename: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _try_iso_date_pattern(
+        self, filename: str, metadata: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """
         Pattern: "Title YYYY-MM" (e.g., "PC Gamer 2024-12").
         """
@@ -327,7 +377,9 @@ class MetadataExtractor:
             logger.warning(f"Invalid ISO date in filename: {filename}")
             return None
 
-    def _try_issue_number_pattern(self, filename: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _try_issue_number_pattern(
+        self, filename: str, metadata: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """
         Pattern: "Title No.XXX YYYY" (e.g., "PC Gamer No.405 2024").
         """
@@ -352,12 +404,16 @@ class MetadataExtractor:
         metadata["year"] = year
         metadata["month_name"] = "January"
         metadata["edition_number"] = int(issue_num)
-        metadata["is_special_edition"] = "special" in filename.lower() and "edition" in filename.lower()
+        metadata["is_special_edition"] = (
+            "special" in filename.lower() and "edition" in filename.lower()
+        )
 
         logger.debug("Pattern match - Issue number format")
         return metadata
 
-    def _try_volume_issue_pattern(self, filename: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _try_volume_issue_pattern(
+        self, filename: str, metadata: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """
         Pattern: "Title Vol.XX No.YY YYYY" (e.g., "2600.Magazine.Vol.41.No.1.2024").
         """
@@ -384,7 +440,9 @@ class MetadataExtractor:
         logger.debug("Pattern match - Volume and issue number format")
         return metadata
 
-    def _try_seasonal_pattern(self, filename: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _try_seasonal_pattern(
+        self, filename: str, metadata: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """
         Pattern: "Title Season YYYY" (e.g., "2600 Winter 2024").
         """
@@ -444,10 +502,14 @@ class MetadataExtractor:
 
         if magazine_name:
             metadata["title"] = magazine_name
-            logger.info(f"Extracted title '{magazine_name}' from directory for date-only filename: {filename}")
+            logger.info(
+                f"Extracted title '{magazine_name}' from directory for date-only filename: {filename}"
+            )
         else:
             metadata["title"] = filename
-            logger.warning(f"Filename is date-only ({filename}) but no suitable magazine folder found")
+            logger.warning(
+                f"Filename is date-only ({filename}) but no suitable magazine folder found"
+            )
 
         return metadata
 
@@ -472,7 +534,9 @@ class MetadataExtractor:
 
         if magazine_name:
             metadata["title"] = magazine_name
-            logger.info(f"Extracted title '{magazine_name}' from directory for year-only filename: {filename}")
+            logger.info(
+                f"Extracted title '{magazine_name}' from directory for year-only filename: {filename}"
+            )
         else:
             logger.info(f"Extracted year {year_str} from filename: {filename}")
 
