@@ -179,6 +179,34 @@ async def get_tasks_status():
             )
         tasks.append(cleanup_covers_info)
 
+        # Folder cleanup task
+        folder_cleanup_info = {
+            "id": "folder_cleanup",
+            "name": "Folder Cleanup",
+            "description": "Removes empty folders and folders containing only non-importable files from downloads and library",
+            "interval": 86400,
+            "last_run": None,
+            "next_run": None,
+            "last_status": None,
+        }
+        if scheduler_status and "folder_cleanup" in scheduler_status.get("tasks", {}):
+            task_data = scheduler_status["tasks"]["folder_cleanup"]
+            last_run = task_data.get("last_run")
+            failure_count = task_data.get("failure_count", 0)
+            # Only set status if task has run at least once
+            status = None
+            if last_run:
+                status = "failed" if failure_count > 0 else "success"
+            folder_cleanup_info.update(
+                {
+                    "interval": task_data.get("interval", 86400),
+                    "last_run": last_run,
+                    "next_run": task_data.get("next_run"),
+                    "last_status": status,
+                }
+            )
+        tasks.append(folder_cleanup_info)
+
         logger.debug(f"Tasks Status - Returning {len(tasks)} tasks to client")
 
         return {

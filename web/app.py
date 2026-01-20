@@ -26,6 +26,7 @@ from tasks import (
     DownloadMonitor,
     CoverCleanup,
     OCRProcessor,
+    FolderCleanup,
 )
 
 # Import all routers
@@ -187,6 +188,14 @@ async def lifespan(app: FastAPI):
             batch_size=tasks_config.get("ocr_batch_size", constants.OCR_BATCH_SIZE),
         )
         logger.info("OCR processor task initialized")
+
+        # Initialize folder cleanup task
+        folder_cleanup_task = FolderCleanup(
+            downloads_dir=storage_config.get("download_dir", "./local/downloads"),
+            organized_dir=storage_config.get("organize_dir", "./_Magazines"),
+            dry_run=False,  # Set to True for testing
+        )
+        logger.info("Folder cleanup task initialized")
 
         # Initialize Issue Discovery services
         issue_discovery_service = IssueDiscoveryService(
@@ -384,6 +393,20 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 logger.error(f"OCR processor error: {e}", exc_info=True)
 
+        # Define folder cleanup task wrapper
+        async def folder_cleanup_periodic_task():
+            """Clean up empty folders and folders without importable files (runs daily)"""
+            try:
+                import asyncio
+
+                # Run in thread pool since it's CPU-bound and has file I/O
+                loop = asyncio.get_event_loop()
+                stats = await loop.run_in_executor(None, folder_cleanup_task.run)
+                if stats.get("total_deleted", 0) > 0:
+                    logger.info(f"Folder cleanup: {stats}")
+            except Exception as e:
+                logger.error(f"Folder cleanup error: {e}", exc_info=True)
+
         # Schedule tasks with intervals from config
         task_scheduler.schedule_periodic(
             "auto_download",
@@ -407,6 +430,15 @@ async def lifespan(app: FastAPI):
             "ocr_processor",
             ocr_processing_task,
             tasks_config.get("ocr_processor_interval", constants.OCR_PROCESSOR_INTERVAL),
+        )
+
+        task_scheduler.schedule_periodic(
+            "folder_cleanup",
+            folder_cleanup_periodic_task,
+            tasks_config.get(
+                "folder_cleanup_interval",
+                86400,  # Default: once per day (24 hours)
+            ),
         )
 
         # Start scheduler in background
