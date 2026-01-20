@@ -13,12 +13,10 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 import logging
 from core.config import ConfigLoader
-from models.database import init_db
+from core.database import DatabaseManager
 from services.file_organizer import FileOrganizer
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -26,19 +24,19 @@ def main():
     """Reorganize all files in the organized directory based on database metadata."""
 
     # Load configuration
-    config = ConfigLoader.load()
+    config_loader = ConfigLoader()
+    config = config_loader.config
 
     # Initialize database
     db_path = config.get("storage", {}).get("db_path", "./local/config/periodicals.db")
-    session_factory = init_db(db_path)
-    session = session_factory()
+    db_url = f"sqlite:///{db_path}"
+    db_manager = DatabaseManager(db_url)
+    session = db_manager.session_factory()
 
     try:
         # Get organization settings
         organize_dir = config.get("storage", {}).get("organize_dir", "./local/data")
-        organization_pattern = config.get("import", {}).get(
-            "organization_pattern", "{category}/{title}/{year}/"
-        )
+        organization_pattern = config.get("import", {}).get("organization_pattern", "{category}/{title}/{year}/")
         category_prefix = config.get("import", {}).get("category_prefix", "_")
 
         logger.info(f"Organize directory: {organize_dir}")
@@ -92,15 +90,11 @@ def main():
                 print(f"  Error: {results.get('error')}")
 
         print("\n" + "=" * 80)
-        response = (
-            input("\nDo you want to proceed with reorganization? (yes/no): ")
-            .strip()
-            .lower()
-        )
+        response = input("\nDo you want to proceed with reorganization? (yes/no): ").strip().lower()
 
         if response not in ["yes", "y"]:
             print("Reorganization cancelled.")
-            return
+            return 0
 
         # Run actual reorganization
         print("\nStarting reorganization...\n")
