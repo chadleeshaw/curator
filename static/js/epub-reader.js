@@ -441,10 +441,40 @@ class EPUBReader {
    * Toggle fullscreen mode
    */
   toggleFullscreen() {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen();
+    const doc = document;
+    const docEl = document.documentElement;
+
+    const isFullscreen =
+      doc.fullscreenElement ||
+      doc.webkitFullscreenElement ||
+      doc.mozFullScreenElement ||
+      doc.msFullscreenElement;
+
+    if (!isFullscreen) {
+      // Enter fullscreen
+      if (docEl.requestFullscreen) {
+        docEl.requestFullscreen();
+      } else if (docEl.webkitRequestFullscreen) {
+        // Safari/iOS
+        docEl.webkitRequestFullscreen();
+      } else if (docEl.mozRequestFullScreen) {
+        // Firefox
+        docEl.mozRequestFullScreen();
+      } else if (docEl.msRequestFullscreen) {
+        // IE/Edge
+        docEl.msRequestFullscreen();
+      }
     } else {
-      document.exitFullscreen();
+      // Exit fullscreen
+      if (doc.exitFullscreen) {
+        doc.exitFullscreen();
+      } else if (doc.webkitExitFullscreen) {
+        doc.webkitExitFullscreen();
+      } else if (doc.mozCancelFullScreen) {
+        doc.mozCancelFullScreen();
+      } else if (doc.msExitFullscreen) {
+        doc.msExitFullscreen();
+      }
     }
   }
 
@@ -453,8 +483,13 @@ class EPUBReader {
    */
   setupFullscreenListeners() {
     // Fullscreen change handler
-    document.addEventListener('fullscreenchange', () => {
-      this.isFullscreen = !!document.fullscreenElement;
+    const handleFullscreenChange = () => {
+      this.isFullscreen = !!(
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.mozFullScreenElement ||
+        document.msFullscreenElement
+      );
       const btn = document.getElementById('fullscreen-btn');
       const sidebar = document.getElementById('sidebar');
 
@@ -475,7 +510,13 @@ class EPUBReader {
       } else {
         this.cleanupAutoHideToolbar();
       }
-    });
+    };
+
+    // Listen to all vendor-prefixed fullscreen change events
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
   }
 
   /**
