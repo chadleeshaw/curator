@@ -736,3 +736,51 @@ body {
 :fullscreen .chapter-content {
   height: 100vh;
 }
+
+/* Fallback fullscreen for iOS and browsers without Fullscreen API support */
+body.fullscreen-fallback {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  z-index: 9999;
+}
+
+body.fullscreen-fallback .reader-header,
+body.fullscreen-fallback .content-header {
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 10000;
+  transition: transform 0.3s ease-in-out;
+}
+
+body.fullscreen-fallback .reader-header {
+  top: 0;
+  transform: translateY(-100%);
+  padding-top: 12px;
+}
+
+body.fullscreen-fallback .content-header {
+  top: 0;
+  transform: translateY(-200%);
+}
+
+body.fullscreen-fallback .reader-header.show-toolbar {
+  transform: translateY(0);
+}
+
+body.fullscreen-fallback .content-header.show-toolbar {
+  transform: translateY(var(--reader-header-offset, 61px));
+}
+
+body.fullscreen-fallback .content-area {
+  padding-top: 0;
+  height: 100vh;
+}
+
+body.fullscreen-fallback .page-content,
+body.fullscreen-fallback .chapter-content {
+  height: 100vh;
+}

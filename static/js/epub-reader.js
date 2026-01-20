@@ -452,17 +452,37 @@ class EPUBReader {
 
     if (!isFullscreen) {
       // Enter fullscreen
-      if (docEl.requestFullscreen) {
-        docEl.requestFullscreen();
-      } else if (docEl.webkitRequestFullscreen) {
-        // Safari/iOS
-        docEl.webkitRequestFullscreen();
-      } else if (docEl.mozRequestFullScreen) {
-        // Firefox
-        docEl.mozRequestFullScreen();
-      } else if (docEl.msRequestFullscreen) {
-        // IE/Edge
-        docEl.msRequestFullscreen();
+      const enterFullscreen = () => {
+        if (docEl.requestFullscreen) {
+          return docEl.requestFullscreen();
+        } else if (docEl.webkitRequestFullscreen) {
+          // Safari/older Chrome
+          return docEl.webkitRequestFullscreen();
+        } else if (docEl.webkitEnterFullscreen) {
+          // iOS Safari (video only)
+          return docEl.webkitEnterFullscreen();
+        } else if (docEl.mozRequestFullScreen) {
+          // Firefox
+          return docEl.mozRequestFullScreen();
+        } else if (docEl.msRequestFullscreen) {
+          // IE/Edge
+          return docEl.msRequestFullscreen();
+        }
+        return null;
+      };
+
+      const result = enterFullscreen();
+
+      // iOS fallback: If fullscreen API is not available or fails
+      if (!result) {
+        console.warn('[EPUBReader] Fullscreen API not available, using CSS fallback');
+        this.enableFullscreenFallback();
+      } else if (result && result.catch) {
+        // Handle promise rejection (e.g., on iOS where it might not be supported)
+        result.catch((err) => {
+          console.warn('[EPUBReader] Fullscreen request failed, using CSS fallback:', err);
+          this.enableFullscreenFallback();
+        });
       }
     } else {
       // Exit fullscreen
@@ -470,11 +490,60 @@ class EPUBReader {
         doc.exitFullscreen();
       } else if (doc.webkitExitFullscreen) {
         doc.webkitExitFullscreen();
+      } else if (doc.webkitCancelFullScreen) {
+        doc.webkitCancelFullScreen();
       } else if (doc.mozCancelFullScreen) {
         doc.mozCancelFullScreen();
       } else if (doc.msExitFullscreen) {
         doc.msExitFullscreen();
       }
+    }
+  }
+
+  /**
+   * Enable CSS-based fullscreen fallback for browsers that don't support Fullscreen API
+   * (particularly iOS Safari/Chrome)
+   */
+  enableFullscreenFallback() {
+    if (this.isFullscreen) {
+      // Exit fallback fullscreen
+      document.body.classList.remove('fullscreen-fallback');
+      this.isFullscreen = false;
+
+      const btn = document.getElementById('fullscreen-btn');
+      const sidebar = document.getElementById('sidebar');
+
+      if (btn) {
+        btn.classList.remove('active');
+        btn.title = 'Fullscreen';
+      }
+
+      if (sidebar) {
+        sidebar.style.display = 'flex';
+      }
+
+      this.cleanupAutoHideToolbar();
+    } else {
+      // Enter fallback fullscreen
+      document.body.classList.add('fullscreen-fallback');
+      this.isFullscreen = true;
+
+      const btn = document.getElementById('fullscreen-btn');
+      const sidebar = document.getElementById('sidebar');
+
+      if (btn) {
+        btn.classList.add('active');
+        btn.title = 'Exit fullscreen';
+      }
+
+      if (sidebar) {
+        sidebar.style.display = 'none';
+      }
+
+      this.setupAutoHideToolbar();
+
+      // Scroll to hide browser chrome on iOS
+      window.scrollTo(0, 1);
     }
   }
 
