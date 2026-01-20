@@ -97,14 +97,20 @@ def test_ocr_month_names():
     months = constants.OCR_MONTH_NAMES
 
     assert isinstance(months, dict)
+    # Test English month names
     assert months["JANUARY"] == 1
     assert months["FEBRUARY"] == 2
     assert months["DECEMBER"] == 12
-    # Includes both full names (12) and abbreviations (12) = 24 total
-    assert len(months) == 24
     # Test abbreviated forms
     assert months["JAN"] == 1
     assert months["DEC"] == 12
+    # Test multilingual support (German, Spanish, French, etc.)
+    assert months["JANUAR"] == 1  # German
+    assert months["ENERO"] == 1  # Spanish
+    assert months["JANVIER"] == 1  # French
+    assert months["DEZEMBRO"] == 12  # Portuguese
+    # Should have at least 24 entries (English) plus multilingual
+    assert len(months) >= 24
 
 
 def test_token_expiration():
