@@ -13,7 +13,6 @@ from core import constants
 from core.database import DatabaseManager
 from core.factories import ClientFactory, ProviderFactory
 from core.parsers import TitleMatcher
-from models.database import MagazineTracking
 from services import (
     DownloadManager,
     FileImporter,

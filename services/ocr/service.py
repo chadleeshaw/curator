@@ -5,7 +5,6 @@
 import logging
 import os
 import re
-import json
 from pathlib import Path
 from typing import Optional, Dict, List, Any
 
@@ -93,19 +92,19 @@ _ocr_config = OCRServiceConfig()
 def _check_ocr_available():
     """Check OCR availability with proper imports"""
     try:
-        import fitz
+        pass
 
         pymupdf_ok = True
     except ImportError:
         try:
-            import pymupdf as fitz
+            pass
 
             pymupdf_ok = True
         except ImportError:
             pymupdf_ok = False
 
     try:
-        import pytesseract
+        pass
 
         pytesseract_ok = True
     except ImportError:

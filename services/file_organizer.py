@@ -7,11 +7,10 @@ Handles both simple and pattern-based organization with metadata extraction.
 
 import logging
 import os
-import re
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from core.constants.country import ISO_COUNTRIES
 from core.constants.files import (
@@ -22,7 +21,6 @@ from core.constants.files import (
     ORGANIZED_FILENAME_SEPARATOR,
 )
 from core.constants.language import DEFAULT_LANGUAGE
-from core.parsers import month_abbr_to_number
 from core.utils.pdf import extract_cover_from_pdf as extract_cover_util
 from core.utils.epub import extract_cover_from_epub
 from core.utils.cbz import extract_cover_from_cbz, extract_cover_from_cbr
@@ -734,7 +732,7 @@ class FileOrganizer:
         Returns:
             Dictionary with processing results
         """
-        from models.database import Magazine, MagazineTracking
+        from models.database import Magazine
 
         files_found = 0
         files_reorganized = 0
@@ -765,7 +763,7 @@ class FileOrganizer:
                 files_found += 1
 
                 # Extract metadata from sidecar
-                tracking_id = sidecar_data.get("tracking_id")
+                sidecar_data.get("tracking_id")
                 tracking_title = sidecar_data.get("tracking_title")
                 country = sidecar_data.get("country")
                 language = sidecar_data.get("language", DEFAULT_LANGUAGE)

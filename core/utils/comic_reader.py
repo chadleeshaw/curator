@@ -4,7 +4,6 @@ Utility functions for reading CBZ/CBR comic files
 
 import io
 import logging
-import tempfile
 import zipfile
 from pathlib import Path
 from typing import Dict, List, Optional, Any

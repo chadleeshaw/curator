@@ -9,7 +9,6 @@ from typing import Callable, Optional, Tuple
 from fastapi import APIRouter
 
 from core.constants.date import MONTH_TO_NUMBER
-from core.utils import run_in_thread
 
 router = APIRouter(prefix="/api", tags=["periodicals"])
 logger = logging.getLogger(__name__)

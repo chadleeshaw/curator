@@ -7,11 +7,10 @@ This module provides common utility functions used across the application.
 import hashlib
 import logging
 import os
-import shutil
 from pathlib import Path
 from typing import Optional
 
-from core.constants.files import BLACKLISTED_FILE_EXTENSIONS, DEFAULT_HASH_CHUNK_SIZE
+from core.constants.files import BLACKLISTED_FILE_EXTENSIONS
 from core.constants.title import SPECIAL_EDITION_KEYWORDS
 
 logger = logging.getLogger(__name__)

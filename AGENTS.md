@@ -228,22 +228,89 @@ def parse_filename_for_metadata(filename: str) -> Dict[str, Any]:
 - **Constants**: UPPER_SNAKE_CASE (`DEFAULT_LANGUAGE`, `MAX_VALID_YEAR`)
 - **Private**: prefix with underscore (`_session_factory`, `_parse_internal`)
 
+#### Constants
+
+- **ALWAYS define constants in `core/constants/` directory**, organized by domain
+- **NEVER define constants in parser/utility modules** - import them instead
+- Constants are organized by domain in separate files:
+  - `core/constants/date.py` - Date/month mappings, year validation
+  - `core/constants/language.py` - Language codes, indicators
+  - `core/constants/country.py` - Country codes, mappings
+  - `core/constants/files.py` - File extensions, MIME types
+  - `core/constants/app.py` - Application-wide settings
+  - etc.
+
+Example of proper constant usage:
+
+```python
+# ❌ WRONG - Don't define constants in utility modules
+# core/parsers/date.py
+MONTH_TO_NUMBER = {"jan": 1, "feb": 2, ...}  # Bad!
+
+def parse_month(month_str: str) -> int:
+    return MONTH_TO_NUMBER.get(month_str.lower(), 0)
+
+# ✅ CORRECT - Import constants from constants directory
+# core/parsers/date.py
+from core.constants.date import MONTH_TO_NUMBER, NUMBER_TO_MONTH
+
+def parse_month(month_str: str) -> int:
+    """Parse month string to number using centralized constants."""
+    return MONTH_TO_NUMBER.get(month_str.lower(), 0)
+```
+
+When adding new constants:
+
+1. Determine the appropriate constants file by domain
+2. Add constant with descriptive docstring
+3. Export from `core/constants/__init__.py` if widely used
+4. Import in modules that need it
+5. Update tests to use the centralized constant
+
+```python
+# core/constants/date.py
+MONTH_TO_NUMBER = {
+    "jan": 1,
+    "january": 1,
+    # ... more mappings
+}
+"""Month name/abbreviation to number mapping (case-insensitive)"""
+
+MIN_VALID_YEAR = 1900
+"""Minimum valid year for publication dates"""
+```
+
 #### Error Handling
 
 - Use specific exception types
 - Log errors with appropriate level (error, warning, info)
 - Provide context in error messages
+- **NEVER catch exceptions without using them** - if you don't need the exception variable, use bare `except Exception:`
 - Example:
 
 ```python
 if not source.exists():
     raise FileNotFoundError(f"Source file not found: {source_path}")
 
+# ✅ CORRECT - Using the exception variable
 try:
     result = process_file(path)
 except ValueError as e:
     logger.error(f"Failed to process {path}: {e}")
     raise
+
+# ✅ CORRECT - Not using exception variable, so don't capture it
+try:
+    result = process_file(path)
+except ValueError:
+    logger.error(f"Failed to process {path}")
+    return None
+
+# ❌ WRONG - Capturing but not using exception variable
+try:
+    result = process_file(path)
+except ValueError as e:  # 'e' is never used!
+    return None
 ```
 
 #### Logging
@@ -257,6 +324,71 @@ logger.info("General informational message")
 logger.warning("Warning about potential issue")
 logger.error("Error occurred", exc_info=True)
 ```
+
+#### Code Cleanliness
+
+**CRITICAL**: Keep the codebase clean and maintainable by avoiding unused code.
+
+- **No unused imports**: Remove imports that are never used in the file
+- **No unused variables**: Remove variables that are assigned but never read
+- **No unused functions**: Remove functions that are defined but never called
+- **Regular cleanup**: Run `autoflake` to detect and remove unused code
+
+```bash
+# Check for unused imports and variables
+.venv/bin/python -m autoflake --check --remove-all-unused-imports --remove-unused-variables <file>
+
+# Automatically fix unused imports and variables
+.venv/bin/python -m autoflake --in-place --remove-all-unused-imports --remove-unused-variables <file>
+```
+
+**Common mistakes to avoid:**
+
+```python
+# ❌ WRONG - Unused imports
+import re  # Never used in file
+from pathlib import Path  # Never used
+from typing import Optional, List  # Only Optional is used
+
+# ✅ CORRECT - Only import what you use
+from typing import Optional
+
+# ❌ WRONG - Unused variable
+def process_data(items):
+    count = len(items)  # Assigned but never used
+    return [x * 2 for x in items]
+
+# ✅ CORRECT - Remove unused variable
+def process_data(items):
+    return [x * 2 for x in items]
+
+# ❌ WRONG - Unused exception variable
+try:
+    data = fetch_data()
+except ValueError as e:  # 'e' is captured but never used
+    return None
+
+# ✅ CORRECT - Don't capture unused exception
+try:
+    data = fetch_data()
+except ValueError:
+    return None
+
+# ❌ WRONG - Unused function (defined but never called)
+def helper_function(x):
+    """This function is never called anywhere"""
+    return x * 2
+
+# ✅ CORRECT - Remove unused functions entirely
+# (or call them if they're actually needed)
+```
+
+**Before committing:**
+
+1. Run `make ci-lint` to catch unused imports (flake8 will warn about F401)
+2. Use `autoflake` to automatically clean up unused code
+3. Verify all tests still pass after cleanup
+4. Review what was removed to ensure nothing important was deleted
 
 ### JavaScript
 

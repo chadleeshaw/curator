@@ -5,7 +5,7 @@ PDF reader utilities for page-by-page reading.
 import logging
 from io import BytesIO
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 import fitz  # PyMuPDF
 from PIL import Image

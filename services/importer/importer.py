@@ -6,7 +6,7 @@ Extracts cover art, categorizes files, and adds them to the database.
 import logging
 import re
 import shutil
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -20,7 +20,7 @@ from core.constants.errors import ErrorCodes
 from core.constants.language import DEFAULT_LANGUAGE
 from core.parsers.country import ISO_COUNTRIES
 from core.utils.general import generate_olid
-from core.parsers import generate_language_aware_olid, sanitize_filename
+from core.parsers import sanitize_filename
 from core.parsers import TitleMatcher, FileCategorizer, Parser
 from services.importer.matcher import TrackingMatcher
 from services.importer.sidecar import read_sidecar_file, delete_sidecar_file
@@ -555,7 +555,6 @@ class FileImporter:
                     logger.info(
                         f"Updating magazine title to match tracking: '{magazine.title}' -> '{target_tracking.title}'"
                     )
-                    old_title = magazine.title
                     magazine.title = target_tracking.title
 
                     # If file was already organized, reorganize it to match tracking title
@@ -655,7 +654,6 @@ class FileImporter:
             logger.info(f"Added to database: {parsed.title} ({category})")
 
             # Run direct text scanning on PDF/EPUB files (fast, synchronous)
-            text_extracted = False
             if organized_path.suffix.lower() in [".pdf", ".epub"]:
                 try:
                     # Check if text scanning is enabled
@@ -683,7 +681,6 @@ class FileImporter:
                         session.commit()
 
                         if scan_result.get("text_found"):
-                            text_extracted = True
                             has_sufficient = scan_result.get("has_sufficient_metadata", False)
                             logger.info(
                                 f"Successfully extracted text metadata for {magazine.title} "

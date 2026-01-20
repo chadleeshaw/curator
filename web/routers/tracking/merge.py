@@ -2,23 +2,20 @@
 Tracking routes - Merge operations
 """
 
-import logging
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-from fastapi import HTTPException, Query
+from fastapi import HTTPException
 
 from core.constants.errors import ErrorMessages
 from core.parsers import sanitize_filename
 from core.utils.general import (
     is_special_edition,
-    generate_olid,
     cleanup_empty_directories,
 )
 from models.database import MagazineTracking
-from models.database import SearchResult as DBSearchResult
-from web.schemas import APIError, TrackingPreferencesRequest
+from web.schemas import APIError
 from core.utils import run_in_thread
 from . import _shared
 

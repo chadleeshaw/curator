@@ -5,7 +5,6 @@ Task management routes
 import logging
 import os
 from pathlib import Path
-from functools import partial
 from typing import Any, Callable, Dict, Optional
 
 from fastapi import APIRouter, HTTPException

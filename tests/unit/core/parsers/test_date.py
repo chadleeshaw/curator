@@ -17,8 +17,8 @@ from core.parsers import (
     month_abbr_to_number,
     normalize_month_name,
     utc_now,
-    MONTH_NAME_MAPPING,
-    MONTH_NUMBER_MAPPING,
+    MONTH_TO_NUMBER,
+    NUMBER_TO_MONTH_ABBR,
 )
 
 
@@ -41,19 +41,21 @@ class TestMonthAbbreviationToNumber:
         assert month_abbr_to_number("Dec") == 12
 
     def test_case_insensitive(self):
-        """Test that month abbreviations work with proper capitalization."""
-        # Function expects capitalized format (Jan, Feb, etc.)
+        """Test that month abbreviations are case-insensitive."""
         assert month_abbr_to_number("Jan") == 1
         assert month_abbr_to_number("Dec") == 12
-        # Lower/upper case may not be supported
-        assert month_abbr_to_number("jan") == 0  # Not found
-        assert month_abbr_to_number("JAN") == 0  # Not found
+        # Now supports case-insensitive lookup
+        assert month_abbr_to_number("jan") == 1
+        assert month_abbr_to_number("JAN") == 1
+        assert month_abbr_to_number("dec") == 12
 
     def test_full_month_names(self):
-        """Test full month names - not supported, returns 0."""
-        # Function only handles 3-letter abbreviations
+        """Test full month names are now supported."""
+        # Function now supports full month names
         result = month_abbr_to_number("January")
-        assert result == 0  # Not found
+        assert result == 1
+        result = month_abbr_to_number("january")
+        assert result == 1
 
     def test_invalid_month(self):
         """Test invalid month abbreviation returns 0."""
@@ -63,10 +65,9 @@ class TestMonthAbbreviationToNumber:
 
     def test_common_variants(self):
         """Test common month abbreviation variants."""
-        # September is Sep in standard format
+        # September variants
         assert month_abbr_to_number("Sep") == 9
-        # Sept is not in the mapping
-        assert month_abbr_to_number("Sept") == 0
+        assert month_abbr_to_number("Sept") == 9  # Also supported now
 
 
 class TestNormalizeMonthName:
@@ -112,41 +113,38 @@ class TestNormalizeMonthName:
 
 
 class TestMonthNameMapping:
-    """Test MONTH_NAME_MAPPING constant."""
+    """Test MONTH_TO_NUMBER constant."""
 
     def test_mapping_has_all_months(self):
         """Test that mapping contains all 12 months."""
         # Should have mappings for common month representations
-        assert isinstance(MONTH_NAME_MAPPING, dict)
+        assert isinstance(MONTH_TO_NUMBER, dict)
         # At minimum should have standard abbreviations
-        assert len(MONTH_NAME_MAPPING) >= 12
+        assert len(MONTH_TO_NUMBER) >= 12
 
-    def test_mapping_full_names_to_abbreviations(self):
-        """Test that full names map to abbreviations."""
-        if "january" in MONTH_NAME_MAPPING:
-            assert MONTH_NAME_MAPPING["january"] == "Jan"
-        if "december" in MONTH_NAME_MAPPING:
-            assert MONTH_NAME_MAPPING["december"] == "Dec"
+    def test_mapping_full_names_to_numbers(self):
+        """Test that full names and abbreviations map to numbers."""
+        assert MONTH_TO_NUMBER.get("january") == 1
+        assert MONTH_TO_NUMBER.get("december") == 12
+        assert MONTH_TO_NUMBER.get("jan") == 1
+        assert MONTH_TO_NUMBER.get("dec") == 12
 
 
 class TestMonthNumberMapping:
-    """Test MONTH_NUMBER_MAPPING constant."""
+    """Test NUMBER_TO_MONTH_ABBR constant."""
 
     def test_mapping_has_all_twelve_months(self):
         """Test that mapping has entries for months 1-12."""
-        assert isinstance(MONTH_NUMBER_MAPPING, dict)
+        assert isinstance(NUMBER_TO_MONTH_ABBR, dict)
 
-        # Mapping uses abbreviations as keys, not numbers
+        # Mapping uses numbers as keys
         # Check we have 12 entries
-        assert len(MONTH_NUMBER_MAPPING) == 12
+        assert len(NUMBER_TO_MONTH_ABBR) == 12
 
     def test_mapping_returns_month_abbreviations(self):
         """Test that numbers map to month abbreviations."""
-        # Common entries
-        if 1 in MONTH_NUMBER_MAPPING:
-            assert MONTH_NUMBER_MAPPING[1] == "Jan"
-        if 12 in MONTH_NUMBER_MAPPING:
-            assert MONTH_NUMBER_MAPPING[12] == "Dec"
+        assert NUMBER_TO_MONTH_ABBR[1] == "Jan"
+        assert NUMBER_TO_MONTH_ABBR[12] == "Dec"
 
 
 class TestUtcNow:
@@ -197,7 +195,20 @@ class TestDateParsingIntegration:
 
     def test_all_months_round_trip(self):
         """Test that all standard month abbreviations convert correctly."""
-        months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        months = [
+            "Jan",
+            "Feb",
+            "Mar",
+            "Apr",
+            "May",
+            "Jun",
+            "Jul",
+            "Aug",
+            "Sep",
+            "Oct",
+            "Nov",
+            "Dec",
+        ]
 
         for i, month_abbr in enumerate(months, 1):
             month_num = month_abbr_to_number(month_abbr)
@@ -225,12 +236,9 @@ class TestEdgeCases:
 
     def test_month_abbr_to_number_none_input(self):
         """Test behavior with None input."""
-        try:
-            result = month_abbr_to_number(None)
-            assert result == 0  # Not found
-        except (TypeError, AttributeError):
-            # Expected if function doesn't handle None
-            pass
+        # Function expects str, so passing None should raise an error
+        with pytest.raises((TypeError, AttributeError)):
+            month_abbr_to_number(None)  # type: ignore
 
 
 if __name__ == "__main__":

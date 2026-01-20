@@ -562,7 +562,7 @@ async def search_periodical_providers(
                                 for r in provider_results
                             ]
                         )
-                    except Exception as e:
+                    except Exception:
                         pass  # Already logged above
         else:
             error_msg = ErrorMessages.SEARCH_PROVIDERS_UNAVAILABLE

@@ -13,7 +13,7 @@ from datetime import datetime  # noqa: E402
 # Path setup handled by conftest.py
 
 from services import FileOrganizer  # noqa: E402
-from core.parsers import sanitize_filename, parse_filename_for_metadata  # noqa: E402
+from core.parsers import sanitize_filename  # noqa: E402
 
 
 def test_sanitize_filename():
@@ -31,36 +31,6 @@ def test_sanitize_filename():
     assert result == "TestFilePath"
 
     print("Testing sanitize_filename()... ✓ PASS")
-
-
-def test_parse_filename_for_metadata():
-    """Test parsing metadata from filenames"""
-    # Use the centralized parser function instead of a method on FileOrganizer
-    # Valid format: "Title - MonYear"
-    result = parse_filename_for_metadata("Wired Magazine - Dec2006")
-    assert result["title"] == "Wired Magazine"
-    assert result["issue_date"].month == 12
-    assert result["issue_date"].year == 2006
-    assert result["confidence"] == "high"
-
-    # Another valid format
-    result = parse_filename_for_metadata("National Geographic - Mar2023")
-    assert result["title"] == "National Geographic"
-    assert result["issue_date"].month == 3
-    assert result["issue_date"].year == 2023
-    assert result["confidence"] == "high"
-
-    # Invalid format
-    result = parse_filename_for_metadata("InvalidFilename")
-    assert result["confidence"] == "low"
-
-    # Test with extra spaces
-    result = parse_filename_for_metadata("Time Magazine  -  Jan2010")
-    assert result["title"] == "Time Magazine"
-    assert result["issue_date"].month == 1
-    assert result["issue_date"].year == 2010
-
-    print("Testing parse_filename_for_metadata()... ✓ PASS")
 
 
 def test_organize_file():
@@ -190,32 +160,9 @@ def test_filename_patterns():
 
 def test_parse_all_months():
     """Test parsing all month abbreviations"""
-    # Use centralized parser instead of method on FileOrganizer
-
-    months = [
-        "Jan",
-        "Feb",
-        "Mar",
-        "Apr",
-        "May",
-        "Jun",
-        "Jul",
-        "Aug",
-        "Sep",
-        "Oct",
-        "Nov",
-        "Dec",
-    ]
-
-    for month_num, month_abbr in enumerate(months, 1):
-        filename = f"Test Magazine - {month_abbr}2020"
-        result = parse_filename_for_metadata(filename)
-
-        assert result["confidence"] == "high"
-        assert result["issue_date"].month == month_num
-        assert result["issue_date"].year == 2020
-
-    print("Testing parse_filename_for_metadata() all month parsing... ✓ PASS")
+    # This test is no longer applicable as parse_filename_for_metadata() was removed
+    # Month parsing functionality is tested in test_date.py
+    print("Testing month parsing... ✓ SKIPPED (tested in test_date.py)")
 
 
 def test_organize_pattern():
@@ -243,7 +190,12 @@ def test_category_prefix_default():
 
         metadata = {"title": "Wired", "issue_date": datetime(2024, 1, 1)}
 
-        result_path = processor.organize(test_pdf, metadata, category="Magazines", pattern="{category}/{title}/{year}/")
+        result_path = processor.organize(
+            test_pdf,
+            metadata,
+            category="Magazines",
+            pattern="{category}/{title}/{year}/",
+        )
 
         # Verify prefix was applied
         assert "_Magazines" in str(result_path)
@@ -264,7 +216,12 @@ def test_category_prefix_custom():
 
         metadata = {"title": "National Geographic", "issue_date": datetime(2024, 6, 1)}
 
-        result_path = processor.organize(test_pdf, metadata, category="Magazines", pattern="{category}/{title}/{year}/")
+        result_path = processor.organize(
+            test_pdf,
+            metadata,
+            category="Magazines",
+            pattern="{category}/{title}/{year}/",
+        )
 
         # Verify custom prefix was applied
         result_str = str(result_path)
@@ -288,7 +245,12 @@ def test_category_prefix_empty():
 
         metadata = {"title": "PC Gamer", "issue_date": datetime(2024, 3, 1)}
 
-        result_path = processor.organize(test_pdf, metadata, category="Magazines", pattern="{category}/{title}/{year}/")
+        result_path = processor.organize(
+            test_pdf,
+            metadata,
+            category="Magazines",
+            pattern="{category}/{title}/{year}/",
+        )
 
         # Verify no prefix (just "Magazines", not "_Magazines")
         assert "/Magazines/" in str(result_path)
@@ -309,13 +271,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Testing FileOrganizer._sanitize_filename()... ❌ FAIL: {e}")
         results["sanitize_filename"] = False
-
-    try:
-        test_parse_filename_for_metadata()
-        results["parse_filename"] = True
-    except Exception as e:
-        print(f"Testing FileOrganizer.parse_filename_for_metadata()... ❌ FAIL: {e}")
-        results["parse_filename"] = False
 
     try:
         test_organize_file()

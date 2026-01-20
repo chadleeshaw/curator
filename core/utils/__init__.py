@@ -33,9 +33,6 @@ from .general import (
 # PDF utilities
 from .pdf import extract_cover_from_pdf, validate_pdf
 
-# Provider utilities
-from .provider import handle_provider_errors
-
 # Thumbnail utilities
 from .thumbnail import (
     THUMBNAIL_MAX_HEIGHT,
@@ -67,8 +64,6 @@ __all__ = [
     # PDF utilities
     "extract_cover_from_pdf",
     "validate_pdf",
-    # Provider utilities
-    "handle_provider_errors",
     # Thumbnail utilities
     "THUMBNAIL_MAX_HEIGHT",
     "THUMBNAIL_MAX_WIDTH",

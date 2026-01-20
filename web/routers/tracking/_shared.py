@@ -9,7 +9,6 @@ from typing import Any, Callable, Dict, Optional
 
 from fastapi import APIRouter
 
-from core.utils import run_in_thread
 
 logger = logging.getLogger(__name__)
 
@@ -49,26 +48,6 @@ def set_dependencies(
     _import_config = import_config or {}
 
 
-def get_session_factory() -> Optional[Callable]:
-    """Get the session factory."""
-    return _session_factory
-
-
 def get_search_providers() -> Optional[Any]:
     """Get the search providers."""
     return _search_providers
-
-
-def get_auto_download_task() -> Optional[Any]:
-    """Get the auto-download task function."""
-    return _auto_download_task_func
-
-
-def get_storage_config() -> Dict[str, Any]:
-    """Get the storage configuration."""
-    return _storage_config or {}
-
-
-def get_import_config() -> Dict[str, Any]:
-    """Get the import configuration."""
-    return _import_config or {}

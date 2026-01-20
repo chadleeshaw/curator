@@ -7,7 +7,6 @@ from typing import Any, Callable
 
 from fastapi import APIRouter
 
-from core.utils import run_in_thread
 
 # Router instance
 router = APIRouter(prefix="/api/downloads", tags=["downloads"])

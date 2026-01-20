@@ -205,7 +205,7 @@ class AuthManager:
             if not creds:
                 return False, None
             return True, creds.api_token
-        except Exception as e:
+        except Exception:
             return False, None
         finally:
             session.close()
@@ -226,7 +226,7 @@ class AuthManager:
             new_token = creds.generate_api_token()
             session.commit()
             return True, new_token
-        except Exception as e:
+        except Exception:
             session.rollback()
             return False, None
         finally:
@@ -248,7 +248,7 @@ class AuthManager:
             if not creds:
                 return False, None
             return True, creds.username
-        except Exception as e:
+        except Exception:
             return False, None
         finally:
             session.close()

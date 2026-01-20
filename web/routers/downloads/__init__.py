@@ -6,7 +6,6 @@ Download management routes package
 from . import _shared
 
 # Import all submodules to register their routes with the router
-from . import submissions, status, queue, operations
 
 # Re-export the router and set_dependencies for backward compatibility
 router = _shared.router

@@ -331,7 +331,6 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
             years_data.append({"year": year, "issues": year_issues})
 
         # Replace template variables
-        import html
 
         # For JSON in HTML attributes, escape quotes properly
         years_json = json.dumps(years_data).replace('"', "&quot;")

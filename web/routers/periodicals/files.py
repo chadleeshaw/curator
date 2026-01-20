@@ -7,8 +7,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict
 
-from fastapi import HTTPException, Query
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi import HTTPException
+from fastapi.responses import FileResponse, HTMLResponse
 
 from core.constants.errors import ErrorMessages
 from core.parsers import sanitize_filename
@@ -346,7 +346,6 @@ async def get_comic_page_endpoint(magazine_id: int, page_index: int):
             raise HTTPException(status_code=404, detail="Page not found")
 
         # Determine content type from image data
-        import mimetypes
 
         # Try to guess from magic bytes
         content_type = "image/jpeg"  # Default

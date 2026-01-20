@@ -5,36 +5,7 @@ Centralized month name and number handling.
 
 from datetime import UTC, datetime
 
-MONTH_NAME_MAPPING = {
-    "jan": "january",
-    "feb": "february",
-    "mar": "march",
-    "apr": "april",
-    "may": "may",
-    "jun": "june",
-    "jul": "july",
-    "aug": "august",
-    "sep": "september",
-    "sept": "september",
-    "oct": "october",
-    "nov": "november",
-    "dec": "december",
-}
-
-MONTH_NUMBER_MAPPING = {
-    "Jan": 1,
-    "Feb": 2,
-    "Mar": 3,
-    "Apr": 4,
-    "May": 5,
-    "Jun": 6,
-    "Jul": 7,
-    "Aug": 8,
-    "Sep": 9,
-    "Oct": 10,
-    "Nov": 11,
-    "Dec": 12,
-}
+from core.constants.date import MONTH_TO_NUMBER, NUMBER_TO_MONTH
 
 
 def normalize_month_name(month_str: str) -> str:
@@ -47,7 +18,12 @@ def normalize_month_name(month_str: str) -> str:
     Returns:
         Full month name in lowercase, or original string if not found
     """
-    return MONTH_NAME_MAPPING.get(month_str.lower(), month_str)
+    # Try to find the month in MONTH_TO_NUMBER and convert back to full name
+    month_lower = month_str.lower()
+    month_num = MONTH_TO_NUMBER.get(month_lower)
+    if month_num:
+        return NUMBER_TO_MONTH[month_num].lower()
+    return month_str
 
 
 def month_abbr_to_number(month_abbr: str) -> int:
@@ -60,7 +36,7 @@ def month_abbr_to_number(month_abbr: str) -> int:
     Returns:
         Month number (1-12), or 0 if not found
     """
-    return MONTH_NUMBER_MAPPING.get(month_abbr, 0)
+    return MONTH_TO_NUMBER.get(month_abbr.lower(), 0)
 
 
 def utc_now() -> datetime:

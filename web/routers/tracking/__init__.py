@@ -9,13 +9,10 @@ This package contains all tracking-related API routes, split by functionality:
 - downloads.py: Track single issues for download
 """
 
-from typing import Any, Callable, Dict, Optional
-
 # Import the shared router and dependencies
 from ._shared import router, set_dependencies
 
 # Import all route modules to register their routes with the shared router
-from . import crud, search, preferences, merge, downloads
 
 # Import and re-export all route functions for backward compatibility
 from .crud import (
