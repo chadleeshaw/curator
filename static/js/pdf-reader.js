@@ -6,6 +6,7 @@
 /* global URL, Image */
 
 import { APIClient } from './api.js';
+import { mediaWorker, Priority } from './media-worker-manager.js';
 
 class PDFReader {
   constructor() {
@@ -27,6 +28,7 @@ class PDFReader {
     this.prefetchCache = new Map(); // Cache for prefetched images
     this.touchStartDistance = 0; // For pinch-to-zoom gesture
     this.initialZoomLevel = 100; // Store initial zoom at gesture start
+    this.workerInitialized = false; // Media worker status
   }
 
   /**
@@ -39,6 +41,16 @@ class PDFReader {
     if (!this.magazineId) {
       this.showError('No periodical ID provided');
       return;
+    }
+
+    // Initialize media worker
+    try {
+      await mediaWorker.init();
+      this.workerInitialized = true;
+      console.log('[PDFReader] Media worker initialized');
+    } catch (error) {
+      console.warn('[PDFReader] Media worker initialization failed:', error);
+      this.workerInitialized = false;
     }
 
     // Setup fullscreen listeners
@@ -146,8 +158,18 @@ class PDFReader {
     this.updatePageUI();
 
     const contentDiv = document.getElementById('page-content');
-    contentDiv.innerHTML =
-      '<div class="loading"><div style="text-align: center"><div class="spinner"></div><div>Loading page...</div></div></div>';
+
+    // Check if page(s) are already cached - skip loading spinner if so
+    const isCached =
+      this.spreadMode && index !== this.coverPageIndex && index < this.metadata.pages.length - 1
+        ? this.prefetchCache.has(index) && this.prefetchCache.has(index + 1)
+        : this.prefetchCache.has(index);
+
+    if (!isCached) {
+      // Only show loading spinner for uncached pages
+      contentDiv.innerHTML =
+        '<div class="loading"><div style="text-align: center"><div class="spinner"></div></div></div>';
+    }
 
     try {
       // In spread mode: cover page is always single, then pair pages after cover (cover+1 & cover+2, etc.)
@@ -272,15 +294,15 @@ class PDFReader {
   }
 
   /**
-   * Prefetch next pages for smoother navigation
+   * Prefetch pages ahead of current position
    */
   prefetchNextPages() {
-    if (!this.metadata) return;
+    if (!this.metadata || !this.metadata.pages) return;
 
     const pagesToPrefetch = [];
 
     if (this.spreadMode) {
-      // In spread mode, prefetch next spread (2 pages)
+      // In spread mode, prefetch next 2 spreads (4 pages total for smoother navigation)
       if (this.currentPageIndex === this.coverPageIndex) {
         // After cover, prefetch first content spread
         const firstContent = this.coverPageIndex + 1;
@@ -290,31 +312,69 @@ class PDFReader {
         if (firstContent + 1 < this.metadata.pages.length) {
           pagesToPrefetch.push(firstContent + 1);
         }
-      } else {
-        // Prefetch next spread (2 pages ahead)
-        const nextPage = this.currentPageIndex + 2;
-        if (nextPage < this.metadata.pages.length) {
-          pagesToPrefetch.push(nextPage);
+        // Also prefetch next spread
+        if (firstContent + 2 < this.metadata.pages.length) {
+          pagesToPrefetch.push(firstContent + 2);
         }
-        if (nextPage + 1 < this.metadata.pages.length) {
-          pagesToPrefetch.push(nextPage + 1);
+        if (firstContent + 3 < this.metadata.pages.length) {
+          pagesToPrefetch.push(firstContent + 3);
+        }
+      } else {
+        // Prefetch next 2 spreads (4 pages)
+        for (let i = 2; i <= 5; i++) {
+          const nextPage = this.currentPageIndex + i;
+          if (nextPage < this.metadata.pages.length) {
+            pagesToPrefetch.push(nextPage);
+          }
         }
       }
     } else {
-      // In single page mode, prefetch next 2 pages
-      const nextPage = this.currentPageIndex + 1;
-      if (nextPage < this.metadata.pages.length) {
-        pagesToPrefetch.push(nextPage);
-      }
-      if (nextPage + 1 < this.metadata.pages.length) {
-        pagesToPrefetch.push(nextPage + 1);
+      // In single page mode, prefetch next 3 pages
+      for (let i = 1; i <= 3; i++) {
+        const nextPage = this.currentPageIndex + i;
+        if (nextPage < this.metadata.pages.length) {
+          pagesToPrefetch.push(nextPage);
+        }
       }
     }
 
-    // Prefetch pages in background
-    pagesToPrefetch.forEach((pageIndex) => {
-      this.prefetchPage(pageIndex);
-    });
+    // Use batch prefetch if worker available for better performance
+    if (this.workerInitialized && pagesToPrefetch.length > 1) {
+      const urls = pagesToPrefetch
+        .filter((idx) => !this.prefetchCache.has(idx))
+        .map((idx) => ({
+          url: `/api/periodicals/${this.magazineId}/pdf/page/${idx}`,
+          priority: Priority.LOW,
+          type: 'pdf-page',
+        }));
+
+      if (urls.length > 0) {
+        mediaWorker
+          .batchPrefetch(urls)
+          .then((result) => {
+            if (result.success) {
+              result.results.forEach((res, i) => {
+                if (res.success) {
+                  const pageIndex = pagesToPrefetch[i];
+                  console.log(`Batch prefetched page ${pageIndex + 1}`);
+                }
+              });
+            }
+          })
+          .catch((err) => {
+            console.warn('Batch prefetch failed, falling back to individual:', err);
+            // Fallback to individual prefetch
+            pagesToPrefetch.forEach((pageIndex) => {
+              this.prefetchPage(pageIndex);
+            });
+          });
+      }
+    } else {
+      // Fallback to individual prefetch
+      pagesToPrefetch.forEach((pageIndex) => {
+        this.prefetchPage(pageIndex);
+      });
+    }
   }
 
   /**
@@ -326,18 +386,40 @@ class PDFReader {
     if (this.prefetchCache.has(index)) return;
 
     const imageUrl = `/api/periodicals/${this.magazineId}/pdf/page/${index}`;
-    const img = new Image();
 
-    img.onload = () => {
-      this.prefetchCache.set(index, img);
-      console.log(`Prefetched page ${index + 1}`);
-    };
+    // Use media worker if available
+    if (this.workerInitialized) {
+      mediaWorker
+        .prefetch(imageUrl, Priority.LOW, 'pdf-page')
+        .then((result) => {
+          if (result.success && result.blob) {
+            const objectUrl = URL.createObjectURL(result.blob);
+            const img = new Image();
+            img.src = objectUrl;
+            img.onload = () => {
+              this.prefetchCache.set(index, img);
+              console.log(`Prefetched page ${index + 1} via worker`);
+            };
+          }
+        })
+        .catch((err) => {
+          console.warn(`Failed to prefetch page ${index + 1} via worker:`, err);
+        });
+    } else {
+      // Fallback to standard prefetch
+      const img = new Image();
 
-    img.onerror = () => {
-      console.warn(`Failed to prefetch page ${index + 1}`);
-    };
+      img.onload = () => {
+        this.prefetchCache.set(index, img);
+        console.log(`Prefetched page ${index + 1}`);
+      };
 
-    img.src = imageUrl;
+      img.onerror = () => {
+        console.warn(`Failed to prefetch page ${index + 1}`);
+      };
+
+      img.src = imageUrl;
+    }
   }
 
   /**

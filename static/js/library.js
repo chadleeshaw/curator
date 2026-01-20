@@ -4,6 +4,8 @@
  * @module library
  */
 
+/* global IntersectionObserver */
+
 import { APIClient } from './api.js';
 import { UIUtils, SortManager } from './ui-utils.js';
 import {
@@ -13,6 +15,7 @@ import {
   TIMEOUTS,
 } from './constants.js';
 import { ValidationError as _ValidationError } from './errors.js';
+import { mediaWorker, Priority } from './media-worker-manager.js';
 
 /**
  * Library Manager class for managing periodical library operations
@@ -33,9 +36,82 @@ export class LibraryManager {
     this.pendingDeleteTitle = null;
     /** @type {number|null} Issue count of periodical pending deletion */
     this.pendingDeleteIssueCount = null;
+    /** @type {boolean} Whether media worker is initialized */
+    this.workerInitialized = false;
+    /** @type {IntersectionObserver|null} Observer for lazy loading thumbnails */
+    this.thumbnailObserver = null;
+
+    // Initialize media worker
+    this.initMediaWorker();
+
+    // Setup Intersection Observer for smart lazy loading
+    this.setupIntersectionObserver();
 
     // Load categories on initialization
     this.loadCategories();
+  }
+
+  /**
+   * Setup Intersection Observer for smart thumbnail loading
+   * Loads thumbnails when they're about to enter viewport
+   */
+  setupIntersectionObserver() {
+    if (!('IntersectionObserver' in window)) {
+      console.warn(
+        '[Library] IntersectionObserver not supported, falling back to standard loading'
+      );
+      return;
+    }
+
+    // Load images when they're within 200px of viewport
+    const options = {
+      root: null,
+      rootMargin: '200px',
+      threshold: 0.01,
+    };
+
+    this.thumbnailObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          const img = entry.target;
+          const dataSrc = img.getAttribute('data-src');
+
+          if (dataSrc && !img.src) {
+            // Load the image
+            img.src = dataSrc;
+            img.removeAttribute('data-src');
+
+            // Prefetch with worker if available
+            if (this.workerInitialized) {
+              mediaWorker.prefetch(dataSrc, Priority.HIGH, 'thumbnail').catch((err) => {
+                console.warn('[Library] Worker prefetch failed:', err);
+              });
+            }
+          }
+
+          // Stop observing once loaded
+          this.thumbnailObserver.unobserve(img);
+        }
+      });
+    }, options);
+  }
+
+  /**
+   * Initialize the media worker for background thumbnail loading
+   * @returns {Promise<void>}
+   */
+  async initMediaWorker() {
+    try {
+      await mediaWorker.init();
+      this.workerInitialized = true;
+      console.log('[Library] Media worker initialized');
+    } catch (error) {
+      console.warn(
+        '[Library] Media worker initialization failed, falling back to standard loading:',
+        error
+      );
+      this.workerInitialized = false;
+    }
   }
 
   /**
@@ -235,8 +311,31 @@ export class LibraryManager {
 
     if (cover_path) {
       const img = document.createElement('img');
-      img.src = `/api/periodicals/${id}/cover`;
       img.alt = title;
+      img.loading = 'lazy'; // Enable native lazy loading as fallback
+
+      const coverUrl = `/api/periodicals/${id}/cover`;
+
+      // Use Intersection Observer if available, otherwise load immediately
+      if (this.thumbnailObserver) {
+        // Set data-src for lazy loading
+        img.setAttribute('data-src', coverUrl);
+        // Add placeholder or low-quality image (optional)
+        img.style.backgroundColor = '#2a2a2a';
+        // Start observing
+        this.thumbnailObserver.observe(img);
+      } else {
+        // Fallback: load immediately
+        img.src = coverUrl;
+
+        // Prefetch with media worker if initialized
+        if (this.workerInitialized) {
+          mediaWorker.prefetch(coverUrl, Priority.MEDIUM, 'thumbnail').catch((err) => {
+            console.warn(`[Library] Worker prefetch failed for ${id}:`, err);
+          });
+        }
+      }
+
       cover.appendChild(img);
     } else {
       cover.textContent = title;

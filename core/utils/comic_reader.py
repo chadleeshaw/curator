@@ -134,14 +134,14 @@ def get_comic_page(file_path: Path, page_index: int) -> Optional[bytes]:
         raise
 
 
-def get_comic_page_thumbnail(file_path: Path, page_index: int, max_size: int = 200) -> Optional[bytes]:
+def get_comic_page_thumbnail(file_path: Path, page_index: int, max_size: int = 150) -> Optional[bytes]:
     """
     Extract a thumbnail of a specific page from a CBZ/CBR file.
 
     Args:
         file_path: Path to the CBZ/CBR file
         page_index: Zero-based page index
-        max_size: Maximum dimension (width or height) for thumbnail
+        max_size: Maximum dimension (width or height) for thumbnail (default: 150px, reduced from 200px)
 
     Returns:
         Thumbnail image data as JPEG bytes, or None if page not found
@@ -170,9 +170,9 @@ def get_comic_page_thumbnail(file_path: Path, page_index: int, max_size: int = 2
         elif img.mode != "RGB":
             img = img.convert("RGB")
 
-        # Save as JPEG
+        # Save as JPEG with lower quality for faster loading
         output = io.BytesIO()
-        img.save(output, format="JPEG", quality=85, optimize=True)
+        img.save(output, format="JPEG", quality=75, optimize=True)
         return output.getvalue()
 
     except Exception as e:

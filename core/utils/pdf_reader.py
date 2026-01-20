@@ -38,14 +38,14 @@ def get_pdf_metadata(pdf_path: Path) -> Dict[str, Any]:
         raise
 
 
-def get_pdf_page(pdf_path: Path, page_index: int, dpi: int = 150) -> bytes:
+def get_pdf_page(pdf_path: Path, page_index: int, dpi: int = 120) -> bytes:
     """
     Extract a specific page from PDF as image bytes.
 
     Args:
         pdf_path: Path to PDF file
         page_index: Page index (0-based)
-        dpi: Resolution for rendering (default: 150)
+        dpi: Resolution for rendering (default: 120, reduced from 150 for faster loading)
 
     Returns:
         Image bytes (JPEG format)
@@ -69,9 +69,10 @@ def get_pdf_page(pdf_path: Path, page_index: int, dpi: int = 150) -> bytes:
         # Convert to PIL Image
         img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
 
-        # Convert to JPEG bytes
+        # Convert to JPEG bytes with optimization for faster loading
+        # Progressive JPEG loads in multiple passes for better perceived performance
         img_bytes = BytesIO()
-        img.save(img_bytes, format="JPEG", quality=90)
+        img.save(img_bytes, format="JPEG", quality=80, optimize=True, progressive=True)
         img_bytes.seek(0)
 
         doc.close()
@@ -82,14 +83,14 @@ def get_pdf_page(pdf_path: Path, page_index: int, dpi: int = 150) -> bytes:
         raise
 
 
-def get_pdf_page_thumbnail(pdf_path: Path, page_index: int, max_height: int = 200) -> bytes:
+def get_pdf_page_thumbnail(pdf_path: Path, page_index: int, max_height: int = 150) -> bytes:
     """
     Extract a thumbnail of a specific page from PDF.
 
     Args:
         pdf_path: Path to PDF file
         page_index: Page index (0-based)
-        max_height: Maximum height of thumbnail (default: 200px)
+        max_height: Maximum height of thumbnail (default: 150px, reduced from 200px)
 
     Returns:
         Thumbnail image bytes (JPEG format)
@@ -116,9 +117,9 @@ def get_pdf_page_thumbnail(pdf_path: Path, page_index: int, max_height: int = 20
         # Convert to PIL Image
         img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
 
-        # Convert to JPEG bytes
+        # Convert to JPEG bytes with lower quality for faster loading
         img_bytes = BytesIO()
-        img.save(img_bytes, format="JPEG", quality=85)
+        img.save(img_bytes, format="JPEG", quality=75, optimize=True)
         img_bytes.seek(0)
 
         doc.close()

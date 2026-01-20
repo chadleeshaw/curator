@@ -172,7 +172,10 @@ async def get_epub_chapter_endpoint(magazine_id: int, chapter_index: int) -> HTM
         if chapter_html is None:
             raise HTTPException(status_code=404, detail="Chapter not found")
 
-        return HTMLResponse(content=chapter_html)
+        response = HTMLResponse(content=chapter_html)
+        # Add cache headers for EPUB chapters (cache for 7 days)
+        response.headers["Cache-Control"] = "public, max-age=604800, immutable"
+        return response
 
     except HTTPException:
         raise
@@ -230,7 +233,10 @@ async def get_epub_image_endpoint(magazine_id: int, image_name: str):
 
         from fastapi.responses import Response
 
-        return Response(content=image_data, media_type=content_type)
+        response = Response(content=image_data, media_type=content_type)
+        # Add cache headers for EPUB images (cache for 7 days)
+        response.headers["Cache-Control"] = "public, max-age=604800, immutable"
+        return response
 
     except HTTPException:
         raise
@@ -353,7 +359,10 @@ async def get_comic_page_endpoint(magazine_id: int, page_index: int):
 
         from fastapi.responses import Response
 
-        return Response(content=image_data, media_type=content_type)
+        response = Response(content=image_data, media_type=content_type)
+        # Add cache headers for full-size pages (cache for 7 days)
+        response.headers["Cache-Control"] = "public, max-age=604800, immutable"
+        return response
 
     except HTTPException:
         raise
@@ -406,7 +415,10 @@ async def get_comic_page_thumbnail_endpoint(magazine_id: int, page_index: int):
 
         from fastapi.responses import Response
 
-        return Response(content=thumbnail_data, media_type="image/jpeg")
+        response = Response(content=thumbnail_data, media_type="image/jpeg")
+        # Add cache headers for thumbnails (cache for 7 days)
+        response.headers["Cache-Control"] = "public, max-age=604800, immutable"
+        return response
 
     except HTTPException:
         raise
@@ -512,7 +524,10 @@ async def get_pdf_page_endpoint(magazine_id: int, page_index: int):
 
         from fastapi.responses import Response
 
-        return Response(content=page_data, media_type="image/jpeg")
+        response = Response(content=page_data, media_type="image/jpeg")
+        # Add cache headers for full-size pages (cache for 7 days)
+        response.headers["Cache-Control"] = "public, max-age=604800, immutable"
+        return response
 
     except HTTPException:
         raise
@@ -565,7 +580,10 @@ async def get_pdf_page_thumbnail_endpoint(magazine_id: int, page_index: int):
 
         from fastapi.responses import Response
 
-        return Response(content=thumbnail_data, media_type="image/jpeg")
+        response = Response(content=thumbnail_data, media_type="image/jpeg")
+        # Add cache headers for thumbnails (cache for 7 days)
+        response.headers["Cache-Control"] = "public, max-age=604800, immutable"
+        return response
 
     except HTTPException:
         raise

@@ -3,9 +3,10 @@
  * Handles loading and displaying EPUB content chapter by chapter
  */
 
-/* global URL */
+/* global URL, DOMParser, IntersectionObserver */
 
 import { APIClient } from './api.js';
+import { mediaWorker, Priority } from './media-worker-manager.js';
 
 class EPUBReader {
   constructor() {
@@ -16,6 +17,8 @@ class EPUBReader {
     this.zoomLevel = 100; // 50-200%
     this.isFullscreen = false;
     this.progressSaveTimer = null;
+    this.workerInitialized = false;
+    this.chapterCache = new Map(); // Cache for prefetched chapters
   }
 
   /**
@@ -28,6 +31,16 @@ class EPUBReader {
     if (!this.magazineId) {
       this.showError('No periodical ID provided');
       return;
+    }
+
+    // Initialize media worker
+    try {
+      await mediaWorker.init();
+      this.workerInitialized = true;
+      console.log('[EPUBReader] Media worker initialized');
+    } catch (error) {
+      console.warn('[EPUBReader] Media worker initialization failed:', error);
+      this.workerInitialized = false;
     }
 
     // Setup fullscreen listeners
@@ -111,13 +124,28 @@ class EPUBReader {
       '<div class="loading"><div style="text-align: center"><div class="spinner"></div><div>Loading chapter...</div></div></div>';
 
     try {
-      const response = await APIClient.get(
-        `/api/periodicals/${this.magazineId}/epub/chapter/${index}`
-      );
-      const html = await response.text();
+      // Check if chapter is cached
+      let html;
+      if (this.chapterCache.has(index)) {
+        console.log(`Loading chapter ${index + 1} from cache`);
+        html = this.chapterCache.get(index);
+      } else {
+        const response = await APIClient.get(
+          `/api/periodicals/${this.magazineId}/epub/chapter/${index}`
+        );
+        html = await response.text();
+        // Cache the chapter
+        this.chapterCache.set(index, html);
+      }
 
       // Display chapter content
       contentDiv.innerHTML = `<div class="chapter-content-inner" style="font-size: ${this.zoomLevel}%;">${html}</div>`;
+
+      // Setup lazy loading for images
+      this.setupImageLazyLoading(contentDiv);
+
+      // Prefetch next chapters and their images
+      this.prefetchNextChapters();
 
       // Scroll to top
       contentDiv.scrollTop = 0;
@@ -133,6 +161,114 @@ class EPUBReader {
     } finally {
       this.loading = false;
     }
+  }
+
+  /**
+   * Setup lazy loading for images in chapter content
+   * @param {HTMLElement} container - Container with images
+   */
+  setupImageLazyLoading(container) {
+    if (!this.workerInitialized || !('IntersectionObserver' in window)) {
+      return; // Fallback to standard loading
+    }
+
+    const images = container.querySelectorAll('img');
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const img = entry.target;
+            const src = img.src;
+
+            // Prefetch via worker
+            if (src) {
+              mediaWorker.prefetch(src, Priority.HIGH, 'epub-image').catch((err) => {
+                console.warn('[EPUBReader] Image prefetch failed:', err);
+              });
+            }
+
+            observer.unobserve(img);
+          }
+        });
+      },
+      { rootMargin: '200px' }
+    );
+
+    images.forEach((img) => observer.observe(img));
+  }
+
+  /**
+   * Prefetch next 2 chapters in background
+   */
+  async prefetchNextChapters() {
+    if (!this.metadata || !this.workerInitialized) return;
+
+    const chaptersToPrefetch = [];
+
+    // Prefetch next 2 chapters
+    for (let i = 1; i <= 2; i++) {
+      const nextIndex = this.currentChapterIndex + i;
+      if (nextIndex < this.metadata.chapters.length && !this.chapterCache.has(nextIndex)) {
+        chaptersToPrefetch.push(nextIndex);
+      }
+    }
+
+    // Prefetch chapters in background
+    chaptersToPrefetch.forEach((chapterIndex) => {
+      this.prefetchChapter(chapterIndex);
+    });
+  }
+
+  /**
+   * Prefetch a single chapter
+   * @param {number} index - Chapter index to prefetch
+   */
+  async prefetchChapter(index) {
+    if (this.chapterCache.has(index)) return;
+
+    const chapterUrl = `/api/periodicals/${this.magazineId}/epub/chapter/${index}`;
+
+    try {
+      // Use worker to prefetch if available
+      if (this.workerInitialized) {
+        await mediaWorker.prefetch(chapterUrl, Priority.LOW, 'epub-chapter');
+      }
+
+      // Also fetch and cache the chapter HTML
+      const response = await fetch(chapterUrl);
+      if (response.ok) {
+        const html = await response.text();
+        this.chapterCache.set(index, html);
+        console.log(`Prefetched chapter ${index + 1}`);
+
+        // Prefetch images in this chapter
+        this.prefetchChapterImages(html);
+      }
+    } catch (error) {
+      console.warn(`Failed to prefetch chapter ${index + 1}:`, error);
+    }
+  }
+
+  /**
+   * Prefetch images from chapter HTML
+   * @param {string} html - Chapter HTML content
+   */
+  prefetchChapterImages(html) {
+    if (!this.workerInitialized) return;
+
+    // Parse HTML to find images
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const images = doc.querySelectorAll('img');
+
+    images.forEach((img) => {
+      const src = img.src;
+      if (src) {
+        mediaWorker.prefetch(src, Priority.LOW, 'epub-image').catch((err) => {
+          console.warn('[EPUBReader] Image prefetch failed:', err);
+        });
+      }
+    });
   }
 
   /**

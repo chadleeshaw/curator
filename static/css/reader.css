@@ -303,6 +303,7 @@ body {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+  animation: fade-in 0.15s ease-in;
 }
 
 /* Fit modes for PDF/Comic */
@@ -339,6 +340,7 @@ body {
   max-height: 100%;
   max-width: 50%;
   object-fit: contain;
+  animation: fade-in 0.15s ease-in;
 }
 
 .page-spread-container.fit-width {
@@ -434,6 +436,16 @@ body {
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
   }
 }
 

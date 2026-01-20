@@ -6,7 +6,7 @@ import asyncio
 from pathlib import Path
 from typing import Any, Dict
 
-from fastapi import HTTPException, Query
+from fastapi import HTTPException, Query, Response
 from fastapi.responses import FileResponse
 
 from core.constants.errors import ErrorMessages
@@ -17,6 +17,22 @@ from . import _shared
 
 router = _shared.router
 logger = _shared.logger
+
+
+def add_cache_headers(response: Response, max_age: int = 86400) -> Response:
+    """
+    Add HTTP cache headers to response.
+
+    Args:
+        response: FastAPI Response object
+        max_age: Cache duration in seconds (default: 86400 = 24 hours)
+
+    Returns:
+        Response with cache headers
+    """
+    response.headers["Cache-Control"] = f"public, max-age={max_age}, immutable"
+    response.headers["ETag"] = f'"{hash(response.headers.get("content-length", "0"))}"'
+    return response
 
 
 @router.get("/periodicals/{magazine_id}/cover")
@@ -57,10 +73,12 @@ async def get_cover(
 
             loop = asyncio.get_event_loop()
             thumbnail_path = await loop.run_in_executor(None, get_or_create_thumbnail, cover_path)
-            return FileResponse(thumbnail_path, media_type="image/jpeg")
+            response = FileResponse(thumbnail_path, media_type="image/jpeg")
+            return add_cache_headers(response, max_age=86400)  # Cache for 24 hours
 
         # Return full resolution (for downloads/printing)
-        return FileResponse(cover_path, media_type="image/jpeg")
+        response = FileResponse(cover_path, media_type="image/jpeg")
+        return add_cache_headers(response, max_age=86400)  # Cache for 24 hours
 
     except HTTPException:
         raise
