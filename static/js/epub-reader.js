@@ -600,6 +600,32 @@ class EPUBReader {
    * Setup fullscreen change listeners
    */
   setupFullscreenListeners() {
+    // Add click listener for fullscreen button (iOS compatibility)
+    const fullscreenBtn = document.getElementById('fullscreen-btn');
+    if (fullscreenBtn) {
+      // Remove any existing onclick to avoid double-triggering
+      fullscreenBtn.removeAttribute('onclick');
+
+      // Add touch and click listeners for better iOS support
+      const toggleHandler = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('[EPUBReader] Fullscreen button clicked/touched');
+        this.toggleFullscreen();
+      };
+
+      fullscreenBtn.addEventListener('click', toggleHandler);
+      fullscreenBtn.addEventListener('touchend', toggleHandler);
+
+      // Ensure button is always clickable
+      fullscreenBtn.style.pointerEvents = 'auto';
+      fullscreenBtn.style.touchAction = 'manipulation';
+
+      console.log('[EPUBReader] Fullscreen button event listeners attached');
+    } else {
+      console.warn('[EPUBReader] Fullscreen button not found in DOM');
+    }
+
     // Fullscreen change handler
     const handleFullscreenChange = () => {
       this.isFullscreen = !!(
