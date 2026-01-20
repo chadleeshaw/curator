@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 _session_factory = None
 _download_monitor_task = None
 _ocr_processor_task = None
+_folder_cleanup_task = None
 _file_importer = None
 _storage_config = None
 _task_scheduler = None
@@ -32,15 +33,17 @@ def set_dependencies(
     storage_config: Dict[str, Any],
     ocr_processor_task: Optional[Any] = None,
     task_scheduler: Optional[Any] = None,
+    folder_cleanup_task: Optional[Any] = None,
 ) -> None:  # pylint: disable=too-many-positional-arguments
     """Set dependencies from main app"""
-    global _session_factory, _download_monitor_task, _file_importer, _storage_config, _ocr_processor_task, _task_scheduler
+    global _session_factory, _download_monitor_task, _file_importer, _storage_config, _ocr_processor_task, _task_scheduler, _folder_cleanup_task
     _session_factory = session_factory
     _download_monitor_task = download_monitor_task
     _file_importer = file_importer
     _storage_config = storage_config
     _ocr_processor_task = ocr_processor_task
     _task_scheduler = task_scheduler
+    _folder_cleanup_task = folder_cleanup_task
 
 
 @router.get("/status")
@@ -257,6 +260,21 @@ async def run_task_manually(task_id: str):
                 "task_name": "Auto-Download",
                 "message": "Auto-download task will run on its scheduled interval (30 minutes)",
             }
+
+        elif task_id == "folder_cleanup":
+            if _folder_cleanup_task:
+                stats = await _folder_cleanup_task.run()
+                message = (
+                    f"Folder cleanup executed. Deleted: {stats.get('total_deleted', 0)} folders, "
+                    f"Freed: {stats.get('total_size_freed', 0)} MB"
+                )
+                return {
+                    "success": True,
+                    "task_name": "Auto-Cleanup",
+                    "message": message,
+                }
+            else:
+                return {"success": False, "message": "Folder cleanup not available"}
 
         elif task_id == "cleanup_orphaned_covers":
             # Manually trigger cover cleanup and generation (run in thread to avoid blocking)

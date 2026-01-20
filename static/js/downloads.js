@@ -793,7 +793,10 @@ export class DownloadsManager {
   async bulkRetryQueue() {
     if (!this.currentModalItems) return;
 
-    const failedItems = this.currentModalItems.filter(({ status }) => status === 'failed');
+    const failedItems = this.currentModalItems.filter(
+      ({ download_status }) =>
+        download_status === 'failed' || download_status === 'permanently_failed'
+    );
     if (failedItems.length === 0) {
       UIUtils.showStatus('modal-queue-status', 'No failed items to retry', 'info');
       return;

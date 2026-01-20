@@ -466,6 +466,7 @@ async def lifespan(app: FastAPI):
             storage_config,
             ocr_processor_task,
             task_scheduler,
+            folder_cleanup_task,
         )
         config.set_dependencies(config_loader)
         pages.set_dependencies(session_factory)
