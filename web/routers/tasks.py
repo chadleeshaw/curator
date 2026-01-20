@@ -182,8 +182,8 @@ async def get_tasks_status():
         # Folder cleanup task
         folder_cleanup_info = {
             "id": "folder_cleanup",
-            "name": "Folder Cleanup",
-            "description": "Removes empty folders and folders containing only non-importable files from downloads and library",
+            "name": "Auto-Cleanup",
+            "description": "Automatically removes empty folders and folders containing only non-importable files from downloads and library",
             "interval": 86400,
             "last_run": None,
             "next_run": None,

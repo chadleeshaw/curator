@@ -27,6 +27,8 @@ class FolderCleanup:
     PROTECTED_FOLDERS = {
         ".covers",  # Cover image cache
         ".thumbnails",  # Thumbnail cache
+        ".ocr_covers",  # OCR processing images
+        ".ocr_images",  # OCR processing images (alternative name)
         ".cache",  # General cache
         ".git",  # Version control
         ".tmp",  # Temporary files

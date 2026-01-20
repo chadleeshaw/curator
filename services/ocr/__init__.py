@@ -2,13 +2,19 @@
 OCR services package - text extraction and queue management
 """
 
-# Import main classes from submodules
-from .service import OCRService
-from .queue import OCRQueueService, _apply_scan_metadata_to_magazine
 
-# Re-export for backward compatibility
-__all__ = [
-    "OCRService",
-    "OCRQueueService",
-    "_apply_scan_metadata_to_magazine",
-]
+# pylint: disable=R0401
+def __getattr__(name):
+    if name == "OCRService":
+        from .service import OCRService
+
+        return OCRService
+    elif name == "OCRQueueService":
+        from .queue import OCRQueueService
+
+        return OCRQueueService
+    elif name == "_apply_scan_metadata_to_magazine":
+        from .queue import _apply_scan_metadata_to_magazine
+
+        return _apply_scan_metadata_to_magazine
+    raise AttributeError(f"module 'services.ocr' has no attribute '{name}'")

@@ -276,7 +276,10 @@ class FileOrganizer:
         if target_path.exists():
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             name_parts = filename.rsplit(".", 1)
-            filename = f"{name_parts[0]} ({timestamp}).pdf"
+            if len(name_parts) == 2:
+                filename = f"{name_parts[0]} ({timestamp}).{name_parts[1]}"
+            else:
+                filename = f"{filename} ({timestamp})"
             target_path = target_dir / filename
 
         return target_path

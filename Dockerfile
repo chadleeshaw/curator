@@ -32,6 +32,13 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     tesseract-ocr-spa \
     tesseract-ocr-ita \
     tesseract-ocr-por \
+    tesseract-ocr-rus \
+    tesseract-ocr-nld \
+    tesseract-ocr-pol \
+    tesseract-ocr-ukr \
+    tesseract-ocr-chi-sim \
+    tesseract-ocr-jpn \
+    tesseract-ocr-kor \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Python packages from builder

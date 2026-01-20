@@ -65,7 +65,7 @@ OCR_IMAGE_MAX_DIMENSION = 1200
 OCR_MAX_WORKERS = 1
 """Default number of parallel OCR processes"""
 
-OCR_BATCH_SIZE = 1
+OCR_BATCH_SIZE = 5
 """Default maximum number of OCR jobs to process per batch"""
 
 OCR_MAX_PAGES = 2
