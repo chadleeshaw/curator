@@ -39,7 +39,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     tesseract-ocr-chi-sim \
     tesseract-ocr-jpn \
     tesseract-ocr-kor \
-    unrar \
+    unrar-free \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Python packages from builder
