@@ -676,6 +676,8 @@ class PDFReader {
    * Toggle fullscreen mode
    */
   toggleFullscreen() {
+    console.log('[PDFReader] toggleFullscreen called, current isFullscreen:', this.isFullscreen);
+
     const doc = document;
     const docEl = document.documentElement;
 
@@ -685,42 +687,80 @@ class PDFReader {
       doc.mozFullScreenElement ||
       doc.msFullscreenElement;
 
-    if (!isFullscreen) {
-      // Enter fullscreen
-      const enterFullscreen = () => {
-        if (docEl.requestFullscreen) {
-          return docEl.requestFullscreen();
-        } else if (docEl.webkitRequestFullscreen) {
-          // Safari/older Chrome
-          return docEl.webkitRequestFullscreen();
-        } else if (docEl.webkitEnterFullscreen) {
-          // iOS Safari (video only)
-          return docEl.webkitEnterFullscreen();
-        } else if (docEl.mozRequestFullScreen) {
-          // Firefox
-          return docEl.mozRequestFullScreen();
-        } else if (docEl.msRequestFullscreen) {
-          // IE/Edge
-          return docEl.msRequestFullscreen();
-        }
-        return null;
-      };
+    // Check if we're in fallback fullscreen mode
+    if (this.isFullscreen && !isFullscreen) {
+      // We're in fallback mode, exit it
+      console.log('[PDFReader] Exiting fallback fullscreen');
+      this.enableFullscreenFallback(); // Toggle off
+      return;
+    }
 
-      const result = enterFullscreen();
+    if (!isFullscreen && !this.isFullscreen) {
+      // Try to enter fullscreen using native API first
+      console.log('[PDFReader] Attempting to enter fullscreen');
 
-      // iOS fallback: If fullscreen API is not available or fails
-      if (!result) {
-        console.warn('[PDFReader] Fullscreen API not available, using CSS fallback');
+      // Check if fullscreen is supported
+      const fullscreenEnabled =
+        doc.fullscreenEnabled ||
+        doc.webkitFullscreenEnabled ||
+        doc.mozFullScreenEnabled ||
+        doc.msFullscreenEnabled;
+
+      console.log('[PDFReader] Fullscreen API supported:', fullscreenEnabled);
+
+      if (!fullscreenEnabled) {
+        // Fullscreen API not supported, use fallback immediately
+        console.log('[PDFReader] Fullscreen API not supported, using CSS fallback');
         this.enableFullscreenFallback();
-      } else if (result && result.catch) {
-        // Handle promise rejection (e.g., on iOS where it might not be supported)
-        result.catch((err) => {
-          console.warn('[PDFReader] Fullscreen request failed, using CSS fallback:', err);
-          this.enableFullscreenFallback();
-        });
+        return;
       }
-    } else {
-      // Exit fullscreen
+
+      // Try native fullscreen API
+      let result = null;
+      try {
+        if (docEl.requestFullscreen) {
+          result = docEl.requestFullscreen();
+        } else if (docEl.webkitRequestFullscreen) {
+          result = docEl.webkitRequestFullscreen();
+        } else if (docEl.webkitRequestFullScreen) {
+          result = docEl.webkitRequestFullScreen();
+        } else if (docEl.mozRequestFullScreen) {
+          result = docEl.mozRequestFullScreen();
+        } else if (docEl.msRequestFullscreen) {
+          result = docEl.msRequestFullscreen();
+        }
+      } catch (err) {
+        console.warn('[PDFReader] Fullscreen request threw error:', err);
+        this.enableFullscreenFallback();
+        return;
+      }
+
+      // If no API available or it returns nothing, use fallback
+      if (!result) {
+        console.log('[PDFReader] No fullscreen method available, using CSS fallback');
+        this.enableFullscreenFallback();
+        return;
+      }
+
+      // Handle promise-based result
+      if (result && typeof result.then === 'function') {
+        result
+          .then(() => {
+            console.log('[PDFReader] Fullscreen request succeeded');
+          })
+          .catch((err) => {
+            console.warn('[PDFReader] Fullscreen request failed:', err);
+            // Use fallback after a short delay to ensure promise rejection completed
+            setTimeout(() => {
+              if (!this.isFullscreen) {
+                this.enableFullscreenFallback();
+              }
+            }, 100);
+          });
+      }
+    } else if (isFullscreen) {
+      // Exit native fullscreen
+      console.log('[PDFReader] Exiting native fullscreen');
       if (doc.exitFullscreen) {
         doc.exitFullscreen();
       } else if (doc.webkitExitFullscreen) {
@@ -740,8 +780,11 @@ class PDFReader {
    * (particularly iOS Safari/Chrome)
    */
   enableFullscreenFallback() {
+    console.log('[PDFReader] enableFullscreenFallback called, current state:', this.isFullscreen);
+
     if (this.isFullscreen) {
       // Exit fallback fullscreen
+      console.log('[PDFReader] Exiting CSS fallback fullscreen');
       document.body.classList.remove('fullscreen-fallback');
       this.isFullscreen = false;
 
@@ -751,15 +794,18 @@ class PDFReader {
       if (btn) {
         btn.classList.remove('active');
         btn.title = 'Fullscreen';
+        console.log('[PDFReader] Button updated to inactive');
       }
 
       if (sidebar) {
         sidebar.style.display = 'flex';
+        console.log('[PDFReader] Sidebar shown');
       }
 
       this.cleanupAutoHideToolbar();
     } else {
       // Enter fallback fullscreen
+      console.log('[PDFReader] Entering CSS fallback fullscreen');
       document.body.classList.add('fullscreen-fallback');
       this.isFullscreen = true;
 
@@ -769,16 +815,19 @@ class PDFReader {
       if (btn) {
         btn.classList.add('active');
         btn.title = 'Exit fullscreen';
+        console.log('[PDFReader] Button updated to active');
       }
 
       if (sidebar) {
         sidebar.style.display = 'none';
+        console.log('[PDFReader] Sidebar hidden');
       }
 
       this.setupAutoHideToolbar();
 
       // Scroll to hide browser chrome on iOS
       window.scrollTo(0, 1);
+      console.log('[PDFReader] Scrolled to hide browser chrome');
     }
   }
 

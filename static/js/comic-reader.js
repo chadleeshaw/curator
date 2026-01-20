@@ -676,6 +676,8 @@ class ComicReader {
    * Toggle fullscreen mode
    */
   toggleFullscreen() {
+    console.log('[ComicReader] toggleFullscreen called, current isFullscreen:', this.isFullscreen);
+
     const doc = document;
     const docEl = document.documentElement;
 
@@ -685,42 +687,80 @@ class ComicReader {
       doc.mozFullScreenElement ||
       doc.msFullscreenElement;
 
-    if (!isFullscreen) {
-      // Enter fullscreen
-      const enterFullscreen = () => {
-        if (docEl.requestFullscreen) {
-          return docEl.requestFullscreen();
-        } else if (docEl.webkitRequestFullscreen) {
-          // Safari/older Chrome
-          return docEl.webkitRequestFullscreen();
-        } else if (docEl.webkitEnterFullscreen) {
-          // iOS Safari (video only)
-          return docEl.webkitEnterFullscreen();
-        } else if (docEl.mozRequestFullScreen) {
-          // Firefox
-          return docEl.mozRequestFullScreen();
-        } else if (docEl.msRequestFullscreen) {
-          // IE/Edge
-          return docEl.msRequestFullscreen();
-        }
-        return null;
-      };
+    // Check if we're in fallback fullscreen mode
+    if (this.isFullscreen && !isFullscreen) {
+      // We're in fallback mode, exit it
+      console.log('[ComicReader] Exiting fallback fullscreen');
+      this.enableFullscreenFallback(); // Toggle off
+      return;
+    }
 
-      const result = enterFullscreen();
+    if (!isFullscreen && !this.isFullscreen) {
+      // Try to enter fullscreen using native API first
+      console.log('[ComicReader] Attempting to enter fullscreen');
 
-      // iOS fallback: If fullscreen API is not available or fails
-      if (!result) {
-        console.warn('[ComicReader] Fullscreen API not available, using CSS fallback');
+      // Check if fullscreen is supported
+      const fullscreenEnabled =
+        doc.fullscreenEnabled ||
+        doc.webkitFullscreenEnabled ||
+        doc.mozFullScreenEnabled ||
+        doc.msFullscreenEnabled;
+
+      console.log('[ComicReader] Fullscreen API supported:', fullscreenEnabled);
+
+      if (!fullscreenEnabled) {
+        // Fullscreen API not supported, use fallback immediately
+        console.log('[ComicReader] Fullscreen API not supported, using CSS fallback');
         this.enableFullscreenFallback();
-      } else if (result && result.catch) {
-        // Handle promise rejection (e.g., on iOS where it might not be supported)
-        result.catch((err) => {
-          console.warn('[ComicReader] Fullscreen request failed, using CSS fallback:', err);
-          this.enableFullscreenFallback();
-        });
+        return;
       }
-    } else {
-      // Exit fullscreen
+
+      // Try native fullscreen API
+      let result = null;
+      try {
+        if (docEl.requestFullscreen) {
+          result = docEl.requestFullscreen();
+        } else if (docEl.webkitRequestFullscreen) {
+          result = docEl.webkitRequestFullscreen();
+        } else if (docEl.webkitRequestFullScreen) {
+          result = docEl.webkitRequestFullScreen();
+        } else if (docEl.mozRequestFullScreen) {
+          result = docEl.mozRequestFullScreen();
+        } else if (docEl.msRequestFullscreen) {
+          result = docEl.msRequestFullscreen();
+        }
+      } catch (err) {
+        console.warn('[ComicReader] Fullscreen request threw error:', err);
+        this.enableFullscreenFallback();
+        return;
+      }
+
+      // If no API available or it returns nothing, use fallback
+      if (!result) {
+        console.log('[ComicReader] No fullscreen method available, using CSS fallback');
+        this.enableFullscreenFallback();
+        return;
+      }
+
+      // Handle promise-based result
+      if (result && typeof result.then === 'function') {
+        result
+          .then(() => {
+            console.log('[ComicReader] Fullscreen request succeeded');
+          })
+          .catch((err) => {
+            console.warn('[ComicReader] Fullscreen request failed:', err);
+            // Use fallback after a short delay to ensure promise rejection completed
+            setTimeout(() => {
+              if (!this.isFullscreen) {
+                this.enableFullscreenFallback();
+              }
+            }, 100);
+          });
+      }
+    } else if (isFullscreen) {
+      // Exit native fullscreen
+      console.log('[ComicReader] Exiting native fullscreen');
       if (doc.exitFullscreen) {
         doc.exitFullscreen();
       } else if (doc.webkitExitFullscreen) {
@@ -740,8 +780,11 @@ class ComicReader {
    * (particularly iOS Safari/Chrome)
    */
   enableFullscreenFallback() {
+    console.log('[ComicReader] enableFullscreenFallback called, current state:', this.isFullscreen);
+
     if (this.isFullscreen) {
       // Exit fallback fullscreen
+      console.log('[ComicReader] Exiting CSS fallback fullscreen');
       document.body.classList.remove('fullscreen-fallback');
       this.isFullscreen = false;
 
@@ -751,15 +794,18 @@ class ComicReader {
       if (btn) {
         btn.classList.remove('active');
         btn.title = 'Fullscreen';
+        console.log('[ComicReader] Button updated to inactive');
       }
 
       if (sidebar) {
         sidebar.style.display = 'flex';
+        console.log('[ComicReader] Sidebar shown');
       }
 
       this.cleanupAutoHideToolbar();
     } else {
       // Enter fallback fullscreen
+      console.log('[ComicReader] Entering CSS fallback fullscreen');
       document.body.classList.add('fullscreen-fallback');
       this.isFullscreen = true;
 
@@ -769,16 +815,19 @@ class ComicReader {
       if (btn) {
         btn.classList.add('active');
         btn.title = 'Exit fullscreen';
+        console.log('[ComicReader] Button updated to active');
       }
 
       if (sidebar) {
         sidebar.style.display = 'none';
+        console.log('[ComicReader] Sidebar hidden');
       }
 
       this.setupAutoHideToolbar();
 
       // Scroll to hide browser chrome on iOS
       window.scrollTo(0, 1);
+      console.log('[ComicReader] Scrolled to hide browser chrome');
     }
   }
 
