@@ -22,7 +22,7 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
-# Install runtime dependencies including Tesseract OCR (without cache mount to avoid lock issues)
+# Install runtime dependencies including Tesseract OCR and unrar (without cache mount to avoid lock issues)
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     poppler-utils \
     tesseract-ocr \
@@ -39,6 +39,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     tesseract-ocr-chi-sim \
     tesseract-ocr-jpn \
     tesseract-ocr-kor \
+    unrar \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Python packages from builder

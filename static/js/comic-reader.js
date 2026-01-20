@@ -3,7 +3,7 @@
  * Handles loading and displaying CBZ/CBR content page by page
  */
 
-/* global URL, Image, Worker */
+/* global URL, Image */
 
 import { APIClient } from './api.js';
 
@@ -25,7 +25,6 @@ class ComicReader {
     this.progressSaveTimer = null;
     this.coverPageIndex = 0; // Index of the cover page (default 0)
     this.prefetchCache = new Map(); // Cache for prefetched images
-    this.prefetchWorker = null; // Web Worker for prefetching
     this.touchStartDistance = 0; // For pinch-to-zoom gesture
     this.initialZoomLevel = 100; // Store initial zoom at gesture start
   }
@@ -50,9 +49,6 @@ class ComicReader {
 
     // Setup pinch-to-zoom gesture
     this.setupPinchZoom();
-
-    // Initialize prefetch worker
-    this.initPrefetchWorker();
 
     // Setup swipe gestures for navigation
     this.setupSwipeGestures();
@@ -325,73 +321,23 @@ class ComicReader {
    * Prefetch a single page image
    * @param {number} index - Page index to prefetch
    */
-  initPrefetchWorker() {
-    if (typeof Worker === 'undefined') {
-      console.warn('Web Workers not supported, falling back to main thread prefetching');
-      return;
-    }
-
-    try {
-      this.prefetchWorker = new Worker('/static/js/reader-worker.js');
-
-      this.prefetchWorker.onmessage = (e) => {
-        const { type, result } = e.data;
-
-        if (type === 'prefetch') {
-          if (result.success && result.blob) {
-            // Create object URL from blob and cache it
-            const objectUrl = URL.createObjectURL(result.blob);
-            const img = new Image();
-            img.onload = () => {
-              this.prefetchCache.set(result.index, img);
-              console.log(`Prefetched page ${result.index + 1}`);
-            };
-            img.onerror = () => {
-              console.warn(`Failed to create image from prefetched page ${result.index + 1}`);
-              URL.revokeObjectURL(objectUrl);
-            };
-            img.src = objectUrl;
-          } else if (!result.cached) {
-            console.warn(`Failed to prefetch page ${result.index + 1}: ${result.error}`);
-          }
-        }
-      };
-
-      this.prefetchWorker.onerror = (error) => {
-        console.error('Prefetch worker error:', error);
-      };
-    } catch (error) {
-      console.warn('Failed to initialize prefetch worker:', error);
-    }
-  }
-
   prefetchPage(index) {
     // Skip if already cached
     if (this.prefetchCache.has(index)) return;
 
     const imageUrl = `/api/periodicals/${this.magazineId}/comic/page/${index}`;
+    const img = new Image();
 
-    if (this.prefetchWorker) {
-      // Use worker for prefetching
-      this.prefetchWorker.postMessage({
-        type: 'prefetch',
-        data: { url: imageUrl, index },
-      });
-    } else {
-      // Fallback to main thread
-      const img = new Image();
+    img.onload = () => {
+      this.prefetchCache.set(index, img);
+      console.log(`Prefetched page ${index + 1}`);
+    };
 
-      img.onload = () => {
-        this.prefetchCache.set(index, img);
-        console.log(`Prefetched page ${index + 1}`);
-      };
+    img.onerror = () => {
+      console.warn(`Failed to prefetch page ${index + 1}`);
+    };
 
-      img.onerror = () => {
-        console.warn(`Failed to prefetch page ${index + 1}`);
-      };
-
-      img.src = imageUrl;
-    }
+    img.src = imageUrl;
   }
 
   /**
