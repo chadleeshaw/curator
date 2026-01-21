@@ -133,6 +133,8 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
                     tracking.track_new_only = updates["track_new_only"]
                 if "delete_from_client_on_completion" in updates:
                     tracking.delete_from_client_on_completion = updates["delete_from_client_on_completion"]
+                if "organization_pattern" in updates:
+                    tracking.organization_pattern = updates["organization_pattern"]
 
                 # If title changed, reorganize all files for this tracking record
                 files_reorganized = 0
