@@ -73,7 +73,9 @@ class FileImporter:
         # Initialize specialized helpers
         self.parser = Parser(fuzzy_threshold=fuzzy_threshold)
         self.categorizer = FileCategorizer()
-        self.organizer = FileOrganizer(self.organize_base_dir, category_prefix=self.category_prefix)
+        self.organizer = FileOrganizer(
+            self.organize_base_dir, category_prefix=self.category_prefix
+        )
 
         # Thread pool for CPU-intensive OCR tasks
         self._ocr_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ocr")
@@ -89,7 +91,9 @@ class FileImporter:
         if hasattr(self, "_ocr_executor"):
             self._ocr_executor.shutdown(wait=False)
 
-    def process_downloads(self, session: Session, organization_pattern: Optional[str] = None) -> Dict[str, Any]:
+    def process_downloads(
+        self, session: Session, organization_pattern: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Scan downloads folder and process any PDFs found.
 
@@ -128,7 +132,10 @@ class FileImporter:
             """Check if file is within the organize directory"""
             try:
                 file_resolved = file_path.resolve()
-                return organize_dir_resolved in file_resolved.parents or file_resolved == organize_dir_resolved
+                return (
+                    organize_dir_resolved in file_resolved.parents
+                    or file_resolved == organize_dir_resolved
+                )
             except Exception:
                 return False
 
@@ -140,14 +147,18 @@ class FileImporter:
         all_files = pdf_files + epub_files + cbz_files + cbr_files
 
         if not all_files:
-            logger.info(f"No PDF or EPUB files found in downloads folder: {self.downloads_dir}")
+            logger.info(
+                f"No PDF or EPUB files found in downloads folder: {self.downloads_dir}"
+            )
             return result.to_dict()
 
         logger.info(
             f"[DOWNLOADS IMPORT] Found {len(all_files)} files to process from {self.downloads_dir} "
             f"({len(pdf_files)} PDFs, {len(epub_files)} EPUBs, {len(cbz_files)} CBZs, {len(cbr_files)} CBRs)"
         )
-        logger.info("[DOWNLOADS IMPORT] Text extraction enabled, OCR queued only for image-based files")
+        logger.info(
+            "[DOWNLOADS IMPORT] Text extraction enabled, OCR queued only for image-based files"
+        )
 
         for pdf_path in pdf_files:
             try:
@@ -173,13 +184,17 @@ class FileImporter:
             except Exception as e:
                 result.data["failed"] += 1
                 error_msg = f"Error importing {pdf_path.name}: {str(e)}"
-                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
+                result.add_error(
+                    ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True
+                )
                 logger.error(error_msg, exc_info=True)
                 # Cleanup failed import to prevent folder clutter
                 try:
                     self._cleanup_download_file(pdf_path)
                 except Exception as cleanup_error:
-                    logger.warning(f"Failed to cleanup {pdf_path.name}: {cleanup_error}")
+                    logger.warning(
+                        f"Failed to cleanup {pdf_path.name}: {cleanup_error}"
+                    )
 
         # Process EPUB files
         for epub_path in epub_files:
@@ -206,13 +221,17 @@ class FileImporter:
             except Exception as e:
                 result.data["failed"] += 1
                 error_msg = f"Error importing EPUB {epub_path.name}: {str(e)}"
-                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
+                result.add_error(
+                    ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True
+                )
                 logger.error(error_msg, exc_info=True)
                 # Cleanup failed import to prevent folder clutter
                 try:
                     self._cleanup_download_file(epub_path)
                 except Exception as cleanup_error:
-                    logger.warning(f"Failed to cleanup {epub_path.name}: {cleanup_error}")
+                    logger.warning(
+                        f"Failed to cleanup {epub_path.name}: {cleanup_error}"
+                    )
 
         # Process CBZ files
         for cbz_path in cbz_files:
@@ -239,13 +258,17 @@ class FileImporter:
             except Exception as e:
                 result.data["failed"] += 1
                 error_msg = f"Error importing CBZ {cbz_path.name}: {str(e)}"
-                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
+                result.add_error(
+                    ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True
+                )
                 logger.error(error_msg, exc_info=True)
                 # Cleanup failed import to prevent folder clutter
                 try:
                     self._cleanup_download_file(cbz_path)
                 except Exception as cleanup_error:
-                    logger.warning(f"Failed to cleanup {cbz_path.name}: {cleanup_error}")
+                    logger.warning(
+                        f"Failed to cleanup {cbz_path.name}: {cleanup_error}"
+                    )
 
         # Process CBR files
         for cbr_path in cbr_files:
@@ -272,13 +295,17 @@ class FileImporter:
             except Exception as e:
                 result.data["failed"] += 1
                 error_msg = f"Error importing CBR {cbr_path.name}: {str(e)}"
-                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
+                result.add_error(
+                    ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True
+                )
                 logger.error(error_msg, exc_info=True)
                 # Cleanup failed import to prevent folder clutter
                 try:
                     self._cleanup_download_file(cbr_path)
                 except Exception as cleanup_error:
-                    logger.warning(f"Failed to cleanup {cbr_path.name}: {cleanup_error}")
+                    logger.warning(
+                        f"Failed to cleanup {cbr_path.name}: {cleanup_error}"
+                    )
 
         return result.to_dict()
 
@@ -322,20 +349,42 @@ class FileImporter:
                     f"tracking_title='{sidecar_metadata.get('tracking_title')}'"
                 )
 
+            # If tracking_id is available and no explicit organization_pattern was provided,
+            # check if the tracking record has a custom organization pattern
+            if tracking_id and not organization_pattern:
+                from models.database import PeriodicalTracking
+
+                tracking_record = (
+                    session.query(PeriodicalTracking)
+                    .filter(PeriodicalTracking.id == tracking_id)
+                    .first()
+                )
+                if tracking_record and tracking_record.organization_pattern:
+                    organization_pattern = tracking_record.organization_pattern
+                    logger.debug(
+                        f"Using per-periodical organization pattern for tracking_id={tracking_id}: {organization_pattern}"
+                    )
+
             # Parse file using unified parser - combines filename and filepath parsing
             parsed = self.parser.parse_file(pdf_path)
 
             # Step 1: Validate title before processing (already done in parser for search results)
             if not self.title_matcher.validate_before_parsing(parsed.title):
-                logger.warning(f"Skipping invalid release title: {parsed.title} (from {pdf_path.name})")
+                logger.warning(
+                    f"Skipping invalid release title: {parsed.title} (from {pdf_path.name})"
+                )
                 return {}
 
-            logger.debug(f"Parsed metadata: '{parsed.title}' (confidence: {parsed.confidence})")
+            logger.debug(
+                f"Parsed metadata: '{parsed.title}' (confidence: {parsed.confidence})"
+            )
 
             # Calculate content hash for duplicate detection
             content_hash = hash_file_in_chunks(str(pdf_path))
             if not content_hash:
-                logger.error(f"Failed to hash file {pdf_path}, skipping import", exc_info=True)
+                logger.error(
+                    f"Failed to hash file {pdf_path}, skipping import", exc_info=True
+                )
                 return {}
 
             # First check: hash-based duplicate detection (100% accurate)
@@ -383,13 +432,21 @@ class FileImporter:
                 filename_lower = pdf_path.stem.lower()
 
                 # Check for country name (e.g., "South Africa", "United Kingdom")
-                country_name_in_filename = bool(re.search(rf"\b{re.escape(country_name.lower())}\b", filename_lower))
+                country_name_in_filename = bool(
+                    re.search(rf"\b{re.escape(country_name.lower())}\b", filename_lower)
+                )
 
                 # Check for country code with word boundaries or as separate token
                 # (e.g., "UK", "ZA" but not "TH" in "The")
-                country_code_in_filename = bool(re.search(rf"\b{re.escape(parsed.country.lower())}\b", filename_lower))
+                country_code_in_filename = bool(
+                    re.search(
+                        rf"\b{re.escape(parsed.country.lower())}\b", filename_lower
+                    )
+                )
 
-                country_in_filename = country_name_in_filename or country_code_in_filename
+                country_in_filename = (
+                    country_name_in_filename or country_code_in_filename
+                )
 
                 # Only append if:
                 # 1. Country was in filename
@@ -425,9 +482,14 @@ class FileImporter:
                     country_name = ISO_COUNTRIES.get(existing_country, existing_country)
                     # Replace country code with country name if it appears at the end of the title
                     if existing.title.endswith(f" {existing_country}"):
-                        existing_normalized = existing.title[: -len(existing_country) - 1] + f" {country_name}"
+                        existing_normalized = (
+                            existing.title[: -len(existing_country) - 1]
+                            + f" {country_name}"
+                        )
 
-                is_match, score = self.title_matcher.match(tracking_title, existing_normalized)
+                is_match, score = self.title_matcher.match(
+                    tracking_title, existing_normalized
+                )
                 if is_match and parsed.issue_date and existing.issue_date:
                     date_diff = abs((parsed.issue_date - existing.issue_date).days)
                     # Also check language match for duplicates
@@ -449,7 +511,9 @@ class FileImporter:
 
             # OCR will be queued for background processing instead of running inline
             # This improves import speed and allows concurrent OCR processing
-            should_queue_ocr = use_ocr and (cover_path or pdf_path) and OCRService.is_available()
+            should_queue_ocr = (
+                use_ocr and (cover_path or pdf_path) and OCRService.is_available()
+            )
 
             category = self.categorizer.categorize(parsed.title)
 
@@ -465,7 +529,9 @@ class FileImporter:
                     "month_name": parsed.month_name,
                     "language": parsed.language,
                 }
-                organized_path = self.organizer.organize(pdf_path, metadata, category, organization_pattern)
+                organized_path = self.organizer.organize(
+                    pdf_path, metadata, category, organization_pattern
+                )
 
                 if not organized_path:
                     return {}
@@ -513,13 +579,19 @@ class FileImporter:
 
             if tracking_id:
                 # Tracking ID provided from download submission - validate and use it
-                target_tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
+                target_tracking = (
+                    session.query(PeriodicalTracking)
+                    .filter(PeriodicalTracking.id == tracking_id)
+                    .first()
+                )
                 if target_tracking:
                     logger.info(
                         f"Using provided tracking_id={tracking_id} ('{target_tracking.title}') for '{tracking_title}'"
                     )
                 else:
-                    logger.warning(f"Provided tracking_id={tracking_id} not found, will try to find best match")
+                    logger.warning(
+                        f"Provided tracking_id={tracking_id} not found, will try to find best match"
+                    )
 
             if not target_tracking:
                 # Try to find best match using the tracking matcher
@@ -559,20 +631,33 @@ class FileImporter:
 
                     # If file was already organized, reorganize it to match tracking title
                     if not skip_organize and organized_path:
-                        logger.info(f"Reorganizing file to match tracking title: {target_tracking.title}")
+                        logger.info(
+                            f"Reorganizing file to match tracking title: {target_tracking.title}"
+                        )
                         try:
                             # Build new path with tracking title
-                            safe_tracking_title = sanitize_filename(target_tracking.title)
+                            safe_tracking_title = sanitize_filename(
+                                target_tracking.title
+                            )
                             month = (
-                                parsed.issue_date.strftime("%B") if parsed.issue_date else datetime.now().strftime("%B")
+                                parsed.issue_date.strftime("%B")
+                                if parsed.issue_date
+                                else datetime.now().strftime("%B")
                             )
                             year = (
-                                parsed.issue_date.strftime("%Y") if parsed.issue_date else datetime.now().strftime("%Y")
+                                parsed.issue_date.strftime("%Y")
+                                if parsed.issue_date
+                                else datetime.now().strftime("%Y")
                             )
                             filename_base = f"{safe_tracking_title} - {month}{year}"
 
                             category_with_prefix = f"{self.category_prefix}{category}"
-                            new_target_dir = self.organize_base_dir / category_with_prefix / safe_tracking_title / year
+                            new_target_dir = (
+                                self.organize_base_dir
+                                / category_with_prefix
+                                / safe_tracking_title
+                                / year
+                            )
                             new_target_dir.mkdir(parents=True, exist_ok=True)
 
                             new_pdf_path = new_target_dir / f"{filename_base}.pdf"
@@ -581,9 +666,14 @@ class FileImporter:
                             if organized_path != new_pdf_path:
                                 # Check if target path already exists in database (UNIQUE constraint check)
                                 existing_record = (
-                                    session.query(Periodical).filter_by(file_path=str(new_pdf_path)).first()
+                                    session.query(Periodical)
+                                    .filter_by(file_path=str(new_pdf_path))
+                                    .first()
                                 )
-                                if existing_record and existing_record.id != magazine.id:
+                                if (
+                                    existing_record
+                                    and existing_record.id != magazine.id
+                                ):
                                     logger.warning(
                                         f"Cannot reorganize magazine {magazine.id}: Target path {new_pdf_path} "
                                         f"already exists in database for magazine {existing_record.id}. "
@@ -593,19 +683,31 @@ class FileImporter:
                                     shutil.move(str(organized_path), str(new_pdf_path))
                                     organized_path = new_pdf_path
                                     magazine.file_path = str(new_pdf_path)
-                                    logger.info(f"Moved file to match tracking title: {new_pdf_path}")
+                                    logger.info(
+                                        f"Moved file to match tracking title: {new_pdf_path}"
+                                    )
 
                                     # Also move cover if it exists
                                     if cover_path and cover_path.exists():
-                                        new_cover_path = new_target_dir / f"{filename_base}.jpg"
-                                        shutil.move(str(cover_path), str(new_cover_path))
+                                        new_cover_path = (
+                                            new_target_dir / f"{filename_base}.jpg"
+                                        )
+                                        shutil.move(
+                                            str(cover_path), str(new_cover_path)
+                                        )
                                         magazine.cover_path = str(new_cover_path)
-                                        logger.info(f"Moved cover to match tracking title: {new_cover_path}")
+                                        logger.info(
+                                            f"Moved cover to match tracking title: {new_cover_path}"
+                                        )
                         except Exception as e:
-                            logger.warning(f"Failed to reorganize file to match tracking title: {e}")
+                            logger.warning(
+                                f"Failed to reorganize file to match tracking title: {e}"
+                            )
                             # Continue with import even if reorganization fails
 
-                logger.debug(f"Linked magazine to tracking: {target_tracking.title} (ID: {target_tracking.id})")
+                logger.debug(
+                    f"Linked magazine to tracking: {target_tracking.title} (ID: {target_tracking.id})"
+                )
 
                 # IMPORTANT: DO NOT update tracking mode for existing tracking records
                 # The tracking mode is a user preference that should persist
@@ -621,7 +723,9 @@ class FileImporter:
                         target_tracking.selected_editions = {}
                     if special_name not in target_tracking.selected_editions:
                         target_tracking.selected_editions[special_name] = True
-                        logger.debug(f"Added special edition '{special_name}' to tracking: {target_tracking.title}")
+                        logger.debug(
+                            f"Added special edition '{special_name}' to tracking: {target_tracking.title}"
+                        )
 
             elif auto_track:
                 # No match found, create new tracking record
@@ -650,7 +754,9 @@ class FileImporter:
 
                 # If this is a special edition, add it to the selected_editions
                 if is_special_edition:
-                    logger.debug(f"Detected special edition '{special_name}' for: {tracking_title}")
+                    logger.debug(
+                        f"Detected special edition '{special_name}' for: {tracking_title}"
+                    )
 
             session.commit()
             logger.info(f"Added to database: {parsed.title} ({category})")
@@ -661,10 +767,14 @@ class FileImporter:
                     # Check if text scanning is enabled
                     enable_text_scan = getattr(self, "_enable_text_scan", True)
                     if enable_text_scan:
-                        logger.debug(f"Attempting direct text extraction for {magazine.id}")
+                        logger.debug(
+                            f"Attempting direct text extraction for {magazine.id}"
+                        )
 
                         # Use TextScanService for direct text extraction
-                        scan_result = TextScanService.scan_document(str(organized_path), language=parsed.language)
+                        scan_result = TextScanService.scan_document(
+                            str(organized_path), language=parsed.language
+                        )
 
                         # Always store text scan metadata (even if no text found)
                         if not magazine.extra_metadata:
@@ -673,9 +783,13 @@ class FileImporter:
 
                         # Apply text scan metadata to main magazine fields if missing
                         if scan_result.get("text_found"):
-                            fields_updated = _apply_scan_metadata_to_magazine(magazine, scan_result)
+                            fields_updated = _apply_scan_metadata_to_magazine(
+                                magazine, scan_result
+                            )
                             if fields_updated:
-                                logger.info(f"Enhanced {magazine.title} with metadata from text scan")
+                                logger.info(
+                                    f"Enhanced {magazine.title} with metadata from text scan"
+                                )
 
                         from sqlalchemy.orm.attributes import flag_modified
 
@@ -683,7 +797,9 @@ class FileImporter:
                         session.commit()
 
                         if scan_result.get("text_found"):
-                            has_sufficient = scan_result.get("has_sufficient_metadata", False)
+                            has_sufficient = scan_result.get(
+                                "has_sufficient_metadata", False
+                            )
                             logger.info(
                                 f"Successfully extracted text metadata for {magazine.title} "
                                 f"(sufficient: {has_sufficient})"
@@ -694,7 +810,9 @@ class FileImporter:
                         logger.debug("Text scanning disabled in config")
 
                 except Exception as e:
-                    logger.debug(f"Direct text extraction failed for {magazine.id}: {e}")
+                    logger.debug(
+                        f"Direct text extraction failed for {magazine.id}: {e}"
+                    )
 
             # Queue OCR job if OCR is enabled and available
             # OCR is the highest priority metadata source (see metadata.source_priority config)
@@ -702,7 +820,11 @@ class FileImporter:
             # OCR results can override text_scan results during metadata aggregation
             if should_queue_ocr:
                 try:
-                    priority = OCRJob.PriorityEnum.HIGH.value if not skip_organize else OCRJob.PriorityEnum.NORMAL.value
+                    priority = (
+                        OCRJob.PriorityEnum.HIGH.value
+                        if not skip_organize
+                        else OCRJob.PriorityEnum.NORMAL.value
+                    )
                     ocr_job = OCRQueueService.queue_ocr_job(
                         db=session,
                         periodical_id=magazine.id,
@@ -710,9 +832,13 @@ class FileImporter:
                         language=parsed.language,
                     )
                     if ocr_job:
-                        logger.info(f"Queued OCR job {ocr_job.id} for magazine {magazine.id}")
+                        logger.info(
+                            f"Queued OCR job {ocr_job.id} for magazine {magazine.id}"
+                        )
                 except Exception as e:
-                    logger.warning(f"Failed to queue OCR job for magazine {magazine.id}: {e}")
+                    logger.warning(
+                        f"Failed to queue OCR job for magazine {magazine.id}: {e}"
+                    )
 
             if not skip_organize:
                 self._cleanup_download_file(pdf_path)
@@ -745,11 +871,15 @@ class FileImporter:
 
             # Cleanup parent directory (including any leftover files) if within downloads
             parent_dir = pdf_path.parent
-            if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
+            if parent_dir != self.downloads_dir and parent_dir.is_relative_to(
+                self.downloads_dir
+            ):
                 if parent_dir.exists():
                     # Remove directory and all its contents (e.g., .nzb, .par2, .nfo files)
                     shutil.rmtree(parent_dir)
-                    logger.info(f"Deleted download folder and contents: {parent_dir.name}")
+                    logger.info(
+                        f"Deleted download folder and contents: {parent_dir.name}"
+                    )
         except Exception as e:
             logger.warning(f"Failed to cleanup download file: {e}")
 
@@ -787,7 +917,9 @@ class FileImporter:
         elif extension == ".cbr":
             return extract_cover_from_cbr(file_path, cover_dir)
         else:
-            logger.warning(f"Unsupported file type for cover extraction: {file_path.suffix}")
+            logger.warning(
+                f"Unsupported file type for cover extraction: {file_path.suffix}"
+            )
             return None
 
     def process_organized_files(
@@ -822,7 +954,9 @@ class FileImporter:
         all_files = find_pdf_epub_files(self.organize_base_dir, recursive=True)
 
         if not all_files:
-            logger.info(f"No periodical files found in organized folders: {self.organize_base_dir}")
+            logger.info(
+                f"No periodical files found in organized folders: {self.organize_base_dir}"
+            )
             return result.to_dict()
 
         pdf_files = [f for f in all_files if f.suffix.lower() == ".pdf"]
@@ -835,7 +969,9 @@ class FileImporter:
             f"from {self.organize_base_dir} ({len(pdf_files)} PDFs, {len(epub_files)} EPUBs, "
             f"{len(cbz_files)} CBZs, {len(cbr_files)} CBRs)"
         )
-        logger.info("[DATA IMPORT] Text extraction enabled, OCR queued only for image-based files")
+        logger.info(
+            "[DATA IMPORT] Text extraction enabled, OCR queued only for image-based files"
+        )
 
         for pdf_path in all_files:
             try:
@@ -850,7 +986,9 @@ class FileImporter:
                 )
                 if import_result:
                     result.data["imported"] += 1
-                    logger.info(f"Successfully imported organized file: {pdf_path.name}")
+                    logger.info(
+                        f"Successfully imported organized file: {pdf_path.name}"
+                    )
                 else:
                     result.data["failed"] += 1
                     result.add_error(
@@ -861,7 +999,9 @@ class FileImporter:
             except Exception as e:
                 result.data["failed"] += 1
                 error_msg = f"Error importing organized file {pdf_path.name}: {str(e)}"
-                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
+                result.add_error(
+                    ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True
+                )
                 logger.error(error_msg, exc_info=True)
 
         return result.to_dict()
