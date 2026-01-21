@@ -86,7 +86,9 @@ def test_start_and_stop():
     asyncio.run(run_scheduler())
 
     # Task should have been called approximately 2-3 times (every 1 second for ~2.5 seconds)
-    assert call_count["count"] >= 2, f"Expected at least 2 calls, got {call_count['count']}"
+    assert call_count["count"] >= 2, (
+        f"Expected at least 2 calls, got {call_count['count']}"
+    )
 
     # Verify scheduler stopped
     assert scheduler.running is False
@@ -110,8 +112,8 @@ def test_scheduler_error_handling():
 
     async def run_scheduler_with_errors():
         scheduler_task = asyncio.create_task(scheduler.start())
-        # Let it run long enough for first failure + backoff retry (1s + 10s backoff)
-        await asyncio.sleep(12)
+        # Let it run long enough for: 1s delay + first failure + 10s backoff + retry
+        await asyncio.sleep(13)
         scheduler.stop()
         await asyncio.sleep(0.5)
 
@@ -125,11 +127,15 @@ def test_scheduler_error_handling():
     asyncio.run(run_scheduler_with_errors())
 
     # Task should be called at least twice (initial + one retry after backoff)
-    assert error_log["count"] >= 2, f"Expected at least 2 calls despite errors, got {error_log['count']}"
+    assert error_log["count"] >= 2, (
+        f"Expected at least 2 calls despite errors, got {error_log['count']}"
+    )
 
     # Verify backoff was applied (second call should be ~10s after first)
     if len(error_log["timestamps"]) >= 2:
-        time_diff = (error_log["timestamps"][1] - error_log["timestamps"][0]).total_seconds()
+        time_diff = (
+            error_log["timestamps"][1] - error_log["timestamps"][0]
+        ).total_seconds()
         assert time_diff >= 9, f"Expected backoff of ~10s, got {time_diff:.1f}s"
 
     assert scheduler.running is False
@@ -208,6 +214,52 @@ def test_task_intervals():
     pass
 
 
+def test_run_immediately():
+    """Test that tasks with run_immediately=True execute on first scheduler cycle"""
+    scheduler = TaskScheduler()
+
+    execution_log = {"immediate": 0, "delayed": 0}
+
+    async def immediate_task():
+        execution_log["immediate"] += 1
+
+    async def delayed_task():
+        execution_log["delayed"] += 1
+
+    # Schedule one task to run immediately, one to wait
+    scheduler.schedule_periodic("immediate", immediate_task, 10, run_immediately=True)
+    scheduler.schedule_periodic("delayed", delayed_task, 10, run_immediately=False)
+
+    async def run_scheduler():
+        scheduler_task = asyncio.create_task(scheduler.start())
+        # Run for 1 second - immediate task should run, delayed should not
+        await asyncio.sleep(1)
+        scheduler.stop()
+        await asyncio.sleep(0.5)
+
+        if not scheduler_task.done():
+            scheduler_task.cancel()
+            try:
+                await scheduler_task
+            except asyncio.CancelledError:
+                pass
+
+    asyncio.run(run_scheduler())
+
+    # Immediate task should have run at least once
+    assert execution_log["immediate"] >= 1, (
+        f"Immediate task should have run at least once, got {execution_log['immediate']}"
+    )
+
+    # Delayed task should not have run (interval is 10s, we only waited 1s)
+    assert execution_log["delayed"] == 0, (
+        f"Delayed task should not have run yet, got {execution_log['delayed']}"
+    )
+
+    print("Testing TaskScheduler run_immediately parameter... ✓ PASS")
+    pass
+
+
 if __name__ == "__main__":
     print("\n🧪 Task Scheduler Tests\n")
     print("=" * 50)
@@ -249,6 +301,12 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Testing TaskScheduler task intervals... ❌ FAIL: {e}")
         results["task_intervals"] = False
+
+    try:
+        results["run_immediately"] = test_run_immediately()
+    except Exception as e:
+        print(f"Testing TaskScheduler run_immediately parameter... ❌ FAIL: {e}")
+        results["run_immediately"] = False
 
     print("\n" + "=" * 50)
     print("Test Summary")

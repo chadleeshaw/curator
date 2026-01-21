@@ -264,11 +264,6 @@ async def lifespan(app: FastAPI):
                         )
                         return
 
-                    logger.info(
-                        f"Auto-download: Selected {len(periodicals_to_search)} periodicals to search: "
-                        f"{[p.title for p in periodicals_to_search]}"
-                    )
-
                     # Phase 2: Search each selected periodical and record results
                     for periodical in periodicals_to_search:
                         try:
@@ -476,6 +471,7 @@ async def lifespan(app: FastAPI):
             tasks_config.get(
                 "auto_download_interval", constants.AUTO_DOWNLOAD_INTERVAL
             ),
+            run_immediately=True,  # Run immediately to check for new periodicals
         )
 
         task_scheduler.schedule_periodic(
@@ -484,6 +480,7 @@ async def lifespan(app: FastAPI):
             tasks_config.get(
                 "download_monitor_interval", constants.DOWNLOAD_MONITOR_INTERVAL
             ),
+            run_immediately=True,  # Check download status immediately
         )
 
         task_scheduler.schedule_periodic(
@@ -492,6 +489,7 @@ async def lifespan(app: FastAPI):
             tasks_config.get(
                 "cleanup_covers_interval", constants.CLEANUP_COVERS_INTERVAL
             ),
+            # run_immediately=False (default) - maintenance can wait
         )
 
         task_scheduler.schedule_periodic(
@@ -500,6 +498,7 @@ async def lifespan(app: FastAPI):
             tasks_config.get(
                 "ocr_processor_interval", constants.OCR_PROCESSOR_INTERVAL
             ),
+            run_immediately=True,  # Process any queued OCR jobs immediately
         )
 
         task_scheduler.schedule_periodic(
@@ -509,6 +508,7 @@ async def lifespan(app: FastAPI):
                 "folder_cleanup_interval",
                 86400,  # Default: once per day (24 hours)
             ),
+            # run_immediately=False (default) - maintenance can wait
         )
 
         # Start scheduler in background
@@ -549,10 +549,6 @@ async def lifespan(app: FastAPI):
             session_factory,
             issue_discovery_service,
             search_scheduler,
-        )
-
-        logger.info(
-            "Curator initialized successfully with auto-import and download monitoring enabled"
         )
 
     except Exception as e:
