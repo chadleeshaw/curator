@@ -358,3 +358,41 @@ class TestConfidenceScoring:
         confidence2 = extractor._calculate_confidence(metadata2)
 
         assert confidence2 == "high"  # 2+2+2+1 = 7 pts
+
+    def test_parse_year_not_treated_as_extension(self, extractor):
+        """
+        Test: Esquire.USA.-.August.2021.pdf
+
+        Regression test for bug where year (2021) was incorrectly treated as
+        file extension and removed during parsing, causing month to default to January.
+
+        The parser should:
+        1. Recognize that "2021" is a year, not a file extension
+        2. Successfully parse "August 2021" as month=8, year=2021
+        3. Not default to month=1 (January)
+        """
+        result = extractor.extract_from_nzb_title("Esquire.USA.-.August.2021.pdf")
+
+        assert result["title"] == "Esquire"
+        assert result["country"] == "USA"
+        assert result["year"] == 2021
+        assert result["month"] == 8, "Month should be 8 (August), not 1 (January)"
+        assert result["confidence"] == "high"
+        assert result["issue_date"] == datetime(2021, 8, 1)
+
+    def test_nzb_style_filename_prioritized(self, extractor):
+        """
+        Test: Filenames with dots and dashes use NZB parser first
+
+        Ensures that NZB-style filenames (multiple dots, typical format)
+        are parsed using the NZB parser before falling back to simpler patterns.
+        This prevents incorrect parsing by year-only patterns.
+        """
+        # Test that NZB-style filename goes through NZB parser
+        test_path = Path("/downloads/Esquire.USA.-.August.2021.pdf")
+        result = extractor.extract_from_filename(test_path)
+
+        # Should have full metadata from NZB parser, not just year
+        assert result["month"] == 8, "Should detect August (month 8) from NZB parsing"
+        assert result["year"] == 2021
+        assert result["country"] == "USA"

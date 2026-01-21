@@ -22,6 +22,7 @@ from core.constants.patterns import (
     DATE_PATTERN_ISO_FULL,
     DATE_PATTERN_ISO_MONTH,
     DATE_PATTERN_MONTH_YEAR_NUMERIC,
+    DATE_PATTERN_MULTI_MONTH,
     DATE_PATTERN_YEAR_ONLY,
     NZB_COUNTRY_PATTERNS,
     NZB_EDITION_PATTERNS,
@@ -32,6 +33,15 @@ from core.constants.patterns import (
     NZB_VOLUME_PATTERN,
     TITLE_CLEANUP_TRAILING_DASH_DIGITS,
     TITLE_CLEANUP_TRAILING_SPACE_DIGITS,
+    TITLE_PATTERN_DASH_MONTH_DOT_YEAR,
+    TITLE_PATTERN_DASH_MONTH_YEAR,
+    TITLE_PATTERN_DOT_SEPARATED,
+    TITLE_PATTERN_ISO_DATE,
+    TITLE_PATTERN_ISSUE_NUMBER,
+    TITLE_PATTERN_SEASONAL,
+    TITLE_PATTERN_SPACE_MONTH_ONLY,
+    TITLE_PATTERN_SPACE_MONTH_YEAR,
+    TITLE_PATTERN_VOLUME_ISSUE,
 )
 from core.parsers.date import parse_month, parse_multi_month
 from core.utils.text import clean_title
@@ -81,10 +91,14 @@ class FilenameParser:
         """
         original_title = nzb_title
 
-        # Remove file extension if present
+        # Remove file extension if present (but preserve years like "2021")
         if "." in nzb_title:
             parts = nzb_title.rsplit(".", 1)
-            if len(parts[-1]) <= 4:  # Likely an extension
+            last_part = parts[-1]
+            # Check if it's a likely extension (≤4 chars), but NOT a year (4 digits between 1900-2100)
+            is_extension = len(last_part) <= 4
+            is_year = last_part.isdigit() and len(last_part) == 4 and MIN_VALID_YEAR <= int(last_part) <= MAX_VALID_YEAR
+            if is_extension and not is_year:
                 nzb_title = parts[0]
 
         # Initialize metadata dictionary
@@ -381,6 +395,24 @@ class FilenameParser:
             "issue_date": datetime.now(),
         }
 
+        # Detect NZB-style filenames (multiple dots, typical format: "Title.Country.-.Month.Year")
+        # Try NZB parser first for these complex filenames as it's more robust
+        is_nzb_style = filename.count(".") >= 2 or ("-" in filename and "." in filename)
+        if is_nzb_style:
+            logger.debug(f"Detected NZB-style filename, trying NZB parser first: {filename}")
+            nzb_result = self.extract_from_nzb_title(filename)
+            # Use NZB result if it has medium/high confidence
+            if nzb_result.get("confidence") in ["medium", "high"]:
+                logger.debug(f"NZB parsing succeeded with {nzb_result['confidence']} confidence")
+                # Convert NZB metadata format to standard metadata format
+                if nzb_result.get("issue_date"):
+                    return nzb_result
+                # If no issue_date but has year/month, construct it
+                if nzb_result.get("year") and nzb_result.get("month"):
+                    nzb_result["issue_date"] = datetime(nzb_result["year"], nzb_result["month"], 1)
+                    return nzb_result
+            logger.debug("NZB parsing failed or low confidence, falling back to standard patterns")
+
         # Try each pattern in order of specificity
         result = (
             self._try_multi_month_pattern(filename, metadata)
@@ -398,7 +430,7 @@ class FilenameParser:
         if result:
             return result
 
-        # Fallback: Try enhanced NZB-style parsing for complex filenames
+        # Final fallback: Try enhanced NZB-style parsing for other complex filenames
         logger.info(f"Standard patterns failed, trying NZB-style parsing: {filename}")
         nzb_result = self.extract_from_nzb_title(filename)
 
@@ -421,8 +453,7 @@ class FilenameParser:
         Pattern: Multi-month periods like "Title - June/July 2024" or "Title Jun/Jul2024".
         """
         # Handles: "Title - Jun/Jul2024", "Title June/July 2024", "Title - December/January 2024"
-        pattern = r"(.+?)\s*[-–]?\s*([A-Za-z]+)[/\-&]([A-Za-z]+)\s*(\d{4})"
-        match = re.search(pattern, filename)
+        match = re.search(DATE_PATTERN_MULTI_MONTH, filename)
 
         if not match:
             return None
@@ -453,13 +484,11 @@ class FilenameParser:
         IMPORTANT: Strips month names from title to prevent folders with embedded dates
         """
         # Try with year directly after month (no separator)
-        pattern = r"(.+?)\s*-\s*([A-Za-z]{3,9})(\d{4})"
-        match = re.search(pattern, filename)
+        match = re.search(TITLE_PATTERN_DASH_MONTH_YEAR, filename)
 
         # Also try with dot or space before year
         if not match:
-            pattern = r"(.+?)\s*-\s*([A-Za-z]{3,9})[\.\s]+(\d{4})"
-            match = re.search(pattern, filename)
+            match = re.search(TITLE_PATTERN_DASH_MONTH_DOT_YEAR, filename)
 
         if not match:
             return None
@@ -492,8 +521,7 @@ class FilenameParser:
         """
         Pattern: "Title.Month.Year" (e.g., "Wired.January.2024").
         """
-        pattern = r"^([^.]+)\.(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.(\d{4})"
-        match = re.search(pattern, filename, re.IGNORECASE)
+        match = re.search(TITLE_PATTERN_DOT_SEPARATED, filename, re.IGNORECASE)
 
         if not match:
             return None
@@ -522,14 +550,12 @@ class FilenameParser:
         IMPORTANT: Strips month names from title to prevent folders like "Esquire Us February"
         """
         # First try with year: "Title Month Year"
-        pattern = r"(.+?)\s+([A-Za-z]+)\s+(\d{4})"
-        match = re.search(pattern, filename)
+        match = re.search(TITLE_PATTERN_SPACE_MONTH_YEAR, filename)
 
         has_year = True
         if not match:
             # Try without year: "Title Month" (use current year)
-            pattern = r"(.+?)\s+([A-Za-z]+)$"
-            match = re.search(pattern, filename)
+            match = re.search(TITLE_PATTERN_SPACE_MONTH_ONLY, filename)
             has_year = False
 
         if not match:
@@ -564,8 +590,7 @@ class FilenameParser:
         """
         Pattern: "Title YYYY-MM" (e.g., "PC Gamer 2024-12").
         """
-        pattern = r"(.+?)\s+(\d{4})-(\d{2})$"
-        match = re.search(pattern, filename)
+        match = re.search(TITLE_PATTERN_ISO_DATE, filename)
 
         if not match:
             return None
@@ -586,8 +611,7 @@ class FilenameParser:
         """
         Pattern: "Title No.XXX YYYY" (e.g., "PC Gamer No.405 2024").
         """
-        pattern = r"^(.+?)[\.\s]+(?:no\.?|number|issue)[\.\s]*(\d{1,3})[\.\s]+(\d{4})(?:[\.\s]+(.+))?$"
-        match = re.search(pattern, filename, re.IGNORECASE)
+        match = re.search(TITLE_PATTERN_ISSUE_NUMBER, filename, re.IGNORECASE)
 
         if not match:
             return None
@@ -616,8 +640,7 @@ class FilenameParser:
         """
         Pattern: "Title Vol.XX No.YY YYYY" (e.g., "2600.Magazine.Vol.41.No.1.2024").
         """
-        pattern = r"^(.+?)[\.\s]+vol\.?[\.\s]*(\d{1,3})[\.\s]+no\.?[\.\s]*(\d{1,3})[\.\s]+(?:.+?[\.\s]+)?(\d{4})"
-        match = re.search(pattern, filename, re.IGNORECASE)
+        match = re.search(TITLE_PATTERN_VOLUME_ISSUE, filename, re.IGNORECASE)
 
         if not match:
             return None
@@ -643,8 +666,7 @@ class FilenameParser:
         """
         Pattern: "Title Season YYYY" (e.g., "2600 Winter 2024").
         """
-        pattern = r"^(.+?)[\.\s]+(spring|summer|fall|autumn|winter)[\.\s]+(\d{4})(?:[\.\s]+(.+))?$"
-        match = re.search(pattern, filename, re.IGNORECASE)
+        match = re.search(TITLE_PATTERN_SEASONAL, filename, re.IGNORECASE)
 
         if not match:
             return None
