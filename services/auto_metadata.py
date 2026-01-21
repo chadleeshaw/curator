@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Dict, Any
 
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from core.database import DatabaseManager
 from core.utils.metadata_builder import (
@@ -69,6 +70,7 @@ class AutoMetadataService:
             "issue_date_synced": 0,
             "ocr_queued": 0,
             "text_scan_queued": 0,
+            "metadata_cleaned": 0,
             "errors": 0,
         }
 
@@ -82,6 +84,10 @@ class AutoMetadataService:
             # Capture ID before any operations that might fail
             periodical_id = periodical.id
             try:
+                # 0. Clean up old/misplaced metadata fields
+                if self._cleanup_metadata(periodical):
+                    stats["metadata_cleaned"] += 1
+
                 # 1. Always regenerate file_scan and rebuild derived_metadata
                 # This ensures stale data is refreshed (e.g., from old parser versions)
                 if self._backfill_derived_metadata(periodical, session):
@@ -326,6 +332,70 @@ class AutoMetadataService:
             logger.error(f"Failed to text scan {periodical.id}: {e}")
 
         return False
+
+    def _cleanup_metadata(self, periodical: Periodical) -> bool:
+        """
+        Clean up old/misplaced metadata fields from extra_metadata and parsed_metadata.
+
+        Removes:
+        - From extra_metadata: duplicate metadata fields (year, month, country, etc.) and old fields
+        - From extra_metadata: scan results that belong in parsed_metadata (text_scan, ocr_metadata)
+        - Moves text_scan/ocr_metadata from extra_metadata to parsed_metadata if needed
+
+        Args:
+            periodical: Periodical to clean up
+
+        Returns:
+            True if cleanup was performed, False otherwise
+        """
+        cleaned = False
+        extra = periodical.extra_metadata or {}
+        parsed = periodical.parsed_metadata or {}
+
+        # Fields that should be removed from extra_metadata (old/duplicate fields)
+        fields_to_remove = [
+            "confidence",
+            "parse_source",
+            "country",
+            "special_edition",
+            "full_title",
+            "year",
+            "month",
+            "issue_number",
+            "volume",
+            "language",
+        ]
+
+        # Remove old/duplicate fields from extra_metadata
+        for field in fields_to_remove:
+            if field in extra:
+                del extra[field]
+                cleaned = True
+                logger.debug(f"Removed duplicate field '{field}' from extra_metadata for periodical {periodical.id}")
+
+        # Move scan results from extra_metadata to parsed_metadata
+        # Old imports may have stored text_scan/ocr_metadata in extra_metadata
+        if "text_scan" in extra:
+            parsed["text_scan"] = extra["text_scan"]
+            del extra["text_scan"]
+            cleaned = True
+            logger.debug(f"Moved text_scan from extra_metadata to parsed_metadata for periodical {periodical.id}")
+
+        if "ocr_metadata" in extra:
+            # Rename ocr_metadata to ocr_scan for consistency
+            parsed["ocr_scan"] = extra["ocr_metadata"]
+            del extra["ocr_metadata"]
+            cleaned = True
+            logger.debug(f"Moved ocr_metadata to parsed_metadata as ocr_scan for periodical {periodical.id}")
+
+        # Save changes if any cleanup was done
+        if cleaned:
+            periodical.extra_metadata = extra
+            periodical.parsed_metadata = parsed
+            flag_modified(periodical, "extra_metadata")
+            flag_modified(periodical, "parsed_metadata")
+
+        return cleaned
 
 
 def run_auto_metadata_task(db_manager: DatabaseManager) -> Dict[str, Any]:

@@ -326,6 +326,7 @@ async def run_task_manually(task_id: str):
             message = (
                 f"Auto-metadata executed. "
                 f"Processed: {stats.get('total_periodicals', 0)}, "
+                f"Metadata cleaned: {stats.get('metadata_cleaned', 0)}, "
                 f"Derived metadata backfilled: {stats.get('derived_metadata_backfilled', 0)}, "
                 f"Issue dates synced: {stats.get('issue_date_synced', 0)}, "
                 f"OCR queued: {stats.get('ocr_queued', 0)}, "
