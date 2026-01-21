@@ -1217,19 +1217,19 @@ export class TrackingManager {
           : '';
 
         // Show language variants badge if multiple variants exist
-        const variantsBadge =
-          issue.variants && issue.variants.length > 1
-            ? `<div style="font-size: 10px; margin-top: 6px; color: var(--primary-color); font-weight: 600;">🌍 ${issue.variants.length} variants</div>`
-            : issue.language
-              ? `<div style="font-size: 10px; margin-top: 6px; color: var(--text-secondary);">${issue.language}</div>`
-              : '';
+        const hasMultipleVariants = issue.variants && issue.variants.length > 1;
+        const variantsBadge = hasMultipleVariants
+          ? `<div style="font-size: 10px; margin-top: 6px; color: var(--primary-color); font-weight: 600;">🌍 ${issue.variants.length} variants</div>`
+          : issue.language
+            ? `<div style="font-size: 10px; margin-top: 6px; color: var(--text-secondary);">${issue.language}</div>`
+            : '';
 
         let cardHtml = `<div style="
           padding: 12px;
           background: ${backgroundColor};
           border-radius: 8px;
           text-align: center;
-          cursor: ${isLibraryItem ? 'default' : 'pointer'};
+          cursor: ${isLibraryItem && !hasMultipleVariants ? 'default' : 'pointer'};
           transition: all 0.2s;
           border-left: 4px solid ${borderColor};
           opacity: ${opacity};
@@ -1237,8 +1237,8 @@ export class TrackingManager {
           box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         "`;
 
-        // Store variants globally for selection
-        if (!isLibraryItem) {
+        // Store variants globally for selection (for both library and available items with variants)
+        if (hasMultipleVariants) {
           const issueKey = `${issue.year}-${issue.month}-${issue.issue}`;
           window.issueVariants = window.issueVariants || {};
           window.issueVariants[issueKey] = issue.variants;
@@ -1474,12 +1474,17 @@ window.selectIssueWithVariants = function (issueKey, alreadyDownloaded, hasFaile
   }
 
   // Multiple variants - show selection modal
+  const hasLibraryItem = alreadyDownloaded || variants.some((v) => v.already_downloaded);
+  const modalDescription = hasLibraryItem
+    ? 'Your downloaded variant is marked below. You can re-download from a different NZB source if needed:'
+    : 'Multiple NZB variants available for this issue:';
+
   const modalHTML = `
     <div id="language-variant-modal" class="modal" style="display: flex;">
       <div class="modal-content" style="max-width: 500px;">
         <span class="close" onclick="closeLangVariantModal()">&times;</span>
         <h2>Select NZB Source</h2>
-        <p style="color: var(--text-secondary); margin-bottom: 20px;">Multiple NZB variants available for this issue:</p>
+        <p style="color: var(--text-secondary); margin-bottom: 20px;">${modalDescription}</p>
         <div id="variant-options" style="display: flex; flex-direction: column; gap: 10px;"></div>
       </div>
     </div>
