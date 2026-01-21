@@ -114,6 +114,49 @@ class FileOrganizer:
 
         return len(countries_found)
 
+    def _strip_country_from_title(self, title: str) -> str:
+        """
+        Remove country codes and names from the end of a title.
+
+        This cleans up titles like "Hustler USA", "Playboy United States",
+        "Penthouse Australia" to just the base magazine name.
+
+        Args:
+            title: Magazine/periodical title to clean
+
+        Returns:
+            Title with country information removed
+        """
+        from core.constants.country import ISO_COUNTRIES
+
+        cleaned_title = title.strip()
+
+        # Remove country codes and names from the end of the title
+        # Try multiple passes to handle cases like "Hustler USA United States"
+        for _ in range(3):  # Max 3 passes to remove multiple countries
+            original = cleaned_title
+
+            # Remove 2-letter country codes at end (e.g., "Hustler US")
+            for code in ISO_COUNTRIES.keys():
+                pattern = rf"\s+{re.escape(code)}$"
+                cleaned_title = re.sub(pattern, "", cleaned_title, flags=re.IGNORECASE)
+
+            # Remove 3-letter codes at end (e.g., "Hustler USA")
+            for code in ISO_COUNTRIES.keys():
+                pattern = rf"\s+{re.escape(code)}A$"
+                cleaned_title = re.sub(pattern, "", cleaned_title, flags=re.IGNORECASE)
+
+            # Remove full country names at end (e.g., "Hustler United States")
+            for name in ISO_COUNTRIES.values():
+                pattern = rf"\s+{re.escape(name)}$"
+                cleaned_title = re.sub(pattern, "", cleaned_title, flags=re.IGNORECASE)
+
+            # If nothing changed, we're done
+            if cleaned_title == original:
+                break
+
+        return cleaned_title.strip()
+
     def _title_has_country_info(self, title: str, country_code: str) -> bool:
         """
         Check if title already contains country information for the specified country.
@@ -692,43 +735,25 @@ class FileOrganizer:
                     files_skipped += 1
                     continue
 
-                # Get country from tracking record if available
+                # Get country and tracking info from tracking record if available
                 country = None
+                tracking_title = None
                 if magazine.tracking_id:
                     tracking = db_session.query(PeriodicalTracking).filter_by(id=magazine.tracking_id).first()
                     if tracking:
                         country = tracking.country
+                        tracking_title = tracking.title
 
-                # Build full title with country identifier (e.g., "Magazine US", "Magazine UK")
-                # Use the existing title as-is - don't append country if title already has location info
-                full_title = magazine.title
-
-                # Check if title has multiple countries - this is an invalid state
-                country_count = self._count_countries_in_title(magazine.title)
-                if country_count > 1:
-                    logger.warning(
-                        f"Title has multiple countries ({country_count}), skipping country append: {magazine.title}"
-                    )
-                # Only append country identifier if:
-                # 1. Country code exists in tracking
-                # 2. Title doesn't already contain country information for this country
-                # 3. Title doesn't have multiple countries
-                elif country and not self._title_has_country_info(magazine.title, country):
-                    # Prefer short codes for US and UK (user preference)
-                    if country == "US":
-                        country_label = "US"
-                    elif country in ("UK", "GB"):
-                        country_label = "UK"
-                    else:
-                        # For other countries, use full name from ISO_COUNTRIES
-                        country_label = ISO_COUNTRIES.get(country, country)
-
-                    # Append country label to title
-                    full_title = f"{magazine.title} {country_label}"
-                    logger.debug(f"Appending country '{country_label}' to title: {magazine.title} -> {full_title}")
+                # CRITICAL: Use the tracking title if available, otherwise use magazine title
+                # The tracking title is the source of truth for folder organization
+                # Do NOT append country codes - the tracking title already has the correct format
+                if tracking_title:
+                    full_title = tracking_title
+                    logger.debug(f"Using tracking title: {tracking_title} (magazine title was: {magazine.title})")
                 else:
-                    if country:
-                        logger.debug(f"Title already has country info for '{country}', not appending: {magazine.title}")
+                    # No tracking record - use magazine title as-is
+                    full_title = magazine.title
+                    logger.debug(f"No tracking record, using magazine title: {magazine.title}")
 
                 # Build expected path based on pattern
                 metadata = {
@@ -821,9 +846,9 @@ class FileOrganizer:
                     # Move file
                     shutil.move(str(current_path), str(final_path))
 
-                    # Update database with new path and title
+                    # Update database with new path and title (use tracking title if available)
                     magazine.file_path = str(final_path)
-                    magazine.title = full_title  # Update title in database to include country
+                    magazine.title = full_title  # Sync to tracking title
                     db_session.commit()
 
                     # Also move cover if it exists
