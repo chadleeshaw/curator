@@ -2,11 +2,11 @@
 Category classification constants
 
 Defines the five primary content categories:
-- Magazine: Recurring periodicals (monthly/weekly magazines)
-- Comic: Single-issue comic books
-- Graphic Novel: Complete graphic novel stories
-- Book: Standalone books and ebooks
-- Document: Papers, articles, reports, journals
+- Magazines: Recurring periodicals (monthly/weekly magazines)
+- Comics: Single-issue comic books
+- Graphic Novels: Complete graphic novel stories
+- Books: Standalone books and ebooks
+- Documents: Papers, articles, reports, journals
 
 Newsnab Category Handling:
 - 7010 (Books/Mags) → Magazine
@@ -28,11 +28,11 @@ from core.constants.date import get_month_year_patterns, get_season_year_pattern
 # Category Names
 # ==============================================================================
 
-CATEGORY_MAGAZINE = "Magazine"
-CATEGORY_COMIC = "Comic"
-CATEGORY_GRAPHIC_NOVEL = "Graphic Novel"
-CATEGORY_BOOK = "Book"
-CATEGORY_DOCUMENT = "Document"
+CATEGORY_MAGAZINE = "Magazines"
+CATEGORY_COMIC = "Comics"
+CATEGORY_GRAPHIC_NOVEL = "Graphic Novels"
+CATEGORY_BOOK = "Books"
+CATEGORY_DOCUMENT = "Documents"
 
 # List of all categories for API/UI
 CATEGORIES = [

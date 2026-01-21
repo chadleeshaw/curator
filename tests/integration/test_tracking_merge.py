@@ -273,8 +273,8 @@ class TestTrackingMergeIntegration:
             tmpdir_path = Path(tmpdir)
 
             # Create source folder structures
-            wired_dir = tmpdir_path / "_Magazine" / "Wired" / "2024"
-            wired_mag_dir = tmpdir_path / "_Magazine" / "Wired Magazine" / "2024"
+            wired_dir = tmpdir_path / "_Magazines" / "Wired" / "2024"
+            wired_mag_dir = tmpdir_path / "_Magazines" / "Wired Magazine" / "2024"
             wired_dir.mkdir(parents=True, exist_ok=True)
             wired_mag_dir.mkdir(parents=True, exist_ok=True)
 
@@ -427,8 +427,8 @@ class TestTrackingMergeIntegration:
             assert result["files_reorganized"] == 1
 
             # Verify files were moved to new location (without language folder)
-            expected_new_pdf = tmpdir_path / "_Magazine" / "Wired" / "2024" / "Wired - February2024.pdf"
-            expected_new_jpg = tmpdir_path / "_Magazine" / "Wired" / "2024" / "Wired - February2024.jpg"
+            expected_new_pdf = tmpdir_path / "_Magazines" / "Wired" / "2024" / "Wired - February2024.pdf"
+            expected_new_jpg = tmpdir_path / "_Magazines" / "Wired" / "2024" / "Wired - February2024.jpg"
 
             assert expected_new_pdf.exists(), f"File should exist at {expected_new_pdf}"
             assert expected_new_jpg.exists(), f"Cover should exist at {expected_new_jpg}"

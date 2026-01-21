@@ -593,7 +593,7 @@ class TestTitleChangeFileReorganization:
             tracking_id = tracking.id
 
             # Create directory structure and files with old title
-            old_folder = library_dir / "_Magazine" / "Old Magazine Name" / "2024"
+            old_folder = library_dir / "_Magazines" / "Old Magazine Name" / "2024"
             old_folder.mkdir(parents=True, exist_ok=True)
 
             old_pdf = old_folder / "Old Magazine Name - January2024.pdf"
@@ -641,7 +641,7 @@ class TestTitleChangeFileReorganization:
             session.commit()
 
             # Verify new structure
-            new_folder = library_dir / "_Magazine" / "New Magazine Name" / "2024"
+            new_folder = library_dir / "_Magazines" / "New Magazine Name" / "2024"
             new_pdf = new_folder / "New Magazine Name - January2024.pdf"
             new_cover = new_folder / "New Magazine Name - January2024.jpg"
 
@@ -744,7 +744,7 @@ class TestTitleChangeFileReorganization:
                 ("March2024", datetime(2024, 3, 15)),
             ]
 
-            old_folder = library_dir / "_Magazine" / "Wired Magazine" / "2024"
+            old_folder = library_dir / "_Magazines" / "Wired Magazine" / "2024"
             old_folder.mkdir(parents=True, exist_ok=True)
 
             magazines = []
@@ -778,7 +778,7 @@ class TestTitleChangeFileReorganization:
             session.commit()
 
             # Verify all files moved
-            new_folder = library_dir / "_Magazine" / "Wired" / "2024"
+            new_folder = library_dir / "_Magazines" / "Wired" / "2024"
             for month_label, _ in issues:
                 new_pdf = new_folder / f"Wired - {month_label}.pdf"
                 assert new_pdf.exists(), f"{month_label} should be reorganized"
