@@ -7,6 +7,7 @@ Handles both simple and pattern-based organization with metadata extraction.
 
 import logging
 import os
+import re
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -81,6 +82,37 @@ class FileOrganizer:
         self.library_dir = Path(library_dir)
         self.category_prefix = category_prefix
         self.library_dir.mkdir(parents=True, exist_ok=True)
+
+    def _count_countries_in_title(self, title: str) -> int:
+        """
+        Count how many countries are mentioned in a title.
+
+        This helps detect invalid titles like "Magazine US Germany" that have
+        multiple country identifiers.
+
+        Args:
+            title: Magazine/periodical title to check
+
+        Returns:
+            Number of distinct countries found in the title
+        """
+        from core.constants.country import ISO_COUNTRIES
+
+        countries_found = set()
+
+        # Check for each country code and name in the title
+        for code, name in ISO_COUNTRIES.items():
+            # Check for 2-letter code with word boundaries
+            if re.search(rf"\b{re.escape(code)}\b", title, re.IGNORECASE):
+                countries_found.add(code)
+            # Check for full country name with word boundaries
+            elif re.search(rf"\b{re.escape(name)}\b", title, re.IGNORECASE):
+                countries_found.add(code)
+            # Check for 3-letter codes like USA, GBR
+            elif re.search(rf"\b{re.escape(code)}A\b", title, re.IGNORECASE):
+                countries_found.add(code)
+
+        return len(countries_found)
 
     def _title_has_country_info(self, title: str, country_code: str) -> bool:
         """
@@ -667,10 +699,17 @@ class FileOrganizer:
                 # Use the existing title as-is - don't append country if title already has location info
                 full_title = magazine.title
 
+                # Check if title has multiple countries - this is an invalid state
+                country_count = self._count_countries_in_title(magazine.title)
+                if country_count > 1:
+                    logger.warning(
+                        f"Title has multiple countries ({country_count}), skipping country append: {magazine.title}"
+                    )
                 # Only append country identifier if:
                 # 1. Country code exists in tracking
                 # 2. Title doesn't already contain country information for this country
-                if country and not self._title_has_country_info(magazine.title, country):
+                # 3. Title doesn't have multiple countries
+                elif country and not self._title_has_country_info(magazine.title, country):
                     # Prefer short codes for US and UK (user preference)
                     if country == "US":
                         country_label = "US"

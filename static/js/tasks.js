@@ -231,7 +231,9 @@ export class TasksManager {
 
       // Debug logging
       console.log('[Preview] API Response:', data);
-      console.log('[Preview] Changes:', data.changes?.length || 0);
+      console.log('[Preview] Changes array:', data.changes);
+      console.log('[Preview] Changes length:', data.changes?.length || 0);
+      console.log('[Preview] Changes is array?:', Array.isArray(data.changes));
 
       if (data.success) {
         this.displayReorganizeResults(data, true);
@@ -333,8 +335,13 @@ export class TasksManager {
 
     // Debug logging
     console.log('[Display] Received data:', data);
-    console.log('[Display] Changes array:', data.changes);
+    console.log('[Display] data.changes:', data.changes);
+    console.log('[Display] Changes is array?:', Array.isArray(data.changes));
     console.log('[Display] Number of changes:', data.changes?.length || 0);
+
+    if (data.changes && data.changes.length > 0) {
+      console.log('[Display] First change:', data.changes[0]);
+    }
 
     const statusLabel = isPreview ? 'Would be reorganized' : 'Reorganized';
     const skippedLabel = isPreview ? 'Would be skipped' : 'Skipped';
@@ -354,7 +361,8 @@ export class TasksManager {
     `;
 
     // Display detailed changes if available
-    if (data.changes && data.changes.length > 0) {
+    if (data.changes && Array.isArray(data.changes) && data.changes.length > 0) {
+      console.log('[Display] Rendering changes list with', data.changes.length, 'items');
       html += `
         <div style="margin-top: 20px;">
           <h5 style="margin: 0 0 10px 0; color: var(--text-primary); font-size: 1em;">
@@ -401,6 +409,16 @@ export class TasksManager {
           </div>
         </div>
       `;
+    } else {
+      console.log('[Display] No changes to display - data.changes:', data.changes);
+      // Show a message if there are files to reorganize but no detailed changes
+      if (data.files_reorganized > 0) {
+        html += `
+          <div style="margin-top: 20px; padding: 10px; background: var(--background-secondary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-hint);">
+            ℹ️ Detailed changes list not available
+          </div>
+        `;
+      }
     }
 
     if (data.errors && data.errors.length > 0) {

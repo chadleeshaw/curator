@@ -281,8 +281,34 @@ def detect_country(text: str, default: Optional[str] = None) -> Optional[str]:
     # Convert to uppercase for pattern matching
     text_upper = text.upper()
 
+    # CRITICAL: Check full country names FIRST, before 2-3 letter patterns
+    # This prevents "New Zealand" from matching "NE" (Niger) or "GQ"
+    # Multi-word country names must be checked before extracting short codes
+    for code, name in ISO_COUNTRIES.items():
+        # Match full country name with word boundaries
+        if re.search(rf"\b{re.escape(name)}\b", text, re.IGNORECASE):
+            return code
+
+    # Special handling for "South Africa" must come before "Africa" check
+    if re.search(r"\bSouth[\s\.]Africa\b", text, re.IGNORECASE):
+        return "ZA"
+
     # Common English words that look like country codes but should be ignored
-    common_words = {"IS", "IN", "IT", "OR", "TO", "BY", "AT", "AS", "IF", "NO", "SO", "DO", "GO"}
+    common_words = {
+        "IS",
+        "IN",
+        "IT",
+        "OR",
+        "TO",
+        "BY",
+        "AT",
+        "AS",
+        "IF",
+        "NO",
+        "SO",
+        "DO",
+        "GO",
+    }
 
     # Patterns to match country codes in various contexts
     # Order matters - more specific patterns first
@@ -319,24 +345,16 @@ def detect_country(text: str, default: Optional[str] = None) -> Optional[str]:
             if len(match) == 3 and match[:2] in ISO_COUNTRIES:
                 return match[:2]
 
-            # Check full name lookup
+            # Check full name lookup - but this should now rarely trigger
+            # since we checked full names first
             country_name = find_country(match)
             if country_name:
                 # Return the matched code, not the first code for the name
                 # This preserves the original code format (e.g., UK, US)
                 return match if len(match) == 2 else match[:2]
 
-    # Also try matching full country names
-    for code, name in ISO_COUNTRIES.items():
-        # Match full country name with word boundaries
-        if re.search(rf"\b{re.escape(name)}\b", text, re.IGNORECASE):
-            return code
-
-    # Special handling for "Africa" patterns (not a country, but used in periodical names)
-    # Check for "South Africa" first (more specific)
-    if re.search(r"\bSouth[\s\.]Africa\b", text, re.IGNORECASE):
-        return "ZA"  # South Africa
-    # Then check for generic "Africa" or "Afrika" - treat as ZA for filtering purposes
+    # Generic "Africa" or "Afrika" - treat as ZA for filtering purposes
+    # (Note: "South Africa" was already checked in full country name matching above)
     if re.search(r"\b(Africa|Afrika)\b", text, re.IGNORECASE):
         return "ZA"  # Treat Africa/Afrika as South Africa for filtering
 
