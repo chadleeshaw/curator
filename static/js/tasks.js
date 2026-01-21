@@ -322,7 +322,7 @@ export class TasksManager {
   }
 
   /**
-   * Display reorganization results
+   * Display reorganization results with detailed changes
    */
   displayReorganizeResults(data, isPreview) {
     const resultsDiv = document.getElementById('reorganize-results');
@@ -344,6 +344,56 @@ export class TasksManager {
         </div>
     `;
 
+    // Display detailed changes if available
+    if (data.changes && data.changes.length > 0) {
+      html += `
+        <div style="margin-top: 20px;">
+          <h5 style="margin: 0 0 10px 0; color: var(--text-primary); font-size: 1em;">
+            📁 ${isPreview ? 'Folder Changes Preview' : 'Completed Changes'} (${data.changes.length})
+          </h5>
+          <div style="max-height: 400px; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px;">
+            ${data.changes
+              .slice(0, 50)
+              .map(
+                (change) => `
+              <div style="padding: 10px; border-bottom: 1px solid var(--border-subtle); font-size: 0.9em;">
+                <div style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 6px;">
+                  ${change.title_changed ? '<span title="Title updated">🏷️</span>' : '<span title="Title unchanged">📄</span>'}
+                  <div style="flex: 1;">
+                    <div style="color: var(--text-primary); font-weight: 500; margin-bottom: 4px;">
+                      ${change.title_changed ? `${this.escapeHtml(change.old_title)} → ${this.escapeHtml(change.new_title)}` : this.escapeHtml(change.new_title)}
+                    </div>
+                    <div style="font-family: monospace; font-size: 0.85em; color: var(--text-secondary);">
+                      <div title="Old folder" style="color: var(--status-failed); margin-bottom: 2px;">
+                        ❌ ${this.escapeHtml(change.old_folder)}/
+                      </div>
+                      <div title="New folder" style="color: var(--status-completed);">
+                        ✅ ${this.escapeHtml(change.new_folder)}/
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            `
+              )
+              .join('')}
+            ${
+              data.changes.length > 50
+                ? `
+              <div style="padding: 10px; text-align: center; color: var(--text-hint); font-style: italic;">
+                ... and ${data.changes.length - 50} more change(s)
+              </div>
+            `
+                : ''
+            }
+          </div>
+          <div style="margin-top: 8px; font-size: 0.85em; color: var(--text-hint);">
+            💡 Legend: 🏷️ = Title updated (country added), 📄 = Title unchanged
+          </div>
+        </div>
+      `;
+    }
+
     if (data.errors && data.errors.length > 0) {
       html += `
         <div style="margin-top: 15px; padding: 10px; background: var(--status-failed-bg); border: 1px solid var(--status-failed); border-radius: 4px;">
@@ -351,7 +401,7 @@ export class TasksManager {
           <ul style="margin: 8px 0 0 20px; color: var(--text-secondary); font-size: 0.9em;">
             ${data.errors
               .slice(0, 5)
-              .map((err) => `<li>${err}</li>`)
+              .map((err) => `<li>${this.escapeHtml(err)}</li>`)
               .join('')}
             ${data.errors.length > 5 ? `<li><em>... and ${data.errors.length - 5} more</em></li>` : ''}
           </ul>
@@ -362,6 +412,15 @@ export class TasksManager {
     html += '</div>';
 
     resultsDiv.innerHTML = html;
+  }
+
+  /**
+   * Escape HTML to prevent XSS
+   */
+  escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 }
 

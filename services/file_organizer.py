@@ -636,6 +636,7 @@ class FileOrganizer:
         files_reorganized = 0
         files_skipped = 0
         errors = []
+        changes = []  # Track detailed changes for preview
         old_directories = set()  # Track directories we moved files from
 
         # Query all magazines in this category from database
@@ -739,6 +740,18 @@ class FileOrganizer:
 
                 logger.info(f"Reorganizing: {current_path} -> {expected_path}")
 
+                # Track this change for preview display
+                change_info = {
+                    "old_path": str(current_path),
+                    "new_path": str(expected_path),
+                    "old_title": magazine.title,
+                    "new_title": full_title,
+                    "title_changed": magazine.title != full_title,
+                    "old_folder": current_path.parent.name,
+                    "new_folder": target_dir.name,
+                }
+                changes.append(change_info)
+
                 if not dry_run:
                     # Create target directory
                     target_dir.mkdir(parents=True, exist_ok=True)
@@ -806,6 +819,9 @@ class FileOrganizer:
         files_reorganized += sidecar_results["files_reorganized"]
         files_skipped += sidecar_results["files_skipped"]
         errors.extend(sidecar_results["errors"])
+        # Merge sidecar changes into main changes list
+        if "changes" in sidecar_results:
+            changes.extend(sidecar_results["changes"])
 
         # Final cleanup after processing sidecar files
         if not dry_run and sidecar_results["files_reorganized"] > 0:
@@ -820,6 +836,7 @@ class FileOrganizer:
             "files_reorganized": files_reorganized,
             "files_skipped": files_skipped,
             "errors": errors,
+            "changes": changes,  # Add detailed changes list
             "dry_run": dry_run,
         }
 
@@ -855,6 +872,7 @@ class FileOrganizer:
         files_reorganized = 0
         files_skipped = 0
         errors = []
+        changes = []  # Track detailed changes for sidecar files
 
         # Find all PDF, EPUB, CBZ, and CBR files in the category directory
         for file_path in category_dir.rglob("*"):
@@ -978,6 +996,19 @@ class FileOrganizer:
 
                 logger.info(f"Reorganizing (from sidecar): {file_path} -> {expected_path}")
 
+                # Track this change for preview display
+                change_info = {
+                    "old_path": str(file_path),
+                    "new_path": str(expected_path),
+                    "old_title": parsed_dict.get("title", "Unknown"),
+                    "new_title": full_title,
+                    "title_changed": parsed_dict.get("title") != full_title,
+                    "old_folder": file_path.parent.name,
+                    "new_folder": target_dir.name,
+                    "source": "sidecar",
+                }
+                changes.append(change_info)
+
                 if not dry_run:
                     # Create target directory
                     target_dir.mkdir(parents=True, exist_ok=True)
@@ -1019,6 +1050,7 @@ class FileOrganizer:
             "files_reorganized": files_reorganized,
             "files_skipped": files_skipped,
             "errors": errors,
+            "changes": changes,  # Add detailed changes list
         }
 
     def _cleanup_old_directories(self, old_directories: set, base_dir: Path) -> int:
