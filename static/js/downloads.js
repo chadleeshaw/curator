@@ -445,12 +445,15 @@ export class DownloadsManager {
         })
         .join('');
 
-      // Check if any items have extra_status (e.g., rate limiting)
-      const extraStatusItems = items.filter((item) => item.extra_status);
-      const extraStatusNote =
-        extraStatusItems.length > 0
-          ? `<div style="font-size: 0.75em; color: var(--text-secondary); margin-top: 4px; font-style: italic;">⏱️ ${extraStatusItems[0].extra_status}</div>`
-          : '';
+      // Check for rate limiting and get longest wait time
+      const waitInfo = this.getLongestWaitTime(items);
+      const waitTimeNote = waitInfo
+        ? `<div style="font-size: 0.8em; color: var(--status-failed); margin-top: 4px; font-weight: 600; display: flex; align-items: center; gap: 5px;">
+             <span style="font-size: 1.2em;">⏱️</span>
+             <span>Longest wait: ${this.formatWaitTime(waitInfo.waitTime)}</span>
+             ${waitInfo.count > 1 ? `<span style="font-size: 0.85em; color: var(--text-secondary); font-weight: normal;">(${waitInfo.count} rate limited)</span>` : ''}
+           </div>`
+        : '';
 
       headerRow.innerHTML = `
         <td colspan="2" style="padding: 12px; font-weight: bold;">
@@ -464,13 +467,69 @@ export class DownloadsManager {
                 ${statusBadges}
                 <span style="font-size: 1.2em; color: var(--text-secondary);">\u2192</span>
               </div>
-              ${extraStatusNote}
+              ${waitTimeNote}
             </div>
           </div>
         </td>
       `;
       tbody.appendChild(headerRow);
     });
+  }
+
+  /**
+   * Format seconds into human-readable time
+   *
+   * @param {number} seconds - Time in seconds
+   * @returns {string} Formatted time (e.g., "2h 58m", "45m", "30s")
+   */
+  formatWaitTime(seconds) {
+    if (seconds < 60) {
+      return `${seconds}s`;
+    }
+    if (seconds < 3600) {
+      const minutes = Math.floor(seconds / 60);
+      return `${minutes}m`;
+    }
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    if (minutes === 0) {
+      return `${hours}h`;
+    }
+    return `${hours}h ${minutes}m`;
+  }
+
+  /**
+   * Extract wait time in seconds from extra_status message
+   *
+   * @param {string} extraStatus - The extra_status field (e.g., "Provider rate limit: waiting 178s (~0.0h)")
+   * @returns {number|null} Wait time in seconds, or null if not found
+   */
+  parseWaitTime(extraStatus) {
+    if (!extraStatus) return null;
+    // Match patterns like "waiting 178s" or "waiting 178 seconds"
+    const match = extraStatus.match(/waiting (\d+)s/);
+    return match ? parseInt(match[1], 10) : null;
+  }
+
+  /**
+   * Get longest wait time from a list of items
+   *
+   * @param {DownloadItem[]} items - Array of download items
+   * @returns {{waitTime: number, count: number}|null} Longest wait time info or null
+   */
+  getLongestWaitTime(items) {
+    const rateLimitedItems = items.filter((item) => item.extra_status);
+    if (rateLimitedItems.length === 0) return null;
+
+    let maxWaitTime = 0;
+    rateLimitedItems.forEach((item) => {
+      const waitTime = this.parseWaitTime(item.extra_status);
+      if (waitTime && waitTime > maxWaitTime) {
+        maxWaitTime = waitTime;
+      }
+    });
+
+    return maxWaitTime > 0 ? { waitTime: maxWaitTime, count: rateLimitedItems.length } : null;
   }
 
   /**
@@ -582,6 +641,22 @@ export class DownloadsManager {
       .map(([status, count]) => `${count} ${status}`)
       .join(', ');
 
+    // Get wait time info for the modal header
+    const waitInfo = this.getLongestWaitTime(items);
+    const waitTimeAlert = waitInfo
+      ? `<div style="background: var(--surface-variant); padding: 10px; border-radius: 6px; margin-top: 10px; border-left: 3px solid var(--status-failed);">
+           <div style="display: flex; align-items: center; gap: 8px;">
+             <span style="font-size: 1.3em;">⏱️</span>
+             <div>
+               <div style="font-weight: 600; color: var(--status-failed);">Rate Limited</div>
+               <div style="font-size: 0.85em; color: var(--text-secondary);">
+                 ${waitInfo.count} issue${waitInfo.count !== 1 ? 's' : ''} waiting - longest: ${this.formatWaitTime(waitInfo.waitTime)}
+               </div>
+             </div>
+           </div>
+         </div>`
+      : '';
+
     const filterButtons = ['all', 'pending', 'downloading', 'completed', 'failed', 'skipped']
       .map((f) => {
         const count = f === 'all' ? items.length : (statusCounts[f] ?? 0);
@@ -608,6 +683,7 @@ export class DownloadsManager {
             submission_id: submissionId,
             created_at: createdAt,
             status,
+            error,
           } = item;
           const statusColor = this.getStatusColor(status);
 
@@ -618,12 +694,23 @@ export class DownloadsManager {
             displayTitle = `${title} <span style="color: var(--text-secondary); font-size: 0.85em;">(#${submissionId}${date ? ' - ' + date : ''})</span>`;
           }
 
+          // Build status info with error or extra_status
+          let statusInfo = `<span style="background: ${statusColor}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.85em;">${status}</span>`;
+
+          // Show error message for failed items
+          if (status === 'failed' && error) {
+            statusInfo += `<div style="font-size: 0.75em; color: var(--status-failed); margin-top: 4px; font-style: italic;">❌ ${error}</div>`;
+          }
+          // Show extra_status for rate limiting or other info
+          else if (item.extra_status) {
+            statusInfo += `<div style="font-size: 0.75em; color: var(--text-secondary); margin-top: 4px; font-style: italic;">⏱️ ${item.extra_status}</div>`;
+          }
+
           return `
           <tr>
             <td style="padding: 10px; border-bottom: 1px solid var(--border-color);">${displayTitle}</td>
             <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
-              <span style="background: ${statusColor}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.85em;">${status}</span>
-              ${item.extra_status ? `<div style="font-size: 0.75em; color: var(--text-secondary); margin-top: 4px; font-style: italic;">⏱️ ${item.extra_status}</div>` : ''}
+              ${statusInfo}
             </td>
             <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
               ${this.getQueueActionButtons(item)}
@@ -638,6 +725,7 @@ export class DownloadsManager {
       <div class="modal-header">
         <h3>Manage Downloads: ${periodical}</h3>
         <p style="color: var(--text-secondary); margin-top: 10px;">${items.length} issues - ${statusList}</p>
+        ${waitTimeAlert}
         <div id="modal-queue-status" class="hidden" style="margin-top: 10px;"></div>
         <div style="display: flex; gap: 5px; margin-top: 15px; flex-wrap: wrap;">
           ${filterButtons}
