@@ -79,6 +79,8 @@ class AutoMetadataService:
         logger.info(f"Processing {len(periodicals)} periodicals...")
 
         for periodical in periodicals:
+            # Capture ID before any operations that might fail
+            periodical_id = periodical.id
             try:
                 # 1. Always regenerate file_scan and rebuild derived_metadata
                 # This ensures stale data is refreshed (e.g., from old parser versions)
@@ -100,12 +102,14 @@ class AutoMetadataService:
                     if self._queue_text_scan(periodical, session):
                         stats["text_scan_queued"] += 1
 
-            except Exception as e:
-                logger.error(f"Error processing periodical {periodical.id}: {e}")
-                stats["errors"] += 1
+                # Commit after each periodical to avoid long-running transactions
+                session.commit()
 
-        # Commit all changes
-        session.commit()
+            except Exception as e:
+                # Rollback on error to continue processing other periodicals
+                session.rollback()
+                logger.error(f"Error processing periodical {periodical_id}: {e}")
+                stats["errors"] += 1
 
         logger.info(f"Auto-metadata scan complete: {stats}")
         return stats
