@@ -229,6 +229,10 @@ export class TasksManager {
 
       const data = await response.json();
 
+      // Debug logging
+      console.log('[Preview] API Response:', data);
+      console.log('[Preview] Changes:', data.changes?.length || 0);
+
       if (data.success) {
         this.displayReorganizeResults(data, true);
         UIUtils.showStatus(
@@ -326,6 +330,11 @@ export class TasksManager {
    */
   displayReorganizeResults(data, isPreview) {
     const resultsDiv = document.getElementById('reorganize-results');
+
+    // Debug logging
+    console.log('[Display] Received data:', data);
+    console.log('[Display] Changes array:', data.changes);
+    console.log('[Display] Number of changes:', data.changes?.length || 0);
 
     const statusLabel = isPreview ? 'Would be reorganized' : 'Reorganized';
     const skippedLabel = isPreview ? 'Would be skipped' : 'Skipped';
