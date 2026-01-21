@@ -39,11 +39,7 @@ class TaskScheduler:
             interval_seconds: How often to run the task
             run_immediately: If True, run task immediately on first scheduler cycle (default: False)
         """
-        next_run = (
-            datetime.now()
-            if run_immediately
-            else datetime.now() + timedelta(seconds=interval_seconds)
-        )
+        next_run = datetime.now() if run_immediately else datetime.now() + timedelta(seconds=interval_seconds)
 
         self.tasks[name] = {
             "func": task_func,
@@ -76,9 +72,7 @@ class TaskScheduler:
                         self.active_tasks.add(task_name)
 
                         try:
-                            logger.debug(
-                                f"[TaskScheduler] About to run task: {task_name}"
-                            )
+                            logger.debug(f"[TaskScheduler] About to run task: {task_name}")
                             logger.debug(f"Running task: {task_name}")
 
                             await task_info["func"]()
@@ -87,9 +81,7 @@ class TaskScheduler:
                             task_info["last_run"] = now
                             task_info["failure_count"] = 0
                             task_info["backoff_seconds"] = 0
-                            task_info["next_run"] = now + timedelta(
-                                seconds=task_info["interval"]
-                            )
+                            task_info["next_run"] = now + timedelta(seconds=task_info["interval"])
 
                             logger.debug(
                                 f"[TaskScheduler] Task completed: {task_name}, next_run: {task_info['next_run']}"
@@ -105,18 +97,13 @@ class TaskScheduler:
                                 task_info["backoff_seconds"] = self.MIN_BACKOFF_SECONDS
                             else:
                                 task_info["backoff_seconds"] = min(
-                                    task_info["backoff_seconds"]
-                                    * self.BACKOFF_MULTIPLIER,
+                                    task_info["backoff_seconds"] * self.BACKOFF_MULTIPLIER,
                                     self.MAX_BACKOFF_SECONDS,
                                 )
 
                             # Schedule next run with backoff
-                            backoff_interval = (
-                                task_info["interval"] + task_info["backoff_seconds"]
-                            )
-                            task_info["next_run"] = now + timedelta(
-                                seconds=backoff_interval
-                            )
+                            backoff_interval = task_info["interval"] + task_info["backoff_seconds"]
+                            task_info["next_run"] = now + timedelta(seconds=backoff_interval)
 
                             logger.error(
                                 f"Error in task {task_name} (failure #{task_info['failure_count']}): {e}. "
@@ -133,9 +120,7 @@ class TaskScheduler:
 
                 # Dynamic sleep: sleep until next task is due (with max 60s)
                 if next_wakeup:
-                    sleep_seconds = max(
-                        0, (next_wakeup - datetime.now()).total_seconds()
-                    )
+                    sleep_seconds = max(0, (next_wakeup - datetime.now()).total_seconds())
                     sleep_seconds = min(sleep_seconds, 60)  # Cap at 60 seconds
                 else:
                     sleep_seconds = 1  # Default fallback
@@ -144,22 +129,15 @@ class TaskScheduler:
                     await asyncio.sleep(sleep_seconds)
 
         except asyncio.CancelledError:
-            logger.info(
-                "Task scheduler cancelled - waiting for active tasks to complete"
-            )
+            logger.info("Task scheduler cancelled - waiting for active tasks to complete")
 
             # Wait for active tasks with timeout
             if self.active_tasks:
-                logger.info(
-                    f"Waiting for {len(self.active_tasks)} active tasks: {self.active_tasks}"
-                )
+                logger.info(f"Waiting for {len(self.active_tasks)} active tasks: {self.active_tasks}")
                 timeout = 30  # 30 second timeout
                 start_time = datetime.now()
 
-                while (
-                    self.active_tasks
-                    and (datetime.now() - start_time).total_seconds() < timeout
-                ):
+                while self.active_tasks and (datetime.now() - start_time).total_seconds() < timeout:
                     await asyncio.sleep(0.5)
 
                 if self.active_tasks:
@@ -185,9 +163,7 @@ class TaskScheduler:
             "tasks": {
                 name: {
                     "interval": info["interval"],
-                    "last_run": (
-                        info["last_run"].isoformat() if info["last_run"] else None
-                    ),
+                    "last_run": (info["last_run"].isoformat() if info["last_run"] else None),
                     "next_run": info["next_run"].isoformat(),
                     "failure_count": info.get("failure_count", 0),
                     "backoff_seconds": info.get("backoff_seconds", 0),

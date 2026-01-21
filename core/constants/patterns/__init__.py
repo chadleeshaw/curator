@@ -102,9 +102,7 @@ def compile_pattern(pattern: str, flags: int = re.IGNORECASE) -> re.Pattern:
     return re.compile(pattern, flags)
 
 
-def compile_patterns(
-    patterns: list[str], flags: int = re.IGNORECASE
-) -> list[re.Pattern]:
+def compile_patterns(patterns: list[str], flags: int = re.IGNORECASE) -> list[re.Pattern]:
     """
     Compile multiple regex patterns with default flags.
 

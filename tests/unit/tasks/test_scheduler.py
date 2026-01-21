@@ -86,9 +86,7 @@ def test_start_and_stop():
     asyncio.run(run_scheduler())
 
     # Task should have been called approximately 2-3 times (every 1 second for ~2.5 seconds)
-    assert call_count["count"] >= 2, (
-        f"Expected at least 2 calls, got {call_count['count']}"
-    )
+    assert call_count["count"] >= 2, f"Expected at least 2 calls, got {call_count['count']}"
 
     # Verify scheduler stopped
     assert scheduler.running is False
@@ -127,15 +125,11 @@ def test_scheduler_error_handling():
     asyncio.run(run_scheduler_with_errors())
 
     # Task should be called at least twice (initial + one retry after backoff)
-    assert error_log["count"] >= 2, (
-        f"Expected at least 2 calls despite errors, got {error_log['count']}"
-    )
+    assert error_log["count"] >= 2, f"Expected at least 2 calls despite errors, got {error_log['count']}"
 
     # Verify backoff was applied (second call should be ~10s after first)
     if len(error_log["timestamps"]) >= 2:
-        time_diff = (
-            error_log["timestamps"][1] - error_log["timestamps"][0]
-        ).total_seconds()
+        time_diff = (error_log["timestamps"][1] - error_log["timestamps"][0]).total_seconds()
         assert time_diff >= 9, f"Expected backoff of ~10s, got {time_diff:.1f}s"
 
     assert scheduler.running is False
@@ -247,14 +241,12 @@ def test_run_immediately():
     asyncio.run(run_scheduler())
 
     # Immediate task should have run at least once
-    assert execution_log["immediate"] >= 1, (
-        f"Immediate task should have run at least once, got {execution_log['immediate']}"
-    )
+    assert (
+        execution_log["immediate"] >= 1
+    ), f"Immediate task should have run at least once, got {execution_log['immediate']}"
 
     # Delayed task should not have run (interval is 10s, we only waited 1s)
-    assert execution_log["delayed"] == 0, (
-        f"Delayed task should not have run yet, got {execution_log['delayed']}"
-    )
+    assert execution_log["delayed"] == 0, f"Delayed task should not have run yet, got {execution_log['delayed']}"
 
     print("Testing TaskScheduler run_immediately parameter... ✓ PASS")
     pass

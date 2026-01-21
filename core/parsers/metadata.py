@@ -149,9 +149,7 @@ class FilenameParser:
                     metadata["country"] = "USA"
                 else:
                     metadata["country"] = country.upper()
-                remaining_text = (
-                    remaining_text[: match.start()] + remaining_text[match.end() :]
-                )
+                remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
                 remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                 break
 
@@ -160,9 +158,7 @@ class FilenameParser:
             match = re.search(pattern, remaining_text, re.IGNORECASE)
             if match:
                 metadata["language"] = match.group(1).capitalize()
-                remaining_text = (
-                    remaining_text[: match.start()] + remaining_text[match.end() :]
-                )
+                remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
                 remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                 break
 
@@ -171,9 +167,7 @@ class FilenameParser:
             match = re.search(pattern, remaining_text, re.IGNORECASE)
             if match:
                 metadata["edition"] = match.group(1).capitalize()
-                remaining_text = (
-                    remaining_text[: match.start()] + remaining_text[match.end() :]
-                )
+                remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
                 remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                 break
 
@@ -190,26 +184,18 @@ class FilenameParser:
                     int(match.group(2)),
                     int(match.group(3)),
                 )
-                if (
-                    MIN_VALID_YEAR <= year <= MAX_VALID_YEAR
-                    and 1 <= month <= 12
-                    and 1 <= day <= 31
-                ):
+                if MIN_VALID_YEAR <= year <= MAX_VALID_YEAR and 1 <= month <= 12 and 1 <= day <= 31:
                     metadata["year"] = year
                     metadata["month"] = month
                     metadata["day"] = day
                     metadata["issue_date"] = datetime(year, month, day)
-                    remaining_text = (
-                        remaining_text[: match.start()] + remaining_text[match.end() :]
-                    )
+                    remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
                     remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                     date_extracted = True
 
         # Format 2: Full month name with year (January 2024)
         if not date_extracted:
-            match = re.search(
-                DATE_PATTERN_FULL_MONTH_YEAR, remaining_text, re.IGNORECASE
-            )
+            match = re.search(DATE_PATTERN_FULL_MONTH_YEAR, remaining_text, re.IGNORECASE)
             if match:
                 month_str, year_str = match.group(1), match.group(2)
                 month_num = parse_month(month_str)
@@ -218,17 +204,13 @@ class FilenameParser:
                     metadata["year"] = year
                     metadata["month"] = month_num
                     metadata["issue_date"] = datetime(year, month_num, 1)
-                    remaining_text = (
-                        remaining_text[: match.start()] + remaining_text[match.end() :]
-                    )
+                    remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
                     remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                     date_extracted = True
 
         # Format 3: Abbreviated month with year (Jan 2024, Jan2024)
         if not date_extracted:
-            match = re.search(
-                DATE_PATTERN_ABBR_MONTH_YEAR, remaining_text, re.IGNORECASE
-            )
+            match = re.search(DATE_PATTERN_ABBR_MONTH_YEAR, remaining_text, re.IGNORECASE)
             if match:
                 month_str, year_str = match.group(1), match.group(2)
                 month_num = parse_month(month_str)
@@ -237,17 +219,13 @@ class FilenameParser:
                     metadata["year"] = year
                     metadata["month"] = month_num
                     metadata["issue_date"] = datetime(year, month_num, 1)
-                    remaining_text = (
-                        remaining_text[: match.start()] + remaining_text[match.end() :]
-                    )
+                    remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
                     remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                     date_extracted = True
 
         # Format 3b: Abbreviated month with year, no word boundaries (Jan2024 in middle of string)
         if not date_extracted:
-            match = re.search(
-                DATE_PATTERN_ABBR_MONTH_YEAR_NO_BOUNDARY, remaining_text, re.IGNORECASE
-            )
+            match = re.search(DATE_PATTERN_ABBR_MONTH_YEAR_NO_BOUNDARY, remaining_text, re.IGNORECASE)
             if match:
                 month_str, year_str = match.group(1), match.group(2)
                 month_num = parse_month(month_str)
@@ -256,9 +234,7 @@ class FilenameParser:
                     metadata["year"] = year
                     metadata["month"] = month_num
                     metadata["issue_date"] = datetime(year, month_num, 1)
-                    remaining_text = (
-                        remaining_text[: match.start()] + remaining_text[match.end() :]
-                    )
+                    remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
                     remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                     date_extracted = True
 
@@ -271,9 +247,7 @@ class FilenameParser:
                     metadata["year"] = year
                     metadata["month"] = month
                     metadata["issue_date"] = datetime(year, month, 1)
-                    remaining_text = (
-                        remaining_text[: match.start()] + remaining_text[match.end() :]
-                    )
+                    remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
                     remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                     date_extracted = True
 
@@ -286,9 +260,7 @@ class FilenameParser:
                     metadata["year"] = year
                     metadata["month"] = month
                     metadata["issue_date"] = datetime(year, month, 1)
-                    remaining_text = (
-                        remaining_text[: match.start()] + remaining_text[match.end() :]
-                    )
+                    remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
                     remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                     date_extracted = True
 
@@ -301,9 +273,7 @@ class FilenameParser:
                     metadata["year"] = year
                     metadata["month"] = 1  # Default to January
                     metadata["issue_date"] = datetime(year, 1, 1)
-                    remaining_text = (
-                        remaining_text[: match.start()] + remaining_text[match.end() :]
-                    )
+                    remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
                     remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                     date_extracted = True
 
@@ -312,9 +282,7 @@ class FilenameParser:
         match = re.search(NZB_VOLUME_PATTERN, remaining_text, re.IGNORECASE)
         if match:
             metadata["volume"] = int(match.group(1))
-            remaining_text = (
-                remaining_text[: match.start()] + remaining_text[match.end() :]
-            )
+            remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
             remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
 
         # Issue patterns: Issue 389, No. 25, N25, #45
@@ -322,23 +290,15 @@ class FilenameParser:
         if match:
             issue_num = match.group(1) or match.group(2)
             metadata["issue"] = int(issue_num)
-            remaining_text = (
-                remaining_text[: match.start()] + remaining_text[match.end() :]
-            )
+            remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
             remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
 
         # Step 8: What remains is the title
         # Clean up remaining text before using as title
         remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
-        remaining_text = re.sub(
-            r"^[-\s]+|[-\s]+$", "", remaining_text
-        ).strip()  # Remove leading/trailing dashes
-        remaining_text = re.sub(
-            r"\s*-\s*$", "", remaining_text
-        ).strip()  # Remove trailing dash with spaces
-        remaining_text = re.sub(
-            r"--+", "-", remaining_text
-        ).strip()  # Collapse multiple dashes
+        remaining_text = re.sub(r"^[-\s]+|[-\s]+$", "", remaining_text).strip()  # Remove leading/trailing dashes
+        remaining_text = re.sub(r"\s*-\s*$", "", remaining_text).strip()  # Remove trailing dash with spaces
+        remaining_text = re.sub(r"--+", "-", remaining_text).strip()  # Collapse multiple dashes
         remaining_text = re.sub(
             TITLE_CLEANUP_TRAILING_DASH_DIGITS, "", remaining_text
         ).strip()  # Remove trailing dash+digits (e.g., "-01")
@@ -444,27 +404,19 @@ class FilenameParser:
 
         # Only use NZB result if it has medium/high confidence
         if nzb_result.get("confidence") in ["medium", "high"]:
-            logger.info(
-                f"NZB parsing succeeded with {nzb_result['confidence']} confidence"
-            )
+            logger.info(f"NZB parsing succeeded with {nzb_result['confidence']} confidence")
             # Convert NZB metadata format to standard metadata format
             if nzb_result.get("issue_date"):
                 return nzb_result
             # If no issue_date but has year/month, construct it
             if nzb_result.get("year") and nzb_result.get("month"):
-                nzb_result["issue_date"] = datetime(
-                    nzb_result["year"], nzb_result["month"], 1
-                )
+                nzb_result["issue_date"] = datetime(nzb_result["year"], nzb_result["month"], 1)
                 return nzb_result
 
-        logger.info(
-            f"No date pattern matched in filename: {filename}, using current date"
-        )
+        logger.info(f"No date pattern matched in filename: {filename}, using current date")
         return metadata
 
-    def _try_multi_month_pattern(
-        self, filename: str, metadata: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    def _try_multi_month_pattern(self, filename: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         Pattern: Multi-month periods like "Title - June/July 2024" or "Title Jun/Jul2024".
         """
@@ -493,9 +445,7 @@ class FilenameParser:
         logger.info(f"Extracted multi-month: {metadata['month_name']} {year}")
         return metadata
 
-    def _try_dash_month_year_pattern(
-        self, filename: str, metadata: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    def _try_dash_month_year_pattern(self, filename: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         Pattern: "Title - MonYear" (e.g., "National Geographic - Dec2024").
         Also handles: "Title-Month.Year" (e.g., "Esquire.Africa-August.2023").
@@ -530,9 +480,7 @@ class FilenameParser:
         for month_name in MONTH_TO_NUMBER.keys():
             # Use word boundary to avoid removing parts of words
             pattern_to_remove = rf"\b{re.escape(month_name)}\b\s*$"
-            cleaned = re.sub(
-                pattern_to_remove, "", cleaned, flags=re.IGNORECASE
-            ).strip()
+            cleaned = re.sub(pattern_to_remove, "", cleaned, flags=re.IGNORECASE).strip()
 
         metadata["title"] = cleaned
         metadata["issue_date"] = datetime(year, month_num, 1)
@@ -540,9 +488,7 @@ class FilenameParser:
         metadata["month_name"] = normalized_month
         return metadata
 
-    def _try_dot_separated_pattern(
-        self, filename: str, metadata: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    def _try_dot_separated_pattern(self, filename: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         Pattern: "Title.Month.Year" (e.g., "Wired.January.2024").
         """
@@ -565,14 +511,10 @@ class FilenameParser:
         metadata["issue_date"] = datetime(year, month_num, 1)
         metadata["year"] = year
         metadata["month_name"] = normalized_month
-        logger.info(
-            f"Extracted '{metadata['title']}' {month_str} {year_str} from dot-separated filename"
-        )
+        logger.info(f"Extracted '{metadata['title']}' {month_str} {year_str} from dot-separated filename")
         return metadata
 
-    def _try_space_month_year_pattern(
-        self, filename: str, metadata: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    def _try_space_month_year_pattern(self, filename: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         Pattern: "Title Month Year" (e.g., "Wired January 2024").
         Also handles: "Title Month" (year defaults to current).
@@ -610,9 +552,7 @@ class FilenameParser:
         for month_name in MONTH_TO_NUMBER.keys():
             # Use word boundary to avoid removing parts of words
             pattern_to_remove = rf"\b{re.escape(month_name)}\b\s*$"
-            cleaned = re.sub(
-                pattern_to_remove, "", cleaned, flags=re.IGNORECASE
-            ).strip()
+            cleaned = re.sub(pattern_to_remove, "", cleaned, flags=re.IGNORECASE).strip()
 
         metadata["title"] = cleaned
         metadata["issue_date"] = datetime(year, month_num, 1)
@@ -620,9 +560,7 @@ class FilenameParser:
         metadata["month_name"] = normalized_month
         return metadata
 
-    def _try_iso_date_pattern(
-        self, filename: str, metadata: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    def _try_iso_date_pattern(self, filename: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         Pattern: "Title YYYY-MM" (e.g., "PC Gamer 2024-12").
         """
@@ -644,9 +582,7 @@ class FilenameParser:
             logger.warning(f"Invalid ISO date in filename: {filename}")
             return None
 
-    def _try_issue_number_pattern(
-        self, filename: str, metadata: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    def _try_issue_number_pattern(self, filename: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         Pattern: "Title No.XXX YYYY" (e.g., "PC Gamer No.405 2024").
         """
@@ -671,16 +607,12 @@ class FilenameParser:
         metadata["year"] = year
         metadata["month_name"] = "January"
         metadata["edition_number"] = int(issue_num)
-        metadata["is_special_edition"] = (
-            "special" in filename.lower() and "edition" in filename.lower()
-        )
+        metadata["is_special_edition"] = "special" in filename.lower() and "edition" in filename.lower()
 
         logger.debug("Pattern match - Issue number format")
         return metadata
 
-    def _try_volume_issue_pattern(
-        self, filename: str, metadata: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    def _try_volume_issue_pattern(self, filename: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         Pattern: "Title Vol.XX No.YY YYYY" (e.g., "2600.Magazine.Vol.41.No.1.2024").
         """
@@ -707,9 +639,7 @@ class FilenameParser:
         logger.debug("Pattern match - Volume and issue number format")
         return metadata
 
-    def _try_seasonal_pattern(
-        self, filename: str, metadata: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    def _try_seasonal_pattern(self, filename: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         Pattern: "Title Season YYYY" (e.g., "2600 Winter 2024").
         """
@@ -769,14 +699,10 @@ class FilenameParser:
 
         if magazine_name:
             metadata["title"] = magazine_name
-            logger.info(
-                f"Extracted title '{magazine_name}' from directory for date-only filename: {filename}"
-            )
+            logger.info(f"Extracted title '{magazine_name}' from directory for date-only filename: {filename}")
         else:
             metadata["title"] = filename
-            logger.warning(
-                f"Filename is date-only ({filename}) but no suitable magazine folder found"
-            )
+            logger.warning(f"Filename is date-only ({filename}) but no suitable magazine folder found")
 
         return metadata
 
@@ -801,9 +727,7 @@ class FilenameParser:
 
         if magazine_name:
             metadata["title"] = magazine_name
-            logger.info(
-                f"Extracted title '{magazine_name}' from directory for year-only filename: {filename}"
-            )
+            logger.info(f"Extracted title '{magazine_name}' from directory for year-only filename: {filename}")
         else:
             logger.info(f"Extracted year {year_str} from filename: {filename}")
 

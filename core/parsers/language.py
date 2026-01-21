@@ -75,10 +75,6 @@ def infer_language_from_country(country: Optional[str], current_language: str) -
         >>> infer_language_from_country("FR", "French")
         'French'
     """
-    if (
-        country
-        and current_language == DEFAULT_LANGUAGE
-        and country in COUNTRY_TO_LANGUAGE
-    ):
+    if country and current_language == DEFAULT_LANGUAGE and country in COUNTRY_TO_LANGUAGE:
         return COUNTRY_TO_LANGUAGE[country]
     return current_language

@@ -59,9 +59,7 @@ class SearchScheduler:
         self.very_slow_interval_hours = very_slow_interval_hours
         self.empty_search_threshold = empty_search_threshold
 
-    def select_periodicals_to_search(
-        self, session: Session
-    ) -> List[PeriodicalTracking]:
+    def select_periodicals_to_search(self, session: Session) -> List[PeriodicalTracking]:
         """
         Select which periodicals to search this run.
 
@@ -88,9 +86,7 @@ class SearchScheduler:
         )
 
         if never_searched:
-            logger.debug(
-                f"Found {len(never_searched)} periodicals never searched before"
-            )
+            logger.debug(f"Found {len(never_searched)} periodicals never searched before")
             candidates.extend(never_searched)
 
         # If we have enough, return
@@ -104,8 +100,7 @@ class SearchScheduler:
                 and_(
                     PeriodicalTracking.last_searched.isnot(None),
                     # Calculate due time: last_searched + (search_interval_hours * 3600)
-                    PeriodicalTracking.last_searched
-                    + timedelta(hours=1) * PeriodicalTracking.search_interval_hours
+                    PeriodicalTracking.last_searched + timedelta(hours=1) * PeriodicalTracking.search_interval_hours
                     <= now,
                 )
             )
@@ -118,10 +113,7 @@ class SearchScheduler:
             logger.debug(f"Found {len(overdue)} periodicals overdue for search")
             candidates.extend(overdue)
 
-        logger.debug(
-            f"Selected {len(candidates)} periodicals to search: "
-            f"{[p.title for p in candidates]}"
-        )
+        logger.debug(f"Selected {len(candidates)} periodicals to search: " f"{[p.title for p in candidates]}")
 
         return candidates[: self.max_periodicals_per_run]
 
@@ -179,9 +171,7 @@ class SearchScheduler:
 
             # Adjust interval based on consecutive empty searches
             old_interval = tracking.search_interval_hours
-            new_interval = self._calculate_new_interval(
-                tracking.searches_without_new_issues
-            )
+            new_interval = self._calculate_new_interval(tracking.searches_without_new_issues)
 
             if new_interval != old_interval:
                 tracking.search_interval_hours = new_interval
@@ -202,45 +192,32 @@ class SearchScheduler:
         """
         total_tracked = session.query(PeriodicalTracking).count()
 
-        never_searched = (
-            session.query(PeriodicalTracking)
-            .filter(PeriodicalTracking.last_searched.is_(None))
-            .count()
-        )
+        never_searched = session.query(PeriodicalTracking).filter(PeriodicalTracking.last_searched.is_(None)).count()
 
         now = utc_now()
 
         # Count by interval
         rapid = (
             session.query(PeriodicalTracking)
-            .filter(
-                PeriodicalTracking.search_interval_hours == self.rapid_interval_hours
-            )
+            .filter(PeriodicalTracking.search_interval_hours == self.rapid_interval_hours)
             .count()
         )
 
         normal = (
             session.query(PeriodicalTracking)
-            .filter(
-                PeriodicalTracking.search_interval_hours == self.normal_interval_hours
-            )
+            .filter(PeriodicalTracking.search_interval_hours == self.normal_interval_hours)
             .count()
         )
 
         slow = (
             session.query(PeriodicalTracking)
-            .filter(
-                PeriodicalTracking.search_interval_hours == self.slow_interval_hours
-            )
+            .filter(PeriodicalTracking.search_interval_hours == self.slow_interval_hours)
             .count()
         )
 
         very_slow = (
             session.query(PeriodicalTracking)
-            .filter(
-                PeriodicalTracking.search_interval_hours
-                == self.very_slow_interval_hours
-            )
+            .filter(PeriodicalTracking.search_interval_hours == self.very_slow_interval_hours)
             .count()
         )
 
@@ -250,8 +227,7 @@ class SearchScheduler:
             .filter(
                 and_(
                     PeriodicalTracking.last_searched.isnot(None),
-                    PeriodicalTracking.last_searched
-                    + timedelta(hours=1) * PeriodicalTracking.search_interval_hours
+                    PeriodicalTracking.last_searched + timedelta(hours=1) * PeriodicalTracking.search_interval_hours
                     <= now,
                 )
             )
@@ -271,9 +247,7 @@ class SearchScheduler:
             "timestamp": now.isoformat(),
         }
 
-    def reset_search_interval(
-        self, tracking_id: int, session: Session, interval_hours: Optional[int] = None
-    ) -> bool:
+    def reset_search_interval(self, tracking_id: int, session: Session, interval_hours: Optional[int] = None) -> bool:
         """
         Manually reset search interval for a periodical (admin override).
 
@@ -297,9 +271,7 @@ class SearchScheduler:
         tracking.searches_without_new_issues = 0  # Reset counter
 
         session.commit()
-        logger.info(
-            f"Manually reset interval for '{tracking.title}': {old_interval}h -> {new_interval}h"
-        )
+        logger.info(f"Manually reset interval for '{tracking.title}': {old_interval}h -> {new_interval}h")
 
         return True
 

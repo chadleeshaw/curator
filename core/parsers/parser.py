@@ -60,9 +60,7 @@ class Parser:
 
         # Clean and normalize title
         cleaned_title = self.title_matcher.clean_release_title(title)
-        base_title, is_special, special_name = self.title_matcher.extract_base_title(
-            cleaned_title
-        )
+        base_title, is_special, special_name = self.title_matcher.extract_base_title(cleaned_title)
 
         # Detect language and country from full path
         full_path_str = str(file_path)
@@ -158,9 +156,7 @@ class Parser:
         cleaned_title = self.title_matcher.clean_release_title(title)
 
         # Extract base title and special edition info
-        base_title, is_special, special_name = self.title_matcher.extract_base_title(
-            cleaned_title
-        )
+        base_title, is_special, special_name = self.title_matcher.extract_base_title(cleaned_title)
 
         # Detect language and country
         language = detect_language(title)
