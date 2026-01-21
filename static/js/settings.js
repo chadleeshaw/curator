@@ -135,6 +135,10 @@ export class SettingsManager {
   async loadSettingsTab() {
     await this.loadAPIToken();
     await this.loadCacheStats();
+    // Load categories for reorganize dropdown
+    if (window.tasks) {
+      await window.tasks.loadCategories();
+    }
   }
 
   /**

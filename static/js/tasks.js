@@ -8,6 +8,52 @@ import { UIUtils } from './ui-utils.js';
 
 export class TasksManager {
   /**
+   * Load and populate categories for reorganize dropdown
+   */
+  async loadCategories() {
+    try {
+      const response = await APIClient.get('/api/constants/categories');
+      const data = await response.json();
+
+      if (data.success && data.categories) {
+        this.populateCategoryDropdown(data.categories);
+      }
+    } catch (error) {
+      console.error('[Tasks] Failed to load categories:', error);
+      // If loading fails, dropdown will keep the hardcoded defaults
+    }
+  }
+
+  /**
+   * Populate the category dropdown with categories from API
+   *
+   * @param {string[]} categories - Array of category names
+   */
+  populateCategoryDropdown(categories) {
+    const dropdown = document.getElementById('reorganize-category');
+    if (!dropdown) return;
+
+    // Store current selection
+    const currentValue = dropdown.value || categories[0];
+
+    // Clear and repopulate
+    dropdown.innerHTML = '';
+
+    // Add each category as an option
+    categories.forEach((category) => {
+      const option = document.createElement('option');
+      option.value = category;
+      option.textContent = category;
+      dropdown.appendChild(option);
+    });
+
+    // Restore selection if still valid
+    if (categories.includes(currentValue)) {
+      dropdown.value = currentValue;
+    }
+  }
+
+  /**
    * Load and display scheduled tasks
    */
   async loadScheduledTasks() {

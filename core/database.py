@@ -51,7 +51,9 @@ class DatabaseManager:
             # Create only the missing tables
             Base.metadata.create_all(
                 self.engine,
-                tables=[Base.metadata.tables[table_name] for table_name in missing_tables],
+                tables=[
+                    Base.metadata.tables[table_name] for table_name in missing_tables
+                ],
             )
             logger.info(f"✓ Created {len(missing_tables)} missing table(s)")
             # Refresh inspector after creating tables
@@ -68,6 +70,7 @@ class DatabaseManager:
                 ("category", "VARCHAR(100)"),
                 ("download_category", "VARCHAR(100)"),
                 ("country", "VARCHAR(50)"),
+                ("organization_pattern", "VARCHAR(255)"),
                 # Adaptive search scheduling fields
                 ("last_searched", "DATETIME"),
                 ("search_count", "INTEGER DEFAULT 0"),
@@ -95,24 +98,36 @@ class DatabaseManager:
         for table_name, columns_to_add in expected_schemas.items():
             # Check if table exists (should exist now after create_all above)
             if not inspector.has_table(table_name):
-                logger.warning(f"Table {table_name} still doesn't exist after migration attempt")
+                logger.warning(
+                    f"Table {table_name} still doesn't exist after migration attempt"
+                )
                 continue
 
             # Get existing columns
-            existing_columns = {col["name"] for col in inspector.get_columns(table_name)}
+            existing_columns = {
+                col["name"] for col in inspector.get_columns(table_name)
+            }
 
             # Check and add missing columns
             for column_name, column_def in columns_to_add:
                 if column_name not in existing_columns:
-                    logger.info(f"Adding missing column '{column_name}' to {table_name}")
+                    logger.info(
+                        f"Adding missing column '{column_name}' to {table_name}"
+                    )
                     try:
                         with self.engine.connect() as conn:
-                            conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}"))
+                            conn.execute(
+                                text(
+                                    f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}"
+                                )
+                            )
                             conn.commit()
                         migrations_applied += 1
                         logger.info(f"✓ Added column {table_name}.{column_name}")
                     except Exception as e:
-                        logger.error(f"Failed to add column {table_name}.{column_name}: {e}")
+                        logger.error(
+                            f"Failed to add column {table_name}.{column_name}: {e}"
+                        )
 
         # Column renames (SQLite requires recreating tables, so we handle it carefully)
         column_renames = {
@@ -127,24 +142,38 @@ class DatabaseManager:
             if not inspector.has_table(table_name):
                 continue
 
-            existing_columns = {col["name"] for col in inspector.get_columns(table_name)}
+            existing_columns = {
+                col["name"] for col in inspector.get_columns(table_name)
+            }
 
             for old_name, new_name in renames:
                 if old_name in existing_columns and new_name not in existing_columns:
-                    logger.info(f"Renaming column '{old_name}' to '{new_name}' in {table_name}")
+                    logger.info(
+                        f"Renaming column '{old_name}' to '{new_name}' in {table_name}"
+                    )
                     try:
                         with self.engine.connect() as conn:
                             # SQLite doesn't support ALTER TABLE RENAME COLUMN directly in older versions
                             # Use a safe approach that works across SQLite versions
-                            conn.execute(text(f"ALTER TABLE {table_name} RENAME COLUMN {old_name} TO {new_name}"))
+                            conn.execute(
+                                text(
+                                    f"ALTER TABLE {table_name} RENAME COLUMN {old_name} TO {new_name}"
+                                )
+                            )
                             conn.commit()
                         migrations_applied += 1
-                        logger.info(f"✓ Renamed column {table_name}.{old_name} → {new_name}")
+                        logger.info(
+                            f"✓ Renamed column {table_name}.{old_name} → {new_name}"
+                        )
                     except Exception as e:
-                        logger.error(f"Failed to rename column {table_name}.{old_name}: {e}")
+                        logger.error(
+                            f"Failed to rename column {table_name}.{old_name}: {e}"
+                        )
 
         if migrations_applied > 0:
-            logger.info(f"Schema migrations complete: {migrations_applied} migration(s) applied")
+            logger.info(
+                f"Schema migrations complete: {migrations_applied} migration(s) applied"
+            )
         elif not missing_tables:
             logger.debug("Schema is up to date, no migrations needed")
 
