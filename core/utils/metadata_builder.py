@@ -71,7 +71,7 @@ def build_derived_metadata(
     - confidence: Confidence score from that source
 
     Fields available from each source:
-    - file_scan: title, year, month, month_name, issue_number, volume, country, language, special_edition_name
+    - file_scan: title, year, month, month_name, issue_number, volume, country, language, is_special_edition, special_edition_name
     - text_scan: year, month, issue_number, volume, special_edition
     - ocr_scan: year, month, issue_number, volume, special_edition
 
@@ -124,6 +124,8 @@ def build_derived_metadata(
         "volume",
         "country",
         "language",
+        "special_edition",
+        "is_special_edition",
         "special_edition_name",
     ]
 
