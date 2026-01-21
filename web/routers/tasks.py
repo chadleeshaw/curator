@@ -312,10 +312,15 @@ async def run_task_manually(task_id: str):
 
                 config_loader = ConfigLoader()
                 storage = config_loader.get_storage()
+                import_config = config_loader.get_import()
                 db_path = storage.get("db_path", "local/data/curator.db")
                 db_manager = DatabaseManager(f"sqlite:///{db_path}")
 
-                service = AutoMetadataService(db_manager)
+                service = AutoMetadataService(
+                    db_manager,
+                    library_base_dir=storage.get("library_dir"),
+                    category_prefix=import_config.get("category_prefix", "_"),
+                )
                 session = db_manager.session_factory()
                 try:
                     return service.run_full_scan(session)
