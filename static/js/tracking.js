@@ -1216,10 +1216,10 @@ export class TrackingManager {
           ? `<div style="font-size: 10px; color: var(--text-secondary); margin-top: 6px;">${issue.provider || ''}</div>`
           : '';
 
-        // Show language variants badge if multiple editions exist
+        // Show language variants badge if multiple variants exist
         const variantsBadge =
           issue.variants && issue.variants.length > 1
-            ? `<div style="font-size: 10px; margin-top: 6px; color: var(--primary-color); font-weight: 600;">🌍 ${issue.variants.length} editions</div>`
+            ? `<div style="font-size: 10px; margin-top: 6px; color: var(--primary-color); font-weight: 600;">🌍 ${issue.variants.length} variants</div>`
             : issue.language
               ? `<div style="font-size: 10px; margin-top: 6px; color: var(--text-secondary);">${issue.language}</div>`
               : '';
@@ -1478,8 +1478,8 @@ window.selectIssueWithVariants = function (issueKey, alreadyDownloaded, hasFaile
     <div id="language-variant-modal" class="modal" style="display: flex;">
       <div class="modal-content" style="max-width: 500px;">
         <span class="close" onclick="closeLangVariantModal()">&times;</span>
-        <h2>Select Language Edition</h2>
-        <p style="color: var(--text-secondary); margin-bottom: 20px;">Multiple language editions available:</p>
+        <h2>Select Language Variant</h2>
+        <p style="color: var(--text-secondary); margin-bottom: 20px;">Multiple language variants available:</p>
         <div id="variant-options" style="display: flex; flex-direction: column; gap: 10px;"></div>
       </div>
     </div>
