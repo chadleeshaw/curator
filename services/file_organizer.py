@@ -792,9 +792,9 @@ class FileOrganizer:
                         full_title = f"{tracking_title} {country}"
 
                 # Parse filename to get date information
-                from core.parsers.metadata import MetadataExtractor
+                from core.parsers.metadata import FilenameParser
 
-                extractor = MetadataExtractor()
+                extractor = FilenameParser()
                 parsed_dict = extractor.extract_from_filename(file_path)
 
                 if not parsed_dict or not parsed_dict.get("year"):

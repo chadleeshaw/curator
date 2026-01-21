@@ -5,7 +5,9 @@ Detects language from title, filename, or metadata.
 """
 
 import re
+from typing import Optional
 
+from core.constants.country import COUNTRY_TO_LANGUAGE
 from core.constants.language import (
     DEFAULT_LANGUAGE,
     LANGUAGE_KEYWORDS,
@@ -47,3 +49,36 @@ def detect_language(text: str, default: str = DEFAULT_LANGUAGE) -> str:
 
     # Default to configured default language if no language indicator found
     return default
+
+
+def infer_language_from_country(country: Optional[str], current_language: str) -> str:
+    """
+    Infer language from country code if language is still default.
+
+    This is useful when country is detected but language is not explicitly specified.
+    For example: "Wired UK" → country="UK", language inferred as "English"
+
+    Args:
+        country: ISO country code (e.g., "UK", "DE", "FR") or None
+        current_language: Current detected language
+
+    Returns:
+        Inferred language if country maps to one, otherwise current_language
+
+    Examples:
+        >>> infer_language_from_country("DE", "English")
+        'German'
+        >>> infer_language_from_country("UK", "English")
+        'English'
+        >>> infer_language_from_country(None, "English")
+        'English'
+        >>> infer_language_from_country("FR", "French")
+        'French'
+    """
+    if (
+        country
+        and current_language == DEFAULT_LANGUAGE
+        and country in COUNTRY_TO_LANGUAGE
+    ):
+        return COUNTRY_TO_LANGUAGE[country]
+    return current_language

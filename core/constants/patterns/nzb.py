@@ -1,0 +1,51 @@
+"""
+NZB-style filename metadata patterns.
+
+Patterns for extracting country, language, edition, quality, release groups,
+volume, and issue numbers from NZB filenames.
+"""
+
+# ==============================================================================
+# NZB METADATA PATTERNS
+# ==============================================================================
+
+# Country/Region patterns (most specific first)
+NZB_COUNTRY_PATTERNS = [
+    r"\b(USA?|UK|CA|AU|NZ|DE|FR|ES|IT|NL|SE|NO|DK|FI|JP|KR|CN|BR|MX|AR|IN)\b",
+    r"\b(United\s+States|United\s+Kingdom|Europe|Asia|North\s+America)\b",
+]
+"""Patterns for detecting country/region indicators in NZB filenames"""
+
+# Language patterns
+NZB_LANGUAGE_PATTERNS = [
+    r"\b(English|German|French|Spanish|Italian|Portuguese|Russian|Japanese|Korean|Chinese)\b",
+]
+"""Patterns for detecting language indicators in NZB filenames"""
+
+# Edition/Variant patterns
+NZB_EDITION_PATTERNS = [
+    r"\b(International|Global|European|Asian|Special|Limited|Digital|Print)\s+(?:Edition|Ed\.?)\b",
+    r"\b(?:Edition|Ed\.?)[\s._-]*(International|Global|European|Asian|Special|Limited)\b",
+]
+"""Patterns for detecting edition/variant indicators in NZB filenames"""
+
+# Quality indicators
+NZB_QUALITY_PATTERNS = [
+    r"\b(True\.?PDF|HQ|High\.?Quality|Retail|Original)\b",
+]
+"""Patterns for detecting quality indicators in NZB filenames"""
+
+# Release group patterns (at end of filename)
+NZB_RELEASE_GROUP_PATTERNS = [
+    r"-([A-Z][A-Z0-9]*v?\d*)$",  # -PHOTOFILEv2, -HQ, -RETAIL (must start with letter)
+    r"\[([A-Z0-9]+)\]$",  # [PHOTOFILE]
+]
+"""Patterns for detecting release groups in NZB filenames"""
+
+# Volume patterns
+NZB_VOLUME_PATTERN = r"(?:vol\.?|volume|v)[\s]*(\d+)\b"
+"""Pattern for volume numbers: Vol.12, Volume 5, V202"""
+
+# Issue patterns
+NZB_ISSUE_PATTERN = r"(?:issue|no\.?|number|nr\.?|n)[\s]*(\d+)\b|#(\d+)"
+"""Pattern for issue numbers: Issue 389, No. 25, N25, #45"""

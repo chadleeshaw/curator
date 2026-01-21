@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 import pytest
 
-from core.parsers.metadata import MetadataExtractor
+from core.parsers.metadata import FilenameParser
 
 
 class TestEnhancedNZBParsing:
@@ -27,8 +27,8 @@ class TestEnhancedNZBParsing:
 
     @pytest.fixture
     def extractor(self):
-        """Create MetadataExtractor instance."""
-        return MetadataExtractor()
+        """Create FilenameParser instance."""
+        return FilenameParser()
 
     def test_parse_complex_usa_magazine(self, extractor):
         """Test: Wired.Magazine.USA.January.2024.True.PDF-PHOTOFILEv2"""
@@ -248,8 +248,8 @@ class TestEnhancedNZBIntegrationWithFilename:
 
     @pytest.fixture
     def extractor(self):
-        """Create MetadataExtractor instance."""
-        return MetadataExtractor()
+        """Create FilenameParser instance."""
+        return FilenameParser()
 
     def test_standard_pattern_preferred(self, extractor):
         """Test that standard patterns are tried first"""
@@ -291,8 +291,8 @@ class TestConfidenceScoring:
 
     @pytest.fixture
     def extractor(self):
-        """Create MetadataExtractor instance."""
-        return MetadataExtractor()
+        """Create FilenameParser instance."""
+        return FilenameParser()
 
     def test_high_confidence_full_metadata(self, extractor):
         """Test high confidence with complete metadata"""

@@ -1,0 +1,187 @@
+"""
+Regex patterns for parsing metadata from filenames and text.
+
+Organized by domain for easy maintenance:
+- date.py: Date and month-year patterns
+- nzb.py: NZB-style metadata patterns
+- title.py: Title extraction and cleanup patterns
+- periodical.py: Periodical detection patterns
+
+Note: Month name patterns are dynamically generated to support multiple languages.
+"""
+
+import re
+
+# Re-export all patterns for backward compatibility
+from core.constants.patterns.date import (
+    DATE_PATTERN_ISO_FULL,
+    DATE_PATTERN_ISO_MONTH,
+    DATE_PATTERN_MONTH_YEAR_NUMERIC,
+    DATE_PATTERN_YEAR_ONLY,
+    DATE_PATTERN_MULTI_MONTH,
+    DATE_PATTERN_FULL_MONTH_YEAR,
+    DATE_PATTERN_ABBR_MONTH_YEAR,
+    DATE_PATTERN_ABBR_MONTH_YEAR_NO_BOUNDARY,
+    get_month_year_pattern,
+    get_abbr_month_year_pattern,
+    get_abbr_month_year_pattern_no_boundary,
+)
+
+from core.constants.patterns.nzb import (
+    NZB_COUNTRY_PATTERNS,
+    NZB_LANGUAGE_PATTERNS,
+    NZB_EDITION_PATTERNS,
+    NZB_QUALITY_PATTERNS,
+    NZB_RELEASE_GROUP_PATTERNS,
+    NZB_VOLUME_PATTERN,
+    NZB_ISSUE_PATTERN,
+)
+
+from core.constants.patterns.title import (
+    TITLE_PATTERN_DASH_MONTH_YEAR,
+    TITLE_PATTERN_DASH_MONTH_DOT_YEAR,
+    TITLE_PATTERN_DOT_SEPARATED,
+    TITLE_PATTERN_SPACE_MONTH_YEAR,
+    TITLE_PATTERN_SPACE_MONTH_ONLY,
+    TITLE_PATTERN_ISO_DATE,
+    TITLE_PATTERN_ISSUE_NUMBER,
+    TITLE_PATTERN_VOLUME_ISSUE,
+    TITLE_PATTERN_SEASONAL,
+    TITLE_PATTERN_DATE_ONLY_COMPACT,
+    TITLE_PATTERN_DATE_ONLY_SPACED,
+    TITLE_CLEANUP_BRACKETS,
+    TITLE_CLEANUP_LANGUAGE_CODES,
+    TITLE_CLEANUP_DESCRIPTORS,
+    TITLE_CLEANUP_TRAILING_DASH,
+    TITLE_CLEANUP_TRAILING_DASH_DIGITS,
+    TITLE_CLEANUP_TRAILING_SPACE_DIGITS,
+)
+
+from core.constants.patterns.periodical import (
+    PERIODICAL_PATTERN_ISSUE_NUMBER,
+    PERIODICAL_PATTERN_HASH_NUMBER,
+    PERIODICAL_PATTERN_VOLUME,
+    PERIODICAL_PATTERN_VOLUME_ISSUE_COMBINED,
+    PERIODICAL_PATTERN_WEEKLY_DATE,
+    ANTI_PERIODICAL_PATTERN_COMPLETE_COLLECTION,
+    ANTI_PERIODICAL_PATTERN_ANTHOLOGY,
+    ANTI_PERIODICAL_PATTERN_OMNIBUS,
+    ANTI_PERIODICAL_PATTERN_COMPENDIUM,
+    ANTI_PERIODICAL_PATTERN_COLLECTED_WORKS,
+    ANTI_PERIODICAL_PATTERN_RANGE_VOLUMES,
+    ANTI_PERIODICAL_PATTERN_RANGE_SHORT,
+    ANTI_PERIODICAL_PATTERN_YEAR_PACK,
+    ANTI_PERIODICAL_PATTERN_YEAR_COMPLETE,
+    ANTI_PERIODICAL_PATTERN_EDITION_NUMBER,
+    ANTI_PERIODICAL_PATTERN_ISBN,
+    ANTI_PERIODICAL_PATTERN_BOOK_FORMAT,
+    ANTI_PERIODICAL_PATTERN_BOOK_NUMBER,
+    ANTI_PERIODICAL_PATTERN_NOVEL_SERIES,
+    ANTI_PERIODICAL_PATTERN_CHAPTER,
+    RELEASE_GROUP_PATTERN_DASH,
+    RELEASE_GROUP_PATTERN_BRACKETS,
+    QUALITY_INDICATOR_PATTERN,
+)
+
+# ==============================================================================
+# HELPER FUNCTIONS
+# ==============================================================================
+
+
+def compile_pattern(pattern: str, flags: int = re.IGNORECASE) -> re.Pattern:
+    """
+    Compile a regex pattern with default flags.
+
+    Args:
+        pattern: Regex pattern string
+        flags: Regex flags (default: re.IGNORECASE)
+
+    Returns:
+        Compiled regex pattern
+    """
+    return re.compile(pattern, flags)
+
+
+def compile_patterns(
+    patterns: list[str], flags: int = re.IGNORECASE
+) -> list[re.Pattern]:
+    """
+    Compile multiple regex patterns with default flags.
+
+    Args:
+        patterns: List of regex pattern strings
+        flags: Regex flags (default: re.IGNORECASE)
+
+    Returns:
+        List of compiled regex patterns
+    """
+    return [compile_pattern(p, flags) for p in patterns]
+
+
+__all__ = [
+    # Date patterns
+    "DATE_PATTERN_ISO_FULL",
+    "DATE_PATTERN_ISO_MONTH",
+    "DATE_PATTERN_MONTH_YEAR_NUMERIC",
+    "DATE_PATTERN_YEAR_ONLY",
+    "DATE_PATTERN_MULTI_MONTH",
+    "DATE_PATTERN_FULL_MONTH_YEAR",
+    "DATE_PATTERN_ABBR_MONTH_YEAR",
+    "DATE_PATTERN_ABBR_MONTH_YEAR_NO_BOUNDARY",
+    "get_month_year_pattern",
+    "get_abbr_month_year_pattern",
+    "get_abbr_month_year_pattern_no_boundary",
+    # NZB patterns
+    "NZB_COUNTRY_PATTERNS",
+    "NZB_LANGUAGE_PATTERNS",
+    "NZB_EDITION_PATTERNS",
+    "NZB_QUALITY_PATTERNS",
+    "NZB_RELEASE_GROUP_PATTERNS",
+    "NZB_VOLUME_PATTERN",
+    "NZB_ISSUE_PATTERN",
+    # Title patterns
+    "TITLE_PATTERN_DASH_MONTH_YEAR",
+    "TITLE_PATTERN_DASH_MONTH_DOT_YEAR",
+    "TITLE_PATTERN_DOT_SEPARATED",
+    "TITLE_PATTERN_SPACE_MONTH_YEAR",
+    "TITLE_PATTERN_SPACE_MONTH_ONLY",
+    "TITLE_PATTERN_ISO_DATE",
+    "TITLE_PATTERN_ISSUE_NUMBER",
+    "TITLE_PATTERN_VOLUME_ISSUE",
+    "TITLE_PATTERN_SEASONAL",
+    "TITLE_PATTERN_DATE_ONLY_COMPACT",
+    "TITLE_PATTERN_DATE_ONLY_SPACED",
+    "TITLE_CLEANUP_BRACKETS",
+    "TITLE_CLEANUP_LANGUAGE_CODES",
+    "TITLE_CLEANUP_DESCRIPTORS",
+    "TITLE_CLEANUP_TRAILING_DASH",
+    "TITLE_CLEANUP_TRAILING_DASH_DIGITS",
+    "TITLE_CLEANUP_TRAILING_SPACE_DIGITS",
+    # Periodical patterns
+    "PERIODICAL_PATTERN_ISSUE_NUMBER",
+    "PERIODICAL_PATTERN_HASH_NUMBER",
+    "PERIODICAL_PATTERN_VOLUME",
+    "PERIODICAL_PATTERN_VOLUME_ISSUE_COMBINED",
+    "PERIODICAL_PATTERN_WEEKLY_DATE",
+    "ANTI_PERIODICAL_PATTERN_COMPLETE_COLLECTION",
+    "ANTI_PERIODICAL_PATTERN_ANTHOLOGY",
+    "ANTI_PERIODICAL_PATTERN_OMNIBUS",
+    "ANTI_PERIODICAL_PATTERN_COMPENDIUM",
+    "ANTI_PERIODICAL_PATTERN_COLLECTED_WORKS",
+    "ANTI_PERIODICAL_PATTERN_RANGE_VOLUMES",
+    "ANTI_PERIODICAL_PATTERN_RANGE_SHORT",
+    "ANTI_PERIODICAL_PATTERN_YEAR_PACK",
+    "ANTI_PERIODICAL_PATTERN_YEAR_COMPLETE",
+    "ANTI_PERIODICAL_PATTERN_EDITION_NUMBER",
+    "ANTI_PERIODICAL_PATTERN_ISBN",
+    "ANTI_PERIODICAL_PATTERN_BOOK_FORMAT",
+    "ANTI_PERIODICAL_PATTERN_BOOK_NUMBER",
+    "ANTI_PERIODICAL_PATTERN_NOVEL_SERIES",
+    "ANTI_PERIODICAL_PATTERN_CHAPTER",
+    "RELEASE_GROUP_PATTERN_DASH",
+    "RELEASE_GROUP_PATTERN_BRACKETS",
+    "QUALITY_INDICATOR_PATTERN",
+    # Helper functions
+    "compile_pattern",
+    "compile_patterns",
+]

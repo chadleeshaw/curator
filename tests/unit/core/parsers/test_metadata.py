@@ -9,13 +9,13 @@ from pathlib import Path
 
 # Path setup handled by conftest.py
 
-from core.parsers.metadata import MetadataExtractor
-from core.utils.date import parse_month, parse_multi_month
+from core.parsers.metadata import FilenameParser
+from core.parsers.date import parse_month, parse_multi_month
 
 
 def test_metadata_extractor_initialization():
-    """Test MetadataExtractor initialization"""
-    extractor = MetadataExtractor()
+    """Test FilenameParser initialization"""
+    extractor = FilenameParser()
 
     assert extractor is not None
     assert hasattr(extractor, "system_folders")
@@ -23,17 +23,17 @@ def test_metadata_extractor_initialization():
 
 def test_metadata_extractor_with_filename():
     """Test extracting metadata from filename"""
-    extractor = MetadataExtractor()
-
-    # MetadataExtractor has methods like extract() that work with Path objects
+    extractor = FilenameParser()
+    result = extractor.extract_from_filename(Path("Wired Magazine - January 2024.pdf"))
+    # FilenameParser has methods like extract() that work with Path objects
     # Test that it can be instantiated and has expected attributes
     assert hasattr(extractor, "system_folders")
     assert isinstance(extractor.system_folders, set)
 
 
 def test_metadata_extractor_system_folders():
-    """Test that system folders are defined"""
-    extractor = MetadataExtractor()
+    """Test that system folders are properly initialized"""
+    extractor = FilenameParser()
 
     # Should have common system folder names
     assert "downloads" in extractor.system_folders
@@ -169,16 +169,16 @@ class TestParseMultiMonth:
 
 
 # ==============================================================================
-# Test MetadataExtractor with multi-month patterns
+# Test FilenameParser with multi-month patterns
 # ==============================================================================
 
 
 class TestMetadataExtractorMultiMonth:
-    """Test MetadataExtractor with multi-month period filenames."""
+    """Test FilenameParser with multi-month period filenames."""
 
     def test_extract_multi_month_slash(self):
         """Test extracting metadata from multi-month filename with slash."""
-        extractor = MetadataExtractor()
+        extractor = FilenameParser()
         # Use dash instead of slash for filesystem compatibility
         pdf_path = Path("/test/National Geographic - June-July 2003.pdf")
 
@@ -192,7 +192,7 @@ class TestMetadataExtractorMultiMonth:
 
     def test_extract_multi_month_abbreviated(self):
         """Test extracting metadata from abbreviated multi-month filename."""
-        extractor = MetadataExtractor()
+        extractor = FilenameParser()
         # Use dash for filesystem compatibility
         pdf_path = Path("/test/Wired - Jun-Jul2024.pdf")
 
@@ -206,7 +206,7 @@ class TestMetadataExtractorMultiMonth:
 
     def test_extract_multi_month_december_january(self):
         """Test extracting year-crossing multi-month period."""
-        extractor = MetadataExtractor()
+        extractor = FilenameParser()
         # Use dash for filesystem compatibility
         pdf_path = Path("/test/Magazine - December-January 2024.pdf")
 
@@ -219,7 +219,7 @@ class TestMetadataExtractorMultiMonth:
 
     def test_extract_multi_month_with_dash(self):
         """Test multi-month with dash separator."""
-        extractor = MetadataExtractor()
+        extractor = FilenameParser()
         pdf_path = Path("/test/PC Gamer - Aug-Sep2023.pdf")
 
         result = extractor.extract_from_filename(pdf_path)
@@ -230,7 +230,7 @@ class TestMetadataExtractorMultiMonth:
 
     def test_standard_single_month_still_works(self):
         """Test that standard single-month parsing still works."""
-        extractor = MetadataExtractor()
+        extractor = FilenameParser()
         pdf_path = Path("/test/Wired - Dec2024.pdf")
 
         result = extractor.extract_from_filename(pdf_path)
@@ -241,7 +241,7 @@ class TestMetadataExtractorMultiMonth:
 
     def test_extract_dot_separated_year(self):
         """Test extraction of filenames with dot-separated year like 'Title-Month.Year'."""
-        extractor = MetadataExtractor()
+        extractor = FilenameParser()
         pdf_path = Path("/test/Vogue.Africa-August.2023.pdf")
 
         result = extractor.extract_from_filename(pdf_path)
@@ -254,7 +254,7 @@ class TestMetadataExtractorMultiMonth:
 
     def test_extract_regional_edition_with_dot_year(self):
         """Test extraction of regional edition with dot-separated year."""
-        extractor = MetadataExtractor()
+        extractor = FilenameParser()
         pdf_path = Path("/test/National.Geographic.South.Africa-March.2023.pdf")
 
         result = extractor.extract_from_filename(pdf_path)
@@ -267,7 +267,7 @@ class TestMetadataExtractorMultiMonth:
 
     def test_seasonal_still_works(self):
         """Test that seasonal parsing still works."""
-        extractor = MetadataExtractor()
+        extractor = FilenameParser()
         pdf_path = Path("/test/Magazine Winter 2024.pdf")
 
         result = extractor.extract_from_filename(pdf_path)
@@ -279,7 +279,7 @@ class TestMetadataExtractorMultiMonth:
 
     def test_extract_multi_season_period(self):
         """Test extracting multi-season periods like Spring/Summer."""
-        extractor = MetadataExtractor()
+        extractor = FilenameParser()
         # Use dash for filesystem compatibility
         pdf_path = Path("/test/Fashion Magazine - Spring-Summer 2024.pdf")
 
@@ -292,7 +292,7 @@ class TestMetadataExtractorMultiMonth:
 
     def test_extract_fall_winter_period(self):
         """Test extracting Fall/Winter season period."""
-        extractor = MetadataExtractor()
+        extractor = FilenameParser()
         # Use dash for filesystem compatibility
         pdf_path = Path("/test/Vogue - Fall-Winter 2023.pdf")
 
@@ -305,7 +305,7 @@ class TestMetadataExtractorMultiMonth:
 
     def test_extract_autumn_winter_period(self):
         """Test extracting Autumn/Winter (synonym for Fall/Winter)."""
-        extractor = MetadataExtractor()
+        extractor = FilenameParser()
         # Use dash for filesystem compatibility
         pdf_path = Path("/test/Magazine - Autumn-Winter 2023.pdf")
 

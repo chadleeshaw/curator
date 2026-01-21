@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 from datetime import datetime
 
-from core.constants.country import COUNTRY_TO_LANGUAGE
 from core.constants.language import DEFAULT_LANGUAGE
 from core.parsers.models import (
     ParsedMetadata,
@@ -17,8 +16,8 @@ from core.parsers.models import (
     ParsedDownloadFile,
 )
 from core.parsers.title import TitleMatcher
-from core.parsers.metadata import MetadataExtractor
-from core.parsers.language import detect_language
+from core.parsers.metadata import FilenameParser
+from core.parsers.language import detect_language, infer_language_from_country
 from core.parsers.country import detect_country
 
 
@@ -36,7 +35,7 @@ class Parser:
             fuzzy_threshold: Threshold for title matching (0-100)
         """
         self.title_matcher = TitleMatcher(threshold=fuzzy_threshold)
-        self.metadata_extractor = MetadataExtractor()
+        self.filename_parser = FilenameParser()
 
     def parse_file(self, file_path: Path) -> ParsedMetadata:
         """
@@ -61,17 +60,17 @@ class Parser:
 
         # Clean and normalize title
         cleaned_title = self.title_matcher.clean_release_title(title)
-        base_title, is_special, special_name = self.title_matcher.extract_base_title(cleaned_title)
+        base_title, is_special, special_name = self.title_matcher.extract_base_title(
+            cleaned_title
+        )
 
         # Detect language and country from full path
         full_path_str = str(file_path)
         language = filepath_data.language_from_path or detect_language(full_path_str)
         country = detect_country(full_path_str)
 
-        # If country is detected but language is still default, infer language from country
-        if country and language == DEFAULT_LANGUAGE and country in COUNTRY_TO_LANGUAGE:
-            inferred_language = COUNTRY_TO_LANGUAGE[country]
-            language = inferred_language
+        # Infer language from country if needed
+        language = infer_language_from_country(country, language)
 
         # Determine confidence
         confidence = "high" if filename_data.confidence == "high" else "medium"
@@ -159,16 +158,16 @@ class Parser:
         cleaned_title = self.title_matcher.clean_release_title(title)
 
         # Extract base title and special edition info
-        base_title, is_special, special_name = self.title_matcher.extract_base_title(cleaned_title)
+        base_title, is_special, special_name = self.title_matcher.extract_base_title(
+            cleaned_title
+        )
 
         # Detect language and country
         language = detect_language(title)
         country = detect_country(title)
 
-        # If country is detected but language is still default, infer language from country
-        if country and language == DEFAULT_LANGUAGE and country in COUNTRY_TO_LANGUAGE:
-            inferred_language = COUNTRY_TO_LANGUAGE[country]
-            language = inferred_language
+        # Infer language from country if needed
+        language = infer_language_from_country(country, language)
 
         return ParsedSearchResult(
             title=cleaned_title,
@@ -214,10 +213,8 @@ class Parser:
         language = detect_language(full_path_str)
         country = detect_country(full_path_str)
 
-        # If country is detected but language is still default, infer language from country
-        if country and language == DEFAULT_LANGUAGE and country in COUNTRY_TO_LANGUAGE:
-            inferred_language = COUNTRY_TO_LANGUAGE[country]
-            language = inferred_language
+        # Infer language from country if needed
+        language = infer_language_from_country(country, language)
 
         # Try to extract date from filename
         filename_data = self._parse_filename_only(file_path)
@@ -233,8 +230,8 @@ class Parser:
         )
 
     def _parse_filename_only(self, file_path: Path) -> ParsedFilename:
-        """Internal: Parse filename using MetadataExtractor"""
-        result = self.metadata_extractor.extract_from_filename(file_path)
+        """Internal: Parse filename using FilenameParser"""
+        result = self.filename_parser.extract_from_filename(file_path)
 
         return ParsedFilename(
             title=result.get("title", file_path.stem),
@@ -251,7 +248,7 @@ class Parser:
 
     def _parse_filepath_only(self, file_path: Path) -> ParsedFilepath:
         """Internal: Parse directory structure"""
-        title_from_path = self.metadata_extractor.get_title_from_path(file_path)
+        title_from_path = self.filename_parser.get_title_from_path(file_path)
 
         # Extract language from path components
         path_str = str(file_path)
