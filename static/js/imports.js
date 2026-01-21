@@ -67,7 +67,6 @@ export class ImportsManager {
     const _category = document.getElementById('import-category').value;
     const autoTrack = document.getElementById('import-auto-track').checked;
     const trackingMode = document.getElementById('import-tracking-mode').value;
-    const organizationPattern = document.getElementById('import-modal-organize-pattern').value;
 
     try {
       const statusDiv = document.getElementById('import-status');
@@ -81,14 +80,13 @@ export class ImportsManager {
       // Close modal
       library.closeImportModal();
 
-      // Import from organize directory
+      // Import from organize directory (files are already organized, no pattern needed)
       const response = await APIClient.authenticatedFetch('/api/import/from-organize-dir', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           auto_track: autoTrack && trackingMode !== 'none',
           tracking_mode: trackingMode,
-          organization_pattern: organizationPattern || null,
         }),
       });
 

@@ -140,7 +140,26 @@ export class TasksManager {
    */
   async runReorganizePreview() {
     const category = document.getElementById('reorganize-category').value;
-    const pattern = document.getElementById('reorganize-pattern').value || null;
+    const patternSelect = document.getElementById('reorganize-pattern-select');
+    const patternCustom = document.getElementById('reorganize-pattern-custom');
+
+    // Get pattern from dropdown or custom input
+    let pattern = null;
+    if (patternSelect && patternSelect.value) {
+      if (patternSelect.value === 'custom' && patternCustom) {
+        pattern = patternCustom.value || null;
+      } else if (patternSelect.value !== '') {
+        // Map pattern keys to their templates
+        const patternTemplates = {
+          default: '{category}/{title}/{year}/',
+          volume: '{category}/{title}/Vol{volume}/',
+          flat: '{category}/{title}/',
+          volume_year: '{category}/{title}/Vol{volume}/{year}/',
+          issue: '{category}/{title}/Issues {issue_range}/',
+        };
+        pattern = patternTemplates[patternSelect.value] || null;
+      }
+    }
 
     try {
       UIUtils.showStatus('reorganize-status', '🔍 Analyzing files...', 'info');
@@ -185,7 +204,26 @@ export class TasksManager {
    */
   async runReorganize() {
     const category = document.getElementById('reorganize-category').value;
-    const pattern = document.getElementById('reorganize-pattern').value || null;
+    const patternSelect = document.getElementById('reorganize-pattern-select');
+    const patternCustom = document.getElementById('reorganize-pattern-custom');
+
+    // Get pattern from dropdown or custom input
+    let pattern = null;
+    if (patternSelect && patternSelect.value) {
+      if (patternSelect.value === 'custom' && patternCustom) {
+        pattern = patternCustom.value || null;
+      } else if (patternSelect.value !== '') {
+        // Map pattern keys to their templates
+        const patternTemplates = {
+          default: '{category}/{title}/{year}/',
+          volume: '{category}/{title}/Vol{volume}/',
+          flat: '{category}/{title}/',
+          volume_year: '{category}/{title}/Vol{volume}/{year}/',
+          issue: '{category}/{title}/Issues {issue_range}/',
+        };
+        pattern = patternTemplates[patternSelect.value] || null;
+      }
+    }
 
     // Confirm before running
     const filesReorganized = document.getElementById('reorganize-results').textContent;

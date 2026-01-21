@@ -428,12 +428,39 @@ export class SettingsManager {
    * Display import settings
    */
   displayImportSettings(importConfig) {
-    const pattern = document.getElementById('import-organize-pattern');
+    const patternSelect = document.getElementById('import-organize-pattern-select');
+    const patternCustom = document.getElementById('import-organize-pattern-custom');
     const enableTextScan = document.getElementById('import-enable-text-scan');
     const enableOcr = document.getElementById('import-enable-ocr');
 
-    if (pattern)
-      pattern.value = importConfig.organization_pattern || 'data/{category}/{title}/{year}/';
+    // Map of pattern templates to their keys
+    const patternMap = {
+      '{category}/{title}/{year}/': 'default',
+      'data/{category}/{title}/{year}/': 'default',
+      '{category}/{title}/Vol{volume}/': 'volume',
+      '{category}/{title}/': 'flat',
+      '{category}/{title}/Vol{volume}/{year}/': 'volume_year',
+      '{category}/{title}/Issues {issue_range}/': 'issue',
+    };
+
+    const configPattern = importConfig.organization_pattern || 'data/{category}/{title}/{year}/';
+    const matchedKey = patternMap[configPattern];
+
+    if (patternSelect) {
+      if (matchedKey) {
+        // Known pattern - select it from dropdown
+        patternSelect.value = matchedKey;
+        if (patternCustom) patternCustom.classList.add('hidden');
+      } else {
+        // Custom pattern - show custom input
+        patternSelect.value = 'custom';
+        if (patternCustom) {
+          patternCustom.value = configPattern;
+          patternCustom.classList.remove('hidden');
+        }
+      }
+    }
+
     if (enableTextScan) enableTextScan.checked = importConfig.enable_text_scan ?? true;
     if (enableOcr) enableOcr.checked = importConfig.enable_ocr ?? true;
   }
@@ -927,10 +954,32 @@ export class SettingsManager {
    */
   async saveImportSettings() {
     try {
+      // Get pattern from dropdown or custom input
+      const patternSelect = document.getElementById('import-organize-pattern-select');
+      const patternCustom = document.getElementById('import-organize-pattern-custom');
       const enableTextScan = document.getElementById('import-enable-text-scan')?.checked;
       const enableOcr = document.getElementById('import-enable-ocr')?.checked;
 
+      // Map pattern keys to their templates
+      const patternTemplates = {
+        default: 'data/{category}/{title}/{year}/',
+        volume: '{category}/{title}/Vol{volume}/',
+        flat: '{category}/{title}/',
+        volume_year: '{category}/{title}/Vol{volume}/{year}/',
+        issue: '{category}/{title}/Issues {issue_range}/',
+      };
+
+      let pattern;
+      if (patternSelect && patternSelect.value === 'custom' && patternCustom) {
+        pattern = patternCustom.value || 'data/{category}/{title}/{year}/';
+      } else if (patternSelect) {
+        pattern = patternTemplates[patternSelect.value] || 'data/{category}/{title}/{year}/';
+      } else {
+        pattern = 'data/{category}/{title}/{year}/';
+      }
+
       const importConfig = {
+        organization_pattern: pattern,
         enable_text_scan: enableTextScan ?? true,
         enable_ocr: enableOcr ?? true,
       };
@@ -1598,6 +1647,31 @@ export class SettingsManager {
       UIUtils.showStatus('settings-status', `Error: ${error.message}`, 'error');
     }
   }
+
+  /**
+   * Handle organization pattern dropdown change
+   * Shows/hides custom input field based on selection
+   *
+   * @param {string} context - Either 'import' or 'reorganize'
+   */
+  handlePatternSelectChange(context) {
+    const selectId =
+      context === 'import' ? 'import-organize-pattern-select' : 'reorganize-pattern-select';
+    const customInputId =
+      context === 'import' ? 'import-organize-pattern-custom' : 'reorganize-pattern-custom';
+
+    const selectElement = document.getElementById(selectId);
+    const customInput = document.getElementById(customInputId);
+
+    if (!selectElement || !customInput) return;
+
+    if (selectElement.value === 'custom') {
+      customInput.classList.remove('hidden');
+      customInput.focus();
+    } else {
+      customInput.classList.add('hidden');
+    }
+  }
 }
 
 // Create singleton instance
@@ -1636,3 +1710,4 @@ window.savePDFSettings = () => settings.savePDFSettings();
 window.saveOCRSettings = () => settings.saveOCRSettings();
 window.saveOCRWorkerSettings = () => settings.saveOCRWorkerSettings();
 window.saveImportSettings = () => settings.saveImportSettings();
+window.handlePatternSelectChange = (context) => settings.handlePatternSelectChange(context);

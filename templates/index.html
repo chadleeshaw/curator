@@ -626,16 +626,47 @@
             <div id="import-section" class="settings-section">
               <h3>Import & Organization</h3>
               <div class="settings-field">
-                <label for="import-organize-pattern">File Organization Pattern:</label>
+                <label for="import-organize-pattern-select">File Organization Pattern:</label>
+                <select
+                  id="import-organize-pattern-select"
+                  onchange="handlePatternSelectChange('import')"
+                  style="
+                    width: 100%;
+                    padding: 8px 12px;
+                    border: 1px solid var(--border);
+                    border-radius: 4px;
+                    background: var(--background);
+                    color: var(--text-primary);
+                    margin-top: 8px;
+                  "
+                >
+                  <option value="default">{category}/{title}/{year}/ - Year-based (default)</option>
+                  <option value="volume">{category}/{title}/Vol{volume}/ - Volume-based</option>
+                  <option value="flat">{category}/{title}/ - Flat structure</option>
+                  <option value="volume_year">
+                    {category}/{title}/Vol{volume}/{year}/ - Hybrid
+                  </option>
+                  <option value="issue">
+                    {category}/{title}/Issues {issue_range}/ - Issue-based
+                  </option>
+                  <option value="custom">Custom pattern...</option>
+                </select>
                 <input
                   type="text"
-                  id="import-organize-pattern"
+                  id="import-organize-pattern-custom"
                   placeholder="data/{category}/{title}/{year}/"
-                  class="w-full mt-8"
+                  class="w-full mt-8 hidden"
+                  style="
+                    padding: 8px 12px;
+                    border: 1px solid var(--border);
+                    border-radius: 4px;
+                    background: var(--background);
+                    color: var(--text-primary);
+                  "
                 />
                 <p class="text-sm text-hint mt-8">
-                  Available tags: {category}, {title}, {year}, {month}, {day}. Leave empty to
-                  disable organization.
+                  Available tags: {category}, {title}, {year}, {month}, {day}, {volume}, {issue},
+                  {language}
                 </p>
               </div>
               <div class="settings-field">
@@ -715,14 +746,13 @@
 
                   <div class="settings-field">
                     <label
-                      for="reorganize-pattern"
+                      for="reorganize-pattern-select"
                       style="display: block; margin-bottom: 8px; font-weight: 500"
                       >Organization Pattern (optional):</label
                     >
-                    <input
-                      type="text"
-                      id="reorganize-pattern"
-                      placeholder="{category}/{title}/{year}/"
+                    <select
+                      id="reorganize-pattern-select"
+                      onchange="handlePatternSelectChange('reorganize')"
                       style="
                         width: 100%;
                         padding: 8px 12px;
@@ -731,10 +761,39 @@
                         background: var(--background);
                         color: var(--text-primary);
                       "
+                    >
+                      <option value="">Use config default</option>
+                      <option value="default">
+                        {category}/{title}/{year}/ - Year-based (default)
+                      </option>
+                      <option value="volume">{category}/{title}/Vol{volume}/ - Volume-based</option>
+                      <option value="flat">{category}/{title}/ - Flat structure</option>
+                      <option value="volume_year">
+                        {category}/{title}/Vol{volume}/{year}/ - Hybrid
+                      </option>
+                      <option value="issue">
+                        {category}/{title}/Issues {issue_range}/ - Issue-based
+                      </option>
+                      <option value="custom">Custom pattern...</option>
+                    </select>
+                    <input
+                      type="text"
+                      id="reorganize-pattern-custom"
+                      placeholder="{category}/{title}/{year}/"
+                      class="hidden"
+                      style="
+                        width: 100%;
+                        padding: 8px 12px;
+                        border: 1px solid var(--border);
+                        border-radius: 4px;
+                        background: var(--background);
+                        color: var(--text-primary);
+                        margin-top: 8px;
+                      "
                     />
                     <p class="text-sm text-hint mt-8">
-                      Leave empty to use config default. Available tags: {category}, {title},
-                      {year}, {month}, {day}
+                      Available tags: {category}, {title}, {year}, {month}, {day}, {volume},
+                      {issue}, {language}
                     </p>
                   </div>
                 </div>
@@ -1717,20 +1776,6 @@
             <option value="Articles">Articles</option>
             <option value="News">News</option>
           </select>
-        </div>
-
-        <div class="settings-field">
-          <label for="import-modal-organize-pattern">File Organization Pattern:</label>
-          <input
-            type="text"
-            id="import-modal-organize-pattern"
-            placeholder="Leave empty to use global default"
-            class="w-full"
-          />
-          <p class="text-sm text-hint mt-8">
-            Available tags: {category}, {title}, {year}, {month}, {day}. Example:
-            "{category}/{title}/{year}/"
-          </p>
         </div>
 
         <div class="flex gap-10 mt-20">
