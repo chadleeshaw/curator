@@ -193,6 +193,7 @@ async def lifespan(app: FastAPI):
             downloads_dir=storage_config.get("download_dir", "./local/downloads"),
             library_dir=storage_config.get("library_dir", "./_Magazines"),
             dry_run=False,  # Set to True for testing
+            category_prefix=category_prefix,
         )
         logger.info("Folder cleanup task initialized")
 

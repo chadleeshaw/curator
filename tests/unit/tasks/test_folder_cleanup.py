@@ -185,6 +185,33 @@ class TestProtectedSystemFolders:
         assert not is_safe
         assert "protected" in reason.lower()
 
+    def test_protects_category_folders(self, tmp_path):
+        """Category folders (_Magazines, _Comics, etc.) should be protected"""
+        # Test each category folder
+        for category in ["Magazines", "Comics", "Graphic Novels", "Books", "Documents"]:
+            folder = tmp_path / f"_{category}"
+            folder.mkdir(exist_ok=True)
+            # Make it empty to test protection (otherwise it would be protected by content)
+
+            cleanup = FolderCleanup(str(tmp_path), str(tmp_path), dry_run=False, category_prefix="_")
+            is_safe, reason, metadata = cleanup._is_safe_to_delete(folder)
+
+            assert not is_safe, f"_{category} should be protected"
+            assert "protected" in reason.lower(), f"Reason should mention protected: {reason}"
+            assert f"_{category}" in reason, f"Reason should mention _{category}: {reason}"
+
+    def test_protects_custom_category_prefix(self, tmp_path):
+        """Category folders with custom prefix should be protected"""
+        folder = tmp_path / "cat_Magazines"
+        folder.mkdir()
+
+        cleanup = FolderCleanup(str(tmp_path), str(tmp_path), dry_run=False, category_prefix="cat_")
+        is_safe, reason, metadata = cleanup._is_safe_to_delete(folder)
+
+        assert not is_safe
+        assert "protected" in reason.lower()
+        assert "cat_Magazines" in reason
+
     def test_protects_subfolder_inside_covers(self, tmp_path):
         """Folders inside /.covers should be protected"""
         covers = tmp_path / ".covers"

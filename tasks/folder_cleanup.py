@@ -12,9 +12,10 @@ Scans downloads and organized directories exhaustively to ensure:
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Set, Tuple
 
 from core.constants import SUPPORTED_FILE_EXTENSIONS
+from core.constants.category import CATEGORIES
 from core.utils import cleanup_empty_directories
 
 logger = logging.getLogger(__name__)
@@ -23,8 +24,8 @@ logger = logging.getLogger(__name__)
 class FolderCleanup:
     """Clean up empty folders and folders without importable files"""
 
-    # Protected folder names that should never be deleted
-    PROTECTED_FOLDERS = {
+    # Base protected folder names that should never be deleted
+    BASE_PROTECTED_FOLDERS = {
         ".covers",  # Cover image cache
         ".thumbnails",  # Thumbnail cache
         ".ocr_covers",  # OCR processing images
@@ -34,7 +35,13 @@ class FolderCleanup:
         ".tmp",  # Temporary files
     }
 
-    def __init__(self, downloads_dir: str, library_dir: str, dry_run: bool = False):
+    def __init__(
+        self,
+        downloads_dir: str,
+        library_dir: str,
+        dry_run: bool = False,
+        category_prefix: str = "_",
+    ):
         """
         Initialize folder cleanup.
 
@@ -42,10 +49,31 @@ class FolderCleanup:
             downloads_dir: Path to downloads directory
             library_dir: Path to library directory
             dry_run: If True, only report what would be deleted without actually deleting
+            category_prefix: Prefix for category folders (e.g., "_" for "_Magazines")
         """
         self.downloads_dir = Path(downloads_dir)
         self.library_dir = Path(library_dir)
         self.dry_run = dry_run
+        self.category_prefix = category_prefix
+
+        # Build complete protected folders set including category folders
+        self.protected_folders: Set[str] = self._build_protected_folders()
+
+    def _build_protected_folders(self) -> Set[str]:
+        """
+        Build complete set of protected folders including category folders.
+
+        Returns:
+            Set of folder names that should never be deleted
+        """
+        protected = set(self.BASE_PROTECTED_FOLDERS)
+
+        # Add category folders (e.g., "_Magazines", "_Comics", "_Graphic Novels")
+        for category in CATEGORIES:
+            category_folder = f"{self.category_prefix}{category}"
+            protected.add(category_folder)
+
+        return protected
 
     def _scan_folder_exhaustively(self, folder: Path) -> Tuple[List[Path], List[Path], int]:
         """
@@ -100,14 +128,14 @@ class FolderCleanup:
         if not folder.exists() or not folder.is_dir():
             return False, "Not a directory or doesn't exist", {}
 
-        # Check if folder is protected (e.g., .covers, .cache, .git)
+        # Check if folder is protected (e.g., .covers, .cache, .git, _Magazines, _Comics)
         folder_name = folder.name
-        if folder_name in self.PROTECTED_FOLDERS:
-            return False, f"Protected system folder: {folder_name}", {}
+        if folder_name in self.protected_folders:
+            return False, f"Protected folder: {folder_name}", {}
 
         # Also check if ANY parent directory is protected
         for parent in folder.parents:
-            if parent.name in self.PROTECTED_FOLDERS:
+            if parent.name in self.protected_folders:
                 return False, f"Inside protected folder: {parent.name}", {}
 
         # Exhaustively scan for all files
