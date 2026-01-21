@@ -1478,8 +1478,8 @@ window.selectIssueWithVariants = function (issueKey, alreadyDownloaded, hasFaile
     <div id="language-variant-modal" class="modal" style="display: flex;">
       <div class="modal-content" style="max-width: 500px;">
         <span class="close" onclick="closeLangVariantModal()">&times;</span>
-        <h2>Select Language Variant</h2>
-        <p style="color: var(--text-secondary); margin-bottom: 20px;">Multiple language variants available:</p>
+        <h2>Select NZB Source</h2>
+        <p style="color: var(--text-secondary); margin-bottom: 20px;">Multiple NZB variants available for this issue:</p>
         <div id="variant-options" style="display: flex; flex-direction: column; gap: 10px;"></div>
       </div>
     </div>
@@ -1489,40 +1489,8 @@ window.selectIssueWithVariants = function (issueKey, alreadyDownloaded, hasFaile
 
   const optionsDiv = document.getElementById('variant-options');
   variants.forEach((variant, index) => {
-    // Detect language using centralized constants
-    let detectedLang = '';
-    let detectedCountry = '';
-
-    if (window.appConstants?.language_keywords) {
-      for (const [lang, keywords] of Object.entries(window.appConstants.language_keywords)) {
-        if (keywords.some((kw) => variant.title.toLowerCase().includes(kw.toLowerCase()))) {
-          detectedLang = lang;
-          break;
-        }
-      }
-    }
-
-    if (window.appConstants?.country_indicators) {
-      for (const [country, indicators] of Object.entries(window.appConstants.country_indicators)) {
-        if (indicators.some((ind) => variant.title.toLowerCase().includes(ind.toLowerCase()))) {
-          detectedCountry = country;
-          break;
-        }
-      }
-    }
-
-    // Detect special editions (Traveler, Kids, etc.)
-    const editionMatch = variant.title.match(
-      /\b(Traveler|Traveller|Kids|Junior|Special|History|Science)\b/i
-    );
-    const edition = editionMatch ? editionMatch[0] : '';
-
-    // Build display label
-    let displayLabel = detectedCountry || detectedLang || `Edition ${index + 1}`;
-    if (edition) {
-      displayLabel =
-        displayLabel !== `Edition ${index + 1}` ? `${displayLabel} - ${edition}` : edition;
-    }
+    // Simple variant numbering since these are different NZB sources for the same file
+    const displayLabel = `Variant ${index + 1}`;
 
     const isDownloaded = variant.already_downloaded || alreadyDownloaded;
     const downloadFailed = variant.download_failed || hasFailed || false;
