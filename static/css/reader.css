@@ -42,6 +42,7 @@ body {
   display: flex;
   gap: 10px;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .btn {
@@ -53,6 +54,7 @@ body {
   cursor: pointer;
   font-size: 0.9em;
   transition: opacity 0.2s;
+  white-space: nowrap;
 }
 
 .btn:hover {
@@ -492,13 +494,22 @@ body {
 
   .header-actions {
     width: 100%;
-    justify-content: center;
+    justify-content: space-between;
+    gap: 8px;
   }
 
   .header-actions .btn {
-    width: 100%;
-    padding: 10px 16px;
-    font-size: 0.95em;
+    flex: 1;
+    padding: 10px 12px;
+    font-size: 0.85em;
+  }
+
+  .header-actions .nav-btn {
+    flex: 0 0 44px;
+    padding: 10px 8px;
+    font-size: 1.2em;
+    min-width: 44px;
+    height: 44px;
   }
 
   .content-header {

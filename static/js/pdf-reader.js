@@ -19,7 +19,7 @@ class PDFReader {
       window.innerWidth <= 768 && window.innerHeight > window.innerWidth
         ? 'fit-width'
         : 'fit-height';
-    this.zoomLevel = 100; // 50-200%
+    this.zoomLevel = 100; // 50-400%
     // Default to spread mode on desktop or landscape orientation
     this.spreadMode = window.innerWidth > 768 || window.innerWidth > window.innerHeight;
     this.isFullscreen = false;
@@ -606,7 +606,7 @@ class PDFReader {
    * @param {number} delta - Amount to change zoom (+/- 10)
    */
   adjustZoom(delta) {
-    this.zoomLevel = Math.max(50, Math.min(200, this.zoomLevel + delta));
+    this.zoomLevel = Math.max(50, Math.min(400, this.zoomLevel + delta));
     document.getElementById('zoom-level').textContent = `${this.zoomLevel}%`;
 
     // Apply zoom using CSS transform scale for compatibility with fit modes
@@ -987,8 +987,8 @@ class PDFReader {
         const scale = currentDistance / initialDistance;
         const newZoom = Math.round(initialZoom * scale);
 
-        // Apply zoom constraints (50-200%)
-        this.zoomLevel = Math.max(50, Math.min(200, newZoom));
+        // Apply zoom constraints (50-400%)
+        this.zoomLevel = Math.max(50, Math.min(400, newZoom));
         document.getElementById('zoom-level').textContent = `${this.zoomLevel}%`;
 
         // Apply zoom using CSS transform

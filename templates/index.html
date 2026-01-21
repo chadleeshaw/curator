@@ -53,36 +53,38 @@
 
             <!-- Sort Controls -->
             <div class="sort-controls">
-              <div class="sort-buttons">
-                <button
-                  class="sort-btn active"
-                  data-lib-sort="title"
-                  onclick="setLibrarySortField('title')"
-                >
-                  Title
-                </button>
-                <button
-                  class="sort-btn"
-                  data-lib-sort="category"
-                  onclick="setLibrarySortField('category')"
-                >
-                  Category
-                </button>
-                <button
-                  class="sort-btn"
-                  data-lib-sort="issue_date"
-                  onclick="setLibrarySortField('issue_date')"
-                >
-                  Issue Date
-                </button>
-                <button
-                  class="sort-btn"
-                  data-lib-sort="created_at"
-                  onclick="setLibrarySortField('created_at')"
-                >
-                  Added Date
-                </button>
-              </div>
+              <label
+                for="library-sort-select"
+                style="color: var(--text-secondary); font-size: 0.9em; font-weight: 500"
+                >Sort by:</label
+              >
+              <select
+                id="library-sort-select"
+                onchange="setLibrarySortField(this.value)"
+                style="
+                  padding: 8px 12px;
+                  border: 1px solid var(--border-color);
+                  border-radius: 6px;
+                  background: var(--surface);
+                  color: var(--text-primary);
+                  font-size: 14px;
+                  cursor: pointer;
+                  -webkit-appearance: none;
+                  -moz-appearance: none;
+                  appearance: none;
+                  background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23f0f0f0%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3e%3cpolyline points=%226 9 12 15 18 9%22%3e%3c/polyline%3e%3c/svg%3e');
+                  background-repeat: no-repeat;
+                  background-position: right 10px center;
+                  background-size: 16px;
+                  padding-right: 35px;
+                "
+              >
+                <option value="title">Title</option>
+                <option value="category">Category</option>
+                <option value="issue_date">Issue Date</option>
+                <option value="created_at">Added Date</option>
+                <option value="issue_count">Number of Issues</option>
+              </select>
               <button
                 id="library-sort-toggle"
                 class="sort-toggle-btn"

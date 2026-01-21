@@ -85,7 +85,7 @@ async def update_progress(magazine_id: int, update: ProgressUpdate) -> Dict[str,
                 )
 
                 if not progress:
-                    progress = ReadingProgress(magazine_id=magazine_id)
+                    progress = ReadingProgress(periodical_id=magazine_id)
                     db_session.add(progress)
 
                 # Update fields

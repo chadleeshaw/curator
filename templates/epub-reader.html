@@ -18,9 +18,13 @@
     <div class="reader-header">
       <h1 class="reader-title" id="book-title">Loading...</h1>
       <div class="header-actions">
+        <button class="nav-btn" id="header-prev-btn" onclick="epubReader.previousChapter()">
+          ←
+        </button>
         <button class="btn" id="back-btn" onclick="epubReader.goBackToPeriodical()">
           ← Back to Periodical
         </button>
+        <button class="nav-btn" id="header-next-btn" onclick="epubReader.nextChapter()">→</button>
       </div>
     </div>
 

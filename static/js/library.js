@@ -183,6 +183,14 @@ export class LibraryManager {
         // Don't restore search query - it should always start empty
         this.searchQuery = '';
 
+        // Restore sort settings
+        if (filters.sortField) {
+          this.sortManager.field = filters.sortField;
+        }
+        if (filters.sortOrder) {
+          this.sortManager.order = filters.sortOrder;
+        }
+
         // Update UI elements
         const categoryDropdown = document.getElementById('library-category-filter');
         if (categoryDropdown) categoryDropdown.value = this.categoryFilter;
@@ -190,13 +198,22 @@ export class LibraryManager {
         const languageDropdown = document.getElementById('library-language-filter');
         if (languageDropdown) languageDropdown.value = this.languageFilter;
 
+        // Update sort dropdown
+        const sortDropdown = document.getElementById('library-sort-select');
+        if (sortDropdown) sortDropdown.value = this.sortManager.field;
+
+        // Update sort toggle button
+        this.updateLibrarySortToggleButton();
+
         // Ensure search input is empty
         const searchInput = document.getElementById('library-search-input');
         if (searchInput) searchInput.value = '';
 
-        console.log('[Library] Loaded saved filter state (category, language only):', {
+        console.log('[Library] Loaded saved filter state:', {
           category: this.categoryFilter,
           language: this.languageFilter,
+          sortField: this.sortManager.field,
+          sortOrder: this.sortManager.order,
         });
       }
     } catch (error) {
@@ -214,6 +231,8 @@ export class LibraryManager {
       const filters = {
         category: this.categoryFilter,
         language: this.languageFilter,
+        sortField: this.sortManager.field,
+        sortOrder: this.sortManager.order,
         // Don't save search query - it should always start fresh
       };
       localStorage.setItem('libraryFilters', JSON.stringify(filters));
@@ -406,14 +425,14 @@ export class LibraryManager {
     this.sortManager.field = field;
     this.sortManager.order = 'asc';
 
-    // Update button active states
-    document.querySelectorAll('.sort-controls .sort-btn').forEach((btn) => {
-      btn.classList.remove('active');
-    });
-    const activeBtn = document.querySelector(`.sort-controls [data-lib-sort="${field}"]`);
-    activeBtn?.classList.add('active');
+    // Update dropdown selected value
+    const selectElement = document.getElementById('library-sort-select');
+    if (selectElement) {
+      selectElement.value = field;
+    }
 
     this.updateLibrarySortToggleButton();
+    this.saveFilterState();
     this.loadPeriodicals();
   }
 
@@ -428,6 +447,7 @@ export class LibraryManager {
   toggleLibrarySortOrder() {
     this.sortManager.order = this.sortManager.order === 'asc' ? 'desc' : 'asc';
     this.updateLibrarySortToggleButton();
+    this.saveFilterState();
     this.loadPeriodicals();
   }
 

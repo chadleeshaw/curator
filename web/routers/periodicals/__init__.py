@@ -29,6 +29,11 @@ from .files import (
     get_pdf,
     move_issue_to_tracking,
 )
+from .progress import (
+    get_progress,
+    update_progress,
+    delete_progress,
+)
 
 __all__ = [
     # Core exports
@@ -51,4 +56,8 @@ __all__ = [
     # File operations
     "get_pdf",
     "move_issue_to_tracking",
+    # Progress operations
+    "get_progress",
+    "update_progress",
+    "delete_progress",
 ]

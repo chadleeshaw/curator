@@ -30,7 +30,7 @@ async def list_periodicals(
     Args:
         skip: Number of records to skip for pagination
         limit: Maximum number of records to return
-        sort_by: Sort field - "title", "category", or "issue_date" (default: "title")
+        sort_by: Sort field - "title", "category", "issue_date", "created_at", or "issue_count" (default: "title")
         sort_order: Sort direction - "asc" or "desc" (default: "asc")
 
     Returns:
@@ -121,8 +121,51 @@ async def list_periodicals(
                 # Left join with tracking to get the primary title for display
                 query = query.outerjoin(PeriodicalTracking, Periodical.tracking_id == PeriodicalTracking.id)
 
+                # Calculate issue counts for sorting (if needed)
+                if sort_by == "issue_count":
+                    # Create subquery to count issues for each group
+                    count_subquery = (
+                        db_session.query(
+                            case(
+                                (
+                                    Periodical.tracking_id.isnot(None),
+                                    Periodical.tracking_id,
+                                ),
+                                else_=Periodical.id,
+                            ).label("group_key"),
+                            Periodical.language,
+                            func.count(Periodical.id).label("issue_count"),  # pylint: disable=not-callable
+                        )
+                        .group_by("group_key", Periodical.language)
+                        .subquery()
+                    )
+
+                    # Join the count subquery
+                    query = query.outerjoin(
+                        count_subquery,
+                        (
+                            case(
+                                (
+                                    Periodical.tracking_id.isnot(None),
+                                    Periodical.tracking_id,
+                                ),
+                                else_=Periodical.id,
+                            )
+                            == count_subquery.c.group_key
+                        )
+                        & (Periodical.language == count_subquery.c.language),
+                    )
+
+                    # Sort by issue count
+                    sort_expr = (
+                        count_subquery.c.issue_count.desc() if is_descending else count_subquery.c.issue_count.asc()
+                    )
+                    query = query.order_by(
+                        sort_expr,
+                        func.coalesce(PeriodicalTracking.title, Periodical.title).asc(),
+                    )
                 # Apply sorting - use tracking title when available
-                if sort_by == "category":
+                elif sort_by == "category":
                     # Sort by category from tracking if available, otherwise fall back to magazine category
                     sort_expr = (
                         func.coalesce(
@@ -141,6 +184,9 @@ async def list_periodicals(
                     )
                 elif sort_by == "issue_date":
                     sort_expr = Periodical.issue_date.desc() if is_descending else Periodical.issue_date.asc()
+                    query = query.order_by(sort_expr)
+                elif sort_by == "created_at":
+                    sort_expr = Periodical.created_at.desc() if is_descending else Periodical.created_at.asc()
                     query = query.order_by(sort_expr)
                 else:  # Default to title
                     sort_expr = (

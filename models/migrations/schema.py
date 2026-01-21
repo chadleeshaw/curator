@@ -52,4 +52,5 @@ COLUMN_RENAMES = {
     "discovered_issues": [("magazine_id", "periodical_id")],
     "download_submissions": [("magazine_id", "periodical_id")],
     "downloads": [("magazine_id", "periodical_id")],
+    "reading_progress": [("magazine_id", "periodical_id")],
 }
