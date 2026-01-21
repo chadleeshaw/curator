@@ -43,7 +43,7 @@ from .thumbnail import (
 )
 
 # Text processing utilities
-from .text import clean_title, normalize_text, sanitize_filename
+from .text import clean_title, normalize_text
 
 # Date parsing utilities
 from .date import parse_month, parse_multi_month
@@ -76,7 +76,6 @@ __all__ = [
     # Text processing utilities
     "clean_title",
     "normalize_text",
-    "sanitize_filename",
     # Thumbnail utilities
     "THUMBNAIL_MAX_HEIGHT",
     "THUMBNAIL_MAX_WIDTH",

@@ -59,35 +59,3 @@ def normalize_text(text: str) -> str:
         Normalized text
     """
     return re.sub(r"\s+", " ", text.lower()).strip()
-
-
-def sanitize_filename(filename: str, max_length: int = 255) -> str:
-    """
-    Sanitize a filename by removing/replacing invalid characters.
-
-    Args:
-        filename: Original filename
-        max_length: Maximum filename length (default: 255)
-
-    Returns:
-        Sanitized filename safe for filesystem use
-    """
-    # Replace invalid characters with underscores
-    # Invalid: < > : " / \ | ? *
-    sanitized = re.sub(r'[<>:"/\\|?*]', "_", filename)
-
-    # Remove leading/trailing dots and spaces
-    sanitized = sanitized.strip(". ")
-
-    # Truncate to max length if needed
-    if len(sanitized) > max_length:
-        # Try to preserve file extension
-        parts = sanitized.rsplit(".", 1)
-        if len(parts) == 2 and len(parts[1]) <= 10:  # Reasonable extension length
-            name, ext = parts
-            max_name_len = max_length - len(ext) - 1
-            sanitized = name[:max_name_len] + "." + ext
-        else:
-            sanitized = sanitized[:max_length]
-
-    return sanitized
