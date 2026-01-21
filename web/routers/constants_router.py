@@ -1,5 +1,7 @@
 """
-Metadata and parser configuration routes
+Application constants API endpoints.
+
+Exposes configuration constants (languages, categories, countries, etc.) to the frontend.
 """
 
 import logging

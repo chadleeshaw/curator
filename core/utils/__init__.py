@@ -42,6 +42,12 @@ from .thumbnail import (
     get_or_create_thumbnail,
 )
 
+# Text processing utilities
+from .text import clean_title, normalize_text, sanitize_filename
+
+# Date parsing utilities
+from .date import parse_month, parse_multi_month
+
 __all__ = [
     # Async utilities
     "run_in_thread",
@@ -52,6 +58,9 @@ __all__ = [
     "validate_cbr",
     # Database utilities
     "get_db_session",
+    # Date parsing utilities
+    "parse_month",
+    "parse_multi_month",
     # EPUB utilities
     "extract_cover_from_epub",
     "extract_text_from_epub",
@@ -64,6 +73,10 @@ __all__ = [
     # PDF utilities
     "extract_cover_from_pdf",
     "validate_pdf",
+    # Text processing utilities
+    "clean_title",
+    "normalize_text",
+    "sanitize_filename",
     # Thumbnail utilities
     "THUMBNAIL_MAX_HEIGHT",
     "THUMBNAIL_MAX_WIDTH",

@@ -7,120 +7,36 @@ import logging
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
 
 from core.constants.date import (
     MAX_VALID_YEAR,
     MIN_VALID_YEAR,
     MONTH_TO_NUMBER,
-    NUMBER_TO_MONTH,
 )
 from core.constants.language import SUPPORTED_LANGUAGES
+from core.constants.patterns import (
+    DATE_PATTERN_ABBR_MONTH_YEAR,
+    DATE_PATTERN_ABBR_MONTH_YEAR_NO_BOUNDARY,
+    DATE_PATTERN_FULL_MONTH_YEAR,
+    DATE_PATTERN_ISO_FULL,
+    DATE_PATTERN_ISO_MONTH,
+    DATE_PATTERN_MONTH_YEAR_NUMERIC,
+    DATE_PATTERN_YEAR_ONLY,
+    NZB_COUNTRY_PATTERNS,
+    NZB_EDITION_PATTERNS,
+    NZB_ISSUE_PATTERN,
+    NZB_LANGUAGE_PATTERNS,
+    NZB_QUALITY_PATTERNS,
+    NZB_RELEASE_GROUP_PATTERNS,
+    NZB_VOLUME_PATTERN,
+    TITLE_CLEANUP_TRAILING_DASH_DIGITS,
+    TITLE_CLEANUP_TRAILING_SPACE_DIGITS,
+)
+from core.utils.date import parse_month, parse_multi_month
+from core.utils.text import clean_title
 
 logger = logging.getLogger(__name__)
-
-
-def parse_month(month_str: str) -> Optional[int]:
-    """
-    Parse a month string to its number (1-12).
-
-    Args:
-        month_str: Month name or abbreviation (e.g., "January", "Jan", "jan")
-
-    Returns:
-        Month number (1-12) or None if not recognized
-    """
-    if not month_str:
-        return None
-
-    month_lower = month_str.lower().strip()
-    return MONTH_TO_NUMBER.get(month_lower)
-
-
-def parse_multi_month(month_str: str) -> Tuple[Optional[int], str]:
-    """
-    Parse a month string that may contain multiple months (e.g., "June/July").
-
-    Args:
-        month_str: Month string, possibly multi-month format
-
-    Returns:
-        Tuple of (first_month_number, display_string)
-        first_month_number is None if not parseable
-    """
-    if not month_str:
-        return None, ""
-
-    month_str = month_str.strip()
-
-    # Check for multi-month separators
-    for sep in ["/", "-", "&"]:
-        if sep in month_str:
-            parts = month_str.split(sep)
-            first_month = parts[0].strip()
-            month_num = parse_month(first_month)
-            if month_num:
-                # Normalize display: "Jun/Jul" -> "June/July"
-                normalized_parts = []
-                for part in parts:
-                    part = part.strip()
-                    part_num = parse_month(part)
-                    if part_num:
-                        # Convert to full month name
-                        normalized_parts.append(NUMBER_TO_MONTH[part_num])
-                    else:
-                        # Keep original if not recognized
-                        normalized_parts.append(part.capitalize())
-                return month_num, "/".join(normalized_parts)
-
-    # Single month - convert to full name
-    month_num = parse_month(month_str)
-    if month_num:
-        return month_num, NUMBER_TO_MONTH[month_num]
-    return None, month_str.capitalize()
-
-
-def clean_title(title: str, remove_descriptors: bool = False) -> str:
-    """
-    Clean a title string by removing common artifacts.
-
-    Args:
-        title: Raw title string
-        remove_descriptors: If True, also remove words like "magazine", "quarterly"
-
-    Returns:
-        Cleaned title string
-    """
-    # Replace dots and underscores with spaces
-    cleaned = title.replace(".", " ").replace("_", " ")
-
-    # Remove release group tags [xxx] and (xxx)
-    cleaned = re.sub(r"\[.*?\]|\(.*?\)", "", cleaned)
-
-    # Remove language codes (but not country codes like UK)
-    cleaned = re.sub(
-        r"[\s]+(?:de|en|fr|es|it|pt|ru|nl|pl|sv|no|fi|da|ja|ko|zh|ar)(?:[\s]|$)",
-        " ",
-        cleaned,
-        flags=re.IGNORECASE,
-    )
-
-    if remove_descriptors:
-        cleaned = re.sub(
-            r"\b(?:quarterly|monthly|weekly|magazine|the|hacker|hybrid|digital|print)\b",
-            " ",
-            cleaned,
-            flags=re.IGNORECASE,
-        )
-
-    # NOTE: Do NOT remove "Special Edition" here - it needs to be preserved
-    # for title_matcher.extract_base_title() to detect special editions properly
-
-    # Clean trailing dashes and normalize whitespace
-    cleaned = re.sub(r"\s*-\s*$", "", cleaned)
-    cleaned = re.sub(r"\s+", " ", cleaned).strip()
-
-    return cleaned
 
 
 class MetadataExtractor:
@@ -145,39 +61,6 @@ class MetadataExtractor:
         }
         # Add language folders (should be skipped when extracting periodical names)
         self.system_folders.update(lang.lower() for lang in SUPPORTED_LANGUAGES)
-
-        # Enhanced pattern library for complex NZB filenames
-        self._init_enhanced_patterns()
-
-    def _init_enhanced_patterns(self):
-        """Initialize comprehensive pattern library for NZB-style filename parsing."""
-        # Country/Region patterns (most specific first)
-        self.country_patterns = [
-            r"\b(USA?|UK|CA|AU|NZ|DE|FR|ES|IT|NL|SE|NO|DK|FI|JP|KR|CN|BR|MX|AR|IN)\b",
-            r"\b(United\s+States|United\s+Kingdom|Europe|Asia|North\s+America)\b",
-        ]
-
-        # Language patterns
-        self.language_patterns = [
-            r"\b(English|German|French|Spanish|Italian|Portuguese|Russian|Japanese|Korean|Chinese)\b",
-        ]
-
-        # Edition/Variant patterns
-        self.edition_patterns = [
-            r"\b(International|Global|European|Asian|Special|Limited|Digital|Print)\s+(?:Edition|Ed\.?)\b",
-            r"\b(?:Edition|Ed\.?)[\s._-]*(International|Global|European|Asian|Special|Limited)\b",
-        ]
-
-        # Quality indicators
-        self.quality_patterns = [
-            r"\b(True\.?PDF|HQ|High\.?Quality|Retail|Original)\b",
-        ]
-
-        # Release group patterns (at end of filename)
-        self.release_group_patterns = [
-            r"-([A-Z][A-Z0-9]*v?\d*)$",  # -PHOTOFILEv2, -HQ, -RETAIL (must start with letter)
-            r"\[([A-Z0-9]+)\]$",  # [PHOTOFILE]
-        ]
 
     def extract_from_nzb_title(self, nzb_title: str) -> Dict[str, Any]:
         """
@@ -226,7 +109,7 @@ class MetadataExtractor:
         remaining_text = normalized
 
         # Step 1: Extract release group (from end)
-        for pattern in self.release_group_patterns:
+        for pattern in NZB_RELEASE_GROUP_PATTERNS:
             match = re.search(pattern, nzb_title, re.IGNORECASE)
             if match:
                 metadata["release_group"] = match.group(1)
@@ -237,7 +120,7 @@ class MetadataExtractor:
                 break
 
         # Step 2: Extract quality indicators (search in ORIGINAL before normalization)
-        for pattern in self.quality_patterns:
+        for pattern in NZB_QUALITY_PATTERNS:
             match = re.search(pattern, nzb_title, re.IGNORECASE)
             if match:
                 quality_text = match.group(1).replace(".", " ")
@@ -257,7 +140,7 @@ class MetadataExtractor:
                 break
 
         # Step 3: Extract country/region
-        for pattern in self.country_patterns:
+        for pattern in NZB_COUNTRY_PATTERNS:
             match = re.search(pattern, remaining_text, re.IGNORECASE)
             if match:
                 country = match.group(1)
@@ -271,7 +154,7 @@ class MetadataExtractor:
                 break
 
         # Step 4: Extract language
-        for pattern in self.language_patterns:
+        for pattern in NZB_LANGUAGE_PATTERNS:
             match = re.search(pattern, remaining_text, re.IGNORECASE)
             if match:
                 metadata["language"] = match.group(1).capitalize()
@@ -280,7 +163,7 @@ class MetadataExtractor:
                 break
 
         # Step 5: Extract edition/variant
-        for pattern in self.edition_patterns:
+        for pattern in NZB_EDITION_PATTERNS:
             match = re.search(pattern, remaining_text, re.IGNORECASE)
             if match:
                 metadata["edition"] = match.group(1).capitalize()
@@ -294,8 +177,7 @@ class MetadataExtractor:
 
         # Format 1: ISO full date (2024.01.20 or 2024-01-20)
         if not date_extracted:
-            pattern = r"(\d{4})[-.\s](\d{1,2})[-.\s](\d{1,2})\b"
-            match = re.search(pattern, remaining_text)
+            match = re.search(DATE_PATTERN_ISO_FULL, remaining_text)
             if match:
                 year, month, day = (
                     int(match.group(1)),
@@ -313,8 +195,7 @@ class MetadataExtractor:
 
         # Format 2: Full month name with year (January 2024)
         if not date_extracted:
-            pattern = r"\b(January|February|March|April|May|June|July|August|September|October|November|December)[\s]+(\d{4})\b"
-            match = re.search(pattern, remaining_text, re.IGNORECASE)
+            match = re.search(DATE_PATTERN_FULL_MONTH_YEAR, remaining_text, re.IGNORECASE)
             if match:
                 month_str, year_str = match.group(1), match.group(2)
                 month_num = parse_month(month_str)
@@ -329,8 +210,7 @@ class MetadataExtractor:
 
         # Format 3: Abbreviated month with year (Jan 2024, Jan2024)
         if not date_extracted:
-            pattern = r"\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?[\s]*(\d{4})\b"
-            match = re.search(pattern, remaining_text, re.IGNORECASE)
+            match = re.search(DATE_PATTERN_ABBR_MONTH_YEAR, remaining_text, re.IGNORECASE)
             if match:
                 month_str, year_str = match.group(1), match.group(2)
                 month_num = parse_month(month_str)
@@ -345,8 +225,7 @@ class MetadataExtractor:
 
         # Format 3b: Abbreviated month with year, no word boundaries (Jan2024 in middle of string)
         if not date_extracted:
-            pattern = r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?(\d{4})"
-            match = re.search(pattern, remaining_text, re.IGNORECASE)
+            match = re.search(DATE_PATTERN_ABBR_MONTH_YEAR_NO_BOUNDARY, remaining_text, re.IGNORECASE)
             if match:
                 month_str, year_str = match.group(1), match.group(2)
                 month_num = parse_month(month_str)
@@ -361,8 +240,7 @@ class MetadataExtractor:
 
         # Format 4: ISO month format (2024-01 or 2024.01)
         if not date_extracted:
-            pattern = r"(\d{4})[-.](\d{1,2})(?![-.\d])"
-            match = re.search(pattern, remaining_text)
+            match = re.search(DATE_PATTERN_ISO_MONTH, remaining_text)
             if match:
                 year, month = int(match.group(1)), int(match.group(2))
                 if MIN_VALID_YEAR <= year <= MAX_VALID_YEAR and 1 <= month <= 12:
@@ -375,8 +253,7 @@ class MetadataExtractor:
 
         # Format 5: Numeric month-year (01-2024 or 1/2024) - check BEFORE year-only
         if not date_extracted:
-            pattern = r"\b(\d{1,2})[-/](\d{4})\b"
-            match = re.search(pattern, remaining_text)
+            match = re.search(DATE_PATTERN_MONTH_YEAR_NUMERIC, remaining_text)
             if match:
                 month, year = int(match.group(1)), int(match.group(2))
                 if MIN_VALID_YEAR <= year <= MAX_VALID_YEAR and 1 <= month <= 12:
@@ -389,36 +266,7 @@ class MetadataExtractor:
 
         # Format 6: Just a year (2024) - LAST to avoid false matches
         if not date_extracted:
-            pattern = r"\b(\d{4})\b"
-            match = re.search(pattern, remaining_text)
-            if match:
-                year = int(match.group(1))
-                if MIN_VALID_YEAR <= year <= MAX_VALID_YEAR:
-                    metadata["year"] = year
-                    metadata["month"] = 1  # Default to January
-                    metadata["issue_date"] = datetime(year, 1, 1)
-                    remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
-                    remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
-                    date_extracted = True
-
-        # Format 5: Numeric month-year (01-2024 or 1/2024)
-        if not date_extracted:
-            pattern = r"\b(\d{1,2})[-/](\d{4})\b"
-            match = re.search(pattern, remaining_text)
-            if match:
-                month, year = int(match.group(1)), int(match.group(2))
-                if MIN_VALID_YEAR <= year <= MAX_VALID_YEAR and 1 <= month <= 12:
-                    metadata["year"] = year
-                    metadata["month"] = month
-                    metadata["issue_date"] = datetime(year, month, 1)
-                    remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
-                    remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
-                    date_extracted = True
-
-        # Format 6: Just a year (2024)
-        if not date_extracted:
-            pattern = r"\b(\d{4})\b"
-            match = re.search(pattern, remaining_text)
+            match = re.search(DATE_PATTERN_YEAR_ONLY, remaining_text)
             if match:
                 year = int(match.group(1))
                 if MIN_VALID_YEAR <= year <= MAX_VALID_YEAR:
@@ -431,16 +279,14 @@ class MetadataExtractor:
 
         # Step 7: Extract volume and issue numbers (AFTER dates to avoid conflicts)
         # Volume patterns: Vol.12, Volume 5, V202
-        volume_pattern = r"(?:vol\.?|volume|v)[\s]*(\d+)\b"
-        match = re.search(volume_pattern, remaining_text, re.IGNORECASE)
+        match = re.search(NZB_VOLUME_PATTERN, remaining_text, re.IGNORECASE)
         if match:
             metadata["volume"] = int(match.group(1))
             remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
             remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
 
         # Issue patterns: Issue 389, No. 25, N25, #45
-        issue_pattern = r"(?:issue|no\.?|number|nr\.?|n)[\s]*(\d+)\b|#(\d+)"
-        match = re.search(issue_pattern, remaining_text, re.IGNORECASE)
+        match = re.search(NZB_ISSUE_PATTERN, remaining_text, re.IGNORECASE)
         if match:
             issue_num = match.group(1) or match.group(2)
             metadata["issue"] = int(issue_num)
@@ -453,9 +299,11 @@ class MetadataExtractor:
         remaining_text = re.sub(r"^[-\s]+|[-\s]+$", "", remaining_text).strip()  # Remove leading/trailing dashes
         remaining_text = re.sub(r"\s*-\s*$", "", remaining_text).strip()  # Remove trailing dash with spaces
         remaining_text = re.sub(r"--+", "-", remaining_text).strip()  # Collapse multiple dashes
-        remaining_text = re.sub(r"-\d{1,2}$", "", remaining_text).strip()  # Remove trailing dash+digits (e.g., "-01")
         remaining_text = re.sub(
-            r"\s+\d{1,2}$", "", remaining_text
+            TITLE_CLEANUP_TRAILING_DASH_DIGITS, "", remaining_text
+        ).strip()  # Remove trailing dash+digits (e.g., "-01")
+        remaining_text = re.sub(
+            TITLE_CLEANUP_TRAILING_SPACE_DIGITS, "", remaining_text
         ).strip()  # Remove trailing space+digits (e.g., " 01")
 
         if remaining_text:

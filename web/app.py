@@ -35,7 +35,7 @@ from web.routers import (
     discovery,
     downloads,
     imports,
-    metadata,
+    constants_router,
     ocr_queue,
     pages,
     periodicals,
@@ -88,7 +88,16 @@ scheduler_task = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown"""
-    global download_client, download_manager, download_monitor_task, cover_cleanup_task, title_matcher, file_processor, file_importer, task_scheduler, scheduler_task
+    global \
+        download_client, \
+        download_manager, \
+        download_monitor_task, \
+        cover_cleanup_task, \
+        title_matcher, \
+        file_processor, \
+        file_importer, \
+        task_scheduler, \
+        scheduler_task
 
     # Startup
     try:
@@ -97,7 +106,9 @@ async def lifespan(app: FastAPI):
         for provider_config in search_provider_configs:
             try:
                 if not provider_config.get("type"):
-                    logger.warning(f"Skipping provider with no type: {provider_config.get('name')}")
+                    logger.warning(
+                        f"Skipping provider with no type: {provider_config.get('name')}"
+                    )
                     continue
 
                 # Check if provider is properly configured
@@ -109,7 +120,9 @@ async def lifespan(app: FastAPI):
                     logger.warning("Skipping RSS provider: Feed URL not configured")
                     continue
 
-                logger.debug(f"Creating search provider: {provider_config.get('name')} (type: {provider_type})")
+                logger.debug(
+                    f"Creating search provider: {provider_config.get('name')} (type: {provider_type})"
+                )
                 provider = ProviderFactory.create(provider_config)
                 search_providers.append(provider)
                 logger.info(f"Loaded search provider: {provider.name}")
@@ -123,13 +136,17 @@ async def lifespan(app: FastAPI):
         try:
             client_config = config_loader.get_download_client()
             if not client_config.get("api_key"):
-                logger.warning("Download client not available: API key not configured (configure in Settings)")
+                logger.warning(
+                    "Download client not available: API key not configured (configure in Settings)"
+                )
                 download_client = None
             else:
                 download_client = ClientFactory.create(client_config)
                 logger.info(f"Loaded download client: {download_client.name}")
         except Exception as e:
-            logger.warning(f"Download client not available (configure in Settings): {e}")
+            logger.warning(
+                f"Download client not available (configure in Settings): {e}"
+            )
             download_client = None
 
         # Initialize other components
@@ -169,7 +186,9 @@ async def lifespan(app: FastAPI):
             )
             logger.info("Download monitor task initialized")
         else:
-            logger.warning("Download manager not initialized: missing download client or search providers")
+            logger.warning(
+                "Download manager not initialized: missing download client or search providers"
+            )
 
         # Initialize cover cleanup task
         cover_cleanup_task = CoverCleanup(
@@ -230,13 +249,19 @@ async def lifespan(app: FastAPI):
                     if not download_manager:
                         return
 
-                    logger.debug("Auto-download: Starting Issue Discovery & Tracking run")
+                    logger.debug(
+                        "Auto-download: Starting Issue Discovery & Tracking run"
+                    )
 
                     # Phase 1: Select periodicals to search (adaptive scheduling)
-                    periodicals_to_search = search_scheduler.select_periodicals_to_search(db_session)
+                    periodicals_to_search = (
+                        search_scheduler.select_periodicals_to_search(db_session)
+                    )
 
                     if not periodicals_to_search:
-                        logger.debug("Auto-download: No periodicals need searching at this time")
+                        logger.debug(
+                            "Auto-download: No periodicals need searching at this time"
+                        )
                         return
 
                     logger.info(
@@ -247,15 +272,23 @@ async def lifespan(app: FastAPI):
                     # Phase 2: Search each selected periodical and record results
                     for periodical in periodicals_to_search:
                         try:
-                            logger.debug(f"Auto-download: Searching for '{periodical.title}'")
+                            logger.debug(
+                                f"Auto-download: Searching for '{periodical.title}'"
+                            )
 
                             # Search all providers for this periodical
-                            search_results = download_manager.search_periodical_issues(periodical.title, db_session)
+                            search_results = download_manager.search_periodical_issues(
+                                periodical.title, db_session
+                            )
 
                             if not search_results:
-                                logger.debug(f"Auto-download: No results found for '{periodical.title}'")
+                                logger.debug(
+                                    f"Auto-download: No results found for '{periodical.title}'"
+                                )
                                 # Update stats with 0 new issues
-                                search_scheduler.update_search_stats(periodical.id, 0, db_session)
+                                search_scheduler.update_search_stats(
+                                    periodical.id, 0, db_session
+                                )
                                 continue
 
                             logger.debug(
@@ -263,8 +296,10 @@ async def lifespan(app: FastAPI):
                             )
 
                             # Record search results as discovered issues
-                            record_stats = issue_discovery_service.record_search_results(
-                                periodical.id, search_results, db_session
+                            record_stats = (
+                                issue_discovery_service.record_search_results(
+                                    periodical.id, search_results, db_session
+                                )
                             )
 
                             # Only log if we found NEW issues (not just updated existing ones)
@@ -274,7 +309,11 @@ async def lifespan(app: FastAPI):
                                 )
 
                             # Evaluate discovered issues against tracking rules
-                            eval_stats = issue_discovery_service.evaluate_discovered_issues(periodical.id, db_session)
+                            eval_stats = (
+                                issue_discovery_service.evaluate_discovered_issues(
+                                    periodical.id, db_session
+                                )
+                            )
 
                             # Only log evaluation if we have wanted issues
                             if eval_stats["wanted"] > 0:
@@ -283,7 +322,9 @@ async def lifespan(app: FastAPI):
                                 )
 
                             # Update search statistics (for adaptive scheduling)
-                            search_scheduler.update_search_stats(periodical.id, record_stats["new"], db_session)
+                            search_scheduler.update_search_stats(
+                                periodical.id, record_stats["new"], db_session
+                            )
 
                         except Exception as e:
                             logger.error(
@@ -310,23 +351,33 @@ async def lifespan(app: FastAPI):
                         .count()
                     )
 
-                    remaining_slots = max(0, download_manager.max_downloads - pending_count)
+                    remaining_slots = max(
+                        0, download_manager.max_downloads - pending_count
+                    )
                     logger.debug(
                         f"Auto-download: {remaining_slots} download slots available ({pending_count} in progress)"
                     )
 
                     if remaining_slots > 0:
                         # Get top priority issues from queue
-                        download_queue = issue_discovery_service.get_download_queue(db_session, limit=remaining_slots)
+                        download_queue = issue_discovery_service.get_download_queue(
+                            db_session, limit=remaining_slots
+                        )
 
                         if download_queue:
-                            logger.info(f"Auto-download: Submitting {len(download_queue)} issues for download")
+                            logger.info(
+                                f"Auto-download: Submitting {len(download_queue)} issues for download"
+                            )
 
                             submitted_count = 0
                             for issue in download_queue:
                                 try:
                                     # Submit download using new method
-                                    submission = download_manager.submit_from_discovered_issue(issue.id, db_session)
+                                    submission = (
+                                        download_manager.submit_from_discovered_issue(
+                                            issue.id, db_session
+                                        )
+                                    )
 
                                     if submission:
                                         submitted_count += 1
@@ -347,9 +398,13 @@ async def lifespan(app: FastAPI):
                                     )
 
                             if submitted_count > 0:
-                                logger.info(f"Auto-download: Successfully submitted {submitted_count} downloads")
+                                logger.info(
+                                    f"Auto-download: Successfully submitted {submitted_count} downloads"
+                                )
 
-                    logger.debug("Auto-download: Completed Issue Discovery & Tracking run")
+                    logger.debug(
+                        "Auto-download: Completed Issue Discovery & Tracking run"
+                    )
 
                 finally:
                     db_session.close()
@@ -364,8 +419,12 @@ async def lifespan(app: FastAPI):
                     from datetime import datetime, timedelta
 
                     # Update next run time before execution
-                    interval = tasks_config.get("download_monitor_interval", constants.DOWNLOAD_MONITOR_INTERVAL)
-                    download_monitor_task.next_run_time = datetime.now() + timedelta(seconds=interval)
+                    interval = tasks_config.get(
+                        "download_monitor_interval", constants.DOWNLOAD_MONITOR_INTERVAL
+                    )
+                    download_monitor_task.next_run_time = datetime.now() + timedelta(
+                        seconds=interval
+                    )
 
                     await download_monitor_task.run()
                 except Exception as e:
@@ -383,8 +442,12 @@ async def lifespan(app: FastAPI):
                 from datetime import datetime, timedelta
 
                 # Update next run time before execution
-                interval = tasks_config.get("ocr_processor_interval", constants.OCR_PROCESSOR_INTERVAL)
-                ocr_processor_task.next_run_time = datetime.now() + timedelta(seconds=interval)
+                interval = tasks_config.get(
+                    "ocr_processor_interval", constants.OCR_PROCESSOR_INTERVAL
+                )
+                ocr_processor_task.next_run_time = datetime.now() + timedelta(
+                    seconds=interval
+                )
 
                 stats = await ocr_processor_task.run()
                 if stats.get("processed", 0) > 0:
@@ -410,25 +473,33 @@ async def lifespan(app: FastAPI):
         task_scheduler.schedule_periodic(
             "auto_download",
             auto_download_task,
-            tasks_config.get("auto_download_interval", constants.AUTO_DOWNLOAD_INTERVAL),
+            tasks_config.get(
+                "auto_download_interval", constants.AUTO_DOWNLOAD_INTERVAL
+            ),
         )
 
         task_scheduler.schedule_periodic(
             "download_monitor",
             download_monitoring_task,
-            tasks_config.get("download_monitor_interval", constants.DOWNLOAD_MONITOR_INTERVAL),
+            tasks_config.get(
+                "download_monitor_interval", constants.DOWNLOAD_MONITOR_INTERVAL
+            ),
         )
 
         task_scheduler.schedule_periodic(
             "cleanup_orphaned_covers",
             cleanup_orphaned_covers_task,
-            tasks_config.get("cleanup_covers_interval", constants.CLEANUP_COVERS_INTERVAL),
+            tasks_config.get(
+                "cleanup_covers_interval", constants.CLEANUP_COVERS_INTERVAL
+            ),
         )
 
         task_scheduler.schedule_periodic(
             "ocr_processor",
             ocr_processing_task,
-            tasks_config.get("ocr_processor_interval", constants.OCR_PROCESSOR_INTERVAL),
+            tasks_config.get(
+                "ocr_processor_interval", constants.OCR_PROCESSOR_INTERVAL
+            ),
         )
 
         task_scheduler.schedule_periodic(
@@ -447,8 +518,12 @@ async def lifespan(app: FastAPI):
         # Set auth manager and middleware in app state for FastAPI dependency injection
         app.state.auth_manager = auth_manager
         app.state.auth_middleware = AuthMiddleware(auth_manager)
-        search.set_dependencies(search_providers, metadata_providers, title_matcher, session_factory)
-        periodicals.set_dependencies(session_factory, storage_config.get("organize_dir", "./"))
+        search.set_dependencies(
+            search_providers, metadata_providers, title_matcher, session_factory
+        )
+        periodicals.set_dependencies(
+            session_factory, storage_config.get("organize_dir", "./")
+        )
         tracking.set_dependencies(
             session_factory,
             search_providers,
@@ -476,7 +551,9 @@ async def lifespan(app: FastAPI):
             search_scheduler,
         )
 
-        logger.info("Curator initialized successfully with auto-import and download monitoring enabled")
+        logger.info(
+            "Curator initialized successfully with auto-import and download monitoring enabled"
+        )
 
     except Exception as e:
         logger.error(f"Startup error: {e}")
@@ -570,7 +647,9 @@ async def get_status():
     return {
         "status": "running",
         "providers": [p.get_provider_info() for p in search_providers],
-        "download_client": (download_client.get_client_info() if download_client else None),
+        "download_client": (
+            download_client.get_client_info() if download_client else None
+        ),
     }
 
 
@@ -578,7 +657,7 @@ async def get_status():
 # Note: tracking must come before periodicals to avoid route conflicts
 # (/periodicals/tracking must match before /periodicals/{magazine_id})
 app.include_router(auth.router)
-app.include_router(metadata.router)
+app.include_router(constants_router.router)
 app.include_router(search.router)
 app.include_router(tracking.router)
 app.include_router(periodicals.router)
@@ -600,4 +679,6 @@ if __name__ == "__main__":
     import uvicorn
 
     server_config = config_loader.get_server()
-    uvicorn.run(app, host=server_config["host"], port=server_config["port"], access_log=False)
+    uvicorn.run(
+        app, host=server_config["host"], port=server_config["port"], access_log=False
+    )

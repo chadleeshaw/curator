@@ -9,7 +9,8 @@ from pathlib import Path
 
 # Path setup handled by conftest.py
 
-from core.parsers.metadata import MetadataExtractor, parse_month, parse_multi_month
+from core.parsers.metadata import MetadataExtractor
+from core.utils.date import parse_month, parse_multi_month
 
 
 def test_metadata_extractor_initialization():
