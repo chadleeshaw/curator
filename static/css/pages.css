@@ -452,6 +452,15 @@
   gap: 15px;
 }
 
+.library-search-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
 .library-controls-row {
   display: flex;
   justify-content: space-between;

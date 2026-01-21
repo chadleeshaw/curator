@@ -94,27 +94,37 @@
             </div>
           </div>
 
-          <!-- Import Buttons with Filter -->
-          <div class="library-controls-row mb-40">
-            <div style="display: flex; gap: 10px; flex-wrap: wrap">
-              <button onclick="checkAndImportDownloads()" class="btn-primary import-button-group">
-                📁 Import Downloads Folder
-              </button>
-              <button onclick="importFromOrganizeDir()" class="btn-primary import-button-group">
-                📁 Import Data Folder
-              </button>
+          <!-- Search and Filter Bar -->
+          <div class="library-search-row mb-20">
+            <div class="search-input-wrapper" style="flex: 1; max-width: 500px">
+              <input
+                type="text"
+                id="library-search-input"
+                placeholder="🔍 Search by title..."
+                oninput="onLibrarySearchInput(this.value)"
+                style="
+                  width: 100%;
+                  padding: 10px 14px;
+                  border: 1px solid var(--border-color);
+                  border-radius: 6px;
+                  background: var(--surface);
+                  color: var(--text-primary);
+                  font-size: 14px;
+                "
+              />
             </div>
 
-            <!-- Category Filter Dropdown -->
-            <div style="display: flex; gap: 10px; align-items: center">
+            <!-- Filter Controls -->
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap">
+              <!-- Category Filter -->
               <label
                 for="library-category-filter"
                 style="color: var(--text-secondary); font-size: 0.9em; font-weight: 500"
-                >Filter:</label
+                >Category:</label
               >
               <select
                 id="library-category-filter"
-                onchange="setLibraryFilter(this.value)"
+                onchange="setLibraryFilter('category', this.value)"
                 style="
                   padding: 8px 12px;
                   border: 1px solid var(--border-color);
@@ -136,6 +146,59 @@
                 <option value="all">All</option>
                 <!-- Categories loaded dynamically from API -->
               </select>
+
+              <!-- Language Filter -->
+              <label
+                for="library-language-filter"
+                style="color: var(--text-secondary); font-size: 0.9em; font-weight: 500"
+                >Language:</label
+              >
+              <select
+                id="library-language-filter"
+                onchange="setLibraryFilter('language', this.value)"
+                style="
+                  padding: 8px 12px;
+                  border: 1px solid var(--border-color);
+                  border-radius: 6px;
+                  background: var(--surface);
+                  color: var(--text-primary);
+                  font-size: 14px;
+                  cursor: pointer;
+                  -webkit-appearance: none;
+                  -moz-appearance: none;
+                  appearance: none;
+                  background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23f0f0f0%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3e%3cpolyline points=%226 9 12 15 18 9%22%3e%3c/polyline%3e%3c/svg%3e');
+                  background-repeat: no-repeat;
+                  background-position: right 10px center;
+                  background-size: 16px;
+                  padding-right: 35px;
+                "
+              >
+                <option value="all">All</option>
+                <!-- Languages loaded dynamically -->
+              </select>
+
+              <!-- Clear Filters Button -->
+              <button
+                onclick="clearLibraryFilters()"
+                class="btn-secondary"
+                style="padding: 8px 14px; font-size: 13px"
+                title="Clear all filters and search"
+              >
+                ✕ Clear
+              </button>
+            </div>
+          </div>
+
+          <!-- Import Buttons -->
+          <div class="library-controls-row mb-40">
+            <div style="display: flex; gap: 10px; flex-wrap: wrap">
+              <button onclick="checkAndImportDownloads()" class="btn-primary import-button-group">
+                📁 Import Downloads Folder
+              </button>
+              <button onclick="importFromOrganizeDir()" class="btn-primary import-button-group">
+                📁 Import Data Folder
+              </button>
             </div>
           </div>
 
@@ -1704,16 +1767,29 @@
         </div>
 
         <div class="settings-field">
-          <label for="edit-tracking-org-pattern">File Organization Pattern:</label>
+          <label for="edit-tracking-pattern-select">File Organization Pattern:</label>
+          <select
+            id="edit-tracking-pattern-select"
+            onchange="handlePatternSelectChange('edit-tracking')"
+            class="w-full"
+          >
+            <option value="">Use global default</option>
+            <option value="default">{category}/{title}/{year}/ - Year-based (default)</option>
+            <option value="volume">{category}/{title}/Vol{volume}/ - Volume-based</option>
+            <option value="flat">{category}/{title}/ - Flat structure</option>
+            <option value="volume_year">{category}/{title}/Vol{volume}/{year}/ - Hybrid</option>
+            <option value="issue">{category}/{title}/Issues {issue_range}/ - Issue-based</option>
+            <option value="custom">Custom pattern...</option>
+          </select>
           <input
             type="text"
-            id="edit-tracking-org-pattern"
-            placeholder="Leave empty to use global default"
-            class="w-full"
+            id="edit-tracking-pattern-custom"
+            placeholder="{category}/{title}/{year}/"
+            class="w-full mt-8 hidden"
           />
           <p class="text-sm text-hint mt-8">
-            Available tags: {category}, {title}, {year}, {month}, {day}. Example:
-            "{category}/{title}/{year}/"
+            Available tags: {category}, {title}, {year}, {month}, {day}, {volume}, {issue},
+            {language}
           </p>
         </div>
 
@@ -1922,6 +1998,33 @@
               </option>
               <option value="all">Track All Issues - Download all past and future issues</option>
             </select>
+          </div>
+
+          <div class="settings-field">
+            <label>Organization Pattern (optional):</label>
+            <select
+              id="new-tracking-pattern-select"
+              onchange="handlePatternSelectChange('new-tracking')"
+              class="w-full"
+            >
+              <option value="">Use global default</option>
+              <option value="default">{category}/{title}/{year}/ - Year-based (default)</option>
+              <option value="volume">{category}/{title}/Vol{volume}/ - Volume-based</option>
+              <option value="flat">{category}/{title}/ - Flat structure</option>
+              <option value="volume_year">{category}/{title}/Vol{volume}/{year}/ - Hybrid</option>
+              <option value="issue">{category}/{title}/Issues {issue_range}/ - Issue-based</option>
+              <option value="custom">Custom pattern...</option>
+            </select>
+            <input
+              type="text"
+              id="new-tracking-pattern-custom"
+              placeholder="{category}/{title}/{year}/"
+              class="w-full mt-8 hidden"
+            />
+            <small style="color: var(--text-secondary); display: block; margin-top: 5px">
+              Override the default pattern for this periodical. Useful for journals with volumes or
+              series without dates.
+            </small>
           </div>
 
           <div class="flex gap-10 mt-20">

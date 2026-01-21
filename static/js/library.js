@@ -30,6 +30,12 @@ export class LibraryManager {
     this.sortManager = new SortManager('title', 'asc', () => this.loadPeriodicals());
     /** @type {string} Current category filter */
     this.categoryFilter = 'all';
+    /** @type {string} Current language filter */
+    this.languageFilter = 'all';
+    /** @type {string} Current search query */
+    this.searchQuery = '';
+    /** @type {Array} All periodicals loaded from API (unfiltered) */
+    this.allPeriodicals = [];
     /** @type {number|null} ID of periodical pending deletion */
     this.pendingDeleteId = null;
     /** @type {string|null} Title of periodical pending deletion */
@@ -49,6 +55,34 @@ export class LibraryManager {
 
     // Load categories on initialization
     this.loadCategories();
+
+    // Load saved filter state from localStorage
+    this.loadFilterState();
+
+    // Setup keyboard shortcuts
+    this.setupKeyboardShortcuts();
+  }
+
+  /**
+   * Setup keyboard shortcuts for library
+   *
+   * @returns {void}
+   */
+  setupKeyboardShortcuts() {
+    document.addEventListener('keydown', (e) => {
+      // Ctrl+F or Cmd+F to focus search (only on library tab)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        const libraryTab = document.getElementById('library-tab');
+        if (libraryTab && libraryTab.classList.contains('active')) {
+          e.preventDefault();
+          const searchInput = document.getElementById('library-search-input');
+          if (searchInput) {
+            searchInput.focus();
+            searchInput.select();
+          }
+        }
+      }
+    });
   }
 
   /**
@@ -135,6 +169,56 @@ export class LibraryManager {
   }
 
   /**
+   * Load saved filter state from localStorage
+   *
+   * @returns {void}
+   */
+  loadFilterState() {
+    try {
+      const saved = localStorage.getItem('libraryFilters');
+      if (saved) {
+        const filters = JSON.parse(saved);
+        this.categoryFilter = filters.category || 'all';
+        this.languageFilter = filters.language || 'all';
+        this.searchQuery = filters.search || '';
+
+        // Update UI elements
+        const categoryDropdown = document.getElementById('library-category-filter');
+        if (categoryDropdown) categoryDropdown.value = this.categoryFilter;
+
+        const languageDropdown = document.getElementById('library-language-filter');
+        if (languageDropdown) languageDropdown.value = this.languageFilter;
+
+        const searchInput = document.getElementById('library-search-input');
+        if (searchInput) searchInput.value = this.searchQuery;
+
+        console.log('[Library] Loaded saved filter state:', filters);
+      }
+    } catch (error) {
+      console.warn('[Library] Failed to load saved filters:', error);
+    }
+  }
+
+  /**
+   * Save current filter state to localStorage
+   *
+   * @returns {void}
+   */
+  saveFilterState() {
+    try {
+      const filters = {
+        category: this.categoryFilter,
+        language: this.languageFilter,
+        search: this.searchQuery,
+      };
+      localStorage.setItem('libraryFilters', JSON.stringify(filters));
+      console.log('[Library] Saved filter state:', filters);
+    } catch (error) {
+      console.warn('[Library] Failed to save filters:', error);
+    }
+  }
+
+  /**
    * Populate the category filter dropdown with categories
    *
    * @param {string[]} categories - Array of category names
@@ -173,40 +257,135 @@ export class LibraryManager {
       );
       const data = await response.json();
 
-      const grid = document.getElementById('periodicals-grid');
-      grid.innerHTML = '';
+      // Store all periodicals unfiltered
+      this.allPeriodicals = data.periodicals || [];
 
-      let { periodicals } = data;
+      // Extract unique languages for language filter
+      this.populateLanguageDropdown();
 
-      // Apply category filter
-      if (this.categoryFilter !== 'all') {
-        periodicals = periodicals.filter((p) => {
-          const category = p.metadata?.category || 'Unknown';
-          return category === this.categoryFilter;
-        });
-      }
+      // Apply filters and render
+      this.applyFiltersAndRender();
+    } catch (error) {
+      console.error('[Library] Failed to load periodicals:', error);
+    }
+  }
 
-      if (periodicals.length === 0) {
-        const filterText = this.categoryFilter !== 'all' ? ` in ${this.categoryFilter}` : '';
-        grid.innerHTML = `<p>No periodicals${filterText} in library yet</p>`;
-        // Update header stats
-        if (window.updateHeaderStats) {
-          window.updateHeaderStats();
-        }
-        return;
-      }
+  /**
+   * Apply current filters and render the filtered periodicals
+   *
+   * @returns {void}
+   */
+  applyFiltersAndRender() {
+    const grid = document.getElementById('periodicals-grid');
+    grid.innerHTML = '';
 
-      periodicals.forEach((periodical) => {
-        grid.appendChild(this.createPeriodicalCard(periodical));
+    let filtered = [...this.allPeriodicals];
+
+    // Apply category filter
+    if (this.categoryFilter !== 'all') {
+      filtered = filtered.filter((p) => {
+        const category = p.metadata?.category || 'Unknown';
+        return category === this.categoryFilter;
       });
+    }
 
+    // Apply language filter
+    if (this.languageFilter !== 'all') {
+      filtered = filtered.filter((p) => {
+        const language = p.language || 'English';
+        return language === this.languageFilter;
+      });
+    }
+
+    // Apply search query
+    if (this.searchQuery.trim()) {
+      const query = this.searchQuery.toLowerCase().trim();
+      filtered = filtered.filter((p) => {
+        const title = (p.title || '').toLowerCase();
+        return title.includes(query);
+      });
+    }
+
+    // Render results
+    if (filtered.length === 0) {
+      const filterDesc = this.getActiveFilterDescription();
+      grid.innerHTML = `<p>No periodicals found${filterDesc}</p>`;
       // Update header stats
       if (window.updateHeaderStats) {
         window.updateHeaderStats();
       }
-    } catch (error) {
-      console.error('[Library] Failed to load periodicals:', error);
+      return;
     }
+
+    filtered.forEach((periodical) => {
+      grid.appendChild(this.createPeriodicalCard(periodical));
+    });
+
+    // Update header stats
+    if (window.updateHeaderStats) {
+      window.updateHeaderStats();
+    }
+
+    console.log(
+      `[Library] Rendered ${filtered.length} of ${this.allPeriodicals.length} periodicals`
+    );
+  }
+
+  /**
+   * Get a description of currently active filters for display
+   *
+   * @returns {string} Description of active filters (e.g., " matching 'comics' in Magazines")
+   */
+  getActiveFilterDescription() {
+    const parts = [];
+
+    if (this.searchQuery.trim()) {
+      parts.push(`matching '${this.searchQuery}'`);
+    }
+
+    if (this.categoryFilter !== 'all') {
+      parts.push(`in ${this.categoryFilter}`);
+    }
+
+    if (this.languageFilter !== 'all') {
+      parts.push(`(${this.languageFilter})`);
+    }
+
+    return parts.length > 0 ? ' ' + parts.join(' ') : '';
+  }
+
+  /**
+   * Populate the language filter dropdown with unique languages from library
+   *
+   * @returns {void}
+   */
+  populateLanguageDropdown() {
+    const dropdown = document.getElementById('library-language-filter');
+    if (!dropdown) return;
+
+    // Extract unique languages
+    const languages = new Set();
+    this.allPeriodicals.forEach((p) => {
+      const lang = p.language || 'English';
+      languages.add(lang);
+    });
+
+    // Sort languages alphabetically
+    const sortedLanguages = Array.from(languages).sort();
+
+    // Keep the "All" option
+    dropdown.innerHTML = '<option value="all">All</option>';
+
+    // Add each language as an option
+    sortedLanguages.forEach((language) => {
+      const option = document.createElement('option');
+      option.value = language;
+      option.textContent = language;
+      dropdown.appendChild(option);
+    });
+
+    // Restore saved selection
+    dropdown.value = this.languageFilter;
   }
 
   /**
@@ -265,24 +444,91 @@ export class LibraryManager {
   }
 
   /**
-   * Set the category filter for the library
+   * Set a filter for the library
    *
-   * @param {string} category - The category to filter by ('all', 'Magazines', 'Comics', 'News', 'Articles')
+   * @param {string} filterType - The type of filter ('category' or 'language')
+   * @param {string} value - The filter value
    * @returns {void}
    *
    * @example
-   * library.setLibraryFilter('Comics');
+   * library.setLibraryFilter('category', 'Comics');
+   * library.setLibraryFilter('language', 'English');
    */
-  setLibraryFilter(category) {
-    this.categoryFilter = category;
+  setLibraryFilter(filterType, value) {
+    if (filterType === 'category') {
+      this.categoryFilter = value;
 
-    // Update dropdown selection
-    const dropdown = document.getElementById('library-category-filter');
-    if (dropdown) {
-      dropdown.value = category;
+      // Update dropdown selection
+      const dropdown = document.getElementById('library-category-filter');
+      if (dropdown) {
+        dropdown.value = value;
+      }
+    } else if (filterType === 'language') {
+      this.languageFilter = value;
+
+      // Update dropdown selection
+      const dropdown = document.getElementById('library-language-filter');
+      if (dropdown) {
+        dropdown.value = value;
+      }
     }
 
-    this.loadPeriodicals();
+    // Save filter state
+    this.saveFilterState();
+
+    // Re-apply filters
+    this.applyFiltersAndRender();
+  }
+
+  /**
+   * Handle search input changes
+   *
+   * @param {string} query - The search query
+   * @returns {void}
+   *
+   * @example
+   * library.onSearchInput('national geographic');
+   */
+  onSearchInput(query) {
+    this.searchQuery = query;
+
+    // Save filter state
+    this.saveFilterState();
+
+    // Re-apply filters (debounced would be better for performance, but simple for now)
+    this.applyFiltersAndRender();
+  }
+
+  /**
+   * Clear all filters and search
+   *
+   * @returns {void}
+   *
+   * @example
+   * library.clearFilters();
+   */
+  clearFilters() {
+    this.categoryFilter = 'all';
+    this.languageFilter = 'all';
+    this.searchQuery = '';
+
+    // Update UI elements
+    const categoryDropdown = document.getElementById('library-category-filter');
+    if (categoryDropdown) categoryDropdown.value = 'all';
+
+    const languageDropdown = document.getElementById('library-language-filter');
+    if (languageDropdown) languageDropdown.value = 'all';
+
+    const searchInput = document.getElementById('library-search-input');
+    if (searchInput) searchInput.value = '';
+
+    // Save cleared state
+    this.saveFilterState();
+
+    // Re-apply filters (will show all)
+    this.applyFiltersAndRender();
+
+    console.log('[Library] Cleared all filters');
   }
 
   /**
@@ -637,7 +883,9 @@ console.log('[Library] LibraryManager singleton created:', library);
 // Expose functions globally for onclick handlers
 window.setLibrarySortField = (field) => library.setLibrarySortField(field);
 window.toggleLibrarySortOrder = () => library.toggleLibrarySortOrder();
-window.setLibraryFilter = (category) => library.setLibraryFilter(category);
+window.setLibraryFilter = (filterType, value) => library.setLibraryFilter(filterType, value);
+window.onLibrarySearchInput = (query) => library.onSearchInput(query);
+window.clearLibraryFilters = () => library.clearFilters();
 window.deletePeriodical = (id, title, issueCount) => {
   console.log('[Library] window.deletePeriodical called with:', id, title, issueCount);
   return library.deletePeriodical(id, title, issueCount);
