@@ -36,6 +36,40 @@ class FileOrganizer:
     # Pattern: {Title} - {MonYear} (e.g., "Wired Periodical - Dec2006")
     ORGANIZED_PATTERN = "{title} - {month}{year}"
 
+    # Organization pattern registry
+    ORGANIZATION_PATTERNS = {
+        # Default: Simple year-based structure
+        "default": {
+            "description": "Simple category > title > year structure",
+            "template": "{category}/{title}/{year}/",
+            "requires_date": True,
+        },
+        # Volume-based: For periodicals with volume numbers but no dates
+        "volume": {
+            "description": "Category > title > volume structure (for series with volume numbers)",
+            "template": "{category}/{title}/Vol{volume}/",
+            "requires_date": False,
+        },
+        # Flat: All issues in title folder
+        "flat": {
+            "description": "Flat structure without subdirectories",
+            "template": "{category}/{title}/",
+            "requires_date": False,
+        },
+        # Volume-Year: Hybrid structure
+        "volume_year": {
+            "description": "Category > title > volume > year (best for academic journals)",
+            "template": "{category}/{title}/Vol{volume}/{year}/",
+            "requires_date": True,
+        },
+        # Issue-based: For numbered series without dates
+        "issue": {
+            "description": "Category > title > issue range (for numbered series)",
+            "template": "{category}/{title}/Issues {issue_range}/",
+            "requires_date": False,
+        },
+    }
+
     def __init__(self, organize_dir: str, category_prefix: str = "_"):
         """
         Initialize file organizer.
@@ -124,19 +158,21 @@ class FileOrganizer:
         safe_title: str,
         volume: Optional[int],
         issue_number: Optional[int],
-        month: str,
-        year: str,
+        month: Optional[str],
+        year: Optional[str],
         extension: str = ".pdf",
     ) -> str:
         """
         Build organized filename with optional volume and issue information.
 
+        Supports files with volume/issue but no date information.
+
         Args:
             safe_title: Sanitized title
             volume: Volume number (optional)
             issue_number: Issue number (optional)
-            month: Month abbreviation (e.g., "Dec")
-            year: Year (e.g., "2006")
+            month: Month abbreviation (e.g., "Dec") - optional if volume/issue present
+            year: Year (e.g., "2006") - optional if volume/issue present
             extension: File extension (default: ".pdf")
 
         Returns:
@@ -146,11 +182,14 @@ class FileOrganizer:
             >>> organizer._build_filename("Wired", 5, 12, "Dec", "2024")
             'Wired - Vol5 - No12 - Dec2024.pdf'
 
+            >>> organizer._build_filename("Science", 385, None, None, None)
+            'Science - Vol385.pdf'
+
+            >>> organizer._build_filename("Comic", None, 123, None, None)
+            'Comic - No123.pdf'
+
             >>> organizer._build_filename("Nature", None, None, "Jan", "2023")
             'Nature - Jan2023.pdf'
-
-            >>> organizer._build_filename("Pride", None, None, "Jan", "2026", ".epub")
-            'Pride - Jan2026.epub'
         """
         filename_parts = [safe_title]
 
@@ -163,9 +202,17 @@ class FileOrganizer:
         if issue_number:
             filename_parts.append(f"{ISSUE_PREFIX}{issue_number}")
 
-        # Add date last (e.g., "Dec2024")
+        # Add date if both month and year are present (e.g., "Dec2024")
         # This ensures consistent sorting and readability
-        filename_parts.append(f"{month}{year}")
+        if month and year:
+            filename_parts.append(f"{month}{year}")
+        elif volume or issue_number:
+            # If we have volume/issue but no date, that's okay
+            pass
+        else:
+            # No volume, issue, or date - use "Unknown" as fallback
+            filename_parts.append("Unknown")
+            logger.warning(f"No date, volume, or issue number for {safe_title} - using 'Unknown'")
 
         # Join with separator to create final filename
         # Example: "Wired - Vol5 - No12 - Dec2024.pdf"
@@ -221,23 +268,26 @@ class FileOrganizer:
         category_with_prefix: str,
         safe_title: str,
         language: str,
-        year: str,
-        month: str,
-        day: str,
+        year: Optional[str],
+        month: Optional[str],
+        day: Optional[str],
         issue_number: Optional[int],
         volume: Optional[int],
     ) -> Path:
         """
         Build directory from pattern with tag substitution.
 
+        Supports optional date fields - uses "Unknown" for missing year/month/day
+        when they appear in the pattern.
+
         Args:
             pattern: Pattern string with {tags}
             category_with_prefix: Category name with prefix
             safe_title: Sanitized title
             language: Language
-            year: Year
-            month: Month abbreviation
-            day: Day
+            year: Year (optional)
+            month: Month abbreviation (optional)
+            day: Day (optional)
             issue_number: Issue number (optional)
             volume: Volume number (optional)
 
@@ -248,9 +298,9 @@ class FileOrganizer:
             "category": category_with_prefix,
             "title": safe_title,
             "language": language,
-            "year": year,
-            "month": month,
-            "day": day,
+            "year": year or "Unknown",
+            "month": month or "Unknown",
+            "day": day or "Unknown",
             "issue": str(issue_number) if issue_number else "",
             "volume": str(volume) if volume else "",
         }
@@ -293,6 +343,8 @@ class FileOrganizer:
         Move and rename PDF to organized location based on pattern.
 
         Pattern-based organization with support for subdirectories and tags.
+        Automatically selects appropriate pattern when date information is missing.
+
         Available pattern tags:
           {category}, {title}, {year}, {month}, {day}, {language}
           {issue} - Issue number (if available)
@@ -302,7 +354,7 @@ class FileOrganizer:
             pdf_path: Original PDF path
             metadata: Extracted metadata
             category: Category name
-            pattern: Organization pattern with tags (optional, defaults to: {category}/{title}/{year}/)
+            pattern: Organization pattern with tags (optional, auto-selected if not provided)
 
         Returns:
             Path to organized file, or None if failed
@@ -310,16 +362,37 @@ class FileOrganizer:
         try:
             # Extract metadata
             title = metadata.get("title", pdf_path.stem)
-            issue_date = metadata.get("issue_date", datetime.now())
+            issue_date = metadata.get("issue_date")
             language = metadata.get("language", DEFAULT_LANGUAGE)
             issue_number = metadata.get("issue_number")
             volume = metadata.get("volume")
 
-            # Format date components
+            # Determine if we have reliable date information
+            # Check if issue_date was explicitly set (not defaulted to now())
+            has_date = issue_date is not None and metadata.get("year") is not None
+
+            # Format date components (use None if no reliable date)
             safe_title = sanitize_filename(title)
-            month = issue_date.strftime("%B")
-            year = issue_date.strftime("%Y")
-            day = issue_date.strftime("%d")
+            if has_date:
+                month = issue_date.strftime("%B")
+                year = issue_date.strftime("%Y")
+                day = issue_date.strftime("%d")
+            else:
+                # No reliable date - check if we have volume/issue to use instead
+                month = None
+                year = None
+                day = None
+                if volume or issue_number:
+                    logger.info(
+                        f"No date found for '{title}', using volume/issue-based organization "
+                        f"(Vol:{volume}, Issue:{issue_number})"
+                    )
+                else:
+                    # No date AND no volume/issue - warn and use fallback
+                    logger.warning(
+                        f"No date, volume, or issue number found for '{title}' - "
+                        f"file will be organized with 'Unknown' identifier"
+                    )
 
             # Preserve file extension (PDF, EPUB, CBZ, or CBR)
             extension = pdf_path.suffix.lower()
@@ -330,9 +403,26 @@ class FileOrganizer:
             # Apply category prefix
             category_with_prefix = f"{self.category_prefix}{category}"
 
+            # Auto-select pattern if not provided
+            if not pattern:
+                if not has_date and volume:
+                    # Has volume but no date - use volume-based pattern
+                    pattern = "{category}/{title}/Vol{volume}/"
+                    logger.info(f"Auto-selected volume-based organization pattern for '{title}'")
+                elif not has_date and issue_number:
+                    # Has issue but no date - use flat pattern (all in title folder)
+                    pattern = "{category}/{title}/"
+                    logger.info(f"Auto-selected flat organization pattern for '{title}'")
+                elif not has_date:
+                    # No date, volume, or issue - use flat pattern
+                    pattern = "{category}/{title}/"
+                    logger.warning(f"Using flat organization pattern for '{title}' (no metadata)")
+                # else: has_date, use default pattern below
+
             # Build target directory
             if not pattern:
-                target_dir = self._build_default_directory(category_with_prefix, safe_title, volume, year)
+                # Default pattern: {category}/{title}/{year}/
+                target_dir = self._build_default_directory(category_with_prefix, safe_title, volume, year or "Unknown")
             else:
                 target_dir = self._build_pattern_directory(
                     pattern,

@@ -49,6 +49,21 @@ storage:
   cache_dir: ./local/cache
 
 import:
+  # Organization pattern for file structure
+  # Available patterns (can also use custom pattern with {tags}):
+  #   '{category}/{title}/{year}/' - Default: organized by year (requires date)
+  #   '{category}/{title}/Vol{volume}/' - Volume-based (for series with volumes but no dates)
+  #   '{category}/{title}/' - Flat structure (all issues in title folder)
+  #   '{category}/{title}/Vol{volume}/{year}/' - Hybrid volume-year structure
+  #
+  # Available tags: {category}, {title}, {year}, {month}, {day}, {language}, {volume}, {issue}
+  #
+  # Smart auto-selection: If pattern is not specified or uses default, the system will
+  # automatically select the best pattern based on available metadata:
+  #   - Has date → uses year-based pattern
+  #   - Has volume but no date → uses volume-based pattern
+  #   - Has issue but no date → uses flat pattern
+  #   - No metadata → uses flat pattern with warning
   organization_pattern: '{category}/{title}/{year}/'
   auto_track_imports: true
   enable_text_scan: true # Enable direct text extraction from PDF/EPUB during import (fast)
