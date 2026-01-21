@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from core.database import DatabaseManager
+from core.constants.category import CATEGORIES
 from core.utils.metadata_builder import (
     build_derived_metadata,
     build_file_scan,
@@ -36,18 +37,25 @@ logger = logging.getLogger(__name__)
 class AutoMetadataService:
     """Service for automatic metadata backfilling and syncing"""
 
-    def __init__(self, db_manager: DatabaseManager, library_base_dir: Optional[str] = None):
+    def __init__(
+        self,
+        db_manager: DatabaseManager,
+        library_base_dir: Optional[str] = None,
+        category_prefix: str = "_",
+    ):
         """
         Initialize auto-metadata service
 
         Args:
             db_manager: Database manager instance
             library_base_dir: Optional library base directory for path resolution
+            category_prefix: Prefix for category folders (e.g., "_" for "_Magazines")
         """
         self.db_manager = db_manager
         self.parser = Parser()
         self.ocr_service = OCRQueueService(db_manager)
         self.library_base_dir = Path(library_base_dir) if library_base_dir else None
+        self.category_prefix = category_prefix
 
     def run_full_scan(self, session: Session) -> Dict[str, Any]:
         """
@@ -155,13 +163,8 @@ class AutoMetadataService:
         try:
             # Find the library folder marker (e.g., "_Magazines", "_Comics", etc.)
             parts = stored_path.parts
-            category_markers = [
-                "_Magazines",
-                "_Comics",
-                "_Articles",
-                "_News",
-                "_Newspapers",
-            ]
+            # Build category markers from constants (e.g., "_Magazines", "_Comics")
+            category_markers = [f"{self.category_prefix}{category}" for category in CATEGORIES]
 
             for i, part in enumerate(parts):
                 if part in category_markers:

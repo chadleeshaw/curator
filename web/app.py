@@ -409,7 +409,11 @@ async def lifespan(app: FastAPI):
                 from core.utils import run_in_thread
 
                 def _run_auto_metadata():
-                    service = AutoMetadataService(db_manager, library_base_dir=storage_config.get("library_dir"))
+                    service = AutoMetadataService(
+                        db_manager,
+                        library_base_dir=storage_config.get("library_dir"),
+                        category_prefix=category_prefix,
+                    )
                     session = session_factory()
                     try:
                         return service.run_full_scan(session)
@@ -483,7 +487,11 @@ async def lifespan(app: FastAPI):
         app.state.auth_manager = auth_manager
         app.state.auth_middleware = AuthMiddleware(auth_manager)
         search.set_dependencies(search_providers, metadata_providers, title_matcher, session_factory)
-        periodicals.set_dependencies(session_factory, storage_config.get("library_dir", "./"))
+        periodicals.set_dependencies(
+            session_factory,
+            storage_config.get("library_dir", "./"),
+            category_prefix=category_prefix,
+        )
         tracking.set_dependencies(
             session_factory,
             search_providers,

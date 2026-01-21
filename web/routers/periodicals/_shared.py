@@ -8,7 +8,8 @@ from typing import Callable, Optional, Tuple
 
 from fastapi import APIRouter
 
-from core.constants.date import MONTH_TO_NUMBER
+from core.constants.date import MONTH_TO_NUMBER, NUMBER_TO_MONTH_ABBR
+from core.constants.category import CATEGORIES
 
 router = APIRouter(prefix="/api", tags=["periodicals"])
 logger = logging.getLogger(__name__)
@@ -16,12 +17,18 @@ logger = logging.getLogger(__name__)
 # Global state (injected from main app)
 _session_factory = None
 _library_base_dir = None
+_category_prefix = "_"  # Default prefix for category folders
 
 
-def set_dependencies(session_factory: Callable, library_base_dir: Optional[str] = None) -> None:
+def set_dependencies(
+    session_factory: Callable,
+    library_base_dir: Optional[str] = None,
+    category_prefix: str = "_",
+) -> None:
     """Set dependencies from main app"""
-    global _session_factory, _library_base_dir
+    global _session_factory, _library_base_dir, _category_prefix
     _session_factory = session_factory
+    _category_prefix = category_prefix
     if library_base_dir:
         _library_base_dir = Path(library_base_dir)
 
@@ -57,13 +64,8 @@ def resolve_file_path(stored_path: str) -> Path:
 
         # Find the library folder marker (e.g., "_Magazines", "_Comics", etc.)
         parts = stored.parts
-        category_markers = [
-            "_Magazines",
-            "_Comics",
-            "_Articles",
-            "_News",
-            "_Newspapers",
-        ]
+        # Build category markers from constants (e.g., "_Magazines", "_Comics")
+        category_markers = [f"{_category_prefix}{category}" for category in CATEGORIES]
 
         for i, part in enumerate(parts):
             if part in category_markers:
@@ -119,22 +121,8 @@ def parse_month_string(month_str: Optional[str]) -> Tuple[int, str]:
     # Look up the month number
     month_num = MONTH_TO_NUMBER.get(first_month.lower(), 0)
 
-    # If not found, try common abbreviations
+    # If not found, default to 1
     if month_num == 0:
-        abbrev_map = {
-            "jan": 1,
-            "feb": 2,
-            "mar": 3,
-            "apr": 4,
-            "may": 5,
-            "jun": 6,
-            "jul": 7,
-            "aug": 8,
-            "sep": 9,
-            "oct": 10,
-            "nov": 11,
-            "dec": 12,
-        }
-        month_num = abbrev_map.get(first_month.lower()[:3], 1)
+        month_num = 1
 
     return month_num, month_str
