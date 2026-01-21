@@ -264,6 +264,7 @@ window.restoreSettingsTab = () => {
 // Make module instances globally available for inline event handlers
 window.ocrQueue = ocrQueue;
 window.downloads = downloads;
+window.tasks = tasks;
 
 // Export modules for debugging in console
 window.__modules = {
