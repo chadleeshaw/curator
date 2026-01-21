@@ -27,6 +27,7 @@ from core.utils.epub import extract_cover_from_epub
 from core.utils.cbz import extract_cover_from_cbz, extract_cover_from_cbr
 from core.parsers import sanitize_filename, detect_country
 from services.importer.sidecar import read_sidecar_file
+from services.importer.matcher import TrackingMatcher
 
 logger = logging.getLogger(__name__)
 
@@ -604,6 +605,138 @@ class FileOrganizer:
             return True
         return False
 
+    def auto_fix_tracking_ids(
+        self,
+        db_session: Any,
+        category: Optional[str] = None,
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Auto-fix incorrect or missing tracking_id values using fuzzy title matching.
+
+        This helps merge folders that should belong to the same tracking record
+        but have incorrect or missing tracking links.
+
+        Args:
+            db_session: Database session
+            category: Category to fix (None = all categories)
+            dry_run: If True, only report what would be fixed
+
+        Returns:
+            Dictionary with fix results
+        """
+        from models.database import Periodical, PeriodicalTracking
+
+        matcher = TrackingMatcher(min_score=70)  # Use 70 as minimum match threshold
+
+        # Get all tracking records for matching
+        tracking_records = db_session.query(PeriodicalTracking).all()
+
+        if not tracking_records:
+            return {
+                "success": True,
+                "fixed": 0,
+                "skipped": 0,
+                "errors": [],
+                "message": "No tracking records found",
+            }
+
+        # Query periodicals to check
+        query = db_session.query(Periodical)
+        if category:
+            query = query.filter(Periodical.category == category)
+
+        periodicals = query.all()
+
+        fixed = 0
+        skipped = 0
+        errors = []
+        fixes = []  # Track what was fixed for reporting
+
+        logger.info(f"Checking {len(periodicals)} periodicals for tracking_id fixes")
+
+        for periodical in periodicals:
+            try:
+                # Get country from derived_metadata if available
+                parsed_country = None
+                if periodical.derived_metadata and "country" in periodical.derived_metadata:
+                    parsed_country = periodical.derived_metadata["country"].get("value")
+
+                # Try to find best matching tracking record
+                match = matcher.find_best_match(
+                    parsed_title=periodical.title,
+                    tracking_records=tracking_records,
+                    parsed_language=periodical.language,
+                    parsed_country=parsed_country,
+                    parsed_category=periodical.category,
+                )
+
+                if match and match.is_match:
+                    # Check if tracking_id needs updating
+                    if periodical.tracking_id != match.tracking_id:
+                        old_tracking_id = periodical.tracking_id
+                        old_tracking_title = None
+
+                        if old_tracking_id:
+                            old_tracking = db_session.query(PeriodicalTracking).filter_by(id=old_tracking_id).first()
+                            if old_tracking:
+                                old_tracking_title = old_tracking.title
+
+                        fix_info = {
+                            "periodical_id": periodical.id,
+                            "title": periodical.title,
+                            "old_tracking_id": old_tracking_id,
+                            "old_tracking_title": old_tracking_title,
+                            "new_tracking_id": match.tracking_id,
+                            "new_tracking_title": match.tracking_title,
+                            "match_score": match.score,
+                            "match_breakdown": match.breakdown,
+                        }
+
+                        if not dry_run:
+                            periodical.tracking_id = match.tracking_id
+                            db_session.commit()
+                            logger.info(
+                                f"Fixed tracking_id for '{periodical.title}': "
+                                f"{old_tracking_id} ({old_tracking_title}) -> "
+                                f"{match.tracking_id} ({match.tracking_title}) "
+                                f"[score: {match.score}]"
+                            )
+                        else:
+                            logger.info(
+                                f"[DRY RUN] Would fix tracking_id for '{periodical.title}': "
+                                f"{old_tracking_id} ({old_tracking_title}) -> "
+                                f"{match.tracking_id} ({match.tracking_title}) "
+                                f"[score: {match.score}]"
+                            )
+
+                        fixes.append(fix_info)
+                        fixed += 1
+                    else:
+                        # Already has correct tracking_id
+                        skipped += 1
+                else:
+                    # No match found
+                    skipped += 1
+
+            except Exception as e:
+                error_msg = f"Error processing periodical {periodical.id} ('{periodical.title}'): {e}"
+                logger.error(error_msg, exc_info=True)
+                errors.append(error_msg)
+
+        return {
+            "success": True,
+            "fixed": fixed,
+            "skipped": skipped,
+            "errors": errors,
+            "fixes": fixes,
+            "dry_run": dry_run,
+            "message": (
+                f"{'Would fix' if dry_run else 'Fixed'} {fixed} tracking_id(s), "
+                f"skipped {skipped}, {len(errors)} errors"
+            ),
+        }
+
     def scan_for_reorganization(
         self,
         category: str,
@@ -671,27 +804,45 @@ class FileOrganizer:
         category: str,
         pattern: Optional[str] = None,
         dry_run: bool = False,
+        auto_fix_tracking: bool = True,
     ) -> Dict[str, Any]:
         """
         Reorganize files based on metadata from database.
 
         Scans the category folder and reorganizes files that are in the wrong location
-        by looking up their metadata in the Magazine table. Uses country from tracking
-        record to build full title (e.g., "Magazine US", "Magazine Germany").
+        by looking up their metadata in the Magazine table. Uses tracking title as the
+        source of truth for folder organization.
 
         Args:
             db_session: SQLAlchemy database session
             category: Category to reorganize (e.g., "Magazines")
             pattern: Organization pattern (defaults to {category}/{title}/{year}/)
             dry_run: If True, only report what would be done without making changes
+            auto_fix_tracking: If True, auto-fix incorrect tracking_id values before reorganizing
 
         Returns:
-            Dictionary with reorganization results
+            Dictionary with reorganization results including tracking_fixes if auto_fix_tracking=True
         """
         from models.database import (
             Periodical,
             PeriodicalTracking,
         )  # Import here to avoid circular dependency
+
+        # Step 1: Auto-fix tracking IDs if enabled
+        tracking_fixes = None
+        if auto_fix_tracking:
+            logger.info("Auto-fixing tracking_id values before reorganization...")
+            tracking_fixes = self.auto_fix_tracking_ids(
+                db_session=db_session,
+                category=category,
+                dry_run=dry_run,
+            )
+            if not dry_run:
+                logger.info(f"Fixed {tracking_fixes['fixed']} tracking_id(s), " f"skipped {tracking_fixes['skipped']}")
+            else:
+                logger.info(
+                    f"Would fix {tracking_fixes['fixed']} tracking_id(s), " f"skipped {tracking_fixes['skipped']}"
+                )
 
         category_with_prefix = f"{self.category_prefix}{category}"
         category_dir = self.library_dir / category_with_prefix
@@ -897,7 +1048,7 @@ class FileOrganizer:
         if not dry_run and sidecar_results["files_reorganized"] > 0:
             self._cleanup_old_directories(old_directories, category_dir)
 
-        return {
+        result = {
             "success": True,
             "category": category,
             "category_dir": str(category_dir),
@@ -909,6 +1060,12 @@ class FileOrganizer:
             "changes": changes,  # Add detailed changes list
             "dry_run": dry_run,
         }
+
+        # Add tracking fixes if auto-fix was enabled
+        if tracking_fixes:
+            result["tracking_fixes"] = tracking_fixes
+
+        return result
 
     def _reorganize_from_sidecars(
         self,
