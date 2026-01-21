@@ -1792,7 +1792,7 @@ window.downloadIssue = async function (title, url, provider) {
 
       UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, message, 'success');
       setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), TIMEOUTS.AUTO_HIDE_LONG);
-      window.closeSearchIssuesModal();
+      // Keep search modal open so user can continue browsing
     } else {
       UIUtils.showStatus(
         ELEMENT_IDS.TRACKING_STATUS,
