@@ -274,6 +274,11 @@ body {
   cursor: not-allowed;
 }
 
+/* Hide header arrow buttons on desktop (they're only for mobile) */
+.header-actions .nav-btn {
+  display: none;
+}
+
 /* Page/Chapter Content */
 .page-content,
 .chapter-content {
@@ -510,6 +515,9 @@ body {
     font-size: 1.2em;
     min-width: 44px;
     height: 44px;
+    display: flex; /* Show arrow buttons on mobile */
+    align-items: center;
+    justify-content: center;
   }
 
   .content-header {
