@@ -342,29 +342,35 @@ export class DownloadsManager {
 
       statsDiv.innerHTML = `
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px;">
-          <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);" title="Waiting for download slot (not yet sent to client)">
             <div class="queue-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.queued};">${queued}</div>
             <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Queued</div>
+            <div style="font-size: 0.7em; color: var(--text-secondary); margin-top: 2px; font-style: italic;">Waiting for slot</div>
           </div>
-          <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);" title="Sent to download client, waiting to start">
             <div class="queue-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.pending};">${pending}</div>
             <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Pending</div>
+            <div style="font-size: 0.7em; color: var(--text-secondary); margin-top: 2px; font-style: italic;">Sent to client</div>
           </div>
-          <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);" title="Actively downloading">
             <div class="queue-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.downloading};">${downloading}</div>
             <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Downloading</div>
+            <div style="font-size: 0.7em; color: var(--text-secondary); margin-top: 2px; font-style: italic;">In progress</div>
           </div>
-          <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);" title="Successfully downloaded">
             <div class="queue-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.completed};">${completed}</div>
             <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Completed</div>
+            <div style="font-size: 0.7em; color: var(--text-secondary); margin-top: 2px; font-style: italic;">Done</div>
           </div>
-          <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);" title="Download failed">
             <div class="queue-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.failed};">${failed}</div>
             <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Failed</div>
+            <div style="font-size: 0.7em; color: var(--text-secondary); margin-top: 2px; font-style: italic;">Error occurred</div>
           </div>
-          <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);" title="Skipped">
             <div class="queue-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.skipped};">${skipped}</div>
             <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Skipped</div>
+            <div style="font-size: 0.7em; color: var(--text-secondary); margin-top: 2px; font-style: italic;">Not downloaded</div>
           </div>
         </div>
       `;
@@ -374,10 +380,10 @@ export class DownloadsManager {
     let filteredDownloads = data.queue;
     if (this.currentFilter === 'queued') {
       filteredDownloads = data.queue.filter(({ status }) => status === 'queued');
-    } else if (this.currentFilter === 'active') {
-      filteredDownloads = data.queue.filter(
-        ({ status }) => status === 'pending' || status === 'downloading'
-      );
+    } else if (this.currentFilter === 'pending') {
+      filteredDownloads = data.queue.filter(({ status }) => status === 'pending');
+    } else if (this.currentFilter === 'downloading') {
+      filteredDownloads = data.queue.filter(({ status }) => status === 'downloading');
     } else if (this.currentFilter === 'failed') {
       filteredDownloads = data.queue.filter(({ status }) => status === 'failed');
     } else if (this.currentFilter === 'completed') {
@@ -395,7 +401,8 @@ export class DownloadsManager {
         const messages = {
           all: 'No downloads in queue',
           queued: 'No queued downloads',
-          active: 'No active downloads',
+          pending: 'No pending downloads',
+          downloading: 'No downloads in progress',
           failed: 'No failed downloads',
           completed: 'No completed downloads',
         };

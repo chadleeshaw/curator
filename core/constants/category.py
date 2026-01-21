@@ -141,7 +141,6 @@ CATEGORY_KEYWORDS = {
         "dissertation",
         "research",
         "document",
-        "pdf",
     ],
 }
 

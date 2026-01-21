@@ -309,74 +309,106 @@
 
           <!-- Download Queue Section -->
           <div id="download-queue-view" class="queue-view">
-            <div>
-              <h2 style="margin-bottom: 10px">📥 Download Queue</h2>
-              <p style="color: var(--text-secondary); margin: 0 0 20px 0">
-                Monitor and manage your periodical downloads. Auto-refreshes every 5 seconds.
-              </p>
+            <!-- Header with Filter Buttons -->
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 10px;
+                flex-wrap: wrap;
+                gap: 10px;
+              "
+            >
+              <div>
+                <h2 style="margin: 0">📥 Download Queue</h2>
+              </div>
+              <!-- Filter Buttons -->
+              <div style="display: flex; gap: 10px; flex-wrap: wrap">
+                <button
+                  id="download-filter-all"
+                  class="filter-btn active"
+                  onclick="window.downloads.setFilter('all')"
+                  title="Show all downloads regardless of status"
+                >
+                  All
+                </button>
+                <button
+                  id="download-filter-queued"
+                  class="filter-btn"
+                  onclick="window.downloads.setFilter('queued')"
+                  title="Show downloads waiting for an available slot (not yet sent to client)"
+                >
+                  Queued
+                </button>
+                <button
+                  id="download-filter-pending"
+                  class="filter-btn"
+                  onclick="window.downloads.setFilter('pending')"
+                  title="Show downloads sent to client but waiting to start"
+                >
+                  Pending
+                </button>
+                <button
+                  id="download-filter-downloading"
+                  class="filter-btn"
+                  onclick="window.downloads.setFilter('downloading')"
+                  title="Show downloads actively in progress"
+                >
+                  Downloading
+                </button>
+                <button
+                  id="download-filter-failed"
+                  class="filter-btn"
+                  onclick="window.downloads.setFilter('failed')"
+                  title="Show downloads that encountered errors"
+                >
+                  Failed
+                </button>
+                <button
+                  id="download-filter-completed"
+                  class="filter-btn"
+                  onclick="window.downloads.setFilter('completed')"
+                  title="Show successfully completed downloads"
+                >
+                  Completed
+                </button>
+              </div>
             </div>
 
-            <!-- Filter Buttons -->
-            <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap">
-              <button
-                id="download-filter-all"
-                class="filter-btn active"
-                onclick="window.downloads.setFilter('all')"
-              >
-                All
-              </button>
-              <button
-                id="download-filter-queued"
-                class="filter-btn"
-                onclick="window.downloads.setFilter('queued')"
-              >
-                Queued
-              </button>
-              <button
-                id="download-filter-active"
-                class="filter-btn"
-                onclick="window.downloads.setFilter('active')"
-              >
-                Active
-              </button>
-              <button
-                id="download-filter-failed"
-                class="filter-btn"
-                onclick="window.downloads.setFilter('failed')"
-              >
-                Failed
-              </button>
-              <button
-                id="download-filter-completed"
-                class="filter-btn"
-                onclick="window.downloads.setFilter('completed')"
-              >
-                Completed
-              </button>
-              <button
-                id="download-clear-queued-btn"
-                class="btn-secondary"
-                onclick="window.downloads.clearQueuedDownloads()"
-                style="margin-left: auto; background: var(--status-info); color: white"
-              >
-                🗑️ Clear Queued
-              </button>
-              <button
-                id="download-clear-pending-btn"
-                class="btn-secondary"
-                onclick="window.downloads.clearPendingDownloads()"
-                style="background: var(--status-warning); color: white"
-              >
-                🗑️ Clear Pending
-              </button>
-              <button
-                id="download-clear-failed-btn"
-                class="btn-secondary"
-                onclick="window.downloads.clearFailedDownloads()"
-                style="background: var(--status-failed); color: white"
-              >
-                🗑️ Clear Failed
-              </button>
+            <div style="margin-bottom: 20px">
+              <p style="color: var(--text-secondary); margin: 0 0 10px 0">
+                Monitor and manage your periodical downloads. Auto-refreshes every 5 seconds.
+              </p>
+              <!-- Clear Buttons -->
+              <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end">
+                <button
+                  id="download-clear-queued-btn"
+                  class="btn-secondary"
+                  onclick="window.downloads.clearQueuedDownloads()"
+                  style="background: var(--status-info); color: white"
+                  title="Remove downloads waiting for an available slot (not yet sent to client)"
+                >
+                  🗑️ Clear Queued
+                </button>
+                <button
+                  id="download-clear-pending-btn"
+                  class="btn-secondary"
+                  onclick="window.downloads.clearPendingDownloads()"
+                  style="background: var(--status-warning); color: white"
+                  title="Remove downloads that have been sent to client but haven't started downloading yet"
+                >
+                  🗑️ Clear Pending
+                </button>
+                <button
+                  id="download-clear-failed-btn"
+                  class="btn-secondary"
+                  onclick="window.downloads.clearFailedDownloads()"
+                  style="background: var(--status-failed); color: white"
+                >
+                  🗑️ Clear Failed
+                </button>
+              </div>
             </div>
 
             <div id="downloads-status" class="hidden"></div>
@@ -452,49 +484,73 @@
 
           <!-- OCR Queue Section -->
           <div id="ocr-queue-view" class="queue-view hidden">
-            <h2>🔍 OCR Processing Queue</h2>
-            <p style="color: var(--text-secondary); margin-bottom: 25px">
-              Monitor OCR text extraction jobs. Auto-refreshes every 5 seconds.
-            </p>
+            <!-- Header with Filter Buttons -->
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 10px;
+                flex-wrap: wrap;
+                gap: 10px;
+              "
+            >
+              <div>
+                <h2 style="margin: 0">🔍 OCR Processing Queue</h2>
+              </div>
+              <!-- Filter Buttons -->
+              <div style="display: flex; gap: 10px; flex-wrap: wrap">
+                <button
+                  id="ocr-filter-all"
+                  class="filter-btn active"
+                  onclick="window.ocrQueue.setFilter('all')"
+                  title="Show all OCR jobs regardless of status"
+                >
+                  All
+                </button>
+                <button
+                  id="ocr-filter-active"
+                  class="filter-btn"
+                  onclick="window.ocrQueue.setFilter('active')"
+                  title="Show pending and processing OCR jobs"
+                >
+                  Active
+                </button>
+                <button
+                  id="ocr-filter-failed"
+                  class="filter-btn"
+                  onclick="window.ocrQueue.setFilter('failed')"
+                  title="Show failed OCR jobs"
+                >
+                  Failed
+                </button>
+                <button
+                  id="ocr-filter-completed"
+                  class="filter-btn"
+                  onclick="window.ocrQueue.setFilter('completed')"
+                  title="Show completed OCR jobs"
+                >
+                  Completed
+                </button>
+              </div>
+            </div>
 
-            <!-- Filter tabs -->
-            <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap">
-              <button
-                id="ocr-filter-all"
-                class="filter-btn active"
-                onclick="window.ocrQueue.setFilter('all')"
-              >
-                All
-              </button>
-              <button
-                id="ocr-filter-active"
-                class="filter-btn"
-                onclick="window.ocrQueue.setFilter('active')"
-              >
-                Active
-              </button>
-              <button
-                id="ocr-filter-failed"
-                class="filter-btn"
-                onclick="window.ocrQueue.setFilter('failed')"
-              >
-                Failed
-              </button>
-              <button
-                id="ocr-filter-completed"
-                class="filter-btn"
-                onclick="window.ocrQueue.setFilter('completed')"
-              >
-                Completed
-              </button>
-              <button
-                id="ocr-clear-failed-btn"
-                class="btn-secondary"
-                onclick="window.ocrQueue.clearFailedJobs()"
-                style="margin-left: auto"
-              >
-                🗑️ Clear Failed
-              </button>
+            <div style="margin-bottom: 20px">
+              <p style="color: var(--text-secondary); margin: 0 0 10px 0">
+                Monitor OCR text extraction jobs. Auto-refreshes every 5 seconds.
+              </p>
+              <!-- Clear Buttons -->
+              <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end">
+                <button
+                  id="ocr-clear-failed-btn"
+                  class="btn-secondary"
+                  onclick="window.ocrQueue.clearFailedJobs()"
+                  style="background: var(--status-failed); color: white"
+                  title="Remove all failed OCR jobs from the queue"
+                >
+                  🗑️ Clear Failed
+                </button>
+              </div>
             </div>
 
             <div id="ocr-queue-stats" style="margin-bottom: 30px">
