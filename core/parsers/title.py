@@ -293,7 +293,14 @@ class TitleMatcher:
             return KNOWN_PERIODICAL_TITLES[title_lower]
 
         # Default title case for others
-        return title.title()
+        title = title.title()
+
+        # Preserve uppercase for common country codes (UK, US)
+        # This prevents "Uk" and "Us" from appearing in titles
+        title = re.sub(r"\bUk\b", "UK", title)
+        title = re.sub(r"\bUs\b", "US", title)
+
+        return title
 
     def parse_with_patterns(self, title: str) -> Optional[Dict[str, str]]:
         """

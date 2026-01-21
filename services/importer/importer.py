@@ -380,12 +380,16 @@ class FileImporter:
             # Only do this if the country name/code was explicitly in the original filename
             # to avoid false positives from spurious country detection
             if parsed.country and parsed.country not in ["XU", "XW", None]:
-                # Import country name mapping
-                country_name = ISO_COUNTRIES.get(parsed.country, parsed.country)
+                # Use the 2-letter country code (e.g., "UK") instead of full name ("United Kingdom")
+                # This ensures consistency with title normalization (see COUNTRY_CODE_NORMALIZATIONS)
+                country_code = parsed.country
 
                 # Check if country name or code was explicitly in the filename
                 # Use word boundaries to avoid false matches (e.g., "TH" in "The")
                 filename_lower = pdf_path.stem.lower()
+
+                # Import country name mapping for full name checking
+                country_name = ISO_COUNTRIES.get(parsed.country, parsed.country)
 
                 # Check for country name (e.g., "South Africa", "United Kingdom")
                 country_name_in_filename = bool(re.search(rf"\b{re.escape(country_name.lower())}\b", filename_lower))
@@ -405,7 +409,7 @@ class FileImporter:
                     and country_name.lower() not in base_title.lower()
                     and parsed.country.lower() not in base_title.lower()
                 ):
-                    tracking_title = f"{base_title} {country_name}"
+                    tracking_title = f"{base_title} {country_code}"
 
             # IMPORTANT: Sanitize tracking title to ensure consistency between:
             # 1. Tracking record title (database)

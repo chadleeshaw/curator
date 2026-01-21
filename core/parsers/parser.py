@@ -255,7 +255,7 @@ class Parser:
         return ParsedFilename(
             title=result.get("title", file_path.stem),
             issue_date=result.get("issue_date"),
-            issue_number=result.get("edition_number"),
+            issue_number=result.get("issue") or result.get("edition_number"),
             volume=result.get("volume"),
             year=result.get("year"),
             month_name=result.get("month_name"),

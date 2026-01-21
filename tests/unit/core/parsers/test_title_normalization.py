@@ -309,7 +309,7 @@ class TestTitleNormalization:
 
         test_cases = [
             # Input -> Expected output
-            ("Unpack Wired No 11 2024 UK Hybrid Magazine", "Wired Uk"),
+            ("Unpack Wired No 11 2024 UK Hybrid Magazine", "Wired UK"),
             ("Wired Issue 05 2023 Digital Magazine", "Wired"),
             ("PC Gamer Magazine - Dec 2023", "PC Gamer"),  # Date pattern removed
             ("PC Gamer #456", "PC Gamer"),  # PC stays uppercase

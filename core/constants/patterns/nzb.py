@@ -11,7 +11,9 @@ volume, and issue numbers from NZB filenames.
 
 # Country/Region patterns (most specific first)
 NZB_COUNTRY_PATTERNS = [
-    r"\b(USA?|UK|CA|AU|NZ|DE|FR|ES|IT|NL|SE|NO|DK|FI|JP|KR|CN|BR|MX|AR|IN)\b",
+    # Match 2-letter country codes, but exclude "NO" when followed by a dot/space and digit (issue numbers like "No.5" or "No 5")
+    r"\b(USA?|UK|CA|AU|NZ|DE|FR|ES|IT|NL|SE|DK|FI|JP|KR|CN|BR|MX|AR|IN)\b",
+    r"\b(NO)(?![.\s]\d)\b",  # Match NO (Norway) only if NOT followed by dot/space and digit
     r"\b(United\s+States|United\s+Kingdom|Europe|Asia|North\s+America)\b",
 ]
 """Patterns for detecting country/region indicators in NZB filenames"""

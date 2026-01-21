@@ -13,6 +13,7 @@ from core.constants.date import (
     MAX_VALID_YEAR,
     MIN_VALID_YEAR,
     MONTH_TO_NUMBER,
+    NUMBER_TO_MONTH,
 )
 from core.constants.language import SUPPORTED_LANGUAGES
 from core.constants.patterns import (
@@ -106,6 +107,7 @@ class FilenameParser:
             "title": None,
             "year": None,
             "month": None,
+            "month_name": None,
             "day": None,
             "volume": None,
             "issue": None,
@@ -201,6 +203,7 @@ class FilenameParser:
                 if MIN_VALID_YEAR <= year <= MAX_VALID_YEAR and 1 <= month <= 12 and 1 <= day <= 31:
                     metadata["year"] = year
                     metadata["month"] = month
+                    metadata["month_name"] = NUMBER_TO_MONTH.get(month)
                     metadata["day"] = day
                     metadata["issue_date"] = datetime(year, month, day)
                     remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
@@ -217,6 +220,7 @@ class FilenameParser:
                 if month_num and MIN_VALID_YEAR <= year <= MAX_VALID_YEAR:
                     metadata["year"] = year
                     metadata["month"] = month_num
+                    metadata["month_name"] = NUMBER_TO_MONTH.get(month_num)
                     metadata["issue_date"] = datetime(year, month_num, 1)
                     remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
                     remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
@@ -232,6 +236,7 @@ class FilenameParser:
                 if month_num and MIN_VALID_YEAR <= year <= MAX_VALID_YEAR:
                     metadata["year"] = year
                     metadata["month"] = month_num
+                    metadata["month_name"] = NUMBER_TO_MONTH.get(month_num)
                     metadata["issue_date"] = datetime(year, month_num, 1)
                     remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
                     remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
@@ -247,6 +252,7 @@ class FilenameParser:
                 if month_num and MIN_VALID_YEAR <= year <= MAX_VALID_YEAR:
                     metadata["year"] = year
                     metadata["month"] = month_num
+                    metadata["month_name"] = NUMBER_TO_MONTH.get(month_num)
                     metadata["issue_date"] = datetime(year, month_num, 1)
                     remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
                     remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
@@ -260,6 +266,7 @@ class FilenameParser:
                 if MIN_VALID_YEAR <= year <= MAX_VALID_YEAR and 1 <= month <= 12:
                     metadata["year"] = year
                     metadata["month"] = month
+                    metadata["month_name"] = NUMBER_TO_MONTH.get(month)
                     metadata["issue_date"] = datetime(year, month, 1)
                     remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
                     remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
@@ -273,6 +280,7 @@ class FilenameParser:
                 if MIN_VALID_YEAR <= year <= MAX_VALID_YEAR and 1 <= month <= 12:
                     metadata["year"] = year
                     metadata["month"] = month
+                    metadata["month_name"] = NUMBER_TO_MONTH.get(month)
                     metadata["issue_date"] = datetime(year, month, 1)
                     remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
                     remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
