@@ -234,9 +234,15 @@ class TitleMatcher:
 
         # Normalize common country code variations (USA -> US, etc.)
         # Note: UK is kept as UK (not normalized to GB) for better user readability
-        for long_form, short_form in COUNTRY_CODE_NORMALIZATIONS.items():
+        # Sort by length (longest first) to avoid replacing "United States" after "USA" in "USA United States"
+        sorted_normalizations = sorted(COUNTRY_CODE_NORMALIZATIONS.items(), key=lambda x: len(x[0]), reverse=True)
+        for long_form, short_form in sorted_normalizations:
             # Match whole words only with word boundaries
             title = re.sub(rf"\b{re.escape(long_form)}\b", short_form, title, flags=re.IGNORECASE)
+
+        # Remove duplicate country indicators
+        # Match any country code followed by itself
+        title = re.sub(r"\b(US|UK|DE|FR|ES|IT|NL|AU|CA)\s+\1\b", r"\1", title, flags=re.IGNORECASE)
 
         # Remove issue numbers that appear as metadata: "No 123", "Issue 456", "No.789", "#42", "Vol 5", "Vol.5"
         # Must do this AFTER replacing dots with spaces

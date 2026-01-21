@@ -88,8 +88,8 @@ def parse_multi_month(month_str: str) -> Tuple[Optional[int], str]:
 
     month_str = month_str.strip()
 
-    # Check for multi-month separators
-    for sep in ["/", "-", "&"]:
+    # Check for multi-month separators (including period for formats like "june.july")
+    for sep in ["/", "-", "&", "."]:
         if sep in month_str:
             parts = month_str.split(sep)
             first_month = parts[0].strip()

@@ -519,7 +519,7 @@ class FilenameParser:
         Pattern: "Title Month Year" (e.g., "Wired January 2024").
         Also handles: "Title Month" (year defaults to current).
 
-        IMPORTANT: Strips month names from title to prevent folders like "Hustler Us February"
+        IMPORTANT: Strips month names from title to prevent folders like "Esquire Us February"
         """
         # First try with year: "Title Month Year"
         pattern = r"(.+?)\s+([A-Za-z]+)\s+(\d{4})"
