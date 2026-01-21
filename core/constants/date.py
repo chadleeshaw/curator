@@ -518,6 +518,7 @@ def get_month_year_patterns(languages: list[str] | None = None) -> list[str]:
     return [
         rf"\b({month_pattern})\s*\d{{4}}\b",  # "january 2024", "enero 2024", "jan2024"
         r"\d{1,2}[/-]\d{4}",  # "01-2024" or "1/2024"
+        r"\d{1,2}\s+\d{4}",  # "01 2024" (space-separated month-year)
         r"\d{4}[/-]\d{1,2}",  # "2024-01" or "2024/1"
         r"\d{4}[\.\s]\d{1,2}",  # "2024.01" or "2024 01"
     ]

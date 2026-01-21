@@ -209,6 +209,34 @@ async def get_tasks_status():
             )
         tasks.append(folder_cleanup_info)
 
+        # Auto-metadata task (scheduled weekly, not manual-only anymore)
+        auto_metadata_info = {
+            "id": "auto_metadata",
+            "name": "Auto-Metadata",
+            "description": "Backfills derived_metadata, syncs issue_date, and queues missing OCR/text scans for all periodicals",
+            "interval": 604800,  # 7 days
+            "last_run": None,
+            "next_run": None,
+            "last_status": None,
+        }
+        if scheduler_status and "auto_metadata" in scheduler_status.get("tasks", {}):
+            task_data = scheduler_status["tasks"]["auto_metadata"]
+            last_run = task_data.get("last_run")
+            failure_count = task_data.get("failure_count", 0)
+            # Only set status if task has run at least once
+            status = None
+            if last_run:
+                status = "failed" if failure_count > 0 else "success"
+            auto_metadata_info.update(
+                {
+                    "interval": task_data.get("interval", 604800),
+                    "last_run": last_run,
+                    "next_run": task_data.get("next_run"),
+                    "last_status": status,
+                }
+            )
+        tasks.append(auto_metadata_info)
+
         logger.debug(f"Tasks Status - Returning {len(tasks)} tasks to client")
 
         return {
@@ -274,6 +302,42 @@ async def run_task_manually(task_id: str):
                 }
             else:
                 return {"success": False, "message": "Folder cleanup not available"}
+
+        elif task_id == "auto_metadata":
+            # Run auto-metadata task to backfill and sync metadata
+            def _run_auto_metadata():
+                from services.auto_metadata import AutoMetadataService
+                from core.database import DatabaseManager
+                from core.config import ConfigLoader
+
+                config_loader = ConfigLoader()
+                storage = config_loader.get_storage()
+                db_path = storage.get("db_path", "local/data/curator.db")
+                db_manager = DatabaseManager(f"sqlite:///{db_path}")
+
+                service = AutoMetadataService(db_manager)
+                session = db_manager.session_factory()
+                try:
+                    return service.run_full_scan(session)
+                finally:
+                    session.close()
+
+            stats = await run_in_thread(_run_auto_metadata)
+            message = (
+                f"Auto-metadata executed. "
+                f"Processed: {stats.get('total_periodicals', 0)}, "
+                f"Derived metadata backfilled: {stats.get('derived_metadata_backfilled', 0)}, "
+                f"Issue dates synced: {stats.get('issue_date_synced', 0)}, "
+                f"OCR queued: {stats.get('ocr_queued', 0)}, "
+                f"Text scans queued: {stats.get('text_scan_queued', 0)}, "
+                f"Errors: {stats.get('errors', 0)}"
+            )
+            return {
+                "success": True,
+                "task_name": "Auto-Metadata",
+                "message": message,
+                "stats": stats,
+            }
 
         elif task_id == "cleanup_orphaned_covers":
             # Manually trigger cover cleanup and generation (run in thread to avoid blocking)

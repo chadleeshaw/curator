@@ -180,7 +180,8 @@ export class LibraryManager {
         const filters = JSON.parse(saved);
         this.categoryFilter = filters.category || 'all';
         this.languageFilter = filters.language || 'all';
-        this.searchQuery = filters.search || '';
+        // Don't restore search query - it should always start empty
+        this.searchQuery = '';
 
         // Update UI elements
         const categoryDropdown = document.getElementById('library-category-filter');
@@ -189,10 +190,14 @@ export class LibraryManager {
         const languageDropdown = document.getElementById('library-language-filter');
         if (languageDropdown) languageDropdown.value = this.languageFilter;
 
+        // Ensure search input is empty
         const searchInput = document.getElementById('library-search-input');
-        if (searchInput) searchInput.value = this.searchQuery;
+        if (searchInput) searchInput.value = '';
 
-        console.log('[Library] Loaded saved filter state:', filters);
+        console.log('[Library] Loaded saved filter state (category, language only):', {
+          category: this.categoryFilter,
+          language: this.languageFilter,
+        });
       }
     } catch (error) {
       console.warn('[Library] Failed to load saved filters:', error);
@@ -209,7 +214,7 @@ export class LibraryManager {
       const filters = {
         category: this.categoryFilter,
         language: this.languageFilter,
-        search: this.searchQuery,
+        // Don't save search query - it should always start fresh
       };
       localStorage.setItem('libraryFilters', JSON.stringify(filters));
       console.log('[Library] Saved filter state:', filters);

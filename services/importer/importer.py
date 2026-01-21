@@ -32,7 +32,7 @@ from services.response_models import OperationResult
 from models.database import Periodical, PeriodicalTracking, OCRJob
 from services.file_organizer import FileOrganizer
 from services.ocr.service import OCRService
-from services.ocr.queue import OCRQueueService, _apply_scan_metadata_to_magazine
+from services.ocr.queue import OCRQueueService
 from services.text_scan_service import TextScanService
 
 logger = logging.getLogger(__name__)
@@ -475,27 +475,35 @@ class FileImporter:
                 if not organized_path:
                     return {}
 
-            # Build extra metadata, including special edition info if applicable
-            extra_metadata = {
-                "category": category,
-                "imported_from": pdf_path.name,
-                "import_date": datetime.now().isoformat(),
-                "confidence": parsed.confidence,
-                "parse_source": parsed.parse_source,
-            }
-            if parsed.country:
-                extra_metadata["country"] = parsed.country
-            if parsed.year:
-                extra_metadata["year"] = parsed.year
-            if parsed.month_name:
-                extra_metadata["month"] = parsed.month_name
-            if parsed.issue_number:
-                extra_metadata["issue_number"] = parsed.issue_number
-            if parsed.volume:
-                extra_metadata["volume"] = parsed.volume
+            # Build new metadata structure
+            from core.utils.metadata_builder import (
+                build_file_scan,
+                build_parsed_metadata,
+                build_derived_metadata,
+                build_extra_metadata,
+            )
+
+            # Build file_scan from parsed results
+            file_scan = build_file_scan(parsed)
+
+            # Add special edition info if applicable
             if is_special_edition:
-                extra_metadata["special_edition"] = special_name
-                extra_metadata["full_title"] = parsed.title
+                file_scan["special_edition_name"] = special_name
+                file_scan["is_special_edition"] = True
+
+            # Build parsed_metadata with file_scan
+            parsed_metadata = build_parsed_metadata(file_scan=file_scan)
+
+            # Build derived_metadata from file_scan (best available at import time)
+            derived_metadata = build_derived_metadata(file_scan=file_scan)
+
+            # Build extra_metadata with import/provenance info only
+            extra_metadata = build_extra_metadata(
+                imported_from=pdf_path.name,
+                import_date=datetime.now().isoformat(),
+                category=category,
+                import_method="auto",
+            )
 
             magazine = Periodical(
                 title=tracking_title,
@@ -503,6 +511,8 @@ class FileImporter:
                 file_path=str(organized_path),
                 cover_path=str(cover_path) if cover_path else None,
                 content_hash=content_hash,
+                parsed_metadata=parsed_metadata,
+                derived_metadata=derived_metadata,
                 extra_metadata=extra_metadata,
             )
 
@@ -672,19 +682,37 @@ class FileImporter:
                         scan_result = TextScanService.scan_document(str(organized_path), language=parsed.language)
 
                         # Always store text scan metadata (even if no text found)
-                        if not magazine.extra_metadata:
-                            magazine.extra_metadata = {}
-                        magazine.extra_metadata["text_scan"] = scan_result
+                        if not magazine.parsed_metadata:
+                            magazine.parsed_metadata = {}
+                        magazine.parsed_metadata["text_scan"] = scan_result
 
-                        # Apply text scan metadata to main magazine fields if missing
+                        # Rebuild derived_metadata with text scan results
+                        from core.utils.metadata_builder import (
+                            build_derived_metadata,
+                            sync_issue_date_from_derived,
+                        )
+
+                        magazine.derived_metadata = build_derived_metadata(
+                            file_scan=magazine.parsed_metadata.get("file_scan"),
+                            text_scan=scan_result,
+                            ocr_scan=magazine.parsed_metadata.get("ocr_scan"),
+                        )
+
+                        # Sync issue_date from derived_metadata (keeps column in sync with best data)
+                        new_issue_date = sync_issue_date_from_derived(magazine.derived_metadata)
+                        if new_issue_date:
+                            magazine.issue_date = new_issue_date
+                            logger.debug(
+                                f"Updated issue_date to {new_issue_date.strftime('%Y-%m')} from derived_metadata"
+                            )
+
                         if scan_result.get("text_found"):
-                            fields_updated = _apply_scan_metadata_to_magazine(magazine, scan_result)
-                            if fields_updated:
-                                logger.info(f"Enhanced {magazine.title} with metadata from text scan")
+                            logger.info(f"Enhanced {magazine.title} with metadata from text scan")
 
                         from sqlalchemy.orm.attributes import flag_modified
 
-                        flag_modified(magazine, "extra_metadata")
+                        flag_modified(magazine, "parsed_metadata")
+                        flag_modified(magazine, "derived_metadata")
                         session.commit()
 
                         if scan_result.get("text_found"):

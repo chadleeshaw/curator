@@ -128,7 +128,7 @@ class Parser:
             title: Raw title from search result
             url: Download URL
             provider: Provider name
-            publication_date: Publication date if available
+            publication_date: Publication date if available (from RSS feed)
             raw_metadata: Raw provider data
 
         Returns:
@@ -152,6 +152,9 @@ class Parser:
                 raw_metadata=raw_metadata or {},
             )
 
+        # Extract metadata from NZB title (includes date parsing)
+        nzb_metadata = self.filename_parser.extract_from_nzb_title(title)
+
         # Clean title
         cleaned_title = self.title_matcher.clean_release_title(title)
 
@@ -165,6 +168,26 @@ class Parser:
         # Infer language from country if needed
         language = infer_language_from_country(country, language)
 
+        # Determine final publication date with smart fallback logic:
+        # 1. If we extracted a date from title AND provider gave us a pubdate in the same month → use provider's (more precise)
+        # 2. If we extracted a date from title but no provider date → use extracted
+        # 3. If no extracted date → use provider's pubdate
+        extracted_date = nzb_metadata.get("issue_date")
+
+        if extracted_date and publication_date:
+            # Both available - use provider's date if it's in the same month (more precise day)
+            if extracted_date.year == publication_date.year and extracted_date.month == publication_date.month:
+                final_publication_date = publication_date
+            else:
+                # Different months - trust the title's date
+                final_publication_date = extracted_date
+        elif extracted_date:
+            # Only title date available
+            final_publication_date = extracted_date
+        else:
+            # Only provider date available (or neither)
+            final_publication_date = publication_date
+
         return ParsedSearchResult(
             title=cleaned_title,
             original_title=title,
@@ -174,7 +197,7 @@ class Parser:
             country=country,
             is_special_edition=is_special,
             special_edition_name=special_name if is_special else None,
-            publication_date=publication_date,
+            publication_date=final_publication_date,
             provider=provider,
             url=url,
             raw_metadata=raw_metadata or {},

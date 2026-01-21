@@ -57,39 +57,10 @@ class DatabaseManager:
             # Refresh inspector after creating tables
             inspector = inspect(self.engine)
 
-        # Define expected schema for column additions/migrations
-        expected_schemas = {
-            "credentials": [
-                ("api_token", "VARCHAR(255)"),
-            ],
-            "periodical_tracking": [
-                ("delete_from_client_on_completion", "BOOLEAN DEFAULT 1"),
-                ("language", "VARCHAR(50) DEFAULT 'English'"),
-                ("category", "VARCHAR(100)"),
-                ("download_category", "VARCHAR(100)"),
-                ("country", "VARCHAR(50)"),
-                ("organization_pattern", "VARCHAR(255)"),
-                # Adaptive search scheduling fields
-                ("last_searched", "DATETIME"),
-                ("search_count", "INTEGER DEFAULT 0"),
-                ("search_interval_hours", "INTEGER DEFAULT 6"),
-                ("total_issues_discovered", "INTEGER DEFAULT 0"),
-                ("last_discovery_count", "INTEGER DEFAULT 0"),
-                ("last_discovery_date", "DATETIME"),
-                ("searches_without_new_issues", "INTEGER DEFAULT 0"),
-            ],
-            "periodicals": [
-                ("language", "VARCHAR(50) DEFAULT 'English'"),
-                ("category", "VARCHAR(100) DEFAULT 'Magazine'"),
-                ("tracking_id", "INTEGER"),
-                ("content_hash", "VARCHAR(64)"),
-                ("created_at", "DATETIME"),
-                ("updated_at", "DATETIME"),
-            ],
-            "download_submissions": [
-                ("extra_status", "VARCHAR(512)"),
-            ],
-        }
+        # Import schema definitions from migrations package
+        from models.migrations import COLUMN_ADDITIONS
+
+        expected_schemas = COLUMN_ADDITIONS
 
         migrations_applied = 0
 
@@ -115,14 +86,10 @@ class DatabaseManager:
                     except Exception as e:
                         logger.error(f"Failed to add column {table_name}.{column_name}: {e}")
 
-        # Column renames (SQLite requires recreating tables, so we handle it carefully)
-        column_renames = {
-            "ocr_jobs": [("magazine_id", "periodical_id")],
-            "search_results": [("magazine_id", "periodical_id")],
-            "discovered_issues": [("magazine_id", "periodical_id")],
-            "download_submissions": [("magazine_id", "periodical_id")],
-            "downloads": [("magazine_id", "periodical_id")],
-        }
+        # Import column renames from migrations package
+        from models.migrations import COLUMN_RENAMES
+
+        column_renames = COLUMN_RENAMES
 
         for table_name, renames in column_renames.items():
             if not inspector.has_table(table_name):
@@ -148,6 +115,28 @@ class DatabaseManager:
             logger.info(f"Schema migrations complete: {migrations_applied} migration(s) applied")
         elif not missing_tables:
             logger.debug("Schema is up to date, no migrations needed")
+
+        # Run data migrations after schema changes
+        from models.migrations import run_data_migrations
+
+        session = self.session_factory()
+        try:
+            data_migration_results = run_data_migrations(session)
+            session.commit()
+
+            # Log data migration results
+            total_data_migrations = sum(data_migration_results.values())
+            if total_data_migrations > 0:
+                logger.info(f"Data migrations complete: {total_data_migrations} record(s) migrated")
+                for migration_name, count in data_migration_results.items():
+                    if count > 0:
+                        logger.debug(f"  {migration_name}: {count} record(s)")
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Data migration failed: {e}")
+            raise
+        finally:
+            session.close()
 
     @contextmanager
     def get_session(self) -> Generator[Session, None, None]:

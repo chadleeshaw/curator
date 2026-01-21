@@ -382,6 +382,7 @@ class ConfigLoader:
         """Get task scheduling configuration"""
         from core.constants.app import (
             AUTO_DOWNLOAD_INTERVAL,
+            AUTO_METADATA_INTERVAL,
             DOWNLOAD_MONITOR_INTERVAL,
             CLEANUP_COVERS_INTERVAL,
         )
@@ -390,6 +391,7 @@ class ConfigLoader:
             CONFIG_KEY_TASKS,
             {
                 "auto_download_interval": AUTO_DOWNLOAD_INTERVAL,
+                "auto_metadata_interval": AUTO_METADATA_INTERVAL,
                 "download_monitor_interval": DOWNLOAD_MONITOR_INTERVAL,
                 "cleanup_covers_interval": CLEANUP_COVERS_INTERVAL,
             },

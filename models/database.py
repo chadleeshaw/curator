@@ -78,7 +78,12 @@ class Periodical(Base):
     file_path = Column(String(512), nullable=False, unique=True)
     cover_path = Column(String(512), nullable=True)
     content_hash = Column(String(64), nullable=True, index=True)  # SHA256 hash of file content for deduplication
-    extra_metadata = Column(JSON, nullable=True)  # Extra metadata from Open Library
+
+    # Metadata columns (new structure)
+    parsed_metadata = Column(JSON, nullable=True)  # Raw scan results: file_scan, text_scan, ocr_scan
+    derived_metadata = Column(JSON, nullable=True)  # Final merged metadata with source attribution
+    extra_metadata = Column(JSON, nullable=True)  # Import/provenance info only (imported_from, import_date, etc.)
+
     created_at = Column(DateTime, default=utcnow, index=True)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
     tracking_id = Column(
@@ -96,6 +101,8 @@ class Periodical(Base):
             "file_path": self.file_path,
             "cover_path": self.cover_path,
             "content_hash": self.content_hash,
+            "parsed_metadata": self.parsed_metadata,
+            "derived_metadata": self.derived_metadata,
             "extra_metadata": self.extra_metadata,
             "tracking_id": self.tracking_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,

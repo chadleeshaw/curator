@@ -278,7 +278,7 @@ class DownloadManager:
             logger.debug(f"Skipping duplicate: '{result_title}' (similar to '{existing.result_title}')")
             return True, existing
 
-        # Also check if already in library (Magazine table)
+        # Also check if already in library (Periodical table)
         # Parse search result to get standardized fields
         parsed = self.parser.parse_search_result(
             title=result_title,
@@ -286,26 +286,33 @@ class DownloadManager:
             provider="",  # Not needed for duplicate check
         )
 
-        logger.debug(f"Parsed result title: '{result_title}' -> '{parsed.title}'")
+        logger.debug(f"Parsed result title: '{result_title}' -> base_title: '{parsed.base_title}'")
 
         # Compute tracking_title the same way file_importer does
         tracking_title = parsed.base_title
         result_language = parsed.language
 
-        # Check if this tracking_title with this language already exists in library
-        in_library = (
+        # Get all library items for this tracking to check with fuzzy matching
+        library_items = (
             session.query(Periodical)
             .filter(
                 Periodical.tracking_id == tracking_id,
-                Periodical.title == tracking_title,
                 Periodical.language == result_language,
             )
-            .first()
+            .all()
         )
 
-        if in_library:
-            logger.debug(f"Skipping duplicate: '{result_title}' already in library as '{in_library.title}'")
-            return True, None
+        # Use fuzzy title matching to detect duplicates
+        # This is consistent with how search results are filtered in web/routers/search.py
+        for lib_item in library_items:
+            is_match, score = self.title_matcher.match(tracking_title, lib_item.title)
+
+            if is_match:
+                logger.debug(
+                    f"Skipping duplicate: '{result_title}' (parsed as '{tracking_title}') "
+                    f"matches library item '{lib_item.title}' (fuzzy score: {score})"
+                )
+                return True, None
 
         return False, None
 

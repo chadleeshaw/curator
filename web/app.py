@@ -401,6 +401,33 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 logger.error(f"Folder cleanup error: {e}", exc_info=True)
 
+        # Define auto-metadata task wrapper
+        async def auto_metadata_periodic_task():
+            """Backfill derived_metadata, sync issue_date, and queue missing OCR/text scans (runs weekly)"""
+            try:
+                from services.auto_metadata import AutoMetadataService
+                from core.utils import run_in_thread
+
+                def _run_auto_metadata():
+                    service = AutoMetadataService(db_manager)
+                    session = session_factory()
+                    try:
+                        return service.run_full_scan(session)
+                    finally:
+                        session.close()
+
+                stats = await run_in_thread(_run_auto_metadata)
+                logger.info(
+                    f"Auto-metadata: Processed {stats.get('total_periodicals', 0)} periodicals, "
+                    f"backfilled {stats.get('derived_metadata_backfilled', 0)} metadata, "
+                    f"synced {stats.get('issue_date_synced', 0)} dates, "
+                    f"queued {stats.get('ocr_queued', 0)} OCR scans, "
+                    f"queued {stats.get('text_scan_queued', 0)} text scans, "
+                    f"errors: {stats.get('errors', 0)}"
+                )
+            except Exception as e:
+                logger.error(f"Auto-metadata error: {e}", exc_info=True)
+
         # Schedule tasks with intervals from config
         task_scheduler.schedule_periodic(
             "auto_download",
@@ -437,6 +464,13 @@ async def lifespan(app: FastAPI):
                 "folder_cleanup_interval",
                 86400,  # Default: once per day (24 hours)
             ),
+            # run_immediately=False (default) - maintenance can wait
+        )
+
+        task_scheduler.schedule_periodic(
+            "auto_metadata",
+            auto_metadata_periodic_task,
+            tasks_config.get("auto_metadata_interval", constants.AUTO_METADATA_INTERVAL),
             # run_immediately=False (default) - maintenance can wait
         )
 

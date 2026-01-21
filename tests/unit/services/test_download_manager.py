@@ -866,3 +866,276 @@ class TestBlacklistFiltering:
         assert submissions[0].status == DownloadSubmission.StatusEnum.PENDING
 
         session.close()
+
+
+class TestDuplicateDetectionConsistency:
+    """
+    Test consistency between duplicate detection methods.
+
+    Tests the potential issue where:
+    - Search UI uses fuzzy + date range matching (TitleMatcher.matches_library_item_with_date_range)
+    - Download manager uses exact title matching (Periodical.title == tracking_title)
+
+    This could cause:
+    1. Items showing as "Available" when they're already downloaded
+    2. Downloading duplicates with slightly different titles
+    """
+
+    def test_fuzzy_title_duplicate_detection(self, test_db, mock_download_client):
+        """
+        Test that similar titles with regional indicators are detected as duplicates.
+
+        Library: "PC Gamer US"
+        Search: "PC Gamer United States" or "PC Gamer (US)"
+
+        Expected: Should be detected as duplicate (same publication, different formatting)
+        Actual: May NOT be detected because parser produces different base_titles
+        """
+        engine, session_factory = test_db
+        session = session_factory()
+
+        from models.database import Periodical, PeriodicalTracking
+
+        # Create tracking
+        tracking = PeriodicalTracking(
+            title="PC Gamer US",
+            olid="pc_gamer_us",
+            language="English",
+            country="US",
+            category="Magazine",
+        )
+        session.add(tracking)
+        session.commit()
+
+        # Create library item with "US" suffix
+        library_item = Periodical(
+            tracking_id=tracking.id,
+            title="Pc Gamer Us",  # This is what parser produces from "PC Gamer US"
+            language="English",
+            category="Magazine",
+            issue_date=datetime(2024, 1, 1, tzinfo=UTC),
+            file_path="/library/PCGamerUS/2024/PCGamerUS - 2024-01.pdf",
+        )
+        session.add(library_item)
+        session.commit()
+
+        # Mock provider returns similar but not identical title
+        provider = MockSearchProvider({"name": "MockProvider", "type": "newsnab"})
+        manager = DownloadManager(
+            search_providers=[provider],
+            download_client=mock_download_client,
+            fuzzy_threshold=80,
+        )
+
+        # Try to download search result with "(US)" format
+        search_result = {
+            "title": "PC Gamer (US) - January 2024",
+            "url": "http://example.com/pc-gamer-us-jan2024.nzb",
+            "provider": "MockProvider",
+        }
+
+        # Check if duplicate is detected
+        is_dup, existing = manager.check_duplicate_submission(tracking.id, search_result["title"], session)
+
+        # EXPECTED: Should be detected as duplicate (same publication, different formatting)
+        # ACTUAL: Will NOT be detected because:
+        #   - Library has base_title="Pc Gamer Us"
+        #   - Search parses to base_title="Pc Gamer (Us)"
+        #   - Exact string match fails: "Pc Gamer Us" != "Pc Gamer (Us)"
+        if not is_dup:
+            print(
+                "\nDETECTED ISSUE: Regional format variations not caught by duplicate detection!"
+                "\n  Library title: 'Pc Gamer Us'"
+                "\n  Search title: 'PC Gamer (US)' → parses to 'Pc Gamer (Us)'"
+                "\n  Result: NOT detected as duplicate (exact match fails)"
+            )
+
+        # This assertion may fail, demonstrating the bug
+        assert is_dup, (
+            "Expected duplicate detection for regional format variations. "
+            "Library has 'Pc Gamer Us', search has 'PC Gamer (US)' which parses to 'Pc Gamer (Us)' - "
+            "these should match but exact string comparison fails"
+        )
+
+        session.close()
+
+    def test_date_range_duplicate_detection(self, test_db, mock_download_client):
+        """
+        Test that issues within date tolerance are detected as duplicates.
+
+        Library: "Tech Weekly" published on 2024-01-01
+        Search: "Tech Weekly" published on 2024-01-05 (5 days later)
+
+        Expected: Should be detected as duplicate (within 7-day tolerance)
+        """
+        engine, session_factory = test_db
+        session = session_factory()
+
+        from models.database import Periodical, PeriodicalTracking
+
+        # Create tracking
+        tracking = PeriodicalTracking(
+            title="Tech Weekly",
+            olid="tech_weekly",
+            language="English",
+            country="US",
+            category="Magazine",
+        )
+        session.add(tracking)
+        session.commit()
+
+        # Create library item published on Jan 1
+        library_item = Periodical(
+            tracking_id=tracking.id,
+            title="Tech Weekly",
+            language="English",
+            category="Magazine",
+            issue_date=datetime(2024, 1, 1, tzinfo=UTC),
+            file_path="/library/TechWeekly/2024/TechWeekly - 2024-01-01.pdf",
+        )
+        session.add(library_item)
+        session.commit()
+
+        provider = MockSearchProvider({"name": "MockProvider", "type": "newsnab"})
+        manager = DownloadManager(
+            search_providers=[provider],
+            download_client=mock_download_client,
+            fuzzy_threshold=80,
+        )
+
+        # Try to download same issue but dated 5 days later (e.g., UK vs US release)
+        search_result = {
+            "title": "Tech Weekly - January 05 2024",
+            "url": "http://example.com/tech-weekly-jan05.nzb",
+            "provider": "MockProvider",
+        }
+
+        # Check if duplicate is detected
+        is_dup, existing = manager.check_duplicate_submission(tracking.id, search_result["title"], session)
+
+        # EXPECTED: Should be detected as duplicate because dates are within 7-day tolerance
+        # ACTUAL: May not be detected because check_duplicate_submission doesn't check dates
+        # NOTE: This might be intentional if we want to allow different dated releases
+        # But it should be CONSISTENT with what the search UI shows
+        if not is_dup:
+            print(
+                "INFO: Date-based duplicate detection not implemented in download_manager. "
+                "This might be intentional, but should match search UI behavior."
+            )
+
+        session.close()
+
+    def test_exact_match_works_correctly(self, test_db, mock_download_client):
+        """
+        Test that exact title matches are correctly detected as duplicates.
+
+        This should always work - baseline test.
+        """
+        engine, session_factory = test_db
+        session = session_factory()
+
+        from models.database import Periodical, PeriodicalTracking
+
+        # Create tracking
+        tracking = PeriodicalTracking(
+            title="Science Monthly",
+            olid="science_monthly",
+            language="English",
+            country="US",
+            category="Magazine",
+        )
+        session.add(tracking)
+        session.commit()
+
+        # Create library item
+        library_item = Periodical(
+            tracking_id=tracking.id,
+            title="Science Monthly",
+            language="English",
+            category="Magazine",
+            issue_date=datetime(2024, 1, 1, tzinfo=UTC),
+            file_path="/library/ScienceMonthly/2024/ScienceMonthly - 2024-01.pdf",
+        )
+        session.add(library_item)
+        session.commit()
+
+        provider = MockSearchProvider({"name": "MockProvider", "type": "newsnab"})
+        manager = DownloadManager(
+            search_providers=[provider],
+            download_client=mock_download_client,
+            fuzzy_threshold=80,
+        )
+
+        # Try to download exact same title
+        search_result = {
+            "title": "Science Monthly - January 2024",
+            "url": "http://example.com/science-monthly-jan2024.nzb",
+            "provider": "MockProvider",
+        }
+
+        # Check if duplicate is detected
+        is_dup, existing = manager.check_duplicate_submission(tracking.id, search_result["title"], session)
+
+        # EXPECTED: Should be detected as duplicate (exact title match)
+        assert is_dup, "Expected duplicate detection for exact title match"
+
+        session.close()
+
+    def test_different_language_not_duplicate(self, test_db, mock_download_client):
+        """
+        Test that same title in different language is NOT detected as duplicate.
+
+        Library: "Auto Today" (English)
+        Search: "Auto Today" (German)
+
+        Expected: Should NOT be duplicate (different languages)
+        """
+        engine, session_factory = test_db
+        session = session_factory()
+
+        from models.database import Periodical, PeriodicalTracking
+
+        # Create tracking
+        tracking = PeriodicalTracking(
+            title="Auto Today",
+            olid="auto_today",
+            language="English",
+            country="US",
+            category="Magazine",
+        )
+        session.add(tracking)
+        session.commit()
+
+        # Create library item in English
+        library_item = Periodical(
+            tracking_id=tracking.id,
+            title="Auto Today",
+            language="English",
+            category="Magazine",
+            issue_date=datetime(2024, 1, 1, tzinfo=UTC),
+            file_path="/library/AutoToday/2024/AutoToday - 2024-01.pdf",
+        )
+        session.add(library_item)
+        session.commit()
+
+        provider = MockSearchProvider({"name": "MockProvider", "type": "newsnab"})
+        manager = DownloadManager(
+            search_providers=[provider],
+            download_client=mock_download_client,
+            fuzzy_threshold=80,
+        )
+
+        # Try to download German version
+        search_result = {
+            "title": "Auto Today - German - January 2024",
+            "url": "http://example.com/auto-today-de-jan2024.nzb",
+            "provider": "MockProvider",
+        }
+
+        # Check if duplicate is detected
+        is_dup, existing = manager.check_duplicate_submission(tracking.id, search_result["title"], session)
+
+        # EXPECTED: Should NOT be duplicate (different language)
+        assert not is_dup, "Expected NO duplicate detection for different language"
+
+        session.close()

@@ -283,43 +283,128 @@ function displayMetadata(data) {
 
     const valueDiv = document.createElement('div');
     valueDiv.className = 'metadata-value';
-    valueDiv.textContent = value;
+
+    // Check if value looks like JSON (starts with { or [)
+    const valueStr = String(value);
+    if ((valueStr.startsWith('{') || valueStr.startsWith('[')) && valueStr.includes('\n')) {
+      // Display as formatted JSON in a pre tag
+      const pre = document.createElement('pre');
+      pre.style.margin = '0';
+      pre.style.fontSize = '11px';
+      pre.style.lineHeight = '1.4';
+      pre.style.padding = '8px';
+      pre.style.background = 'var(--background)';
+      pre.style.border = '1px solid var(--border-color)';
+      pre.style.borderRadius = '3px';
+      pre.style.overflow = 'auto';
+      pre.style.maxHeight = '200px';
+      pre.style.fontFamily = 'monospace';
+      pre.textContent = valueStr;
+      valueDiv.appendChild(pre);
+    } else {
+      // Display as plain text
+      valueDiv.textContent = valueStr;
+    }
 
     item.appendChild(labelDiv);
     item.appendChild(valueDiv);
     metadataBody.appendChild(item);
   }
 
-  // Display key metadata
-  addMetadataItem('Title', data.title);
-  addMetadataItem('Language', data.language || '(not set)');
-  if (data.metadata && data.metadata.country) addMetadataItem('Country', data.metadata.country);
-  if (data.metadata && data.metadata.year) addMetadataItem('Year', data.metadata.year);
-  if (data.metadata && data.metadata.month) addMetadataItem('Month/Period', data.metadata.month);
-  if (data.metadata && data.metadata.issue_number)
-    addMetadataItem('Issue Number', data.metadata.issue_number);
-  if (data.metadata && data.metadata.volume) addMetadataItem('Volume', data.metadata.volume);
-  if (data.metadata && data.metadata.special_edition)
-    addMetadataItem('Special Edition', data.metadata.special_edition);
-  addMetadataItem(
-    'Tracking ID',
-    data.tracking_id !== null && data.tracking_id !== undefined ? data.tracking_id : '(not set)'
-  );
+  // Section 1: Database Fields (from Periodical model)
+  const dbSection = document.createElement('div');
+  dbSection.style.marginBottom = '20px';
+  dbSection.innerHTML =
+    '<h4 style="margin: 0 0 10px 0; color: var(--primary-color);">💾 Database Fields</h4>';
+  metadataBody.appendChild(dbSection);
 
-  // Add text scan information if available
-  if (data.extra_metadata && data.extra_metadata.text_scan) {
-    const textScan = data.extra_metadata.text_scan;
-    if (textScan.scanned) {
-      const scanStatus = textScan.text_found ? '✓ Text Found' : '✗ No Text Found';
-      addMetadataItem('Text Scan', scanStatus);
-      if (textScan.extraction_method) {
-        addMetadataItem('Extraction Method', textScan.extraction_method);
+  // Display all database fields dynamically (excluding JSON columns which are shown separately)
+  const dbFields = {
+    id: 'ID',
+    title: 'Title',
+    language: 'Language',
+    category: 'Category',
+    issue_date: 'Issue Date',
+    file_path: 'File Path',
+    cover_path: 'Cover Path',
+    content_hash: 'Content Hash',
+    tracking_id: 'Tracking ID',
+    created_at: 'Created At',
+    updated_at: 'Updated At',
+  };
+
+  for (const [field, label] of Object.entries(dbFields)) {
+    if (data[field] !== null && data[field] !== undefined) {
+      let value = data[field];
+
+      // Format dates nicely
+      if (field === 'issue_date' && value) {
+        // Issue date: just show the date, no time
+        value = value.split('T')[0]; // "2000-05-01"
+      } else if ((field === 'created_at' || field === 'updated_at') && value) {
+        // Created/Updated: show datetime without microseconds
+        value = value.split('.')[0].replace('T', ' '); // "2026-01-17 05:43:47"
       }
-      if (textScan.has_sufficient_metadata !== undefined) {
-        addMetadataItem('Sufficient Metadata', textScan.has_sufficient_metadata ? 'Yes' : 'No');
+
+      addMetadataItem(label, value);
+    }
+  }
+
+  // Section 2: Derived Metadata (final merged with source attribution)
+  if (data.derived_metadata && Object.keys(data.derived_metadata).length > 0) {
+    const derivedSection = document.createElement('div');
+    derivedSection.style.marginTop = '20px';
+    derivedSection.innerHTML =
+      '<h4 style="margin: 0 0 10px 0; color: var(--primary-color);">📊 Derived Metadata (Merged from Scans)</h4>';
+    metadataBody.appendChild(derivedSection);
+
+    // Display all derived metadata fields dynamically
+    const skipFields = ['_merge_config']; // Internal fields to skip
+
+    for (const [fieldName, fieldData] of Object.entries(data.derived_metadata)) {
+      if (skipFields.includes(fieldName)) continue;
+
+      if (typeof fieldData === 'object' && fieldData !== null && 'value' in fieldData) {
+        const value = fieldData.value;
+        const source = fieldData.source;
+        const confidence = fieldData.confidence;
+
+        if (value === null || value === undefined) continue;
+
+        const item = document.createElement('div');
+        item.className = 'metadata-item';
+
+        const labelDiv = document.createElement('div');
+        labelDiv.className = 'metadata-label';
+        // Convert field_name to Field Name
+        labelDiv.textContent = fieldName
+          .replace(/_/g, ' ')
+          .replace(/\b\w/g, (l) => l.toUpperCase());
+
+        const valueDiv = document.createElement('div');
+        valueDiv.className = 'metadata-value';
+
+        // Show value with source badge
+        const sourceBadge =
+          {
+            file_scan: '📁 File',
+            text_scan: '📄 Text',
+            ocr_scan: '🔍 OCR',
+          }[source] || source;
+
+        const confBadge =
+          typeof confidence === 'number' ? ` (${(confidence * 100).toFixed(0)}%)` : '';
+        valueDiv.innerHTML = `${value} <span style="font-size: 0.85em; color: var(--text-secondary); margin-left: 8px;">${sourceBadge}${confBadge}</span>`;
+
+        item.appendChild(labelDiv);
+        item.appendChild(valueDiv);
+        metadataBody.appendChild(item);
       }
     }
   }
+
+  // Note: parsed_metadata sections (file_scan, text_scan, ocr_scan) are only shown
+  // in the collapsible "Full Metadata JSON" section below for cleaner display
 
   // Create collapsible full metadata section
   const metadataSection = document.createElement('div');
@@ -362,7 +447,29 @@ function displayMetadata(data) {
   pre.style.lineHeight = '1.5';
   pre.style.color = 'var(--text-primary)';
   pre.style.fontFamily = 'monospace';
-  pre.textContent = JSON.stringify(data, null, 2);
+
+  // Create organized JSON structure showing all fields from Periodical model
+  const fullData = {
+    // Database fields
+    id: data.id,
+    title: data.title,
+    language: data.language,
+    category: data.category,
+    issue_date: data.issue_date,
+    file_path: data.file_path,
+    cover_path: data.cover_path,
+    content_hash: data.content_hash,
+    tracking_id: data.tracking_id,
+    created_at: data.created_at,
+    updated_at: data.updated_at,
+
+    // Metadata columns (new structure)
+    parsed_metadata: data.parsed_metadata || null,
+    derived_metadata: data.derived_metadata || null,
+    extra_metadata: data.extra_metadata || null,
+  };
+
+  pre.textContent = JSON.stringify(fullData, null, 2);
 
   metadataContent.appendChild(pre);
 

@@ -245,3 +245,61 @@ class TestPeriodicalValidation:
         result = {"title": "Some Publication 2024"}
         # Year alone is not a strong enough indicator
         assert service._validate_is_periodical(result) is False
+
+    # ===================================================================
+    # Test Volume/Issue Number vs Date Disambiguation
+    # ===================================================================
+
+    def test_volume_number_with_year_not_confused_with_date(self, service):
+        """Test: 'Magazine Vol. 01 2024' should be recognized as periodical (volume+year, not month-year)"""
+        # The "Vol." keyword makes this clearly a volume number, not month 01
+        result = {"title": "Magazine Vol. 01 2024"}
+        assert service._validate_is_periodical(result) is True
+
+    def test_issue_number_with_year_not_confused_with_date(self, service):
+        """Test: 'Magazine No. 01 2024' should be recognized as periodical (issue+year, not month-year)"""
+        # The "No." keyword makes this clearly an issue number, not month 01
+        result = {"title": "Magazine No. 01 2024"}
+        assert service._validate_is_periodical(result) is True
+
+    def test_volume_number_without_keyword_accepted_as_date(self, service):
+        """Test: 'Magazine 01 2024' (without Vol/No) is interpreted as date (January 2024)"""
+        # Without keywords, "01 2024" is ambiguous but assumed to be month-year (common format)
+        result = {"title": "Magazine 01 2024"}
+        assert service._validate_is_periodical(result) is True
+
+    def test_issue_keyword_followed_by_date_format(self, service):
+        """Test: 'Magazine Issue 389 January 2024' has both issue number and date"""
+        # Contains both issue number pattern and date pattern - should be accepted
+        result = {"title": "Magazine Issue 389 January 2024"}
+        assert service._validate_is_periodical(result) is True
+
+    def test_numeric_date_with_dash_separator(self, service):
+        """Test: 'Magazine 01-2024' recognized as date (dash separator)"""
+        # Dash-separated numeric dates are clear month-year indicators
+        result = {"title": "Magazine 01-2024"}
+        assert service._validate_is_periodical(result) is True
+
+    def test_numeric_date_with_slash_separator(self, service):
+        """Test: 'Magazine 01/2024' recognized as date (slash separator)"""
+        # Slash-separated numeric dates are clear month-year indicators
+        result = {"title": "Magazine 01/2024"}
+        assert service._validate_is_periodical(result) is True
+
+    def test_numeric_date_with_space_separator(self, service):
+        """Test: 'Magazine 01 2024' recognized as date (space separator)"""
+        # Space-separated numeric dates should also be recognized (common in adult magazines)
+        result = {"title": "Magazine 01 2024"}
+        assert service._validate_is_periodical(result) is True
+
+    def test_volume_and_issue_combined(self, service):
+        """Test: 'Journal Vol. 12 No. 3' recognized as periodical"""
+        # Combined volume + issue is a very strong periodical indicator
+        result = {"title": "Journal Vol. 12 No. 3"}
+        assert service._validate_is_periodical(result) is True
+
+    def test_volume_shorthand_with_date(self, service):
+        """Test: 'Magazine V12 N3 January 2024' has volume, issue, and date"""
+        # Contains multiple periodical patterns - should be strongly accepted
+        result = {"title": "Magazine V12 N3 January 2024"}
+        assert service._validate_is_periodical(result) is True

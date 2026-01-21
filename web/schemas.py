@@ -126,6 +126,7 @@ class PeriodicalResponse(BaseModel):
     id: int
     title: str
     language: Optional[str]
+    category: Optional[str] = None  # Content category
     issue_date: str
     file_path: str
     cover_path: Optional[str]
@@ -133,7 +134,10 @@ class PeriodicalResponse(BaseModel):
     tracking_id: Optional[int]
     created_at: Optional[str]
     updated_at: Optional[str]
-    metadata: Optional[Dict[str, Any]]
+    metadata: Optional[Dict[str, Any]]  # Legacy field (alias for extra_metadata)
+    parsed_metadata: Optional[Dict[str, Any]] = None  # Raw scan results
+    derived_metadata: Optional[Dict[str, Any]] = None  # Final merged metadata
+    extra_metadata: Optional[Dict[str, Any]] = None  # Import/provenance info
 
 
 class EditionInfo(BaseModel):

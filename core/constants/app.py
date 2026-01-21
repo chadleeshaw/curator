@@ -60,6 +60,9 @@ CLEANUP_COVERS_INTERVAL = 86400
 OCR_PROCESSOR_INTERVAL = 10
 """Interval for running OCR text extraction on queued covers (10 seconds)"""
 
+AUTO_METADATA_INTERVAL = 604800
+"""Interval for automatic metadata backfill and sync (7 days / 1 week)"""
+
 TASK_SCHEDULER_CHECK_INTERVAL = 60
 """Interval for task scheduler checking (1 minute)"""
 

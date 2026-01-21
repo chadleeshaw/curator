@@ -496,14 +496,24 @@ class IssueDiscoveryService:
         import re
         from core.constants.validation import PERIODICAL_PATTERNS
 
-        # Normalize dots, underscores, and dashes to spaces for better matching
-        # NZB filenames often use these as separators: "Wired.Magazine.January.2024.pdf"
-        normalized_title = title.replace(".", " ").replace("_", " ").replace("-", " ")
-        title_lower = normalized_title.lower()
+        # Strategy: Match patterns on both normalized (dashes→spaces) and original title
+        # This catches both "Jan-2024" (needs dash) and "Magazine-Jan-2024" (needs space)
 
+        # Try matching on original title first (preserves numeric date separators like "01-2024")
+        title_lower = title.lower()
         for pattern in PERIODICAL_PATTERNS:
             if re.search(pattern, title_lower, re.IGNORECASE):
                 logger.debug(f"Found periodical pattern in '{title}': {pattern}")
+                return True
+
+        # If no match, try with dash→space normalization (catches "Magazine-January-2024")
+        # Also normalize dots and underscores for NZB filenames: "Wired.Magazine.January.2024.pdf"
+        normalized_title = title.replace(".", " ").replace("_", " ").replace("-", " ")
+        title_lower_normalized = normalized_title.lower()
+
+        for pattern in PERIODICAL_PATTERNS:
+            if re.search(pattern, title_lower_normalized, re.IGNORECASE):
+                logger.debug(f"Found periodical pattern in '{title}' (after normalization): {pattern}")
                 return True
 
         return False

@@ -56,7 +56,10 @@ async def list_periodicals(
                 date_subquery = (
                     db_session.query(
                         case(
-                            (Periodical.tracking_id.isnot(None), Periodical.tracking_id),
+                            (
+                                Periodical.tracking_id.isnot(None),
+                                Periodical.tracking_id,
+                            ),
                             else_=Periodical.id,
                         ).label("group_key"),
                         Periodical.language,
@@ -70,7 +73,10 @@ async def list_periodicals(
                 id_subquery = (
                     db_session.query(
                         case(
-                            (Periodical.tracking_id.isnot(None), Periodical.tracking_id),
+                            (
+                                Periodical.tracking_id.isnot(None),
+                                Periodical.tracking_id,
+                            ),
                             else_=Periodical.id,
                         ).label("group_key"),
                         Periodical.language,
@@ -100,7 +106,10 @@ async def list_periodicals(
                     id_subquery,
                     (
                         case(
-                            (Periodical.tracking_id.isnot(None), Periodical.tracking_id),
+                            (
+                                Periodical.tracking_id.isnot(None),
+                                Periodical.tracking_id,
+                            ),
                             else_=Periodical.id,
                         )
                         == id_subquery.c.group_key
@@ -206,11 +215,26 @@ async def list_periodicals(
                         if tracking:
                             tracking_titles[mag.tracking_id] = tracking.title
 
+                # Helper function to get best title (tracking > derived_metadata > database column)
+                def get_best_title(mag):
+                    # Priority 1: Tracking title (if linked to tracking)
+                    if mag.tracking_id and mag.tracking_id in tracking_titles:
+                        return tracking_titles[mag.tracking_id]
+
+                    # Priority 2: Title from derived_metadata (from best scan source)
+                    if mag.derived_metadata and mag.derived_metadata.get("title"):
+                        title_data = mag.derived_metadata["title"]
+                        if isinstance(title_data, dict) and title_data.get("value"):
+                            return title_data["value"]
+
+                    # Priority 3: Database column (fallback)
+                    return mag.title
+
                 return {
                     "periodicals": [
                         {
                             "id": m.id,
-                            "title": (tracking_titles.get(m.tracking_id, m.title) if m.tracking_id else m.title),
+                            "title": get_best_title(m),
                             "language": m.language or "English",
                             "issue_date": (m.issue_date.date().isoformat() if m.issue_date else None),
                             "file_path": m.file_path,
@@ -220,6 +244,7 @@ async def list_periodicals(
                             "created_at": (m.created_at.isoformat() if m.created_at else None),
                             "updated_at": (m.updated_at.isoformat() if m.updated_at else None),
                             "metadata": m.extra_metadata,
+                            "derived_metadata": m.derived_metadata,
                             "issue_count": issue_counts.get(
                                 (
                                     (m.tracking_id, m.language or "English")
@@ -258,19 +283,13 @@ async def get_magazine(magazine_id: int) -> PeriodicalResponse:
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
 
-                return {
-                    "id": magazine.id,
-                    "title": magazine.title,
-                    "language": magazine.language,
-                    "issue_date": (magazine.issue_date.date().isoformat() if magazine.issue_date else None),
-                    "file_path": magazine.file_path,
-                    "cover_path": magazine.cover_path,
-                    "content_hash": magazine.content_hash,
-                    "tracking_id": magazine.tracking_id,
-                    "created_at": (magazine.created_at.isoformat() if magazine.created_at else None),
-                    "updated_at": (magazine.updated_at.isoformat() if magazine.updated_at else None),
-                    "metadata": magazine.extra_metadata,
-                }
+                # Use to_dict() to get all fields from the Periodical model
+                result = magazine.to_dict()
+
+                # Add legacy 'metadata' field for backward compatibility (points to extra_metadata)
+                result["metadata"] = magazine.extra_metadata
+
+                return result
             finally:
                 db_session.close()
 

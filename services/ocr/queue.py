@@ -449,30 +449,38 @@ class OCRQueueService:
                     job.completed_at = datetime.now(UTC)
                     job.processing_time_seconds = int(processing_time)
 
-                    # Update magazine with metadata - use different keys for text vs OCR
-                    if not magazine.extra_metadata:
-                        magazine.extra_metadata = {}
+                    # Store OCR scan results in parsed_metadata
+                    if not magazine.parsed_metadata:
+                        magazine.parsed_metadata = {}
 
-                    # Store in text_metadata if direct extraction, ocr_metadata if OCR was used
+                    magazine.parsed_metadata["ocr_scan"] = metadata
                     extraction_method = metadata.get("extraction_method", "ocr_image")
-                    if extraction_method in ["pdf_text", "epub_text"]:
-                        magazine.extra_metadata["text_metadata"] = metadata
-                        logger.info(
-                            f"Stored text extraction metadata for {magazine.title} (method: {extraction_method})"
-                        )
-                    else:
-                        magazine.extra_metadata["ocr_metadata"] = metadata
-                        logger.info(f"Stored OCR metadata for {magazine.title} (method: {extraction_method})")
+                    logger.info(f"Stored OCR scan metadata for {magazine.title} (method: {extraction_method})")
 
-                    # Apply scan/OCR metadata to main magazine fields if missing
-                    fields_updated = _apply_scan_metadata_to_magazine(magazine, metadata, metadata_config)
-                    if fields_updated:
-                        logger.info(f"Enhanced {magazine.title} with metadata from scan/OCR")
+                    # Rebuild derived_metadata with all scan results
+                    from core.utils.metadata_builder import (
+                        build_derived_metadata,
+                        sync_issue_date_from_derived,
+                    )
 
-                    # Flag the JSON field as modified so SQLAlchemy persists it
+                    magazine.derived_metadata = build_derived_metadata(
+                        file_scan=magazine.parsed_metadata.get("file_scan"),
+                        text_scan=magazine.parsed_metadata.get("text_scan"),
+                        ocr_scan=metadata,
+                    )
+                    logger.info(f"Enhanced {magazine.title} with metadata from OCR scan")
+
+                    # Sync issue_date from derived_metadata (keeps column in sync with best data)
+                    new_issue_date = sync_issue_date_from_derived(magazine.derived_metadata)
+                    if new_issue_date:
+                        magazine.issue_date = new_issue_date
+                        logger.debug(f"Updated issue_date to {new_issue_date.strftime('%Y-%m')} from derived_metadata")
+
+                    # Flag the JSON fields as modified so SQLAlchemy persists them
                     from sqlalchemy.orm.attributes import flag_modified
 
-                    flag_modified(magazine, "extra_metadata")
+                    flag_modified(magazine, "parsed_metadata")
+                    flag_modified(magazine, "derived_metadata")
 
                     # Clean up OCR PNG file immediately after successful processing
                     try:
