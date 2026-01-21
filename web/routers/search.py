@@ -17,6 +17,7 @@ from core.constants.country import LANGUAGE_TO_COUNTRY, COUNTRY_INDICATORS
 from core.constants.language import LANGUAGE_KEYWORDS
 from core.utils import run_in_thread
 from core.parsers.date import normalize_month_name
+from services.issue_discovery import IssueDiscoveryService
 
 router = APIRouter(prefix="/api", tags=["search"])
 logger = logging.getLogger(__name__)
@@ -125,6 +126,46 @@ def _filter_edition_variants(results: List[Dict[str, Any]], query: str) -> List[
                 f"doesn't match query '{query}' (variant: {query_variant})"
             )
 
+    return filtered
+
+
+def _filter_non_periodicals(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Filter out non-periodical content (movies, audiobooks, soundtracks, etc.).
+
+    Uses the same validation logic as IssueDiscoveryService to ensure
+    only actual periodicals are returned to users.
+
+    Args:
+        results: List of search result dictionaries
+
+    Returns:
+        Filtered list with only periodical content
+    """
+    if not results:
+        return results
+
+    # Create a temporary IssueDiscoveryService instance for validation
+    validator = IssueDiscoveryService()
+    filtered = []
+
+    for result in results:
+        # Convert result dict to format expected by validator
+        search_result = {
+            "title": result.get("title", ""),
+            "url": result.get("url", ""),
+            "provider": result.get("provider", ""),
+            "category": result.get("metadata", {}).get("category", ""),
+            "size": result.get("metadata", {}).get("size", 0),
+        }
+
+        # Validate using IssueDiscoveryService validation
+        if validator._validate_is_periodical(search_result):
+            filtered.append(result)
+        else:
+            logger.debug(f"Filtered out non-periodical: {result.get('title', '')}")
+
+    logger.debug(f"Filtered {len(results) - len(filtered)} non-periodical results")
     return filtered
 
 
@@ -575,11 +616,16 @@ async def search_periodical_providers(
         all_results = _merge_search_results(cached_results, fresh_results)
         logger.debug(f"Merged to {len(all_results)} total results")
 
-        # === STEP 4: Save Fresh Results to Cache ===
+        # === STEP 4: Filter Non-Periodicals ===
+        # Remove movies, audiobooks, soundtracks, and other unsupported content
+        all_results = _filter_non_periodicals(all_results)
+        logger.debug(f"After non-periodical filter: {len(all_results)} results")
+
+        # === STEP 5: Save Fresh Results to Cache ===
         if fresh_results:
             _save_search_results_to_cache(db_session, query, fresh_results, tracking_id)
 
-        # === STEP 5: Apply Language/Country Filters ===
+        # === STEP 6: Apply Language/Country Filters ===
         filter_language = language if language else "English"
         filter_country = country if country else "US"
         filtered_results = _filter_by_language_and_country(all_results, filter_language, filter_country)
@@ -592,7 +638,7 @@ async def search_periodical_providers(
         filtered_results = _filter_edition_variants(filtered_results, query)
         logger.debug(f"After edition variant filter: {len(filtered_results)} results")
 
-        # === STEP 6: Load Library Items (Scoped by tracking_id) ===
+        # === STEP 7: Load Library Items (Scoped by tracking_id) ===
         library_items = db_session.query(Periodical).all()
 
         if tracking_id:
@@ -600,7 +646,7 @@ async def search_periodical_providers(
 
         logger.debug(f"Checking against {len(library_items)} library items")
 
-        # === STEP 7: Match Provider Results Against Library ===
+        # === STEP 8: Match Provider Results Against Library ===
         # Remove provider results that already exist in library using fuzzy + date range matching
         deduplicated_results = []
 
@@ -638,7 +684,7 @@ async def search_periodical_providers(
                     result["publication_date"] = result["publication_date"].isoformat()
                 deduplicated_results.append(result)
 
-        # === STEP 8: Check Failed Downloads ===
+        # === STEP 9: Check Failed Downloads ===
         failed_downloads = (
             db_session.query(DownloadSubmission)
             .filter(
@@ -663,7 +709,7 @@ async def search_periodical_providers(
                 result["status_badge"] = "⚠️ Failed Before"
                 result["download_failed"] = True
 
-        # === STEP 9: Add Library-Only Items ===
+        # === STEP 10: Add Library-Only Items ===
         # Items in library that match the query
         library_matches = []
 
@@ -697,7 +743,7 @@ async def search_periodical_providers(
         # Apply same language/country filter to library items
         library_matches = _filter_by_language_and_country(library_matches, filter_language, filter_country)
 
-        # === STEP 10: Combine and Sort Results ===
+        # === STEP 11: Combine and Sort Results ===
         final_results = library_matches + deduplicated_results
 
         # Sort by relevance (fuzzy match score), then date (newest first)
@@ -719,7 +765,7 @@ async def search_periodical_providers(
             )
             final_results = [r[0] for r in scored_results]
 
-        # === STEP 11: Return Response ===
+        # === STEP 12: Return Response ===
         if final_results:
             logger.info(f"Found {len(final_results)} results for: {query}")
             return {

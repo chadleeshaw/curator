@@ -83,14 +83,24 @@ ANTI_PERIODICAL_PATTERNS = [
     r"\b(vol|issue|no)\.?\s*\d+\s*-\s*\d+\b",  # "Vol 1-3", "No 5-10"
     r"\byear\s+\d+\s+pack\b",  # "Year 2023 Pack"
     r"\b\d{4}\s+(complete|full)\b",  # "2023 Complete"
-    # Book-specific patterns
+    # Book-specific patterns (novels, not periodicals)
     r"\bedition\s+\d+(st|nd|rd|th)\b",  # "Edition 3rd" (textbooks)
     r"\bISBN\b",  # Books have ISBNs
-    r"\b(hardcover|paperback|ebook)\b",  # Book formats
+    r"\b(hardcover|paperback)\b",  # Physical book formats
     # Novel/series indicators
     r"\bbook\s+\d+\b",  # "Book 1", "Book 2"
-    r"\b(novel|trilogy|saga|series)\b",
+    r"\b(novel|trilogy|saga)\b",
     r"\bchapter\s+\d+\b",  # Chapters suggest book, not periodical
+    # Audiobooks and soundtracks
+    r"\b(audiobook|audio\s*book)\b",
+    r"\b(soundtrack|ost|original\s+(score|motion\s+picture))\b",
+    # Video content (movies, TV shows, documentaries)
+    r"\b(movie|film|documentary)\b",
+    r"\btv[\s\-]?(show|series|episode)\b",
+    r"\b(1080p|720p|4k|uhd|bluray|blu[\-\s]?ray|dvdrip|webrip|hdtv|bdrip|brrip)\b",  # Video quality indicators
+    r"\b(dvd|xvid|x264|x265|h[\.\s]?264|h[\.\s]?265|hevc|wmv)\b",  # Video codecs and formats
+    r"\.(mp4|avi|mkv|mov|wmv|iso|img)[\s\-]",  # Video extensions in title
+    r"\bsvengoolie\b",  # TV show host (not a periodical)
 ]
 
 
