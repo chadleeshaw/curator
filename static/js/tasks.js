@@ -186,8 +186,8 @@ export class TasksManager {
    */
   async runReorganizePreview() {
     const category = document.getElementById('reorganize-category').value;
-    const patternSelect = document.getElementById('reorganize-pattern-select');
-    const patternCustom = document.getElementById('reorganize-pattern-custom');
+    const patternSelect = document.getElementById('reorganization-pattern-select');
+    const patternCustom = document.getElementById('reorganization-pattern-custom');
 
     // Get pattern from dropdown or custom input
     let pattern = null;
@@ -250,8 +250,8 @@ export class TasksManager {
    */
   async runReorganize() {
     const category = document.getElementById('reorganize-category').value;
-    const patternSelect = document.getElementById('reorganize-pattern-select');
-    const patternCustom = document.getElementById('reorganize-pattern-custom');
+    const patternSelect = document.getElementById('reorganization-pattern-select');
+    const patternCustom = document.getElementById('reorganization-pattern-custom');
 
     // Get pattern from dropdown or custom input
     let pattern = null;

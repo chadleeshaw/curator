@@ -67,7 +67,7 @@ RUN chmod +x /app/docker-entrypoint.sh
 ENV CURATOR_CONFIG_PATH=/app/local/config/config.yaml \
     CURATOR_DB_PATH=/app/local/config/periodicals.db \
     CURATOR_DOWNLOAD_DIR=/app/local/downloads \
-    CURATOR_ORGANIZE_DIR=/app/local/data \
+    CURATOR_LIBRARY_DIR=/app/local/data \
     CURATOR_CACHE_DIR=/app/local/cache \
     CURATOR_LOG_FILE=/app/local/logs/periodical_manager.log \
     CURATOR_LOG_LEVEL=INFO \

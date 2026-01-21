@@ -58,7 +58,7 @@ export const ELEMENT_IDS = {
   IMPORT_CATEGORY: 'import-category',
   IMPORT_AUTO_TRACK: 'import-auto-track',
   IMPORT_TRACKING_MODE: 'import-tracking-mode',
-  IMPORT_ORGANIZE_PATTERN: 'import-organize-pattern',
+  IMPORT_ORGANIZE_PATTERN: 'import-organization-pattern',
   IMPORT_MODAL_ORGANIZE_PATTERN: 'import-modal-organize-pattern',
   IMPORT_ENABLE_TEXT_SCAN: 'import-enable-text-scan',
   IMPORT_ENABLE_OCR: 'import-enable-ocr',
@@ -337,7 +337,7 @@ export const STORAGE_KEYS = {
 
 export const DEFAULTS = {
   THEME: 'dark',
-  ORGANIZATION_PATTERN: 'data/{category}/{title}/{year}/',
+  ORGANIZATION_PATTERN: '{category}/{title}/{year}/',
   CLEANUP_HOURS: 24,
   ENABLE_TEXT_SCAN: true,
   ENABLE_OCR: true,

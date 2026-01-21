@@ -30,14 +30,14 @@ CONFIG_KEY_JWT_SECRET = "jwt_secret"
 # Storage Keys
 STORAGE_KEY_DB_PATH = "db_path"
 STORAGE_KEY_DOWNLOAD_DIR = "download_dir"
-STORAGE_KEY_ORGANIZE_DIR = "organize_dir"
+STORAGE_KEY_LIBRARY_DIR = "library_dir"
 STORAGE_KEY_CACHE_DIR = "cache_dir"
 
 # Environment Variable Names
 ENV_CURATOR_CONFIG_PATH = "CURATOR_CONFIG_PATH"
 ENV_CURATOR_DB_PATH = "CURATOR_DB_PATH"
 ENV_CURATOR_DOWNLOAD_DIR = "CURATOR_DOWNLOAD_DIR"
-ENV_CURATOR_ORGANIZE_DIR = "CURATOR_ORGANIZE_DIR"
+ENV_CURATOR_LIBRARY_DIR = "CURATOR_LIBRARY_DIR"
 ENV_CURATOR_CACHE_DIR = "CURATOR_CACHE_DIR"
 ENV_CURATOR_LOG_FILE = "CURATOR_LOG_FILE"
 ENV_CURATOR_LOG_LEVEL = "CURATOR_LOG_LEVEL"
@@ -113,17 +113,27 @@ def _apply_storage_env_overrides(storage: Dict[str, Any]) -> None:
     This allows Docker containers, systemd services, or CI/CD to override paths
     without modifying config files.
 
+    Supports backward compatibility: CURATOR_ORGANIZE_DIR falls back to CURATOR_LIBRARY_DIR.
+
     Args:
         storage: Storage configuration dictionary (modified in place)
     """
-    # Override each storage path if corresponding environment variable is set
-    # Pattern: CURATOR_<KEY> overrides config.<key>
+    # Environment variables override config file values
+    # This allows Docker containers, systemd services, or CI/CD to override paths
     if os.environ.get(ENV_CURATOR_DB_PATH):
         storage[STORAGE_KEY_DB_PATH] = os.environ[ENV_CURATOR_DB_PATH]
     if os.environ.get(ENV_CURATOR_DOWNLOAD_DIR):
         storage[STORAGE_KEY_DOWNLOAD_DIR] = os.environ[ENV_CURATOR_DOWNLOAD_DIR]
-    if os.environ.get(ENV_CURATOR_ORGANIZE_DIR):
-        storage[STORAGE_KEY_ORGANIZE_DIR] = os.environ[ENV_CURATOR_ORGANIZE_DIR]
+
+    # Support both new (library_dir) and old (organize_dir) environment variables
+    # New takes precedence over old for backward compatibility
+    if os.environ.get(ENV_CURATOR_LIBRARY_DIR):
+        storage[STORAGE_KEY_LIBRARY_DIR] = os.environ[ENV_CURATOR_LIBRARY_DIR]
+    elif os.environ.get("CURATOR_ORGANIZE_DIR"):
+        # Backward compatibility: map old env var to new key
+        storage[STORAGE_KEY_LIBRARY_DIR] = os.environ["CURATOR_ORGANIZE_DIR"]
+        logger.warning(f"CURATOR_ORGANIZE_DIR is deprecated. Please use {ENV_CURATOR_LIBRARY_DIR} instead.")
+
     if os.environ.get(ENV_CURATOR_CACHE_DIR):
         storage[STORAGE_KEY_CACHE_DIR] = os.environ[ENV_CURATOR_CACHE_DIR]
 
@@ -141,7 +151,7 @@ def _validate_storage_paths(storage: Dict[str, Any]) -> None:
     # Validate directories
     for key in [
         STORAGE_KEY_DOWNLOAD_DIR,
-        STORAGE_KEY_ORGANIZE_DIR,
+        STORAGE_KEY_LIBRARY_DIR,
         STORAGE_KEY_CACHE_DIR,
     ]:
         if key in storage:
@@ -281,8 +291,19 @@ class ConfigLoader:
         return client
 
     def get_storage(self) -> Dict[str, Any]:
-        """Get storage configuration with environment variable overrides and validation"""
+        """
+        Get storage configuration with environment variable overrides and validation.
+
+        Provides backward compatibility for organize_dir → library_dir migration.
+        """
         storage = self.config.get(CONFIG_KEY_STORAGE, {}).copy()
+
+        # Backward compatibility: Map old organize_dir to new library_dir
+        if "organize_dir" in storage and STORAGE_KEY_LIBRARY_DIR not in storage:
+            storage[STORAGE_KEY_LIBRARY_DIR] = storage["organize_dir"]
+            logger.warning(
+                "Config key 'organize_dir' is deprecated. Please update your config.yaml to use 'library_dir' instead."
+            )
 
         # Apply environment variable overrides
         _apply_storage_env_overrides(storage)

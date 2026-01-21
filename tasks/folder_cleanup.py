@@ -34,17 +34,17 @@ class FolderCleanup:
         ".tmp",  # Temporary files
     }
 
-    def __init__(self, downloads_dir: str, organized_dir: str, dry_run: bool = False):
+    def __init__(self, downloads_dir: str, library_dir: str, dry_run: bool = False):
         """
         Initialize folder cleanup.
 
         Args:
             downloads_dir: Path to downloads directory
-            organized_dir: Path to organized/library directory
+            library_dir: Path to library directory
             dry_run: If True, only report what would be deleted without actually deleting
         """
         self.downloads_dir = Path(downloads_dir)
-        self.organized_dir = Path(organized_dir)
+        self.library_dir = Path(library_dir)
         self.dry_run = dry_run
 
     def _scan_folder_exhaustively(self, folder: Path) -> Tuple[List[Path], List[Path], int]:
@@ -273,7 +273,7 @@ class FolderCleanup:
         downloads_stats = self.cleanup_directory(self.downloads_dir, "downloads")
 
         # Clean organized directory
-        organized_stats = self.cleanup_directory(self.organized_dir, "organized")
+        organized_stats = self.cleanup_directory(self.library_dir, "organized")
 
         # Combine statistics
         total_stats = {

@@ -196,8 +196,8 @@
               <button onclick="checkAndImportDownloads()" class="btn-primary import-button-group">
                 📁 Import Downloads Folder
               </button>
-              <button onclick="importFromOrganizeDir()" class="btn-primary import-button-group">
-                📁 Import Data Folder
+              <button onclick="importFromLibraryDir()" class="btn-primary import-button-group">
+                📁 Import Library Folder
               </button>
             </div>
           </div>
@@ -672,8 +672,8 @@
                 <input type="text" id="storage-download-dir" placeholder="./downloads" />
               </div>
               <div class="settings-field">
-                <label for="storage-organize-dir">Organize Directory:</label>
-                <input type="text" id="storage-organize-dir" placeholder="./periodicals" />
+                <label for="storage-library-dir">Library Directory:</label>
+                <input type="text" id="storage-library-dir" placeholder="./periodicals" />
               </div>
               <div class="settings-field">
                 <label for="storage-cache-dir">Cache Directory:</label>
@@ -689,9 +689,9 @@
             <div id="import-section" class="settings-section">
               <h3>Import & Organization</h3>
               <div class="settings-field">
-                <label for="import-organize-pattern-select">File Organization Pattern:</label>
+                <label for="import-organization-pattern-select">File Organization Pattern:</label>
                 <select
-                  id="import-organize-pattern-select"
+                  id="import-organization-pattern-select"
                   onchange="handlePatternSelectChange('import')"
                   style="
                     width: 100%;
@@ -716,8 +716,8 @@
                 </select>
                 <input
                   type="text"
-                  id="import-organize-pattern-custom"
-                  placeholder="data/{category}/{title}/{year}/"
+                  id="import-organization-pattern-custom"
+                  placeholder="{category}/{title}/{year}/"
                   class="w-full mt-8 hidden"
                   style="
                     padding: 8px 12px;
@@ -806,12 +806,12 @@
 
                   <div class="settings-field">
                     <label
-                      for="reorganize-pattern-select"
+                      for="reorganization-pattern-select"
                       style="display: block; margin-bottom: 8px; font-weight: 500"
                       >Organization Pattern (optional):</label
                     >
                     <select
-                      id="reorganize-pattern-select"
+                      id="reorganization-pattern-select"
                       onchange="handlePatternSelectChange('reorganize')"
                       style="
                         width: 100%;
@@ -838,7 +838,7 @@
                     </select>
                     <input
                       type="text"
-                      id="reorganize-pattern-custom"
+                      id="reorganization-pattern-custom"
                       placeholder="{category}/{title}/{year}/"
                       class="hidden"
                       style="

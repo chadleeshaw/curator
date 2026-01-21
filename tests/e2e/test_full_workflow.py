@@ -31,11 +31,11 @@ def temp_dirs():
         dirs = {
             "db_path": temp_path / "test.db",
             "download_dir": temp_path / "downloads",
-            "organize_dir": temp_path / "organized",
+            "library_dir": temp_path / "organized",
             "cache_dir": temp_path / "cache",
         }
         # Create directories
-        for key in ["download_dir", "organize_dir", "cache_dir"]:
+        for key in ["download_dir", "library_dir", "cache_dir"]:
             dirs[key].mkdir(parents=True, exist_ok=True)
 
         yield dirs
@@ -262,7 +262,7 @@ class TestFileOrganizationWorkflow:
     def test_organize_downloaded_file(self, temp_dirs, session):
         """Test organizing a downloaded file"""
         # Step 1: Create organizer
-        organizer = FileOrganizer(str(temp_dirs["organize_dir"]))
+        organizer = FileOrganizer(str(temp_dirs["library_dir"]))
 
         # Step 2: Create a test file in downloads
         test_file = temp_dirs["download_dir"] / "test_magazine.pdf"
@@ -297,7 +297,7 @@ class TestImportWorkflow:
         # Step 2: Create importer
         importer = FileImporter(
             downloads_dir=str(temp_dirs["download_dir"]),
-            organize_base_dir=str(temp_dirs["organize_dir"]),
+            library_base_dir=str(temp_dirs["library_dir"]),
             fuzzy_threshold=80,
         )
 

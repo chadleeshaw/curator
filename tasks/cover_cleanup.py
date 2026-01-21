@@ -27,7 +27,7 @@ class CoverCleanup:
     def __init__(
         self,
         session_factory: sessionmaker,
-        organize_base_dir: str,
+        library_base_dir: str,
         file_importer,
     ):
         """
@@ -35,11 +35,11 @@ class CoverCleanup:
 
         Args:
             session_factory: SQLAlchemy session factory
-            organize_base_dir: Base directory for organized files
+            library_base_dir: Base directory for organized files
             file_importer: FileImporter instance for extracting covers
         """
         self.session_factory = session_factory
-        self.organize_base_dir = Path(organize_base_dir)
+        self.library_base_dir = Path(library_base_dir)
         self.file_importer = file_importer
 
     async def run(self) -> dict:
@@ -63,7 +63,7 @@ class CoverCleanup:
                 db_cover_paths = {str(Path(m.cover_path).resolve()) for m in periodicals_with_covers}
 
                 # Find all cover files on disk
-                covers_dir = self.organize_base_dir / ".covers"
+                covers_dir = self.library_base_dir / ".covers"
                 covers_dir.mkdir(parents=True, exist_ok=True)
 
                 # Part 1: Delete orphaned covers

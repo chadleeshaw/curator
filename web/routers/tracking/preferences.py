@@ -121,8 +121,8 @@ async def reorganize_tracking_files(tracking_id: int) -> Dict[str, Any]:
 
                 from models.database import Periodical
 
-                # Get organize directory from config
-                organize_base_dir = Path(_shared._storage_config.get("organize_dir", "./local/data")).resolve()
+                # Get library directory from config
+                library_base_dir = Path(_shared._storage_config.get("library_dir", "./local/data")).resolve()
                 category_prefix = _shared._import_config.get("category_prefix", "_")
 
                 # Get organization pattern (per-periodical or global default)
@@ -138,7 +138,7 @@ async def reorganize_tracking_files(tracking_id: int) -> Dict[str, Any]:
                 # Use FileOrganizer to reorganize files with the pattern
                 from services.file_organizer import FileOrganizer
 
-                organizer = FileOrganizer(str(organize_base_dir), category_prefix=category_prefix)
+                organizer = FileOrganizer(str(library_base_dir), category_prefix=category_prefix)
 
                 for magazine in magazines:
                     # Check if this is a special edition
@@ -216,7 +216,7 @@ async def reorganize_tracking_files(tracking_id: int) -> Dict[str, Any]:
                     "files_reorganized": files_reorganized,
                     "files_failed": files_failed,
                     "directories_to_cleanup": directories_to_cleanup,
-                    "organize_base_dir": organize_base_dir,
+                    "library_base_dir": library_base_dir,
                 }
             finally:
                 db_session.close()
@@ -225,12 +225,12 @@ async def reorganize_tracking_files(tracking_id: int) -> Dict[str, Any]:
         files_reorganized = result["files_reorganized"]
         files_failed = result["files_failed"]
         directories_to_cleanup = result["directories_to_cleanup"]
-        organize_base_dir = result["organize_base_dir"]
+        library_base_dir = result["library_base_dir"]
 
         # Clean up empty directories
         for directory in directories_to_cleanup:
             if directory.exists():
-                cleanup_empty_directories(directory, organize_base_dir)
+                cleanup_empty_directories(directory, library_base_dir)
 
         message = f"Successfully reorganized {files_reorganized} file(s)"
         if files_failed > 0:
@@ -289,13 +289,13 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
                 # If title changed, reorganize all files for this tracking record
                 files_reorganized = 0
                 directories_to_cleanup = set()
-                organize_base_dir = None
+                library_base_dir = None
 
                 if title_changed:
                     from models.database import Periodical
 
-                    # Get organize directory from config
-                    organize_base_dir = Path(_shared._storage_config.get("organize_dir", "./local/data")).resolve()
+                    # Get library directory from config
+                    library_base_dir = Path(_shared._storage_config.get("library_dir", "./local/data")).resolve()
                     category_prefix = _shared._import_config.get("category_prefix", "_")
 
                     # Get all magazines linked to this tracking record
@@ -323,7 +323,7 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
                             new_pdf_path, new_cover_path = _reorganize_periodical_files(
                                 magazine,
                                 tracking.title,
-                                organize_base_dir,
+                                library_base_dir,
                                 category_prefix,
                             )
 
@@ -391,7 +391,7 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
                     "files_affected_by_pattern": files_affected_by_pattern,
                     "files_reorganized": files_reorganized,
                     "directories_to_cleanup": directories_to_cleanup,
-                    "organize_base_dir": organize_base_dir,
+                    "library_base_dir": library_base_dir,
                 }
             finally:
                 db_session.close()
@@ -403,14 +403,14 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
         files_affected_by_pattern = result["files_affected_by_pattern"]
         files_reorganized = result["files_reorganized"]
         directories_to_cleanup = result["directories_to_cleanup"]
-        organize_base_dir = result["organize_base_dir"]
+        library_base_dir = result["library_base_dir"]
         old_title = result["old_title"]
 
         # Clean up empty directories after successful commit
         if title_changed and files_reorganized > 0:
             for directory in directories_to_cleanup:
                 if directory.exists():
-                    cleanup_empty_directories(directory, organize_base_dir)
+                    cleanup_empty_directories(directory, library_base_dir)
 
             logger.info(
                 f"Title changed from '{old_title}' to '{tracking_data['title']}', reorganized {files_reorganized} files"

@@ -109,8 +109,8 @@ def test_organize_file_non_pdf():
         print("Testing FileOrganizer.organize_file() with non-PDF... ✓ PASS")
 
 
-def test_organize_directory_creation():
-    """Test that organize directory is created automatically"""
+def test_library_directory_creation():
+    """Test that library directory is created automatically"""
     with tempfile.TemporaryDirectory() as tmpdir:
         organize_path = Path(tmpdir) / "organized" / "magazines"
 
@@ -295,7 +295,7 @@ if __name__ == "__main__":
         results["non_pdf"] = False
 
     try:
-        test_organize_directory_creation()
+        test_library_directory_creation()
         results["directory_creation"] = True
     except Exception as e:
         print(f"Testing FileOrganizer directory creation... ❌ FAIL: {e}")

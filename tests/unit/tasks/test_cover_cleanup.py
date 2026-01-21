@@ -47,7 +47,7 @@ def test_cleanup_task_attributes():
         task = CoverCleanup(mock_session_factory, tmpdir, mock_file_importer)
 
         assert hasattr(task, "session_factory")
-        assert hasattr(task, "organize_base_dir")
+        assert hasattr(task, "library_base_dir")
         assert hasattr(task, "file_importer")
 
 

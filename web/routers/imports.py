@@ -108,14 +108,14 @@ async def get_import_status() -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/from-organize-dir")
-async def import_from_organize_dir(
+@router.post("/from-library-dir")
+async def import_from_library_dir(
     background_tasks: BackgroundTasks,
     options: ImportOptionsRequest,
 ) -> Dict[str, Any]:
     """
     Import PDF and EPUB files from the organized data directory back into the library.
-    Useful for syncing files that exist in the organize directory but aren't in the database.
+    Useful for syncing files that exist in the library directory but aren't in the database.
 
     Args:
         options: Import options including auto_track, tracking_mode, and organization_pattern
@@ -127,23 +127,23 @@ async def import_from_organize_dir(
         if not _file_importer:
             raise HTTPException(status_code=503, detail=ErrorMessages.FILE_IMPORTER_UNAVAILABLE)
 
-        organize_dir = Path(_storage_config.get("organize_dir", "./local/data"))
+        library_dir = Path(_storage_config.get("library_dir", "./local/data"))
 
-        if not organize_dir.exists():
-            raise HTTPException(status_code=400, detail=f"Organize directory not found: {organize_dir}")
+        if not library_dir.exists():
+            raise HTTPException(status_code=400, detail=f"Library directory not found: {library_dir}")
 
         # Count files available for import (PDFs and EPUBs)
-        all_files = find_pdf_epub_files(organize_dir, recursive=True)
+        all_files = find_pdf_epub_files(library_dir, recursive=True)
 
         if not all_files:
             return {
                 "success": True,
                 "imported": 0,
-                "message": f"No PDF or EPUB files found in organize directory: {organize_dir}",
+                "message": f"No PDF or EPUB files found in library directory: {library_dir}",
             }
 
-        def process_organize_dir_imports():
-            """Background task to process imports from organize directory"""
+        def process_library_dir_imports():
+            """Background task to process imports from library directory"""
             try:
                 logger.info(
                     f"Import settings: auto_track={options.auto_track}, " f"tracking_mode={options.tracking_mode}"
@@ -166,27 +166,27 @@ async def import_from_organize_dir(
                     imported = data.get("imported", 0)
                     failed = data.get("failed", 0)
 
-                    logger.info(f"Organize directory import results: {imported} imported, {failed} failed")
+                    logger.info(f"Library directory import results: {imported} imported, {failed} failed")
 
                     # Restore original pattern
                     _file_importer.organization_pattern = original_pattern
                 finally:
                     db_session.close()
             except Exception as e:
-                logger.error(f"Error processing organize directory imports: {e}", exc_info=True)
+                logger.error(f"Error processing library directory imports: {e}", exc_info=True)
 
-        background_tasks.add_task(process_organize_dir_imports)
+        background_tasks.add_task(process_library_dir_imports)
 
         return {
             "success": True,
             "imported": len(all_files),
-            "message": f"Started importing {len(all_files)} files from organize directory",
+            "message": f"Started importing {len(all_files)} files from library directory",
         }
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Import from organize dir error: {e}")
+        logger.error(f"Import from library dir error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

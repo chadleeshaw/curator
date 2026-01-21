@@ -15,7 +15,7 @@ help:
 	@echo "  make run              Start the application"
 	@echo "  make format           Format all code (Python, JS, CSS)"
 	@echo "  make lint             Run all linters"
-	@echo "  make ci-lint          Run CI linters (matches GitHub exactly)"
+	@echo "  make ci-lint          Run CI linters"
 	@echo ""
 	@echo "Linting:"
 	@echo "  make lint-python      Lint Python files (pylint + flake8)"
@@ -73,7 +73,7 @@ lint-css:
 
 # CI Linting (matches GitHub Actions exactly)
 ci-lint:
-	@echo "🔍 Running CI linters (matches GitHub exactly)..."
+	@echo "🔍 Running CI linters..."
 	@echo ""
 	@echo "📝 Running pylint..."
 	@.venv/bin/python -m pylint --fail-under=7.0 --recursive=y . --ignore=.venv,node_modules || true

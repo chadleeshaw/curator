@@ -45,10 +45,10 @@ def temp_dirs():
         temp_path = Path(tmpdir)
         dirs = {
             "download_dir": temp_path / "downloads",
-            "organize_dir": temp_path / "organized",
+            "library_dir": temp_path / "organized",
         }
         # Create directories
-        for key in ["download_dir", "organize_dir"]:
+        for key in ["download_dir", "library_dir"]:
             dirs[key].mkdir(parents=True, exist_ok=True)
 
         yield dirs
@@ -65,7 +65,7 @@ class TestTitleNormalization:
         # Create FileImporter
         importer = FileImporter(
             downloads_dir=str(temp_dirs["download_dir"]),
-            organize_base_dir=str(temp_dirs["organize_dir"]),
+            library_base_dir=str(temp_dirs["library_dir"]),
         )
 
         # Test titles that should all be normalized to "Wired - UK"
@@ -129,7 +129,7 @@ class TestTitleNormalization:
         # Create FileImporter
         importer = FileImporter(
             downloads_dir=str(temp_dirs["download_dir"]),
-            organize_base_dir=str(temp_dirs["organize_dir"]),
+            library_base_dir=str(temp_dirs["library_dir"]),
         )
 
         # Import multiple issues with different filenames but same periodical
@@ -186,7 +186,7 @@ class TestTitleNormalization:
         # Create FileImporter
         importer = FileImporter(
             downloads_dir=str(temp_dirs["download_dir"]),
-            organize_base_dir=str(temp_dirs["organize_dir"]),
+            library_base_dir=str(temp_dirs["library_dir"]),
         )
 
         # Import a file with messy title
@@ -231,7 +231,7 @@ class TestTitleNormalization:
         # Create FileImporter
         importer = FileImporter(
             downloads_dir=str(temp_dirs["download_dir"]),
-            organize_base_dir=str(temp_dirs["organize_dir"]),
+            library_base_dir=str(temp_dirs["library_dir"]),
         )
 
         # Import a file with auto-tracking enabled
@@ -269,7 +269,7 @@ class TestTitleNormalization:
 
         importer = FileImporter(
             downloads_dir=str(temp_dirs["download_dir"]),
-            organize_base_dir=str(temp_dirs["organize_dir"]),
+            library_base_dir=str(temp_dirs["library_dir"]),
         )
 
         # Import multiple 2600 issues

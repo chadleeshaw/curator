@@ -15,15 +15,15 @@ logger = logging.getLogger(__name__)
 
 # Global state (injected from main app)
 _session_factory = None
-_organize_base_dir = None
+_library_base_dir = None
 
 
-def set_dependencies(session_factory: Callable, organize_base_dir: Optional[str] = None) -> None:
+def set_dependencies(session_factory: Callable, library_base_dir: Optional[str] = None) -> None:
     """Set dependencies from main app"""
-    global _session_factory, _organize_base_dir
+    global _session_factory, _library_base_dir
     _session_factory = session_factory
-    if organize_base_dir:
-        _organize_base_dir = Path(organize_base_dir)
+    if library_base_dir:
+        _library_base_dir = Path(library_base_dir)
 
 
 def parse_month_string(month_str: Optional[str]) -> Tuple[int, str]:

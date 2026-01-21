@@ -70,17 +70,17 @@ class FileOrganizer:
         },
     }
 
-    def __init__(self, organize_dir: str, category_prefix: str = "_"):
+    def __init__(self, library_dir: str, category_prefix: str = "_"):
         """
         Initialize file organizer.
 
         Args:
-            organize_dir: Base directory for organized files
+            library_dir: Base directory for library files (where organized files are stored)
             category_prefix: Prefix for category folders (e.g., "_" for "_Magazines")
         """
-        self.organize_dir = Path(organize_dir)
+        self.library_dir = Path(library_dir)
         self.category_prefix = category_prefix
-        self.organize_dir.mkdir(parents=True, exist_ok=True)
+        self.library_dir.mkdir(parents=True, exist_ok=True)
 
     def organize_file(
         self,
@@ -129,13 +129,13 @@ class FileOrganizer:
 
         # Preserve file extension (PDF, EPUB, CBZ, or CBR)
         extension = source.suffix.lower()
-        file_path = self.organize_dir / f"{filename_base}{extension}"
-        jpg_path = self.organize_dir / f"{filename_base}.jpg"
+        file_path = self.library_dir / f"{filename_base}{extension}"
+        jpg_path = self.library_dir / f"{filename_base}.jpg"
 
         if extension in [".pdf", ".epub", ".cbz", ".cbr"]:
             try:
                 source.rename(file_path)
-                logger.info(f"Organized file: {file_path}")
+                logger.info(f"Moved to library: {file_path}")
             except (OSError, PermissionError) as e:
                 logger.error(f"Error moving file: {e}", exc_info=True)
                 file_path = None
@@ -146,7 +146,7 @@ class FileOrganizer:
         if cover_path and Path(cover_path).exists():
             try:
                 Path(cover_path).rename(jpg_path)
-                logger.info(f"Organized cover: {jpg_path}")
+                logger.info(f"Moved cover to library: {jpg_path}")
             except (OSError, PermissionError) as e:
                 logger.error(f"Error moving cover: {e}", exc_info=True)
                 jpg_path = None
@@ -246,7 +246,7 @@ class FileOrganizer:
 
         path_parts.append(year)
 
-        return self.organize_dir / Path(*path_parts)
+        return self.library_dir / Path(*path_parts)
 
     def _resolve_path(self, path_str: str) -> Path:
         """
@@ -259,7 +259,7 @@ class FileOrganizer:
             Resolved Path object
         """
         if not path_str.startswith("/"):
-            return self.organize_dir / path_str
+            return self.library_dir / path_str
         return Path(path_str)
 
     def _build_pattern_directory(  # pylint: disable=too-many-positional-arguments
@@ -391,7 +391,7 @@ class FileOrganizer:
                     # No date AND no volume/issue - warn and use fallback
                     logger.warning(
                         f"No date, volume, or issue number found for '{title}' - "
-                        f"file will be organized with 'Unknown' identifier"
+                        f"file will be stored with 'Unknown' identifier"
                     )
 
             # Preserve file extension (PDF, EPUB, CBZ, or CBR)
@@ -442,11 +442,11 @@ class FileOrganizer:
 
             # Move file
             shutil.move(str(pdf_path), str(target_path))
-            logger.info(f"Organized file: {target_path}")
+            logger.info(f"Moved to library: {target_path}")
             return target_path
 
         except Exception as e:
-            logger.error(f"Error organizing file {pdf_path}: {e}", exc_info=True)
+            logger.error(f"Error moving file to library {pdf_path}: {e}", exc_info=True)
             return None
 
     def extract_cover_from_pdf(self, pdf_path: str, output_path: str) -> bool:
@@ -523,7 +523,7 @@ class FileOrganizer:
             Dictionary with scan results and reorganization actions
         """
         category_with_prefix = f"{self.category_prefix}{category}"
-        category_dir = self.organize_dir / category_with_prefix
+        category_dir = self.library_dir / category_with_prefix
 
         if not category_dir.exists():
             logger.warning(f"Category directory does not exist: {category_dir}")
@@ -592,7 +592,7 @@ class FileOrganizer:
         )  # Import here to avoid circular dependency
 
         category_with_prefix = f"{self.category_prefix}{category}"
-        category_dir = self.organize_dir / category_with_prefix
+        category_dir = self.library_dir / category_with_prefix
 
         if not category_dir.exists():
             logger.warning(f"Category directory does not exist: {category_dir}")

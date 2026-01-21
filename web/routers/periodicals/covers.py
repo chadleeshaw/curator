@@ -121,8 +121,8 @@ async def regenerate_cover(magazine_id: int, request_data: Dict[str, Any]) -> Di
                     raise HTTPException(status_code=404, detail="PDF file not found on disk")
 
                 # Determine cover directory from config
-                if _shared._organize_base_dir:
-                    cover_dir = _shared._organize_base_dir / ".covers"
+                if _shared._library_base_dir:
+                    cover_dir = _shared._library_base_dir / ".covers"
                 else:
                     # Fallback: use pdf's parent directory structure
                     cover_dir = pdf_path.parent.parent.parent / ".covers"

@@ -322,12 +322,12 @@ export class SettingsManager {
   displayStorageSettings(storageConfig) {
     const dbPath = document.getElementById('storage-db-path');
     const downloadDir = document.getElementById('storage-download-dir');
-    const organizeDir = document.getElementById('storage-organize-dir');
+    const libraryDir = document.getElementById('storage-library-dir');
     const cacheDir = document.getElementById('storage-cache-dir');
 
     if (dbPath) dbPath.value = storageConfig.db_path || '';
     if (downloadDir) downloadDir.value = storageConfig.download_dir || '';
-    if (organizeDir) organizeDir.value = storageConfig.organize_dir || '';
+    if (libraryDir) libraryDir.value = storageConfig.library_dir || '';
     if (cacheDir) cacheDir.value = storageConfig.cache_dir || '';
   }
 
@@ -432,22 +432,22 @@ export class SettingsManager {
    * Display import settings
    */
   displayImportSettings(importConfig) {
-    const patternSelect = document.getElementById('import-organize-pattern-select');
-    const patternCustom = document.getElementById('import-organize-pattern-custom');
+    const patternSelect = document.getElementById('import-organization-pattern-select');
+    const patternCustom = document.getElementById('import-organization-pattern-custom');
     const enableTextScan = document.getElementById('import-enable-text-scan');
     const enableOcr = document.getElementById('import-enable-ocr');
 
     // Map of pattern templates to their keys
     const patternMap = {
       '{category}/{title}/{year}/': 'default',
-      'data/{category}/{title}/{year}/': 'default',
+      '{category}/{title}/{year}/': 'default',
       '{category}/{title}/Vol{volume}/': 'volume',
       '{category}/{title}/': 'flat',
       '{category}/{title}/Vol{volume}/{year}/': 'volume_year',
       '{category}/{title}/Issues {issue_range}/': 'issue',
     };
 
-    const configPattern = importConfig.organization_pattern || 'data/{category}/{title}/{year}/';
+    const configPattern = importConfig.organization_pattern || '{category}/{title}/{year}/';
     const matchedKey = patternMap[configPattern];
 
     if (patternSelect) {
@@ -810,13 +810,13 @@ export class SettingsManager {
     try {
       const dbPath = document.getElementById('storage-db-path')?.value;
       const downloadDir = document.getElementById('storage-download-dir')?.value;
-      const organizeDir = document.getElementById('storage-organize-dir')?.value;
+      const libraryDir = document.getElementById('storage-library-dir')?.value;
       const cacheDir = document.getElementById('storage-cache-dir')?.value;
 
       const storageConfig = {
         db_path: dbPath,
         download_dir: downloadDir,
-        organize_dir: organizeDir,
+        library_dir: libraryDir,
         cache_dir: cacheDir,
       };
 
@@ -959,14 +959,14 @@ export class SettingsManager {
   async saveImportSettings() {
     try {
       // Get pattern from dropdown or custom input
-      const patternSelect = document.getElementById('import-organize-pattern-select');
-      const patternCustom = document.getElementById('import-organize-pattern-custom');
+      const patternSelect = document.getElementById('import-organization-pattern-select');
+      const patternCustom = document.getElementById('import-organization-pattern-custom');
       const enableTextScan = document.getElementById('import-enable-text-scan')?.checked;
       const enableOcr = document.getElementById('import-enable-ocr')?.checked;
 
       // Map pattern keys to their templates
       const patternTemplates = {
-        default: 'data/{category}/{title}/{year}/',
+        default: '{category}/{title}/{year}/',
         volume: '{category}/{title}/Vol{volume}/',
         flat: '{category}/{title}/',
         volume_year: '{category}/{title}/Vol{volume}/{year}/',
@@ -975,11 +975,11 @@ export class SettingsManager {
 
       let pattern;
       if (patternSelect && patternSelect.value === 'custom' && patternCustom) {
-        pattern = patternCustom.value || 'data/{category}/{title}/{year}/';
+        pattern = patternCustom.value || '{category}/{title}/{year}/';
       } else if (patternSelect) {
-        pattern = patternTemplates[patternSelect.value] || 'data/{category}/{title}/{year}/';
+        pattern = patternTemplates[patternSelect.value] || '{category}/{title}/{year}/';
       } else {
-        pattern = 'data/{category}/{title}/{year}/';
+        pattern = '{category}/{title}/{year}/';
       }
 
       const importConfig = {
@@ -1660,9 +1660,9 @@ export class SettingsManager {
    */
   handlePatternSelectChange(context) {
     const selectId =
-      context === 'import' ? 'import-organize-pattern-select' : 'reorganize-pattern-select';
+      context === 'import' ? 'import-organization-pattern-select' : 'reorganization-pattern-select';
     const customInputId =
-      context === 'import' ? 'import-organize-pattern-custom' : 'reorganize-pattern-custom';
+      context === 'import' ? 'import-organization-pattern-custom' : 'reorganization-pattern-custom';
 
     const selectElement = document.getElementById(selectId);
     const customInput = document.getElementById(customInputId);

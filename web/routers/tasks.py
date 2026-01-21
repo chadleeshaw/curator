@@ -294,7 +294,7 @@ async def run_task_manually(task_id: str):
                     db_cover_paths = {str(Path(m.cover_path).resolve()) for m in periodicals_with_covers}
 
                     # Find all cover files on disk
-                    covers_dir = Path(_storage_config.get("organize_base_dir", "./local/data")) / ".covers"
+                    covers_dir = Path(_storage_config.get("library_base_dir", "./local/data")) / ".covers"
                     covers_dir.mkdir(parents=True, exist_ok=True)
 
                     # Part 1: Delete orphaned covers

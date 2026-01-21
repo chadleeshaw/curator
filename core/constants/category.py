@@ -93,6 +93,10 @@ CATEGORY_KEYWORDS = {
         "vogue",
         "gq",
         "esquire",
+        "news",
+        "daily",
+        "newspaper",
+        "weekly",
     ],
     CATEGORY_COMIC: [
         "comic",
@@ -136,6 +140,8 @@ CATEGORY_KEYWORDS = {
         "thesis",
         "dissertation",
         "research",
+        "document",
+        "pdf",
     ],
 }
 

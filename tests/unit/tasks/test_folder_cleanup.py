@@ -388,22 +388,22 @@ class TestComplexScenarios:
 class TestFullCleanupRun:
     """Test the complete cleanup run across both directories"""
 
-    def test_cleans_both_downloads_and_organized_dirs(self, tmp_path):
+    def test_cleans_both_downloads_and_library_dirs(self, tmp_path):
         """Should clean both downloads and organized directories"""
         downloads_dir = tmp_path / "downloads"
-        organized_dir = tmp_path / "organized"
+        library_dir = tmp_path / "organized"
         downloads_dir.mkdir()
-        organized_dir.mkdir()
+        library_dir.mkdir()
 
         # Bad folder in downloads
         (downloads_dir / "bad1").mkdir()
         (downloads_dir / "bad1" / "junk.txt").touch()
 
         # Bad folder in organized
-        (organized_dir / "bad2").mkdir()
-        (organized_dir / "bad2" / "trash.nfo").touch()
+        (library_dir / "bad2").mkdir()
+        (library_dir / "bad2" / "trash.nfo").touch()
 
-        cleanup = FolderCleanup(str(downloads_dir), str(organized_dir), dry_run=False)
+        cleanup = FolderCleanup(str(downloads_dir), str(library_dir), dry_run=False)
         stats = cleanup.run()
 
         assert stats["total_deleted"] == 2

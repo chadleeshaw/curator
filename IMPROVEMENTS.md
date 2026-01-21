@@ -684,8 +684,8 @@ class FileOrganizer:
 
     def __init__(
         self,
-        downloads_dir: str,      # NEW: Explicit downloads directory
-        organized_dir: str,      # NEW: Renamed from organize_dir
+        downloads_dir: str,
+        library_dir: str,
         category_prefix: str = "_",
         organization_pattern: str = "default",
     ):

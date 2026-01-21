@@ -192,7 +192,7 @@ download_client:
 storage:
   db_path: './local/config/periodicals.db'
   download_dir: './local/downloads' # Where downloads arrive
-  organize_dir: './local/data' # Where files are organized
+  library_dir: './local/data' # Where files are organized
   cache_dir: './local/cache'
 ```
 

@@ -28,7 +28,7 @@ import shutil
 
 
 def _reorganize_periodical_files(
-    periodical, new_title: str, organize_base_dir: Path, category_prefix: str = "_"
+    periodical, new_title: str, library_base_dir: Path, category_prefix: str = "_"
 ) -> Tuple[Optional[str], Optional[str]]:
     """
     Reorganize periodical files to match new title structure.
@@ -36,7 +36,7 @@ def _reorganize_periodical_files(
     Args:
         magazine: Periodical database object
         new_title: New title to use for folder organization
-        organize_base_dir: Base directory for organized files
+        library_base_dir: Base directory for organized files
         category_prefix: Prefix for category folders (default: "_")
 
     Returns:
@@ -64,7 +64,7 @@ def _reorganize_periodical_files(
         filename_base = f"{safe_title} - {month}{year}"
 
         category_with_prefix = f"{category_prefix}{category}"
-        target_dir = organize_base_dir / category_with_prefix / safe_title / year
+        target_dir = library_base_dir / category_with_prefix / safe_title / year
         target_dir.mkdir(parents=True, exist_ok=True)
 
         new_pdf_path = target_dir / f"{filename_base}.pdf"
@@ -168,9 +168,9 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
                 files_reorganized = 0
                 directories_to_cleanup = set()
 
-                # Get organize directory from config or use default
+                # Get library directory from config or use default
                 # This should match the structure used by FileOrganizer
-                organize_base_dir = Path("./local/data").resolve()
+                library_base_dir = Path("./local/data").resolve()
                 category_prefix = "_"
 
                 # Move periodicals from source to target
@@ -204,7 +204,7 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
                             new_pdf_path, new_cover_path = _reorganize_periodical_files(
                                 periodical,
                                 target.title,
-                                organize_base_dir,
+                                library_base_dir,
                                 category_prefix,
                             )
 
@@ -262,7 +262,7 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
                 # Clean up empty directories after successful commit
                 for directory in directories_to_cleanup:
                     if directory.exists():
-                        cleanup_empty_directories(directory, organize_base_dir)
+                        cleanup_empty_directories(directory, library_base_dir)
 
                 source_titles = [s.title for s in sources]
                 logger.info(

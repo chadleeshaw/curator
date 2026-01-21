@@ -315,7 +315,7 @@ async def get_tracking_details(tracking_id: int) -> Dict[str, Any]:
 
 
 def _reorganize_periodical_files(
-    periodical, new_title: str, organize_base_dir: Path, category_prefix: str = "_"
+    periodical, new_title: str, library_base_dir: Path, category_prefix: str = "_"
 ) -> Tuple[Optional[str], Optional[str]]:
     """
     Reorganize periodical files to match new title structure.
@@ -323,7 +323,7 @@ def _reorganize_periodical_files(
     Args:
         magazine: Periodical database object
         new_title: New title to use for folder organization
-        organize_base_dir: Base directory for organized files
+        library_base_dir: Base directory for organized files
         category_prefix: Prefix for category folders (default: "_")
 
     Returns:
@@ -351,7 +351,7 @@ def _reorganize_periodical_files(
         filename_base = f"{safe_title} - {month}{year}"
 
         category_with_prefix = f"{category_prefix}{category}"
-        target_dir = organize_base_dir / category_with_prefix / safe_title / year
+        target_dir = library_base_dir / category_with_prefix / safe_title / year
         target_dir.mkdir(parents=True, exist_ok=True)
 
         new_pdf_path = target_dir / f"{filename_base}.pdf"

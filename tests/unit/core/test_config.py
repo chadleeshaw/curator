@@ -100,13 +100,13 @@ class TestStorageConfiguration:
         assert isinstance(storage, dict)
         assert "db_path" in storage
         assert "download_dir" in storage
-        assert "organize_dir" in storage
+        assert "library_dir" in storage
 
     def test_storage_paths_exist(self, config_loader):
         """Test that storage paths are created if they don't exist"""
         storage = config_loader.get_storage()
         # After calling get_storage, directories should be created
-        for key in ["download_dir", "organize_dir", "cache_dir"]:
+        for key in ["download_dir", "library_dir", "cache_dir"]:
             if key in storage:
                 path = Path(storage[key])
                 assert path.exists()

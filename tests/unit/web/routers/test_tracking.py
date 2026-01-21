@@ -578,8 +578,8 @@ class TestTitleChangeFileReorganization:
 
         # Create a temporary directory structure
         with tempfile.TemporaryDirectory() as tmpdir:
-            organize_dir = Path(tmpdir) / "data"
-            organize_dir.mkdir(parents=True, exist_ok=True)
+            library_dir = Path(tmpdir) / "data"
+            library_dir.mkdir(parents=True, exist_ok=True)
 
             # Create tracking record
             tracking = PeriodicalTracking(
@@ -593,7 +593,7 @@ class TestTitleChangeFileReorganization:
             tracking_id = tracking.id
 
             # Create directory structure and files with old title
-            old_folder = organize_dir / "_Magazine" / "Old Magazine Name" / "2024"
+            old_folder = library_dir / "_Magazine" / "Old Magazine Name" / "2024"
             old_folder.mkdir(parents=True, exist_ok=True)
 
             old_pdf = old_folder / "Old Magazine Name - January2024.pdf"
@@ -629,7 +629,7 @@ class TestTitleChangeFileReorganization:
             tracking.title = new_title
 
             # Reorganize files
-            new_pdf_path, new_cover_path = _reorganize_periodical_files(magazine, new_title, organize_dir, "_")
+            new_pdf_path, new_cover_path = _reorganize_periodical_files(magazine, new_title, library_dir, "_")
 
             # Update magazine record
             if new_pdf_path:
@@ -641,7 +641,7 @@ class TestTitleChangeFileReorganization:
             session.commit()
 
             # Verify new structure
-            new_folder = organize_dir / "_Magazine" / "New Magazine Name" / "2024"
+            new_folder = library_dir / "_Magazine" / "New Magazine Name" / "2024"
             new_pdf = new_folder / "New Magazine Name - January2024.pdf"
             new_cover = new_folder / "New Magazine Name - January2024.jpg"
 
@@ -668,8 +668,8 @@ class TestTitleChangeFileReorganization:
         session = session_factory()
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            organize_dir = Path(tmpdir) / "data"
-            organize_dir.mkdir(parents=True, exist_ok=True)
+            library_dir = Path(tmpdir) / "data"
+            library_dir.mkdir(parents=True, exist_ok=True)
 
             # Create tracking record
             tracking = PeriodicalTracking(
@@ -682,7 +682,7 @@ class TestTitleChangeFileReorganization:
             tracking_id = tracking.id
 
             # Create special edition magazine
-            special_folder = organize_dir / "_Magazines" / "National Geographic" / "2024"
+            special_folder = library_dir / "_Magazines" / "National Geographic" / "2024"
             special_folder.mkdir(parents=True, exist_ok=True)
 
             special_pdf = special_folder / "National Geographic Swimsuit - January2024.pdf"
@@ -724,8 +724,8 @@ class TestTitleChangeFileReorganization:
         session = session_factory()
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            organize_dir = Path(tmpdir) / "data"
-            organize_dir.mkdir(parents=True, exist_ok=True)
+            library_dir = Path(tmpdir) / "data"
+            library_dir.mkdir(parents=True, exist_ok=True)
 
             # Create tracking record
             tracking = PeriodicalTracking(
@@ -744,7 +744,7 @@ class TestTitleChangeFileReorganization:
                 ("March2024", datetime(2024, 3, 15)),
             ]
 
-            old_folder = organize_dir / "_Magazine" / "Wired Magazine" / "2024"
+            old_folder = library_dir / "_Magazine" / "Wired Magazine" / "2024"
             old_folder.mkdir(parents=True, exist_ok=True)
 
             magazines = []
@@ -770,7 +770,7 @@ class TestTitleChangeFileReorganization:
             tracking.title = "Wired"
 
             for magazine in magazines:
-                new_pdf_path, new_cover_path = _reorganize_periodical_files(magazine, "Wired", organize_dir, "_")
+                new_pdf_path, new_cover_path = _reorganize_periodical_files(magazine, "Wired", library_dir, "_")
                 if new_pdf_path:
                     magazine.file_path = new_pdf_path
                     magazine.title = "Wired"
@@ -778,7 +778,7 @@ class TestTitleChangeFileReorganization:
             session.commit()
 
             # Verify all files moved
-            new_folder = organize_dir / "_Magazine" / "Wired" / "2024"
+            new_folder = library_dir / "_Magazine" / "Wired" / "2024"
             for month_label, _ in issues:
                 new_pdf = new_folder / f"Wired - {month_label}.pdf"
                 assert new_pdf.exists(), f"{month_label} should be reorganized"

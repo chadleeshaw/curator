@@ -45,7 +45,7 @@ download_client:
 storage:
   db_path: ./local/config/periodicals.db
   download_dir: ./local/downloads
-  organize_dir: ./local/data
+  library_dir: ./local/data
   cache_dir: ./local/cache
 
 import:
@@ -69,27 +69,6 @@ import:
   enable_text_scan: true # Enable direct text extraction from PDF/EPUB during import (fast)
   enable_ocr: true # Enable OCR for image-based text extraction (slower, queued)
   category_prefix: _
-  category_keywords:
-    Magazines:
-      - magazine
-      - national geographic
-      - wired
-      - time
-      - newsweek
-      - economist
-    Comics:
-      - comic
-      - marvel
-      - dc
-      - graphic novel
-    Articles:
-      - article
-      - paper
-      - journal
-    News:
-      - news
-      - daily
-      - newspaper
 
 metadata:
   # Metadata aggregation settings - controls how metadata from different sources is combined
@@ -270,7 +249,7 @@ jwt_secret: null # Auto-generated if null/empty
 #   CURATOR_CONFIG_PATH - Path to config file (default: local/config/config.yaml)
 #   CURATOR_DB_PATH - Database file path
 #   CURATOR_DOWNLOAD_DIR - Download directory
-#   CURATOR_ORGANIZE_DIR - Organization directory
+#   CURATOR_LIBRARY_DIR - Organization directory
 #   CURATOR_CACHE_DIR - Cache directory
 #
 # Logging:

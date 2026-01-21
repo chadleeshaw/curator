@@ -84,7 +84,7 @@ export class EventHandlers {
       'close-import-modal': () => this.closeImportModal(),
 
       // Import actions
-      'import-from-organize': () => this.importFromOrganizeDir(),
+      'import-from-library': () => this.importFromLibraryDir(),
       'save-import-settings': () => this.saveImportSettings(),
       'start-import-with-options': () => this.startImportWithOptions(),
       'check-and-import-downloads': () => this.checkAndImportDownloads(),
@@ -309,9 +309,9 @@ export class EventHandlers {
   // Import Handlers
   // ============================================================================
 
-  static importFromOrganizeDir() {
-    if (window.importFromOrganizeDir) {
-      window.importFromOrganizeDir();
+  static importFromLibraryDir() {
+    if (window.importFromLibraryDir) {
+      window.importFromLibraryDir();
     }
   }
 

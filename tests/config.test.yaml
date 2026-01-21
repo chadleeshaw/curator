@@ -1,10 +1,10 @@
 search_providers:
-- type: newsnab
-  name: Test Newsnab
-  api_url: http://test-newsnab.example.com/api
-  api_key: test-api-key
-  categories: "7000,7010,7020,7030"
-  enabled: true
+  - type: newsnab
+    name: Test Newsnab
+    api_url: http://test-newsnab.example.com/api
+    api_key: test-api-key
+    categories: '7000,7010,7020,7030'
+    enabled: true
 download_client:
   type: sabnzbd
   name: Test SABnzbd
@@ -13,20 +13,19 @@ download_client:
 storage:
   db_path: ':memory:'
   download_dir: ./local/downloads
-  organize_dir: ./local/data
+  library_dir: ./local/data
   cache_dir: ./local/cache
 import:
-  organization_pattern: "{category}/{title}/{year}/"
+  organization_pattern: '{category}/{title}/{year}/'
   auto_track_imports: true
   category_keywords:
-    Magazines:
-    - magazine
-    Comics:
-    - comic
-    Articles:
-    - article
-    News:
-    - news
+    Magazine:
+      - magazine
+    Comic:
+      - comic
+    Document:
+      - article
+      - report
 matching:
   fuzzy_threshold: 80
 logging:

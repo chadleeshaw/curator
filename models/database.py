@@ -35,23 +35,17 @@ class Credentials(Base):
     id = Column(Integer, primary_key=True)
     username = Column(String(255), nullable=False, unique=True, index=True)
     password_hash = Column(String(255), nullable=False)
-    api_token = Column(
-        String(255), nullable=True, unique=True, index=True
-    )  # For API access
+    api_token = Column(String(255), nullable=True, unique=True, index=True)  # For API access
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     def set_password(self, password: str) -> None:
         """Hash and set the password"""
-        self.password_hash = bcrypt.hashpw(
-            password.encode("utf-8"), bcrypt.gensalt()
-        ).decode("utf-8")
+        self.password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
     def verify_password(self, password: str) -> bool:
         """Verify a password against the stored hash"""
-        return bcrypt.checkpw(
-            password.encode("utf-8"), self.password_hash.encode("utf-8")
-        )
+        return bcrypt.checkpw(password.encode("utf-8"), self.password_hash.encode("utf-8"))
 
     def generate_api_token(self) -> str:
         """Generate a new API token"""
@@ -78,18 +72,12 @@ class Periodical(Base):
 
     id = Column(Integer, primary_key=True)
     title = Column(String(255), nullable=False, index=True)
-    language = Column(
-        String(50), nullable=True, default=DEFAULT_LANGUAGE, index=True
-    )  # Language of the edition
-    category = Column(
-        String(100), nullable=True, default=DEFAULT_CATEGORY, index=True
-    )  # Content category
+    language = Column(String(50), nullable=True, default=DEFAULT_LANGUAGE, index=True)  # Language of the edition
+    category = Column(String(100), nullable=True, default=DEFAULT_CATEGORY, index=True)  # Content category
     issue_date = Column(DateTime, nullable=False, index=True)
     file_path = Column(String(512), nullable=False, unique=True)
     cover_path = Column(String(512), nullable=True)
-    content_hash = Column(
-        String(64), nullable=True, index=True
-    )  # SHA256 hash of file content for deduplication
+    content_hash = Column(String(64), nullable=True, index=True)  # SHA256 hash of file content for deduplication
     extra_metadata = Column(JSON, nullable=True)  # Extra metadata from Open Library
     created_at = Column(DateTime, default=utcnow, index=True)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
@@ -125,20 +113,14 @@ class PeriodicalTracking(Base):
         String(50), nullable=False, index=True
     )  # Open Library ID (not unique anymore - different languages can share)
     title = Column(String(255), nullable=False, index=True)
-    language = Column(
-        String(50), nullable=True, default="English", index=True
-    )  # Language of tracked edition
+    language = Column(String(50), nullable=True, default="English", index=True)  # Language of tracked edition
     country = Column(String(50), nullable=True, index=True)  # Country code (ISO)
     first_publish_year = Column(Integer, nullable=True)
     total_editions_known = Column(Integer, default=0)
 
     # Selection preferences
-    track_all_editions = Column(
-        Boolean, default=False
-    )  # Auto-download all new editions
-    track_new_only = Column(
-        Boolean, default=False
-    )  # Auto-download only new/future editions
+    track_all_editions = Column(Boolean, default=False)  # Auto-download all new editions
+    track_new_only = Column(Boolean, default=False)  # Auto-download only new/future editions
     selected_editions = Column(JSON, default={})  # Dict: {olid: True/False, ...}
     selected_years = Column(JSON, default=[])  # List of years to track
     delete_from_client_on_completion = Column(
@@ -147,9 +129,7 @@ class PeriodicalTracking(Base):
     category = Column(
         String(100), nullable=True, default=DEFAULT_CATEGORY
     )  # Content category: Periodical, Comic, Graphic Novel, Book, Document
-    download_category = Column(
-        String(100), nullable=True
-    )  # Download client category (e.g., "books", "magazines")
+    download_category = Column(String(100), nullable=True)  # Download client category (e.g., "books", "magazines")
     organization_pattern = Column(
         String(255), nullable=True
     )  # Optional organization pattern override for this periodical
@@ -159,23 +139,17 @@ class PeriodicalTracking(Base):
     last_metadata_update = Column(DateTime, nullable=True)
 
     # Search scheduling (for adaptive search)
-    last_searched = Column(
-        DateTime, nullable=True, index=True
-    )  # When we last searched for this
+    last_searched = Column(DateTime, nullable=True, index=True)  # When we last searched for this
     search_count = Column(Integer, default=0)  # Total searches performed
     search_interval_hours = Column(Integer, default=6)  # How often to search (adaptive)
 
     # Discovery statistics
     total_issues_discovered = Column(Integer, default=0)  # Total unique issues found
     last_discovery_count = Column(Integer, default=0)  # New issues found in last search
-    last_discovery_date = Column(
-        DateTime, nullable=True
-    )  # When we last found new issues
+    last_discovery_date = Column(DateTime, nullable=True)  # When we last found new issues
 
     # Search efficiency tracking
-    searches_without_new_issues = Column(
-        Integer, default=0
-    )  # Consecutive searches finding nothing new
+    searches_without_new_issues = Column(Integer, default=0)  # Consecutive searches finding nothing new
 
     created_at = Column(DateTime, default=utcnow, index=True)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
@@ -199,20 +173,14 @@ class PeriodicalTracking(Base):
             "download_category": self.download_category,
             "organization_pattern": self.organization_pattern,
             "periodical_metadata": self.periodical_metadata,
-            "last_metadata_update": self.last_metadata_update.isoformat()
-            if self.last_metadata_update
-            else None,
+            "last_metadata_update": self.last_metadata_update.isoformat() if self.last_metadata_update else None,
             # Search scheduling fields
-            "last_searched": self.last_searched.isoformat()
-            if self.last_searched
-            else None,
+            "last_searched": self.last_searched.isoformat() if self.last_searched else None,
             "search_count": self.search_count,
             "search_interval_hours": self.search_interval_hours,
             "total_issues_discovered": self.total_issues_discovered,
             "last_discovery_count": self.last_discovery_count,
-            "last_discovery_date": self.last_discovery_date.isoformat()
-            if self.last_discovery_date
-            else None,
+            "last_discovery_date": self.last_discovery_date.isoformat() if self.last_discovery_date else None,
             "searches_without_new_issues": self.searches_without_new_issues,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
@@ -231,13 +199,9 @@ class SearchResult(Base):
     url = Column(String(512), nullable=False)
     publication_date = Column(DateTime, nullable=True)
     raw_metadata = Column(JSON, nullable=True)  # Provider-specific fields as JSON
-    fuzzy_match_group_id = Column(
-        String(255), nullable=True, index=True
-    )  # Grouping for deduplication
+    fuzzy_match_group_id = Column(String(255), nullable=True, index=True)  # Grouping for deduplication
     created_at = Column(DateTime, default=utcnow, index=True)
-    periodical_id = Column(
-        Integer, ForeignKey("periodicals.id"), nullable=True
-    )  # Links to downloaded periodical
+    periodical_id = Column(Integer, ForeignKey("periodicals.id"), nullable=True)  # Links to downloaded periodical
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize SearchResult to dictionary for API responses"""
@@ -247,9 +211,7 @@ class SearchResult(Base):
             "query": self.query,
             "title": self.title,
             "url": self.url,
-            "publication_date": self.publication_date.isoformat()
-            if self.publication_date
-            else None,
+            "publication_date": self.publication_date.isoformat() if self.publication_date else None,
             "raw_metadata": self.raw_metadata,
             "fuzzy_match_group_id": self.fuzzy_match_group_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
@@ -271,27 +233,19 @@ class DownloadSubmission(Base):
         SKIPPED = "skipped"
 
     id = Column(Integer, primary_key=True)
-    tracking_id = Column(
-        Integer, ForeignKey("periodical_tracking.id"), nullable=False, index=True
-    )  # Which periodical
+    tracking_id = Column(Integer, ForeignKey("periodical_tracking.id"), nullable=False, index=True)  # Which periodical
     search_result_id = Column(
         Integer, ForeignKey("search_results.id"), nullable=True, index=True
     )  # Which search result
-    job_id = Column(
-        String(255), nullable=True, index=True
-    )  # Client's job ID (if submitted)
+    job_id = Column(String(255), nullable=True, index=True)  # Client's job ID (if submitted)
     status = Column(Enum(StatusEnum), default=StatusEnum.PENDING, index=True)
     source_url = Column(String(512), nullable=False)  # NZB URL or download link
     result_title = Column(String(255), nullable=False)  # Title from search result
-    fuzzy_match_group = Column(
-        String(255), nullable=True, index=True
-    )  # For dedup grouping
+    fuzzy_match_group = Column(String(255), nullable=True, index=True)  # For dedup grouping
     client_name = Column(String(100), nullable=True)  # Which client handled this
     attempt_count = Column(Integer, default=0)  # Number of download attempts
     last_error = Column(String(512), nullable=True)  # Last error message
-    extra_status = Column(
-        String(512), nullable=True
-    )  # Additional status info (e.g., rate limiting)
+    extra_status = Column(String(512), nullable=True)  # Additional status info (e.g., rate limiting)
     file_path = Column(String(512), nullable=True)  # Path where file was downloaded
     created_at = Column(DateTime, default=utcnow, index=True)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
@@ -329,9 +283,7 @@ class Download(Base):
         FAILED = "failed"
 
     id = Column(Integer, primary_key=True)
-    job_id = Column(
-        String(255), nullable=False, unique=True, index=True
-    )  # Client's job ID
+    job_id = Column(String(255), nullable=False, unique=True, index=True)  # Client's job ID
     status = Column(Enum(StatusEnum), default=StatusEnum.PENDING, index=True)
     source_url = Column(String(512), nullable=False)  # NZB URL sent to client
     client_name = Column(String(100), nullable=False)  # Which client handled this
@@ -372,9 +324,7 @@ class OCRJob(Base):
         HIGH = 10  # User-requested
 
     id = Column(Integer, primary_key=True)
-    periodical_id = Column(
-        Integer, ForeignKey("periodicals.id"), nullable=False, index=True
-    )
+    periodical_id = Column(Integer, ForeignKey("periodicals.id"), nullable=False, index=True)
     status = Column(Enum(StatusEnum), default=StatusEnum.PENDING, index=True)
     priority = Column(Integer, default=PriorityEnum.NORMAL.value, index=True)
     language = Column(String(50), nullable=True)  # OCR language hint
@@ -401,9 +351,7 @@ class OCRJob(Base):
             "processing_time_seconds": self.processing_time_seconds,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat()
-            if self.completed_at
-            else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 
@@ -420,20 +368,12 @@ class DiscoveredIssue(Base):
 
     # Primary identification
     id = Column(Integer, primary_key=True)
-    tracking_id = Column(
-        Integer, ForeignKey("periodical_tracking.id"), nullable=False, index=True
-    )
+    tracking_id = Column(Integer, ForeignKey("periodical_tracking.id"), nullable=False, index=True)
 
     # Issue identification (from search results)
-    title = Column(
-        String(255), nullable=False, index=True
-    )  # Original title from search
-    normalized_title = Column(
-        String(255), nullable=False, index=True
-    )  # Normalized for comparison
-    fuzzy_match_group = Column(
-        String(255), nullable=False, index=True
-    )  # For deduplication
+    title = Column(String(255), nullable=False, index=True)  # Original title from search
+    normalized_title = Column(String(255), nullable=False, index=True)  # Normalized for comparison
+    fuzzy_match_group = Column(String(255), nullable=False, index=True)  # For deduplication
 
     # Issue metadata (parsed from title, may be incomplete)
     issue_date = Column(DateTime, nullable=True, index=True)
@@ -445,14 +385,10 @@ class DiscoveredIssue(Base):
     # Discovery tracking
     first_seen = Column(DateTime, default=utcnow, index=True)
     last_seen = Column(DateTime, default=utcnow, index=True)
-    times_seen = Column(
-        Integer, default=1
-    )  # How many times we've seen this in searches
+    times_seen = Column(Integer, default=1)  # How many times we've seen this in searches
 
     # Download state machine
-    download_status = Column(
-        String(50), nullable=False, default="discovered", index=True
-    )
+    download_status = Column(String(50), nullable=False, default="discovered", index=True)
     # Values:
     # - "discovered": Found in search, not yet evaluated
     # - "wanted": Matches tracking criteria, ready for download
@@ -463,9 +399,7 @@ class DiscoveredIssue(Base):
     # - "permanently_failed": All retry attempts exhausted (attempt_count > max_retries)
     # - "ignored": Doesn't match criteria or user skipped
 
-    download_priority = Column(
-        Integer, default=50, index=True
-    )  # 1-100, higher = download first
+    download_priority = Column(Integer, default=50, index=True)  # 1-100, higher = download first
 
     # Search result tracking (we may see same issue from multiple providers)
     latest_url = Column(String(512), nullable=True)  # Most recent NZB/download URL
@@ -473,13 +407,9 @@ class DiscoveredIssue(Base):
     search_result_ids = Column(JSON, default=list)  # List of SearchResult.id we've seen
 
     # Download tracking
-    current_submission_id = Column(
-        Integer, ForeignKey("download_submissions.id"), nullable=True, index=True
-    )
+    current_submission_id = Column(Integer, ForeignKey("download_submissions.id"), nullable=True, index=True)
     submission_ids = Column(JSON, default=list)  # List of ALL DownloadSubmission IDs
-    periodical_id = Column(
-        Integer, ForeignKey("periodicals.id"), nullable=True, index=True
-    )
+    periodical_id = Column(Integer, ForeignKey("periodicals.id"), nullable=True, index=True)
 
     # Failure tracking
     attempt_count = Column(Integer, default=0)
@@ -519,9 +449,7 @@ class DiscoveredIssue(Base):
             "periodical_id": self.periodical_id,
             "attempt_count": self.attempt_count,
             "max_retries": self.max_retries,
-            "last_attempt": self.last_attempt.isoformat()
-            if self.last_attempt
-            else None,
+            "last_attempt": self.last_attempt.isoformat() if self.last_attempt else None,
             "last_error": self.last_error,
             "extra_metadata": self.extra_metadata,
             "created_at": self.created_at.isoformat() if self.created_at else None,
@@ -535,9 +463,7 @@ class ReadingProgress(Base):
     __tablename__ = "reading_progress"
 
     id = Column(Integer, primary_key=True)
-    periodical_id = Column(
-        Integer, ForeignKey("periodicals.id"), nullable=False, index=True, unique=True
-    )
+    periodical_id = Column(Integer, ForeignKey("periodicals.id"), nullable=False, index=True, unique=True)
     current_page = Column(Integer, nullable=True)  # For comics/PDFs (0-indexed)
     current_chapter = Column(Integer, nullable=True)  # For EPUBs (0-indexed)
     total_pages = Column(Integer, nullable=True)  # Total pages/chapters
@@ -555,9 +481,7 @@ class ReadingProgress(Base):
             "current_chapter": self.current_chapter,
             "total_pages": self.total_pages,
             "progress_percent": self.progress_percent,
-            "last_read_at": self.last_read_at.isoformat()
-            if self.last_read_at
-            else None,
+            "last_read_at": self.last_read_at.isoformat() if self.last_read_at else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

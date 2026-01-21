@@ -20,7 +20,7 @@ from core.config import ConfigLoader
 
 DEFAULT_DB_PATH = "./local/config/periodicals.db"
 DEFAULT_DOWNLOAD_DIR = "./local/downloads"
-DEFAULT_ORGANIZE_DIR = "./local/data"
+DEFAULT_LIBRARY_DIR = "./local/data"
 DEFAULT_CACHE_DIR = "./local/cache"
 DEFAULT_LOG_FILE = "./local/logs/periodical_manager.log"
 DEFAULT_LOG_LEVEL = "INFO"
@@ -44,7 +44,7 @@ def _setup_directories(config_loader: ConfigLoader) -> Dict[str, Path]:
         Dictionary containing Path objects for all required directories:
         - db_path: Database file path
         - download_dir: Download staging directory
-        - organize_dir: Organized periodicals directory
+        - library_dir: Library periodicals directory
         - cache_dir: Application cache directory
         - log_file: Log file path
         - log_dir: Log directory path
@@ -58,7 +58,7 @@ def _setup_directories(config_loader: ConfigLoader) -> Dict[str, Path]:
     paths = {
         "db_path": Path(storage_config.get("db_path", DEFAULT_DB_PATH)),
         "download_dir": Path(storage_config.get("download_dir", DEFAULT_DOWNLOAD_DIR)),
-        "organize_dir": Path(storage_config.get("organize_dir", DEFAULT_ORGANIZE_DIR)),
+        "library_dir": Path(storage_config.get("library_dir", DEFAULT_LIBRARY_DIR)),
         "cache_dir": Path(storage_config.get("cache_dir", DEFAULT_CACHE_DIR)),
     }
 
@@ -70,7 +70,7 @@ def _setup_directories(config_loader: ConfigLoader) -> Dict[str, Path]:
     for directory in [
         paths["db_path"].parent,
         paths["download_dir"],
-        paths["organize_dir"],
+        paths["library_dir"],
         paths["cache_dir"],
         paths["log_dir"],
     ]:

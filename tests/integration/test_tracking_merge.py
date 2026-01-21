@@ -332,13 +332,13 @@ class TestTrackingMergeIntegration:
             assert wired_mag_feb_pdf.exists()
             assert wired_mag_feb_jpg.exists()
 
-            # Mock the organize_base_dir to use our temp directory
+            # Mock the library_base_dir to use our temp directory
             import web.routers.tracking as tracking_module
 
             original_merge = tracking_module.merge_tracking
 
             async def patched_merge(target_id, source_ids):
-                # Temporarily patch the organize_base_dir
+                # Temporarily patch the library_base_dir
                 db_session = session_factory()
                 try:
                     from models.database import DownloadSubmission
@@ -355,7 +355,7 @@ class TestTrackingMergeIntegration:
                     periodicals_moved = 0
                     files_reorganized = 0
                     directories_to_cleanup = set()
-                    organize_base_dir = tmpdir_path  # Use temp dir
+                    library_base_dir = tmpdir_path  # Use temp dir
                     category_prefix = "_"
 
                     # Import helper functions
@@ -379,7 +379,7 @@ class TestTrackingMergeIntegration:
                             new_pdf_path, new_cover_path = _reorganize_periodical_files(
                                 periodical,
                                 target.title,
-                                organize_base_dir,
+                                library_base_dir,
                                 category_prefix,
                             )
 
@@ -399,7 +399,7 @@ class TestTrackingMergeIntegration:
                     # Clean up empty directories
                     for directory in directories_to_cleanup:
                         if directory.exists():
-                            cleanup_empty_directories(directory, organize_base_dir)
+                            cleanup_empty_directories(directory, library_base_dir)
 
                     return {
                         "success": True,

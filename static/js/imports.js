@@ -12,7 +12,7 @@ export class ImportsManager {
   /**
    * Import files from organized data directory - show modal for options
    */
-  async importFromOrganizeDir() {
+  async importFromLibraryDir() {
     // Show modal with options
     library.openImportModal();
   }
@@ -22,7 +22,7 @@ export class ImportsManager {
    */
   async saveImportSettings() {
     const pattern =
-      document.getElementById('import-organize-pattern').value || 'data/{category}/{title}/{year}/';
+      document.getElementById('import-organization-pattern').value || '{category}/{title}/{year}/';
     const enableTextScan = document.getElementById('import-enable-text-scan')?.checked ?? true;
     const enableOcr = document.getElementById('import-enable-ocr')?.checked ?? true;
     const messageDiv = document.getElementById('import-message');
@@ -80,8 +80,8 @@ export class ImportsManager {
       // Close modal
       library.closeImportModal();
 
-      // Import from organize directory (files are already organized, no pattern needed)
-      const response = await APIClient.authenticatedFetch('/api/import/from-organize-dir', {
+      // Import from library directory (files are already organized, no pattern needed)
+      const response = await APIClient.authenticatedFetch('/api/import/from-library-dir', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -160,7 +160,7 @@ export class ImportsManager {
 export const imports = new ImportsManager();
 
 // Expose functions globally for onclick handlers
-window.importFromOrganizeDir = () => imports.importFromOrganizeDir();
+window.importFromLibraryDir = () => imports.importFromLibraryDir();
 window.saveImportSettings = () => imports.saveImportSettings();
 window.startImportWithOptions = () => imports.startImportWithOptions();
 window.checkAndImportDownloads = () => imports.checkAndImportDownloads();

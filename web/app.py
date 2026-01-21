@@ -138,12 +138,12 @@ async def lifespan(app: FastAPI):
         category_prefix = import_config.get("category_prefix", "_")
         title_matcher = TitleMatcher(fuzzy_threshold)
         file_processor = FileOrganizer(
-            storage_config.get("organize_dir", "./_Magazines"),
+            storage_config.get("library_dir", "./_Magazines"),
             category_prefix=category_prefix,
         )
         file_importer = FileImporter(
             downloads_dir=storage_config.get("download_dir", "./downloads"),
-            organize_base_dir=storage_config.get("organize_dir", "./_Magazines"),
+            library_base_dir=storage_config.get("library_dir", "./_Magazines"),
             fuzzy_threshold=fuzzy_threshold,
             organization_pattern=import_config.get("organization_pattern"),
             category_prefix=category_prefix,
@@ -174,7 +174,7 @@ async def lifespan(app: FastAPI):
         # Initialize cover cleanup task
         cover_cleanup_task = CoverCleanup(
             session_factory=session_factory,
-            organize_base_dir=storage_config.get("organize_dir", "./_Magazines"),
+            library_base_dir=storage_config.get("library_dir", "./_Magazines"),
             file_importer=file_importer,
         )
         logger.info("Cover cleanup task initialized")
@@ -191,7 +191,7 @@ async def lifespan(app: FastAPI):
         # Initialize folder cleanup task
         folder_cleanup_task = FolderCleanup(
             downloads_dir=storage_config.get("download_dir", "./local/downloads"),
-            organized_dir=storage_config.get("organize_dir", "./_Magazines"),
+            library_dir=storage_config.get("library_dir", "./_Magazines"),
             dry_run=False,  # Set to True for testing
         )
         logger.info("Folder cleanup task initialized")
@@ -448,7 +448,7 @@ async def lifespan(app: FastAPI):
         app.state.auth_manager = auth_manager
         app.state.auth_middleware = AuthMiddleware(auth_manager)
         search.set_dependencies(search_providers, metadata_providers, title_matcher, session_factory)
-        periodicals.set_dependencies(session_factory, storage_config.get("organize_dir", "./"))
+        periodicals.set_dependencies(session_factory, storage_config.get("library_dir", "./"))
         tracking.set_dependencies(
             session_factory,
             search_providers,

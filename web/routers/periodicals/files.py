@@ -624,8 +624,8 @@ async def move_issue_to_tracking(periodical_id: int, target_tracking_id: int) ->
                 old_title = magazine.title
                 old_tracking_id = magazine.tracking_id
 
-                # Get organize directory from config or use default
-                organize_base_dir = Path("./local/data").resolve()
+                # Get library directory from config or use default
+                library_base_dir = Path("./local/data").resolve()
                 category_prefix = "_"
 
                 # Update the magazine's tracking_id
@@ -663,7 +663,7 @@ async def move_issue_to_tracking(periodical_id: int, target_tracking_id: int) ->
                         filename_base = f"{safe_title} - {month}{year}"
 
                         category_with_prefix = f"{category_prefix}{category}"
-                        target_dir = organize_base_dir / category_with_prefix / safe_title / year
+                        target_dir = library_base_dir / category_with_prefix / safe_title / year
                         target_dir.mkdir(parents=True, exist_ok=True)
 
                         new_pdf_path = target_dir / f"{filename_base}.pdf"
@@ -716,7 +716,7 @@ async def move_issue_to_tracking(periodical_id: int, target_tracking_id: int) ->
 
                 # Clean up old directory after successful commit
                 if old_dir_to_cleanup and old_dir_to_cleanup.exists():
-                    cleanup_empty_directories(old_dir_to_cleanup, organize_base_dir)
+                    cleanup_empty_directories(old_dir_to_cleanup, library_base_dir)
 
                 msg = f"Moved issue from '{old_title}' to '{target_tracking.title}'"
                 if files_reorganized:
