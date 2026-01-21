@@ -207,3 +207,338 @@ MAX_VALID_YEAR = 2100
 
 DUPLICATE_DATE_THRESHOLD_DAYS = 5
 """Days threshold for considering publications as duplicates"""
+
+
+# ==============================================================================
+# Multilingual Month Mappings
+# ==============================================================================
+
+MONTHS_BY_LANGUAGE = {
+    "English": {
+        "full": [
+            "january",
+            "february",
+            "march",
+            "april",
+            "may",
+            "june",
+            "july",
+            "august",
+            "september",
+            "october",
+            "november",
+            "december",
+        ],
+        "abbr": [
+            "jan",
+            "feb",
+            "mar",
+            "apr",
+            "may",
+            "jun",
+            "jul",
+            "aug",
+            "sep",
+            "sept",
+            "oct",
+            "nov",
+            "dec",
+        ],
+    },
+    "German": {
+        "full": [
+            "januar",
+            "februar",
+            "märz",
+            "april",
+            "mai",
+            "juni",
+            "juli",
+            "august",
+            "september",
+            "oktober",
+            "november",
+            "dezember",
+        ],
+        "abbr": ["marz"],  # ASCII alternative for märz
+    },
+    "Spanish": {
+        "full": [
+            "enero",
+            "febrero",
+            "marzo",
+            "abril",
+            "mayo",
+            "junio",
+            "julio",
+            "agosto",
+            "septiembre",
+            "octubre",
+            "noviembre",
+            "diciembre",
+        ],
+        "abbr": [],
+    },
+    "French": {
+        "full": [
+            "janvier",
+            "février",
+            "mars",
+            "avril",
+            "mai",
+            "juin",
+            "juillet",
+            "août",
+            "septembre",
+            "octobre",
+            "novembre",
+            "décembre",
+        ],
+        "abbr": ["fevrier", "aout", "decembre"],  # ASCII alternatives
+    },
+    "Italian": {
+        "full": [
+            "gennaio",
+            "febbraio",
+            "marzo",
+            "aprile",
+            "maggio",
+            "giugno",
+            "luglio",
+            "agosto",
+            "settembre",
+            "ottobre",
+            "novembre",
+            "dicembre",
+        ],
+        "abbr": [],
+    },
+    "Portuguese": {
+        "full": [
+            "janeiro",
+            "fevereiro",
+            "março",
+            "abril",
+            "maio",
+            "junho",
+            "julho",
+            "agosto",
+            "setembro",
+            "outubro",
+            "novembro",
+            "dezembro",
+        ],
+        "abbr": ["marco"],  # ASCII alternative for março
+    },
+    "Dutch": {
+        "full": [
+            "januari",
+            "februari",
+            "maart",
+            "april",
+            "mei",
+            "juni",
+            "juli",
+            "augustus",
+            "september",
+            "oktober",
+            "november",
+            "december",
+        ],
+        "abbr": [],
+    },
+    "Polish": {
+        "full": [
+            "styczeń",
+            "luty",
+            "marzec",
+            "kwiecień",
+            "maj",
+            "czerwiec",
+            "lipiec",
+            "sierpień",
+            "wrzesień",
+            "październik",
+            "listopad",
+            "grudzień",
+        ],
+        "abbr": [
+            "styczen",
+            "kwiecien",
+            "sierpien",
+            "wrzesien",
+            "pazdziernik",
+            "grudzien",
+        ],  # ASCII alternatives
+    },
+    "Russian": {
+        "full": [
+            "yanvar",
+            "fevral",
+            "mart",
+            "aprel",
+            "may",
+            "iyun",
+            "iyul",
+            "avgust",
+            "sentyabr",
+            "oktyabr",
+            "noyabr",
+            "dekabr",
+        ],
+        "abbr": [],
+    },
+    "Ukrainian": {
+        "full": [
+            "sichen",
+            "liuty",
+            "berezen",
+            "kviten",
+            "traven",
+            "cherven",
+            "lypen",
+            "serpen",
+            "veresen",
+            "zhovten",
+            "lystopad",
+            "hruden",
+        ],
+        "abbr": [],
+    },
+}
+"""Organized month names by language for regex pattern generation"""
+
+
+# ==============================================================================
+# Multilingual Season Mappings
+# ==============================================================================
+
+SEASONS_BY_LANGUAGE = {
+    "English": ["spring", "summer", "fall", "autumn", "winter"],
+    "German": ["frühling", "fruehling", "sommer", "herbst", "winter"],
+    "Spanish": ["primavera", "verano", "otoño", "otono", "invierno"],
+    "French": ["printemps", "été", "ete", "automne", "hiver"],
+    "Italian": ["primavera", "estate", "autunno", "inverno"],
+    "Portuguese": ["primavera", "verão", "verao", "outono", "inverno"],
+    "Dutch": ["lente", "zomer", "herfst", "winter"],
+    "Polish": ["wiosna", "lato", "jesień", "jesien", "zima"],
+    "Russian": ["vesna", "leto", "osen", "zima"],
+    "Ukrainian": ["vesna", "lito", "osin", "zyma"],
+}
+"""Organized season names by language for regex pattern generation"""
+
+
+# ==============================================================================
+# Regex Pattern Generators
+# ==============================================================================
+
+
+def get_supported_languages() -> list[str]:
+    """
+    Get list of languages supported for date parsing.
+
+    Returns:
+        List of language names that have month/season translations
+    """
+    return sorted(set(MONTHS_BY_LANGUAGE.keys()) | set(SEASONS_BY_LANGUAGE.keys()))
+
+
+def get_month_regex_pattern(languages: list[str] | None = None) -> str:
+    """
+    Generate regex pattern for month names in specified languages.
+
+    Args:
+        languages: List of language names to include. If None, includes all supported languages.
+
+    Returns:
+        Regex pattern string matching month names (e.g., "january|febrero|januar|...")
+
+    Example:
+        >>> pattern = get_month_regex_pattern(["English", "Spanish"])
+        >>> # Returns: "january|february|...|enero|febrero|..."
+    """
+    if languages is None:
+        languages = list(MONTHS_BY_LANGUAGE.keys())
+
+    all_months = set()
+    for lang in languages:
+        if lang in MONTHS_BY_LANGUAGE:
+            lang_data = MONTHS_BY_LANGUAGE[lang]
+            all_months.update(lang_data.get("full", []))
+            all_months.update(lang_data.get("abbr", []))
+
+    # Sort by length (longest first) to match longer names before shorter ones
+    sorted_months = sorted(all_months, key=len, reverse=True)
+    return "|".join(sorted_months)
+
+
+def get_season_regex_pattern(languages: list[str] | None = None) -> str:
+    """
+    Generate regex pattern for season names in specified languages.
+
+    Args:
+        languages: List of language names to include. If None, includes all supported languages.
+
+    Returns:
+        Regex pattern string matching season names (e.g., "spring|summer|primavera|...")
+
+    Example:
+        >>> pattern = get_season_regex_pattern(["English", "Spanish"])
+        >>> # Returns: "spring|summer|fall|autumn|winter|primavera|verano|..."
+    """
+    if languages is None:
+        languages = list(SEASONS_BY_LANGUAGE.keys())
+
+    all_seasons = set()
+    for lang in languages:
+        if lang in SEASONS_BY_LANGUAGE:
+            all_seasons.update(SEASONS_BY_LANGUAGE[lang])
+
+    # Sort by length (longest first) to match longer names before shorter ones
+    sorted_seasons = sorted(all_seasons, key=len, reverse=True)
+    return "|".join(sorted_seasons)
+
+
+def get_month_year_patterns(languages: list[str] | None = None) -> list[str]:
+    """
+    Generate list of regex patterns for "month year" formats in multiple languages.
+
+    Args:
+        languages: List of language names to include. If None, includes all supported languages.
+
+    Returns:
+        List of regex pattern strings for various month+year formats
+
+    Example:
+        >>> patterns = get_month_year_patterns(["English"])
+        >>> # Returns patterns matching "January 2024", "Jan 2024", "Jan2024", etc.
+    """
+    month_pattern = get_month_regex_pattern(languages)
+
+    return [
+        rf"\b({month_pattern})\s*\d{{4}}\b",  # "january 2024", "enero 2024", "jan2024"
+        r"\d{1,2}[/-]\d{4}",  # "01-2024" or "1/2024"
+        r"\d{4}[/-]\d{1,2}",  # "2024-01" or "2024/1"
+        r"\d{4}[\.\s]\d{1,2}",  # "2024.01" or "2024 01"
+    ]
+
+
+def get_season_year_patterns(languages: list[str] | None = None) -> list[str]:
+    """
+    Generate list of regex patterns for "season year" formats in multiple languages.
+
+    Args:
+        languages: List of language names to include. If None, includes all supported languages.
+
+    Returns:
+        List of regex pattern strings for season+year formats
+
+    Example:
+        >>> patterns = get_season_year_patterns(["English", "Spanish"])
+        >>> # Returns patterns matching "Spring 2024", "Primavera 2024", etc.
+    """
+    season_pattern = get_season_regex_pattern(languages)
+
+    return [
+        rf"\b({season_pattern})\s+\d{{4}}\b",  # "spring 2024", "primavera 2024"
+    ]

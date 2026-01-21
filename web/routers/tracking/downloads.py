@@ -7,7 +7,7 @@ from typing import Any, Dict
 from fastapi import HTTPException, Query
 
 from core.constants.errors import ErrorMessages
-from models.database import MagazineTracking
+from models.database import PeriodicalTracking
 from web.schemas import APIError
 from core.utils import run_in_thread
 from . import _shared
@@ -46,7 +46,7 @@ async def track_single_issue(tracking_id: int, edition_id: str, track: bool = Qu
         def _update():
             db_session = _shared._session_factory()
             try:
-                tracking = db_session.query(MagazineTracking).filter(MagazineTracking.id == tracking_id).first()
+                tracking = db_session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
                 if not tracking:
                     raise HTTPException(status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND)
 

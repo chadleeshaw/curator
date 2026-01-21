@@ -15,7 +15,7 @@ from sqlalchemy.orm import sessionmaker
 # Path setup handled by conftest.py
 
 from core.parsers import TitleMatcher
-from models.database import Base, Magazine, MagazineTracking
+from models.database import Base, Periodical, PeriodicalTracking
 from services import FileImporter
 
 
@@ -92,7 +92,7 @@ class TestTitleNormalization:
 
             if success:
                 # Get the imported magazine
-                magazine = session.query(Magazine).order_by(Magazine.id.desc()).first()
+                magazine = session.query(Periodical).order_by(Periodical.id.desc()).first()
                 if magazine:
                     imported_titles.append(magazine.title)
 
@@ -152,16 +152,16 @@ class TestTitleNormalization:
         # Simulate library view query (groups by title)
         # This is what the /api/periodicals endpoint does
         subquery = (
-            session.query(Magazine.title, func.max(Magazine.issue_date).label("max_date"))
-            .group_by(Magazine.title)
+            session.query(Periodical.title, func.max(Periodical.issue_date).label("max_date"))
+            .group_by(Periodical.title)
             .subquery()
         )
 
         grouped_periodicals = (
-            session.query(Magazine)
+            session.query(Periodical)
             .join(
                 subquery,
-                (Magazine.title == subquery.c.title) & (Magazine.issue_date == subquery.c.max_date),
+                (Periodical.title == subquery.c.title) & (Periodical.issue_date == subquery.c.max_date),
             )
             .all()
         )
@@ -173,7 +173,7 @@ class TestTitleNormalization:
 
         # Get issue count for the group
         periodical = grouped_periodicals[0]
-        issue_count = session.query(Magazine).filter(Magazine.title == periodical.title).count()
+        issue_count = session.query(Periodical).filter(Periodical.title == periodical.title).count()
         assert issue_count == 3, f"Expected 3 issues in group, got {issue_count}"
 
         session.close()
@@ -199,7 +199,7 @@ class TestTitleNormalization:
         session.commit()
 
         # Get the imported magazine
-        magazine = session.query(Magazine).first()
+        magazine = session.query(Periodical).first()
         assert magazine is not None
 
         # Check the organized file path
@@ -244,7 +244,7 @@ class TestTitleNormalization:
         session.commit()
 
         # Check tracking record
-        tracking = session.query(MagazineTracking).first()
+        tracking = session.query(PeriodicalTracking).first()
         assert tracking is not None, "Tracking record should be created"
 
         # Skip if title was extracted from temp directory
@@ -287,7 +287,7 @@ class TestTitleNormalization:
         session.commit()
 
         # Check how many unique titles we have
-        unique_titles = session.query(Magazine.title).distinct().all()
+        unique_titles = session.query(Periodical.title).distinct().all()
         unique_titles_list = [t[0] for t in unique_titles]
 
         # All should be grouped under one title containing "2600"

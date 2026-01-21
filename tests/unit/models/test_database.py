@@ -19,8 +19,8 @@ from models.database import (
     Base,
     Download,
     DownloadSubmission,
-    Magazine,
-    MagazineTracking,
+    Periodical,
+    PeriodicalTracking,
     SearchResult,
 )
 
@@ -50,7 +50,7 @@ class TestMagazineModel:
 
     def test_magazine_creation_with_all_fields(self):
         """Test Magazine model creation with all fields"""
-        mag = Magazine(
+        mag = Periodical(
             title="National Geographic",
             issue_date=datetime(2023, 3, 15),
             file_path="/data/National Geographic - Mar2023.pdf",
@@ -65,7 +65,7 @@ class TestMagazineModel:
 
     def test_magazine_required_fields_only(self):
         """Test Magazine model with only required fields"""
-        mag = Magazine(
+        mag = Periodical(
             title="Wired",
             issue_date=datetime(2020, 1, 1),
             file_path="/data/wired.pdf",
@@ -79,7 +79,7 @@ class TestMagazineModel:
 
     def test_magazine_persistence(self, session):
         """Test saving and retrieving Magazine from database"""
-        mag = Magazine(
+        mag = Periodical(
             title="Test Magazine",
             issue_date=datetime(2023, 1, 1),
             file_path="/test/path.pdf",
@@ -89,7 +89,7 @@ class TestMagazineModel:
         magazine_id = mag.id
 
         # Retrieve
-        retrieved = session.query(Magazine).filter(Magazine.id == magazine_id).first()
+        retrieved = session.query(Periodical).filter(Periodical.id == magazine_id).first()
         assert retrieved is not None
         assert retrieved.title == "Test Magazine"
         assert retrieved.file_path == "/test/path.pdf"
@@ -100,7 +100,7 @@ class TestMagazineTracking:
 
     def test_tracking_creation(self):
         """Test MagazineTracking model creation"""
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="OL1234567W",
             title="Time Magazine",
             first_publish_year=1923,
@@ -118,7 +118,7 @@ class TestMagazineTracking:
 
     def test_tracking_defaults(self, session):
         """Test MagazineTracking model default values"""
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="OL9876543W",
             title="Scientific American",
         )
@@ -202,7 +202,7 @@ class TestDownloadSubmissionModel:
     def test_download_submission_creation(self, session):
         """Test DownloadSubmission creation"""
         # Create tracking first
-        tracking = MagazineTracking(olid="test_mag", title="Test")
+        tracking = PeriodicalTracking(olid="test_mag", title="Test")
         session.add(tracking)
         session.flush()
 
@@ -236,7 +236,7 @@ class TestDatabaseOperations:
 
     def test_create_and_retrieve(self, session):
         """Test creating and retrieving records"""
-        mag = Magazine(
+        mag = Periodical(
             title="Test Magazine",
             issue_date=datetime(2023, 1, 1),
             file_path="/test/path.pdf",
@@ -245,14 +245,14 @@ class TestDatabaseOperations:
         session.commit()
         magazine_id = mag.id
 
-        retrieved = session.query(Magazine).filter(Magazine.id == magazine_id).first()
+        retrieved = session.query(Periodical).filter(Periodical.id == magazine_id).first()
         assert retrieved is not None
         assert retrieved.title == "Test Magazine"
 
     def test_foreign_key_relationships(self, session):
         """Test foreign key relationships"""
         # Create magazine
-        mag = Magazine(
+        mag = Periodical(
             title="Test Magazine",
             issue_date=datetime(2023, 1, 1),
             file_path="/test/path.pdf",
@@ -266,7 +266,7 @@ class TestDatabaseOperations:
             query="test",
             title="test result",
             url="https://test.com",
-            magazine_id=mag.id,
+            periodical_id=mag.id,
         )
         session.add(search_result)
         session.flush()
@@ -277,19 +277,19 @@ class TestDatabaseOperations:
             status=Download.StatusEnum.COMPLETED,
             source_url="https://test.com/nzb",
             client_name="test_client",
-            magazine_id=mag.id,
+            periodical_id=mag.id,
             search_result_id=search_result.id,
         )
         session.add(download)
         session.commit()
 
-        assert search_result.magazine_id == mag.id
-        assert download.magazine_id == mag.id
+        assert search_result.periodical_id == mag.id
+        assert download.periodical_id == mag.id
         assert download.search_result_id == search_result.id
 
     def test_unique_constraint_file_path(self, session):
         """Test unique constraint on Magazine file_path"""
-        mag1 = Magazine(
+        mag1 = Periodical(
             title="Magazine 1",
             issue_date=datetime(2023, 1, 1),
             file_path="/unique/path.pdf",
@@ -298,7 +298,7 @@ class TestDatabaseOperations:
         session.commit()
 
         # Try to create another with same file_path
-        mag2 = Magazine(
+        mag2 = Periodical(
             title="Magazine 2",
             issue_date=datetime(2023, 2, 1),
             file_path="/unique/path.pdf",
@@ -311,16 +311,16 @@ class TestDatabaseOperations:
     def test_olid_can_be_duplicate_for_languages(self, session):
         """Test that OLID can be shared across different language editions"""
         # Same OLID but different languages - should be allowed
-        tracking1 = MagazineTracking(olid="OL12345W", title="Wired Magazine", language="English")
+        tracking1 = PeriodicalTracking(olid="OL12345W", title="Wired Magazine", language="English")
         session.add(tracking1)
         session.commit()
 
-        tracking2 = MagazineTracking(olid="OL12345W", title="Wired Magazine", language="German")
+        tracking2 = PeriodicalTracking(olid="OL12345W", title="Wired Magazine", language="German")
         session.add(tracking2)
         session.commit()  # Should not raise - duplicate OLID is allowed
 
         # Verify both exist
-        all_tracking = session.query(MagazineTracking).filter(MagazineTracking.olid == "OL12345W").all()
+        all_tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.olid == "OL12345W").all()
         assert len(all_tracking) == 2
         assert {t.language for t in all_tracking} == {"English", "German"}
 
@@ -330,7 +330,7 @@ class TestLanguageFields:
 
     def test_magazine_language_default(self, session):
         """Test that Magazine language defaults to English"""
-        mag = Magazine(
+        mag = Periodical(
             title="Test Magazine",
             issue_date=datetime(2024, 1, 1),
             file_path="/test/magazine.pdf",
@@ -342,7 +342,7 @@ class TestLanguageFields:
 
     def test_magazine_language_custom(self, session):
         """Test setting custom language on Magazine"""
-        mag = Magazine(
+        mag = Periodical(
             title="Wired Magazine",
             issue_date=datetime(2024, 1, 1),
             file_path="/test/wired_de.pdf",
@@ -354,12 +354,12 @@ class TestLanguageFields:
         assert mag.language == "German"
 
         # Verify it persists
-        retrieved = session.query(Magazine).filter(Magazine.id == mag.id).first()
+        retrieved = session.query(Periodical).filter(Periodical.id == mag.id).first()
         assert retrieved.language == "German"
 
     def test_tracking_language_default(self, session):
         """Test that MagazineTracking language defaults to English"""
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="OL12345W",
             title="Test Periodical",
         )
@@ -370,7 +370,7 @@ class TestLanguageFields:
 
     def test_tracking_language_custom(self, session):
         """Test setting custom language on MagazineTracking"""
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="OL99999W",
             title="Revista Española",
             language="Spanish",
@@ -381,13 +381,13 @@ class TestLanguageFields:
         assert tracking.language == "Spanish"
 
         # Verify it persists
-        retrieved = session.query(MagazineTracking).filter(MagazineTracking.id == tracking.id).first()
+        retrieved = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking.id).first()
         assert retrieved.language == "Spanish"
 
     def test_multiple_languages_same_title(self, session):
         """Test tracking same magazine in multiple languages"""
         # English edition
-        tracking_en = MagazineTracking(
+        tracking_en = PeriodicalTracking(
             olid="wired",
             title="Wired Magazine",
             language="English",
@@ -395,7 +395,7 @@ class TestLanguageFields:
         session.add(tracking_en)
 
         # German edition
-        tracking_de = MagazineTracking(
+        tracking_de = PeriodicalTracking(
             olid="wired",
             title="Wired Magazine",
             language="German",
@@ -403,7 +403,7 @@ class TestLanguageFields:
         session.add(tracking_de)
 
         # French edition
-        tracking_fr = MagazineTracking(
+        tracking_fr = PeriodicalTracking(
             olid="wired",
             title="Wired Magazine",
             language="French",
@@ -413,7 +413,7 @@ class TestLanguageFields:
         session.commit()
 
         # All should persist independently
-        all_wired = session.query(MagazineTracking).filter(MagazineTracking.olid == "wired").all()
+        all_wired = session.query(PeriodicalTracking).filter(PeriodicalTracking.olid == "wired").all()
         assert len(all_wired) == 3
 
         languages = {t.language for t in all_wired}
@@ -422,27 +422,39 @@ class TestLanguageFields:
     def test_magazine_language_query(self, session):
         """Test querying magazines by language"""
         # Add English magazines
-        mag_en1 = Magazine(
-            title="PC Gamer", issue_date=datetime(2024, 1, 1), file_path="/test/pcgamer_en.pdf", language="English"
+        mag_en1 = Periodical(
+            title="PC Gamer",
+            issue_date=datetime(2024, 1, 1),
+            file_path="/test/pcgamer_en.pdf",
+            language="English",
         )
-        mag_en2 = Magazine(
-            title="Wired", issue_date=datetime(2024, 1, 1), file_path="/test/wired_en.pdf", language="English"
+        mag_en2 = Periodical(
+            title="Wired",
+            issue_date=datetime(2024, 1, 1),
+            file_path="/test/wired_en.pdf",
+            language="English",
         )
 
         # Add German magazines
-        mag_de1 = Magazine(
-            title="PC Gamer", issue_date=datetime(2024, 1, 1), file_path="/test/pcgamer_de.pdf", language="German"
+        mag_de1 = Periodical(
+            title="PC Gamer",
+            issue_date=datetime(2024, 1, 1),
+            file_path="/test/pcgamer_de.pdf",
+            language="German",
         )
-        mag_de2 = Magazine(
-            title="Wired", issue_date=datetime(2024, 1, 1), file_path="/test/wired_de.pdf", language="German"
+        mag_de2 = Periodical(
+            title="Wired",
+            issue_date=datetime(2024, 1, 1),
+            file_path="/test/wired_de.pdf",
+            language="German",
         )
 
         session.add_all([mag_en1, mag_en2, mag_de1, mag_de2])
         session.commit()
 
         # Query by language
-        english_mags = session.query(Magazine).filter(Magazine.language == "English").all()
-        german_mags = session.query(Magazine).filter(Magazine.language == "German").all()
+        english_mags = session.query(Periodical).filter(Periodical.language == "English").all()
+        german_mags = session.query(Periodical).filter(Periodical.language == "German").all()
 
         assert len(english_mags) == 2
         assert len(german_mags) == 2
@@ -453,7 +465,7 @@ class TestTimestampFields:
 
     def test_magazine_timestamps(self, session):
         """Test Magazine created_at and updated_at"""
-        mag = Magazine(
+        mag = Periodical(
             title="Timestamped Magazine",
             issue_date=datetime(2023, 1, 1),
             file_path="/test/timestamps.pdf",
@@ -468,7 +480,7 @@ class TestTimestampFields:
 
     def test_tracking_timestamps(self, session):
         """Test MagazineTracking timestamps"""
-        tracking = MagazineTracking(olid="test_olid", title="Test")
+        tracking = PeriodicalTracking(olid="test_olid", title="Test")
         session.add(tracking)
         session.commit()
 
@@ -481,15 +493,15 @@ class TestIndexing:
 
     def test_magazine_indexed_fields(self):
         """Test Magazine indexed columns"""
-        assert hasattr(Magazine, "title")
-        assert hasattr(Magazine, "issue_date")
-        assert hasattr(Magazine, "created_at")
+        assert hasattr(Periodical, "title")
+        assert hasattr(Periodical, "issue_date")
+        assert hasattr(Periodical, "created_at")
 
     def test_tracking_indexed_fields(self):
         """Test MagazineTracking indexed columns"""
-        assert hasattr(MagazineTracking, "olid")
-        assert hasattr(MagazineTracking, "title")
-        assert hasattr(MagazineTracking, "created_at")
+        assert hasattr(PeriodicalTracking, "olid")
+        assert hasattr(PeriodicalTracking, "title")
+        assert hasattr(PeriodicalTracking, "created_at")
 
 
 if __name__ == "__main__":

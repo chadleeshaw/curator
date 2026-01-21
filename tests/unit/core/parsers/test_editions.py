@@ -16,7 +16,7 @@ from sqlalchemy.orm import sessionmaker
 from services import DownloadManager
 from models.database import (
     Base,
-    MagazineTracking,
+    PeriodicalTracking,
     DownloadSubmission,
     SearchResult as DBSearchResult,
 )
@@ -110,7 +110,7 @@ class TestSelectedEditionsDict:
         engine, session_factory = test_db
         session = session_factory()
 
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test-mag",
             title="Test Magazine",
         )
@@ -126,7 +126,7 @@ class TestSelectedEditionsDict:
         engine, session_factory = test_db
         session = session_factory()
 
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test-mag",
             title="Test Magazine",
             selected_editions={"OL123456M": True, "OL123457M": True},
@@ -144,7 +144,7 @@ class TestSelectedEditionsDict:
         engine, session_factory = test_db
         session = session_factory()
 
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test-mag",
             title="Test Magazine",
             selected_editions={"OL123456M": True, "OL123457M": False},
@@ -169,7 +169,7 @@ class TestDownloadSelectedEditions:
         engine, session_factory = test_db
         session = session_factory()
 
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test-mag",
             title="Test Magazine",
             selected_editions={
@@ -194,7 +194,7 @@ class TestDownloadSelectedEditions:
         engine, session_factory = test_db
         session = session_factory()
 
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test-mag",
             title="Test Magazine",
             selected_editions={},  # Empty
@@ -214,7 +214,7 @@ class TestDownloadSelectedEditions:
         engine, session_factory = test_db
         session = session_factory()
 
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test-mag",
             title="Test Magazine",
             selected_editions={
@@ -240,7 +240,7 @@ class TestEditionMatching:
         engine, session_factory = test_db
         session = session_factory()
 
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test-mag",
             title="Test Magazine",
             selected_editions={"OL123456M": True},
@@ -281,7 +281,7 @@ class TestEditionMatching:
             max_downloads=10,
         )
 
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test-mag",
             title="Test",
             selected_editions={"OL999999M": True},
@@ -320,7 +320,7 @@ class TestEditionMatching:
             max_downloads=10,
         )
 
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test-mag",
             title="Test Magazine",
             selected_editions={"OL123456M": True},
@@ -361,7 +361,7 @@ class TestEditionMatching:
             fuzzy_threshold=80,
         )
 
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test-mag",
             title="Test Magazine",
             selected_editions={"OL123456M": True},  # Different from search result
@@ -386,7 +386,7 @@ class TestAutoDownloadIntegration:
         session = session_factory()
 
         # Create tracking with selected editions
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=False,
@@ -398,7 +398,7 @@ class TestAutoDownloadIntegration:
 
         # Query for periodicals to check (mimics auto_download_task logic)
         tracked_with_selections = (
-            session.query(MagazineTracking).filter(MagazineTracking.selected_editions.isnot(None)).all()
+            session.query(PeriodicalTracking).filter(PeriodicalTracking.selected_editions.isnot(None)).all()
         )
 
         # Should find the tracking record

@@ -9,12 +9,12 @@ from datetime import datetime
 # Path setup handled by conftest.py
 
 from services.ocr.queue import _apply_scan_metadata_to_magazine
-from models.database import Magazine
+from models.database import Periodical
 
 
 def test_apply_year_from_scan():
     """Test applying year from scan when not present in metadata"""
-    magazine = Magazine(
+    magazine = Periodical(
         id=1,
         title="Test Magazine",
         language="English",
@@ -35,7 +35,7 @@ def test_apply_year_from_scan():
 
 def test_apply_volume_from_scan():
     """Test applying volume from scan when not present"""
-    magazine = Magazine(
+    magazine = Periodical(
         id=2,
         title="Tech Monthly",
         language="English",
@@ -56,7 +56,7 @@ def test_apply_volume_from_scan():
 
 def test_dont_overwrite_existing_year():
     """Test that existing year from filename parsing is not overridden by low-confidence OCR"""
-    magazine = Magazine(
+    magazine = Periodical(
         id=3,
         title="Science Weekly",
         language="English",
@@ -86,7 +86,7 @@ def test_dont_overwrite_existing_year():
 
 def test_dont_overwrite_existing_issue_number():
     """Test that existing issue number from filename is preserved when OCR confidence is low"""
-    magazine = Magazine(
+    magazine = Periodical(
         id=4,
         title="Gaming Magazine",
         language="English",
@@ -113,7 +113,7 @@ def test_dont_overwrite_existing_issue_number():
 
 def test_apply_special_edition_flag():
     """Test applying special edition flag from scan"""
-    magazine = Magazine(
+    magazine = Periodical(
         id=5,
         title="Holiday Magazine",
         language="English",
@@ -134,7 +134,7 @@ def test_apply_special_edition_flag():
 
 def test_partial_metadata_enhancement():
     """Test filling in only missing fields"""
-    magazine = Magazine(
+    magazine = Periodical(
         id=6,
         title="Mixed Metadata",
         language="English",
@@ -161,7 +161,7 @@ def test_partial_metadata_enhancement():
 
 def test_no_update_when_all_fields_present():
     """Test that filename values are preserved when OCR confidence is low"""
-    magazine = Magazine(
+    magazine = Periodical(
         id=7,
         title="Complete Magazine",
         language="English",
@@ -199,7 +199,7 @@ def test_no_update_when_all_fields_present():
 
 def test_empty_scan_metadata():
     """Test handling of empty scan metadata"""
-    magazine = Magazine(
+    magazine = Periodical(
         id=8,
         title="Empty Scan",
         language="English",
@@ -218,7 +218,7 @@ def test_empty_scan_metadata():
 
 def test_none_scan_metadata():
     """Test handling of None scan metadata"""
-    magazine = Magazine(
+    magazine = Periodical(
         id=9,
         title="None Scan",
         language="English",
@@ -236,7 +236,7 @@ def test_update_issue_date_when_year_found():
     """Test that issue_date is updated when year is applied from scan"""
     # Create magazine with placeholder date (same as created_at)
     created_time = datetime(2024, 1, 15, 10, 30, 0)
-    magazine = Magazine(
+    magazine = Periodical(
         id=10,
         title="Date Update Test",
         language="English",
@@ -260,7 +260,7 @@ def test_update_issue_date_when_year_found():
 
 def test_month_conversion_to_name():
     """Test that month numbers are correctly converted to month names"""
-    magazine = Magazine(
+    magazine = Periodical(
         id=11,
         title="Month Test",
         language="English",
@@ -273,7 +273,7 @@ def test_month_conversion_to_name():
     test_months = [(1, "January"), (6, "June"), (12, "December")]
 
     for month_num, expected_name in test_months:
-        mag = Magazine(
+        mag = Periodical(
             id=11,
             title="Month Test",
             language="English",

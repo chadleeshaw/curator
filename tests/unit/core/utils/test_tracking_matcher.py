@@ -3,6 +3,7 @@ Test the tracking matcher functionality
 """
 
 import pytest
+from core.constants.category import CATEGORY_MAGAZINE
 from services.importer.matcher import TrackingMatcher
 
 
@@ -76,7 +77,10 @@ def test_language_matching():
 
     # With matching language
     score_with_lang, breakdown = matcher.match_to_tracking(
-        parsed_title="Wired US", tracking_title="Wired US", parsed_language="English", tracking_language="English"
+        parsed_title="Wired US",
+        tracking_title="Wired US",
+        parsed_language="English",
+        tracking_language="English",
     )
 
     # Without language info
@@ -93,7 +97,10 @@ def test_country_matching():
 
     # With matching country
     score_with_country, breakdown = matcher.match_to_tracking(
-        parsed_title="Wired", tracking_title="Wired", parsed_country="US", tracking_country="US"
+        parsed_title="Wired",
+        tracking_title="Wired",
+        parsed_country="US",
+        tracking_country="US",
     )
 
     # Without country info
@@ -109,9 +116,9 @@ def test_find_best_match():
     matcher = TrackingMatcher()
 
     tracking_records = [
-        MockTracking(1, "National Geographic", "English", "US", "Magazines"),
-        MockTracking(2, "Wired US", "English", "US", "Magazines"),
-        MockTracking(3, "Time", "English", "US", "Magazines"),
+        MockTracking(1, "National Geographic", "English", "US", CATEGORY_MAGAZINE),
+        MockTracking(2, "Wired US", "English", "US", CATEGORY_MAGAZINE),
+        MockTracking(3, "Time", "English", "US", CATEGORY_MAGAZINE),
     ]
 
     # Should match Wired US
@@ -120,7 +127,7 @@ def test_find_best_match():
         tracking_records=tracking_records,
         parsed_language="English",
         parsed_country="US",
-        parsed_category="Magazines",
+        parsed_category=CATEGORY_MAGAZINE,
     )
 
     assert result is not None
@@ -134,13 +141,15 @@ def test_no_match_below_threshold():
     matcher = TrackingMatcher()
 
     tracking_records = [
-        MockTracking(1, "National Geographic", "English", "US", "Magazines"),
-        MockTracking(2, "Wired", "English", "US", "Magazines"),
+        MockTracking(1, "National Geographic", "English", "US", CATEGORY_MAGAZINE),
+        MockTracking(2, "Wired", "English", "US", CATEGORY_MAGAZINE),
     ]
 
     # Should NOT match any of these
     result = matcher.find_best_match(
-        parsed_title="Sports Illustrated", tracking_records=tracking_records, parsed_language="English"
+        parsed_title="Sports Illustrated",
+        tracking_records=tracking_records,
+        parsed_language="English",
     )
 
     # Should either return None or a result with is_match=False
@@ -163,12 +172,18 @@ def test_country_mismatch_penalty():
 
     # Matching country
     score_match, _ = matcher.match_to_tracking(
-        parsed_title="Wired", tracking_title="Wired", parsed_country="US", tracking_country="US"
+        parsed_title="Wired",
+        tracking_title="Wired",
+        parsed_country="US",
+        tracking_country="US",
     )
 
     # Mismatched country
     score_mismatch, breakdown = matcher.match_to_tracking(
-        parsed_title="Wired", tracking_title="Wired", parsed_country="US", tracking_country="GB"
+        parsed_title="Wired",
+        tracking_title="Wired",
+        parsed_country="US",
+        tracking_country="GB",
     )
 
     # Country mismatch now blocks matching entirely (score = 0)
@@ -181,7 +196,7 @@ def test_regional_editions_dont_match():
     matcher = TrackingMatcher()
 
     tracking_records = [
-        MockTracking(1, "GQ", "English", "US", "Magazines"),
+        MockTracking(1, "GQ", "English", "US", CATEGORY_MAGAZINE),
     ]
 
     # GQ South Africa should NOT match GQ US
@@ -190,7 +205,7 @@ def test_regional_editions_dont_match():
         tracking_records=tracking_records,
         parsed_language="English",
         parsed_country="ZA",  # South Africa
-        parsed_category="Magazines",
+        parsed_category=CATEGORY_MAGAZINE,
     )
 
     # Should not match due to country mismatch blocking

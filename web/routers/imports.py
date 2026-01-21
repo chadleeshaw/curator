@@ -9,6 +9,7 @@ from typing import Any, Callable, Dict, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
+from core.constants.category import DEFAULT_CATEGORY
 from core.constants.errors import ErrorMessages
 from core.utils.general import find_pdf_epub_files
 from web.schemas import ImportOptionsRequest
@@ -191,7 +192,7 @@ async def import_from_organize_dir(
 
 @router.post("/reorganize")
 async def reorganize_library(
-    category: str = "Magazines",
+    category: str = DEFAULT_CATEGORY,
     pattern: Optional[str] = None,
     dry_run: Optional[bool] = None,
 ) -> Dict[str, Any]:
@@ -202,7 +203,7 @@ async def reorganize_library(
     to the correct location based on their metadata in the database.
 
     Args:
-        category: Category to reorganize (default: "Magazines")
+        category: Category to reorganize (default: DEFAULT_CATEGORY from constants)
         pattern: Organization pattern with tags like {category}/{title}/{year}/ (uses config default if not provided)
         dry_run: If True, only report what would be done without making changes.
                  If None (default), checks CURATOR_DRY_RUN env var (defaults to False if not set)

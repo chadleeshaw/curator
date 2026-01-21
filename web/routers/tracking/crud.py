@@ -8,12 +8,13 @@ from typing import Any, Dict, Optional, Tuple
 
 from fastapi import HTTPException, Query
 
+from core.constants.category import DEFAULT_CATEGORY
 from core.constants.errors import ErrorMessages
 from core.parsers import sanitize_filename
 from core.utils.general import (
     generate_olid,
 )
-from models.database import MagazineTracking
+from models.database import PeriodicalTracking
 from web.schemas import APIError
 from core.utils import run_in_thread
 from . import _shared
@@ -62,7 +63,7 @@ async def start_tracking_periodical(
         def _create():
             db_session = _shared._session_factory()
             try:
-                existing = db_session.query(MagazineTracking).filter(MagazineTracking.olid == olid).first()
+                existing = db_session.query(PeriodicalTracking).filter(PeriodicalTracking.olid == olid).first()
                 if existing:
                     return {
                         "success": False,
@@ -70,7 +71,7 @@ async def start_tracking_periodical(
                         "tracking_id": existing.id,
                     }
 
-                tracking = MagazineTracking(
+                tracking = PeriodicalTracking(
                     olid=olid,
                     title=title.strip(),
                     category=category.strip() if category else None,
@@ -129,8 +130,8 @@ async def list_tracked_periodicals(skip: int = 0, limit: int = 50) -> Dict[str, 
         def _query():
             db_session = _shared._session_factory()
             try:
-                tracked = db_session.query(MagazineTracking).offset(skip).limit(limit).all()
-                total = db_session.query(MagazineTracking).count()
+                tracked = db_session.query(PeriodicalTracking).offset(skip).limit(limit).all()
+                total = db_session.query(PeriodicalTracking).count()
 
                 return {
                     "success": True,
@@ -170,39 +171,41 @@ async def list_tracked_magazines(
             db_session = _shared._session_factory()
             try:
                 is_descending = sort_order.lower() == "desc"
-                query = db_session.query(MagazineTracking)
+                query = db_session.query(PeriodicalTracking)
 
                 if sort_by == "category":
-                    sort_expr = MagazineTracking.category.desc() if is_descending else MagazineTracking.category.asc()
-                    query = query.order_by(sort_expr, MagazineTracking.title.asc())
+                    sort_expr = (
+                        PeriodicalTracking.category.desc() if is_descending else PeriodicalTracking.category.asc()
+                    )
+                    query = query.order_by(sort_expr, PeriodicalTracking.title.asc())
                 elif sort_by == "tracking_mode":
                     if is_descending:
                         query = query.order_by(
-                            MagazineTracking.track_all_editions.asc(),
-                            MagazineTracking.track_new_only.asc(),
+                            PeriodicalTracking.track_all_editions.asc(),
+                            PeriodicalTracking.track_new_only.asc(),
                         )
                     else:
                         query = query.order_by(
-                            MagazineTracking.track_all_editions.desc(),
-                            MagazineTracking.track_new_only.desc(),
+                            PeriodicalTracking.track_all_editions.desc(),
+                            PeriodicalTracking.track_new_only.desc(),
                         )
                 else:
-                    sort_expr = MagazineTracking.title.desc() if is_descending else MagazineTracking.title.asc()
+                    sort_expr = PeriodicalTracking.title.desc() if is_descending else PeriodicalTracking.title.asc()
                     query = query.order_by(sort_expr)
 
                 tracked = query.offset(skip).limit(limit).all()
-                total = db_session.query(MagazineTracking).count()
+                total = db_session.query(PeriodicalTracking).count()
 
                 # Compute library count and failed download count for each tracked periodical
                 from models.database import (
-                    Magazine,
+                    Periodical,
                     DiscoveredIssue,
                     DownloadSubmission,
                 )
 
                 tracked_list = []
                 for t in tracked:
-                    library_count = db_session.query(Magazine).filter(Magazine.tracking_id == t.id).count()
+                    library_count = db_session.query(Periodical).filter(Periodical.tracking_id == t.id).count()
 
                     # Count failed downloads from both sources for backward compatibility:
                     # 1. New Issue Discovery system (canonical going forward)
@@ -272,7 +275,7 @@ async def get_tracking_details(tracking_id: int) -> Dict[str, Any]:
         def _query():
             db_session = _shared._session_factory()
             try:
-                tracking = db_session.query(MagazineTracking).filter(MagazineTracking.id == tracking_id).first()
+                tracking = db_session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
                 if not tracking:
                     raise HTTPException(status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND)
 
@@ -311,14 +314,14 @@ async def get_tracking_details(tracking_id: int) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-def _reorganize_magazine_files(
-    magazine, new_title: str, organize_base_dir: Path, category_prefix: str = "_"
+def _reorganize_periodical_files(
+    periodical, new_title: str, organize_base_dir: Path, category_prefix: str = "_"
 ) -> Tuple[Optional[str], Optional[str]]:
     """
-    Reorganize magazine files to match new title structure.
+    Reorganize periodical files to match new title structure.
 
     Args:
-        magazine: Magazine database object
+        magazine: Periodical database object
         new_title: New title to use for folder organization
         organize_base_dir: Base directory for organized files
         category_prefix: Prefix for category folders (default: "_")
@@ -330,12 +333,16 @@ def _reorganize_magazine_files(
         Exception: If file reorganization fails (caught and returns None, None)
     """
     try:
-        old_pdf_path = Path(magazine.file_path)
-        old_cover_path = Path(magazine.cover_path) if magazine.cover_path else None
+        old_pdf_path = Path(periodical.file_path)
+        old_cover_path = Path(periodical.cover_path) if periodical.cover_path else None
 
         # Extract metadata from current path structure
-        category = magazine.extra_metadata.get("category", "Magazines") if magazine.extra_metadata else "Magazines"
-        issue_date = magazine.issue_date
+        category = (
+            periodical.extra_metadata.get("category", DEFAULT_CATEGORY)
+            if periodical.extra_metadata
+            else DEFAULT_CATEGORY
+        )
+        issue_date = periodical.issue_date
 
         # Build new path structure (without language folder)
         safe_title = sanitize_filename(new_title)
@@ -377,7 +384,7 @@ def _reorganize_magazine_files(
         return str(new_pdf_path), str(new_cover_path) if new_cover_path else None
 
     except Exception as e:
-        logger.error(f"Error reorganizing magazine files: {e}", exc_info=True)
+        logger.error(f"Error reorganizing periodical files: {e}", exc_info=True)
         return None, None
 
 
@@ -401,7 +408,7 @@ async def delete_tracking(tracking_id: int) -> Dict[str, Any]:
         def _delete():
             db_session = _shared._session_factory()
             try:
-                tracking = db_session.query(MagazineTracking).filter(MagazineTracking.id == tracking_id).first()
+                tracking = db_session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
                 if not tracking:
                     raise HTTPException(status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND)
 

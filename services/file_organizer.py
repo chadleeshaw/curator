@@ -497,8 +497,8 @@ class FileOrganizer:
             Dictionary with reorganization results
         """
         from models.database import (
-            Magazine,
-            MagazineTracking,
+            Periodical,
+            PeriodicalTracking,
         )  # Import here to avoid circular dependency
 
         category_with_prefix = f"{self.category_prefix}{category}"
@@ -522,7 +522,7 @@ class FileOrganizer:
         old_directories = set()  # Track directories we moved files from
 
         # Query all magazines in this category from database
-        magazines = db_session.query(Magazine).filter(Magazine.file_path.like(f"%{category_with_prefix}%")).all()
+        magazines = db_session.query(Periodical).filter(Periodical.file_path.like(f"%{category_with_prefix}%")).all()
 
         logger.info(f"Found {len(magazines)} magazine records in database for category {category}")
 
@@ -541,7 +541,7 @@ class FileOrganizer:
                 # Get country from tracking record if available
                 country = None
                 if magazine.tracking_id:
-                    tracking = db_session.query(MagazineTracking).filter_by(id=magazine.tracking_id).first()
+                    tracking = db_session.query(PeriodicalTracking).filter_by(id=magazine.tracking_id).first()
                     if tracking:
                         country = tracking.country
 
@@ -630,7 +630,7 @@ class FileOrganizer:
                     final_path = self._get_unique_target_path(target_dir, filename)
 
                     # Check if target path already exists in database (to avoid UNIQUE constraint error)
-                    existing_record = db_session.query(Magazine).filter_by(file_path=str(final_path)).first()
+                    existing_record = db_session.query(Periodical).filter_by(file_path=str(final_path)).first()
                     if existing_record and existing_record.id != magazine.id:
                         logger.warning(
                             f"Target path already exists in database for different record: {final_path}. "
@@ -732,7 +732,7 @@ class FileOrganizer:
         Returns:
             Dictionary with processing results
         """
-        from models.database import Magazine
+        from models.database import Periodical
 
         files_found = 0
         files_reorganized = 0
@@ -748,7 +748,7 @@ class FileOrganizer:
                 continue
 
             # Skip if file is already in database
-            existing = db_session.query(Magazine).filter(Magazine.file_path == str(file_path)).first()
+            existing = db_session.query(Periodical).filter(Periodical.file_path == str(file_path)).first()
             if existing:
                 continue  # Already handled by database reorganization
 

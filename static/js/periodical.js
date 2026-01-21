@@ -17,14 +17,6 @@ let pendingDeleteId = null;
 let currentMagazineId = null;
 let currentMagazineData = null;
 
-// Initialize theme from localStorage
-function initializeTheme() {
-  const savedTheme = localStorage.getItem('curator-theme') || 'dark';
-  if (savedTheme === 'dark') {
-    document.body.classList.add('dark-mode');
-  }
-}
-
 // Delete modal functions
 function openDeleteModal(magazineId, title) {
   pendingDeleteId = magazineId;
@@ -822,10 +814,8 @@ window.openMoveIssueModal = openMoveIssueModal;
 window.closeMoveIssueModal = closeMoveIssueModal;
 window.confirmMoveIssue = confirmMoveIssue;
 
-// Initialize theme on page load
+// Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
-  initializeTheme();
-
   // Ensure delete modal is closed on page load
   const deleteModal = document.getElementById('delete-modal');
   if (deleteModal && typeof deleteModal.close === 'function') {

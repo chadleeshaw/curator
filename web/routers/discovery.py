@@ -16,7 +16,7 @@ from sqlalchemy import and_, desc, func
 from sqlalchemy.orm import sessionmaker
 
 from core.utils import run_in_thread
-from models.database import DiscoveredIssue, MagazineTracking
+from models.database import DiscoveredIssue, PeriodicalTracking
 from services import IssueDiscoveryService, SearchScheduler
 
 logger = logging.getLogger(__name__)
@@ -123,7 +123,7 @@ async def list_discovered_issues(
 
             # Get tracking titles for all issues
             tracking_ids = {issue.tracking_id for issue in issues}
-            trackings = db.query(MagazineTracking).filter(MagazineTracking.id.in_(tracking_ids)).all()
+            trackings = db.query(PeriodicalTracking).filter(PeriodicalTracking.id.in_(tracking_ids)).all()
             tracking_map = {t.id: t.title for t in trackings}
 
             # Build response
@@ -168,7 +168,7 @@ async def get_discovered_issue(issue_id: int) -> Dict[str, Any]:
                 raise HTTPException(status_code=404, detail="Issue not found")
 
             # Get tracking info
-            tracking = db.query(MagazineTracking).filter(MagazineTracking.id == issue.tracking_id).first()
+            tracking = db.query(PeriodicalTracking).filter(PeriodicalTracking.id == issue.tracking_id).first()
 
             # Get submission history if available
             submission_history = []
@@ -353,7 +353,7 @@ async def get_statistics_by_tracking() -> Dict[str, List[Dict[str, Any]]]:
         db = _session_factory()
         try:
             # Get all tracking records
-            trackings = db.query(MagazineTracking).all()
+            trackings = db.query(PeriodicalTracking).all()
 
             result = []
             for tracking in trackings:

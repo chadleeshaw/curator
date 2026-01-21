@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import func, or_
 
 from core.constants.errors import ErrorMessages
-from models.database import Magazine, SearchResult, DownloadSubmission
+from models.database import Periodical, SearchResult, DownloadSubmission
 from web.schemas import APIError, SearchRequest
 from core.constants.country import LANGUAGE_TO_COUNTRY, COUNTRY_INDICATORS
 from core.constants.language import LANGUAGE_KEYWORDS
@@ -488,7 +488,7 @@ async def search_periodical_providers(
     query: str = Query(..., description="Periodical title to search for"),
     language: str = Query(None, description="Filter by language (e.g., English, German)"),
     country: str = Query(None, description="Filter by country code (e.g., US, UK, DE)"),
-    category: str = Query(None, description="Filter by category (e.g., Magazines, Comics)"),
+    category: str = Query(None, description="Filter by category (e.g., Periodicals, Comics)"),
     tracking_id: int = Query(None, description="Scope library status to specific tracking ID"),
     force_refresh: bool = Query(False, description="Bypass cache and fetch fresh results"),
     cache_ttl_days: int = Query(7, description="Cache validity in days"),
@@ -593,7 +593,7 @@ async def search_periodical_providers(
         logger.debug(f"After edition variant filter: {len(filtered_results)} results")
 
         # === STEP 6: Load Library Items (Scoped by tracking_id) ===
-        library_items = db_session.query(Magazine).all()
+        library_items = db_session.query(Periodical).all()
 
         if tracking_id:
             library_items = [m for m in library_items if m.tracking_id == tracking_id]

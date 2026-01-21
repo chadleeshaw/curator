@@ -1291,6 +1291,37 @@
               <button onclick="saveOCRSettings()" class="save-btn">Save OCR Settings</button>
               <div id="ocr-message" class="hidden"></div>
             </div>
+
+            <!-- OCR Worker Settings -->
+            <div class="settings-section">
+              <h3>OCR Worker Configuration</h3>
+              <p class="text-base text-muted mb-15">
+                Configure OCR processing performance and resource usage.
+              </p>
+
+              <div class="settings-field">
+                <label for="ocr-worker-count">Worker Count:</label>
+                <input type="number" id="ocr-worker-count" placeholder="1" min="1" max="8" />
+                <p class="text-sm text-hint mt-8">
+                  Number of parallel OCR workers (1-8). More workers = faster processing but higher
+                  CPU/memory usage.
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="ocr-batch-size">Batch Size:</label>
+                <input type="number" id="ocr-batch-size" placeholder="5" min="1" max="20" />
+                <p class="text-sm text-hint mt-8">
+                  Number of jobs to process per batch (1-20). Larger batches process more files at
+                  once.
+                </p>
+              </div>
+
+              <button onclick="saveOCRWorkerSettings()" class="save-btn">
+                Save Worker Settings
+              </button>
+              <div id="ocr-worker-message" class="hidden"></div>
+            </div>
           </div>
 
           <!-- Appearance Settings Tab -->

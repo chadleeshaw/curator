@@ -14,6 +14,7 @@ from datetime import datetime  # noqa: E402
 
 from services import FileOrganizer  # noqa: E402
 from core.parsers import sanitize_filename  # noqa: E402
+from core.constants.category import CATEGORY_MAGAZINE  # noqa: E402
 
 
 def test_sanitize_filename():
@@ -193,12 +194,12 @@ def test_category_prefix_default():
         result_path = processor.organize(
             test_pdf,
             metadata,
-            category="Magazines",
+            category=CATEGORY_MAGAZINE,
             pattern="{category}/{title}/{year}/",
         )
 
         # Verify prefix was applied
-        assert "_Magazines" in str(result_path)
+        assert f"_{CATEGORY_MAGAZINE}" in str(result_path)
 
     print("Testing FileOrganizer category_prefix default... ✓ PASS")
 
@@ -219,15 +220,15 @@ def test_category_prefix_custom():
         result_path = processor.organize(
             test_pdf,
             metadata,
-            category="Magazines",
+            category=CATEGORY_MAGAZINE,
             pattern="{category}/{title}/{year}/",
         )
 
         # Verify custom prefix was applied
         result_str = str(result_path)
-        assert "PREFIX_Magazines" in result_str
-        # Verify it doesn't start with just "_Magazines" (should have PREFIX_)
-        assert not result_str.startswith(str(tmpdir) + "/_Magazines")
+        assert f"PREFIX_{CATEGORY_MAGAZINE}" in result_str
+        # Verify it doesn't start with just f"_{CATEGORY_MAGAZINE}" (should have PREFIX_)
+        assert not result_str.startswith(str(tmpdir) + f"/_{CATEGORY_MAGAZINE}")
 
     print("Testing FileOrganizer custom category_prefix... ✓ PASS")
 
@@ -248,13 +249,13 @@ def test_category_prefix_empty():
         result_path = processor.organize(
             test_pdf,
             metadata,
-            category="Magazines",
+            category=CATEGORY_MAGAZINE,
             pattern="{category}/{title}/{year}/",
         )
 
-        # Verify no prefix (just "Magazines", not "_Magazines")
-        assert "/Magazines/" in str(result_path)
-        assert "/_Magazines/" not in str(result_path)
+        # Verify no prefix (just "Magazine", not "_Magazine")
+        assert f"/{CATEGORY_MAGAZINE}/" in str(result_path)
+        assert f"/_{CATEGORY_MAGAZINE}/" not in str(result_path)
 
     print("Testing FileOrganizer empty category_prefix... ✓ PASS")
 

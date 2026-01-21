@@ -10,6 +10,7 @@ from typing import Any, Dict
 from fastapi import HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
 
+from core.constants.category import DEFAULT_CATEGORY
 from core.constants.errors import ErrorMessages
 from core.parsers import sanitize_filename
 from core.utils.general import is_special_edition, cleanup_empty_directories
@@ -21,7 +22,7 @@ from core.utils.comic_reader import (
     get_comic_page_thumbnail,
 )
 from core.utils.pdf_reader import get_pdf_metadata, get_pdf_page, get_pdf_page_thumbnail
-from models.database import Magazine
+from models.database import Periodical
 
 from . import _shared
 
@@ -29,8 +30,8 @@ router = _shared.router
 logger = _shared.logger
 
 
-@router.get("/periodicals/{magazine_id}/pdf")
-async def get_pdf(magazine_id: int):
+@router.get("/periodicals/{periodical_id}/pdf")
+async def get_pdf(periodical_id: int):
     """
     Get magazine file (PDF, EPUB, CBZ, or CBR).
 
@@ -42,7 +43,7 @@ async def get_pdf(magazine_id: int):
         def _db_operation():
             db_session = _shared._session_factory()
             try:
-                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+                magazine = db_session.query(Periodical).filter(Periodical.id == periodical_id).first()
 
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
@@ -83,8 +84,8 @@ async def get_pdf(magazine_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/periodicals/{magazine_id}/epub/metadata")
-async def get_epub_metadata_endpoint(magazine_id: int) -> Dict[str, Any]:
+@router.get("/periodicals/{periodical_id}/epub/metadata")
+async def get_epub_metadata_endpoint(periodical_id: int) -> Dict[str, Any]:
     """
     Get EPUB metadata and chapter list.
 
@@ -96,7 +97,7 @@ async def get_epub_metadata_endpoint(magazine_id: int) -> Dict[str, Any]:
         def _db_operation():
             db_session = _shared._session_factory()
             try:
-                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+                magazine = db_session.query(Periodical).filter(Periodical.id == periodical_id).first()
 
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
@@ -130,13 +131,13 @@ async def get_epub_metadata_endpoint(magazine_id: int) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/periodicals/{magazine_id}/epub/chapter/{chapter_index}")
-async def get_epub_chapter_endpoint(magazine_id: int, chapter_index: int) -> HTMLResponse:
+@router.get("/periodicals/{periodical_id}/epub/chapter/{chapter_index}")
+async def get_epub_chapter_endpoint(periodical_id: int, chapter_index: int) -> HTMLResponse:
     """
     Get specific EPUB chapter content as HTML.
 
     Args:
-        magazine_id: The periodical ID
+        periodical_id: The periodical ID
         chapter_index: Zero-based chapter index
 
     Returns:
@@ -147,7 +148,7 @@ async def get_epub_chapter_endpoint(magazine_id: int, chapter_index: int) -> HTM
         def _db_operation():
             db_session = _shared._session_factory()
             try:
-                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+                magazine = db_session.query(Periodical).filter(Periodical.id == periodical_id).first()
 
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
@@ -166,8 +167,8 @@ async def get_epub_chapter_endpoint(magazine_id: int, chapter_index: int) -> HTM
 
         file_path = await run_in_thread(_db_operation)
 
-        # Get chapter content with magazine_id for image URL rewriting
-        chapter_html = await run_in_thread(lambda: get_epub_chapter(file_path, chapter_index, magazine_id))
+        # Get chapter content with periodical_id for image URL rewriting
+        chapter_html = await run_in_thread(lambda: get_epub_chapter(file_path, chapter_index, periodical_id))
 
         if chapter_html is None:
             raise HTTPException(status_code=404, detail="Chapter not found")
@@ -184,13 +185,13 @@ async def get_epub_chapter_endpoint(magazine_id: int, chapter_index: int) -> HTM
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/periodicals/{magazine_id}/epub/image/{image_name}")
-async def get_epub_image_endpoint(magazine_id: int, image_name: str):
+@router.get("/periodicals/{periodical_id}/epub/image/{image_name}")
+async def get_epub_image_endpoint(periodical_id: int, image_name: str):
     """
     Get an image from an EPUB file.
 
     Args:
-        magazine_id: The periodical ID
+        periodical_id: The periodical ID
         image_name: Name of the image file (e.g., 'cover.jpg')
 
     Returns:
@@ -201,7 +202,7 @@ async def get_epub_image_endpoint(magazine_id: int, image_name: str):
         def _db_operation():
             db_session = _shared._session_factory()
             try:
-                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+                magazine = db_session.query(Periodical).filter(Periodical.id == periodical_id).first()
 
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
@@ -250,8 +251,8 @@ async def get_epub_image_endpoint(magazine_id: int, image_name: str):
 # ============================================================================
 
 
-@router.get("/periodicals/{magazine_id}/comic/metadata")
-async def get_comic_metadata_endpoint(magazine_id: int) -> Dict[str, Any]:
+@router.get("/periodicals/{periodical_id}/comic/metadata")
+async def get_comic_metadata_endpoint(periodical_id: int) -> Dict[str, Any]:
     """
     Get comic metadata and page list.
 
@@ -263,7 +264,7 @@ async def get_comic_metadata_endpoint(magazine_id: int) -> Dict[str, Any]:
         def _db_operation():
             db_session = _shared._session_factory()
             try:
-                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+                magazine = db_session.query(Periodical).filter(Periodical.id == periodical_id).first()
 
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
@@ -303,13 +304,13 @@ async def get_comic_metadata_endpoint(magazine_id: int) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/periodicals/{magazine_id}/comic/page/{page_index}")
-async def get_comic_page_endpoint(magazine_id: int, page_index: int):
+@router.get("/periodicals/{periodical_id}/comic/page/{page_index}")
+async def get_comic_page_endpoint(periodical_id: int, page_index: int):
     """
     Get specific comic page as image.
 
     Args:
-        magazine_id: The periodical ID
+        periodical_id: The periodical ID
         page_index: Zero-based page index
 
     Returns:
@@ -320,7 +321,7 @@ async def get_comic_page_endpoint(magazine_id: int, page_index: int):
         def _db_operation():
             db_session = _shared._session_factory()
             try:
-                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+                magazine = db_session.query(Periodical).filter(Periodical.id == periodical_id).first()
 
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
@@ -370,13 +371,13 @@ async def get_comic_page_endpoint(magazine_id: int, page_index: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/periodicals/{magazine_id}/comic/page/{page_index}/thumbnail")
-async def get_comic_page_thumbnail_endpoint(magazine_id: int, page_index: int):
+@router.get("/periodicals/{periodical_id}/comic/page/{page_index}/thumbnail")
+async def get_comic_page_thumbnail_endpoint(periodical_id: int, page_index: int):
     """
     Get thumbnail of a specific comic page.
 
     Args:
-        magazine_id: The periodical ID
+        periodical_id: The periodical ID
         page_index: Zero-based page index
 
     Returns:
@@ -387,7 +388,7 @@ async def get_comic_page_thumbnail_endpoint(magazine_id: int, page_index: int):
         def _db_operation():
             db_session = _shared._session_factory()
             try:
-                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+                magazine = db_session.query(Periodical).filter(Periodical.id == periodical_id).first()
 
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
@@ -426,8 +427,8 @@ async def get_comic_page_thumbnail_endpoint(magazine_id: int, page_index: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/periodicals/{magazine_id}/pdf/metadata")
-async def get_pdf_metadata_endpoint(magazine_id: int) -> Dict[str, Any]:
+@router.get("/periodicals/{periodical_id}/pdf/metadata")
+async def get_pdf_metadata_endpoint(periodical_id: int) -> Dict[str, Any]:
     """
     Get PDF metadata including page count and cover page index.
 
@@ -439,7 +440,7 @@ async def get_pdf_metadata_endpoint(magazine_id: int) -> Dict[str, Any]:
         def _db_operation():
             db_session = _shared._session_factory()
             try:
-                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+                magazine = db_session.query(Periodical).filter(Periodical.id == periodical_id).first()
 
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
@@ -479,13 +480,13 @@ async def get_pdf_metadata_endpoint(magazine_id: int) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/periodicals/{magazine_id}/pdf/page/{page_index}")
-async def get_pdf_page_endpoint(magazine_id: int, page_index: int):
+@router.get("/periodicals/{periodical_id}/pdf/page/{page_index}")
+async def get_pdf_page_endpoint(periodical_id: int, page_index: int):
     """
     Get a specific page from a PDF as an image.
 
     Args:
-        magazine_id: ID of the magazine
+        periodical_id: ID of the magazine
         page_index: Page index (0-based)
 
     Returns:
@@ -496,7 +497,7 @@ async def get_pdf_page_endpoint(magazine_id: int, page_index: int):
         def _db_operation():
             db_session = _shared._session_factory()
             try:
-                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+                magazine = db_session.query(Periodical).filter(Periodical.id == periodical_id).first()
 
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
@@ -535,13 +536,13 @@ async def get_pdf_page_endpoint(magazine_id: int, page_index: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/periodicals/{magazine_id}/pdf/page/{page_index}/thumbnail")
-async def get_pdf_page_thumbnail_endpoint(magazine_id: int, page_index: int):
+@router.get("/periodicals/{periodical_id}/pdf/page/{page_index}/thumbnail")
+async def get_pdf_page_thumbnail_endpoint(periodical_id: int, page_index: int):
     """
     Get a thumbnail of a specific page from a PDF.
 
     Args:
-        magazine_id: ID of the magazine
+        periodical_id: ID of the magazine
         page_index: Page index (0-based)
 
     Returns:
@@ -552,7 +553,7 @@ async def get_pdf_page_thumbnail_endpoint(magazine_id: int, page_index: int):
         def _db_operation():
             db_session = _shared._session_factory()
             try:
-                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+                magazine = db_session.query(Periodical).filter(Periodical.id == periodical_id).first()
 
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
@@ -591,14 +592,14 @@ async def get_pdf_page_thumbnail_endpoint(magazine_id: int, page_index: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/periodicals/{magazine_id}/move-to-tracking")
-async def move_issue_to_tracking(magazine_id: int, target_tracking_id: int) -> Dict[str, Any]:
+@router.post("/periodicals/{periodical_id}/move-to-tracking")
+async def move_issue_to_tracking(periodical_id: int, target_tracking_id: int) -> Dict[str, Any]:
     """
     Move a single issue to a different tracking record.
     Useful for correcting misplaced issues.
 
     Args:
-        magazine_id: ID of the issue to move
+        periodical_id: ID of the issue to move
         target_tracking_id: ID of the tracking record to move the issue to
     """
     try:
@@ -606,16 +607,16 @@ async def move_issue_to_tracking(magazine_id: int, target_tracking_id: int) -> D
         def _db_operation():
             db_session = _shared._session_factory()
             try:
-                from models.database import MagazineTracking
+                from models.database import PeriodicalTracking
 
                 # Get the magazine to move
-                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+                magazine = db_session.query(Periodical).filter(Periodical.id == periodical_id).first()
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
 
                 # Get the target tracking record
                 target_tracking = (
-                    db_session.query(MagazineTracking).filter(MagazineTracking.id == target_tracking_id).first()
+                    db_session.query(PeriodicalTracking).filter(PeriodicalTracking.id == target_tracking_id).first()
                 )
                 if not target_tracking:
                     raise HTTPException(status_code=404, detail="Target tracking record not found")
@@ -649,9 +650,9 @@ async def move_issue_to_tracking(magazine_id: int, target_tracking_id: int) -> D
                     try:
                         # Extract metadata from current path structure
                         category = (
-                            magazine.extra_metadata.get("category", "Magazines")
+                            magazine.extra_metadata.get("category", DEFAULT_CATEGORY)
                             if magazine.extra_metadata
-                            else "Magazines"
+                            else DEFAULT_CATEGORY
                         )
                         issue_date = magazine.issue_date
 

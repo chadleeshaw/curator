@@ -17,7 +17,7 @@ from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from core.parsers import Parser, utc_now
-from models.database import DiscoveredIssue, Magazine, MagazineTracking
+from models.database import DiscoveredIssue, Periodical, PeriodicalTracking
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ class IssueDiscoveryService:
         4. Creates new or updates existing (increment times_seen, update last_seen)
 
         Args:
-            tracking_id: MagazineTracking ID these results belong to
+            tracking_id: PeriodicalTracking ID these results belong to
             search_results: List of search result dicts from providers
             session: Database session
 
@@ -74,10 +74,16 @@ class IssueDiscoveryService:
                 ...
             ]
         """
-        stats = {"new": 0, "updated": 0, "duplicate": 0, "errors": 0}
+        stats = {
+            "new": 0,
+            "updated": 0,
+            "duplicate": 0,
+            "errors": 0,
+            "rejected_non_periodical": 0,
+        }
 
         # Get the tracking record for context
-        tracking = session.query(MagazineTracking).filter_by(id=tracking_id).first()
+        tracking = session.query(PeriodicalTracking).filter_by(id=tracking_id).first()
         if not tracking:
             logger.error(f"Tracking ID {tracking_id} not found")
             return stats
@@ -91,6 +97,12 @@ class IssueDiscoveryService:
                 if not title:
                     logger.debug("Search result missing title, skipping")
                     stats["errors"] += 1
+                    continue
+
+                # Validate it's actually a periodical (not a book/collection)
+                if not self._validate_is_periodical(result):
+                    logger.info(f"Rejecting non-periodical result: {title}")
+                    stats["rejected_non_periodical"] += 1
                     continue
 
                 url = result.get("url", "")
@@ -201,7 +213,8 @@ class IssueDiscoveryService:
         session.commit()
         logger.info(
             f"Recorded search results for tracking_id={tracking_id}: "
-            f"{stats['new']} new, {stats['updated']} updated, {stats['errors']} errors"
+            f"{stats['new']} new, {stats['updated']} updated, {stats['errors']} errors, "
+            f"{stats['rejected_non_periodical']} rejected (non-periodical)"
         )
 
         return stats
@@ -219,7 +232,7 @@ class IssueDiscoveryService:
         6. Calculates priority for "wanted" issues
 
         Args:
-            tracking_id: MagazineTracking ID to evaluate
+            tracking_id: PeriodicalTracking ID to evaluate
             session: Database session
 
         Returns:
@@ -228,7 +241,7 @@ class IssueDiscoveryService:
         stats = {"wanted": 0, "ignored": 0, "already_have": 0, "errors": 0}
 
         # Get the tracking record
-        tracking = session.query(MagazineTracking).filter_by(id=tracking_id).first()
+        tracking = session.query(PeriodicalTracking).filter_by(id=tracking_id).first()
         if not tracking:
             logger.error(f"Tracking ID {tracking_id} not found")
             return stats
@@ -250,11 +263,11 @@ class IssueDiscoveryService:
         for issue in discovered:
             try:
                 # Check if we already have this in our library
-                magazine_id = self._check_if_in_library(issue, tracking, session)
-                if magazine_id:
+                periodical_id = self._check_if_in_library(issue, tracking, session)
+                if periodical_id:
                     issue.download_status = "completed"
                     issue.download_priority = 0
-                    issue.magazine_id = magazine_id
+                    issue.periodical_id = periodical_id
                     stats["already_have"] += 1
                     logger.debug(f"Already have: {issue.title}")
                     continue
@@ -400,6 +413,164 @@ class IssueDiscoveryService:
 
     # Private helper methods
 
+    def _validate_is_periodical(self, search_result: Dict[str, Any]) -> bool:
+        """
+        Validate that a search result represents a periodical issue, not a book/collection.
+
+        Uses multiple validation layers:
+        1. Newsnab category codes (explicit periodical/book categories)
+        2. Title pattern analysis (periodical indicators vs anti-patterns)
+        3. File size heuristics (typical periodical size ranges)
+
+        Args:
+            search_result: Search result dictionary from provider
+
+        Returns:
+            True if likely a periodical, False if likely book/collection
+        """
+        from core.constants.validation import (
+            NEWSNAB_BOOK_CATEGORIES,
+            NEWSNAB_PERIODICAL_CATEGORIES,
+            PERIODICAL_PATTERNS,
+            ANTI_PERIODICAL_PATTERNS,
+            FILE_SIZE_MIN_MB,
+            FILE_SIZE_MAX_MB,
+        )
+
+        title = search_result.get("title", "")
+
+        # Layer 1: Check Newsnab category if available
+        category = search_result.get("category", "")
+        if category:
+            # Explicit book categories - reject
+            if any(cat in category for cat in NEWSNAB_BOOK_CATEGORIES):
+                logger.debug(f"Rejecting '{title}': Book category detected ({category})")
+                return False
+
+            # Explicit periodical categories - accept (but still check patterns as safety)
+            # Note: 6000 (Adult) and 8000 (Misc) are included because periodicals are sometimes categorized there
+            # We still validate patterns to filter out books/collections/videos in these categories
+            if any(cat in category for cat in NEWSNAB_PERIODICAL_CATEGORIES):
+                logger.debug(f"Accepting '{title}': Periodical category ({category})")
+                # Still run pattern check to catch mis-categorized collections
+                if self._has_anti_periodical_patterns(title):
+                    logger.warning(f"Rejecting '{title}': Periodical category but has anti-patterns")
+                    return False
+                return True
+
+        # Layer 2: Pattern analysis (most important for uncategorized results)
+        if not self._has_periodical_patterns(title):
+            logger.debug(f"Rejecting '{title}': No periodical patterns found")
+            return False
+
+        # Layer 3: File size heuristics (if available)
+        if not self._validate_file_size(search_result):
+            logger.debug(f"Rejecting '{title}': Suspicious file size")
+            return False
+
+        logger.debug(f"Accepting '{title}': Passed validation")
+        return True
+
+    def _has_periodical_patterns(self, title: str) -> bool:
+        """
+        Check if title contains patterns typical of periodicals.
+
+        Periodical indicators:
+        - Date patterns: "January 2024", "Jan 2024", "01.2024", "2024-01"
+        - Issue numbers: "#123", "Issue 45", "No. 67"
+        - Volume numbers: "Vol. 12", "Volume 5"
+        - Combined: "Vol 12 No 3"
+        - Seasonal: "Spring 2024", "Winter 2024"
+
+        Args:
+            title: Title string to check
+
+        Returns:
+            True if periodical patterns found, False otherwise
+        """
+        import re
+        from core.constants.validation import PERIODICAL_PATTERNS
+
+        # Normalize dots, underscores, and dashes to spaces for better matching
+        # NZB filenames often use these as separators: "Wired.Magazine.January.2024.pdf"
+        normalized_title = title.replace(".", " ").replace("_", " ").replace("-", " ")
+        title_lower = normalized_title.lower()
+
+        for pattern in PERIODICAL_PATTERNS:
+            if re.search(pattern, title_lower, re.IGNORECASE):
+                logger.debug(f"Found periodical pattern in '{title}': {pattern}")
+                return True
+
+        return False
+
+    def _has_anti_periodical_patterns(self, title: str) -> bool:
+        """
+        Check if title contains anti-patterns indicating books/collections.
+
+        Anti-patterns:
+        - "Complete Collection", "Full Series"
+        - "Anthology", "Omnibus", "Compendium"
+        - "Volumes 1-5", "Issues 10-20" (range indicators)
+        - "Year 2023 Pack"
+        - "Book 1", "Novel", "Trilogy"
+
+        Args:
+            title: Title string to check
+
+        Returns:
+            True if anti-patterns found (NOT a periodical), False otherwise
+        """
+        import re
+        from core.constants.validation import ANTI_PERIODICAL_PATTERNS
+
+        # Normalize dots and underscores to spaces
+        normalized_title = title.replace(".", " ").replace("_", " ")
+        title_lower = normalized_title.lower()
+
+        for pattern in ANTI_PERIODICAL_PATTERNS:
+            if re.search(pattern, title_lower, re.IGNORECASE):
+                logger.debug(f"Found anti-periodical pattern in '{title}': {pattern}")
+                return True
+
+        return False
+
+    def _validate_file_size(self, search_result: Dict[str, Any]) -> bool:
+        """
+        Validate file size is within typical periodical range.
+
+        Typical ranges:
+        - Magazines (PDF): 10MB - 500MB
+        - Comics (CBZ/CBR): 50MB - 500MB
+        - Suspiciously small: <5MB (likely article/ebook)
+        - Suspiciously large: >1000MB (likely collection/pack)
+
+        Args:
+            search_result: Search result dictionary
+
+        Returns:
+            True if size is reasonable for periodical (or unknown)
+        """
+        from core.constants.validation import FILE_SIZE_MIN_MB, FILE_SIZE_MAX_MB
+
+        size_bytes = search_result.get("size", 0)
+        if size_bytes == 0:
+            # Unknown size - allow (can't validate)
+            return True
+
+        size_mb = size_bytes / (1024 * 1024)
+
+        # Suspiciously small (likely book/article)
+        if size_mb < FILE_SIZE_MIN_MB:
+            logger.debug(f"Suspicious: Very small file ({size_mb:.1f}MB), likely not a periodical")
+            return False
+
+        # Suspiciously large (likely collection/pack)
+        if size_mb > FILE_SIZE_MAX_MB:
+            logger.debug(f"Suspicious: Very large file ({size_mb:.1f}MB), likely a collection")
+            return False
+
+        return True
+
     def _get_fuzzy_group_id(self, title: str, publication_date: Optional[datetime] = None) -> str:
         """
         Generate a fuzzy match group ID for deduplication.
@@ -432,13 +603,13 @@ class IssueDiscoveryService:
 
         return normalized
 
-    def _should_download(self, issue: DiscoveredIssue, tracking: MagazineTracking) -> bool:
+    def _should_download(self, issue: DiscoveredIssue, tracking: PeriodicalTracking) -> bool:
         """
         Determine if an issue should be downloaded based on tracking rules.
 
         Args:
             issue: DiscoveredIssue to evaluate
-            tracking: MagazineTracking with user preferences
+            tracking: PeriodicalTracking with user preferences
 
         Returns:
             True if issue matches tracking criteria, False otherwise
@@ -468,7 +639,7 @@ class IssueDiscoveryService:
         # Default: Don't download unless explicitly requested
         return False
 
-    def _calculate_priority(self, issue: DiscoveredIssue, tracking: MagazineTracking) -> int:
+    def _calculate_priority(self, issue: DiscoveredIssue, tracking: PeriodicalTracking) -> int:
         """
         Calculate download priority for an issue (1-100, higher = download first).
 
@@ -479,7 +650,7 @@ class IssueDiscoveryService:
 
         Args:
             issue: DiscoveredIssue to prioritize
-            tracking: MagazineTracking with user preferences
+            tracking: PeriodicalTracking with user preferences
 
         Returns:
             Priority value (1-100)
@@ -513,14 +684,14 @@ class IssueDiscoveryService:
         return max(1, min(100, priority))
 
     def _check_if_in_library(
-        self, issue: DiscoveredIssue, tracking: MagazineTracking, session: Session
+        self, issue: DiscoveredIssue, tracking: PeriodicalTracking, session: Session
     ) -> Optional[int]:
         """
         Check if an issue is already in the library.
 
         Args:
             issue: DiscoveredIssue to check
-            tracking: MagazineTracking for context
+            tracking: PeriodicalTracking for context
             session: Database session
 
         Returns:
@@ -536,10 +707,10 @@ class IssueDiscoveryService:
 
         # Query for magazines with similar title and same date
         existing = (
-            session.query(Magazine)
+            session.query(Periodical)
             .filter(
                 and_(
-                    Magazine.tracking_id == tracking.id,
+                    Periodical.tracking_id == tracking.id,
                 )
             )
             .all()

@@ -14,11 +14,11 @@ from core.utils.general import (
     generate_olid,
     cleanup_empty_directories,
 )
-from models.database import MagazineTracking
+from models.database import PeriodicalTracking
 from web.schemas import TrackingPreferencesRequest
 from core.utils import run_in_thread
 from . import _shared
-from .merge import _reorganize_magazine_files
+from .merge import _reorganize_periodical_files
 
 # Access global state via _shared module to get current values
 router = _shared.router
@@ -38,7 +38,7 @@ async def save_tracking_preferences(
             db_session = _shared._session_factory()
             try:
                 olid = request.olid or generate_olid(request.title)
-                existing = db_session.query(MagazineTracking).filter(MagazineTracking.olid == olid).first()
+                existing = db_session.query(PeriodicalTracking).filter(PeriodicalTracking.olid == olid).first()
 
                 if existing:
                     existing.title = request.title
@@ -54,7 +54,7 @@ async def save_tracking_preferences(
                     existing.last_metadata_update = datetime.now(UTC)
                     tracking = existing
                 else:
-                    tracking = MagazineTracking(
+                    tracking = PeriodicalTracking(
                         olid=olid,
                         title=request.title,
                         category=getattr(request, "category", None),
@@ -109,7 +109,7 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
         def _update():
             db_session = _shared._session_factory()
             try:
-                tracking = db_session.query(MagazineTracking).filter(MagazineTracking.id == tracking_id).first()
+                tracking = db_session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
                 if not tracking:
                     raise HTTPException(status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND)
 
@@ -140,14 +140,14 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
                 organize_base_dir = None
 
                 if title_changed:
-                    from models.database import Magazine
+                    from models.database import Periodical
 
                     # Get organize directory from config
                     organize_base_dir = Path(_shared._storage_config.get("organize_dir", "./local/data")).resolve()
                     category_prefix = _shared._import_config.get("category_prefix", "_")
 
                     # Get all magazines linked to this tracking record
-                    magazines = db_session.query(Magazine).filter(Magazine.tracking_id == tracking_id).all()
+                    magazines = db_session.query(Periodical).filter(Periodical.tracking_id == tracking_id).all()
 
                     for magazine in magazines:
                         # Check if this is a special edition
@@ -168,7 +168,7 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
                                 directories_to_cleanup.add(title_dir)
 
                             # Reorganize files to match new title structure
-                            new_pdf_path, new_cover_path = _reorganize_magazine_files(
+                            new_pdf_path, new_cover_path = _reorganize_periodical_files(
                                 magazine,
                                 tracking.title,
                                 organize_base_dir,
@@ -178,7 +178,7 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
                             # Update database paths if reorganization succeeded
                             if new_pdf_path:
                                 # Check if target path already exists in database (UNIQUE constraint check)
-                                existing_record = db_session.query(Magazine).filter_by(file_path=new_pdf_path).first()
+                                existing_record = db_session.query(Periodical).filter_by(file_path=new_pdf_path).first()
                                 if existing_record and existing_record.id != magazine.id:
                                     logger.error(
                                         f"Cannot update magazine {magazine.id}: Target path {new_pdf_path} "

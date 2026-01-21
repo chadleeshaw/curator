@@ -2,7 +2,7 @@
 File categorization based on title keywords.
 """
 
-from core.constants.category import CATEGORY_KEYWORDS
+from core.constants.category import CATEGORY_KEYWORDS, DEFAULT_CATEGORY
 
 
 class FileCategorizer:
@@ -16,10 +16,10 @@ class FileCategorizer:
             title: Title to categorize
 
         Returns:
-            Category name (Magazines, Comics, Articles, News, etc.)
+            Category name (Periodical, Comic, Graphic Novel, Book, Document)
         """
         if not title:
-            return "Magazines"
+            return DEFAULT_CATEGORY
 
         title_lower = title.lower()
 
@@ -27,4 +27,4 @@ class FileCategorizer:
             if any(keyword.lower() in title_lower for keyword in keywords):
                 return category
 
-        return "Magazines"
+        return DEFAULT_CATEGORY

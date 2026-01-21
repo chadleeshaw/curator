@@ -79,6 +79,7 @@ class DatabaseManager:
             ],
             "periodicals": [
                 ("language", "VARCHAR(50) DEFAULT 'English'"),
+                ("category", "VARCHAR(100) DEFAULT 'Magazine'"),
                 ("tracking_id", "INTEGER"),
                 ("content_hash", "VARCHAR(64)"),
                 ("created_at", "DATETIME"),
@@ -113,8 +114,37 @@ class DatabaseManager:
                     except Exception as e:
                         logger.error(f"Failed to add column {table_name}.{column_name}: {e}")
 
+        # Column renames (SQLite requires recreating tables, so we handle it carefully)
+        column_renames = {
+            "ocr_jobs": [("magazine_id", "periodical_id")],
+            "search_results": [("magazine_id", "periodical_id")],
+            "discovered_issues": [("magazine_id", "periodical_id")],
+            "download_submissions": [("magazine_id", "periodical_id")],
+            "downloads": [("magazine_id", "periodical_id")],
+        }
+
+        for table_name, renames in column_renames.items():
+            if not inspector.has_table(table_name):
+                continue
+
+            existing_columns = {col["name"] for col in inspector.get_columns(table_name)}
+
+            for old_name, new_name in renames:
+                if old_name in existing_columns and new_name not in existing_columns:
+                    logger.info(f"Renaming column '{old_name}' to '{new_name}' in {table_name}")
+                    try:
+                        with self.engine.connect() as conn:
+                            # SQLite doesn't support ALTER TABLE RENAME COLUMN directly in older versions
+                            # Use a safe approach that works across SQLite versions
+                            conn.execute(text(f"ALTER TABLE {table_name} RENAME COLUMN {old_name} TO {new_name}"))
+                            conn.commit()
+                        migrations_applied += 1
+                        logger.info(f"✓ Renamed column {table_name}.{old_name} → {new_name}")
+                    except Exception as e:
+                        logger.error(f"Failed to rename column {table_name}.{old_name}: {e}")
+
         if migrations_applied > 0:
-            logger.info(f"Schema migrations complete: {migrations_applied} column(s) added")
+            logger.info(f"Schema migrations complete: {migrations_applied} migration(s) applied")
         elif not missing_tables:
             logger.debug("Schema is up to date, no migrations needed")
 

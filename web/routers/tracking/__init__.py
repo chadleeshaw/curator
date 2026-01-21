@@ -24,7 +24,7 @@ from .crud import (
 )
 from .search import search_tracked_periodical_issues
 from .preferences import save_tracking_preferences, update_tracking
-from .merge import merge_tracking, _reorganize_magazine_files
+from .merge import merge_tracking, _reorganize_periodical_files
 from .downloads import track_single_issue
 
 # Re-export the router and set_dependencies for backward compatibility
@@ -44,7 +44,7 @@ __all__ = [
     "update_tracking",
     # Merge functions
     "merge_tracking",
-    "_reorganize_magazine_files",
+    "_reorganize_periodical_files",
     # Download functions
     "track_single_issue",
 ]

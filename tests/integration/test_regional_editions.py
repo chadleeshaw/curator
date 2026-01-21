@@ -7,6 +7,7 @@ don't get merged into the same tracking record.
 """
 
 import pytest
+from core.constants.category import CATEGORY_MAGAZINE
 from services.importer.matcher import TrackingMatcher
 
 
@@ -33,7 +34,7 @@ def test_esquire_south_africa_separate_from_us():
 
     # Existing Esquire US tracking
     tracking_records = [
-        MockTracking(2, "Esquire", "English", "US", "Magazines"),
+        MockTracking(2, "Esquire", "English", "US", CATEGORY_MAGAZINE),
     ]
 
     # Try to match Esquire South Africa
@@ -43,7 +44,7 @@ def test_esquire_south_africa_separate_from_us():
         tracking_records=tracking_records,
         parsed_language="English",
         parsed_country="ZA",  # South Africa
-        parsed_category="Magazines",
+        parsed_category=CATEGORY_MAGAZINE,
     )
 
     # Should not match due to country mismatch
@@ -59,9 +60,9 @@ def test_esquire_south_africa_matches_its_own_tracking():
 
     # Multiple Esquire editions
     tracking_records = [
-        MockTracking(1, "Esquire", "English", "US", "Magazines"),
-        MockTracking(2, "Esquire South Africa", "English", "ZA", "Magazines"),
-        MockTracking(3, "Esquire", "German", "DE", "Magazines"),
+        MockTracking(1, "Esquire", "English", "US", CATEGORY_MAGAZINE),
+        MockTracking(2, "Esquire South Africa", "English", "ZA", CATEGORY_MAGAZINE),
+        MockTracking(3, "Esquire", "German", "DE", CATEGORY_MAGAZINE),
     ]
 
     # Should match the South Africa edition (ID 2)
@@ -70,7 +71,7 @@ def test_esquire_south_africa_matches_its_own_tracking():
         tracking_records=tracking_records,
         parsed_language="English",
         parsed_country="ZA",
-        parsed_category="Magazines",
+        parsed_category=CATEGORY_MAGAZINE,
     )
 
     assert result is not None
@@ -84,7 +85,7 @@ def test_wired_uk_separate_from_us():
     matcher = TrackingMatcher()
 
     tracking_records = [
-        MockTracking(1, "Wired", "English", "US", "Magazines"),
+        MockTracking(1, "Wired", "English", "US", CATEGORY_MAGAZINE),
     ]
 
     # Wired UK should NOT match Wired US
@@ -93,7 +94,7 @@ def test_wired_uk_separate_from_us():
         tracking_records=tracking_records,
         parsed_language="English",
         parsed_country="GB",  # UK
-        parsed_category="Magazines",
+        parsed_category=CATEGORY_MAGAZINE,
     )
 
     assert result is None or not result.is_match
@@ -104,7 +105,7 @@ def test_same_country_different_editions_can_match():
     matcher = TrackingMatcher()
 
     tracking_records = [
-        MockTracking(1, "Sports Illustrated", "English", "US", "Magazines"),
+        MockTracking(1, "Sports Illustrated", "English", "US", CATEGORY_MAGAZINE),
     ]
 
     # Sports Illustrated Swimsuit (US edition) should match Sports Illustrated US
@@ -113,7 +114,7 @@ def test_same_country_different_editions_can_match():
         tracking_records=tracking_records,
         parsed_language="English",
         parsed_country="US",
-        parsed_category="Magazines",
+        parsed_category=CATEGORY_MAGAZINE,
     )
 
     assert result is not None
@@ -126,7 +127,7 @@ def test_no_country_specified_can_still_match():
     matcher = TrackingMatcher()
 
     tracking_records = [
-        MockTracking(1, "National Geographic", "English", None, "Magazines"),
+        MockTracking(1, "National Geographic", "English", None, CATEGORY_MAGAZINE),
     ]
 
     # Should match even without country specified
@@ -135,7 +136,7 @@ def test_no_country_specified_can_still_match():
         tracking_records=tracking_records,
         parsed_language="English",
         parsed_country=None,
-        parsed_category="Magazines",
+        parsed_category=CATEGORY_MAGAZINE,
     )
 
     assert result is not None

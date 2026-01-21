@@ -8,7 +8,7 @@ from typing import Any, Dict
 from fastapi import HTTPException
 
 from core.constants.errors import ErrorMessages
-from models.database import DownloadSubmission, MagazineTracking
+from models.database import DownloadSubmission, PeriodicalTracking
 from web.schemas import (
     APIError,
     DownloadAllIssuesRequest,
@@ -55,7 +55,7 @@ async def download_all_periodical_issues(
     def _download():
         db_session = _shared._session_factory()
         try:
-            tracking = db_session.query(MagazineTracking).filter(MagazineTracking.id == request.tracking_id).first()
+            tracking = db_session.query(PeriodicalTracking).filter(PeriodicalTracking.id == request.tracking_id).first()
             if not tracking:
                 raise ValueError(f"Tracking record not found: {request.tracking_id}")
 
@@ -95,7 +95,7 @@ async def download_single_issue(
     def _download():
         db_session = _shared._session_factory()
         try:
-            tracking = db_session.query(MagazineTracking).filter(MagazineTracking.id == request.tracking_id).first()
+            tracking = db_session.query(PeriodicalTracking).filter(PeriodicalTracking.id == request.tracking_id).first()
             if not tracking:
                 raise ValueError(f"Tracking record not found: {request.tracking_id}")
 

@@ -12,7 +12,7 @@ from sqlalchemy.orm import sessionmaker
 
 # Path setup handled by conftest.py
 
-from models.database import Base, DownloadSubmission, MagazineTracking
+from models.database import Base, DownloadSubmission, PeriodicalTracking
 from services import DownloadManager
 
 
@@ -78,7 +78,7 @@ class TestDownloadSubmission:
         session = session_factory()
 
         # Create tracking record
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test_magazine",
             title="Test Magazine",
             track_all_editions=False,
@@ -110,7 +110,7 @@ class TestDownloadSubmission:
         session = session_factory()
 
         # Create tracking record
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test_magazine",
             title="Test Magazine",
             track_all_editions=False,
@@ -160,7 +160,7 @@ class TestDownloadStatusTracking:
         session = session_factory()
 
         # Create tracking and submission
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test_magazine",
             title="Test Magazine",
         )
@@ -194,7 +194,7 @@ class TestDownloadStatusTracking:
         session = session_factory()
 
         # Create tracking
-        tracking = MagazineTracking(olid="test_mag", title="Test")
+        tracking = PeriodicalTracking(olid="test_mag", title="Test")
         session.add(tracking)
         session.flush()
 
@@ -251,7 +251,7 @@ class TestDownloadCompletion:
         session = session_factory()
 
         # Create tracking
-        tracking = MagazineTracking(olid="test_mag", title="Test")
+        tracking = PeriodicalTracking(olid="test_mag", title="Test")
         session.add(tracking)
         session.flush()
 
@@ -295,7 +295,7 @@ class TestDownloadCompletion:
         session = session_factory()
 
         # Create tracking and completed submission
-        tracking = MagazineTracking(olid="test_mag", title="Test")
+        tracking = PeriodicalTracking(olid="test_mag", title="Test")
         session.add(tracking)
         session.flush()
 

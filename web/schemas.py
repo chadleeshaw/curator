@@ -107,8 +107,8 @@ class SearchResultResponse(BaseModel):
     match_score: Optional[int] = None
 
 
-class MagazineSearchResponse(BaseModel):
-    """Response from Open Library magazine search"""
+class PeriodicalSearchResponse(BaseModel):
+    """Response from Open Library periodical search"""
 
     olid: str
     title: str
@@ -118,11 +118,11 @@ class MagazineSearchResponse(BaseModel):
 
 
 # ==============================================================================
-# Magazines/Periodicals
+# Periodicals (Magazines, Comics, Books, Documents)
 # ==============================================================================
 
 
-class MagazineResponse(BaseModel):
+class PeriodicalResponse(BaseModel):
     id: int
     title: str
     language: Optional[str]
@@ -137,7 +137,7 @@ class MagazineResponse(BaseModel):
 
 
 class EditionInfo(BaseModel):
-    """Single edition of a magazine"""
+    """Single edition of a periodical"""
 
     olid: str
     title: str
@@ -149,8 +149,8 @@ class EditionInfo(BaseModel):
     language: str
 
 
-class MagazineEditionsResponse(BaseModel):
-    """Response with all editions of a magazine"""
+class PeriodicalEditionsResponse(BaseModel):
+    """Response with all editions of a periodical"""
 
     work_olid: str
     title: str

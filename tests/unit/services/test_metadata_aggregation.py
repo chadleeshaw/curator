@@ -8,7 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 import pytest
-from models.database import Magazine
+from models.database import Periodical
 from services.ocr.queue import _apply_scan_metadata_to_magazine
 
 
@@ -19,7 +19,7 @@ class TestMetadataAggregation:
         """Set up test fixtures"""
         # Create a test magazine with minimal data
         # pylint: disable=attribute-defined-outside-init
-        self.magazine = Magazine()
+        self.magazine = Periodical()
         self.magazine.title = "Test Magazine"
         self.magazine.extra_metadata = {}
 

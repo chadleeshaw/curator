@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional
 from fastapi import HTTPException
 
 
-from models.database import DownloadSubmission, MagazineTracking
+from models.database import DownloadSubmission, PeriodicalTracking
 from core.utils import run_in_thread
 
 from . import _shared
@@ -38,7 +38,9 @@ async def get_download_queue_all(status: Optional[str] = None) -> Dict[str, Any]
                 tracking_map = {}
                 tracking_ids = {s.tracking_id for s in submissions if s.tracking_id}
                 if tracking_ids:
-                    trackings = db_session.query(MagazineTracking).filter(MagazineTracking.id.in_(tracking_ids)).all()
+                    trackings = (
+                        db_session.query(PeriodicalTracking).filter(PeriodicalTracking.id.in_(tracking_ids)).all()
+                    )
                     tracking_map = {t.id: t.title for t in trackings}
 
                 # Count by status

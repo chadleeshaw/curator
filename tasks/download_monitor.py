@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from core.constants.app import DOWNLOAD_FILE_SEARCH_DEPTH
 from services.importer.sidecar import create_sidecar_file
-from models.database import DownloadSubmission, MagazineTracking, DiscoveredIssue
+from models.database import DownloadSubmission, PeriodicalTracking, DiscoveredIssue
 from services import DownloadManager
 from services import FileImporter
 
@@ -368,8 +368,8 @@ class DownloadMonitor:
                         # Check if we should delete from client after failure
                         if submission.tracking_id:
                             tracking = (
-                                session.query(MagazineTracking)
-                                .filter(MagazineTracking.id == submission.tracking_id)
+                                session.query(PeriodicalTracking)
+                                .filter(PeriodicalTracking.id == submission.tracking_id)
                                 .first()
                             )
                             if tracking and tracking.delete_from_client_on_completion:
@@ -515,7 +515,7 @@ class DownloadMonitor:
             # This preserves the tracking association even if the filename is ambiguous
             if submission.tracking_id:
                 try:
-                    tracking = session.query(MagazineTracking).filter_by(id=submission.tracking_id).first()
+                    tracking = session.query(PeriodicalTracking).filter_by(id=submission.tracking_id).first()
                     if tracking:
                         create_sidecar_file(
                             file_path,
@@ -541,7 +541,7 @@ class DownloadMonitor:
                     processed_count += 1
 
                     # Sync DiscoveredIssue status (NEW: Issue Discovery & Tracking)
-                    self._sync_discovered_issue_status(submission, "completed", result.get("magazine_id"), session)
+                    self._sync_discovered_issue_status(submission, "completed", result.get("periodical_id"), session)
 
                     # Mark submission as processed
                     self.download_manager.mark_processed(submission.id, session)
@@ -549,8 +549,8 @@ class DownloadMonitor:
                     # Check if we should delete from client after successful completion
                     if submission.tracking_id:
                         tracking = (
-                            session.query(MagazineTracking)
-                            .filter(MagazineTracking.id == submission.tracking_id)
+                            session.query(PeriodicalTracking)
+                            .filter(PeriodicalTracking.id == submission.tracking_id)
                             .first()
                         )
                         if tracking and tracking.delete_from_client_on_completion:
@@ -596,7 +596,7 @@ class DownloadMonitor:
         self,
         submission: DownloadSubmission,
         new_status: str,
-        magazine_id: Optional[int],
+        periodical_id: Optional[int],
         session: Session,
     ) -> None:
         """
@@ -607,7 +607,7 @@ class DownloadMonitor:
         Args:
             submission: DownloadSubmission that changed
             new_status: New status for DiscoveredIssue ("downloading", "completed", "failed", etc.)
-            magazine_id: Magazine ID if successfully imported (for "completed" status)
+            periodical_id: Magazine ID if successfully imported (for "completed" status)
             session: Database session
         """
         try:
@@ -631,9 +631,9 @@ class DownloadMonitor:
             discovered_issue.download_status = new_status
 
             # Handle different status transitions
-            if new_status == "completed" and magazine_id:
+            if new_status == "completed" and periodical_id:
                 # Successfully completed
-                discovered_issue.magazine_id = magazine_id
+                discovered_issue.periodical_id = periodical_id
                 discovered_issue.download_priority = 0  # No longer needed
                 discovered_issue.current_submission_id = None  # Clear active submission
                 logger.info(f"Marked DiscoveredIssue as completed: {discovered_issue.title}")

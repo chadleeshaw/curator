@@ -13,7 +13,8 @@ from sqlalchemy.orm import sessionmaker
 
 # Path setup handled by conftest.py
 
-from models.database import Base, Magazine, MagazineTracking
+from core.constants.category import CATEGORY_MAGAZINE
+from models.database import Base, Periodical, PeriodicalTracking
 
 
 @pytest.fixture
@@ -43,7 +44,7 @@ class TestTrackingCreation:
         engine, session_factory = test_db
         session = session_factory()
 
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="OL12345W",
             title="National Geographic",
             first_publish_year=1888,
@@ -54,7 +55,7 @@ class TestTrackingCreation:
         session.commit()
 
         # Verify created
-        retrieved = session.query(MagazineTracking).filter_by(olid="OL12345W").first()
+        retrieved = session.query(PeriodicalTracking).filter_by(olid="OL12345W").first()
         assert retrieved is not None
         assert retrieved.title == "National Geographic"
         assert retrieved.track_all_editions is True
@@ -66,7 +67,7 @@ class TestTrackingCreation:
         engine, session_factory = test_db
         session = session_factory()
 
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="OL99999W",
             title="Test Magazine",
         )
@@ -92,7 +93,7 @@ class TestTrackingUpdates:
         session = session_factory()
 
         # Create initial tracking
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="OL12345W",
             title="Wired Magazine",
             track_all_editions=False,
@@ -119,7 +120,7 @@ class TestTrackingUpdates:
         engine, session_factory = test_db
         session = session_factory()
 
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="OL12345W",
             title="Time Magazine",
             selected_editions={
@@ -148,13 +149,13 @@ class TestTrackingQueries:
         session = session_factory()
 
         # Create multiple tracking records
-        tracking1 = MagazineTracking(olid="OL11111W", title="Magazine A")
-        tracking2 = MagazineTracking(olid="OL22222W", title="Magazine B")
+        tracking1 = PeriodicalTracking(olid="OL11111W", title="Magazine A")
+        tracking2 = PeriodicalTracking(olid="OL22222W", title="Magazine B")
         session.add_all([tracking1, tracking2])
         session.commit()
 
         # Find specific tracking
-        found = session.query(MagazineTracking).filter_by(olid="OL11111W").first()
+        found = session.query(PeriodicalTracking).filter_by(olid="OL11111W").first()
         assert found is not None
         assert found.title == "Magazine A"
 
@@ -166,17 +167,17 @@ class TestTrackingQueries:
         session = session_factory()
 
         # Create mix of tracking records
-        track_all1 = MagazineTracking(
+        track_all1 = PeriodicalTracking(
             olid="OL11111W",
             title="Magazine A",
             track_all_editions=True,
         )
-        track_selective = MagazineTracking(
+        track_selective = PeriodicalTracking(
             olid="OL22222W",
             title="Magazine B",
             track_all_editions=False,
         )
-        track_all2 = MagazineTracking(
+        track_all2 = PeriodicalTracking(
             olid="OL33333W",
             title="Magazine C",
             track_all_editions=True,
@@ -185,7 +186,7 @@ class TestTrackingQueries:
         session.commit()
 
         # Query for track_all_editions
-        tracking_all = session.query(MagazineTracking).filter_by(track_all_editions=True).all()
+        tracking_all = session.query(PeriodicalTracking).filter_by(track_all_editions=True).all()
         assert len(tracking_all) == 2
         assert all(t.track_all_editions for t in tracking_all)
 
@@ -196,7 +197,7 @@ class TestTrackingQueries:
         engine, session_factory = test_db
         session = session_factory()
 
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="OL12345W",
             title="Vintage Magazine",
             selected_years=[2020, 2021, 2022],
@@ -205,7 +206,7 @@ class TestTrackingQueries:
         session.commit()
 
         # Find by year (requires JSON field query in real app)
-        found = session.query(MagazineTracking).filter_by(olid="OL12345W").first()
+        found = session.query(PeriodicalTracking).filter_by(olid="OL12345W").first()
         assert 2021 in found.selected_years
 
         session.close()
@@ -219,7 +220,7 @@ class TestTrackingDeletion:
         engine, session_factory = test_db
         session = session_factory()
 
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="OL12345W",
             title="Temporary Magazine",
         )
@@ -232,7 +233,7 @@ class TestTrackingDeletion:
         session.commit()
 
         # Verify deleted
-        found = session.query(MagazineTracking).filter_by(id=tracking_id).first()
+        found = session.query(PeriodicalTracking).filter_by(id=tracking_id).first()
         assert found is None
 
         session.close()
@@ -253,7 +254,7 @@ class TestTrackingMetadata:
             "subjects": ["News", "Politics", "Culture"],
         }
 
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="OL12345W",
             title="Time Magazine",
             periodical_metadata=metadata,
@@ -273,7 +274,7 @@ class TestTrackingMetadata:
         engine, session_factory = test_db
         session = session_factory()
 
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="OL12345W",
             title="Test Magazine",
             last_metadata_update=None,
@@ -302,7 +303,7 @@ class TestTrackingUniqueness:
         engine, session_factory = test_db
         session = session_factory()
 
-        tracking1 = MagazineTracking(
+        tracking1 = PeriodicalTracking(
             olid="OL12345W",
             title="Wired Magazine",
             language="English",
@@ -311,7 +312,7 @@ class TestTrackingUniqueness:
         session.commit()
 
         # Same OLID but different language - should be allowed
-        tracking2 = MagazineTracking(
+        tracking2 = PeriodicalTracking(
             olid="OL12345W",  # Same OLID
             title="Wired Magazine",
             language="German",
@@ -320,7 +321,7 @@ class TestTrackingUniqueness:
         session.commit()  # Should not raise - duplicate OLID with different language is allowed
 
         # Verify both exist
-        all_tracking = session.query(MagazineTracking).filter(MagazineTracking.olid == "OL12345W").all()
+        all_tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.olid == "OL12345W").all()
         assert len(all_tracking) == 2
 
         session.close()
@@ -340,13 +341,13 @@ class TestTrackingMerge:
         set_dependencies(session_factory, None, None)
 
         # Create two tracking records with different titles
-        tracking1 = MagazineTracking(
+        tracking1 = PeriodicalTracking(
             olid="OL12345W",
             title="Wired",
             track_all_editions=True,
             last_metadata_update=datetime.now(UTC),
         )
-        tracking2 = MagazineTracking(
+        tracking2 = PeriodicalTracking(
             olid="OL67890W",
             title="Wired Magazine",
             track_all_editions=True,
@@ -356,21 +357,21 @@ class TestTrackingMerge:
         session.commit()
 
         # Create magazines linked to each tracking record
-        mag1 = Magazine(
+        mag1 = Periodical(
             title="Wired",
             language="English",
             issue_date=datetime(2024, 1, 1),
             file_path="/test/wired-jan2024.pdf",
             tracking_id=tracking1.id,
         )
-        mag2 = Magazine(
+        mag2 = Periodical(
             title="Wired Magazine",
             language="English",
             issue_date=datetime(2024, 2, 1),
             file_path="/test/wired-feb2024.pdf",
             tracking_id=tracking2.id,
         )
-        mag3 = Magazine(
+        mag3 = Periodical(
             title="Wired Magazine",
             language="English",
             issue_date=datetime(2024, 3, 1),
@@ -381,7 +382,7 @@ class TestTrackingMerge:
         session.commit()
 
         # Verify we have 2 distinct titles before merge
-        distinct_titles = session.query(Magazine.title).distinct().all()
+        distinct_titles = session.query(Periodical.title).distinct().all()
         assert len(distinct_titles) == 2
         title_set = {t[0] for t in distinct_titles}
         assert "Wired" in title_set
@@ -398,30 +399,30 @@ class TestTrackingMerge:
 
         # Verify merge results
         assert result["success"] is True
-        assert result["magazines_moved"] == 2
+        assert result["periodicals_moved"] == 2
         assert "Wired Magazine" in result["merged_titles"]
 
         # Refresh session to see updated data
         session.expire_all()
 
         # Verify all magazines now have the same title
-        all_magazines = session.query(Magazine).all()
+        all_magazines = session.query(Periodical).all()
         assert len(all_magazines) == 3
         for mag in all_magazines:
             assert mag.title == "Wired", f"Magazine title should be 'Wired', got '{mag.title}'"
             assert mag.tracking_id == target_id
 
         # Verify library grouping would work (only 1 distinct title now)
-        distinct_titles_after = session.query(Magazine.title).distinct().all()
+        distinct_titles_after = session.query(Periodical.title).distinct().all()
         assert len(distinct_titles_after) == 1
         assert distinct_titles_after[0][0] == "Wired"
 
         # Verify source tracking record was deleted
-        deleted_tracking = session.query(MagazineTracking).filter(MagazineTracking.id == source_id).first()
+        deleted_tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == source_id).first()
         assert deleted_tracking is None
 
         # Verify target tracking record still exists
-        target_tracking = session.query(MagazineTracking).filter(MagazineTracking.id == target_id).first()
+        target_tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == target_id).first()
         assert target_tracking is not None
         assert target_tracking.title == "Wired"
 
@@ -437,13 +438,13 @@ class TestTrackingMerge:
         set_dependencies(session_factory, None, None)
 
         # Create tracking records
-        tracking1 = MagazineTracking(
+        tracking1 = PeriodicalTracking(
             olid="OL111W",
             title="National Geographic",
             track_all_editions=True,
             last_metadata_update=datetime.now(UTC),
         )
-        tracking2 = MagazineTracking(
+        tracking2 = PeriodicalTracking(
             olid="OL222W",
             title="NatGeo Magazine",
             track_all_editions=True,
@@ -453,14 +454,14 @@ class TestTrackingMerge:
         session.commit()
 
         # Create magazines in different languages
-        mag1_en = Magazine(
+        mag1_en = Periodical(
             title="National Geographic",
             language="English",
             issue_date=datetime(2024, 1, 1),
             file_path="/test/natgeo-en-jan.pdf",
             tracking_id=tracking1.id,
         )
-        mag2_de = Magazine(
+        mag2_de = Periodical(
             title="NatGeo Magazine",
             language="German",
             issue_date=datetime(2024, 1, 1),
@@ -482,7 +483,7 @@ class TestTrackingMerge:
         session.expire_all()
 
         # Both magazines should have same title but different languages
-        all_magazines = session.query(Magazine).all()
+        all_magazines = session.query(Periodical).all()
         assert len(all_magazines) == 2
         for mag in all_magazines:
             assert mag.title == "National Geographic"
@@ -490,7 +491,7 @@ class TestTrackingMerge:
         # Should have 2 groups in library view (by title+language)
         from sqlalchemy import func
 
-        title_lang_groups = session.query(Magazine.title, Magazine.language).distinct().all()
+        title_lang_groups = session.query(Periodical.title, Periodical.language).distinct().all()
         assert len(title_lang_groups) == 2
 
         session.close()
@@ -505,13 +506,13 @@ class TestTrackingMerge:
         set_dependencies(session_factory, None, None)
 
         # Create two tracking records
-        tracking1 = MagazineTracking(
+        tracking1 = PeriodicalTracking(
             olid="OL_MAIN",
             title="National Geographic",
             track_all_editions=True,
             last_metadata_update=datetime.now(UTC),
         )
-        tracking2 = MagazineTracking(
+        tracking2 = PeriodicalTracking(
             olid="OL_SPECIAL",
             title="National Geographic Special Edition",
             track_all_editions=True,
@@ -521,14 +522,14 @@ class TestTrackingMerge:
         session.commit()
 
         # Create regular and special edition magazines
-        regular_mag = Magazine(
+        regular_mag = Periodical(
             title="National Geographic",
             language="English",
             issue_date=datetime(2024, 1, 1),
             file_path="/lib/natgeo-jan2024.pdf",
             tracking_id=tracking1.id,
         )
-        special_mag = Magazine(
+        special_mag = Periodical(
             title="National Geographic Special Edition",
             language="English",
             issue_date=datetime(2024, 1, 1),
@@ -550,17 +551,17 @@ class TestTrackingMerge:
         session.expire_all()
 
         # Both should now link to target tracking
-        all_mags = session.query(Magazine).all()
+        all_mags = session.query(Periodical).all()
         assert len(all_mags) == 2
         for mag in all_mags:
             assert mag.tracking_id == target_id
 
         # Regular edition should have normalized title
-        regular = session.query(Magazine).filter(Magazine.file_path == "/lib/natgeo-jan2024.pdf").first()
+        regular = session.query(Periodical).filter(Periodical.file_path == "/lib/natgeo-jan2024.pdf").first()
         assert regular.title == "National Geographic"
 
         # Special edition should KEEP its special title
-        special = session.query(Magazine).filter(Magazine.file_path == "/lib/natgeo-special-jan2024.pdf").first()
+        special = session.query(Periodical).filter(Periodical.file_path == "/lib/natgeo-special-jan2024.pdf").first()
         assert special.title == "National Geographic Special Edition", "Special edition title should be preserved"
         assert special.extra_metadata.get("special_edition") == "Special Edition"
 
@@ -581,10 +582,10 @@ class TestTitleChangeFileReorganization:
             organize_dir.mkdir(parents=True, exist_ok=True)
 
             # Create tracking record
-            tracking = MagazineTracking(
+            tracking = PeriodicalTracking(
                 olid="OL12345W",
                 title="Old Magazine Name",
-                category="Magazines",
+                category=CATEGORY_MAGAZINE,
                 track_all_editions=True,
             )
             session.add(tracking)
@@ -592,7 +593,7 @@ class TestTitleChangeFileReorganization:
             tracking_id = tracking.id
 
             # Create directory structure and files with old title
-            old_folder = organize_dir / "_Magazines" / "Old Magazine Name" / "2024"
+            old_folder = organize_dir / "_Magazine" / "Old Magazine Name" / "2024"
             old_folder.mkdir(parents=True, exist_ok=True)
 
             old_pdf = old_folder / "Old Magazine Name - January2024.pdf"
@@ -603,13 +604,13 @@ class TestTitleChangeFileReorganization:
             old_cover.write_text("Cover content")
 
             # Add magazine record pointing to old paths
-            magazine = Magazine(
+            magazine = Periodical(
                 title="Old Magazine Name",
                 issue_date=datetime(2024, 1, 15),
                 file_path=str(old_pdf),
                 cover_path=str(old_cover),
                 tracking_id=tracking_id,
-                extra_metadata={"category": "Magazines"},
+                extra_metadata={"category": CATEGORY_MAGAZINE},
             )
             session.add(magazine)
             session.commit()
@@ -620,7 +621,7 @@ class TestTitleChangeFileReorganization:
             assert old_cover.exists(), "Old cover should exist"
 
             # Simulate the update_tracking endpoint behavior
-            from web.routers.tracking import _reorganize_magazine_files
+            from web.routers.tracking import _reorganize_periodical_files
 
             # Update the tracking title
             old_title = tracking.title
@@ -628,7 +629,7 @@ class TestTitleChangeFileReorganization:
             tracking.title = new_title
 
             # Reorganize files
-            new_pdf_path, new_cover_path = _reorganize_magazine_files(magazine, new_title, organize_dir, "_")
+            new_pdf_path, new_cover_path = _reorganize_periodical_files(magazine, new_title, organize_dir, "_")
 
             # Update magazine record
             if new_pdf_path:
@@ -640,7 +641,7 @@ class TestTitleChangeFileReorganization:
             session.commit()
 
             # Verify new structure
-            new_folder = organize_dir / "_Magazines" / "New Magazine Name" / "2024"
+            new_folder = organize_dir / "_Magazine" / "New Magazine Name" / "2024"
             new_pdf = new_folder / "New Magazine Name - January2024.pdf"
             new_cover = new_folder / "New Magazine Name - January2024.jpg"
 
@@ -671,10 +672,10 @@ class TestTitleChangeFileReorganization:
             organize_dir.mkdir(parents=True, exist_ok=True)
 
             # Create tracking record
-            tracking = MagazineTracking(
+            tracking = PeriodicalTracking(
                 olid="OL12345W",
                 title="National Geographic",
-                category="Magazines",
+                category=CATEGORY_MAGAZINE,
             )
             session.add(tracking)
             session.commit()
@@ -687,13 +688,13 @@ class TestTitleChangeFileReorganization:
             special_pdf = special_folder / "National Geographic Swimsuit - January2024.pdf"
             special_pdf.write_text("Special PDF content")
 
-            special_magazine = Magazine(
+            special_magazine = Periodical(
                 title="National Geographic Swimsuit Edition",
                 issue_date=datetime(2024, 1, 15),
                 file_path=str(special_pdf),
                 tracking_id=tracking_id,
                 extra_metadata={
-                    "category": "Magazines",
+                    "category": CATEGORY_MAGAZINE,
                     "special_edition": "Swimsuit Edition",
                 },
             )
@@ -727,10 +728,10 @@ class TestTitleChangeFileReorganization:
             organize_dir.mkdir(parents=True, exist_ok=True)
 
             # Create tracking record
-            tracking = MagazineTracking(
+            tracking = PeriodicalTracking(
                 olid="OL12345W",
                 title="Wired Magazine",
-                category="Magazines",
+                category=CATEGORY_MAGAZINE,
             )
             session.add(tracking)
             session.commit()
@@ -743,7 +744,7 @@ class TestTitleChangeFileReorganization:
                 ("March2024", datetime(2024, 3, 15)),
             ]
 
-            old_folder = organize_dir / "_Magazines" / "Wired Magazine" / "2024"
+            old_folder = organize_dir / "_Magazine" / "Wired Magazine" / "2024"
             old_folder.mkdir(parents=True, exist_ok=True)
 
             magazines = []
@@ -751,12 +752,12 @@ class TestTitleChangeFileReorganization:
                 pdf_path = old_folder / f"Wired Magazine - {month_label}.pdf"
                 pdf_path.write_text(f"Content for {month_label}")
 
-                magazine = Magazine(
+                magazine = Periodical(
                     title="Wired Magazine",
                     issue_date=issue_date,
                     file_path=str(pdf_path),
                     tracking_id=tracking_id,
-                    extra_metadata={"category": "Magazines"},
+                    extra_metadata={"category": CATEGORY_MAGAZINE},
                 )
                 session.add(magazine)
                 magazines.append(magazine)
@@ -764,12 +765,12 @@ class TestTitleChangeFileReorganization:
             session.commit()
 
             # Update title and reorganize all files
-            from web.routers.tracking import _reorganize_magazine_files
+            from web.routers.tracking import _reorganize_periodical_files
 
             tracking.title = "Wired"
 
             for magazine in magazines:
-                new_pdf_path, new_cover_path = _reorganize_magazine_files(magazine, "Wired", organize_dir, "_")
+                new_pdf_path, new_cover_path = _reorganize_periodical_files(magazine, "Wired", organize_dir, "_")
                 if new_pdf_path:
                     magazine.file_path = new_pdf_path
                     magazine.title = "Wired"
@@ -777,7 +778,7 @@ class TestTitleChangeFileReorganization:
             session.commit()
 
             # Verify all files moved
-            new_folder = organize_dir / "_Magazines" / "Wired" / "2024"
+            new_folder = organize_dir / "_Magazine" / "Wired" / "2024"
             for month_label, _ in issues:
                 new_pdf = new_folder / f"Wired - {month_label}.pdf"
                 assert new_pdf.exists(), f"{month_label} should be reorganized"

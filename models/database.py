@@ -15,6 +15,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.declarative import declarative_base
 
+from core.constants.category import DEFAULT_CATEGORY
 from core.constants.language import DEFAULT_LANGUAGE
 from core.parsers import utc_now
 
@@ -64,14 +65,15 @@ class Credentials(Base):
         }
 
 
-class Magazine(Base):
-    """Organized periodical with metadata"""
+class Periodical(Base):
+    """Organized periodical with metadata (magazines, comics, books, documents)"""
 
     __tablename__ = "periodicals"
 
     id = Column(Integer, primary_key=True)
     title = Column(String(255), nullable=False, index=True)
     language = Column(String(50), nullable=True, default=DEFAULT_LANGUAGE, index=True)  # Language of the edition
+    category = Column(String(100), nullable=True, default=DEFAULT_CATEGORY, index=True)  # Content category
     issue_date = Column(DateTime, nullable=False, index=True)
     file_path = Column(String(512), nullable=False, unique=True)
     cover_path = Column(String(512), nullable=True)
@@ -84,11 +86,12 @@ class Magazine(Base):
     )  # Link to tracking record
 
     def to_dict(self) -> Dict[str, Any]:
-        """Serialize Magazine to dictionary for API responses"""
+        """Serialize Periodical to dictionary for API responses"""
         return {
             "id": self.id,
             "title": self.title,
             "language": self.language,
+            "category": self.category,
             "issue_date": self.issue_date.isoformat() if self.issue_date else None,
             "file_path": self.file_path,
             "cover_path": self.cover_path,
@@ -100,7 +103,7 @@ class Magazine(Base):
         }
 
 
-class MagazineTracking(Base):
+class PeriodicalTracking(Base):
     """Track periodical series for monitoring and downloading specific editions"""
 
     __tablename__ = "periodical_tracking"
@@ -123,7 +126,9 @@ class MagazineTracking(Base):
     delete_from_client_on_completion = Column(
         Boolean, default=True
     )  # Delete from download client after completion or failure (True = auto-remove)
-    category = Column(String(100), nullable=True)  # Content category: Magazines, Comics, Articles, News
+    category = Column(
+        String(100), nullable=True, default=DEFAULT_CATEGORY
+    )  # Content category: Periodical, Comic, Graphic Novel, Book, Document
     download_category = Column(String(100), nullable=True)  # Download client category (e.g., "books", "magazines")
 
     # Metadata
@@ -147,7 +152,7 @@ class MagazineTracking(Base):
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     def to_dict(self) -> Dict[str, Any]:
-        """Serialize MagazineTracking to dictionary for API responses"""
+        """Serialize PeriodicalTracking to dictionary for API responses"""
         return {
             "id": self.id,
             "olid": self.olid,
@@ -192,7 +197,7 @@ class SearchResult(Base):
     raw_metadata = Column(JSON, nullable=True)  # Provider-specific fields as JSON
     fuzzy_match_group_id = Column(String(255), nullable=True, index=True)  # Grouping for deduplication
     created_at = Column(DateTime, default=utcnow, index=True)
-    magazine_id = Column(Integer, ForeignKey("periodicals.id"), nullable=True)  # Links to downloaded periodical
+    periodical_id = Column(Integer, ForeignKey("periodicals.id"), nullable=True)  # Links to downloaded periodical
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize SearchResult to dictionary for API responses"""
@@ -206,7 +211,7 @@ class SearchResult(Base):
             "raw_metadata": self.raw_metadata,
             "fuzzy_match_group_id": self.fuzzy_match_group_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
-            "magazine_id": self.magazine_id,
+            "periodical_id": self.periodical_id,
         }
 
 
@@ -278,7 +283,7 @@ class Download(Base):
     status = Column(Enum(StatusEnum), default=StatusEnum.PENDING, index=True)
     source_url = Column(String(512), nullable=False)  # NZB URL sent to client
     client_name = Column(String(100), nullable=False)  # Which client handled this
-    magazine_id = Column(Integer, ForeignKey("periodicals.id"), nullable=True)
+    periodical_id = Column(Integer, ForeignKey("periodicals.id"), nullable=True)
     search_result_id = Column(Integer, ForeignKey("search_results.id"), nullable=True)
     created_at = Column(DateTime, default=utcnow, index=True)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
@@ -291,7 +296,7 @@ class Download(Base):
             "status": self.status.value if self.status else None,
             "source_url": self.source_url,
             "client_name": self.client_name,
-            "magazine_id": self.magazine_id,
+            "periodical_id": self.periodical_id,
             "search_result_id": self.search_result_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
@@ -315,7 +320,7 @@ class OCRJob(Base):
         HIGH = 10  # User-requested
 
     id = Column(Integer, primary_key=True)
-    magazine_id = Column(Integer, ForeignKey("periodicals.id"), nullable=False, index=True)
+    periodical_id = Column(Integer, ForeignKey("periodicals.id"), nullable=False, index=True)
     status = Column(Enum(StatusEnum), default=StatusEnum.PENDING, index=True)
     priority = Column(Integer, default=PriorityEnum.NORMAL.value, index=True)
     language = Column(String(50), nullable=True)  # OCR language hint
@@ -332,7 +337,7 @@ class OCRJob(Base):
         """Serialize OCRJob to dictionary for API responses"""
         return {
             "id": self.id,
-            "magazine_id": self.magazine_id,
+            "periodical_id": self.periodical_id,
             "status": self.status.value if self.status else None,
             "priority": self.priority,
             "language": self.language,
@@ -400,7 +405,7 @@ class DiscoveredIssue(Base):
     # Download tracking
     current_submission_id = Column(Integer, ForeignKey("download_submissions.id"), nullable=True, index=True)
     submission_ids = Column(JSON, default=list)  # List of ALL DownloadSubmission IDs
-    magazine_id = Column(Integer, ForeignKey("periodicals.id"), nullable=True, index=True)
+    periodical_id = Column(Integer, ForeignKey("periodicals.id"), nullable=True, index=True)
 
     # Failure tracking
     attempt_count = Column(Integer, default=0)
@@ -437,7 +442,7 @@ class DiscoveredIssue(Base):
             "search_result_ids": self.search_result_ids,
             "current_submission_id": self.current_submission_id,
             "submission_ids": self.submission_ids,
-            "magazine_id": self.magazine_id,
+            "periodical_id": self.periodical_id,
             "attempt_count": self.attempt_count,
             "max_retries": self.max_retries,
             "last_attempt": self.last_attempt.isoformat() if self.last_attempt else None,
@@ -454,7 +459,7 @@ class ReadingProgress(Base):
     __tablename__ = "reading_progress"
 
     id = Column(Integer, primary_key=True)
-    magazine_id = Column(Integer, ForeignKey("periodicals.id"), nullable=False, index=True, unique=True)
+    periodical_id = Column(Integer, ForeignKey("periodicals.id"), nullable=False, index=True, unique=True)
     current_page = Column(Integer, nullable=True)  # For comics/PDFs (0-indexed)
     current_chapter = Column(Integer, nullable=True)  # For EPUBs (0-indexed)
     total_pages = Column(Integer, nullable=True)  # Total pages/chapters
@@ -467,7 +472,7 @@ class ReadingProgress(Base):
         """Serialize ReadingProgress to dictionary for API responses"""
         return {
             "id": self.id,
-            "magazine_id": self.magazine_id,
+            "periodical_id": self.periodical_id,
             "current_page": self.current_page,
             "current_chapter": self.current_chapter,
             "total_pages": self.total_pages,

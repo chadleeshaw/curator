@@ -2,6 +2,13 @@
 Provider-specific constants for search providers and indexers
 """
 
+from core.constants.category import (
+    CATEGORY_BOOK,
+    CATEGORY_COMIC,
+    CATEGORY_DOCUMENT,
+    CATEGORY_MAGAZINE,
+)
+
 # ==============================================================================
 # Newsnab Provider Configuration
 # ==============================================================================
@@ -9,25 +16,37 @@ Provider-specific constants for search providers and indexers
 NEWSNAB_DEFAULT_API_URL = "http://localhost:9696"
 """Default Newsnab API URL (typically Prowlarr)"""
 
-NEWSNAB_DEFAULT_CATEGORIES = "7000,7010,7020,7030,6000,8000"
+NEWSNAB_DEFAULT_CATEGORIES = "7000,7010,7020,7030,6000,8000,8010"
 """
 Default Newsnab categories to search.
-Common Newznab categories:
-- 7000: Books (all)
-- 7010: Magazines
-- 7020: Ebooks
-- 7030: Comics
-- 6000: Adult
-- 8000: Misc
+Standard Newsnab categories:
+- 7000: Books (parent)
+- 7010: Books/Mags (Magazines)
+- 7020: Books/EBook
+- 7030: Books/Comics
+- 6000: XXX (adult - magazines, comics, books - requires pattern validation)
+- 8000: Other (parent - requires pattern validation)
+- 8010: Other/Misc (requires pattern validation)
+- 8050: Other/Hashed (spam/obfuscated - explicitly excluded)
+
+Note: Categories 6000, 8000, and 8010 are included because periodicals are sometimes
+      placed there, but they require additional pattern-based validation.
 """
 
 NEWSNAB_CATEGORY_MAP = {
-    "Magazines": "7010",
-    "Comics": "7030",
-    "Articles": "7020",  # Ebooks
-    "News": "7010",  # Same as magazines
+    CATEGORY_MAGAZINE: "7010,8000,8010",  # Books/Mags + Other/Misc (periodicals sometimes in Other)
+    CATEGORY_COMIC: "7030,8000,8010",  # Books/Comics + Other/Misc (comics sometimes in Other)
+    CATEGORY_BOOK: "7000,7020",  # Books (parent) and Books/EBook
+    CATEGORY_DOCUMENT: "7020",  # Books/EBook (documents/PDFs)
 }
-"""Mapping of Curator category names to Newsnab category IDs"""
+"""
+Mapping of Curator category names to Newsnab category IDs for searching.
+
+Note: 6000 (XXX) is intentionally excluded from default searches.
+      Users can add it manually in search filters if needed.
+      8000 (Other) and 8010 (Other/Misc) are included because periodicals are sometimes categorized there.
+      8050 (Other/Hashed) is excluded as it's typically spam/obfuscated releases.
+"""
 
 NEWSNAB_DEFAULT_MAX_REQUESTS_PER_HOUR = 100
 """Default maximum requests per hour for Newsnab providers"""

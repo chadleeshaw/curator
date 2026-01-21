@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 
 from core.constants.errors import ErrorMessages
 from core.utils import run_in_thread
-from models.database import Magazine
+from models.database import Periodical
 
 from . import _shared
 
@@ -52,7 +52,7 @@ async def get_cover(
         def _db_operation():
             db_session = _shared._session_factory()
             try:
-                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+                magazine = db_session.query(Periodical).filter(Periodical.id == magazine_id).first()
 
                 if not magazine or not magazine.cover_path:
                     raise HTTPException(status_code=404, detail=ErrorMessages.COVER_NOT_FOUND)
@@ -112,7 +112,7 @@ async def regenerate_cover(magazine_id: int, request_data: Dict[str, Any]) -> Di
         def _db_operation():
             db_session = _shared._session_factory()
             try:
-                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+                magazine = db_session.query(Periodical).filter(Periodical.id == magazine_id).first()
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.PERIODICAL_NOT_FOUND)
 

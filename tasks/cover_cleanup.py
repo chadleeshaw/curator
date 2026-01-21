@@ -9,7 +9,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import sessionmaker
 
-from models.database import Magazine
+from models.database import Periodical
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ class CoverCleanup:
             db_session = self.session_factory()
             try:
                 # Get all periodicals
-                all_periodicals = db_session.query(Magazine).all()
+                all_periodicals = db_session.query(Periodical).all()
                 periodicals_with_covers = [m for m in all_periodicals if m.cover_path and Path(m.cover_path).exists()]
                 periodicals_without_covers = [
                     m for m in all_periodicals if m.file_path and (not m.cover_path or not Path(m.cover_path).exists())

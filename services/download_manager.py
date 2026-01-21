@@ -19,6 +19,7 @@ from core.constants.app import (
     MAX_DOWNLOAD_RETRIES,
     PROVIDER_SEARCH_TIMEOUT,
 )
+from core.constants.category import DEFAULT_CATEGORY
 from core.constants.files import BLACKLISTED_FILE_EXTENSIONS
 from core.parsers import normalize_month_name, utc_now
 from core.parsers import LANGUAGE_INDICATORS
@@ -26,8 +27,8 @@ from core.parsers import TitleMatcher, Parser
 from core.parsers.categorizer import FileCategorizer
 from models.database import (
     DownloadSubmission,
-    Magazine,
-    MagazineTracking,
+    Periodical,
+    PeriodicalTracking,
 )
 from models.database import SearchResult as DBSearchResult
 
@@ -58,7 +59,9 @@ class DownloadManager:
         # Get default category from client config (handles mocks gracefully)
         client_config = getattr(download_client, "config", {})
         self.default_category = (
-            client_config.get("default_category", "Magazines") if isinstance(client_config, dict) else "Magazines"
+            client_config.get("default_category", DEFAULT_CATEGORY)
+            if isinstance(client_config, dict)
+            else DEFAULT_CATEGORY
         )
         self.max_downloads = max_downloads
         self.title_matcher = TitleMatcher(threshold=fuzzy_threshold)
@@ -291,11 +294,11 @@ class DownloadManager:
 
         # Check if this tracking_title with this language already exists in library
         in_library = (
-            session.query(Magazine)
+            session.query(Periodical)
             .filter(
-                Magazine.tracking_id == tracking_id,
-                Magazine.title == tracking_title,
-                Magazine.language == result_language,
+                Periodical.tracking_id == tracking_id,
+                Periodical.title == tracking_title,
+                Periodical.language == result_language,
             )
             .first()
         )
@@ -418,7 +421,7 @@ class DownloadManager:
         # Submit to download client
         try:
             # Determine download client category: tracked item download_category > config default
-            tracking = session.query(MagazineTracking).filter(MagazineTracking.id == tracking_id).first()
+            tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
             download_category = None
             if tracking and tracking.download_category:
                 download_category = tracking.download_category
@@ -562,7 +565,7 @@ class DownloadManager:
         # Submit to download client
         try:
             # Get tracking for category
-            tracking = session.query(MagazineTracking).filter(MagazineTracking.id == issue.tracking_id).first()
+            tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == issue.tracking_id).first()
 
             download_category = None
             if tracking and tracking.download_category:
@@ -642,7 +645,7 @@ class DownloadManager:
             Dict with submission results
         """
         # Get tracking record
-        tracking = session.query(MagazineTracking).filter(MagazineTracking.id == tracking_id).first()
+        tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
 
         if not tracking:
             logger.error(f"Tracking record not found: {tracking_id}")
@@ -764,7 +767,7 @@ class DownloadManager:
             Dict with submission results
         """
         # Get tracking record
-        tracking = session.query(MagazineTracking).filter(MagazineTracking.id == tracking_id).first()
+        tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
 
         if not tracking:
             logger.error(f"Tracking record not found: {tracking_id}")
@@ -1158,7 +1161,7 @@ class DownloadManager:
             # Resubmit to download client
             logger.info(f"Retrying submission {submission_id}: {submission.result_title}")
             # Determine download client category: tracked item download_category > config default
-            tracking = session.query(MagazineTracking).filter(MagazineTracking.id == submission.tracking_id).first()
+            tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == submission.tracking_id).first()
             download_category = None
             if tracking and tracking.download_category:
                 download_category = tracking.download_category
@@ -1274,7 +1277,9 @@ class DownloadManager:
                 try:
                     # Get tracking for category
                     tracking = (
-                        session.query(MagazineTracking).filter(MagazineTracking.id == submission.tracking_id).first()
+                        session.query(PeriodicalTracking)
+                        .filter(PeriodicalTracking.id == submission.tracking_id)
+                        .first()
                     )
 
                     download_category = None

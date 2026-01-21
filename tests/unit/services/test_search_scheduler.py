@@ -19,7 +19,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from services import SearchScheduler
-from models.database import Base, MagazineTracking
+from models.database import Base, PeriodicalTracking
 
 
 @pytest.fixture
@@ -64,13 +64,13 @@ class TestSelectPeriodicalsToSearch:
         session = session_factory()
 
         # Create periodicals - some never searched, some searched
-        never_searched = MagazineTracking(
+        never_searched = PeriodicalTracking(
             olid="never-searched",
             title="Never Searched Magazine",
             track_all_editions=True,
             last_searched=None,
         )
-        recently_searched = MagazineTracking(
+        recently_searched = PeriodicalTracking(
             olid="recent",
             title="Recently Searched Magazine",
             track_all_editions=True,
@@ -97,14 +97,14 @@ class TestSelectPeriodicalsToSearch:
         session = session_factory()
 
         # Create periodicals with different intervals
-        overdue = MagazineTracking(
+        overdue = PeriodicalTracking(
             olid="overdue",
             title="Overdue Magazine",
             track_all_editions=True,
             last_searched=datetime.now(UTC) - timedelta(hours=7),  # 7 hours ago
             search_interval_hours=6,  # Should have been searched 1 hour ago
         )
-        not_due = MagazineTracking(
+        not_due = PeriodicalTracking(
             olid="not-due",
             title="Not Due Magazine",
             track_all_editions=True,
@@ -131,7 +131,7 @@ class TestSelectPeriodicalsToSearch:
 
         # Create 5 overdue periodicals
         for i in range(5):
-            tracking = MagazineTracking(
+            tracking = PeriodicalTracking(
                 olid=f"mag-{i}",
                 title=f"Magazine {i}",
                 track_all_editions=True,
@@ -155,14 +155,14 @@ class TestSelectPeriodicalsToSearch:
         session = session_factory()
 
         # Create periodicals overdue by different amounts
-        very_overdue = MagazineTracking(
+        very_overdue = PeriodicalTracking(
             olid="very-overdue",
             title="Very Overdue Magazine",
             track_all_editions=True,
             last_searched=datetime.now(UTC) - timedelta(days=10),
             search_interval_hours=6,
         )
-        slightly_overdue = MagazineTracking(
+        slightly_overdue = PeriodicalTracking(
             olid="slightly-overdue",
             title="Slightly Overdue Magazine",
             track_all_editions=True,
@@ -192,7 +192,7 @@ class TestUpdateSearchStats:
         session = session_factory()
 
         # Create periodical with normal interval
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
@@ -211,7 +211,7 @@ class TestUpdateSearchStats:
         )
 
         # Check database
-        tracking = session.query(MagazineTracking).filter_by(id=tracking.id).first()
+        tracking = session.query(PeriodicalTracking).filter_by(id=tracking.id).first()
         assert tracking.search_interval_hours == 1  # Rapid interval
         assert tracking.searches_without_new_issues == 0  # Reset
         assert tracking.last_searched is not None
@@ -224,7 +224,7 @@ class TestUpdateSearchStats:
         session = session_factory()
 
         # Create periodical
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
@@ -243,7 +243,7 @@ class TestUpdateSearchStats:
         )
 
         # Check database
-        tracking = session.query(MagazineTracking).filter_by(id=tracking.id).first()
+        tracking = session.query(PeriodicalTracking).filter_by(id=tracking.id).first()
         assert tracking.searches_without_new_issues == 1  # Incremented
         # Interval should still be normal (not enough empty searches yet)
         assert tracking.search_interval_hours == 6
@@ -256,7 +256,7 @@ class TestUpdateSearchStats:
         session = session_factory()
 
         # Create periodical with normal interval
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
@@ -275,7 +275,7 @@ class TestUpdateSearchStats:
         )
 
         # Check database
-        tracking = session.query(MagazineTracking).filter_by(id=tracking.id).first()
+        tracking = session.query(PeriodicalTracking).filter_by(id=tracking.id).first()
         assert tracking.search_interval_hours == 24  # Slow interval
         assert tracking.searches_without_new_issues == 3
 
@@ -287,7 +287,7 @@ class TestUpdateSearchStats:
         session = session_factory()
 
         # Create periodical with slow interval
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
@@ -306,7 +306,7 @@ class TestUpdateSearchStats:
         )
 
         # Check database
-        tracking = session.query(MagazineTracking).filter_by(id=tracking.id).first()
+        tracking = session.query(PeriodicalTracking).filter_by(id=tracking.id).first()
         assert tracking.search_interval_hours == 168  # Very slow interval (7 days)
         assert tracking.searches_without_new_issues == 6
 
@@ -318,7 +318,7 @@ class TestUpdateSearchStats:
         session = session_factory()
 
         # Create periodical already at very_slow
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
@@ -337,7 +337,7 @@ class TestUpdateSearchStats:
         )
 
         # Check database - should stay at very_slow
-        tracking = session.query(MagazineTracking).filter_by(id=tracking.id).first()
+        tracking = session.query(PeriodicalTracking).filter_by(id=tracking.id).first()
         assert tracking.search_interval_hours == 168  # Still very slow
         assert tracking.searches_without_new_issues == 11  # Counter still increments
 
@@ -353,7 +353,7 @@ class TestResetSearchInterval:
         session = session_factory()
 
         # Create periodical at very_slow
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
@@ -374,7 +374,7 @@ class TestResetSearchInterval:
         assert success is True
 
         # Check database
-        tracking = session.query(MagazineTracking).filter_by(id=tracking.id).first()
+        tracking = session.query(PeriodicalTracking).filter_by(id=tracking.id).first()
         assert tracking.search_interval_hours == 1  # Rapid
         assert tracking.searches_without_new_issues == 0  # Reset counter
 
@@ -406,21 +406,21 @@ class TestGetSearchStatistics:
         session = session_factory()
 
         # Create several periodicals with different states
-        tracking1 = MagazineTracking(
+        tracking1 = PeriodicalTracking(
             olid="mag-1",
             title="Magazine 1",
             track_all_editions=True,
             last_searched=None,  # Never searched
             search_interval_hours=6,
         )
-        tracking2 = MagazineTracking(
+        tracking2 = PeriodicalTracking(
             olid="mag-2",
             title="Magazine 2",
             track_all_editions=True,
             last_searched=datetime.now(UTC) - timedelta(hours=1),
             search_interval_hours=1,  # Rapid
         )
-        tracking3 = MagazineTracking(
+        tracking3 = PeriodicalTracking(
             olid="mag-3",
             title="Magazine 3",
             track_all_editions=True,
@@ -452,7 +452,7 @@ class TestIntervalTransitions:
         session = session_factory()
 
         # Create periodical (starts at normal interval by default)
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
@@ -469,7 +469,7 @@ class TestIntervalTransitions:
             new_issues_found=0,
             session=session,
         )
-        tracking = session.query(MagazineTracking).filter_by(id=tracking.id).first()
+        tracking = session.query(PeriodicalTracking).filter_by(id=tracking.id).first()
         assert tracking.search_interval_hours == 6  # Normal
         assert tracking.searches_without_new_issues == 1
 
@@ -479,7 +479,7 @@ class TestIntervalTransitions:
             new_issues_found=0,
             session=session,
         )
-        tracking = session.query(MagazineTracking).filter_by(id=tracking.id).first()
+        tracking = session.query(PeriodicalTracking).filter_by(id=tracking.id).first()
         assert tracking.search_interval_hours == 6  # Normal
         assert tracking.searches_without_new_issues == 2
 
@@ -489,7 +489,7 @@ class TestIntervalTransitions:
             new_issues_found=0,
             session=session,
         )
-        tracking = session.query(MagazineTracking).filter_by(id=tracking.id).first()
+        tracking = session.query(PeriodicalTracking).filter_by(id=tracking.id).first()
         assert tracking.search_interval_hours == 24  # Slow
         assert tracking.searches_without_new_issues == 3
 
@@ -504,7 +504,7 @@ class TestIntervalTransitions:
             new_issues_found=0,
             session=session,
         )
-        tracking = session.query(MagazineTracking).filter_by(id=tracking.id).first()
+        tracking = session.query(PeriodicalTracking).filter_by(id=tracking.id).first()
         assert tracking.search_interval_hours == 24  # Still slow
         assert tracking.searches_without_new_issues == 5
 
@@ -514,7 +514,7 @@ class TestIntervalTransitions:
             new_issues_found=0,
             session=session,
         )
-        tracking = session.query(MagazineTracking).filter_by(id=tracking.id).first()
+        tracking = session.query(PeriodicalTracking).filter_by(id=tracking.id).first()
         assert tracking.search_interval_hours == 168  # Very slow
         assert tracking.searches_without_new_issues == 6
 
@@ -524,7 +524,7 @@ class TestIntervalTransitions:
             new_issues_found=3,
             session=session,
         )
-        tracking = session.query(MagazineTracking).filter_by(id=tracking.id).first()
+        tracking = session.query(PeriodicalTracking).filter_by(id=tracking.id).first()
         assert tracking.search_interval_hours == 1  # Rapid
         assert tracking.searches_without_new_issues == 0  # Reset
 

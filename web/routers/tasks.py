@@ -9,7 +9,7 @@ from typing import Any, Callable, Dict, Optional
 
 from fastapi import APIRouter, HTTPException
 
-from models.database import Magazine
+from models.database import Periodical
 from core.utils import run_in_thread
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
@@ -281,7 +281,7 @@ async def run_task_manually(task_id: str):
                 db_session = _session_factory()
                 try:
                     # Get all periodicals
-                    all_periodicals = db_session.query(Magazine).all()
+                    all_periodicals = db_session.query(Periodical).all()
                     periodicals_with_covers = [
                         m for m in all_periodicals if m.cover_path and Path(m.cover_path).exists()
                     ]

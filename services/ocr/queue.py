@@ -14,14 +14,14 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 from core import constants
 from core.config import ConfigLoader
 from core.constants.date import NUMBER_TO_MONTH
-from models.database import OCRJob, Magazine
+from models.database import OCRJob, Periodical
 from .service import OCRService
 
 logger = logging.getLogger(__name__)
 
 
 def _apply_scan_metadata_to_magazine(
-    magazine: Magazine,
+    magazine: Periodical,
     scan_metadata: Dict[str, Any],
     metadata_config: Optional[Dict[str, Any]] = None,
 ) -> bool:
@@ -210,7 +210,7 @@ class OCRQueueService:
     @staticmethod
     def queue_ocr_job(
         db: Session,
-        magazine_id: int,
+        periodical_id: int,
         priority: int = OCRJob.PriorityEnum.NORMAL.value,
         language: Optional[str] = None,
     ) -> Optional[OCRJob]:
@@ -219,7 +219,7 @@ class OCRQueueService:
 
         Args:
             db: Database session
-            magazine_id: Magazine ID to process
+            periodical_id: Periodical ID to process
             priority: Job priority (LOW=1, NORMAL=5, HIGH=10)
             language: Optional language hint
 
@@ -230,19 +230,19 @@ class OCRQueueService:
         existing = (
             db.query(OCRJob)
             .filter(
-                OCRJob.magazine_id == magazine_id,
+                OCRJob.periodical_id == periodical_id,
                 OCRJob.status.in_([OCRJob.StatusEnum.PENDING, OCRJob.StatusEnum.PROCESSING]),
             )
             .first()
         )
 
         if existing:
-            logger.debug(f"OCR job already queued for magazine {magazine_id}")
+            logger.debug(f"OCR job already queued for magazine {periodical_id}")
             return None
 
         # Create new job
         job = OCRJob(
-            magazine_id=magazine_id,
+            periodical_id=periodical_id,
             status=OCRJob.StatusEnum.PENDING,
             priority=priority,
             language=language,
@@ -251,7 +251,7 @@ class OCRQueueService:
         db.commit()
         db.refresh(job)
 
-        logger.info(f"Queued OCR job {job.id} for magazine {magazine_id} (priority={priority})")
+        logger.info(f"Queued OCR job {job.id} for magazine {periodical_id} (priority={priority})")
         return job
 
     def process_queue(self, db: Session, batch_size: int = 1, max_retries: int = 1) -> Dict[str, int]:
@@ -314,10 +314,10 @@ class OCRQueueService:
         job_data = []
         for job in pending_jobs:
             # Get magazine and cover path
-            magazine = db.query(Magazine).filter(Magazine.id == job.magazine_id).first()
+            magazine = db.query(Periodical).filter(Periodical.id == job.periodical_id).first()
 
             if not magazine:
-                logger.warning(f"Magazine {job.magazine_id} not found for OCR job {job.id}")
+                logger.warning(f"Magazine {job.periodical_id} not found for OCR job {job.id}")
                 job.status = OCRJob.StatusEnum.FAILED
                 job.last_error = "Magazine not found"
                 stats["failed"] += 1
@@ -429,7 +429,7 @@ class OCRQueueService:
                 # Refresh objects from DB to avoid stale state
                 db.expire_all()
                 job = db.query(OCRJob).filter(OCRJob.id == job_id).first()
-                magazine = db.query(Magazine).filter(Magazine.id == magazine_id).first()
+                magazine = db.query(Periodical).filter(Periodical.id == magazine_id).first()
 
                 if not job or not magazine:
                     logger.error(f"Job or magazine not found after processing: job={job_id}, magazine={magazine_id}")

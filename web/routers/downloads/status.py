@@ -6,7 +6,7 @@ from typing import Any, Dict
 
 from fastapi import HTTPException
 
-from models.database import DownloadSubmission, MagazineTracking
+from models.database import DownloadSubmission, PeriodicalTracking
 from core.utils import run_in_thread
 
 from . import _shared
@@ -20,7 +20,7 @@ async def get_download_status_for_tracking(tracking_id: int) -> Dict[str, Any]:
         def _query():
             db_session = _shared._session_factory()
             try:
-                tracking = db_session.query(MagazineTracking).filter(MagazineTracking.id == tracking_id).first()
+                tracking = db_session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
                 if not tracking:
                     raise HTTPException(status_code=404, detail="Tracking record not found")
 

@@ -21,8 +21,8 @@ from sqlalchemy.orm import sessionmaker
 from services import IssueDiscoveryService
 from models.database import (
     Base,
-    MagazineTracking,
-    Magazine,
+    PeriodicalTracking,
+    Periodical,
     DiscoveredIssue,
 )
 
@@ -65,7 +65,7 @@ class TestRecordSearchResults:
         session = session_factory()
 
         # Create tracking record
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
@@ -124,7 +124,7 @@ class TestRecordSearchResults:
         session = session_factory()
 
         # Create tracking record
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
@@ -197,7 +197,7 @@ class TestEvaluateDiscoveredIssues:
         session = session_factory()
 
         # Create tracking with track_all_editions=True
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
@@ -253,7 +253,7 @@ class TestEvaluateDiscoveredIssues:
         session = session_factory()
 
         # Create tracking
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
@@ -262,7 +262,7 @@ class TestEvaluateDiscoveredIssues:
         session.commit()
 
         # Create magazine in library
-        magazine = Magazine(
+        magazine = Periodical(
             title="Test Magazine",
             issue_date=datetime(2024, 1, 15),
             file_path="/path/to/magazine.pdf",
@@ -300,7 +300,7 @@ class TestEvaluateDiscoveredIssues:
         # Check database
         issue = session.query(DiscoveredIssue).filter_by(tracking_id=tracking.id).first()
         assert issue.download_status == "completed"
-        assert issue.magazine_id == magazine.id
+        assert issue.periodical_id == magazine.id
 
         session.close()
 
@@ -314,7 +314,7 @@ class TestDownloadFailureHandling:
         session = session_factory()
 
         # Create tracking
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
@@ -372,7 +372,7 @@ class TestDownloadFailureHandling:
         session = session_factory()
 
         # Create tracking
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
@@ -439,7 +439,7 @@ class TestDownloadQueue:
         session = session_factory()
 
         # Create tracking
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
@@ -507,7 +507,7 @@ class TestDownloadQueue:
         session = session_factory()
 
         # Create tracking
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
@@ -567,7 +567,7 @@ class TestRetryPermanentlyFailed:
         session = session_factory()
 
         # Create tracking
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
@@ -630,7 +630,7 @@ class TestRetryPermanentlyFailed:
         session = session_factory()
 
         # Create tracking
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,

@@ -10,8 +10,8 @@ from fastapi import HTTPException
 from core.constants.errors import ErrorMessages
 from core.utils.general import generate_olid
 from core.utils import run_in_thread
-from models.database import Magazine
-from web.schemas import MagazineResponse
+from models.database import Periodical
+from web.schemas import PeriodicalResponse
 
 from . import _shared
 
@@ -48,7 +48,7 @@ async def list_periodicals(
                 # This allows merged tracking records to show as one entry while preserving
                 # separate entries for untracked items
                 from sqlalchemy import func, case, String, cast
-                from models.database import MagazineTracking
+                from models.database import PeriodicalTracking
 
                 # For grouping, use tracking.title when tracking_id exists, otherwise use magazine.title
                 # This ensures merged items show under the primary tracking title
@@ -56,13 +56,13 @@ async def list_periodicals(
                 date_subquery = (
                     db_session.query(
                         case(
-                            (Magazine.tracking_id.isnot(None), Magazine.tracking_id),
-                            else_=Magazine.id,
+                            (Periodical.tracking_id.isnot(None), Periodical.tracking_id),
+                            else_=Periodical.id,
                         ).label("group_key"),
-                        Magazine.language,
-                        func.max(Magazine.issue_date).label("max_date"),
+                        Periodical.language,
+                        func.max(Periodical.issue_date).label("max_date"),
                     )
-                    .group_by("group_key", Magazine.language)
+                    .group_by("group_key", Periodical.language)
                     .subquery()
                 )
 
@@ -70,74 +70,74 @@ async def list_periodicals(
                 id_subquery = (
                     db_session.query(
                         case(
-                            (Magazine.tracking_id.isnot(None), Magazine.tracking_id),
-                            else_=Magazine.id,
+                            (Periodical.tracking_id.isnot(None), Periodical.tracking_id),
+                            else_=Periodical.id,
                         ).label("group_key"),
-                        Magazine.language,
-                        func.max(Magazine.id).label("max_id"),
+                        Periodical.language,
+                        func.max(Periodical.id).label("max_id"),
                     )
                     .join(
                         date_subquery,
                         (
                             case(
                                 (
-                                    Magazine.tracking_id.isnot(None),
-                                    Magazine.tracking_id,
+                                    Periodical.tracking_id.isnot(None),
+                                    Periodical.tracking_id,
                                 ),
-                                else_=Magazine.id,
+                                else_=Periodical.id,
                             )
                             == date_subquery.c.group_key
                         )
-                        & (Magazine.language == date_subquery.c.language)
-                        & (Magazine.issue_date == date_subquery.c.max_date),
+                        & (Periodical.language == date_subquery.c.language)
+                        & (Periodical.issue_date == date_subquery.c.max_date),
                     )
-                    .group_by("group_key", Magazine.language)
+                    .group_by("group_key", Periodical.language)
                     .subquery()
                 )
 
                 # Join to get full magazine record for each group's latest issue
-                query = db_session.query(Magazine).join(
+                query = db_session.query(Periodical).join(
                     id_subquery,
                     (
                         case(
-                            (Magazine.tracking_id.isnot(None), Magazine.tracking_id),
-                            else_=Magazine.id,
+                            (Periodical.tracking_id.isnot(None), Periodical.tracking_id),
+                            else_=Periodical.id,
                         )
                         == id_subquery.c.group_key
                     )
-                    & (Magazine.language == id_subquery.c.language)
-                    & (Magazine.id == id_subquery.c.max_id),
+                    & (Periodical.language == id_subquery.c.language)
+                    & (Periodical.id == id_subquery.c.max_id),
                 )
 
                 # Left join with tracking to get the primary title for display
-                query = query.outerjoin(MagazineTracking, Magazine.tracking_id == MagazineTracking.id)
+                query = query.outerjoin(PeriodicalTracking, Periodical.tracking_id == PeriodicalTracking.id)
 
                 # Apply sorting - use tracking title when available
                 if sort_by == "category":
                     # Sort by category from tracking if available, otherwise fall back to magazine category
                     sort_expr = (
                         func.coalesce(
-                            MagazineTracking.category,
-                            cast(Magazine.extra_metadata["category"], String),
+                            PeriodicalTracking.category,
+                            cast(Periodical.extra_metadata["category"], String),
                         ).desc()
                         if is_descending
                         else func.coalesce(
-                            MagazineTracking.category,
-                            cast(Magazine.extra_metadata["category"], String),
+                            PeriodicalTracking.category,
+                            cast(Periodical.extra_metadata["category"], String),
                         ).asc()
                     )
                     query = query.order_by(
                         sort_expr,
-                        func.coalesce(MagazineTracking.title, Magazine.title).asc(),
+                        func.coalesce(PeriodicalTracking.title, Periodical.title).asc(),
                     )
                 elif sort_by == "issue_date":
-                    sort_expr = Magazine.issue_date.desc() if is_descending else Magazine.issue_date.asc()
+                    sort_expr = Periodical.issue_date.desc() if is_descending else Periodical.issue_date.asc()
                     query = query.order_by(sort_expr)
                 else:  # Default to title
                     sort_expr = (
-                        func.coalesce(MagazineTracking.title, Magazine.title).desc()
+                        func.coalesce(PeriodicalTracking.title, Periodical.title).desc()
                         if is_descending
-                        else func.coalesce(MagazineTracking.title, Magazine.title).asc()
+                        else func.coalesce(PeriodicalTracking.title, Periodical.title).asc()
                     )
                     query = query.order_by(sort_expr)
 
@@ -149,13 +149,13 @@ async def list_periodicals(
                         func.distinct(  # pylint: disable=not-callable
                             case(
                                 (
-                                    Magazine.tracking_id.isnot(None),
-                                    Magazine.tracking_id,
+                                    Periodical.tracking_id.isnot(None),
+                                    Periodical.tracking_id,
                                 ),
-                                else_=Magazine.id,
+                                else_=Periodical.id,
                             )
                             .concat("_")
-                            .concat(func.coalesce(Magazine.language, "English"))
+                            .concat(func.coalesce(Periodical.language, "English"))
                         )
                     )
                 )
@@ -171,10 +171,10 @@ async def list_periodicals(
                         key = (mag.tracking_id, mag.language or "English")
                         if key not in issue_counts:
                             count = (
-                                db_session.query(Magazine)
+                                db_session.query(Periodical)
                                 .filter(
-                                    Magazine.tracking_id == mag.tracking_id,
-                                    Magazine.language == mag.language,
+                                    Periodical.tracking_id == mag.tracking_id,
+                                    Periodical.language == mag.language,
                                 )
                                 .count()
                             )
@@ -184,11 +184,11 @@ async def list_periodicals(
                         key = (mag.title, mag.language or "English", None)
                         if key not in issue_counts:
                             count = (
-                                db_session.query(Magazine)
+                                db_session.query(Periodical)
                                 .filter(
-                                    Magazine.title == mag.title,
-                                    Magazine.language == mag.language,
-                                    Magazine.tracking_id.is_(None),
+                                    Periodical.title == mag.title,
+                                    Periodical.language == mag.language,
+                                    Periodical.tracking_id.is_(None),
                                 )
                                 .count()
                             )
@@ -199,7 +199,9 @@ async def list_periodicals(
                 for mag in magazines:
                     if mag.tracking_id and mag.tracking_id not in tracking_titles:
                         tracking = (
-                            db_session.query(MagazineTracking).filter(MagazineTracking.id == mag.tracking_id).first()
+                            db_session.query(PeriodicalTracking)
+                            .filter(PeriodicalTracking.id == mag.tracking_id)
+                            .first()
                         )
                         if tracking:
                             tracking_titles[mag.tracking_id] = tracking.title
@@ -244,14 +246,14 @@ async def list_periodicals(
 
 
 @router.get("/periodicals/{magazine_id}")
-async def get_magazine(magazine_id: int) -> MagazineResponse:
+async def get_magazine(magazine_id: int) -> PeriodicalResponse:
     """Get magazine details"""
     try:
 
         def _db_operation():
             db_session = _shared._session_factory()
             try:
-                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+                magazine = db_session.query(Periodical).filter(Periodical.id == magazine_id).first()
 
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
@@ -302,7 +304,7 @@ async def delete_periodical(
         def _db_operation():
             db_session = _shared._session_factory()
             try:
-                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+                magazine = db_session.query(Periodical).filter(Periodical.id == magazine_id).first()
 
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
@@ -315,7 +317,9 @@ async def delete_periodical(
                 if delete_all_issues:
                     # Get all magazines with the same title and language
                     magazines_to_delete = (
-                        db_session.query(Magazine).filter(Magazine.title == title, Magazine.language == language).all()
+                        db_session.query(Periodical)
+                        .filter(Periodical.title == title, Periodical.language == language)
+                        .all()
                     )
                 else:
                     # Only delete the single specified magazine
@@ -365,10 +369,10 @@ async def delete_periodical(
 
                 # Remove tracking record if requested
                 if remove_tracking:
-                    from models.database import MagazineTracking
+                    from models.database import PeriodicalTracking
 
                     olid = generate_olid(title)
-                    tracking = db_session.query(MagazineTracking).filter(MagazineTracking.olid == olid).first()
+                    tracking = db_session.query(PeriodicalTracking).filter(PeriodicalTracking.olid == olid).first()
                     if tracking:
                         db_session.delete(tracking)
                         db_session.commit()
@@ -446,18 +450,18 @@ async def purge_database() -> Dict[str, Any]:
         def _db_operation():
             db_session = _shared._session_factory()
             try:
-                from models.database import MagazineTracking, DownloadSubmission
+                from models.database import PeriodicalTracking, DownloadSubmission
 
                 # Count entries before deletion
-                magazine_count = db_session.query(Magazine).count()
-                tracking_count = db_session.query(MagazineTracking).count()
+                magazine_count = db_session.query(Periodical).count()
+                tracking_count = db_session.query(PeriodicalTracking).count()
                 download_count = db_session.query(DownloadSubmission).count()
 
                 # Delete all library entries
-                db_session.query(Magazine).delete()
+                db_session.query(Periodical).delete()
 
                 # Delete all tracking records
-                db_session.query(MagazineTracking).delete()
+                db_session.query(PeriodicalTracking).delete()
 
                 # Delete all download submissions
                 db_session.query(DownloadSubmission).delete()
@@ -602,7 +606,7 @@ async def get_periodicals_count() -> Dict[str, int]:
         def _db_operation():
             db_session = _shared._session_factory()
             try:
-                total = db_session.query(Magazine).count()
+                total = db_session.query(Periodical).count()
                 return {"total": total}
             finally:
                 db_session.close()

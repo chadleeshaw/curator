@@ -29,7 +29,7 @@ from core.utils.epub import extract_cover_from_epub
 from core.utils.cbz import extract_cover_from_cbz, extract_cover_from_cbr
 from core.utils.general import find_pdf_epub_files, hash_file_in_chunks
 from services.response_models import OperationResult
-from models.database import Magazine, MagazineTracking, OCRJob
+from models.database import Periodical, PeriodicalTracking, OCRJob
 from services.file_organizer import FileOrganizer
 from services.ocr.service import OCRService
 from services.ocr.queue import OCRQueueService, _apply_scan_metadata_to_magazine
@@ -341,10 +341,10 @@ class FileImporter:
             # First check: hash-based duplicate detection (100% accurate)
             # Only check if we have a valid hash (skip NULL hashes from older imports)
             existing_by_hash = (
-                session.query(Magazine)
+                session.query(Periodical)
                 .filter(
-                    Magazine.content_hash == content_hash,
-                    Magazine.content_hash.isnot(None),
+                    Periodical.content_hash == content_hash,
+                    Periodical.content_hash.isnot(None),
                 )
                 .first()
             )
@@ -413,7 +413,7 @@ class FileImporter:
             # Check for duplicates using fuzzy matching on tracking titles AND issue date
             # A duplicate is defined as: same tracking title (fuzzy match) AND same issue date (within 5 days)
             # Normalize existing titles to use full country names for consistent comparison
-            existing_magazines = session.query(Magazine).all()
+            existing_magazines = session.query(Periodical).all()
             for existing in existing_magazines:
                 # Normalize the existing title to use full country names instead of codes
                 # This ensures "Esquire US" matches "Esquire United States"
@@ -492,7 +492,7 @@ class FileImporter:
                 extra_metadata["special_edition"] = special_name
                 extra_metadata["full_title"] = parsed.title
 
-            magazine = Magazine(
+            magazine = Periodical(
                 title=tracking_title,
                 issue_date=parsed.issue_date or datetime.now(),
                 file_path=str(organized_path),
@@ -513,7 +513,7 @@ class FileImporter:
 
             if tracking_id:
                 # Tracking ID provided from download submission - validate and use it
-                target_tracking = session.query(MagazineTracking).filter(MagazineTracking.id == tracking_id).first()
+                target_tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
                 if target_tracking:
                     logger.info(
                         f"Using provided tracking_id={tracking_id} ('{target_tracking.title}') for '{tracking_title}'"
@@ -523,7 +523,7 @@ class FileImporter:
 
             if not target_tracking:
                 # Try to find best match using the tracking matcher
-                all_tracking = session.query(MagazineTracking).all()
+                all_tracking = session.query(PeriodicalTracking).all()
                 if all_tracking:
                     match_result = self.tracking_matcher.find_best_match(
                         parsed_title=tracking_title,
@@ -535,8 +535,8 @@ class FileImporter:
 
                     if match_result and match_result.is_match:
                         target_tracking = (
-                            session.query(MagazineTracking)
-                            .filter(MagazineTracking.id == match_result.tracking_id)
+                            session.query(PeriodicalTracking)
+                            .filter(PeriodicalTracking.id == match_result.tracking_id)
                             .first()
                         )
                         logger.info(
@@ -580,7 +580,9 @@ class FileImporter:
                             # Only move if paths are different
                             if organized_path != new_pdf_path:
                                 # Check if target path already exists in database (UNIQUE constraint check)
-                                existing_record = session.query(Magazine).filter_by(file_path=str(new_pdf_path)).first()
+                                existing_record = (
+                                    session.query(Periodical).filter_by(file_path=str(new_pdf_path)).first()
+                                )
                                 if existing_record and existing_record.id != magazine.id:
                                     logger.warning(
                                         f"Cannot reorganize magazine {magazine.id}: Target path {new_pdf_path} "
@@ -627,7 +629,7 @@ class FileImporter:
                 track_all_editions = tracking_mode == "all"
                 track_new_only = tracking_mode == "new"
 
-                new_tracking = MagazineTracking(
+                new_tracking = PeriodicalTracking(
                     olid=olid,
                     title=tracking_title,
                     language=parsed.language,
@@ -703,7 +705,7 @@ class FileImporter:
                     priority = OCRJob.PriorityEnum.HIGH.value if not skip_organize else OCRJob.PriorityEnum.NORMAL.value
                     ocr_job = OCRQueueService.queue_ocr_job(
                         db=session,
-                        magazine_id=magazine.id,
+                        periodical_id=magazine.id,
                         priority=priority,
                         language=parsed.language,
                     )
@@ -715,7 +717,7 @@ class FileImporter:
             if not skip_organize:
                 self._cleanup_download_file(pdf_path)
 
-            return {"magazine_id": magazine.id}
+            return {"periodical_id": magazine.id}
 
         except Exception as e:
             session.rollback()

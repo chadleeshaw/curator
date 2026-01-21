@@ -17,7 +17,7 @@ from sqlalchemy.orm import sessionmaker
 
 from core.auth import AuthManager
 from core.database import DatabaseManager
-from models.database import Base, DownloadSubmission, Magazine, MagazineTracking
+from models.database import Base, DownloadSubmission, Periodical, PeriodicalTracking
 from services import DownloadManager
 from services import FileImporter
 from services import FileOrganizer
@@ -153,7 +153,7 @@ class TestPeriodicalTrackingWorkflow:
     def test_track_periodical_lifecycle(self, session):
         """Test complete lifecycle from tracking to download"""
         # Step 1: Start tracking a periodical
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="OL12345W",
             title="Wired Magazine",
             track_all_editions=True,
@@ -163,7 +163,7 @@ class TestPeriodicalTrackingWorkflow:
         tracking_id = tracking.id
 
         # Step 2: Verify tracking created
-        retrieved = session.query(MagazineTracking).filter_by(id=tracking_id).first()
+        retrieved = session.query(PeriodicalTracking).filter_by(id=tracking_id).first()
         assert retrieved is not None
         assert retrieved.title == "Wired Magazine"
 
@@ -182,7 +182,7 @@ class TestPeriodicalTrackingWorkflow:
         session.commit()
 
         # Verify deleted
-        deleted = session.query(MagazineTracking).filter_by(id=tracking_id).first()
+        deleted = session.query(PeriodicalTracking).filter_by(id=tracking_id).first()
         assert deleted is None
 
 
@@ -192,7 +192,7 @@ class TestDownloadWorkflow:
     def test_search_and_download_workflow(self, session, mock_search_provider, mock_download_client):
         """Test complete search and download workflow"""
         # Step 1: Create tracking
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="test_magazine",
             title="Test Magazine",
             track_all_editions=False,
@@ -227,7 +227,7 @@ class TestDownloadWorkflow:
     def test_duplicate_prevention_workflow(self, session, mock_download_client):
         """Test that duplicates are prevented"""
         # Setup tracking
-        tracking = MagazineTracking(olid="test_mag", title="Test")
+        tracking = PeriodicalTracking(olid="test_mag", title="Test")
         session.add(tracking)
         session.commit()
 
@@ -332,7 +332,7 @@ class TestEndToEndJourney:
         assert valid
 
         # Step 2: Track a periodical
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             olid="wired_magazine",
             title="Wired",
             track_all_editions=True,
@@ -359,7 +359,7 @@ class TestEndToEndJourney:
         assert updated.status == DownloadSubmission.StatusEnum.COMPLETED
 
         # Step 5: Create magazine entry
-        magazine = Magazine(
+        magazine = Periodical(
             title="Wired",
             issue_date=datetime(2024, 1, 1),
             file_path=updated.file_path or "/test/wired.pdf",
@@ -368,9 +368,9 @@ class TestEndToEndJourney:
         session.commit()
 
         # Step 6: Verify everything persisted
-        assert session.query(MagazineTracking).count() == 1
+        assert session.query(PeriodicalTracking).count() == 1
         assert session.query(DownloadSubmission).count() == 1
-        assert session.query(Magazine).count() == 1
+        assert session.query(Periodical).count() == 1
 
 
 class TestErrorRecovery:
@@ -379,7 +379,7 @@ class TestErrorRecovery:
     def test_failed_download_retry(self, session, mock_download_client):
         """Test retrying a failed download"""
         # Setup
-        tracking = MagazineTracking(olid="test", title="Test")
+        tracking = PeriodicalTracking(olid="test", title="Test")
         session.add(tracking)
         session.flush()
 

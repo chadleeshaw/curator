@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 
 from core.constants.errors import ErrorMessages
 from core.utils import run_in_thread
-from models.database import OCRJob, Magazine
+from models.database import OCRJob, Periodical
 from services.ocr.queue import OCRQueueService
 
 logger = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ async def get_ocr_queue(status: Optional[str] = None):
     def _db_operation():
         db = _session_factory()
         try:
-            query = db.query(OCRJob).join(Magazine, OCRJob.magazine_id == Magazine.id)
+            query = db.query(OCRJob).join(Periodical, OCRJob.periodical_id == Periodical.id)
 
             # Filter by status if provided
             if status:
@@ -58,7 +58,7 @@ async def get_ocr_queue(status: Optional[str] = None):
             # Build response with magazine details
             result = []
             for job in jobs:
-                magazine = db.query(Magazine).filter(Magazine.id == job.magazine_id).first()
+                magazine = db.query(Periodical).filter(Periodical.id == job.periodical_id).first()
                 if not magazine:
                     continue
 
@@ -70,7 +70,7 @@ async def get_ocr_queue(status: Optional[str] = None):
                 result.append(
                     {
                         "id": job.id,
-                        "magazine_id": job.magazine_id,
+                        "magazine_id": job.periodical_id,
                         "magazine_title": magazine.title,
                         "magazine_issue": issue_display,
                         "magazine_year": (magazine.issue_date.year if magazine.issue_date else None),
@@ -90,11 +90,11 @@ async def get_ocr_queue(status: Optional[str] = None):
                 )
 
             # Get tracking titles for all jobs with tracking_id
-            from models.database import MagazineTracking
+            from models.database import PeriodicalTracking
 
             tracking_ids = {j["tracking_id"] for j in result if j["tracking_id"]}
             if tracking_ids:
-                trackings = db.query(MagazineTracking).filter(MagazineTracking.id.in_(tracking_ids)).all()
+                trackings = db.query(PeriodicalTracking).filter(PeriodicalTracking.id.in_(tracking_ids)).all()
                 tracking_map = {t.id: t.title for t in trackings}
 
                 # Update tracking_title in results
@@ -342,14 +342,14 @@ async def queue_magazine_ocr(magazine_id: int, priority: int = OCRJob.PriorityEn
         db = _session_factory()
         try:
             # Verify magazine exists
-            magazine = db.query(Magazine).filter(Magazine.id == magazine_id).first()
+            magazine = db.query(Periodical).filter(Periodical.id == magazine_id).first()
             if not magazine:
                 raise HTTPException(status_code=404, detail="Magazine not found")
 
             # Queue the job
             job = OCRQueueService.queue_ocr_job(
                 db=db,
-                magazine_id=magazine_id,
+                periodical_id=magazine_id,
                 priority=priority,
                 language=magazine.language,
             )
@@ -359,7 +359,7 @@ async def queue_magazine_ocr(magazine_id: int, priority: int = OCRJob.PriorityEn
                 existing = (
                     db.query(OCRJob)
                     .filter(
-                        OCRJob.magazine_id == magazine_id,
+                        OCRJob.periodical_id == magazine_id,
                         OCRJob.status.in_([OCRJob.StatusEnum.PENDING, OCRJob.StatusEnum.PROCESSING]),
                     )
                     .first()
@@ -372,7 +372,7 @@ async def queue_magazine_ocr(magazine_id: int, priority: int = OCRJob.PriorityEn
 
             return {
                 "id": job.id,
-                "magazine_id": job.magazine_id,
+                "magazine_id": job.periodical_id,
                 "status": job.status.value,
                 "priority": job.priority,
                 "message": "Job queued successfully",

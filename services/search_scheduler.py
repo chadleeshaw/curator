@@ -16,7 +16,7 @@ from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from core.parsers import utc_now
-from models.database import MagazineTracking
+from models.database import PeriodicalTracking
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ class SearchScheduler:
         self.very_slow_interval_hours = very_slow_interval_hours
         self.empty_search_threshold = empty_search_threshold
 
-    def select_periodicals_to_search(self, session: Session) -> List[MagazineTracking]:
+    def select_periodicals_to_search(self, session: Session) -> List[PeriodicalTracking]:
         """
         Select which periodicals to search this run.
 
@@ -72,15 +72,15 @@ class SearchScheduler:
             session: Database session
 
         Returns:
-            List of MagazineTracking objects to search (max: max_periodicals_per_run)
+            List of PeriodicalTracking objects to search (max: max_periodicals_per_run)
         """
         now = utc_now()
         candidates = []
 
         # Priority 1: Never searched before
         never_searched = (
-            session.query(MagazineTracking)
-            .filter(MagazineTracking.last_searched.is_(None))
+            session.query(PeriodicalTracking)
+            .filter(PeriodicalTracking.last_searched.is_(None))
             .limit(self.max_periodicals_per_run)
             .all()
         )
@@ -95,15 +95,16 @@ class SearchScheduler:
 
         # Priority 2: Overdue for search
         overdue = (
-            session.query(MagazineTracking)
+            session.query(PeriodicalTracking)
             .filter(
                 and_(
-                    MagazineTracking.last_searched.isnot(None),
+                    PeriodicalTracking.last_searched.isnot(None),
                     # Calculate due time: last_searched + (search_interval_hours * 3600)
-                    MagazineTracking.last_searched + timedelta(hours=1) * MagazineTracking.search_interval_hours <= now,
+                    PeriodicalTracking.last_searched + timedelta(hours=1) * PeriodicalTracking.search_interval_hours
+                    <= now,
                 )
             )
-            .order_by(MagazineTracking.last_searched.asc())  # Oldest first
+            .order_by(PeriodicalTracking.last_searched.asc())  # Oldest first
             .limit(self.max_periodicals_per_run - len(candidates))
             .all()
         )
@@ -132,11 +133,11 @@ class SearchScheduler:
         4. Adjusts search_interval_hours based on success
 
         Args:
-            tracking_id: MagazineTracking ID
+            tracking_id: PeriodicalTracking ID
             new_issues_found: Number of new issues discovered in this search
             session: Database session
         """
-        tracking = session.query(MagazineTracking).filter_by(id=tracking_id).first()
+        tracking = session.query(PeriodicalTracking).filter_by(id=tracking_id).first()
         if not tracking:
             logger.error(f"Tracking ID {tracking_id} not found")
             return
@@ -189,44 +190,45 @@ class SearchScheduler:
         Returns:
             Dictionary with search statistics
         """
-        total_tracked = session.query(MagazineTracking).count()
+        total_tracked = session.query(PeriodicalTracking).count()
 
-        never_searched = session.query(MagazineTracking).filter(MagazineTracking.last_searched.is_(None)).count()
+        never_searched = session.query(PeriodicalTracking).filter(PeriodicalTracking.last_searched.is_(None)).count()
 
         now = utc_now()
 
         # Count by interval
         rapid = (
-            session.query(MagazineTracking)
-            .filter(MagazineTracking.search_interval_hours == self.rapid_interval_hours)
+            session.query(PeriodicalTracking)
+            .filter(PeriodicalTracking.search_interval_hours == self.rapid_interval_hours)
             .count()
         )
 
         normal = (
-            session.query(MagazineTracking)
-            .filter(MagazineTracking.search_interval_hours == self.normal_interval_hours)
+            session.query(PeriodicalTracking)
+            .filter(PeriodicalTracking.search_interval_hours == self.normal_interval_hours)
             .count()
         )
 
         slow = (
-            session.query(MagazineTracking)
-            .filter(MagazineTracking.search_interval_hours == self.slow_interval_hours)
+            session.query(PeriodicalTracking)
+            .filter(PeriodicalTracking.search_interval_hours == self.slow_interval_hours)
             .count()
         )
 
         very_slow = (
-            session.query(MagazineTracking)
-            .filter(MagazineTracking.search_interval_hours == self.very_slow_interval_hours)
+            session.query(PeriodicalTracking)
+            .filter(PeriodicalTracking.search_interval_hours == self.very_slow_interval_hours)
             .count()
         )
 
         # Count overdue
         overdue = (
-            session.query(MagazineTracking)
+            session.query(PeriodicalTracking)
             .filter(
                 and_(
-                    MagazineTracking.last_searched.isnot(None),
-                    MagazineTracking.last_searched + timedelta(hours=1) * MagazineTracking.search_interval_hours <= now,
+                    PeriodicalTracking.last_searched.isnot(None),
+                    PeriodicalTracking.last_searched + timedelta(hours=1) * PeriodicalTracking.search_interval_hours
+                    <= now,
                 )
             )
             .count()
@@ -250,14 +252,14 @@ class SearchScheduler:
         Manually reset search interval for a periodical (admin override).
 
         Args:
-            tracking_id: MagazineTracking ID
+            tracking_id: PeriodicalTracking ID
             session: Database session
             interval_hours: New interval in hours (defaults to normal_interval_hours)
 
         Returns:
             True if successful, False otherwise
         """
-        tracking = session.query(MagazineTracking).filter_by(id=tracking_id).first()
+        tracking = session.query(PeriodicalTracking).filter_by(id=tracking_id).first()
         if not tracking:
             logger.error(f"Tracking ID {tracking_id} not found")
             return False

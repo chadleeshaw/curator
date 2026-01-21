@@ -652,10 +652,10 @@ class TestBlacklistFiltering:
         engine, session_factory = test_db
         session = session_factory()
 
-        from models.database import MagazineTracking
+        from models.database import PeriodicalTracking
 
         # Create tracking record
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             title="Test Magazine",
             olid="test_magazine",
             language="en",
@@ -695,9 +695,9 @@ class TestBlacklistFiltering:
         engine, session_factory = test_db
         session = session_factory()
 
-        from models.database import MagazineTracking
+        from models.database import PeriodicalTracking
 
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             title="Test Magazine",
             olid="test_magazine",
             language="en",
@@ -728,10 +728,10 @@ class TestBlacklistFiltering:
         engine, session_factory = test_db
         session = session_factory()
 
-        from models.database import MagazineTracking
+        from models.database import PeriodicalTracking
 
         # Magazine with "MP" in name (like "Computer Music" or "Example MP")
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             title="Example MP Magazine",
             olid="example_mp_magazine",
             language="en",
@@ -764,9 +764,9 @@ class TestBlacklistFiltering:
         engine, session_factory = test_db
         session = session_factory()
 
-        from models.database import MagazineTracking
+        from models.database import PeriodicalTracking
 
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             title="Test Magazine",
             olid="test_magazine",
             language="en",
@@ -797,9 +797,9 @@ class TestBlacklistFiltering:
         engine, session_factory = test_db
         session = session_factory()
 
-        from models.database import MagazineTracking
+        from models.database import PeriodicalTracking
 
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             title="Test Magazine",
             olid="test_magazine",
             language="en",
@@ -831,9 +831,9 @@ class TestBlacklistFiltering:
         engine, session_factory = test_db
         session = session_factory()
 
-        from models.database import MagazineTracking
+        from models.database import PeriodicalTracking
 
-        tracking = MagazineTracking(
+        tracking = PeriodicalTracking(
             title="Test Magazine",
             olid="test_magazine",
             language="en",

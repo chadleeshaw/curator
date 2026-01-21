@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from core.constants.errors import ErrorMessages
 from core.parsers import utc_now
 from core.utils import run_in_thread
-from models.database import Magazine, ReadingProgress
+from models.database import Periodical, ReadingProgress
 
 from . import _shared
 
@@ -39,12 +39,14 @@ async def get_progress(magazine_id: int) -> Dict[str, Any]:
             db_session = _shared._session_factory()
             try:
                 # Verify magazine exists
-                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+                magazine = db_session.query(Periodical).filter(Periodical.id == magazine_id).first()
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
 
                 # Get progress
-                progress = db_session.query(ReadingProgress).filter(ReadingProgress.magazine_id == magazine_id).first()
+                progress = (
+                    db_session.query(ReadingProgress).filter(ReadingProgress.periodical_id == magazine_id).first()
+                )
 
                 return progress.to_dict() if progress else None
             finally:
@@ -73,12 +75,14 @@ async def update_progress(magazine_id: int, update: ProgressUpdate) -> Dict[str,
             db_session = _shared._session_factory()
             try:
                 # Verify magazine exists
-                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+                magazine = db_session.query(Periodical).filter(Periodical.id == magazine_id).first()
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
 
                 # Get or create progress record
-                progress = db_session.query(ReadingProgress).filter(ReadingProgress.magazine_id == magazine_id).first()
+                progress = (
+                    db_session.query(ReadingProgress).filter(ReadingProgress.periodical_id == magazine_id).first()
+                )
 
                 if not progress:
                     progress = ReadingProgress(magazine_id=magazine_id)
@@ -129,12 +133,14 @@ async def delete_progress(magazine_id: int) -> Dict[str, str]:
             db_session = _shared._session_factory()
             try:
                 # Verify magazine exists
-                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+                magazine = db_session.query(Periodical).filter(Periodical.id == magazine_id).first()
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
 
                 # Delete progress if exists
-                progress = db_session.query(ReadingProgress).filter(ReadingProgress.magazine_id == magazine_id).first()
+                progress = (
+                    db_session.query(ReadingProgress).filter(ReadingProgress.periodical_id == magazine_id).first()
+                )
 
                 if progress:
                     db_session.delete(progress)

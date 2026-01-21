@@ -4,6 +4,7 @@ import json
 import tempfile
 from pathlib import Path
 
+from core.constants.category import CATEGORY_MAGAZINE
 from services.importer.sidecar import (
     create_sidecar_file,
     read_sidecar_file,
@@ -50,7 +51,7 @@ class TestMetadataSidecar:
                 tracking_id=456,
                 tracking_title="Full Magazine",
                 submission_id=789,
-                category="Magazines",
+                category=CATEGORY_MAGAZINE,
                 language="English",
                 country="US",
             )
@@ -60,7 +61,7 @@ class TestMetadataSidecar:
             assert metadata["tracking_id"] == 456
             assert metadata["tracking_title"] == "Full Magazine"
             assert metadata["submission_id"] == 789
-            assert metadata["category"] == "Magazines"
+            assert metadata["category"] == CATEGORY_MAGAZINE
             assert metadata["language"] == "English"
             assert metadata["country"] == "US"
 

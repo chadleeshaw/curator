@@ -28,7 +28,7 @@ async def run_in_thread(func: Callable[[], T]) -> T:
             def _query():
                 session = session_factory()
                 try:
-                    return session.query(Magazine).all()
+                    return session.query(Periodical).all()
                 finally:
                     session.close()
 

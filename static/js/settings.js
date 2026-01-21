@@ -462,6 +462,8 @@ export class SettingsManager {
     const normalSearchInterval = document.getElementById('tasks-normal-search-interval');
     const slowSearchInterval = document.getElementById('tasks-slow-search-interval');
     const verySlowSearchInterval = document.getElementById('tasks-very-slow-search-interval');
+    const ocrWorkerCount = document.getElementById('ocr-worker-count');
+    const ocrBatchSize = document.getElementById('ocr-batch-size');
 
     if (autoDownloadInterval)
       autoDownloadInterval.value = tasksConfig.auto_download_interval || 1800;
@@ -477,6 +479,8 @@ export class SettingsManager {
     if (slowSearchInterval) slowSearchInterval.value = tasksConfig.slow_search_interval || 24;
     if (verySlowSearchInterval)
       verySlowSearchInterval.value = tasksConfig.very_slow_search_interval || 168;
+    if (ocrWorkerCount) ocrWorkerCount.value = tasksConfig.ocr_max_workers || 1;
+    if (ocrBatchSize) ocrBatchSize.value = tasksConfig.ocr_batch_size || 5;
   }
 
   /**
@@ -860,10 +864,11 @@ export class SettingsManager {
         },
       };
 
-      const response = await APIClient.post('/api/config', { metadata: metadataConfig });
+      const response = await APIClient.post('/api/config/save', { metadata: metadataConfig });
       const data = await response.json();
 
       if (data.success) {
+        await this.loadSettings();
         UIUtils.showStatus('metadata-message', 'Metadata settings saved', 'success');
         setTimeout(() => UIUtils.hideStatus('metadata-message'), 3000);
       } else {
@@ -901,10 +906,11 @@ export class SettingsManager {
         log_file: logFile,
       };
 
-      const response = await APIClient.post('/api/config', { logging: loggingConfig });
+      const response = await APIClient.post('/api/config/save', { logging: loggingConfig });
       const data = await response.json();
 
       if (data.success) {
+        await this.loadSettings();
         UIUtils.showStatus('settings-status', 'Logging settings saved', 'success');
         setTimeout(() => UIUtils.hideStatus('settings-status'), 3000);
       } else {
@@ -917,20 +923,54 @@ export class SettingsManager {
   }
 
   /**
+   * Save import settings (enable_text_scan, enable_ocr)
+   */
+  async saveImportSettings() {
+    try {
+      const enableTextScan = document.getElementById('import-enable-text-scan')?.checked;
+      const enableOcr = document.getElementById('import-enable-ocr')?.checked;
+
+      const importConfig = {
+        enable_text_scan: enableTextScan ?? true,
+        enable_ocr: enableOcr ?? true,
+      };
+
+      const response = await APIClient.post('/api/config/save', { import: importConfig });
+      const data = await response.json();
+
+      if (data.success) {
+        await this.loadSettings();
+        UIUtils.showStatus('import-message', 'Import settings saved', 'success');
+        setTimeout(() => UIUtils.hideStatus('import-message'), 3000);
+      } else {
+        UIUtils.showStatus('import-message', data.message || 'Error saving settings', 'error');
+      }
+    } catch (error) {
+      console.error('Error saving import settings:', error);
+      UIUtils.showStatus('import-message', 'Error: ' + error.message, 'error');
+    }
+  }
+
+  /**
    * Save theme settings
    */
   async saveThemeSettings() {
     try {
       const mode = document.getElementById('theme-mode')?.value;
 
+      if (!mode) {
+        UIUtils.showStatus('theme-message', 'Please select a theme', 'error');
+        return;
+      }
+
       // Apply theme immediately using UIUtils
       UIUtils.setTheme(mode);
 
-      UIUtils.showStatus('settings-status', 'Theme settings saved', 'success');
-      setTimeout(() => UIUtils.hideStatus('settings-status'), 3000);
+      UIUtils.showStatus('theme-message', `Theme changed to ${mode} mode`, 'success');
+      setTimeout(() => UIUtils.hideStatus('theme-message'), 3000);
     } catch (error) {
       console.error('Error saving theme settings:', error);
-      UIUtils.showStatus('settings-status', 'Error: ' + error.message, 'error');
+      UIUtils.showStatus('theme-message', 'Error: ' + error.message, 'error');
     }
   }
 
@@ -1079,10 +1119,11 @@ export class SettingsManager {
         cover_quality_high: parseInt(coverQualityHigh) || 85,
       };
 
-      const response = await APIClient.post('/api/config', { pdf: pdfConfig });
+      const response = await APIClient.post('/api/config/save', { pdf: pdfConfig });
       const data = await response.json();
 
       if (data.success) {
+        await this.loadSettings();
         UIUtils.showStatus('pdf-message', 'PDF settings saved', 'success');
         setTimeout(() => UIUtils.hideStatus('pdf-message'), 3000);
       } else {
@@ -1111,10 +1152,11 @@ export class SettingsManager {
         sharpen_kernel: parseInt(sharpenKernel) || 5,
       };
 
-      const response = await APIClient.post('/api/config', { ocr: ocrConfig });
+      const response = await APIClient.post('/api/config/save', { ocr: ocrConfig });
       const data = await response.json();
 
       if (data.success) {
+        await this.loadSettings();
         UIUtils.showStatus('ocr-message', 'OCR settings saved', 'success');
         setTimeout(() => UIUtils.hideStatus('ocr-message'), 3000);
       } else {
@@ -1123,6 +1165,42 @@ export class SettingsManager {
     } catch (error) {
       console.error('Error saving OCR settings:', error);
       UIUtils.showStatus('ocr-message', 'Error: ' + error.message, 'error');
+    }
+  }
+
+  /**
+   * Save OCR worker settings (worker count and batch size)
+   */
+  async saveOCRWorkerSettings() {
+    try {
+      const workerCount = document.getElementById('ocr-worker-count')?.value;
+      const batchSize = document.getElementById('ocr-batch-size')?.value;
+
+      const tasksConfig = {
+        ocr_max_workers: parseInt(workerCount) || 1,
+        ocr_batch_size: parseInt(batchSize) || 5,
+      };
+
+      // Save config without restarting
+      const response = await APIClient.post('/api/config/save', { tasks: tasksConfig });
+      const data = await response.json();
+
+      if (data.success) {
+        // Reload settings to show updated values in UI
+        await this.loadSettings();
+
+        UIUtils.showStatus(
+          'ocr-worker-message',
+          'OCR worker settings saved. Restart required for changes to take effect.',
+          'success'
+        );
+        setTimeout(() => UIUtils.hideStatus('ocr-worker-message'), 5000);
+      } else {
+        UIUtils.showStatus('ocr-worker-message', data.message || 'Error saving settings', 'error');
+      }
+    } catch (error) {
+      console.error('Error saving OCR worker settings:', error);
+      UIUtils.showStatus('ocr-worker-message', 'Error: ' + error.message, 'error');
     }
   }
 
@@ -1556,3 +1634,5 @@ window.saveTasksSettings = () => settings.saveTasksSettings();
 window.saveDiscoverySettings = () => settings.saveDiscoverySettings();
 window.savePDFSettings = () => settings.savePDFSettings();
 window.saveOCRSettings = () => settings.saveOCRSettings();
+window.saveOCRWorkerSettings = () => settings.saveOCRWorkerSettings();
+window.saveImportSettings = () => settings.saveImportSettings();

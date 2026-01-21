@@ -24,8 +24,8 @@ from models.database import (
     Credentials,
     Download,
     DownloadSubmission,
-    Magazine,
-    MagazineTracking,
+    Periodical,
+    PeriodicalTracking,
     SearchResult,
 )
 

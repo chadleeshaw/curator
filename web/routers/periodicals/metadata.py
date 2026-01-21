@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from core.constants.date import NUMBER_TO_MONTH
 from core.constants.errors import ErrorMessages
 from core.utils import run_in_thread
-from models.database import Magazine
+from models.database import Periodical
 
 from . import _shared
 
@@ -32,7 +32,7 @@ async def toggle_special_edition(magazine_id: int, is_special: bool) -> Dict[str
         def _db_operation():
             db_session = _shared._session_factory()
             try:
-                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+                magazine = db_session.query(Periodical).filter(Periodical.id == magazine_id).first()
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
 
@@ -85,7 +85,7 @@ async def update_periodical(magazine_id: int, updates: Dict[str, Any]) -> Dict[s
         def _db_operation():
             db_session = _shared._session_factory()
             try:
-                magazine = db_session.query(Magazine).filter(Magazine.id == magazine_id).first()
+                magazine = db_session.query(Periodical).filter(Periodical.id == magazine_id).first()
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.PERIODICAL_NOT_FOUND)
 

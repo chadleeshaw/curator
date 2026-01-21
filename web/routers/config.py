@@ -135,6 +135,36 @@ async def update_config(config_update: Dict[str, Any], background_tasks: Backgro
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/save")
+async def save_config_only(config_update: Dict[str, Any]):
+    """Save configuration without restarting"""
+    try:
+        # Reload from file to ensure we have the latest (including manual edits)
+        _config_loader.reload_config()
+        current_config = _config_loader.get_all_config()
+
+        # Deep merge the update with current config
+        updated_config = _deep_merge(current_config, config_update)
+
+        # Save to file
+        _config_loader.save_config(updated_config)
+
+        # Return masked config
+        safe_config = _mask_sensitive_config(updated_config)
+
+        logger.info("Configuration saved via UI (no restart)")
+
+        return {
+            "success": True,
+            "status": "success",
+            "message": "Configuration saved. Restart required for changes to take effect.",
+            "config": safe_config,
+        }
+    except Exception as e:
+        logger.error(f"Save config error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/reload")
 async def reload_config():
     """Reload configuration and reinitialize providers"""

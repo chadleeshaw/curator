@@ -202,7 +202,7 @@ tasks:
 
   # OCR worker settings
   ocr_max_workers: 1 # Number of parallel OCR processes
-  ocr_batch_size: 1 # Max jobs to process per batch
+  ocr_batch_size: 5 # Max jobs to process per batch
 
   # ==============================================================================
   # Issue Discovery & Tracking System
