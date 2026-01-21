@@ -316,6 +316,47 @@ async def list_periodicals(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/periodicals/languages")
+async def get_languages() -> Dict[str, Any]:
+    """
+    Get unique languages from library with periodical counts.
+
+    Returns:
+        List of languages with counts, sorted alphabetically
+    """
+    try:
+
+        def _db_operation():
+            db_session = _shared._session_factory()
+            try:
+                from sqlalchemy import func
+
+                # Query for unique languages with counts
+                # Use COALESCE to handle NULL languages as "English"
+                language_counts = (
+                    db_session.query(
+                        func.coalesce(Periodical.language, "English").label("language"),
+                        func.count(Periodical.id).label("count"),  # pylint: disable=not-callable
+                    )
+                    .group_by("language")
+                    .order_by("language")
+                    .all()
+                )
+
+                return {
+                    "success": True,
+                    "languages": [{"language": lang, "count": count} for lang, count in language_counts],
+                }
+            finally:
+                db_session.close()
+
+        return await run_in_thread(_db_operation)
+
+    except Exception as e:
+        logger.error(f"Get languages error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/periodicals/{magazine_id}")
 async def get_magazine(magazine_id: int) -> PeriodicalResponse:
     """Get magazine details"""

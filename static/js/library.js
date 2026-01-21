@@ -284,8 +284,8 @@ export class LibraryManager {
       // Store all periodicals unfiltered
       this.allPeriodicals = data.periodicals || [];
 
-      // Extract unique languages for language filter
-      this.populateLanguageDropdown();
+      // Load unique languages for language filter (independent API call)
+      await this.populateLanguageDropdown();
 
       // Apply filters and render
       this.applyFiltersAndRender();
@@ -381,35 +381,38 @@ export class LibraryManager {
   /**
    * Populate the language filter dropdown with unique languages from library
    *
-   * @returns {void}
+   * @returns {Promise<void>}
    */
-  populateLanguageDropdown() {
+  async populateLanguageDropdown() {
     const dropdown = document.getElementById('library-language-filter');
     if (!dropdown) return;
 
-    // Extract unique languages
-    const languages = new Set();
-    this.allPeriodicals.forEach((p) => {
-      const lang = p.language || 'English';
-      languages.add(lang);
-    });
+    try {
+      // Fetch languages with counts from API
+      const response = await APIClient.authenticatedFetch('/api/periodicals/languages');
+      const data = await response.json();
 
-    // Sort languages alphabetically
-    const sortedLanguages = Array.from(languages).sort();
+      if (data.success && data.languages) {
+        // Keep the "All" option
+        dropdown.innerHTML = '<option value="all">All</option>';
 
-    // Keep the "All" option
-    dropdown.innerHTML = '<option value="all">All</option>';
+        // Add each language as an option with count
+        data.languages.forEach(({ language, count }) => {
+          const option = document.createElement('option');
+          option.value = language;
+          option.textContent = `${language} (${count})`;
+          dropdown.appendChild(option);
+        });
 
-    // Add each language as an option
-    sortedLanguages.forEach((language) => {
-      const option = document.createElement('option');
-      option.value = language;
-      option.textContent = language;
-      dropdown.appendChild(option);
-    });
-
-    // Restore saved selection
-    dropdown.value = this.languageFilter;
+        // Restore saved selection
+        dropdown.value = this.languageFilter;
+      } else {
+        console.warn('[Library] Failed to load languages from API');
+      }
+    } catch (error) {
+      console.error('[Library] Error loading languages:', error);
+      // Fallback: don't populate dropdown on error
+    }
   }
 
   /**
