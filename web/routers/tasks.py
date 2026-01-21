@@ -290,10 +290,10 @@ async def run_task_manually(task_id: str):
 
         elif task_id == "folder_cleanup":
             if _folder_cleanup_task:
-                stats = await _folder_cleanup_task.run()
+                stats = await run_in_thread(_folder_cleanup_task.run)
                 message = (
                     f"Folder cleanup executed. Deleted: {stats.get('total_deleted', 0)} folders, "
-                    f"Freed: {stats.get('total_size_freed', 0)} MB"
+                    f"Freed: {stats.get('total_size_freed', 0) / (1024 * 1024):.2f} MB"
                 )
                 return {
                     "success": True,
