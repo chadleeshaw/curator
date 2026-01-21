@@ -24,7 +24,7 @@ from core.constants.language import DEFAULT_LANGUAGE
 from core.utils.pdf import extract_cover_from_pdf as extract_cover_util
 from core.utils.epub import extract_cover_from_epub
 from core.utils.cbz import extract_cover_from_cbz, extract_cover_from_cbr
-from core.parsers import sanitize_filename
+from core.parsers import sanitize_filename, detect_country
 from services.importer.sidecar import read_sidecar_file
 
 logger = logging.getLogger(__name__)
@@ -81,6 +81,33 @@ class FileOrganizer:
         self.library_dir = Path(library_dir)
         self.category_prefix = category_prefix
         self.library_dir.mkdir(parents=True, exist_ok=True)
+
+    def _title_has_country_info(self, title: str, country_code: str) -> bool:
+        """
+        Check if title already contains country information for the specified country.
+
+        Uses the detect_country() parser to intelligently detect country codes, names,
+        and common abbreviations (USA, UK, etc.) in the title.
+
+        Args:
+            title: Magazine/periodical title to check
+            country_code: 2-letter ISO country code (e.g., "US", "UK", "ZA")
+
+        Returns:
+            True if title already contains country information for this country
+
+        Examples:
+            >>> _title_has_country_info("Wired USA", "US")
+            True
+            >>> _title_has_country_info("Time US", "US")
+            True
+            >>> _title_has_country_info("Magazine United States", "US")
+            True
+            >>> _title_has_country_info("National Geographic", "US")
+            False
+        """
+        detected_country = detect_country(title)
+        return detected_country == country_code
 
     def organize_file(
         self,
@@ -635,29 +662,29 @@ class FileOrganizer:
                     if tracking:
                         country = tracking.country
 
-                # Build full title with country name (e.g., "Magazine South Africa", "Magazine Germany")
+                # Build full title with country identifier (e.g., "Magazine US", "Magazine UK")
                 # Use the existing title as-is - don't append country if title already has location info
                 full_title = magazine.title
 
-                # Only append country name if:
+                # Only append country identifier if:
                 # 1. Country code exists in tracking
-                # 2. Title doesn't already end with a country code or name
-                # 3. Title doesn't already contain the country name
-                if country:
-                    # Get country name from code (e.g., "ZA" -> "South Africa")
-                    country_name = ISO_COUNTRIES.get(country)
+                # 2. Title doesn't already contain country information for this country
+                if country and not self._title_has_country_info(magazine.title, country):
+                    # Prefer short codes for US and UK (user preference)
+                    if country == "US":
+                        country_label = "US"
+                    elif country in ("UK", "GB"):
+                        country_label = "UK"
+                    else:
+                        # For other countries, use full name from ISO_COUNTRIES
+                        country_label = ISO_COUNTRIES.get(country, country)
 
-                    if country_name:
-                        # Get list of country names from ISO_COUNTRIES constant
-                        country_names = list(ISO_COUNTRIES.values())
-
-                        # Check if title already has country info
-                        has_country_name = any(name in magazine.title for name in country_names)
-                        has_country_code = magazine.title.endswith(f" {country}")
-
-                        if not has_country_name and not has_country_code:
-                            # Title doesn't have country info, add the country name
-                            full_title = f"{magazine.title} {country_name}"
+                    # Append country label to title
+                    full_title = f"{magazine.title} {country_label}"
+                    logger.debug(f"Appending country '{country_label}' to title: {magazine.title} -> {full_title}")
+                else:
+                    if country:
+                        logger.debug(f"Title already has country info for '{country}', not appending: {magazine.title}")
 
                 # Build expected path based on pattern
                 metadata = {
