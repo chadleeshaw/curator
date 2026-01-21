@@ -17,6 +17,32 @@ let pendingDeleteId = null;
 let currentMagazineId = null;
 let currentMagazineData = null;
 
+/**
+ * Helper function to extract special edition value from data structure.
+ * Checks derived_metadata (new location), extra_metadata, and metadata (legacy location).
+ *
+ * @param {Object} data - The periodical data object
+ * @returns {string|null} The special edition name or null
+ */
+function getSpecialEditionValue(data) {
+  // Check derived_metadata first (new structure from file scans)
+  if (data.derived_metadata?.special_edition?.value) {
+    return data.derived_metadata.special_edition.value;
+  }
+
+  // Check extra_metadata (where backend stores manual toggles)
+  if (data.extra_metadata?.special_edition) {
+    return data.extra_metadata.special_edition;
+  }
+
+  // Fallback to metadata (legacy structure)
+  if (data.metadata?.special_edition) {
+    return data.metadata.special_edition;
+  }
+
+  return null;
+}
+
 // Delete modal functions
 function openDeleteModal(magazineId, title) {
   pendingDeleteId = magazineId;
@@ -258,7 +284,7 @@ function displayMetadata(data) {
   currentMagazineData = data;
 
   // Update special edition button text based on current status
-  const isSpecialEdition = data.metadata && data.metadata.special_edition;
+  const isSpecialEdition = getSpecialEditionValue(data);
   const toggleBtn = document.getElementById('toggle-special-btn');
   if (toggleBtn) {
     if (isSpecialEdition) {
@@ -559,11 +585,10 @@ function enableMetadataEdit() {
 
   // Always show special edition field in edit mode
   const specialField = document.getElementById('special-edition-name-field');
-  const isSpecialEdition =
-    currentMagazineData.metadata && currentMagazineData.metadata.special_edition;
+  const specialEditionValue = getSpecialEditionValue(currentMagazineData);
+  const isSpecialEdition = !!specialEditionValue;
   specialField.classList.remove(CSS_CLASSES.HIDDEN);
-  document.getElementById('edit-special-edition').value =
-    (currentMagazineData.metadata && currentMagazineData.metadata.special_edition) || '';
+  document.getElementById('edit-special-edition').value = specialEditionValue || '';
 
   // Update the label to indicate if it's currently marked as special edition
   const specialLabel = specialField.querySelector('label');
@@ -870,8 +895,7 @@ async function toggleSpecialEdition() {
     return;
   }
 
-  const isCurrentlySpecial =
-    currentMagazineData.metadata && currentMagazineData.metadata.special_edition;
+  const isCurrentlySpecial = !!getSpecialEditionValue(currentMagazineData);
 
   const toggleBtn = document.getElementById('toggle-special-btn');
   const originalText = toggleBtn.textContent;

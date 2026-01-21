@@ -662,7 +662,9 @@ class FileOrganizer:
                 "files_reorganized": 0,
             }
 
-        logger.info(f"Reorganizing files in: {category_dir}")
+        # Only log for actual operations, not dry run
+        if not dry_run:
+            logger.info(f"Reorganizing files in: {category_dir}")
 
         files_found = 0
         files_reorganized = 0
@@ -674,7 +676,9 @@ class FileOrganizer:
         # Query all magazines in this category from database
         magazines = db_session.query(Periodical).filter(Periodical.file_path.like(f"%{category_with_prefix}%")).all()
 
-        logger.info(f"Found {len(magazines)} magazine records in database for category {category}")
+        # Only log for actual operations, not dry run
+        if not dry_run:
+            logger.info(f"Found {len(magazines)} magazine records in database for category {category}")
 
         for magazine in magazines:
             # Store original path for error messages (before any DB operations)
@@ -777,7 +781,9 @@ class FileOrganizer:
                     files_skipped += 1
                     continue
 
-                logger.info(f"Reorganizing: {current_path} -> {expected_path}")
+                # Only log for actual operations, not dry run
+                if not dry_run:
+                    logger.info(f"Reorganizing: {current_path} -> {expected_path}")
 
                 # Track this change for preview display
                 change_info = {
@@ -1033,7 +1039,9 @@ class FileOrganizer:
                     files_skipped += 1
                     continue
 
-                logger.info(f"Reorganizing (from sidecar): {file_path} -> {expected_path}")
+                # Only log for actual operations, not dry run
+                if not dry_run:
+                    logger.info(f"Reorganizing (from sidecar): {file_path} -> {expected_path}")
 
                 # Track this change for preview display
                 change_info = {
