@@ -409,7 +409,7 @@ async def lifespan(app: FastAPI):
                 from core.utils import run_in_thread
 
                 def _run_auto_metadata():
-                    service = AutoMetadataService(db_manager)
+                    service = AutoMetadataService(db_manager, library_base_dir=storage_config.get("library_dir"))
                     session = session_factory()
                     try:
                         return service.run_full_scan(session)
@@ -419,6 +419,7 @@ async def lifespan(app: FastAPI):
                 stats = await run_in_thread(_run_auto_metadata)
                 logger.info(
                     f"Auto-metadata: Processed {stats.get('total_periodicals', 0)} periodicals, "
+                    f"fixed {stats.get('paths_fixed', 0)} paths, "
                     f"backfilled {stats.get('derived_metadata_backfilled', 0)} metadata, "
                     f"synced {stats.get('issue_date_synced', 0)} dates, "
                     f"queued {stats.get('ocr_queued', 0)} OCR scans, "

@@ -2,6 +2,7 @@
 Auto-metadata service for backfilling and syncing periodical metadata.
 
 This service provides comprehensive metadata maintenance:
+- Fixes incorrect file paths (e.g., from different environments)
 - Backfills derived_metadata for periodicals that don't have it
 - Syncs issue_date from derived_metadata
 - Queues missing OCR scans
@@ -13,7 +14,7 @@ Can be run manually or scheduled as a background task.
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
@@ -35,16 +36,18 @@ logger = logging.getLogger(__name__)
 class AutoMetadataService:
     """Service for automatic metadata backfilling and syncing"""
 
-    def __init__(self, db_manager: DatabaseManager):
+    def __init__(self, db_manager: DatabaseManager, library_base_dir: Optional[str] = None):
         """
         Initialize auto-metadata service
 
         Args:
             db_manager: Database manager instance
+            library_base_dir: Optional library base directory for path resolution
         """
         self.db_manager = db_manager
         self.parser = Parser()
         self.ocr_service = OCRQueueService(db_manager)
+        self.library_base_dir = Path(library_base_dir) if library_base_dir else None
 
     def run_full_scan(self, session: Session) -> Dict[str, Any]:
         """
@@ -66,6 +69,7 @@ class AutoMetadataService:
 
         stats = {
             "total_periodicals": 0,
+            "paths_fixed": 0,
             "derived_metadata_backfilled": 0,
             "issue_date_synced": 0,
             "ocr_queued": 0,
@@ -84,26 +88,30 @@ class AutoMetadataService:
             # Capture ID before any operations that might fail
             periodical_id = periodical.id
             try:
-                # 0. Clean up old/misplaced metadata fields
+                # 0. Fix file path if incorrect (e.g., from different Docker environment)
+                if self._fix_file_path(periodical):
+                    stats["paths_fixed"] += 1
+
+                # 1. Clean up old/misplaced metadata fields
                 if self._cleanup_metadata(periodical):
                     stats["metadata_cleaned"] += 1
 
-                # 1. Always regenerate file_scan and rebuild derived_metadata
+                # 2. Always regenerate file_scan and rebuild derived_metadata
                 # This ensures stale data is refreshed (e.g., from old parser versions)
                 if self._backfill_derived_metadata(periodical, session):
                     stats["derived_metadata_backfilled"] += 1
 
-                # 2. Sync issue_date from derived_metadata
+                # 3. Sync issue_date from derived_metadata
                 if periodical.derived_metadata:
                     if self._sync_issue_date(periodical):
                         stats["issue_date_synced"] += 1
 
-                # 3. Queue missing OCR scan
+                # 4. Queue missing OCR scan
                 if self._should_queue_ocr(periodical, session):
                     if self._queue_ocr_scan(periodical, session):
                         stats["ocr_queued"] += 1
 
-                # 4. Queue missing text scan
+                # 5. Queue missing text scan
                 if self._should_queue_text_scan(periodical):
                     if self._queue_text_scan(periodical, session):
                         stats["text_scan_queued"] += 1
@@ -119,6 +127,68 @@ class AutoMetadataService:
 
         logger.info(f"Auto-metadata scan complete: {stats}")
         return stats
+
+    def _fix_file_path(self, periodical: Periodical) -> bool:
+        """
+        Fix incorrect file path in database (e.g., from different Docker environment).
+
+        This handles cases where:
+        - Path is stored as absolute from Docker container (e.g., /app/local/data/...)
+        - Path needs to be resolved relative to configured library_dir
+
+        Args:
+            periodical: Periodical to check and fix
+
+        Returns:
+            True if path was fixed, False otherwise
+        """
+        if not self.library_base_dir:
+            return False
+
+        stored_path = Path(periodical.file_path)
+
+        # If path exists as-is, no fix needed
+        if stored_path.exists():
+            return False
+
+        # Try to resolve the path
+        try:
+            # Find the library folder marker (e.g., "_Magazines", "_Comics", etc.)
+            parts = stored_path.parts
+            category_markers = [
+                "_Magazines",
+                "_Comics",
+                "_Articles",
+                "_News",
+                "_Newspapers",
+            ]
+
+            for i, part in enumerate(parts):
+                if part in category_markers:
+                    # Reconstruct path from category marker onwards
+                    relative_path = Path(*parts[i:])
+                    resolved = self.library_base_dir / relative_path
+
+                    if resolved.exists():
+                        periodical.file_path = str(resolved)
+                        logger.info(f"Fixed file path for periodical {periodical.id}: {stored_path} -> {resolved}")
+                        return True
+                    break
+
+            # Last resort: search by filename
+            filename = stored_path.name
+            for candidate in self.library_base_dir.rglob(filename):
+                if candidate.is_file():
+                    periodical.file_path = str(candidate)
+                    logger.warning(
+                        f"Fixed file path by name search for periodical {periodical.id}: {stored_path} -> {candidate}"
+                    )
+                    return True
+
+        except Exception as e:
+            logger.warning(f"Failed to fix file path for periodical {periodical.id}: {e}")
+
+        return False
 
     def _backfill_derived_metadata(self, periodical: Periodical, session: Session) -> bool:
         """

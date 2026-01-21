@@ -48,9 +48,10 @@ async def get_pdf(periodical_id: int):
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
 
-                file_path = Path(magazine.file_path)
-                if not file_path.exists():
-                    raise HTTPException(status_code=404, detail="File not found")
+                try:
+                    file_path = _shared.resolve_file_path(magazine.file_path)
+                except FileNotFoundError as e:
+                    raise HTTPException(status_code=404, detail=str(e))
 
                 return file_path
             finally:
@@ -102,9 +103,10 @@ async def get_epub_metadata_endpoint(periodical_id: int) -> Dict[str, Any]:
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
 
-                file_path = Path(magazine.file_path)
-                if not file_path.exists():
-                    raise HTTPException(status_code=404, detail="File not found")
+                try:
+                    file_path = _shared.resolve_file_path(magazine.file_path)
+                except FileNotFoundError as e:
+                    raise HTTPException(status_code=404, detail=str(e))
 
                 # Verify it's an EPUB file
                 if file_path.suffix.lower() != ".epub":
@@ -153,9 +155,10 @@ async def get_epub_chapter_endpoint(periodical_id: int, chapter_index: int) -> H
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
 
-                file_path = Path(magazine.file_path)
-                if not file_path.exists():
-                    raise HTTPException(status_code=404, detail="File not found")
+                try:
+                    file_path = _shared.resolve_file_path(magazine.file_path)
+                except FileNotFoundError as e:
+                    raise HTTPException(status_code=404, detail=str(e))
 
                 # Verify it's an EPUB file
                 if file_path.suffix.lower() != ".epub":
@@ -207,9 +210,10 @@ async def get_epub_image_endpoint(periodical_id: int, image_name: str):
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
 
-                file_path = Path(magazine.file_path)
-                if not file_path.exists():
-                    raise HTTPException(status_code=404, detail="File not found")
+                try:
+                    file_path = _shared.resolve_file_path(magazine.file_path)
+                except FileNotFoundError as e:
+                    raise HTTPException(status_code=404, detail=str(e))
 
                 # Verify it's an EPUB file
                 if file_path.suffix.lower() != ".epub":
@@ -269,9 +273,10 @@ async def get_comic_metadata_endpoint(periodical_id: int) -> Dict[str, Any]:
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
 
-                file_path = Path(magazine.file_path)
-                if not file_path.exists():
-                    raise HTTPException(status_code=404, detail="File not found")
+                try:
+                    file_path = _shared.resolve_file_path(magazine.file_path)
+                except FileNotFoundError as e:
+                    raise HTTPException(status_code=404, detail=str(e))
 
                 # Verify it's a comic file
                 if file_path.suffix.lower() not in [".cbz", ".cbr"]:
@@ -326,9 +331,10 @@ async def get_comic_page_endpoint(periodical_id: int, page_index: int):
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
 
-                file_path = Path(magazine.file_path)
-                if not file_path.exists():
-                    raise HTTPException(status_code=404, detail="File not found")
+                try:
+                    file_path = _shared.resolve_file_path(magazine.file_path)
+                except FileNotFoundError as e:
+                    raise HTTPException(status_code=404, detail=str(e))
 
                 # Verify it's a comic file
                 if file_path.suffix.lower() not in [".cbz", ".cbr"]:
@@ -393,9 +399,10 @@ async def get_comic_page_thumbnail_endpoint(periodical_id: int, page_index: int)
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
 
-                file_path = Path(magazine.file_path)
-                if not file_path.exists():
-                    raise HTTPException(status_code=404, detail="File not found")
+                try:
+                    file_path = _shared.resolve_file_path(magazine.file_path)
+                except FileNotFoundError as e:
+                    raise HTTPException(status_code=404, detail=str(e))
 
                 # Verify it's a comic file
                 if file_path.suffix.lower() not in [".cbz", ".cbr"]:
@@ -445,9 +452,10 @@ async def get_pdf_metadata_endpoint(periodical_id: int) -> Dict[str, Any]:
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
 
-                file_path = Path(magazine.file_path)
-                if not file_path.exists():
-                    raise HTTPException(status_code=404, detail="File not found")
+                try:
+                    file_path = _shared.resolve_file_path(magazine.file_path)
+                except FileNotFoundError as e:
+                    raise HTTPException(status_code=404, detail=str(e))
 
                 # Check if file is PDF
                 if file_path.suffix.lower() != ".pdf":
@@ -502,9 +510,10 @@ async def get_pdf_page_endpoint(periodical_id: int, page_index: int):
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
 
-                file_path = Path(magazine.file_path)
-                if not file_path.exists():
-                    raise HTTPException(status_code=404, detail="File not found")
+                try:
+                    file_path = _shared.resolve_file_path(magazine.file_path)
+                except FileNotFoundError as e:
+                    raise HTTPException(status_code=404, detail=str(e))
 
                 # Check if file is PDF
                 if file_path.suffix.lower() != ".pdf":
@@ -558,9 +567,10 @@ async def get_pdf_page_thumbnail_endpoint(periodical_id: int, page_index: int):
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
 
-                file_path = Path(magazine.file_path)
-                if not file_path.exists():
-                    raise HTTPException(status_code=404, detail="File not found")
+                try:
+                    file_path = _shared.resolve_file_path(magazine.file_path)
+                except FileNotFoundError as e:
+                    raise HTTPException(status_code=404, detail=str(e))
 
                 # Check if file is PDF
                 if file_path.suffix.lower() != ".pdf":

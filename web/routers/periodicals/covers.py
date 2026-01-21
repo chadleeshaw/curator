@@ -116,9 +116,10 @@ async def regenerate_cover(magazine_id: int, request_data: Dict[str, Any]) -> Di
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.PERIODICAL_NOT_FOUND)
 
-                pdf_path = Path(magazine.file_path)
-                if not pdf_path.exists():
-                    raise HTTPException(status_code=404, detail="PDF file not found on disk")
+                try:
+                    pdf_path = _shared.resolve_file_path(magazine.file_path)
+                except FileNotFoundError as e:
+                    raise HTTPException(status_code=404, detail=str(e))
 
                 # Determine cover directory from config
                 if _shared._library_base_dir:

@@ -26,6 +26,68 @@ def set_dependencies(session_factory: Callable, library_base_dir: Optional[str] 
         _library_base_dir = Path(library_base_dir)
 
 
+def resolve_file_path(stored_path: str) -> Path:
+    """
+    Resolve a file path from the database to the actual filesystem location.
+
+    This handles cases where:
+    - Path is stored as absolute (e.g., from Docker container: /app/local/data/...)
+    - Path needs to be resolved relative to configured library_dir
+
+    Args:
+        stored_path: File path stored in database (may be absolute or relative)
+
+    Returns:
+        Resolved Path object pointing to actual file location
+
+    Raises:
+        FileNotFoundError: If file cannot be found after resolution attempts
+    """
+    stored = Path(stored_path)
+
+    # If stored path exists as-is, use it (same environment)
+    if stored.exists():
+        return stored
+
+    # Try resolving relative to library_dir if configured
+    if _library_base_dir:
+        # Extract the relative path from stored path
+        # This handles cases where stored path is from different environment
+        # Example: /app/local/data/_Magazines/... -> _Magazines/...
+
+        # Find the library folder marker (e.g., "_Magazines", "_Comics", etc.)
+        parts = stored.parts
+        category_markers = [
+            "_Magazines",
+            "_Comics",
+            "_Articles",
+            "_News",
+            "_Newspapers",
+        ]
+
+        for i, part in enumerate(parts):
+            if part in category_markers:
+                # Reconstruct path from category marker onwards
+                relative_path = Path(*parts[i:])
+                resolved = _library_base_dir / relative_path
+                if resolved.exists():
+                    logger.debug(f"Resolved path: {stored_path} -> {resolved}")
+                    return resolved
+                break
+
+    # Last resort: check if it's directly under library_dir
+    if _library_base_dir:
+        filename = stored.name
+        # Search recursively for the file (last resort, slower)
+        for candidate in _library_base_dir.rglob(filename):
+            if candidate.is_file():
+                logger.warning(f"Found file by name search: {stored_path} -> {candidate}")
+                return candidate
+
+    # File not found after all attempts
+    raise FileNotFoundError(f"File not found: {stored_path} (library_dir: {_library_base_dir})")
+
+
 def parse_month_string(month_str: Optional[str]) -> Tuple[int, str]:
     """
     Parse a month string, handling multi-month formats like "June/July".
