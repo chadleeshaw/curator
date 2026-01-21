@@ -814,8 +814,40 @@ export class TrackingManager {
         document.getElementById('edit-delete-from-client').checked =
           !t.delete_from_client_on_completion;
 
-        // Set organization pattern
-        document.getElementById('edit-tracking-org-pattern').value = t.organization_pattern || '';
+        // Set organization pattern dropdown
+        const patternSelect = document.getElementById('edit-tracking-pattern-select');
+        const patternCustom = document.getElementById('edit-tracking-pattern-custom');
+        const orgPattern = t.organization_pattern || '';
+
+        // Map of pattern templates to their keys
+        const patternMap = {
+          '{category}/{title}/{year}/': 'default',
+          '{category}/{title}/Vol{volume}/': 'volume',
+          '{category}/{title}/': 'flat',
+          '{category}/{title}/Vol{volume}/{year}/': 'volume_year',
+          '{category}/{title}/Issues {issue_range}/': 'issue',
+        };
+
+        const matchedKey = patternMap[orgPattern];
+
+        if (patternSelect) {
+          if (!orgPattern) {
+            // No pattern set - use global default
+            patternSelect.value = '';
+            if (patternCustom) patternCustom.classList.add('hidden');
+          } else if (matchedKey) {
+            // Known pattern - select it from dropdown
+            patternSelect.value = matchedKey;
+            if (patternCustom) patternCustom.classList.add('hidden');
+          } else {
+            // Custom pattern - show custom input
+            patternSelect.value = 'custom';
+            if (patternCustom) {
+              patternCustom.value = orgPattern;
+              patternCustom.classList.remove('hidden');
+            }
+          }
+        }
 
         // Show modal
         document
@@ -1343,7 +1375,27 @@ window.saveEditedTracking = async function () {
   const country = document.getElementById('edit-tracking-country').value;
   const mode = document.getElementById('edit-tracking-mode').value;
   const keepHistory = document.getElementById('edit-delete-from-client').checked;
-  const orgPattern = document.getElementById('edit-tracking-org-pattern').value.trim();
+
+  // Get organization pattern from dropdown or custom input
+  const patternSelect = document.getElementById('edit-tracking-pattern-select');
+  const patternCustom = document.getElementById('edit-tracking-pattern-custom');
+  let organizationPattern = null;
+
+  if (patternSelect && patternSelect.value) {
+    if (patternSelect.value === 'custom' && patternCustom) {
+      organizationPattern = patternCustom.value.trim() || null;
+    } else if (patternSelect.value !== '') {
+      // Map pattern keys to their templates
+      const patternTemplates = {
+        default: '{category}/{title}/{year}/',
+        volume: '{category}/{title}/Vol{volume}/',
+        flat: '{category}/{title}/',
+        volume_year: '{category}/{title}/Vol{volume}/{year}/',
+        issue: '{category}/{title}/Issues {issue_range}/',
+      };
+      organizationPattern = patternTemplates[patternSelect.value] || null;
+    }
+  }
 
   try {
     const response = await APIClient.put(`/api/periodicals/tracking/${trackingId}`, {
@@ -1355,15 +1407,42 @@ window.saveEditedTracking = async function () {
       track_all_editions: mode === 'all',
       track_new_only: mode === 'new',
       delete_from_client_on_completion: !keepHistory, // Inverted: checked = keep, unchecked = auto-remove
-      organization_pattern: orgPattern || null, // Send null if empty to use global default
+      organization_pattern: organizationPattern, // Send null if empty to use global default
     });
 
     const result = await response.json();
     if (result.success) {
       window.closeEditTrackingModal();
       tracking.loadTrackedPeriodicals();
-      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Tracking updated successfully', 'success');
-      setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), TIMEOUTS.AUTO_HIDE_STATUS);
+
+      // If pattern changed, prompt user to reorganize
+      if (result.pattern_changed && result.files_affected > 0) {
+        const confirmed = await UIUtils.confirm(
+          'Reorganize Files?',
+          `Organization pattern changed. Would you like to reorganize ${result.files_affected} existing file(s) to match the new pattern?\n\nNew files will use the new pattern automatically.`
+        );
+
+        if (confirmed) {
+          // Trigger reorganization for this tracking ID
+          await reorganizeTrackingFiles(trackingId, title);
+        } else {
+          UIUtils.showStatus(
+            ELEMENT_IDS.TRACKING_STATUS,
+            'Tracking updated. New downloads will use the new pattern.',
+            'success'
+          );
+          setTimeout(
+            () => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS),
+            TIMEOUTS.AUTO_HIDE_STATUS
+          );
+        }
+      } else {
+        UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Tracking updated successfully', 'success');
+        setTimeout(
+          () => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS),
+          TIMEOUTS.AUTO_HIDE_STATUS
+        );
+      }
     } else {
       UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Failed to update tracking', 'error');
     }
@@ -1777,6 +1856,27 @@ window.saveNewTracking = async () => {
 
   const trackingMode = document.getElementById('new-tracking-mode').value || 'all';
 
+  // Get organization pattern from dropdown or custom input
+  const patternSelect = document.getElementById('new-tracking-pattern-select');
+  const patternCustom = document.getElementById('new-tracking-pattern-custom');
+  let organizationPattern = null;
+
+  if (patternSelect && patternSelect.value) {
+    if (patternSelect.value === 'custom' && patternCustom) {
+      organizationPattern = patternCustom.value.trim() || null;
+    } else if (patternSelect.value !== '') {
+      // Map pattern keys to their templates
+      const patternTemplates = {
+        default: '{category}/{title}/{year}/',
+        volume: '{category}/{title}/Vol{volume}/',
+        flat: '{category}/{title}/',
+        volume_year: '{category}/{title}/Vol{volume}/{year}/',
+        issue: '{category}/{title}/Issues {issue_range}/',
+      };
+      organizationPattern = patternTemplates[patternSelect.value] || null;
+    }
+  }
+
   try {
     // Build query string for the POST request
     const params = new URLSearchParams({
@@ -1795,7 +1895,7 @@ window.saveNewTracking = async () => {
     const data = await response.json();
 
     if (data.success) {
-      // Now update with the tracking mode, download category, and country
+      // Now update with the tracking mode, download category, country, and organization pattern
       const updateData = {
         track_all_editions: trackingMode === 'all',
         track_new_only: trackingMode === 'new',
@@ -1803,6 +1903,9 @@ window.saveNewTracking = async () => {
       };
       if (downloadCategory) {
         updateData.download_category = downloadCategory;
+      }
+      if (organizationPattern) {
+        updateData.organization_pattern = organizationPattern;
       }
       await APIClient.put(`/api/periodicals/tracking/${data.tracking_id}`, updateData);
 
@@ -1831,3 +1934,38 @@ window.editTracking = (id) => tracking.editTracking(id);
 window.searchForIssues = (id, title, language, country, category) =>
   tracking.searchForIssues(id, title, language, country, category);
 window.deleteTracking = (id, title) => tracking.deleteTracking(id, title);
+
+/**
+ * Reorganize files for a tracking record to match its organization pattern
+ *
+ * @param {number} trackingId - Tracking record ID
+ * @param {string} _title - Periodical title (unused but kept for API consistency)
+ * @returns {Promise<void>}
+ */
+async function reorganizeTrackingFiles(trackingId, _title) {
+  try {
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Reorganizing files...', 'info');
+
+    const response = await APIClient.post(`/api/periodicals/tracking/${trackingId}/reorganize`, {});
+    const result = await response.json();
+
+    if (result.success) {
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, result.message, 'success');
+      tracking.loadTrackedPeriodicals(); // Reload to reflect changes
+      setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), TIMEOUTS.AUTO_HIDE_SUCCESS);
+    } else {
+      UIUtils.showStatus(
+        ELEMENT_IDS.TRACKING_STATUS,
+        `Reorganization failed: ${result.message || 'Unknown error'}`,
+        'error'
+      );
+    }
+  } catch (error) {
+    console.error('[Tracking] Error reorganizing files:', error);
+    UIUtils.showStatus(
+      ELEMENT_IDS.TRACKING_STATUS,
+      `Error reorganizing files: ${error.message}`,
+      'error'
+    );
+  }
+}
