@@ -126,6 +126,10 @@ export class UIUtils {
     const savedTheme = localStorage.getItem('curator-theme') ?? 'dark';
     if (savedTheme === 'dark') {
       document.body.classList.add('dark-mode');
+      document.documentElement.removeAttribute('data-theme');
+    } else {
+      document.body.classList.remove('dark-mode');
+      document.documentElement.setAttribute('data-theme', 'light');
     }
     const themeSelect = document.getElementById('theme-mode');
     if (themeSelect) {
@@ -146,8 +150,10 @@ export class UIUtils {
     localStorage.setItem('curator-theme', theme);
     if (theme === 'dark') {
       document.body.classList.add('dark-mode');
+      document.documentElement.removeAttribute('data-theme');
     } else {
       document.body.classList.remove('dark-mode');
+      document.documentElement.setAttribute('data-theme', 'light');
     }
   }
 
