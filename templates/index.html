@@ -711,9 +711,14 @@
                   placeholder="Enter your API key"
                 />
               </div>
-              <button onclick="saveDownloadClientSettings()" class="save-btn">
-                Save Download Client
-              </button>
+              <div style="display: flex; gap: 10px">
+                <button onclick="testDownloadClientConnection()" class="save-btn btn-secondary">
+                  Test Connection
+                </button>
+                <button onclick="saveDownloadClientSettings()" class="save-btn">
+                  Save Download Client
+                </button>
+              </div>
               <div id="download-client-message" class="hidden"></div>
             </div>
           </div>

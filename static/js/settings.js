@@ -288,6 +288,7 @@ export class SettingsManager {
           </label>
         </div>
         <div style="margin-top: 15px; display: flex; gap: 10px;">
+          <button onclick="testProviderConnection(${index})" class="btn-secondary">Test Connection</button>
           <button onclick="editSearchProvider(${index})" class="btn-primary">Save</button>
           <button onclick="removeSearchProvider(${index})" class="btn-danger">Remove</button>
         </div>
@@ -601,6 +602,104 @@ export class SettingsManager {
     } catch (error) {
       console.error('Error saving download client settings:', error);
       UIUtils.showStatus('settings-status', `Error: ${error.message}`, 'error');
+    }
+  }
+
+  /**
+   * Test connection to download client
+   */
+  async testDownloadClientConnection() {
+    try {
+      const type = document.getElementById('download-client-type')?.value;
+      const url = document.getElementById('download-client-url')?.value;
+      const apiKeyInput = document.getElementById('download-client-apikey');
+      const apiKey = apiKeyInput?.value || apiKeyInput?.dataset.originalKey;
+
+      if (!url) {
+        UIUtils.showStatus('settings-status', 'Please enter an API URL', 'error');
+        return;
+      }
+
+      if (!apiKey) {
+        UIUtils.showStatus('settings-status', 'Please enter an API key', 'error');
+        return;
+      }
+
+      // Show testing status
+      UIUtils.showStatus('settings-status', `Testing connection to ${type}...`, 'info');
+
+      // Build the test payload
+      const testPayload = {
+        type,
+        api_url: url,
+        api_key: apiKey,
+      };
+
+      const response = await APIClient.post('/api/config/test-download-client', testPayload);
+      const data = await response.json();
+
+      if (data.success) {
+        const versionInfo = data.version ? ` (v${data.version})` : '';
+        UIUtils.showStatus('settings-status', `Connection successful!${versionInfo}`, 'success');
+        setTimeout(() => UIUtils.hideStatus('settings-status'), 5000);
+      } else {
+        UIUtils.showStatus('settings-status', data.message || 'Connection test failed', 'error');
+      }
+    } catch (error) {
+      console.error('Failed to test download client connection:', error);
+      UIUtils.showStatus('settings-status', 'Error: ' + error.message, 'error');
+    }
+  }
+
+  /**
+   * Test connection to a search provider
+   */
+  async testProviderConnection(index) {
+    try {
+      const name = document.getElementById(`search-provider-name-${index}`).value;
+      const url = document.getElementById(`search-provider-url-${index}`).value;
+      const keyInput = document.getElementById(`search-provider-key-${index}`);
+      const key = keyInput.value || keyInput.dataset.originalKey;
+
+      if (!url) {
+        UIUtils.showStatus('settings-status', 'Please enter an API URL', 'error');
+        return;
+      }
+
+      if (!key) {
+        UIUtils.showStatus('settings-status', 'Please enter an API key', 'error');
+        return;
+      }
+
+      // Show testing status
+      UIUtils.showStatus(
+        'settings-status',
+        `Testing connection to ${name || 'provider'}...`,
+        'info'
+      );
+
+      // Build the test payload
+      const testPayload = {
+        type: 'newsnab', // Currently only newsnab is supported
+        api_url: url,
+        api_key: key,
+      };
+
+      const response = await APIClient.post('/api/config/test-provider', testPayload);
+      const data = await response.json();
+
+      if (data.success) {
+        const serverInfo = data.server_info
+          ? ` (${data.server_info.title || 'Unknown'} v${data.server_info.version || 'Unknown'})`
+          : '';
+        UIUtils.showStatus('settings-status', `Connection successful!${serverInfo}`, 'success');
+        setTimeout(() => UIUtils.hideStatus('settings-status'), 5000);
+      } else {
+        UIUtils.showStatus('settings-status', data.message || 'Connection test failed', 'error');
+      }
+    } catch (error) {
+      console.error('Failed to test provider connection:', error);
+      UIUtils.showStatus('settings-status', 'Error: ' + error.message, 'error');
     }
   }
 
@@ -1684,6 +1783,8 @@ export const settings = new SettingsManager();
 // Expose functions globally for onclick handlers
 window.saveProviderSettings = () => settings.saveProviderSettings();
 window.saveDownloadClientSettings = () => settings.saveDownloadClientSettings();
+window.testProviderConnection = (index) => settings.testProviderConnection(index);
+window.testDownloadClientConnection = () => settings.testDownloadClientConnection();
 window.editSearchProvider = (index) => settings.editSearchProvider(index);
 window.removeSearchProvider = (index) => settings.removeSearchProvider(index);
 window.addSearchProvider = () => settings.addSearchProvider();
