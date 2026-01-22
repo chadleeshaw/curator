@@ -10,11 +10,11 @@ function switchMode(mode) {
   successMessage.classList.remove('show');
 
   if (mode === 'setup') {
-    loginMode.style.display = 'none';
-    setupMode.style.display = 'block';
+    loginMode.classList.add('hidden');
+    setupMode.classList.remove('hidden');
   } else {
-    loginMode.style.display = 'block';
-    setupMode.style.display = 'none';
+    loginMode.classList.remove('hidden');
+    setupMode.classList.add('hidden');
   }
 }
 

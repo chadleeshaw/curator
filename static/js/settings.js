@@ -24,6 +24,16 @@ export class SettingsManager {
   }
 
   /**
+   * Escape HTML to prevent XSS and attribute issues
+   */
+  escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  /**
    * Initialize drag-and-drop for sortable lists
    */
   initSortable() {
@@ -256,28 +266,28 @@ export class SettingsManager {
       div.className = 'provider-block';
 
       div.innerHTML = `
-        <h4>${provider.name || 'Provider ' + (index + 1)}</h4>
+        <h4>${this.escapeHtml(provider.name || 'Provider ' + (index + 1))}</h4>
         <div style="margin: 10px 0;">
           <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">Name:</label>
-          <input type="text" id="search-provider-name-${index}" value="${provider.name || ''}"
+          <input type="text" id="search-provider-name-${index}" value="${this.escapeHtml(provider.name || '')}"
                 style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
         </div>
         <div style="margin: 10px 0;">
           <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">API URL:</label>
-          <input type="text" id="search-provider-url-${index}" value="${provider.api_url || ''}"
+          <input type="text" id="search-provider-url-${index}" value="${this.escapeHtml(provider.api_url || '')}"
                 style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
         </div>
         <div style="margin: 10px 0;">
           <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">API Key:</label>
           <input type="password" id="search-provider-key-${index}" placeholder="${provider.api_key ? '••••••••••••••••' : 'Enter API key'}"
-                data-original-key="${provider.api_key || ''}"
+                data-original-key="${this.escapeHtml(provider.api_key || '')}"
                 style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
         </div>
         <div style="margin: 10px 0;">
           <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">
             Categories <span style="font-weight: 400; color: var(--text-secondary); font-size: 12px;">(Newsnab only, comma-separated, e.g., 7000,7010,7030)</span>:
           </label>
-          <input type="text" id="search-provider-categories-${index}" value="${provider.categories || ''}"
+          <input type="text" id="search-provider-categories-${index}" value="${this.escapeHtml(provider.categories || '')}"
                 placeholder="7000,7010,7020,7030"
                 style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
         </div>
