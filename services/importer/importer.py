@@ -872,7 +872,7 @@ class FileImporter:
             f"from {self.library_base_dir} ({len(pdf_files)} PDFs, {len(epub_files)} EPUBs, "
             f"{len(cbz_files)} CBZs, {len(cbr_files)} CBRs)"
         )
-        logger.info("[DATA IMPORT] Text extraction enabled, OCR queued only for image-based files")
+        logger.info("[DATA IMPORT] OCR disabled for library imports - will run during next scheduled OCR task")
 
         for pdf_path in all_files:
             try:
@@ -883,7 +883,7 @@ class FileImporter:
                     auto_track=auto_track,
                     skip_organize=True,
                     tracking_mode=tracking_mode,
-                    use_ocr=True,  # Enable text extraction, OCR queued only if needed
+                    use_ocr=False,  # Don't queue OCR during library imports
                 )
                 if import_result:
                     result.data["imported"] += 1

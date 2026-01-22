@@ -556,15 +556,28 @@ async def purge_database() -> Dict[str, Any]:
         def _db_operation():
             db_session = _shared._session_factory()
             try:
-                from models.database import PeriodicalTracking, DownloadSubmission
+                from models.database import (
+                    PeriodicalTracking,
+                    DownloadSubmission,
+                    OCRJob,
+                    DiscoveredIssue,
+                )
 
                 # Count entries before deletion
                 magazine_count = db_session.query(Periodical).count()
                 tracking_count = db_session.query(PeriodicalTracking).count()
                 download_count = db_session.query(DownloadSubmission).count()
+                ocr_count = db_session.query(OCRJob).count()
+                issue_count = db_session.query(DiscoveredIssue).count()
 
-                # Delete all library entries
+                # Delete all library entries (will cascade delete OCR jobs due to foreign key)
                 db_session.query(Periodical).delete()
+
+                # Delete all OCR jobs (in case any orphaned jobs exist)
+                db_session.query(OCRJob).delete()
+
+                # Delete all discovered issues (will cascade due to foreign key to tracking)
+                db_session.query(DiscoveredIssue).delete()
 
                 # Delete all tracking records
                 db_session.query(PeriodicalTracking).delete()
@@ -577,18 +590,22 @@ async def purge_database() -> Dict[str, Any]:
 
                 logger.warning(
                     f"Database purged successfully. Removed {magazine_count} library entries, "
-                    f"{tracking_count} tracking records, and {download_count} download submissions."
+                    f"{tracking_count} tracking records, {download_count} download submissions, "
+                    f"{ocr_count} OCR jobs, and {issue_count} discovered issues."
                 )
 
                 return {
                     "success": True,
                     "message": f"Database purged successfully. Removed {magazine_count} library entries, "
-                    f"{tracking_count} tracking records, and {download_count} downloads. "
+                    f"{tracking_count} tracking records, {download_count} downloads, "
+                    f"{ocr_count} OCR jobs, and {issue_count} discovered issues. "
                     f"Files on disk remain untouched.",
                     "counts": {
                         "magazines": magazine_count,
                         "tracking": tracking_count,
                         "downloads": download_count,
+                        "ocr_jobs": ocr_count,
+                        "discovered_issues": issue_count,
                     },
                 }
 
