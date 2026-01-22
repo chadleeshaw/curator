@@ -144,36 +144,48 @@ async def import_from_library_dir(
 
         def process_library_dir_imports():
             """Background task to process imports from library directory"""
+            db_session = None
+            original_pattern = None
             try:
                 logger.info(
                     f"Import settings: auto_track={options.auto_track}, " f"tracking_mode={options.tracking_mode}"
                 )
                 db_session = _session_factory()
-                try:
-                    # Temporarily override organization pattern if provided
-                    original_pattern = _file_importer.organization_pattern
-                    if options.organization_pattern:
-                        _file_importer.organization_pattern = options.organization_pattern
 
-                    results = _file_importer.process_organized_files(
-                        db_session,
-                        auto_track=options.auto_track,
-                        tracking_mode=options.tracking_mode,
-                    )
+                # Temporarily override organization pattern if provided
+                original_pattern = _file_importer.organization_pattern
+                if options.organization_pattern:
+                    _file_importer.organization_pattern = options.organization_pattern
 
-                    # Extract counts from nested data structure
-                    data = results.get("data", {})
-                    imported = data.get("imported", 0)
-                    failed = data.get("failed", 0)
+                results = _file_importer.process_organized_files(
+                    db_session,
+                    auto_track=options.auto_track,
+                    tracking_mode=options.tracking_mode,
+                )
 
-                    logger.info(f"Library directory import results: {imported} imported, {failed} failed")
+                # Extract counts from nested data structure
+                data = results.get("data", {})
+                imported = data.get("imported", 0)
+                failed = data.get("failed", 0)
 
-                    # Restore original pattern
-                    _file_importer.organization_pattern = original_pattern
-                finally:
-                    db_session.close()
+                logger.info(f"Library directory import results: {imported} imported, {failed} failed")
+
             except Exception as e:
                 logger.error(f"Error processing library directory imports: {e}", exc_info=True)
+            finally:
+                # Restore original pattern
+                if original_pattern is not None:
+                    try:
+                        _file_importer.organization_pattern = original_pattern
+                    except Exception as e:
+                        logger.error(f"Error restoring organization pattern: {e}")
+
+                # Close database session
+                if db_session is not None:
+                    try:
+                        db_session.close()
+                    except Exception as e:
+                        logger.error(f"Error closing database session: {e}")
 
         background_tasks.add_task(process_library_dir_imports)
 
