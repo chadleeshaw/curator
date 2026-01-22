@@ -316,3 +316,59 @@ class SABnzbdClient(DownloadClient):
         except Exception as e:
             logger.error(f"[SABnzbd] Error deleting job {job_id}: {e}")
             return False
+
+    def test_connection(self) -> Dict[str, Any]:
+        """
+        Test the connection to SABnzbd.
+
+        Returns:
+            Dict with success status and message
+        """
+        try:
+            # Use the version endpoint as a lightweight test
+            response = self._api_call("version")
+
+            if not response:
+                return {
+                    "success": False,
+                    "message": "No response from SABnzbd - check your API URL and key",
+                }
+
+            # Check if we got version info
+            version = response.get("version")
+            if version:
+                return {
+                    "success": True,
+                    "message": f"Connection successful - SABnzbd v{version}",
+                    "version": version,
+                }
+
+            # Try getting queue info as fallback
+            queue_response = self._api_call("queue")
+            if queue_response and "queue" in queue_response:
+                return {
+                    "success": True,
+                    "message": "Connection successful",
+                }
+
+            return {
+                "success": False,
+                "message": "Unexpected response from SABnzbd",
+            }
+
+        except requests.exceptions.Timeout:
+            return {
+                "success": False,
+                "message": "Connection timeout - check your API URL and network",
+            }
+        except requests.exceptions.ConnectionError:
+            return {
+                "success": False,
+                "message": "Connection failed - check your API URL and network",
+            }
+        except Exception as e:
+            logger.error(f"SABnzbd connection test error: {e}", exc_info=True)
+            return {
+                "success": False,
+                "message": f"Error: {str(e)}",
+            }

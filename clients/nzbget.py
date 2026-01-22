@@ -249,3 +249,70 @@ class NZBGetClient(DownloadClient):
         except Exception as e:
             logger.error(f"[NZBGet] Error deleting job {job_id}: {e}")
             return False
+
+    def test_connection(self) -> Dict[str, Any]:
+        """
+        Test the connection to NZBGet.
+
+        Returns:
+            Dict with success status and message
+        """
+        try:
+            # Use the version endpoint as a lightweight test
+            version = self._api_call("version")
+
+            if not version:
+                return {
+                    "success": False,
+                    "message": "No response from NZBGet - check your API URL, username, and password",
+                }
+
+            # NZBGet returns version as a string
+            if isinstance(version, str):
+                return {
+                    "success": True,
+                    "message": f"Connection successful - NZBGet v{version}",
+                    "version": version,
+                }
+
+            # Try getting status as fallback
+            status = self._api_call("status")
+            if status and isinstance(status, dict):
+                nzbget_version = status.get("Version", "Unknown")
+                return {
+                    "success": True,
+                    "message": f"Connection successful - NZBGet v{nzbget_version}",
+                    "version": nzbget_version,
+                }
+
+            return {
+                "success": False,
+                "message": "Unexpected response from NZBGet",
+            }
+
+        except requests.exceptions.Timeout:
+            return {
+                "success": False,
+                "message": "Connection timeout - check your API URL and network",
+            }
+        except requests.exceptions.ConnectionError:
+            return {
+                "success": False,
+                "message": "Connection failed - check your API URL and network",
+            }
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 401:
+                return {
+                    "success": False,
+                    "message": "Authentication failed - check your username and password",
+                }
+            return {
+                "success": False,
+                "message": f"HTTP error: {e.response.status_code}",
+            }
+        except Exception as e:
+            logger.error(f"NZBGet connection test error: {e}", exc_info=True)
+            return {
+                "success": False,
+                "message": f"Error: {str(e)}",
+            }

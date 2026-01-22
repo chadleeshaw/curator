@@ -201,3 +201,89 @@ async def restart_application(background_tasks: BackgroundTasks):
     except Exception as e:
         logger.error(f"Restart error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/test-provider")
+async def test_provider_connection(provider_config: Dict[str, Any]):
+    """
+    Test connection to a search provider.
+
+    Args:
+        provider_config: Provider configuration with type, api_url, api_key, etc.
+
+    Returns:
+        Connection test result
+    """
+    try:
+        provider_type = provider_config.get("type")
+        if not provider_type:
+            raise HTTPException(status_code=400, detail="Provider type is required")
+
+        # Import provider classes
+        if provider_type == "newsnab":
+            from providers.newsnab import NewsnabProvider
+
+            provider = NewsnabProvider(provider_config)
+            result = provider.test_connection()
+        elif provider_type == "rss":
+            return {
+                "success": True,
+                "message": "RSS providers don't require authentication",
+            }
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown provider type: {provider_type}")
+
+        return result
+
+    except ValueError as e:
+        # Configuration errors (e.g., missing API key)
+        return {
+            "success": False,
+            "message": str(e),
+        }
+    except Exception as e:
+        logger.error(f"Test provider connection error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/test-download-client")
+async def test_download_client_connection(client_config: Dict[str, Any]):
+    """
+    Test connection to a download client.
+
+    Args:
+        client_config: Download client configuration with type, api_url, api_key, etc.
+
+    Returns:
+        Connection test result
+    """
+    try:
+        client_type = client_config.get("type")
+        if not client_type:
+            raise HTTPException(status_code=400, detail="Download client type is required")
+
+        # Import client classes
+        if client_type == "sabnzbd":
+            from clients.sabnzbd import SABnzbdClient
+
+            client = SABnzbdClient(client_config)
+            result = client.test_connection()
+        elif client_type == "nzbget":
+            from clients.nzbget import NZBGetClient
+
+            client = NZBGetClient(client_config)
+            result = client.test_connection()
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown download client type: {client_type}")
+
+        return result
+
+    except ValueError as e:
+        # Configuration errors (e.g., missing API key/password)
+        return {
+            "success": False,
+            "message": str(e),
+        }
+    except Exception as e:
+        logger.error(f"Test download client connection error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))

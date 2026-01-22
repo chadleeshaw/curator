@@ -8,7 +8,7 @@ import re
 import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 import requests
 
@@ -312,3 +312,94 @@ class NewsnabProvider(SearchProvider):
             logger.debug(f"Newsnab XML parse error: {e}")
 
         return results
+
+    def test_connection(self) -> Dict[str, Any]:
+        """
+        Test the connection to the Newsnab provider.
+
+        Returns:
+            Dict with success status and message
+        """
+        try:
+            # Try to hit the capabilities endpoint or a simple search
+            url = f"{self.api_url}/api"
+            params = {
+                "apikey": self.api_key,
+                "t": "caps",  # Capabilities endpoint - lightweight test
+            }
+
+            logger.info(f"Testing Newsnab connection to {url}")
+            response = requests.get(url, params=params, timeout=10)
+
+            if response.status_code == 401:
+                return {
+                    "success": False,
+                    "message": "Authentication failed - check your API key",
+                    "status_code": 401,
+                }
+
+            if response.status_code == 404:
+                return {
+                    "success": False,
+                    "message": "API endpoint not found - check your API URL",
+                    "status_code": 404,
+                }
+
+            response.raise_for_status()
+
+            # Check if response is valid XML
+            try:
+                root = ET.fromstring(response.content)
+
+                # Check for error in response
+                error_elem = root.find(".//error")
+                if error_elem is not None:
+                    error_desc = error_elem.get("description", error_elem.text or "Unknown error")
+                    return {
+                        "success": False,
+                        "message": f"API error: {error_desc}",
+                    }
+
+                # Success - check for server info if available
+                server_elem = root.find(".//server")
+                server_info = {}
+                if server_elem is not None:
+                    server_info = {
+                        "title": server_elem.get("title", "Unknown"),
+                        "version": server_elem.get("version", "Unknown"),
+                    }
+
+                return {
+                    "success": True,
+                    "message": "Connection successful",
+                    "server_info": server_info if server_info else None,
+                }
+
+            except ET.ParseError as e:
+                return {
+                    "success": False,
+                    "message": f"Invalid XML response: {str(e)}",
+                }
+
+        except requests.exceptions.Timeout:
+            return {
+                "success": False,
+                "message": "Connection timeout - check your API URL and network",
+            }
+        except requests.exceptions.ConnectionError:
+            return {
+                "success": False,
+                "message": "Connection failed - check your API URL and network",
+            }
+        except requests.exceptions.HTTPError as e:
+            return {
+                "success": False,
+                "message": f"HTTP error: {e.response.status_code}",
+                "status_code": e.response.status_code,
+            }
+        except Exception as e:
+            logger.error(f"Newsnab connection test error: {e}", exc_info=True)
+            return {
+                "success": False,
+                "message": f"Unexpected error: {str(e)}",
+            }
