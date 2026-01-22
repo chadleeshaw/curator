@@ -119,8 +119,8 @@ class FileOrganizer:
         """
         Remove country codes and names from the end of a title.
 
-        This cleans up titles like "Hustler USA", "Playboy United States",
-        "Penthouse Australia" to just the base magazine name.
+        This cleans up titles like "Magazine USA", "Periodical United States",
+        "Publication Australia" to just the base magazine name.
 
         Args:
             title: Magazine/periodical title to clean
@@ -133,21 +133,21 @@ class FileOrganizer:
         cleaned_title = title.strip()
 
         # Remove country codes and names from the end of the title
-        # Try multiple passes to handle cases like "Hustler USA United States"
+        # Try multiple passes to handle cases like "Magazine USA United States"
         for _ in range(3):  # Max 3 passes to remove multiple countries
             original = cleaned_title
 
-            # Remove 2-letter country codes at end (e.g., "Hustler US")
+            # Remove 2-letter country codes at end (e.g., "Magazine US")
             for code in ISO_COUNTRIES.keys():
                 pattern = rf"\s+{re.escape(code)}$"
                 cleaned_title = re.sub(pattern, "", cleaned_title, flags=re.IGNORECASE)
 
-            # Remove 3-letter codes at end (e.g., "Hustler USA")
+            # Remove 3-letter codes at end (e.g., "Magazine USA")
             for code in ISO_COUNTRIES.keys():
                 pattern = rf"\s+{re.escape(code)}A$"
                 cleaned_title = re.sub(pattern, "", cleaned_title, flags=re.IGNORECASE)
 
-            # Remove full country names at end (e.g., "Hustler United States")
+            # Remove full country names at end (e.g., "Magazine United States")
             for name in ISO_COUNTRIES.values():
                 pattern = rf"\s+{re.escape(name)}$"
                 cleaned_title = re.sub(pattern, "", cleaned_title, flags=re.IGNORECASE)
@@ -695,7 +695,6 @@ class FileOrganizer:
 
                         if not dry_run:
                             periodical.tracking_id = match.tracking_id
-                            db_session.commit()
                             logger.info(
                                 f"Fixed tracking_id for '{periodical.title}': "
                                 f"{old_tracking_id} ({old_tracking_title}) -> "
@@ -723,6 +722,22 @@ class FileOrganizer:
                 error_msg = f"Error processing periodical {periodical.id} ('{periodical.title}'): {e}"
                 logger.error(error_msg, exc_info=True)
                 errors.append(error_msg)
+
+        # Commit all tracking_id fixes in a single transaction
+        if not dry_run and fixed > 0:
+            try:
+                db_session.commit()
+                logger.info(f"Successfully committed {fixed} tracking_id fix(es)")
+            except Exception as e:
+                db_session.rollback()
+                logger.error(f"Failed to commit tracking_id fixes: {e}")
+                return {
+                    "success": False,
+                    "error": f"Database commit failed: {e}",
+                    "fixed": 0,
+                    "skipped": skipped,
+                    "errors": errors + [str(e)],
+                }
 
         return {
             "success": True,
