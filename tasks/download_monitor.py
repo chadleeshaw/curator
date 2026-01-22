@@ -366,24 +366,29 @@ class DownloadMonitor:
                         failed_count += 1
 
                         # Check if we should delete from client after failure
+                        should_delete = True  # Default: always delete failed downloads
                         if submission.tracking_id:
                             tracking = (
                                 session.query(PeriodicalTracking)
                                 .filter(PeriodicalTracking.id == submission.tracking_id)
                                 .first()
                             )
-                            if tracking and tracking.delete_from_client_on_completion:
-                                try:
-                                    if self.download_manager.download_client.delete(submission.job_id):
-                                        logger.info(
-                                            f"[DownloadMonitor] Deleted failed job {submission.job_id} "
-                                            f"from download client"
-                                        )
-                                except Exception as e:
-                                    logger.error(
-                                        f"Error deleting from client: {e}",
-                                        exc_info=True,
+                            # Only override default if tracking explicitly disables deletion
+                            if tracking:
+                                should_delete = tracking.delete_from_client_on_completion
+
+                        if should_delete:
+                            try:
+                                if self.download_manager.download_client.delete(submission.job_id):
+                                    logger.info(
+                                        f"[DownloadMonitor] Deleted failed job {submission.job_id} "
+                                        f"from download client"
                                     )
+                            except Exception as e:
+                                logger.error(
+                                    f"Error deleting from client: {e}",
+                                    exc_info=True,
+                                )
             except Exception as e:
                 logger.error(
                     f"Error updating status for job {submission.job_id}: {e}",
@@ -547,21 +552,26 @@ class DownloadMonitor:
                     self.download_manager.mark_processed(submission.id, session)
 
                     # Check if we should delete from client after successful completion
+                    should_delete = True  # Default: always delete completed downloads
                     if submission.tracking_id:
                         tracking = (
                             session.query(PeriodicalTracking)
                             .filter(PeriodicalTracking.id == submission.tracking_id)
                             .first()
                         )
-                        if tracking and tracking.delete_from_client_on_completion:
-                            try:
-                                if self.download_manager.download_client.delete(submission.job_id):
-                                    logger.info(
-                                        f"[DownloadMonitor] Deleted completed job {submission.job_id} "
-                                        f"from download client"
-                                    )
-                            except Exception as e:
-                                logger.error(f"Error deleting from client: {e}", exc_info=True)
+                        # Only override default if tracking explicitly disables deletion
+                        if tracking:
+                            should_delete = tracking.delete_from_client_on_completion
+
+                    if should_delete:
+                        try:
+                            if self.download_manager.download_client.delete(submission.job_id):
+                                logger.info(
+                                    f"[DownloadMonitor] Deleted completed job {submission.job_id} "
+                                    f"from download client"
+                                )
+                        except Exception as e:
+                            logger.error(f"Error deleting from client: {e}", exc_info=True)
 
                     # Call optional callback (e.g., for database updates)
                     if self.import_callback:
