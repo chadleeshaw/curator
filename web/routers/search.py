@@ -27,6 +27,7 @@ _search_providers = None
 _metadata_providers = None
 _title_matcher = None
 _session_factory = None
+_provider_cache_service = None
 
 
 def set_dependencies(
@@ -34,13 +35,15 @@ def set_dependencies(
     metadata_providers: Any,
     title_matcher: Any,
     session_factory: Callable,
+    provider_cache_service: Any = None,
 ) -> None:
     """Set dependencies from main app"""
-    global _search_providers, _metadata_providers, _title_matcher, _session_factory
+    global _search_providers, _metadata_providers, _title_matcher, _session_factory, _provider_cache_service
     _search_providers = search_providers
     _metadata_providers = metadata_providers
     _title_matcher = title_matcher
     _session_factory = session_factory
+    _provider_cache_service = provider_cache_service
 
 
 def _get_fuzzy_group_id(title: str) -> str:
@@ -449,6 +452,30 @@ async def search(request: SearchRequest) -> Dict[str, Any]:
     try:
         all_results = []
 
+        # Try provider cache first if available
+        if _provider_cache_service:
+            try:
+                cached_releases = _provider_cache_service.search(request.query.strip(), limit=100)
+                if cached_releases:
+                    logger.info(f"Found {len(cached_releases)} results from provider cache")
+                    for release in cached_releases:
+                        all_results.append(
+                            {
+                                "title": release.title,
+                                "url": release.download_url,
+                                "provider": release.provider_name,
+                                "publication_date": (
+                                    release.raw_metadata.get("upload_date")
+                                    if release.raw_metadata and release.raw_metadata.get("upload_date")
+                                    else None
+                                ),
+                                "raw_metadata": release.raw_metadata or {},
+                                "from_cache": True,
+                            }
+                        )
+            except Exception as e:
+                logger.warning(f"Provider cache search failed, falling back to direct providers: {e}")
+
         # Determine which providers to search
         providers = _search_providers if _search_providers else []
         active_providers = providers
@@ -563,6 +590,32 @@ async def search_periodical_providers(
         # === STEP 2: Fetch Fresh Results from Providers ===
         fresh_results = []
         provider_errors = []
+
+        # Try provider cache first if available
+        if _provider_cache_service and not force_refresh:
+            try:
+                cached_releases = _provider_cache_service.search(query.strip(), limit=100)
+                if cached_releases:
+                    logger.info(f"Found {len(cached_releases)} results from provider cache")
+                    fresh_results.extend(
+                        [
+                            {
+                                "title": r.title,
+                                "url": r.download_url,  # Note: cache uses download_url not url
+                                "provider": r.provider_name,
+                                "publication_date": (
+                                    datetime.fromisoformat(r.raw_metadata.get("upload_date"))
+                                    if r.raw_metadata and r.raw_metadata.get("upload_date")
+                                    else None
+                                ),
+                                "metadata": r.raw_metadata or {},
+                                "from_cache": True,
+                            }
+                            for r in cached_releases
+                        ]
+                    )
+            except Exception as e:
+                logger.warning(f"Provider cache search failed, falling back to direct providers: {e}")
 
         if _search_providers:
             for provider in _search_providers:
@@ -849,6 +902,34 @@ async def get_periodical_editions(magazine_title: str) -> Dict[str, Any]:
 
         # Search across search providers for specific editions
         results = []
+
+        # Try provider cache first if available
+        if _provider_cache_service:
+            try:
+                cached_releases = _provider_cache_service.search(magazine_title.strip(), limit=100)
+                if cached_releases:
+                    logger.info(f"Found {len(cached_releases)} results from provider cache for '{magazine_title}'")
+                    for release in cached_releases:
+                        results.append(
+                            type(
+                                "SearchResult",
+                                (),
+                                {
+                                    "title": release.title,
+                                    "url": release.download_url,
+                                    "provider": release.provider_name,
+                                    "publication_date": (
+                                        datetime.fromisoformat(release.raw_metadata.get("upload_date"))
+                                        if release.raw_metadata and release.raw_metadata.get("upload_date")
+                                        else None
+                                    ),
+                                    "raw_metadata": release.raw_metadata or {},
+                                },
+                            )()
+                        )
+            except Exception as e:
+                logger.warning(f"Provider cache search failed, falling back to direct providers: {e}")
+
         for provider in _search_providers:
             try:
                 provider_results = provider.search(magazine_title.strip())
@@ -865,4 +946,42 @@ async def get_periodical_editions(magazine_title: str) -> Dict[str, Any]:
         raise
     except Exception as e:
         logger.error(f"Get editions error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/indexer-cache/status")
+async def get_provider_cache_status() -> Dict[str, Any]:
+    """
+    Get provider cache statistics and status.
+
+    Returns:
+        Dictionary with cache statistics including:
+        - total_entries: Number of cached releases
+        - last_sync: Timestamp of last successful sync
+        - providers: List of providers and their release counts
+    """
+    try:
+        if not _provider_cache_service:
+            return {
+                "enabled": False,
+                "total_entries": 0,
+                "last_sync": None,
+                "providers": [],
+            }
+
+        def _get_stats():
+            stats = _provider_cache_service.get_stats()
+            return {
+                "enabled": True,
+                "total_entries": stats.get("total_releases", 0),
+                "last_sync": stats.get("last_sync"),
+                "oldest_release": stats.get("oldest_release"),
+                "newest_release": stats.get("newest_release"),
+                "providers": stats.get("providers", []),
+            }
+
+        return await run_in_thread(_get_stats)
+
+    except Exception as e:
+        logger.error(f"Get provider cache status error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

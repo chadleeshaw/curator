@@ -14,7 +14,11 @@ from core.interfaces import SearchResult, SearchProvider, DownloadClient
 
 def test_search_result_initialization():
     """Test SearchResult dataclass initialization"""
-    result = SearchResult(title="Test Magazine Issue 5", url="https://example.com/nzb/test", provider="TestProvider")
+    result = SearchResult(
+        title="Test Magazine Issue 5",
+        url="https://example.com/nzb/test",
+        provider="TestProvider",
+    )
 
     assert result.title == "Test Magazine Issue 5"
     assert result.url == "https://example.com/nzb/test"
@@ -68,7 +72,13 @@ def test_search_provider_concrete_implementation():
 
     class TestProvider(SearchProvider):
         def search(self, query, category=None):
-            return [SearchResult(title=f"Result for {query}", url="https://example.com/nzb", provider=self.name)]
+            return [
+                SearchResult(
+                    title=f"Result for {query}",
+                    url="https://example.com/nzb",
+                    provider=self.name,
+                )
+            ]
 
     config = {"name": "TestProvider", "type": "search", "enabled": True}
     provider = TestProvider(config)
@@ -153,7 +163,6 @@ def test_download_client_default_values():
     """Test DownloadClient default name and type"""
 
     class MyClient(DownloadClient):
-
         def submit(self, nzb_url, title=None, category=None):
             return "id"
 

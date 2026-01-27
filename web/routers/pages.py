@@ -254,19 +254,35 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
                         "extra_metadata": p.extra_metadata or {},
                     }
 
-                    # Check if this is a special edition by checking metadata first, then title
+                    # Check if this is a special edition by checking derived_metadata first, then extra_metadata, then title
                     is_special = False
-                    if p.extra_metadata and isinstance(p.extra_metadata, dict):
+                    special_edition_value = None
+
+                    # Check derived_metadata first (new location)
+                    if p.derived_metadata and isinstance(p.derived_metadata, dict):
+                        special_data = p.derived_metadata.get("special_edition")
+                        if special_data:
+                            if isinstance(special_data, dict):
+                                special_edition_value = special_data.get("value")
+                            else:
+                                special_edition_value = special_data
+                            if special_edition_value:
+                                is_special = True
+
+                    # Fallback to extra_metadata (legacy location)
+                    if not is_special and p.extra_metadata and isinstance(p.extra_metadata, dict):
                         special_edition_value = p.extra_metadata.get("special_edition")
-                        # Check if special_edition is truthy (True, or a non-empty string name)
                         if special_edition_value:
                             is_special = True
-                            # Store the special edition name if it's a string, otherwise empty
-                            if isinstance(special_edition_value, str):
-                                periodical_data["special_edition_name"] = special_edition_value
-                            else:
-                                periodical_data["special_edition_name"] = ""
 
+                    # Store special edition name if found
+                    if is_special and special_edition_value:
+                        if isinstance(special_edition_value, str):
+                            periodical_data["special_edition_name"] = special_edition_value
+                        else:
+                            periodical_data["special_edition_name"] = ""
+
+                    # Fallback to title pattern matching
                     if not is_special and is_special_edition(p.title):
                         is_special = True
 

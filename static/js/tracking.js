@@ -1229,7 +1229,7 @@ export class TrackingManager {
           background: ${backgroundColor};
           border-radius: 8px;
           text-align: center;
-          cursor: ${isLibraryItem && !hasMultipleVariants ? 'default' : 'pointer'};
+          cursor: ${isLibraryItem ? 'default' : 'pointer'};
           transition: all 0.2s;
           border-left: 4px solid ${borderColor};
           opacity: ${opacity};
@@ -1237,8 +1237,8 @@ export class TrackingManager {
           box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         "`;
 
-        // Store variants globally for selection (for both library and available items with variants)
-        if (hasMultipleVariants) {
+        // Store variants globally and add click handler for all non-library items
+        if (!isLibraryItem && issue.variants && issue.variants.length > 0) {
           const issueKey = `${issue.year}-${issue.month}-${issue.issue}`;
           window.issueVariants = window.issueVariants || {};
           window.issueVariants[issueKey] = issue.variants;

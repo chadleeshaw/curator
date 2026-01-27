@@ -50,8 +50,6 @@ def _migrate_single_periodical(periodical: Periodical) -> bool:
         file_scan["volume"] = old_metadata["volume"]
     if old_metadata.get("country"):
         file_scan["country"] = old_metadata["country"]
-    if old_metadata.get("special_edition"):
-        file_scan["special_edition"] = old_metadata["special_edition"]
     if old_metadata.get("full_title"):
         file_scan["full_title"] = old_metadata["full_title"]
 

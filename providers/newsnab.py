@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
+from core.constants.cache import UPLOAD_DATE_FORMATS
 from core.constants.providers import (
     NEWSNAB_CATEGORY_MAP,
     NEWSNAB_DEFAULT_API_URL,
@@ -147,12 +148,12 @@ class NewsnabProvider(SearchProvider):
 
         return None
 
-    def search(self, query: str, category: str = None) -> List[SearchResult]:
+    def search(self, query: str = "", category: str = None) -> List[SearchResult]:
         """
         Search Newsnab-compatible service for NZBs.
 
         Args:
-            query: Magazine title to search for
+            query: Magazine title to search for. Empty string triggers RSS mode.
             category: Optional category filter ("Magazines", "Comics", etc.)
 
         Returns:
@@ -179,7 +180,11 @@ class NewsnabProvider(SearchProvider):
 
             # Use XML API - it's more reliable and well-supported
             # (v1 JSON API often has issues with Prowlarr aggregators)
-            results = self._search_xml_api(query, category)
+            # If query is empty, use RSS mode to fetch latest releases
+            if not query or query.strip() == "":
+                results = self._search_xml_api_rss(category)
+            else:
+                results = self._search_xml_api(query, category)
             return results
 
         except Exception as e:
@@ -264,6 +269,7 @@ class NewsnabProvider(SearchProvider):
                 title_elem = item.find("title")
                 link_elem = item.find("link")
                 enclosure_elem = item.find("enclosure")
+                pubdate_elem = item.find("pubDate")
 
                 if title_elem is not None and title_elem.text:
                     # Get NZB URL from enclosure or link
@@ -273,13 +279,31 @@ class NewsnabProvider(SearchProvider):
                     elif link_elem is not None:
                         nzb_url = link_elem.text or ""
 
+                    # Parse upload_date from pubDate element
+                    upload_date = None
+                    if pubdate_elem is not None and pubdate_elem.text:
+                        upload_date = self._parse_upload_date(pubdate_elem.text)
+
+                    # Extract category from newznab:attr elements
+                    category_id = None
+                    for attr in item.findall(".//{http://www.newznab.com/DTD/2010/feeds/attributes/}attr"):
+                        if attr.get("name") == "category":
+                            category_id = attr.get("value")
+                            break
+
+                    raw_metadata = {
+                        "indexer": item.findtext("indexer", ""),
+                    }
+                    if upload_date:
+                        raw_metadata["upload_date"] = upload_date.isoformat()
+                    if category_id:
+                        raw_metadata["category"] = category_id
+
                     result = SearchResult(
                         title=title_elem.text,
                         url=nzb_url,
                         provider=self.type,
-                        raw_metadata={
-                            "indexer": item.findtext("indexer", ""),
-                        },
+                        raw_metadata=raw_metadata,
                     )
                     results.append(result)
 
@@ -312,6 +336,263 @@ class NewsnabProvider(SearchProvider):
             logger.debug(f"Newsnab XML parse error: {e}")
 
         return results
+
+    def _search_xml_api_rss(self, category: str = None) -> List[SearchResult]:
+        """
+        Search using the RSS mode (fetch latest releases without query).
+
+        This method is used for cache sync operations to fetch the latest
+        releases from the provider without a specific search query.
+
+        Args:
+            category: Optional category filter
+
+        Returns:
+            List of SearchResult objects
+        """
+        results = []
+
+        try:
+            # Determine which categories to search
+            cat_ids = self.categories  # Default: all configured categories
+
+            if category and category in self.category_map:
+                # If specific category requested, use its ID
+                cat_ids = self.category_map[category]
+                logger.debug(f"Using category filter: {category} -> {cat_ids}")
+
+            url = f"{self.api_url}/api"
+            params = {
+                "apikey": self.api_key,
+                "t": "rss",  # RSS mode instead of search
+                "cat": cat_ids,
+                # DO NOT include 'q' parameter in RSS mode
+            }
+
+            logger.debug(f"Newsnab RSS mode: categories={cat_ids}, url={url}")
+
+            response = requests.get(url, params=params, timeout=NEWSNAB_REQUEST_TIMEOUT)
+
+            # Check for rate limit errors (HTTP 429 or specific status codes)
+            if response.status_code == 429:  # Too Many Requests
+                wait_time = None
+                # Check Retry-After header
+                retry_after = response.headers.get("Retry-After")
+                if retry_after:
+                    try:
+                        wait_time = int(retry_after)
+                    except ValueError:
+                        pass
+
+                if not wait_time:
+                    wait_time = NEWSNAB_DEFAULT_RATE_LIMIT_WAIT
+
+                self._rate_limit_until = datetime.now() + timedelta(seconds=wait_time)
+                self._rate_limit_reason = "HTTP 429 Too Many Requests"
+                logger.error(
+                    f"[{self.name}] Rate limited by provider (HTTP 429). "
+                    f"Will wait {wait_time} seconds (~{wait_time / 3600:.1f} hours)"
+                )
+                return []
+
+            response.raise_for_status()
+
+            # Check for error messages in XML response
+            root = ET.fromstring(response.content)
+
+            # Check for error element in response
+            error_elem = root.find(".//error")
+            if error_elem is not None:
+                error_code = error_elem.get("code", "")
+                error_desc = error_elem.get("description", error_elem.text or "")
+
+                # Check if RSS mode is not supported (common with Prowlarr aggregators)
+                if error_code == "202":
+                    logger.info(f"[{self.name}] RSS mode not supported (error 202), falling back to broad search")
+                    # Fall back to broad search query for periodicals
+                    return self._search_xml_api_rss_fallback(category)
+
+                # Check if it's a rate limit error
+                wait_time = self._parse_rate_limit_from_error(error_desc)
+                if wait_time:
+                    self._rate_limit_until = datetime.now() + timedelta(seconds=wait_time)
+                    self._rate_limit_reason = f"Provider error: {error_desc}"
+                    logger.error(
+                        f"[{self.name}] Rate limited by provider: {error_desc}. "
+                        f"Will wait {wait_time} seconds (~{wait_time / 3600:.1f} hours)"
+                    )
+                    return []
+                else:
+                    logger.warning(f"[{self.name}] API error: {error_desc} (code: {error_code})")
+                    return []
+
+            # Parse RSS/XML response
+            for item in root.findall(".//item"):
+                title_elem = item.find("title")
+                link_elem = item.find("link")
+                enclosure_elem = item.find("enclosure")
+                pubdate_elem = item.find("pubDate")
+                guid_elem = item.find("guid")
+
+                if title_elem is not None and title_elem.text:
+                    # Get NZB URL from enclosure or link
+                    nzb_url = ""
+                    if enclosure_elem is not None:
+                        nzb_url = enclosure_elem.get("url", "")
+                    elif link_elem is not None:
+                        nzb_url = link_elem.text or ""
+
+                    # Parse upload_date from pubDate element (CRITICAL for cache ranking)
+                    upload_date = None
+                    if pubdate_elem is not None and pubdate_elem.text:
+                        upload_date = self._parse_upload_date(pubdate_elem.text)
+
+                    # Extract category from newznab:attr elements
+                    category_id = None
+                    for attr in item.findall(".//{http://www.newznab.com/DTD/2010/feeds/attributes/}attr"):
+                        if attr.get("name") == "category":
+                            category_id = attr.get("value")
+                            break
+
+                    # Build raw_metadata
+                    raw_metadata = {
+                        "indexer": item.findtext("indexer", ""),
+                    }
+                    if upload_date:
+                        raw_metadata["upload_date"] = upload_date.isoformat()
+                    if category_id:
+                        raw_metadata["category"] = category_id
+
+                    # Include GUID for deduplication (if available)
+                    if guid_elem is not None and guid_elem.text:
+                        raw_metadata["guid"] = guid_elem.text
+
+                    result = SearchResult(
+                        title=title_elem.text,
+                        url=nzb_url,
+                        provider=self.type,
+                        raw_metadata=raw_metadata,
+                    )
+                    results.append(result)
+
+            logger.debug(f"Newsnab (RSS mode) found {len(results)} results in categories {cat_ids}")
+
+        except requests.exceptions.HTTPError as e:
+            # Check if it's a rate limit error in the response text
+            if e.response is not None:
+                try:
+                    error_text = e.response.text
+
+                    # Check if RSS mode is not supported (HTTP 400 with error code 202)
+                    if e.response.status_code == 400 and 'code="202"' in error_text:
+                        logger.info(
+                            f"[{self.name}] RSS mode not supported (HTTP 400, code 202), "
+                            f"falling back to broad search"
+                        )
+                        return self._search_xml_api_rss_fallback(category)
+
+                    wait_time = self._parse_rate_limit_from_error(error_text)
+                    if wait_time:
+                        self._rate_limit_until = datetime.now() + timedelta(seconds=wait_time)
+                        self._rate_limit_reason = f"HTTP {e.response.status_code}: Rate limit"
+                        logger.error(
+                            f"[{self.name}] Rate limited by provider (HTTP {e.response.status_code}). "
+                            f"Will wait {wait_time} seconds (~{wait_time / 3600:.1f} hours)"
+                        )
+                        return []
+                except Exception:
+                    pass
+
+            logger.error(f"Newsnab RSS API HTTP error: {e}")
+
+        except requests.exceptions.RequestException as e:
+            logger.debug(f"Newsnab RSS API error: {e}")
+        except ET.ParseError as e:
+            logger.debug(f"Newsnab RSS parse error: {e}")
+
+        return results
+
+    def _search_xml_api_rss_fallback(self, category: str = None) -> List[SearchResult]:
+        """
+        Fallback search method for providers that don't support RSS mode (like Prowlarr).
+
+        Uses broad search queries to fetch recent releases across periodical categories.
+        This is less efficient than RSS mode but works with Prowlarr aggregators.
+
+        Args:
+            category: Optional category filter
+
+        Returns:
+            List of SearchResult objects
+        """
+        logger.info(f"[{self.name}] Using RSS fallback: broad search for latest periodicals")
+
+        # Use a set of broad search terms that cover most periodicals
+        # These are common words that appear in magazine/periodical releases
+        search_terms = [
+            "magazine",
+            "2024",
+            "2025",
+            "weekly",
+            "monthly",
+        ]
+
+        all_results = []
+        seen_guids = set()
+
+        # Try a few broad searches to get a diverse set of recent releases
+        for term in search_terms[:2]:  # Limit to 2 searches to avoid excessive API calls
+            try:
+                results = self._search_xml_api(term, category)
+
+                # Deduplicate by GUID
+                for result in results:
+                    guid = result.raw_metadata.get("guid") if result.raw_metadata else None
+                    if guid and guid not in seen_guids:
+                        seen_guids.add(guid)
+                        all_results.append(result)
+                    elif not guid:
+                        # No GUID, add anyway (will be deduped later by cache service)
+                        all_results.append(result)
+
+                # Stop if we have enough results
+                if len(all_results) >= 100:
+                    break
+
+            except Exception as e:
+                logger.warning(f"[{self.name}] RSS fallback search failed for '{term}': {e}")
+                continue
+
+        logger.info(
+            f"[{self.name}] RSS fallback retrieved {len(all_results)} results "
+            f"from {len(search_terms[:2])} search terms"
+        )
+
+        return all_results[:100]  # Limit to 100 results
+
+    def _parse_upload_date(self, date_str: str) -> Optional[datetime]:
+        """
+        Parse upload date from provider response.
+
+        Tries multiple date formats commonly used by Newsnab providers.
+
+        Args:
+            date_str: Date string from provider (e.g., pubDate element)
+
+        Returns:
+            Parsed datetime object, or None if parsing fails
+        """
+        for date_format in UPLOAD_DATE_FORMATS:
+            try:
+                # Try parsing with the current format
+                parsed_date = datetime.strptime(date_str.strip(), date_format)
+                return parsed_date
+            except (ValueError, TypeError):
+                continue
+
+        # If all formats fail, log warning and return None
+        logger.debug(f"[{self.name}] Failed to parse upload date: {date_str}")
+        return None
 
     def test_connection(self) -> Dict[str, Any]:
         """

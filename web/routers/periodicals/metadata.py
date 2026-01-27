@@ -36,27 +36,30 @@ async def toggle_special_edition(magazine_id: int, is_special: bool) -> Dict[str
                 if not magazine:
                     raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
 
-                # Initialize extra_metadata if needed
-                if magazine.extra_metadata is None:
-                    magazine.extra_metadata = {}
+                # Initialize derived_metadata if needed
+                if magazine.derived_metadata is None:
+                    magazine.derived_metadata = {}
 
-                # Update special edition status
+                # Update special edition status in derived_metadata
                 if is_special:
-                    # Mark as special edition - store the current title as special edition name
-                    magazine.extra_metadata["special_edition"] = magazine.title
+                    # Mark as special edition - store as structured data
+                    magazine.derived_metadata["special_edition"] = {
+                        "value": magazine.title,
+                        "source": "manual",
+                    }
                     logger.info(f"Marked issue as special edition: {magazine.title}")
                     message = f"Marked '{magazine.title}' as a special edition"
                 else:
                     # Unmark as special edition
-                    if "special_edition" in magazine.extra_metadata:
-                        del magazine.extra_metadata["special_edition"]
+                    if "special_edition" in magazine.derived_metadata:
+                        del magazine.derived_metadata["special_edition"]
                     logger.info(f"Unmarked special edition: {magazine.title}")
                     message = f"Unmarked '{magazine.title}' as special edition"
 
                 # Mark the column as modified for SQLAlchemy to detect the change
                 from sqlalchemy.orm.attributes import flag_modified
 
-                flag_modified(magazine, "extra_metadata")
+                flag_modified(magazine, "derived_metadata")
 
                 db_session.commit()
 
@@ -143,16 +146,25 @@ async def update_periodical(magazine_id: int, updates: Dict[str, Any]) -> Dict[s
                 if "volume" in updates:
                     magazine.extra_metadata["volume"] = updates["volume"]
 
+                # Handle special edition in derived_metadata (structured storage)
+                if magazine.derived_metadata is None:
+                    magazine.derived_metadata = {}
+
                 if "special_edition" in updates:
                     if updates["special_edition"]:
-                        magazine.extra_metadata["special_edition"] = updates["special_edition"]
-                    elif "special_edition" in magazine.extra_metadata:
-                        del magazine.extra_metadata["special_edition"]
+                        # Store as structured data with source indicator
+                        magazine.derived_metadata["special_edition"] = {
+                            "value": updates["special_edition"],
+                            "source": "manual",
+                        }
+                    elif "special_edition" in magazine.derived_metadata:
+                        del magazine.derived_metadata["special_edition"]
 
-                # Mark the column as modified for SQLAlchemy to detect the change
+                # Mark both columns as modified for SQLAlchemy to detect changes
                 from sqlalchemy.orm.attributes import flag_modified
 
                 flag_modified(magazine, "extra_metadata")
+                flag_modified(magazine, "derived_metadata")
 
                 db_session.commit()
                 db_session.refresh(magazine)

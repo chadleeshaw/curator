@@ -54,3 +54,10 @@ COLUMN_RENAMES = {
     "downloads": [("magazine_id", "periodical_id")],
     "reading_progress": [("magazine_id", "periodical_id")],
 }
+
+# Column removals
+# Format: {table_name: [column_name, ...]}
+# Note: This is for cleanup after data migration. Ensure data is migrated before removing columns.
+COLUMN_REMOVALS = {
+    "periodicals": ["special_edition"],
+}

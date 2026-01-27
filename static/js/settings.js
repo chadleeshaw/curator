@@ -251,6 +251,11 @@ export class SettingsManager {
     if (config.config?.ocr) {
       this.displayOCRSettings(config.config.ocr);
     }
+
+    // Display cache settings
+    if (config.config?.cache) {
+      this.displayCacheSettings(config.config.cache);
+    }
   }
 
   /**
@@ -1706,6 +1711,7 @@ export class SettingsManager {
    */
   async loadCacheStats() {
     try {
+      // Load old-style search result cache stats
       const response = await APIClient.authenticatedFetch('/api/cache/stats');
       const stats = await response.json();
 
@@ -1715,8 +1721,109 @@ export class SettingsManager {
         const queryText = stats.unique_queries === 1 ? 'query' : 'queries';
         statsText.textContent = `Currently ${stats.total_entries} ${entryText} from ${stats.unique_queries} ${queryText}.`;
       }
+
+      // Load provider cache stats for display
+      const providerCacheResponse = await APIClient.authenticatedFetch('/api/indexer-cache/status');
+      const providerStats = await providerCacheResponse.json();
+
+      // Update cache stats display
+      this.displayCacheStats(providerStats);
     } catch (error) {
       console.warn('Error loading cache stats:', error);
+    }
+  }
+
+  /**
+   * Display cache statistics in the UI
+   */
+  displayCacheStats(stats) {
+    const totalReleases = document.getElementById('cache-total-releases');
+    const lastSync = document.getElementById('cache-last-sync');
+
+    if (totalReleases) {
+      totalReleases.textContent = stats.total_entries?.toLocaleString() || '0';
+    }
+    if (lastSync) {
+      if (stats.last_sync) {
+        const date = new Date(stats.last_sync);
+        lastSync.textContent = date.toLocaleString();
+      } else {
+        lastSync.textContent = 'Never';
+      }
+    }
+  }
+
+  /**
+   * Display cache settings in the UI
+   */
+  displayCacheSettings(cacheConfig) {
+    const cacheEnabled = document.getElementById('cache-enabled');
+    const cacheRetention = document.getElementById('cache-retention');
+    const cacheSyncInterval = document.getElementById('cache-sync-interval');
+
+    if (cacheEnabled) {
+      cacheEnabled.checked = cacheConfig?.enabled ?? true;
+    }
+    if (cacheRetention) {
+      cacheRetention.value = cacheConfig?.retention_days || 90;
+    }
+    if (cacheSyncInterval) {
+      const intervalMinutes = cacheConfig?.sync?.interval_seconds
+        ? Math.round(cacheConfig.sync.interval_seconds / 60)
+        : 30;
+      cacheSyncInterval.value = intervalMinutes;
+    }
+  }
+
+  /**
+   * Save cache settings
+   */
+  async saveCacheSettings() {
+    try {
+      UIUtils.showStatus('settings-status', 'Saving cache settings...', 'info');
+
+      const cacheEnabled = document.getElementById('cache-enabled')?.checked;
+      const cacheRetention = parseInt(document.getElementById('cache-retention')?.value || '90');
+      const cacheSyncInterval = parseInt(
+        document.getElementById('cache-sync-interval')?.value || '30'
+      );
+
+      const payload = {
+        cache: {
+          enabled: cacheEnabled,
+          retention_days: cacheRetention,
+          sync: {
+            interval_seconds: cacheSyncInterval * 60,
+            initial_sync_limit: this.currentConfig?.config?.cache?.sync?.initial_sync_limit || 100,
+            incremental_sync_limit:
+              this.currentConfig?.config?.cache?.sync?.incremental_sync_limit || 100,
+          },
+        },
+      };
+
+      const response = await APIClient.authenticatedFetch('/api/config', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        UIUtils.showStatus('settings-status', 'Cache settings saved successfully!', 'success');
+        await this.loadSettings();
+      } else {
+        UIUtils.showStatus(
+          'settings-status',
+          data.message || 'Failed to save cache settings',
+          'error'
+        );
+      }
+    } catch (error) {
+      console.error('Error saving cache settings:', error);
+      UIUtils.showStatus('settings-status', `Error: ${error.message}`, 'error');
     }
   }
 
@@ -1826,3 +1933,5 @@ window.saveOCRSettings = () => settings.saveOCRSettings();
 window.saveOCRWorkerSettings = () => settings.saveOCRWorkerSettings();
 window.saveImportSettings = () => settings.saveImportSettings();
 window.handlePatternSelectChange = (context) => settings.handlePatternSelectChange(context);
+window.saveCacheSettings = () => settings.saveCacheSettings();
+window.loadCacheStats = () => settings.loadCacheStats();

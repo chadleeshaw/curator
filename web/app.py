@@ -55,6 +55,7 @@ logger = logging.getLogger(__name__)
 # Global state
 config_loader = ConfigLoader()
 storage_config = config_loader.get_storage()
+cache_config = config_loader.get_cache()
 matching_config = config_loader.get_matching()
 pdf_config = config_loader.get_pdf()
 downloads_config = config_loader.get_downloads()
@@ -83,12 +84,15 @@ file_processor = None
 file_importer = None
 task_scheduler = None
 scheduler_task = None
+provider_cache_service = None
+provider_sync_service = None
+provider_sync_task = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown"""
-    global download_client, download_manager, download_monitor_task, cover_cleanup_task, title_matcher, file_processor, file_importer, task_scheduler, scheduler_task
+    global download_client, download_manager, download_monitor_task, cover_cleanup_task, title_matcher, file_processor, file_importer, task_scheduler, scheduler_task, provider_cache_service, provider_sync_service
 
     # Startup
     try:
@@ -132,6 +136,41 @@ async def lifespan(app: FastAPI):
             logger.warning(f"Download client not available (configure in Settings): {e}")
             download_client = None
 
+        # Initialize provider cache services (if enabled)
+        if cache_config.get("enabled", True):
+            try:
+                from services.cache import ProviderCacheService, ProviderSyncService
+                from pathlib import Path
+
+                cache_dir = Path(storage_config.get("cache_dir", "./local/cache"))
+                cache_db_path = cache_dir / "provider_cache.db"
+
+                # Initialize cache service
+                provider_cache_service = ProviderCacheService(
+                    cache_db_path=str(cache_db_path),
+                    fuzzy_threshold=matching_config.get("fuzzy_threshold", 80),
+                )
+                logger.info(
+                    f"Provider cache initialized: {cache_db_path} (retention: {cache_config.get('retention_days', 90)} days)"
+                )
+
+                # Initialize sync service (if we have providers)
+                if search_providers:
+                    provider_sync_service = ProviderSyncService(
+                        cache_service=provider_cache_service,
+                        search_providers=search_providers,
+                    )
+                    logger.info("Provider sync service initialized")
+                else:
+                    logger.warning("Provider sync service not initialized: no search providers")
+
+            except Exception as e:
+                logger.warning(f"Provider cache not available: {e}", exc_info=True)
+                provider_cache_service = None
+                provider_sync_service = None
+        else:
+            logger.info("Provider cache disabled in configuration")
+
         # Initialize other components
         fuzzy_threshold = matching_config.get("fuzzy_threshold")
         import_config = config_loader.get_import()
@@ -157,6 +196,7 @@ async def lifespan(app: FastAPI):
                 download_client=download_client,
                 fuzzy_threshold=fuzzy_threshold,
                 max_downloads=downloads_config.get("max_concurrent", 10),
+                provider_cache_service=provider_cache_service,
             )
             logger.info("Download manager initialized")
 
@@ -434,6 +474,21 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 logger.error(f"Auto-metadata error: {e}", exc_info=True)
 
+        # Define provider cache sync task wrapper (if sync service is available)
+        async def provider_cache_sync_task():
+            """Sync provider cache with latest releases from providers (runs every 30 min by default)"""
+            if provider_sync_service:
+                try:
+                    stats = await provider_sync_service.sync_all_providers()
+                    if stats.get("total_added", 0) > 0:
+                        logger.info(
+                            f"Provider cache sync: {stats.get('total_added', 0)} releases added, "
+                            f"{stats.get('total_nzbs_downloaded', 0)} NZBs downloaded, "
+                            f"{stats.get('total_failed', 0)} failures"
+                        )
+                except Exception as e:
+                    logger.error(f"Provider cache sync error: {e}", exc_info=True)
+
         # Schedule tasks with intervals from config
         task_scheduler.schedule_periodic(
             "auto_download",
@@ -480,6 +535,18 @@ async def lifespan(app: FastAPI):
             # run_immediately=False (default) - maintenance can wait
         )
 
+        # Schedule provider cache sync task (if enabled)
+        if provider_sync_service:
+            task_scheduler.schedule_periodic(
+                "provider_cache_sync",
+                provider_cache_sync_task,
+                cache_config.get("sync", {}).get("interval_seconds", 1800),
+                run_immediately=False,  # Don't block startup - let it run after server is ready
+            )
+            logger.info(
+                f"Provider cache sync scheduled: every {cache_config.get('sync', {}).get('interval_seconds', 1800)}s"
+            )
+
         # Start scheduler in background
         scheduler_task = asyncio.create_task(task_scheduler.start())
 
@@ -487,7 +554,13 @@ async def lifespan(app: FastAPI):
         # Set auth manager and middleware in app state for FastAPI dependency injection
         app.state.auth_manager = auth_manager
         app.state.auth_middleware = AuthMiddleware(auth_manager)
-        search.set_dependencies(search_providers, metadata_providers, title_matcher, session_factory)
+        search.set_dependencies(
+            search_providers,
+            metadata_providers,
+            title_matcher,
+            session_factory,
+            provider_cache_service,
+        )
         periodicals.set_dependencies(
             session_factory,
             storage_config.get("library_dir", "./"),

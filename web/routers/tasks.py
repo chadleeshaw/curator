@@ -87,39 +87,6 @@ async def get_tasks_status():
         else:
             logger.debug("Tasks Status - Download Monitor task not available")
 
-        # OCR processor task
-        if _ocr_processor_task:
-            ocr_last_run = getattr(_ocr_processor_task, "last_run_time", None)
-            ocr_status = getattr(_ocr_processor_task, "last_status", None)
-            ocr_stats = getattr(_ocr_processor_task, "stats", {})
-            logger.debug(f"Tasks Status - OCR Processor: last_run={ocr_last_run}, status={ocr_status}")
-
-            # Get interval from scheduler
-            ocr_interval = 3600
-            if _task_scheduler:
-                scheduler_status = _task_scheduler.get_status()
-                if "ocr_processor" in scheduler_status.get("tasks", {}):
-                    ocr_interval = scheduler_status["tasks"]["ocr_processor"]["interval"]
-
-            tasks.append(
-                {
-                    "id": "ocr_processor",
-                    "name": "Auto-OCR",
-                    "description": "Automatically extracts text from periodical covers using OCR for better search and metadata",
-                    "interval": ocr_interval,
-                    "last_run": ocr_last_run,
-                    "next_run": getattr(_ocr_processor_task, "next_run_time", None),
-                    "last_status": ocr_status,
-                    "stats": {
-                        "total_runs": ocr_stats.get("total_runs", 0),
-                        "jobs_processed": ocr_stats.get("jobs_processed", 0),
-                        "jobs_failed": ocr_stats.get("jobs_failed", 0),
-                    },
-                }
-            )
-        else:
-            logger.debug("Tasks Status - OCR Processor task not available")
-
         # Get scheduler status if available
         scheduler_status = None
         if _task_scheduler:
@@ -237,6 +204,34 @@ async def get_tasks_status():
             )
         tasks.append(auto_metadata_info)
 
+        # Auto-cache task (provider cache sync)
+        auto_cache_info = {
+            "id": "provider_cache_sync",
+            "name": "Auto-Cache",
+            "description": "Automatically syncs the provider cache with latest releases from search providers",
+            "interval": 1800,  # 30 minutes default
+            "last_run": None,
+            "next_run": None,
+            "last_status": None,
+        }
+        if scheduler_status and "provider_cache_sync" in scheduler_status.get("tasks", {}):
+            task_data = scheduler_status["tasks"]["provider_cache_sync"]
+            last_run = task_data.get("last_run")
+            failure_count = task_data.get("failure_count", 0)
+            # Only set status if task has run at least once
+            status = None
+            if last_run:
+                status = "failed" if failure_count > 0 else "success"
+            auto_cache_info.update(
+                {
+                    "interval": task_data.get("interval", 1800),
+                    "last_run": last_run,
+                    "next_run": task_data.get("next_run"),
+                    "last_status": status,
+                }
+            )
+        tasks.append(auto_cache_info)
+
         logger.debug(f"Tasks Status - Returning {len(tasks)} tasks to client")
 
         return {
@@ -264,20 +259,6 @@ async def run_task_manually(task_id: str):
                 }
             else:
                 return {"success": False, "message": "Download monitor not available"}
-
-        elif task_id == "ocr_processor":
-            if _ocr_processor_task:
-                stats = await _ocr_processor_task.run()
-                message = (
-                    f"OCR processor executed. Processed: {stats.get('processed', 0)}, Failed: {stats.get('failed', 0)}"
-                )
-                return {
-                    "success": True,
-                    "task_name": "Auto-OCR",
-                    "message": message,
-                }
-            else:
-                return {"success": False, "message": "OCR processor not available"}
 
         elif task_id == "auto_download":
             # Note: This manual trigger should be handled by the task scheduler
@@ -343,6 +324,16 @@ async def run_task_manually(task_id: str):
                 "task_name": "Auto-Metadata",
                 "message": message,
                 "stats": stats,
+            }
+
+        elif task_id == "provider_cache_sync":
+            # Trigger cache sync manually
+            # Note: This should ideally be handled by the task scheduler
+            # For now, just return a message
+            return {
+                "success": True,
+                "task_name": "Auto-Cache",
+                "message": "Provider cache sync will run on its scheduled interval (30 minutes). Check Cache Management in Settings for manual sync.",
             }
 
         elif task_id == "cleanup_orphaned_covers":

@@ -111,12 +111,8 @@ class DatabaseManager:
                     except Exception as e:
                         logger.error(f"Failed to rename column {table_name}.{old_name}: {e}")
 
-        if migrations_applied > 0:
-            logger.info(f"Schema migrations complete: {migrations_applied} migration(s) applied")
-        elif not missing_tables:
-            logger.debug("Schema is up to date, no migrations needed")
-
-        # Run data migrations after schema changes
+        # Run data migrations after schema changes but before column removals
+        # This ensures data is migrated before old columns are removed
         from models.migrations import run_data_migrations
 
         session = self.session_factory()
@@ -137,6 +133,41 @@ class DatabaseManager:
             raise
         finally:
             session.close()
+
+        # Import column removals from migrations package
+        # This happens AFTER data migrations to ensure data is migrated first
+        from models.migrations import COLUMN_REMOVALS
+
+        column_removals = COLUMN_REMOVALS
+
+        for table_name, columns_to_remove in column_removals.items():
+            if not inspector.has_table(table_name):
+                continue
+
+            existing_columns = {col["name"] for col in inspector.get_columns(table_name)}
+
+            for column_name in columns_to_remove:
+                if column_name in existing_columns:
+                    logger.info(f"Removing deprecated column '{column_name}' from {table_name}")
+                    try:
+                        with self.engine.connect() as conn:
+                            # SQLite requires recreating the table to drop columns
+                            # Use ALTER TABLE DROP COLUMN (supported in SQLite 3.35.0+)
+                            conn.execute(text(f"ALTER TABLE {table_name} DROP COLUMN {column_name}"))
+                            conn.commit()
+                        migrations_applied += 1
+                        logger.info(f"✓ Removed column {table_name}.{column_name}")
+                    except Exception as e:
+                        # If DROP COLUMN fails (older SQLite), log a warning but don't fail
+                        logger.warning(
+                            f"Could not remove column {table_name}.{column_name}: {e}. "
+                            f"This column is deprecated and can be safely ignored."
+                        )
+
+        if migrations_applied > 0:
+            logger.info(f"Schema migrations complete: {migrations_applied} migration(s) applied")
+        elif not missing_tables:
+            logger.debug("Schema is up to date, no migrations needed")
 
     @contextmanager
     def get_session(self) -> Generator[Session, None, None]:

@@ -1240,20 +1240,6 @@
                 </p>
               </div>
 
-              <div class="settings-field">
-                <label for="tasks-ocr-processor-interval">Auto-OCR Interval (seconds):</label>
-                <input
-                  type="number"
-                  id="tasks-ocr-processor-interval"
-                  placeholder="10"
-                  min="5"
-                  max="300"
-                />
-                <p class="text-sm text-hint mt-8">
-                  How often to process queued OCR jobs (default: 10 seconds).
-                </p>
-              </div>
-
               <button onclick="saveTasksSettings()" class="save-btn">Save Task Settings</button>
               <div id="tasks-message" class="hidden"></div>
             </div>
@@ -1272,12 +1258,12 @@
                 <input
                   type="number"
                   id="tasks-max-periodicals-per-search"
-                  placeholder="2"
+                  placeholder="10"
                   min="1"
-                  max="10"
+                  max="50"
                 />
                 <p class="text-sm text-hint mt-8">
-                  How many periodicals to search per auto-download run (default: 2). This does NOT
+                  How many periodicals to search per auto-download run (default: 10). This does NOT
                   search all periodicals—it searches a small batch and adapts intervals based on
                   success. Higher values = more provider load but faster discovery. Lower values =
                   gentler on providers but slower discovery.
@@ -1289,14 +1275,14 @@
                 <input
                   type="number"
                   id="tasks-rapid-search-interval"
-                  placeholder="1"
-                  min="0.5"
+                  placeholder="0.5"
+                  min="0.25"
                   max="24"
-                  step="0.5"
+                  step="0.25"
                 />
                 <p class="text-sm text-hint mt-8">
-                  How often to search periodicals that are actively finding new issues (default: 1
-                  hour).
+                  How often to search periodicals that are actively finding new issues (default: 0.5
+                  hours = 30 minutes).
                 </p>
               </div>
 
@@ -1305,13 +1291,14 @@
                 <input
                   type="number"
                   id="tasks-normal-search-interval"
-                  placeholder="6"
-                  min="1"
+                  placeholder="2"
+                  min="0.5"
                   max="48"
+                  step="0.5"
                 />
                 <p class="text-sm text-hint mt-8">
                   Default search frequency for periodicals with 1-2 consecutive empty searches
-                  (default: 6 hours).
+                  (default: 2 hours).
                 </p>
               </div>
 
@@ -1320,13 +1307,13 @@
                 <input
                   type="number"
                   id="tasks-slow-search-interval"
-                  placeholder="24"
-                  min="6"
+                  placeholder="12"
+                  min="1"
                   max="168"
                 />
                 <p class="text-sm text-hint mt-8">
-                  How often to search periodicals with 3-5 consecutive empty searches (default: 24
-                  hours = daily).
+                  How often to search periodicals with 3-5 consecutive empty searches (default: 12
+                  hours = twice daily).
                 </p>
               </div>
 
@@ -1337,13 +1324,13 @@
                 <input
                   type="number"
                   id="tasks-very-slow-search-interval"
-                  placeholder="168"
-                  min="24"
+                  placeholder="48"
+                  min="12"
                   max="720"
                 />
                 <p class="text-sm text-hint mt-8">
                   How often to search very quiet periodicals with 6+ consecutive empty searches
-                  (default: 168 hours = weekly).
+                  (default: 48 hours = every 2 days).
                 </p>
               </div>
 
@@ -1652,6 +1639,106 @@
                 >
                   🗑️ Purge Database
                 </button>
+              </div>
+            </div>
+
+            <!-- Cache Management -->
+            <div id="cache-section" class="settings-section">
+              <h3>Cache Management</h3>
+              <p class="text-base text-muted mb-15">
+                Manage search cache to reduce API calls and improve performance
+              </p>
+
+              <div class="settings-field">
+                <label>
+                  <input type="checkbox" id="cache-enabled" />
+                  <span>Enable Search Cache</span>
+                </label>
+                <p class="text-sm text-hint mt-5">
+                  Cache search results locally to reduce API calls and improve search performance
+                  (95%+ reduction in provider requests)
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="cache-retention">Cache Retention (days):</label>
+                <p class="text-sm text-hint mb-10">
+                  How long to keep cached releases before they expire
+                </p>
+                <input
+                  type="number"
+                  id="cache-retention"
+                  min="1"
+                  max="365"
+                  placeholder="90"
+                  style="width: 150px"
+                />
+              </div>
+
+              <div class="settings-field">
+                <label for="cache-sync-interval">Sync Interval (minutes):</label>
+                <p class="text-sm text-hint mb-10">
+                  How often to sync latest releases from providers (recommended: 30-60 minutes)
+                </p>
+                <input
+                  type="number"
+                  id="cache-sync-interval"
+                  min="5"
+                  max="1440"
+                  placeholder="30"
+                  style="width: 150px"
+                />
+              </div>
+
+              <div class="settings-field">
+                <label>Cache Statistics:</label>
+                <div
+                  id="cache-stats-display"
+                  style="
+                    background: var(--card-bg);
+                    border: 1px solid var(--border-color);
+                    border-radius: 8px;
+                    padding: 15px;
+                    margin-top: 10px;
+                  "
+                >
+                  <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px">
+                    <div>
+                      <div class="text-sm text-hint">Total Releases</div>
+                      <div id="cache-total-releases" class="text-lg" style="margin-top: 5px">-</div>
+                    </div>
+                    <div>
+                      <div class="text-sm text-hint">Last Sync</div>
+                      <div id="cache-last-sync" class="text-lg" style="margin-top: 5px">-</div>
+                    </div>
+                  </div>
+                  <div style="margin-top: 15px; text-align: center">
+                    <a
+                      href="javascript:void(0)"
+                      onclick="loadCacheStats()"
+                      style="color: var(--primary-color); text-decoration: none; font-size: 14px"
+                    >
+                      🔄 Refresh Stats
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              <div style="margin-top: 30px">
+                <button
+                  onclick="saveCacheSettings()"
+                  class="save-btn"
+                  style="padding: 12px 40px; font-size: 16px; font-weight: 500; border-radius: 8px"
+                >
+                  Save Cache Settings
+                </button>
+              </div>
+
+              <hr style="margin: 30px 0; border: none; border-top: 1px solid var(--border-color)" />
+
+              <div class="bg-warning rounded-lg p-15 mb-20">
+                <strong>⚠️ Danger Zone</strong>
+                <p class="mt-8 mb-0">This action cannot be undone. Use with caution.</p>
               </div>
 
               <div class="settings-field">

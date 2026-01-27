@@ -44,6 +44,7 @@ class DownloadManager:
         download_client: DownloadClient,
         fuzzy_threshold: int = DEFAULT_FUZZY_THRESHOLD,
         max_downloads: int = 10,
+        provider_cache_service: Optional[Any] = None,
     ):
         """
         Initialize download manager.
@@ -53,6 +54,7 @@ class DownloadManager:
             download_client: Download client to submit jobs to
             fuzzy_threshold: Fuzzy matching threshold for deduplication
             max_downloads: Maximum number of concurrent downloads allowed
+            provider_cache_service: Optional provider cache service for NZB file caching
         """
         self.search_providers = search_providers
         self.download_client = download_client
@@ -66,6 +68,7 @@ class DownloadManager:
         self.max_downloads = max_downloads
         self.title_matcher = TitleMatcher(threshold=fuzzy_threshold)
         self.parser = Parser(fuzzy_threshold=fuzzy_threshold)
+        self.provider_cache_service = provider_cache_service
         self.categorizer = FileCategorizer()
 
     def search_periodical_issues(self, periodical_title: str, session: Session) -> List[Dict[str, Any]]:
@@ -438,8 +441,11 @@ class DownloadManager:
                 logger.debug(f"[DownloadManager] Using default download_category: {download_category}")
 
             logger.debug(
-                f"[DownloadManager] Submitting to download client: {search_result['title']} (download_category: {download_category})"
+                f"[DownloadManager] Submitting to download client: {search_result['title']} "
+                f"(download_category: {download_category})"
             )
+
+            # Submit NZB URL to download client
             job_id = self.download_client.submit(
                 nzb_url=search_result["url"],
                 title=search_result["title"],

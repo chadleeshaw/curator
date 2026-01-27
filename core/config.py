@@ -16,6 +16,7 @@ CONFIG_KEY_SEARCH_PROVIDERS = "search_providers"
 CONFIG_KEY_METADATA_PROVIDERS = "metadata_providers"
 CONFIG_KEY_DOWNLOAD_CLIENT = "download_client"
 CONFIG_KEY_STORAGE = "storage"
+CONFIG_KEY_CACHE = "cache"
 CONFIG_KEY_MATCHING = "matching"
 CONFIG_KEY_IMPORT = "import"
 CONFIG_KEY_PDF = "pdf"
@@ -312,6 +313,38 @@ class ConfigLoader:
         _validate_storage_paths(storage)
 
         return storage
+
+    def get_cache(self) -> Dict[str, Any]:
+        """
+        Get provider cache configuration with defaults.
+
+        Returns:
+            Dictionary with cache settings:
+            - enabled: Whether cache is enabled (default: True)
+            - retention_days: Days to retain cached releases (default: 90)
+            - sync: Sync settings (interval, limits)
+        """
+        from core.constants.cache import (
+            CACHE_RETENTION_DAYS,
+            DEFAULT_SYNC_INTERVAL_SECONDS,
+            INITIAL_SYNC_LIMIT,
+            INCREMENTAL_SYNC_LIMIT,
+        )
+
+        cache_config = self.config.get(CONFIG_KEY_CACHE, {})
+
+        # Return config with defaults
+        return {
+            "enabled": cache_config.get("enabled", True),
+            "retention_days": cache_config.get("retention_days", CACHE_RETENTION_DAYS),
+            "sync": {
+                "interval_seconds": cache_config.get("sync", {}).get("interval_seconds", DEFAULT_SYNC_INTERVAL_SECONDS),
+                "initial_sync_limit": cache_config.get("sync", {}).get("initial_sync_limit", INITIAL_SYNC_LIMIT),
+                "incremental_sync_limit": cache_config.get("sync", {}).get(
+                    "incremental_sync_limit", INCREMENTAL_SYNC_LIMIT
+                ),
+            },
+        }
 
     def get_matching(self) -> Dict[str, Any]:
         """Get matching configuration"""
