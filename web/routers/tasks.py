@@ -289,6 +289,8 @@ async def run_task_manually(task_id: str):
 
     elif task_id == "auto_metadata":
         # Run auto-metadata task to backfill and sync metadata
+        logger.info("Starting auto-metadata task (manual trigger)")
+
         def _run_auto_metadata():
             from services.auto_metadata import AutoMetadataService
             from core.database import DatabaseManager
@@ -345,6 +347,8 @@ async def run_task_manually(task_id: str):
 
     elif task_id == "cleanup_orphaned_covers":
         # Manually trigger cover cleanup and generation (run in thread to avoid blocking)
+        logger.info("Starting cover cleanup task (manual trigger)")
+
         def operation(db):
             # Get all periodicals
             all_periodicals = db.query(Periodical).all()
