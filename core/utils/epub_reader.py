@@ -25,7 +25,7 @@ EXCLUDE_PATTERNS = [
 
 # Patterns to filter out from content (boilerplate, licensing)
 EXCLUDE_CONTENT_PATTERNS = [
-    "project gutenberg ebook",
+    "project gutenberg",
     "start of the project gutenberg",
     "end of the project gutenberg",
     "pg-boilerplate",

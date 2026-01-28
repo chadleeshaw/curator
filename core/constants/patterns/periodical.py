@@ -65,7 +65,7 @@ ANTI_PERIODICAL_PATTERN_EDITION_NUMBER = r"\bedition\s+\d+(st|nd|rd|th)\b"
 ANTI_PERIODICAL_PATTERN_ISBN = r"\bISBN\b"
 """Pattern for ISBN indicators (books)"""
 
-ANTI_PERIODICAL_PATTERN_BOOK_FORMAT = r"\b(hardcover|paperback|ebook)\b"
+ANTI_PERIODICAL_PATTERN_BOOK_FORMAT = r"\b(hardcover|paperback)\b"
 """Pattern for book format indicators"""
 
 ANTI_PERIODICAL_PATTERN_BOOK_NUMBER = r"\bbook\s+\d+\b"

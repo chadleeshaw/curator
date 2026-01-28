@@ -123,8 +123,6 @@ CATEGORY_KEYWORDS = {
     CATEGORY_BOOK: [
         "book",
         "novel",
-        "ebook",
-        "e-book",
         "hardcover",
         "paperback",
         "audiobook",
@@ -182,7 +180,7 @@ CATEGORY_PATTERNS_STATIC = {
         r"\b(novel|trilogy|saga|series)\b",
         r"\bedition\s+\d+(st|nd|rd|th)\b",
         r"\bISBN\b",
-        r"\b(hardcover|paperback|ebook)\b",
+        r"\b(hardcover|paperback)\b",
         r"\bchapter\s+\d+\b",
     ],
     CATEGORY_DOCUMENT: [
