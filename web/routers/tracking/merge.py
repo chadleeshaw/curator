@@ -2,30 +2,25 @@
 Tracking routes - Merge operations
 """
 
-from datetime import datetime
+import shutil
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 from fastapi import HTTPException
 
-from core.constants.category import DEFAULT_CATEGORY
 from core.constants.errors import ErrorMessages
-from core.parsers import sanitize_filename
-from core.utils.error_handling import handle_api_errors
-from core.utils.general import (
-    is_special_edition,
-    cleanup_empty_directories,
-)
-from models.database import PeriodicalTracking
-from web.schemas import APIError
 from core.utils import run_in_thread
+from core.utils.error_handling import handle_api_errors
+from core.utils.general import cleanup_empty_directories, is_special_edition
+from models.database import PeriodicalTracking
+from services.file_operations import reorganize_periodical_files
+from web.schemas import APIError
+
 from . import _shared
 
 # Access global state via _shared module to get current values
 router = _shared.router
 logger = _shared.logger
-
-import shutil
 
 
 def _reorganize_periodical_files(
@@ -34,71 +29,27 @@ def _reorganize_periodical_files(
     """
     Reorganize periodical files to match new title structure.
 
+    This is a wrapper around the shared reorganize_periodical_files utility.
+
     Args:
-        magazine: Periodical database object
+        periodical: Periodical database object
         new_title: New title to use for folder organization
         library_base_dir: Base directory for organized files
         category_prefix: Prefix for category folders (default: "_")
 
     Returns:
         Tuple of (new_pdf_path, new_cover_path) or (None, None) if failed
-
-    Raises:
-        Exception: If file reorganization fails (caught and returns None, None)
     """
-    try:
-        old_pdf_path = Path(periodical.file_path)
-        old_cover_path = Path(periodical.cover_path) if periodical.cover_path else None
-
-        # Extract metadata from current path structure
-        category = (
-            periodical.extra_metadata.get("category", DEFAULT_CATEGORY)
-            if periodical.extra_metadata
-            else DEFAULT_CATEGORY
-        )
-        issue_date = periodical.issue_date
-
-        # Build new path structure (without language folder)
-        safe_title = sanitize_filename(new_title)
-        month = issue_date.strftime("%B")
-        year = issue_date.strftime("%Y")
-        filename_base = f"{safe_title} - {month}{year}"
-
-        category_with_prefix = f"{category_prefix}{category}"
-        target_dir = library_base_dir / category_with_prefix / safe_title / year
-        target_dir.mkdir(parents=True, exist_ok=True)
-
-        new_pdf_path = target_dir / f"{filename_base}.pdf"
-        new_cover_path = target_dir / f"{filename_base}.jpg" if old_cover_path else None
-
-        # Handle filename conflicts by appending timestamp
-        if new_pdf_path.exists() and new_pdf_path != old_pdf_path:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename_base_with_ts = f"{safe_title} - {month}{year} ({timestamp})"
-            new_pdf_path = target_dir / f"{filename_base_with_ts}.pdf"
-            if old_cover_path:
-                new_cover_path = target_dir / f"{filename_base_with_ts}.jpg"
-
-        # Move PDF file
-        if old_pdf_path.exists() and new_pdf_path != old_pdf_path:
-            shutil.move(str(old_pdf_path), str(new_pdf_path))
-            logger.info(f"Moved PDF: {old_pdf_path} -> {new_pdf_path}")
-        elif new_pdf_path == old_pdf_path:
-            # File is already in correct location
-            pass
-        else:
-            logger.warning(f"PDF file not found: {old_pdf_path}")
-            return None, None
-
-        # Move cover file if it exists
-        if old_cover_path and old_cover_path.exists() and new_cover_path and new_cover_path != old_cover_path:
-            shutil.move(str(old_cover_path), str(new_cover_path))
-            logger.info(f"Moved cover: {old_cover_path} -> {new_cover_path}")
-
-        return str(new_pdf_path), str(new_cover_path) if new_cover_path else None
-
-    except Exception as e:
-        logger.error(f"Error reorganizing magazine files: {e}", exc_info=True)
+    result = reorganize_periodical_files(
+        periodical,
+        new_title=new_title,
+        library_base_dir=library_base_dir,
+        category_prefix=category_prefix,
+        update_db=True,
+    )
+    if result.success:
+        return result.new_pdf_path, result.new_cover_path
+    else:
         return None, None
 
 

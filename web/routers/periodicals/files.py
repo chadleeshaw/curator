@@ -3,7 +3,6 @@ File operations for periodicals
 """
 
 import mimetypes
-import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict
@@ -26,6 +25,7 @@ from core.utils.comic_reader import (
 )
 from core.utils.pdf_reader import get_pdf_metadata, get_pdf_page, get_pdf_page_thumbnail
 from models.database import Periodical
+from services.file_operations import reorganize_periodical_files
 
 from . import _shared
 
@@ -456,68 +456,25 @@ async def move_issue_to_tracking(periodical_id: int, target_tracking_id: int) ->
         files_reorganized = False
         old_dir_to_cleanup = None
         if not is_special:
-            # Store old paths
+            # Store old directory for cleanup
             old_pdf_path = Path(magazine.file_path)
-            old_cover_path = Path(magazine.cover_path) if magazine.cover_path else None
+            old_dir_to_cleanup = old_pdf_path.parent
 
-            # Reorganize files to match new title structure (without language folder)
-            try:
-                # Extract metadata from current path structure
-                category = (
-                    magazine.extra_metadata.get("category", DEFAULT_CATEGORY)
-                    if magazine.extra_metadata
-                    else DEFAULT_CATEGORY
-                )
-                issue_date = magazine.issue_date
+            # Reorganize files using shared utility
+            result = reorganize_periodical_files(
+                magazine,
+                new_title=target_tracking.title,
+                library_base_dir=library_base_dir,
+                category_prefix=category_prefix,
+                update_db=True,
+            )
 
-                # Build new path structure
-                safe_title = sanitize_filename(target_tracking.title)
-                month = issue_date.strftime("%B")
-                year = issue_date.strftime("%Y")
-                filename_base = f"{safe_title} - {month}{year}"
-
-                category_with_prefix = f"{category_prefix}{category}"
-                target_dir = library_base_dir / category_with_prefix / safe_title / year
-                target_dir.mkdir(parents=True, exist_ok=True)
-
-                new_pdf_path = target_dir / f"{filename_base}.pdf"
-                new_cover_path = target_dir / f"{filename_base}.jpg" if old_cover_path else None
-
-                # Handle filename conflicts by appending timestamp
-                if new_pdf_path.exists() and new_pdf_path != old_pdf_path:
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    filename_base_with_ts = f"{safe_title} - {month}{year} ({timestamp})"
-                    new_pdf_path = target_dir / f"{filename_base_with_ts}.pdf"
-                    if old_cover_path:
-                        new_cover_path = target_dir / f"{filename_base_with_ts}.jpg"
-
-                # Move PDF file
-                if old_pdf_path.exists() and new_pdf_path != old_pdf_path:
-                    # Store directory for cleanup before moving files
-                    old_dir_to_cleanup = old_pdf_path.parent
-                    shutil.move(str(old_pdf_path), str(new_pdf_path))
-                    logger.info(f"Moved PDF: {old_pdf_path} -> {new_pdf_path}")
-                    magazine.file_path = str(new_pdf_path)
-                    files_reorganized = True
-                elif new_pdf_path == old_pdf_path:
-                    # File is already in correct location
-                    magazine.file_path = str(new_pdf_path)
-                else:
-                    logger.warning(f"PDF file not found: {old_pdf_path}")
-
-                # Move cover file if it exists
-                if old_cover_path and old_cover_path.exists() and new_cover_path and new_cover_path != old_cover_path:
-                    shutil.move(str(old_cover_path), str(new_cover_path))
-                    logger.info(f"Moved cover: {old_cover_path} -> {new_cover_path}")
-                    magazine.cover_path = str(new_cover_path)
-                elif new_cover_path:
-                    magazine.cover_path = str(new_cover_path)
-
-                # Update title after file operations
+            if result.success:
+                files_reorganized = result.files_moved
+                # Update title after successful file operations
                 magazine.title = target_tracking.title
-
-            except Exception as e:
-                logger.error(f"Error reorganizing magazine files: {e}", exc_info=True)
+            else:
+                logger.error(f"Error reorganizing magazine files: {result.error}")
                 # Still update the tracking_id and title even if file move failed
                 magazine.title = target_tracking.title
 
