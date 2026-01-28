@@ -38,6 +38,7 @@ from core.constants.cache import (
 )
 from core.parsers import utc_now
 from core.parsers.title import TitleMatcher
+from core.utils import run_in_thread
 from models.cache import CacheBase, CachedRelease, SyncStatus
 
 logger = logging.getLogger(__name__)
@@ -318,7 +319,7 @@ class ProviderCacheService:
                     added_count += 1
 
             session.commit()
-            logger.info(f"Upserted {added_count} new releases, updated {updated_count} existing releases")
+            logger.debug(f"Upserted {added_count} new releases, updated {updated_count} existing releases")
             return added_count + updated_count
 
         except Exception as e:
@@ -604,12 +605,19 @@ class ProviderSyncService:
             sync_status = session.query(SyncStatus).filter(SyncStatus.provider_name == provider.name).first()
 
             if not sync_status:
-                sync_status = SyncStatus(provider_name=provider.name)
+                sync_status = SyncStatus(
+                    provider_name=provider.name,
+                    total_syncs=0,
+                    failed_syncs=0,
+                    total_releases_cached=0,
+                    last_sync_added=0,
+                )
                 session.add(sync_status)
+                session.flush()  # Ensure defaults are set
 
             sync_status.last_sync_time = utc_now()
             sync_status.last_successful_sync = utc_now()
-            sync_status.total_syncs += 1
+            sync_status.total_syncs = (sync_status.total_syncs or 0) + 1
             sync_status.last_sync_added = added_count
             sync_status.last_sync_duration_seconds = time.time() - sync_start
             sync_status.initial_sync_completed = True
@@ -639,8 +647,8 @@ class ProviderSyncService:
             sync_status = session.query(SyncStatus).filter(SyncStatus.provider_name == provider.name).first()
             if sync_status:
                 sync_status.last_sync_time = utc_now()
-                sync_status.total_syncs += 1
-                sync_status.failed_syncs += 1
+                sync_status.total_syncs = (sync_status.total_syncs or 0) + 1
+                sync_status.failed_syncs = (sync_status.failed_syncs or 0) + 1
                 session.commit()
 
             return 0
@@ -669,14 +677,15 @@ class ProviderSyncService:
 
             # Fetch latest releases using RSS mode
             logger.debug(f"Fetching latest {INCREMENTAL_SYNC_LIMIT} releases from {provider.name}")
-            results = provider.search(query="", category=None)  # RSS mode
+            # Run blocking search in thread pool
+            results = await run_in_thread(lambda: provider.search(query="", category=None))
 
             if not results:
                 logger.debug(f"No new results from {provider.name}")
                 # Update sync status even if no new results
                 sync_status.last_sync_time = utc_now()
                 sync_status.last_successful_sync = utc_now()
-                sync_status.total_syncs += 1
+                sync_status.total_syncs = (sync_status.total_syncs or 0) + 1
                 sync_status.last_sync_added = 0
                 sync_status.last_sync_duration_seconds = time.time() - sync_start
                 session.commit()
@@ -699,7 +708,7 @@ class ProviderSyncService:
                 # Update sync status even if no new results
                 sync_status.last_sync_time = utc_now()
                 sync_status.last_successful_sync = utc_now()
-                sync_status.total_syncs += 1
+                sync_status.total_syncs = (sync_status.total_syncs or 0) + 1
                 sync_status.last_sync_added = 0
                 sync_status.last_sync_duration_seconds = time.time() - sync_start
                 session.commit()
@@ -712,7 +721,7 @@ class ProviderSyncService:
             # Update sync status
             sync_status.last_sync_time = utc_now()
             sync_status.last_successful_sync = utc_now()
-            sync_status.total_syncs += 1
+            sync_status.total_syncs = (sync_status.total_syncs or 0) + 1
             sync_status.last_sync_added = added_count
             sync_status.last_sync_duration_seconds = time.time() - sync_start
 
@@ -740,8 +749,8 @@ class ProviderSyncService:
             # Update sync status with failure
             if sync_status:
                 sync_status.last_sync_time = utc_now()
-                sync_status.total_syncs += 1
-                sync_status.failed_syncs += 1
+                sync_status.total_syncs = (sync_status.total_syncs or 0) + 1
+                sync_status.failed_syncs = (sync_status.failed_syncs or 0) + 1
                 session.commit()
 
             return 0
