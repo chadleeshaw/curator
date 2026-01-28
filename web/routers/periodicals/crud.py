@@ -12,7 +12,7 @@ from core.utils.error_handling import handle_api_errors
 from core.utils.general import generate_olid
 from models.database import Periodical, PeriodicalTracking
 from web.schemas import PeriodicalResponse
-from web.utils.responses import success_response, list_response
+from web.utils.responses import success_response
 
 from . import _shared
 

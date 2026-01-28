@@ -11,7 +11,7 @@ from typing import Any, Dict
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 from core.utils.error_handling import handle_api_errors
-from web.utils.responses import success_response, error_response
+from web.utils.responses import error_response, status_response, success_response
 
 router = APIRouter(prefix="/api/config", tags=["configuration"])
 logger = logging.getLogger(__name__)
@@ -93,7 +93,7 @@ async def get_config():
     # Mask sensitive data in response
     safe_config = _mask_sensitive_config(config)
 
-    return {"status": "success", "config": safe_config}
+    return status_response("success", config=safe_config)
 
 
 @router.post("")
@@ -166,10 +166,7 @@ async def reload_config():
     # This endpoint signals the need to reload but actual reloading happens elsewhere
     _config_loader.reload_config()
 
-    return {
-        "status": "success",
-        "message": "Configuration reloaded. Providers will be reinitialized.",
-    }
+    return status_response("success", "Configuration reloaded. Providers will be reinitialized.")
 
 
 @router.post("/restart")
@@ -186,7 +183,7 @@ async def restart_application(background_tasks: BackgroundTasks):
 
     background_tasks.add_task(restart_process)
 
-    return {"status": "success", "message": "Application restarting..."}
+    return status_response("success", "Application restarting...")
 
 
 @router.post("/test-provider")

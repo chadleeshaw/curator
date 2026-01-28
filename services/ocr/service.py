@@ -1004,20 +1004,6 @@ class OCRService:
 
         return metadata
 
-    @staticmethod
-    def _extract_lossless_cover(file_path: Path) -> Optional[Path]:
-        """
-        Deprecated: No longer used with PyMuPDF approach.
-        Extract a lossless cover image (PNG) from PDF for OCR processing.
-
-        Args:
-            file_path: Path to PDF file
-
-        Returns:
-            Path to extracted PNG cover image, or None if failed
-        """
-        logger.warning("_extract_lossless_cover is deprecated with PyMuPDF approach")
-
 
 # Export all public items for wildcard imports
 __all__ = ["OCRService", "OCRServiceConfig"]

@@ -15,7 +15,7 @@ from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from core.utils.general import find_pdf_epub_files
 from web.schemas import ImportOptionsRequest
-from web.utils.responses import success_response
+from web.utils.responses import status_response, success_response
 
 router = APIRouter(prefix="/api/import", tags=["imports"])
 logger = logging.getLogger(__name__)
@@ -69,10 +69,7 @@ async def import_from_downloads(
 
     background_tasks.add_task(process_imports)
 
-    return {
-        "status": "processing",
-        "message": "Started importing PDFs from downloads folder",
-    }
+    return status_response("processing", "Started importing PDFs from downloads folder")
 
 
 @router.get("/status")

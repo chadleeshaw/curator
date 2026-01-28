@@ -17,6 +17,7 @@ export default [
         location: 'readonly',
         confirm: 'readonly',
         FormData: 'readonly',
+        URL: 'readonly',
         URLSearchParams: 'readonly',
         setTimeout: 'readonly',
         setInterval: 'readonly',

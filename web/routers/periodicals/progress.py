@@ -10,6 +10,7 @@ from core.parsers import utc_now
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from models.database import ReadingProgress
+from web.utils.responses import status_response
 
 from . import _shared
 
@@ -111,7 +112,7 @@ async def delete_progress(magazine_id: int) -> Dict[str, str]:
             db.delete(progress)
             db.commit()
 
-        return {"status": "success"}
+        return status_response("success")
 
     result = await with_db_session(_shared._session_factory, operation)
     return result

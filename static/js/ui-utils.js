@@ -219,13 +219,21 @@ export class UIUtils {
    * UIUtils.showToast('An error occurred', 'error', 5000);
    */
   static showToast(message, type = 'info', duration = 3000) {
-    // Create toast container if it doesn't exist
-    let toastContainer = document.getElementById('toast-container');
+    // Check if a modal is currently visible
+    const visibleModal = document.querySelector('.modal:not(.hidden)');
+    const modalContent = visibleModal?.querySelector('.modal-content');
+
+    // Determine the container parent and container ID
+    const containerParent = modalContent || document.body;
+    const containerId = modalContent ? 'modal-toast-container' : 'toast-container';
+
+    // Create toast container if it doesn't exist in the appropriate context
+    let toastContainer = containerParent.querySelector(`#${containerId}`);
     if (!toastContainer) {
       toastContainer = document.createElement('div');
-      toastContainer.id = 'toast-container';
+      toastContainer.id = containerId;
       toastContainer.style.cssText = `
-        position: fixed;
+        position: ${modalContent ? 'absolute' : 'fixed'};
         top: 20px;
         right: 20px;
         z-index: 10000;
@@ -233,7 +241,7 @@ export class UIUtils {
         flex-direction: column;
         gap: 10px;
       `;
-      document.body.appendChild(toastContainer);
+      containerParent.appendChild(toastContainer);
     }
 
     // Create toast element

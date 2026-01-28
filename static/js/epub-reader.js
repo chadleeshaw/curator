@@ -3,10 +3,18 @@
  * Handles loading and displaying EPUB content chapter by chapter
  */
 
-/* global URL, DOMParser, IntersectionObserver */
+/* global DOMParser, IntersectionObserver */
 
 import { APIClient, APIHelper } from './api.js';
 import { mediaWorker, Priority } from './media-worker-manager.js';
+import {
+  FullscreenManager,
+  ProgressManager,
+  escapeHtml,
+  goBackToPeriodical,
+  setupMobileSidebar,
+  setupKeyboardNavigation,
+} from './reader-utils.js';
 
 class EPUBReader {
   constructor() {
@@ -15,10 +23,30 @@ class EPUBReader {
     this.currentChapterIndex = 0;
     this.loading = false;
     this.zoomLevel = 100; // 50-200%
-    this.isFullscreen = false;
-    this.progressSaveTimer = null;
     this.workerInitialized = false;
-    this.chapterCache = new Map(); // Cache for prefetched chapters
+    this.chapterCache = new Map();
+
+    // Initialize managers
+    this.fullscreenManager = new FullscreenManager({
+      logPrefix: 'EPUBReader',
+    });
+
+    this.progressManager = new ProgressManager({
+      logPrefix: 'EPUBReader',
+      getMagazineId: () => this.magazineId,
+      getProgressData: () => ({
+        current_chapter: this.currentChapterIndex,
+        total_pages: this.metadata?.chapters?.length || 0,
+      }),
+      onProgressLoaded: (progress) => {
+        if (progress.current_chapter !== null) {
+          const urlParams = new URLSearchParams(window.location.search);
+          if (!urlParams.has('chapter')) {
+            this.loadChapter(progress.current_chapter);
+          }
+        }
+      },
+    });
   }
 
   /**
@@ -43,14 +71,14 @@ class EPUBReader {
       this.workerInitialized = false;
     }
 
-    // Setup fullscreen listeners
-    this.setupFullscreenListeners();
+    // Setup fullscreen
+    this.fullscreenManager.setup();
 
     // Load metadata and initialize UI
     await this.loadMetadata();
 
     // Load saved progress
-    await this.loadProgress();
+    await this.progressManager.load();
   }
 
   /**
@@ -94,13 +122,13 @@ class EPUBReader {
     chapterList.innerHTML = this.metadata.chapters
       .map(
         (chapter, index) => `
-        <div 
-          class="chapter-item ${index === this.currentChapterIndex ? 'active' : ''}" 
+        <div
+          class="chapter-item ${index === this.currentChapterIndex ? 'active' : ''}"
           data-index="${index}"
           onclick="epubReader.loadChapter(${index})"
         >
           <span class="chapter-number">${index + 1}.</span>
-          ${this.escapeHtml(chapter)}
+          ${escapeHtml(chapter)}
         </div>
       `
       )
@@ -158,10 +186,10 @@ class EPUBReader {
       this.updateURL(index);
 
       // Save progress
-      this.saveProgressDebounced();
+      this.progressManager.saveDebounced();
     } catch (error) {
       console.error('Failed to load chapter:', error);
-      contentDiv.innerHTML = `<div class="error">Failed to load chapter: ${this.escapeHtml(error.message)}</div>`;
+      contentDiv.innerHTML = `<div class="error">Failed to load chapter: ${escapeHtml(error.message)}</div>`;
     } finally {
       this.loading = false;
     }
@@ -173,7 +201,7 @@ class EPUBReader {
    */
   setupImageLazyLoading(container) {
     if (!this.workerInitialized || !('IntersectionObserver' in window)) {
-      return; // Fallback to standard loading
+      return;
     }
 
     const images = container.querySelectorAll('img');
@@ -184,7 +212,6 @@ class EPUBReader {
             const img = entry.target;
             const src = img.src;
 
-            // Prefetch via worker
             if (src) {
               mediaWorker.prefetch(src, Priority.HIGH, 'epub-image').catch((err) => {
                 console.warn('[EPUBReader] Image prefetch failed:', err);
@@ -209,7 +236,6 @@ class EPUBReader {
 
     const chaptersToPrefetch = [];
 
-    // Prefetch next 2 chapters
     for (let i = 1; i <= 2; i++) {
       const nextIndex = this.currentChapterIndex + i;
       if (nextIndex < this.metadata.chapters.length && !this.chapterCache.has(nextIndex)) {
@@ -217,7 +243,6 @@ class EPUBReader {
       }
     }
 
-    // Prefetch chapters in background
     chaptersToPrefetch.forEach((chapterIndex) => {
       this.prefetchChapter(chapterIndex);
     });
@@ -233,19 +258,15 @@ class EPUBReader {
     const chapterUrl = `/api/periodicals/${this.magazineId}/epub/chapter/${index}`;
 
     try {
-      // Use worker to prefetch if available
       if (this.workerInitialized) {
         await mediaWorker.prefetch(chapterUrl, Priority.LOW, 'epub-chapter');
       }
 
-      // Also fetch and cache the chapter HTML
       const response = await fetch(chapterUrl);
       if (response.ok) {
         const html = await response.text();
         this.chapterCache.set(index, html);
         console.log(`Prefetched chapter ${index + 1}`);
-
-        // Prefetch images in this chapter
         this.prefetchChapterImages(html);
       }
     } catch (error) {
@@ -260,7 +281,6 @@ class EPUBReader {
   prefetchChapterImages(html) {
     if (!this.workerInitialized) return;
 
-    // Parse HTML to find images
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
     const images = doc.querySelectorAll('img');
@@ -279,16 +299,13 @@ class EPUBReader {
    * Update chapter selection UI (sidebar, title, nav buttons)
    */
   updateChapterUI() {
-    // Update sidebar active state
     document.querySelectorAll('.chapter-item').forEach((item, idx) => {
       item.classList.toggle('active', idx === this.currentChapterIndex);
     });
 
-    // Update chapter title display
     const chapterTitle = this.metadata.chapters[this.currentChapterIndex];
     document.getElementById('current-chapter-title').textContent = chapterTitle;
 
-    // Update navigation buttons
     const prevBtn = document.getElementById('prev-btn');
     const nextBtn = document.getElementById('next-btn');
 
@@ -330,79 +347,10 @@ class EPUBReader {
    */
   showError(message) {
     const contentDiv = document.getElementById('chapter-content');
-    contentDiv.innerHTML = `<div class="error">${this.escapeHtml(message)}</div>`;
+    contentDiv.innerHTML = `<div class="error">${escapeHtml(message)}</div>`;
 
     const chapterList = document.getElementById('chapter-list');
-    chapterList.innerHTML = `<div class="error">${this.escapeHtml(message)}</div>`;
-  }
-
-  /**
-   * Escape HTML to prevent XSS
-   * @param {string} text
-   * @returns {string}
-   */
-  escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
-
-  /**
-   * Load saved reading progress
-   */
-  async loadProgress() {
-    try {
-      const data = await APIHelper.executeWithErrorHandling(async () => {
-        const response = await APIClient.get(`/api/periodicals/${this.magazineId}/progress`);
-        return await response.json();
-      }, 'EPUBReader');
-
-      if (data.progress && data.progress.current_chapter !== null) {
-        // Load the saved chapter (unless URL specifies a different chapter)
-        const urlParams = new URLSearchParams(window.location.search);
-        if (!urlParams.has('chapter')) {
-          await this.loadChapter(data.progress.current_chapter);
-        }
-      }
-    } catch (error) {
-      console.log('No saved progress found or error loading progress:', error.message);
-    }
-  }
-
-  /**
-   * Save reading progress (debounced to avoid excessive API calls)
-   */
-  saveProgressDebounced() {
-    // Clear existing timer
-    if (this.progressSaveTimer) {
-      clearTimeout(this.progressSaveTimer);
-    }
-
-    // Set new timer to save after 2 seconds of inactivity
-    this.progressSaveTimer = setTimeout(() => {
-      this.saveProgress();
-    }, 2000);
-  }
-
-  /**
-   * Save current reading progress to server
-   */
-  async saveProgress() {
-    if (!this.metadata) return;
-
-    try {
-      await APIHelper.executeWithErrorHandling(async () => {
-        await APIClient.post(`/api/periodicals/${this.magazineId}/progress`, {
-          current_chapter: this.currentChapterIndex,
-          total_pages: this.metadata.chapters.length,
-        });
-      }, 'EPUBReader');
-      console.log(
-        `Progress saved: chapter ${this.currentChapterIndex + 1}/${this.metadata.chapters.length}`
-      );
-    } catch (error) {
-      console.error('Failed to save progress:', error);
-    }
+    chapterList.innerHTML = `<div class="error">${escapeHtml(message)}</div>`;
   }
 
   /**
@@ -413,7 +361,6 @@ class EPUBReader {
     this.zoomLevel = Math.max(50, Math.min(200, this.zoomLevel + delta));
     document.getElementById('zoom-level').textContent = `${this.zoomLevel}%`;
 
-    // Apply zoom to current content
     const content = document.querySelector('.chapter-content-inner');
     if (content) {
       content.style.fontSize = `${this.zoomLevel}%`;
@@ -437,329 +384,14 @@ class EPUBReader {
    * Navigate back to the periodical detail page
    */
   goBackToPeriodical() {
-    if (this.magazineId) {
-      window.location.href = `/periodical?id=${this.magazineId}`;
-    } else {
-      // Fallback to home if no ID available
-      window.location.href = '/';
-    }
+    goBackToPeriodical(this.magazineId);
   }
 
   /**
    * Toggle fullscreen mode
    */
   toggleFullscreen() {
-    console.log('[EPUBReader] toggleFullscreen called, current isFullscreen:', this.isFullscreen);
-
-    const doc = document;
-    const docEl = document.documentElement;
-
-    const isFullscreen =
-      doc.fullscreenElement ||
-      doc.webkitFullscreenElement ||
-      doc.mozFullScreenElement ||
-      doc.msFullscreenElement;
-
-    // Check if we're in fallback fullscreen mode
-    if (this.isFullscreen && !isFullscreen) {
-      // We're in fallback mode, exit it
-      console.log('[EPUBReader] Exiting fallback fullscreen');
-      this.enableFullscreenFallback(); // Toggle off
-      return;
-    }
-
-    if (!isFullscreen && !this.isFullscreen) {
-      // Try to enter fullscreen using native API first
-      console.log('[EPUBReader] Attempting to enter fullscreen');
-
-      // Check if fullscreen is supported
-      const fullscreenEnabled =
-        doc.fullscreenEnabled ||
-        doc.webkitFullscreenEnabled ||
-        doc.mozFullScreenEnabled ||
-        doc.msFullscreenEnabled;
-
-      console.log('[EPUBReader] Fullscreen API supported:', fullscreenEnabled);
-
-      if (!fullscreenEnabled) {
-        // Fullscreen API not supported, use fallback immediately
-        console.log('[EPUBReader] Fullscreen API not supported, using CSS fallback');
-        this.enableFullscreenFallback();
-        return;
-      }
-
-      // Try native fullscreen API
-      let result = null;
-      try {
-        if (docEl.requestFullscreen) {
-          result = docEl.requestFullscreen();
-        } else if (docEl.webkitRequestFullscreen) {
-          result = docEl.webkitRequestFullscreen();
-        } else if (docEl.webkitRequestFullScreen) {
-          result = docEl.webkitRequestFullScreen();
-        } else if (docEl.mozRequestFullScreen) {
-          result = docEl.mozRequestFullScreen();
-        } else if (docEl.msRequestFullscreen) {
-          result = docEl.msRequestFullscreen();
-        }
-      } catch (err) {
-        console.warn('[EPUBReader] Fullscreen request threw error:', err);
-        this.enableFullscreenFallback();
-        return;
-      }
-
-      // If no API available or it returns nothing, use fallback
-      if (!result) {
-        console.log('[EPUBReader] No fullscreen method available, using CSS fallback');
-        this.enableFullscreenFallback();
-        return;
-      }
-
-      // Handle promise-based result
-      if (result && typeof result.then === 'function') {
-        result
-          .then(() => {
-            console.log('[EPUBReader] Fullscreen request succeeded');
-          })
-          .catch((err) => {
-            console.warn('[EPUBReader] Fullscreen request failed:', err);
-            // Use fallback after a short delay to ensure promise rejection completed
-            setTimeout(() => {
-              if (!this.isFullscreen) {
-                this.enableFullscreenFallback();
-              }
-            }, 100);
-          });
-      }
-    } else if (isFullscreen) {
-      // Exit native fullscreen
-      console.log('[EPUBReader] Exiting native fullscreen');
-      if (doc.exitFullscreen) {
-        doc.exitFullscreen();
-      } else if (doc.webkitExitFullscreen) {
-        doc.webkitExitFullscreen();
-      } else if (doc.webkitCancelFullScreen) {
-        doc.webkitCancelFullScreen();
-      } else if (doc.mozCancelFullScreen) {
-        doc.mozCancelFullScreen();
-      } else if (doc.msExitFullscreen) {
-        doc.msExitFullscreen();
-      }
-    }
-  }
-
-  /**
-   * Enable CSS-based fullscreen fallback for browsers that don't support Fullscreen API
-   * (particularly iOS Safari/Chrome)
-   */
-  enableFullscreenFallback() {
-    console.log('[EPUBReader] enableFullscreenFallback called, current state:', this.isFullscreen);
-
-    if (this.isFullscreen) {
-      // Exit fallback fullscreen
-      console.log('[EPUBReader] Exiting CSS fallback fullscreen');
-      document.body.classList.remove('fullscreen-fallback');
-      this.isFullscreen = false;
-
-      const btn = document.getElementById('fullscreen-btn');
-      const sidebar = document.getElementById('sidebar');
-
-      if (btn) {
-        btn.classList.remove('active');
-        btn.title = 'Fullscreen';
-        console.log('[EPUBReader] Button updated to inactive');
-      }
-
-      if (sidebar) {
-        sidebar.style.display = 'flex';
-        console.log('[EPUBReader] Sidebar shown');
-      }
-
-      this.cleanupAutoHideToolbar();
-    } else {
-      // Enter fallback fullscreen
-      console.log('[EPUBReader] Entering CSS fallback fullscreen');
-      document.body.classList.add('fullscreen-fallback');
-      this.isFullscreen = true;
-
-      const btn = document.getElementById('fullscreen-btn');
-      const sidebar = document.getElementById('sidebar');
-
-      if (btn) {
-        btn.classList.add('active');
-        btn.title = 'Exit fullscreen';
-        console.log('[EPUBReader] Button updated to active');
-      }
-
-      if (sidebar) {
-        sidebar.style.display = 'none';
-        console.log('[EPUBReader] Sidebar hidden');
-      }
-
-      this.setupAutoHideToolbar();
-
-      // Scroll to hide browser chrome on iOS
-      window.scrollTo(0, 1);
-      console.log('[EPUBReader] Scrolled to hide browser chrome');
-    }
-  }
-
-  /**
-   * Setup fullscreen change listeners
-   */
-  setupFullscreenListeners() {
-    // Add click listener for fullscreen button (iOS compatibility)
-    const fullscreenBtn = document.getElementById('fullscreen-btn');
-    if (fullscreenBtn) {
-      // Remove any existing onclick to avoid double-triggering
-      fullscreenBtn.removeAttribute('onclick');
-
-      // Add touch and click listeners for better iOS support
-      const toggleHandler = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        console.log('[EPUBReader] Fullscreen button clicked/touched');
-        this.toggleFullscreen();
-      };
-
-      fullscreenBtn.addEventListener('click', toggleHandler);
-      fullscreenBtn.addEventListener('touchend', toggleHandler);
-
-      // Ensure button is always clickable
-      fullscreenBtn.style.pointerEvents = 'auto';
-      fullscreenBtn.style.touchAction = 'manipulation';
-
-      console.log('[EPUBReader] Fullscreen button event listeners attached');
-    } else {
-      console.warn('[EPUBReader] Fullscreen button not found in DOM');
-    }
-
-    // Fullscreen change handler
-    const handleFullscreenChange = () => {
-      this.isFullscreen = !!(
-        document.fullscreenElement ||
-        document.webkitFullscreenElement ||
-        document.mozFullScreenElement ||
-        document.msFullscreenElement
-      );
-      const btn = document.getElementById('fullscreen-btn');
-      const sidebar = document.getElementById('sidebar');
-
-      if (btn) {
-        btn.classList.toggle('active', this.isFullscreen);
-        btn.textContent = this.isFullscreen ? '⛶' : '⛶';
-        btn.title = this.isFullscreen ? 'Exit fullscreen' : 'Fullscreen';
-      }
-
-      // Hide sidebar in fullscreen mode
-      if (sidebar) {
-        sidebar.style.display = this.isFullscreen ? 'none' : 'flex';
-      }
-
-      // Setup auto-hide toolbar in fullscreen
-      if (this.isFullscreen) {
-        this.setupAutoHideToolbar();
-      } else {
-        this.cleanupAutoHideToolbar();
-      }
-    };
-
-    // Listen to all vendor-prefixed fullscreen change events
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
-    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
-    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
-  }
-
-  /**
-   * Setup auto-hide toolbar behavior in fullscreen
-   */
-  setupAutoHideToolbar() {
-    const readerHeader = document.querySelector('.reader-header');
-    const contentHeader = document.querySelector('.content-header');
-    let hideTimer = null;
-
-    // Calculate proper positioning for content header below reader header
-    if (readerHeader && contentHeader) {
-      // Wait a tick for fullscreen padding to apply, then measure
-      setTimeout(() => {
-        // offsetHeight includes padding and border, subtract 1px to overlap the border
-        const readerHeaderHeight = readerHeader.offsetHeight;
-        contentHeader.style.setProperty('--reader-header-offset', `${readerHeaderHeight - 1}px`);
-      }, 50);
-    }
-
-    // Function to show toolbars
-    const showToolbars = () => {
-      if (readerHeader) readerHeader.classList.add('show-toolbar');
-      if (contentHeader) contentHeader.classList.add('show-toolbar');
-
-      // Auto-hide after 3 seconds of inactivity
-      clearTimeout(hideTimer);
-      hideTimer = setTimeout(() => {
-        if (readerHeader) readerHeader.classList.remove('show-toolbar');
-        if (contentHeader) contentHeader.classList.remove('show-toolbar');
-      }, 3000);
-    };
-
-    // Function to hide toolbars immediately
-    const hideToolbars = () => {
-      clearTimeout(hideTimer);
-      if (readerHeader) readerHeader.classList.remove('show-toolbar');
-      if (contentHeader) contentHeader.classList.remove('show-toolbar');
-    };
-
-    // Show toolbars when mouse moves near top of screen (but not at very top to avoid browser UI)
-    const handleMouseMove = (e) => {
-      // Show toolbar when mouse is between 50-150px from top (avoiding browser UI at 0-50px)
-      if (e.clientY >= 50 && e.clientY < 150) {
-        showToolbars();
-      } else if (e.clientY > 250) {
-        // Hide if mouse moves away from toolbar area
-        clearTimeout(hideTimer);
-        hideTimer = setTimeout(hideToolbars, 1000);
-      }
-    };
-
-    // Show toolbars on touch near top of screen (avoiding very top for browser UI)
-    const handleTouchStart = (e) => {
-      const touch = e.touches[0];
-      // Show toolbar when touch is between 50-150px from top
-      if (touch.clientY >= 50 && touch.clientY < 150) {
-        showToolbars();
-      }
-    };
-
-    // Store handlers for cleanup
-    this._toolbarMouseMove = handleMouseMove;
-    this._toolbarTouchStart = handleTouchStart;
-
-    // Add event listeners
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('touchstart', handleTouchStart);
-
-    // Initially hide toolbars after a delay
-    hideTimer = setTimeout(hideToolbars, 2000);
-  }
-
-  /**
-   * Cleanup auto-hide toolbar listeners
-   */
-  cleanupAutoHideToolbar() {
-    if (this._toolbarMouseMove) {
-      document.removeEventListener('mousemove', this._toolbarMouseMove);
-      this._toolbarMouseMove = null;
-    }
-    if (this._toolbarTouchStart) {
-      document.removeEventListener('touchstart', this._toolbarTouchStart);
-      this._toolbarTouchStart = null;
-    }
-
-    // Show toolbars when exiting fullscreen
-    const readerHeader = document.querySelector('.reader-header');
-    const contentHeader = document.querySelector('.content-header');
-    if (readerHeader) readerHeader.classList.remove('show-toolbar');
-    if (contentHeader) contentHeader.classList.remove('show-toolbar');
+    this.fullscreenManager.toggle();
   }
 }
 
@@ -772,31 +404,14 @@ document.addEventListener('DOMContentLoaded', () => {
   epubReader.init();
 });
 
-// Handle keyboard navigation
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'ArrowLeft') {
-    epubReader.previousChapter();
-  } else if (e.key === 'ArrowRight') {
-    epubReader.nextChapter();
-  } else if (e.key === '+' || e.key === '=') {
-    e.preventDefault();
-    epubReader.adjustZoom(10);
-  } else if (e.key === '-' || e.key === '_') {
-    e.preventDefault();
-    epubReader.adjustZoom(-10);
-  } else if (e.key === '0') {
-    e.preventDefault();
-    epubReader.resetZoom();
-  } else if (e.key === 'f' || e.key === 'F') {
-    e.preventDefault();
-    epubReader.toggleFullscreen();
-  }
+// Setup keyboard navigation
+setupKeyboardNavigation({
+  previousItem: () => epubReader.previousChapter(),
+  nextItem: () => epubReader.nextChapter(),
+  adjustZoom: (delta) => epubReader.adjustZoom(delta),
+  resetZoom: () => epubReader.resetZoom(),
+  toggleFullscreen: () => epubReader.toggleFullscreen(),
 });
 
-// Mobile sidebar toggle
-window.toggleSidebar = function () {
-  const sidebar = document.getElementById('sidebar');
-  const overlay = document.getElementById('mobile-overlay');
-  sidebar.classList.toggle('open');
-  overlay.classList.toggle('active');
-};
+// Setup mobile sidebar toggle
+setupMobileSidebar();
