@@ -16,6 +16,7 @@ from core.parsers import sanitize_filename
 from core.utils import run_in_thread
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
+from core.utils.files import get_library_dir, get_category_prefix
 from core.utils.general import cleanup_empty_directories, is_special_edition
 from core.utils.epub_reader import get_epub_metadata, get_epub_chapter, get_epub_image
 from core.utils.comic_reader import (
@@ -438,9 +439,10 @@ async def move_issue_to_tracking(periodical_id: int, target_tracking_id: int) ->
         old_title = magazine.title
         old_tracking_id = magazine.tracking_id
 
-        # Get library directory from config or use default
-        library_base_dir = Path("./local/data").resolve()
-        category_prefix = "_"
+        # Get library directory and category prefix from shared module
+        # These are already configured via set_dependencies() from main app
+        library_base_dir = _shared._library_base_dir or get_library_dir(None)
+        category_prefix = _shared._category_prefix
 
         # Update the magazine's tracking_id
         magazine.tracking_id = target_tracking_id

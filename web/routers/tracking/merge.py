@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from core.constants.errors import ErrorMessages
 from core.utils import run_in_thread
 from core.utils.error_handling import handle_api_errors
+from core.utils.files import get_library_dir, get_category_prefix
 from core.utils.general import cleanup_empty_directories, is_special_edition
 from models.database import PeriodicalTracking
 from services.file_operations import reorganize_periodical_files
@@ -120,10 +121,9 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
             files_reorganized = 0
             directories_to_cleanup = set()
 
-            # Get library directory from config or use default
-            # This should match the structure used by FileOrganizer
-            library_base_dir = Path("./local/data").resolve()
-            category_prefix = "_"
+            # Get library directory and category prefix from config
+            library_base_dir = get_library_dir(_shared._storage_config)
+            category_prefix = get_category_prefix(_shared._import_config)
 
             # Move periodicals from source to target
             for source in sources:

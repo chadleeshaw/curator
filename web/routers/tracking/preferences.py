@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from core.constants.category import DEFAULT_CATEGORY
 from core.constants.errors import ErrorMessages
 from core.utils.error_handling import handle_api_errors
+from core.utils.files import get_library_dir, get_category_prefix
 from core.utils.general import (
     is_special_edition,
     generate_olid,
@@ -119,9 +120,9 @@ async def reorganize_tracking_files(tracking_id: int) -> Dict[str, Any]:
 
             from models.database import Periodical
 
-            # Get library directory from config
-            library_base_dir = Path(_shared._storage_config.get("library_dir", "./local/data")).resolve()
-            category_prefix = _shared._import_config.get("category_prefix", "_")
+            # Get library directory and category prefix from config
+            library_base_dir = get_library_dir(_shared._storage_config)
+            category_prefix = get_category_prefix(_shared._import_config)
 
             # Get organization pattern (per-periodical or global default)
             organization_pattern = tracking.organization_pattern
@@ -283,9 +284,9 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
             if title_changed:
                 from models.database import Periodical
 
-                # Get library directory from config
-                library_base_dir = Path(_shared._storage_config.get("library_dir", "./local/data")).resolve()
-                category_prefix = _shared._import_config.get("category_prefix", "_")
+                # Get library directory and category prefix from config
+                library_base_dir = get_library_dir(_shared._storage_config)
+                category_prefix = get_category_prefix(_shared._import_config)
 
                 # Get all magazines linked to this tracking record
                 magazines = db_session.query(Periodical).filter(Periodical.tracking_id == tracking_id).all()
