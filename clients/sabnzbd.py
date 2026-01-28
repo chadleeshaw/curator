@@ -49,12 +49,15 @@ class SABnzbdClient(DownloadClient):
 
         return None
 
-    def _api_call(self, action: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
+    def _api_call(self, mode: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
         """Make API call to SABnzbd"""
         if params is None:
             params = {}
 
-        params["action"] = action
+        # SABnzbd API uses 'mode' parameter, not 'action'
+        # Only set mode if not already present (allows caller to override)
+        if "mode" not in params:
+            params["mode"] = mode
         params["output"] = "json"
         params["apikey"] = self.api_key
 
@@ -122,7 +125,7 @@ class SABnzbdClient(DownloadClient):
         try:
             logger.debug(f"[SABnzbd] Checking status for job_id: {job_id}")
 
-            response = self._api_call("queue", {"mode": "queue"})
+            response = self._api_call("queue")
 
             queue = response.get("queue", {})
             slots = queue.get("slots", [])
@@ -196,7 +199,7 @@ class SABnzbdClient(DownloadClient):
 
             # Check history for completed/failed downloads
             logger.debug("[SABnzbd] Job not in queue, checking history...")
-            response = self._api_call("history", {"mode": "history"})
+            response = self._api_call("history")
 
             history = response.get("history", {})
             slots = history.get("slots", [])
@@ -297,14 +300,14 @@ class SABnzbdClient(DownloadClient):
         """
         try:
             # Try deleting from history first (most common case after completion)
-            response = self._api_call("history", {"mode": "history", "name": "delete", "value": job_id})
+            response = self._api_call("history", {"name": "delete", "value": job_id})
 
             if response.get("status"):
                 logger.info(f"[SABnzbd] Deleted job {job_id} from history")
                 return True
 
             # If not in history, try queue
-            response = self._api_call("queue", {"mode": "queue", "name": "delete", "value": job_id})
+            response = self._api_call("queue", {"name": "delete", "value": job_id})
 
             if response.get("status"):
                 logger.info(f"[SABnzbd] Deleted job {job_id} from queue")
