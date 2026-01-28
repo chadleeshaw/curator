@@ -42,6 +42,9 @@ COLUMN_ADDITIONS = {
     "download_submissions": [
         ("extra_status", "VARCHAR(512)"),
     ],
+    "discovered_issues": [
+        ("country", "VARCHAR(50)"),
+    ],
 }
 
 # Column renames
