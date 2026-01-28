@@ -494,14 +494,14 @@ async def lifespan(app: FastAPI):
             "auto_download",
             auto_download_task,
             tasks_config.get("auto_download_interval", constants.AUTO_DOWNLOAD_INTERVAL),
-            run_immediately=True,  # Run immediately to check for new periodicals
+            run_immediately=False,  # Let first run happen after server is ready to avoid blocking startup
         )
 
         task_scheduler.schedule_periodic(
             "download_monitor",
             download_monitoring_task,
             tasks_config.get("download_monitor_interval", constants.DOWNLOAD_MONITOR_INTERVAL),
-            run_immediately=True,  # Check download status immediately
+            run_immediately=False,  # Let first run happen after server is ready to avoid blocking startup
         )
 
         task_scheduler.schedule_periodic(
@@ -515,7 +515,7 @@ async def lifespan(app: FastAPI):
             "ocr_processor",
             ocr_processing_task,
             tasks_config.get("ocr_processor_interval", constants.OCR_PROCESSOR_INTERVAL),
-            run_immediately=True,  # Process any queued OCR jobs immediately
+            run_immediately=False,  # Let first run happen after server is ready to avoid blocking startup
         )
 
         task_scheduler.schedule_periodic(
@@ -654,6 +654,8 @@ app.add_middleware(
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint for Docker and monitoring"""
+    from fastapi.responses import JSONResponse
+
     try:
         # Test database connectivity
         session = session_factory()
@@ -665,18 +667,24 @@ async def health_check():
         except Exception as e:
             logger.error(f"Health check database error: {e}")
             db_status = "error"
-            return {
-                "status": "unhealthy",
-                "service": "curator",
-                "database": db_status,
-            }, 503
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "status": "unhealthy",
+                    "service": "curator",
+                    "database": db_status,
+                },
+            )
         finally:
             session.close()
 
         return {"status": "healthy", "service": "curator", "database": db_status}
     except Exception as e:
         logger.error(f"Health check failed: {e}")
-        return {"status": "unhealthy", "service": "curator", "error": str(e)}, 503
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unhealthy", "service": "curator", "error": str(e)},
+        )
 
 
 @app.get("/api/status")

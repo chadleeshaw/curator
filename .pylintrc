@@ -46,7 +46,8 @@ disable=
     consider-using-sys-exit,
     unnecessary-pass,
     assignment-from-no-return,
-    abstract-class-instantiated
+    abstract-class-instantiated,
+    cyclic-import
     
 [FORMAT]
 max-line-length=120

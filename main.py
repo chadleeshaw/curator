@@ -155,7 +155,15 @@ def main():
         port = server_config.get("port", DEFAULT_SERVER_PORT)
 
         # Start the ASGI server (blocks until shutdown signal received)
-        uvicorn.run(app, host=host, port=port, access_log=access_log)
+        # Configure timeouts to prevent H11 protocol errors
+        uvicorn.run(
+            app,
+            host=host,
+            port=port,
+            access_log=access_log,
+            timeout_keep_alive=5,  # Reduce keep-alive timeout to prevent stale connections
+            timeout_graceful_shutdown=10,  # Allow 10s for graceful shutdown
+        )
 
     except KeyboardInterrupt:
         logger.info("Shutting down...")

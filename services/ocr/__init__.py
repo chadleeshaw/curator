@@ -3,7 +3,6 @@ OCR services package - text extraction and queue management
 """
 
 
-# pylint: disable=R0401
 def __getattr__(name):
     if name == "OCRService":
         from .service import OCRService
