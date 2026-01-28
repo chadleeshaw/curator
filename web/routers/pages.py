@@ -10,11 +10,12 @@ from typing import Callable
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
+from core.utils import run_in_thread
+from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from core.utils.general import is_special_edition
 from core.version import get_version_info
 from models.database import Periodical
-from core.utils import run_in_thread
 
 router = APIRouter(tags=["pages"])
 logger = logging.getLogger(__name__)
@@ -70,71 +71,64 @@ async def pdf_reader_page(id: int = Query(...)):
 async def view_periodical_by_id(id: int = Query(...)):
     """View all published issues of a periodical by periodical ID"""
 
-    def _get_periodical_data():
-        db_session = _session_factory()
-        try:
-            from models.database import PeriodicalTracking
+    def operation(db):
+        from models.database import PeriodicalTracking
 
-            # Query the periodical to get its title and tracking info
-            periodical = db_session.query(Periodical).filter(Periodical.id == id).first()
+        # Query the periodical to get its title and tracking info
+        periodical = db.query(Periodical).filter(Periodical.id == id).first()
 
-            if not periodical:
-                raise HTTPException(status_code=404, detail=f"Periodical with ID {id} not found")
+        if not periodical:
+            raise HTTPException(status_code=404, detail=f"Periodical with ID {id} not found")
 
-            # Determine the title to display and how to query
-            if periodical.tracking_id:
-                # Use tracking title for display and query by tracking_id
-                tracking = (
-                    db_session.query(PeriodicalTracking).filter(PeriodicalTracking.id == periodical.tracking_id).first()
-                )
-                display_title = tracking.title if tracking else periodical.title
+        # Determine the title to display and how to query
+        if periodical.tracking_id:
+            # Use tracking title for display and query by tracking_id
+            tracking = db.query(PeriodicalTracking).filter(PeriodicalTracking.id == periodical.tracking_id).first()
+            display_title = tracking.title if tracking else periodical.title
 
-                # Query all magazines with same tracking_id (includes special editions)
-                periodicals = (
-                    db_session.query(Periodical)
-                    .filter(Periodical.tracking_id == periodical.tracking_id)
-                    .order_by(Periodical.issue_date.desc())
-                    .all()
-                )
-            else:
-                # No tracking - use the magazine's own title
-                display_title = periodical.title
-                periodicals = (
-                    db_session.query(Periodical)
-                    .filter(Periodical.title == display_title)
-                    .order_by(Periodical.issue_date.desc())
-                    .all()
-                )
+            # Query all magazines with same tracking_id (includes special editions)
+            periodicals = (
+                db.query(Periodical)
+                .filter(Periodical.tracking_id == periodical.tracking_id)
+                .order_by(Periodical.issue_date.desc())
+                .all()
+            )
+        else:
+            # No tracking - use the magazine's own title
+            display_title = periodical.title
+            periodicals = (
+                db.query(Periodical)
+                .filter(Periodical.title == display_title)
+                .order_by(Periodical.issue_date.desc())
+                .all()
+            )
 
-            if not periodicals:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"No periodicals found for '{display_title}'",
-                )
+        if not periodicals:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No periodicals found for '{display_title}'",
+            )
 
-            # Group periodicals by year
-            periodicals_by_year = defaultdict(list)
-            for p in periodicals:
-                year = p.issue_date.year if p.issue_date else "Unknown"
-                periodicals_by_year[year].append(
-                    {
-                        "id": p.id,
-                        "title": p.title,
-                        "issue_date": (p.issue_date.date().isoformat() if p.issue_date else None),
-                        "cover_path": p.cover_path,
-                        "file_path": p.file_path,
-                    }
-                )
+        # Group periodicals by year
+        periodicals_by_year = defaultdict(list)
+        for p in periodicals:
+            year = p.issue_date.year if p.issue_date else "Unknown"
+            periodicals_by_year[year].append(
+                {
+                    "id": p.id,
+                    "title": p.title,
+                    "issue_date": (p.issue_date.date().isoformat() if p.issue_date else None),
+                    "cover_path": p.cover_path,
+                    "file_path": p.file_path,
+                }
+            )
 
-            # Sort years in descending order
-            sorted_years = sorted(periodicals_by_year.keys(), reverse=True)
+        # Sort years in descending order
+        sorted_years = sorted(periodicals_by_year.keys(), reverse=True)
 
-            return display_title, sorted_years, periodicals_by_year
+        return display_title, sorted_years, periodicals_by_year
 
-        finally:
-            db_session.close()
-
-    display_title, sorted_years, periodicals_by_year = await run_in_thread(_get_periodical_data)
+    display_title, sorted_years, periodicals_by_year = await with_db_session(_session_factory, operation)
 
     # Read the periodical template
     try:
@@ -177,131 +171,122 @@ async def view_periodical_by_id(id: int = Query(...)):
 async def view_periodical(periodical_title: str, language: str = Query(None), tracking_id: int = Query(None)):
     """View all published issues of a periodical organized by year"""
 
-    def _get_periodical_data():
-        db_session = _session_factory()
-        try:
-            from models.database import PeriodicalTracking
+    def operation(db):
+        from models.database import PeriodicalTracking
 
-            # Determine the actual tracking title to display
-            display_title = periodical_title
+        # Determine the actual tracking title to display
+        display_title = periodical_title
 
-            # If tracking_id is provided, query by that (includes merged items)
-            if tracking_id:
-                query = db_session.query(Periodical).filter(Periodical.tracking_id == tracking_id)
-                # Get the tracking title for display
-                tracking = db_session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
-                if tracking:
-                    display_title = tracking.title
+        # If tracking_id is provided, query by that (includes merged items)
+        if tracking_id:
+            query = db.query(Periodical).filter(Periodical.tracking_id == tracking_id)
+            # Get the tracking title for display
+            tracking = db.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
+            if tracking:
+                display_title = tracking.title
+        else:
+            # Try to find a tracking record by title first
+            tracking = db.query(PeriodicalTracking).filter(PeriodicalTracking.title == periodical_title).first()
+
+            if tracking:
+                # Query all magazines with this tracking_id
+                query = db.query(Periodical).filter(Periodical.tracking_id == tracking.id)
+                display_title = tracking.title
             else:
-                # Try to find a tracking record by title first
-                tracking = (
-                    db_session.query(PeriodicalTracking).filter(PeriodicalTracking.title == periodical_title).first()
-                )
+                # No tracking found by that title - try querying magazines by title
+                # and if they have a tracking_id, use that tracking title instead
+                query = db.query(Periodical).filter(Periodical.title == periodical_title)
+                sample_mag = query.first()
+                if sample_mag and sample_mag.tracking_id:
+                    # This magazine has tracking - use the tracking title
+                    tracking = (
+                        db.query(PeriodicalTracking).filter(PeriodicalTracking.id == sample_mag.tracking_id).first()
+                    )
+                    if tracking:
+                        display_title = tracking.title
+                        # Re-query using tracking_id to get all issues
+                        query = db.query(Periodical).filter(Periodical.tracking_id == tracking.id)
 
-                if tracking:
-                    # Query all magazines with this tracking_id
-                    query = db_session.query(Periodical).filter(Periodical.tracking_id == tracking.id)
-                    display_title = tracking.title
-                else:
-                    # No tracking found by that title - try querying magazines by title
-                    # and if they have a tracking_id, use that tracking title instead
-                    query = db_session.query(Periodical).filter(Periodical.title == periodical_title)
-                    sample_mag = query.first()
-                    if sample_mag and sample_mag.tracking_id:
-                        # This magazine has tracking - use the tracking title
-                        tracking = (
-                            db_session.query(PeriodicalTracking)
-                            .filter(PeriodicalTracking.id == sample_mag.tracking_id)
-                            .first()
-                        )
-                        if tracking:
-                            display_title = tracking.title
-                            # Re-query using tracking_id to get all issues
-                            query = db_session.query(Periodical).filter(Periodical.tracking_id == tracking.id)
+        # Add language filter if provided
+        if language:
+            query = query.filter(Periodical.language == language)
 
-            # Add language filter if provided
-            if language:
-                query = query.filter(Periodical.language == language)
+        periodicals = query.order_by(Periodical.issue_date.desc()).all()
 
-            periodicals = query.order_by(Periodical.issue_date.desc()).all()
+        if not periodicals:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No periodicals found for '{periodical_title}'",
+            )
 
-            if not periodicals:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"No periodicals found for '{periodical_title}'",
-                )
+        # Group periodicals by year and separate special editions
+        periodicals_by_year = defaultdict(list)
+        special_editions = []
 
-            # Group periodicals by year and separate special editions
-            periodicals_by_year = defaultdict(list)
-            special_editions = []
+        for p in periodicals:
+            periodical_data = {
+                "id": p.id,
+                "title": p.title,
+                "issue_date": (p.issue_date.date().isoformat() if p.issue_date else None),
+                "cover_path": p.cover_path,
+                "file_path": p.file_path,
+                "extra_metadata": p.extra_metadata or {},
+            }
 
-            for p in periodicals:
-                periodical_data = {
-                    "id": p.id,
-                    "title": p.title,
-                    "issue_date": (p.issue_date.date().isoformat() if p.issue_date else None),
-                    "cover_path": p.cover_path,
-                    "file_path": p.file_path,
-                    "extra_metadata": p.extra_metadata or {},
-                }
+            # Check if this is a special edition by checking derived_metadata first, then extra_metadata, then title
+            is_special = False
+            special_edition_value = None
 
-                # Check if this is a special edition by checking derived_metadata first, then extra_metadata, then title
-                is_special = False
-                special_edition_value = None
-
-                # Check derived_metadata first (new location)
-                if p.derived_metadata and isinstance(p.derived_metadata, dict):
-                    special_data = p.derived_metadata.get("special_edition")
-                    if special_data:
-                        if isinstance(special_data, dict):
-                            special_edition_value = special_data.get("value")
-                        else:
-                            special_edition_value = special_data
-                        if special_edition_value:
-                            is_special = True
-
-                # Fallback to extra_metadata (legacy location)
-                if not is_special and p.extra_metadata and isinstance(p.extra_metadata, dict):
-                    special_edition_value = p.extra_metadata.get("special_edition")
+            # Check derived_metadata first (new location)
+            if p.derived_metadata and isinstance(p.derived_metadata, dict):
+                special_data = p.derived_metadata.get("special_edition")
+                if special_data:
+                    if isinstance(special_data, dict):
+                        special_edition_value = special_data.get("value")
+                    else:
+                        special_edition_value = special_data
                     if special_edition_value:
                         is_special = True
 
-                # Store special edition name if found
-                if is_special and special_edition_value:
-                    if isinstance(special_edition_value, str):
-                        periodical_data["special_edition_name"] = special_edition_value
-                    else:
-                        periodical_data["special_edition_name"] = ""
-
-                # Fallback to title pattern matching
-                if not is_special and is_special_edition(p.title):
+            # Fallback to extra_metadata (legacy location)
+            if not is_special and p.extra_metadata and isinstance(p.extra_metadata, dict):
+                special_edition_value = p.extra_metadata.get("special_edition")
+                if special_edition_value:
                     is_special = True
 
-                if is_special:
-                    special_editions.append(periodical_data)
+            # Store special edition name if found
+            if is_special and special_edition_value:
+                if isinstance(special_edition_value, str):
+                    periodical_data["special_edition_name"] = special_edition_value
                 else:
-                    year = p.issue_date.year if p.issue_date else "Unknown"
-                    periodicals_by_year[year].append(periodical_data)
+                    periodical_data["special_edition_name"] = ""
 
-            # Sort years in descending order
-            sorted_years = sorted(periodicals_by_year.keys(), reverse=True)
+            # Fallback to title pattern matching
+            if not is_special and is_special_edition(p.title):
+                is_special = True
 
-            return (
-                display_title,
-                sorted_years,
-                periodicals_by_year,
-                special_editions,
-            )
+            if is_special:
+                special_editions.append(periodical_data)
+            else:
+                year = p.issue_date.year if p.issue_date else "Unknown"
+                periodicals_by_year[year].append(periodical_data)
 
-        finally:
-            db_session.close()
+        # Sort years in descending order
+        sorted_years = sorted(periodicals_by_year.keys(), reverse=True)
+
+        return (
+            display_title,
+            sorted_years,
+            periodicals_by_year,
+            special_editions,
+        )
 
     (
         display_title,
         sorted_years,
         periodicals_by_year,
         special_editions,
-    ) = await run_in_thread(_get_periodical_data)
+    ) = await with_db_session(_session_factory, operation)
 
     # Read the periodical template
     try:

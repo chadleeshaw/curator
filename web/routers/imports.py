@@ -12,6 +12,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from core.constants.category import DEFAULT_CATEGORY
 from core.constants.errors import ErrorMessages
 from core.utils import run_in_thread
+from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from core.utils.general import find_pdf_epub_files
 from web.schemas import ImportOptionsRequest
@@ -51,17 +52,18 @@ async def import_from_downloads(
     if not _file_importer:
         raise HTTPException(status_code=503, detail=ErrorMessages.FILE_IMPORTER_UNAVAILABLE)
 
-    def process_imports():
+    async def process_imports():
         """Background task to process imports"""
         try:
-            db_session = _session_factory()
-            try:
+
+            def operation(db):
                 # Pass organization_pattern to file importer
                 org_pattern = options.organization_pattern if options else None
-                results = _file_importer.process_downloads(db_session, org_pattern)
+                results = _file_importer.process_downloads(db, org_pattern)
                 logger.debug(f"Import completed: {results}")
-            finally:
-                db_session.close()
+                return results
+
+            await with_db_session(_session_factory, operation)
         except Exception as e:
             logger.error(f"Error processing imports: {e}", exc_info=True)
 
@@ -133,31 +135,33 @@ async def import_from_library_dir(
             "message": f"No PDF or EPUB files found in library directory: {library_dir}",
         }
 
-    def process_library_dir_imports():
+    async def process_library_dir_imports():
         """Background task to process imports from library directory"""
-        db_session = None
         original_pattern = None
         try:
-            logger.info(f"Import settings: auto_track={options.auto_track}, " f"tracking_mode={options.tracking_mode}")
-            db_session = _session_factory()
+            logger.info(f"Import settings: auto_track={options.auto_track}, tracking_mode={options.tracking_mode}")
 
             # Temporarily override organization pattern if provided
             original_pattern = _file_importer.organization_pattern
             if options.organization_pattern:
                 _file_importer.organization_pattern = options.organization_pattern
 
-            results = _file_importer.process_organized_files(
-                db_session,
-                auto_track=options.auto_track,
-                tracking_mode=options.tracking_mode,
-            )
+            def operation(db):
+                results = _file_importer.process_organized_files(
+                    db,
+                    auto_track=options.auto_track,
+                    tracking_mode=options.tracking_mode,
+                )
 
-            # Extract counts from nested data structure
-            data = results.get("data", {})
-            imported = data.get("imported", 0)
-            failed = data.get("failed", 0)
+                # Extract counts from nested data structure
+                data = results.get("data", {})
+                imported = data.get("imported", 0)
+                failed = data.get("failed", 0)
 
-            logger.info(f"Library directory import results: {imported} imported, {failed} failed")
+                logger.info(f"Library directory import results: {imported} imported, {failed} failed")
+                return results
+
+            await with_db_session(_session_factory, operation)
 
         except Exception as e:
             logger.error(f"Error processing library directory imports: {e}", exc_info=True)
@@ -168,13 +172,6 @@ async def import_from_library_dir(
                     _file_importer.organization_pattern = original_pattern
                 except Exception as e:
                     logger.error(f"Error restoring organization pattern: {e}")
-
-            # Close database session
-            if db_session is not None:
-                try:
-                    db_session.close()
-                except Exception as e:
-                    logger.error(f"Error closing database session: {e}")
 
     background_tasks.add_task(process_library_dir_imports)
 
@@ -215,21 +212,12 @@ async def reorganize_library(
     if not _file_importer:
         raise HTTPException(status_code=503, detail=ErrorMessages.FILE_IMPORTER_UNAVAILABLE)
 
-    def reorganize():
-        db_session = _session_factory()
-        try:
-            # Use the file organizer from the file importer
-            organizer = _file_importer.organizer
+    def operation(db):
+        # Use the file organizer from the file importer
+        organizer = _file_importer.organizer
 
-            results = organizer.reorganize_from_database(
-                db_session=db_session,
-                category=category,
-                pattern=pattern,
-                dry_run=dry_run,
-            )
+        results = organizer.reorganize_from_database(db_session=db, category=category, pattern=pattern, dry_run=dry_run)
 
-            return results
-        finally:
-            db_session.close()
+        return results
 
-    return await run_in_thread(reorganize)
+    return await with_db_session(_session_factory, operation)

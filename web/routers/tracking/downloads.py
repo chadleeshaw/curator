@@ -8,6 +8,7 @@ from fastapi import HTTPException, Query
 
 from core.constants.errors import ErrorMessages
 from core.utils import run_in_thread
+from core.utils.db import with_db_session
 from core.utils.db import mark_json_modified
 from core.utils.error_handling import handle_api_errors
 from models.database import PeriodicalTracking
@@ -46,47 +47,43 @@ logger = _shared.logger
 async def track_single_issue(tracking_id: int, edition_id: str, track: bool = Query(True)) -> Dict[str, Any]:
     """Track or untrack a single issue/edition"""
 
-    def _update():
-        db_session = _shared._session_factory()
-        try:
-            tracking = db_session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
-            if not tracking:
-                raise HTTPException(status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND)
+    def operation(db):
+        tracking = db.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
+        if not tracking:
+            raise HTTPException(status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND)
 
-            # Initialize selected_editions if None
-            if tracking.selected_editions is None:
-                tracking.selected_editions = {}
+        # Initialize selected_editions if None
+        if tracking.selected_editions is None:
+            tracking.selected_editions = {}
 
-            # Update the selected_editions dictionary
-            tracking.selected_editions[edition_id] = track
+        # Update the selected_editions dictionary
+        tracking.selected_editions[edition_id] = track
 
-            # Mark the column as modified for SQLAlchemy to detect the change
-            mark_json_modified(tracking, "selected_editions")
+        # Mark the column as modified for SQLAlchemy to detect the change
+        mark_json_modified(tracking, "selected_editions")
 
-            db_session.commit()
+        db.commit()
 
-            # Trigger immediate auto-download check if an edition was marked for tracking
-            if track and _shared._auto_download_task_func:
-                import asyncio
+        # Trigger immediate auto-download check if an edition was marked for tracking
+        if track and _shared._auto_download_task_func:
+            import asyncio
 
-                try:
-                    asyncio.create_task(_shared._auto_download_task_func())
-                    logger.info(f"Triggered immediate auto-download check after tracking edition {edition_id}")
-                except Exception as e:
-                    logger.warning(f"Could not trigger immediate auto-download: {e}")
+            try:
+                asyncio.create_task(_shared._auto_download_task_func())
+                logger.info(f"Triggered immediate auto-download check after tracking edition {edition_id}")
+            except Exception as e:
+                logger.warning(f"Could not trigger immediate auto-download: {e}")
 
-            action = "marked for tracking" if track else "unmarked from tracking"
-            logger.info(f"Issue {edition_id} {action} for periodical '{tracking.title}'")
+        action = "marked for tracking" if track else "unmarked from tracking"
+        logger.info(f"Issue {edition_id} {action} for periodical '{tracking.title}'")
 
-            return {
-                "success": True,
-                "message": f"Issue {action}",
-                "tracking_id": tracking.id,
-                "edition_id": edition_id,
-                "tracked": track,
-                "total_selected": len([v for v in tracking.selected_editions.values() if v]),
-            }
-        finally:
-            db_session.close()
+        return {
+            "success": True,
+            "message": f"Issue {action}",
+            "tracking_id": tracking.id,
+            "edition_id": edition_id,
+            "tracked": track,
+            "total_selected": len([v for v in tracking.selected_editions.values() if v]),
+        }
 
-    return await run_in_thread(_update)
+    return await with_db_session(_shared._session_factory, operation)

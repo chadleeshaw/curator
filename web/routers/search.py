@@ -16,6 +16,7 @@ from core.constants.language import LANGUAGE_KEYWORDS
 from core.parsers.country import detect_country
 from core.parsers.date import normalize_month_name
 from core.utils import run_in_thread
+from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from models.database import DownloadSubmission, Periodical, SearchResult
 from services.issue_discovery import IssueDiscoveryService
@@ -567,9 +568,8 @@ async def search_periodical_providers(
     6. Add library-only items with status badges
     7. Return unified result list with status indicators
     """
-    db_session = _session_factory()
 
-    try:
+    def operation(db):
         if not query or len(query.strip()) < 2:
             raise HTTPException(status_code=400, detail="Query must be at least 2 characters")
 
@@ -578,7 +578,7 @@ async def search_periodical_providers(
         # === STEP 1: Load Cached Results ===
         cached_results = []
         if not force_refresh:
-            cached_results = _get_cached_search_results(db_session, query, tracking_id, cache_ttl_days)
+            cached_results = _get_cached_search_results(db, query, tracking_id, cache_ttl_days)
             logger.debug(f"Found {len(cached_results)} cached results for '{query}'")
 
         # === STEP 2: Fetch Fresh Results from Providers ===
@@ -670,7 +670,7 @@ async def search_periodical_providers(
 
         # === STEP 5: Save Fresh Results to Cache ===
         if fresh_results:
-            _save_search_results_to_cache(db_session, query, fresh_results, tracking_id)
+            _save_search_results_to_cache(db, query, fresh_results, tracking_id)
 
         # === STEP 6: Apply Language/Country Filters ===
         filter_language = language if language else "English"
@@ -686,7 +686,7 @@ async def search_periodical_providers(
         logger.debug(f"After edition variant filter: {len(filtered_results)} results")
 
         # === STEP 7: Load Library Items (Scoped by tracking_id) ===
-        library_items = db_session.query(Periodical).all()
+        library_items = db.query(Periodical).all()
 
         if tracking_id:
             library_items = [m for m in library_items if m.tracking_id == tracking_id]
@@ -733,7 +733,7 @@ async def search_periodical_providers(
 
         # === STEP 9: Check Failed Downloads ===
         failed_downloads = (
-            db_session.query(DownloadSubmission)
+            db.query(DownloadSubmission)
             .filter(
                 or_(
                     DownloadSubmission.status == DownloadSubmission.StatusEnum.FAILED,
@@ -843,8 +843,7 @@ async def search_periodical_providers(
                 "cache_age_days": (datetime.utcnow() - cached_results[0].created_at).days if cached_results else None,
             }
 
-    finally:
-        db_session.close()
+    return await with_db_session(_session_factory, operation)
 
 
 @router.get(
