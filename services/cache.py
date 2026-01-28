@@ -205,7 +205,7 @@ class ProviderCacheService:
         finally:
             session.close()
 
-    def resolve_redirect_url(self, url: str, max_redirects: int = 10) -> str:
+    async def resolve_redirect_url(self, url: str, max_redirects: int = 10) -> str:
         """
         Resolve proxy URLs to final NZB download URLs.
 
@@ -223,46 +223,47 @@ class ProviderCacheService:
         Example:
             >>> # Prowlarr proxy URL
             >>> proxy_url = "https://prowlarr.com/download?link=..."
-            >>> service.resolve_redirect_url(proxy_url)
+            >>> await service.resolve_redirect_url(proxy_url)
             "https://api.nzb.su/getnzb/abc123.nzb&i=..."
         """
-        try:
-            # Use GET with stream=True to follow redirects without downloading content
-            # HEAD requests don't work with Prowlarr/Cloudflare (returns 405)
-            response = requests.get(
-                url,
-                allow_redirects=True,
-                timeout=10,
-                stream=True,  # Don't download body
-            )
 
-            # Close connection immediately (don't download content)
-            response.close()
-
-            # Get final URL after redirects
-            final_url = response.url
-
-            # Log only if redirect occurred
-            if final_url != url:
-                redirect_count = len(response.history)
-                logger.info(
-                    f"Resolved proxy URL ({redirect_count} redirect{'s' if redirect_count > 1 else ''}): "
-                    f"{url[:80]}... -> {final_url[:80]}..."
+        def _resolve():
+            try:
+                # Use GET with stream=True to follow redirects without downloading content
+                # HEAD requests don't work with Prowlarr/Cloudflare (returns 405)
+                response = requests.get(
+                    url,
+                    allow_redirects=True,
+                    timeout=10,
+                    stream=True,  # Don't download body
                 )
 
-            return final_url
+                # Close connection immediately (don't download content)
+                response.close()
 
-        except requests.exceptions.TooManyRedirects:
-            logger.warning(f"Too many redirects resolving URL (>{max_redirects}), using original")
-            return url
-        except requests.exceptions.RequestException as e:
-            logger.warning(f"Failed to resolve URL redirect: {e}, using original URL")
-            return url
-        except Exception as e:
-            logger.error(f"Unexpected error resolving URL: {e}", exc_info=True)
-            return url
+                # Get final URL after redirects
+                final_url = response.url
 
-    def upsert_releases(self, releases: List[Dict[str, Any]]) -> int:
+                # Return final URL and whether redirect occurred
+                return (final_url, final_url != url)
+
+            except requests.exceptions.TooManyRedirects:
+                logger.warning(f"Too many redirects resolving URL (>{max_redirects}), using original")
+                return (url, False)
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"Failed to resolve URL redirect: {e}, using original URL")
+                return (url, False)
+            except Exception as e:
+                logger.error(f"Unexpected error resolving URL: {e}", exc_info=True)
+                return (url, False)
+
+        # Run in thread pool to avoid blocking async event loop
+        import asyncio
+
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, _resolve)
+
+    async def upsert_releases(self, releases: List[Dict[str, Any]]) -> Dict[str, int]:
         """
         Insert or update releases in cache.
 
@@ -274,12 +275,13 @@ class ProviderCacheService:
             releases: List of release dictionaries from providers
 
         Returns:
-            Number of releases added or updated
+            Dictionary with counts: {'added': int, 'updated': int, 'redirects_resolved': int}
         """
         session = self._session_factory()
         try:
             added_count = 0
             updated_count = 0
+            redirects_resolved = 0
 
             for release_data in releases:
                 guid = release_data.get("guid")
@@ -302,7 +304,9 @@ class ProviderCacheService:
                         session.flush()  # Ensure delete is committed before insert
 
                         # Create new record
-                        new_release = self._create_release_from_dict(release_data)
+                        new_release, was_redirected = await self._create_release_from_dict(release_data)
+                        if was_redirected:
+                            redirects_resolved += 1
                         session.add(new_release)
                         added_count += 1
                     else:
@@ -311,13 +315,24 @@ class ProviderCacheService:
                         updated_count += 1
                 else:
                     # New release - add to cache
-                    new_release = self._create_release_from_dict(release_data)
+                    new_release, was_redirected = await self._create_release_from_dict(release_data)
+                    if was_redirected:
+                        redirects_resolved += 1
                     session.add(new_release)
                     added_count += 1
 
             session.commit()
+
+            # Log summary if any redirects were resolved
+            if redirects_resolved > 0:
+                logger.info(f"Resolved {redirects_resolved} proxy URL redirects during cache update")
+
             logger.debug(f"Upserted {added_count} new releases, updated {updated_count} existing releases")
-            return added_count + updated_count
+            return {
+                "added": added_count,
+                "updated": updated_count,
+                "redirects_resolved": redirects_resolved,
+            }
 
         except Exception as e:
             session.rollback()
@@ -326,7 +341,7 @@ class ProviderCacheService:
         finally:
             session.close()
 
-    def _create_release_from_dict(self, release_data: Dict[str, Any]) -> CachedRelease:
+    async def _create_release_from_dict(self, release_data: Dict[str, Any]) -> CachedRelease:
         """
         Create CachedRelease model from dictionary.
 
@@ -343,9 +358,9 @@ class ProviderCacheService:
 
         # Get download URL and resolve any redirects (e.g., Prowlarr proxy URLs)
         download_url = release_data.get("download_url", release_data.get("url", ""))
-        resolved_url = self.resolve_redirect_url(download_url)
+        resolved_url, was_redirected = await self.resolve_redirect_url(download_url)
 
-        return CachedRelease(  # pylint: disable=inconsistent-return-statements
+        release = CachedRelease(  # pylint: disable=inconsistent-return-statements
             guid=release_data.get("guid"),
             title=title,
             normalized_title=normalized_title,
@@ -361,6 +376,8 @@ class ProviderCacheService:
             fuzzy_match_group=release_data.get("fuzzy_match_group"),
             raw_metadata=release_data.get("raw_metadata", {}),
         )
+
+        return (release, was_redirected)
 
     def cleanup_stale_releases(self, days: int = CACHE_RETENTION_DAYS) -> Dict[str, int]:
         """
@@ -596,7 +613,8 @@ class ProviderSyncService:
 
             # Convert to cache format and upsert
             cache_releases = self._convert_results_to_cache_format(results, provider)
-            added_count = self.cache_service.upsert_releases(cache_releases)
+            upsert_stats = await self.cache_service.upsert_releases(cache_releases)
+            added_count = upsert_stats["added"] + upsert_stats["updated"]
 
             # Update sync status
             sync_status = session.query(SyncStatus).filter(SyncStatus.provider_name == provider.name).first()
@@ -713,7 +731,8 @@ class ProviderSyncService:
 
             # Convert and upsert new releases
             cache_releases = self._convert_results_to_cache_format(new_results, provider)
-            added_count = self.cache_service.upsert_releases(cache_releases)
+            upsert_stats = await self.cache_service.upsert_releases(cache_releases)
+            added_count = upsert_stats["added"] + upsert_stats["updated"]
 
             # Update sync status
             sync_status.last_sync_time = utc_now()
