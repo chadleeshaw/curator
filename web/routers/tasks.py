@@ -250,6 +250,7 @@ async def run_task_manually(task_id: str):
     """Manually trigger a scheduled task"""
     if task_id == "download_monitor":
         if _download_monitor_task:
+            logger.info("Starting auto-import task (manual trigger)")
             await _download_monitor_task.run()
             return success_response(
                 "Auto-import task executed",
@@ -275,6 +276,7 @@ async def run_task_manually(task_id: str):
 
     elif task_id == "folder_cleanup":
         if _folder_cleanup_task:
+            logger.info("Starting folder cleanup task (manual trigger)")
             stats = await run_in_thread(_folder_cleanup_task.run)
             message = (
                 f"Folder cleanup executed. Deleted: {stats.get('total_deleted', 0)} folders, "

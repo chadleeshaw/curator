@@ -87,7 +87,6 @@ class DownloadMonitor:
         try:
             self.last_run_time = datetime.now()
             self.stats["total_runs"] += 1
-            logger.info("Starting auto-import task (download monitor)")
             logger.debug(f"[DownloadMonitor] Monitor run #{self.stats['total_runs']} started")
 
             # Part 1: Monitor download client submissions
