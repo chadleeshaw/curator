@@ -14,6 +14,7 @@ Classes:
     ProviderSyncService: Syncs with search providers in background
 """
 
+import asyncio
 import logging
 import os
 import time
@@ -258,8 +259,6 @@ class ProviderCacheService:
                 return (url, False)
 
         # Run in thread pool to avoid blocking async event loop
-        import asyncio
-
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, _resolve)
 
@@ -283,11 +282,25 @@ class ProviderCacheService:
             updated_count = 0
             redirects_resolved = 0
 
+            # Phase 1: Resolve all URLs in parallel (fast!)
+            logger.debug(f"Resolving {len(releases)} proxy URLs in parallel...")
+            url_tasks = []
             for release_data in releases:
+                download_url = release_data.get("download_url", release_data.get("url", ""))
+                url_tasks.append(self.resolve_redirect_url(download_url))
+
+            # Resolve all URLs concurrently
+            resolved_urls = await asyncio.gather(*url_tasks)
+
+            # Phase 2: Database operations (sequential with resolved URLs)
+            for release_data, (resolved_url, was_redirected) in zip(releases, resolved_urls):
                 guid = release_data.get("guid")
                 if not guid:
                     logger.warning("Skipping release without GUID")
                     continue
+
+                if was_redirected:
+                    redirects_resolved += 1
 
                 # Check if release already exists
                 existing = session.query(CachedRelease).filter(CachedRelease.guid == guid).first()
@@ -303,10 +316,8 @@ class ProviderCacheService:
                         session.delete(existing)
                         session.flush()  # Ensure delete is committed before insert
 
-                        # Create new record
-                        new_release, was_redirected = await self._create_release_from_dict(release_data)
-                        if was_redirected:
-                            redirects_resolved += 1
+                        # Create new record with already-resolved URL
+                        new_release = self._create_release_from_data(release_data, resolved_url)
                         session.add(new_release)
                         added_count += 1
                     else:
@@ -314,10 +325,8 @@ class ProviderCacheService:
                         existing.last_seen = utc_now()
                         updated_count += 1
                 else:
-                    # New release - add to cache
-                    new_release, was_redirected = await self._create_release_from_dict(release_data)
-                    if was_redirected:
-                        redirects_resolved += 1
+                    # New release - add to cache with already-resolved URL
+                    new_release = self._create_release_from_data(release_data, resolved_url)
                     session.add(new_release)
                     added_count += 1
 
@@ -340,6 +349,39 @@ class ProviderCacheService:
             raise
         finally:
             session.close()
+
+    def _create_release_from_data(self, release_data: Dict[str, Any], resolved_url: str) -> CachedRelease:
+        """
+        Create CachedRelease model from dictionary with pre-resolved URL.
+
+        Args:
+            release_data: Release data from provider
+            resolved_url: Already-resolved download URL
+
+        Returns:
+            CachedRelease model instance
+        """
+        # Normalize title for better matching
+        title = release_data.get("title", "")
+        title_matcher = TitleMatcher()
+        normalized_title = title_matcher.clean_release_title(title).lower()
+
+        return CachedRelease(
+            guid=release_data.get("guid"),
+            title=title,
+            normalized_title=normalized_title,
+            provider_name=release_data.get("provider_name"),
+            provider_type=release_data.get("provider_type"),
+            download_url=resolved_url,
+            size_bytes=release_data.get("size_bytes"),
+            publication_date=release_data.get("publication_date"),
+            upload_date=release_data.get("upload_date"),
+            category=release_data.get("category"),
+            language=release_data.get("language"),
+            country=release_data.get("country"),
+            fuzzy_match_group=release_data.get("fuzzy_match_group"),
+            raw_metadata=release_data.get("raw_metadata", {}),
+        )
 
     async def _create_release_from_dict(self, release_data: Dict[str, Any]) -> CachedRelease:
         """
