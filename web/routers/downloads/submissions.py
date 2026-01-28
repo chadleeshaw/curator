@@ -16,7 +16,6 @@ from web.schemas import (
     DownloadSingleIssueRequest,
     DownloadSubmissionResponse,
 )
-from core.utils import run_in_thread
 from core.utils.db import with_db_session
 
 from . import _shared
@@ -63,7 +62,7 @@ async def download_all_periodical_issues(
                 detail=f"Tracking record not found: {request.tracking_id}",
             )
 
-        results = _shared._download_manager.download_all_periodical_issues(request.tracking_id, db_session)
+        results = _shared._download_manager.download_all_periodical_issues(request.tracking_id, db)
         return {
             "success": True,
             "tracking_id": request.tracking_id,
@@ -104,7 +103,7 @@ async def download_single_issue(
             "raw_metadata": {},
         }
 
-        submission = _shared._download_manager.download_single_issue(request.tracking_id, search_result, db_session)
+        submission = _shared._download_manager.download_single_issue(request.tracking_id, search_result, db)
         if not submission:
             # Check if there's a failed submission with error details
             failed_submission = (

@@ -8,7 +8,6 @@ session management, and progress reporting.
 import logging
 from typing import Any, Callable, Dict, Optional, Type, TypeVar
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from models.database import Base

@@ -3,8 +3,6 @@
 Test suite for NZBGet Download Client
 """
 
-import sys
-from pathlib import Path
 from unittest.mock import Mock, patch
 
 # Path setup handled by conftest.py

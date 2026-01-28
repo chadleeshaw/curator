@@ -2,9 +2,6 @@
 Test suite for authentication router endpoints
 """
 
-import sys
-from pathlib import Path
-
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient

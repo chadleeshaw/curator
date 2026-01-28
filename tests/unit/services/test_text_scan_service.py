@@ -3,9 +3,6 @@
 Test suite for services.text_scan_service module
 """
 
-import sys
-from pathlib import Path
-from unittest.mock import Mock, patch
 
 # Path setup handled by conftest.py
 

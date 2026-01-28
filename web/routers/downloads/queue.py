@@ -4,9 +4,7 @@ Download queue listing and monitoring endpoints
 
 from typing import Any, Dict, Optional
 
-from fastapi import HTTPException
 
-from core.utils import run_in_thread
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from models.database import DownloadSubmission, PeriodicalTracking

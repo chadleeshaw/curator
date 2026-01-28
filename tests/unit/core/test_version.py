@@ -2,10 +2,7 @@
 Tests for version management
 """
 
-import json
-from pathlib import Path
 from unittest.mock import patch
-import subprocess
 
 from core.version import get_version, get_version_info
 

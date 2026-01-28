@@ -4,8 +4,6 @@ Test suite for file categorization utilities.
 Tests categorizing files into Periodical, Comic, Graphic Novel, Book, Document.
 """
 
-import sys
-from pathlib import Path
 
 import pytest
 

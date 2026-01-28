@@ -3,8 +3,6 @@
 Test suite for web.schemas module
 """
 
-import sys
-from pathlib import Path
 
 # Path setup handled by conftest.py
 

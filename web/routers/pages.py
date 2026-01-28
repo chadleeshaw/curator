@@ -10,7 +10,6 @@ from typing import Callable
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
-from core.utils import run_in_thread
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from core.utils.general import is_special_edition

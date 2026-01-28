@@ -7,7 +7,6 @@ from typing import Any, Dict
 from fastapi import HTTPException
 
 from core.constants.errors import ErrorMessages
-from core.utils import run_in_thread
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from models.database import PeriodicalTracking

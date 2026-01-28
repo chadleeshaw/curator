@@ -5,7 +5,7 @@ Test suite for scheduler.ocr_processor module
 
 import sys
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))

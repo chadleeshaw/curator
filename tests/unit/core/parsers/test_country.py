@@ -4,8 +4,6 @@ Test suite for country detection utilities.
 Tests country detection from text and ISO country mappings.
 """
 
-import sys
-from pathlib import Path
 
 import pytest
 

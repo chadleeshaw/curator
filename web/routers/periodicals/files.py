@@ -3,20 +3,16 @@ File operations for periodicals
 """
 
 import mimetypes
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict
 
 from fastapi import HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, Response
 
-from core.constants.category import DEFAULT_CATEGORY
-from core.constants.errors import ErrorMessages
-from core.parsers import sanitize_filename
 from core.utils import run_in_thread
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
-from core.utils.files import get_library_dir, get_category_prefix
+from core.utils.files import get_library_dir
 from core.utils.general import cleanup_empty_directories, is_special_edition
 from core.utils.epub_reader import get_epub_metadata, get_epub_chapter, get_epub_image
 from core.utils.comic_reader import (
@@ -25,7 +21,6 @@ from core.utils.comic_reader import (
     get_comic_page_thumbnail,
 )
 from core.utils.pdf_reader import get_pdf_metadata, get_pdf_page, get_pdf_page_thumbnail
-from models.database import Periodical
 from services.file_operations import reorganize_periodical_files
 
 from . import _shared

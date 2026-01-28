@@ -2,21 +2,17 @@
 Test suite for Database Models and initialization
 """
 
-import sys
 import tempfile
-from datetime import UTC, datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 # Add parent directory to path
 # Path setup handled by conftest.py
 
 from core.database import DatabaseManager
 from models.database import (
-    Base,
     Download,
     DownloadSubmission,
     Periodical,

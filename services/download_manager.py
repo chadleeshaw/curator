@@ -1025,7 +1025,7 @@ class DownloadManager:
             new_status = status_map.get(client_status_value, DownloadSubmission.StatusEnum.PENDING)
 
             # Track previous status to detect transitions
-            previous_status = submission.status
+            submission.status
 
             # Update submission
             submission.status = new_status

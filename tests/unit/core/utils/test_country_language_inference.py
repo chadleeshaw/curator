@@ -2,9 +2,6 @@
 Tests for automatic language inference from country detection.
 """
 
-import sys
-from pathlib import Path
-
 # Path setup handled by conftest.py
 
 from core.parsers import Parser

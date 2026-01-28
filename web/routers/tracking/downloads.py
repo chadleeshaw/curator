@@ -7,7 +7,6 @@ from typing import Any, Dict
 from fastapi import HTTPException, Query
 
 from core.constants.errors import ErrorMessages
-from core.utils import run_in_thread
 from core.utils.db import with_db_session
 from core.utils.db import mark_json_modified
 from core.utils.error_handling import handle_api_errors

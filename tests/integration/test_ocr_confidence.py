@@ -2,7 +2,6 @@
 Tests for OCR confidence scoring
 """
 
-import pytest
 from services.ocr.service import OCRService
 
 

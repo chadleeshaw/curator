@@ -10,7 +10,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-import pytest
 
 from core.utils.query_expansion import generate_query_variants, expand_search_queries
 

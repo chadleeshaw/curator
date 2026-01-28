@@ -14,7 +14,7 @@ import sys
 sys.path.insert(0, ".")
 
 import pytest
-from datetime import datetime, UTC, timedelta
+from datetime import datetime
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 

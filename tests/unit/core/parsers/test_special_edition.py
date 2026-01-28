@@ -2,8 +2,6 @@
 Tests for special edition detection and grouping
 """
 
-import pytest
-
 from core.utils.general import is_special_edition
 
 

@@ -2,8 +2,6 @@
 Tests for periodical display logic in web pages
 """
 
-import pytest
-
 
 class TestSpecialEditionDisplay:
     """Test that special edition display logic correctly interprets metadata"""

@@ -2,6 +2,7 @@
 Authentication routes
 """
 
+import logging
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
@@ -9,6 +10,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 if TYPE_CHECKING:
     from core.auth import AuthManager
 
+from core.utils.error_handling import handle_api_errors
 from web.schemas import (
     APIError,
     ChangePasswordRequest,
@@ -19,6 +21,7 @@ from web.schemas import (
 from web.middleware.auth import AuthMiddleware
 
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
+logger = logging.getLogger(__name__)
 
 
 def get_auth_manager(request: Request) -> "AuthManager":
@@ -88,12 +91,14 @@ async def get_verify_token(
         }
     },
 )
+@handle_api_errors("Check auth status", logger)
 async def auth_status(auth_manager: "AuthManager" = Depends(get_auth_manager)):
     """Check if credentials are set up"""
     return {"credentials_exist": auth_manager.credentials_exist()}
 
 
 @router.get("/login-mode")
+@handle_api_errors("Get login mode", logger)
 async def get_login_mode(auth_manager: "AuthManager" = Depends(get_auth_manager)):
     """Backend decides which login mode to show (setup or login)"""
     if auth_manager.credentials_exist():
@@ -111,6 +116,7 @@ async def get_login_mode(auth_manager: "AuthManager" = Depends(get_auth_manager)
         400: {"description": "Credentials already exist", "model": APIError},
     },
 )
+@handle_api_errors("Setup credentials", logger)
 async def setup_credentials(
     request: CreateCredentialsRequest,
     auth_manager: "AuthManager" = Depends(get_auth_manager),
@@ -127,6 +133,7 @@ async def setup_credentials(
 
 
 @router.post("/login")
+@handle_api_errors("Login", logger)
 async def login(request: LoginRequest, auth_manager: "AuthManager" = Depends(get_auth_manager)):
     """Authenticate user and return JWT token"""
     success, message = auth_manager.verify_credentials(request.username, request.password)
@@ -139,6 +146,7 @@ async def login(request: LoginRequest, auth_manager: "AuthManager" = Depends(get
 
 
 @router.post("/change-password")
+@handle_api_errors("Change password", logger)
 async def change_password(
     request: ChangePasswordRequest,
     username: str = Depends(get_verify_token),
@@ -154,6 +162,7 @@ async def change_password(
 
 
 @router.get("/user/info")
+@handle_api_errors("Get user info", logger)
 async def get_user_info(current_username: str = Depends(get_verify_token)):
     """Get current user information"""
     return {
@@ -164,6 +173,7 @@ async def get_user_info(current_username: str = Depends(get_verify_token)):
 
 
 @router.post("/user/update")
+@handle_api_errors("Update user", logger)
 async def update_user(
     request: UpdateUserRequest,
     current_username: str = Depends(get_verify_token),
@@ -207,7 +217,11 @@ async def get_api_token(
         if not success:
             raise HTTPException(status_code=500, detail="Failed to generate API token")
 
-    return {"success": True, "api_token": api_token, "message": "API token retrieved successfully"}
+    return {
+        "success": True,
+        "api_token": api_token,
+        "message": "API token retrieved successfully",
+    }
 
 
 @router.post("/api-token/regenerate")
@@ -221,4 +235,8 @@ async def regenerate_api_token(
     if not success:
         raise HTTPException(status_code=500, detail="Failed to generate new API token")
 
-    return {"success": True, "api_token": new_token, "message": "API token regenerated successfully"}
+    return {
+        "success": True,
+        "api_token": new_token,
+        "message": "API token regenerated successfully",
+    }

@@ -5,10 +5,8 @@ CRUD operations for periodicals
 from pathlib import Path
 from typing import Any, Dict
 
-from fastapi import HTTPException
 from sqlalchemy import cast, case, func, String
 
-from core.constants.errors import ErrorMessages
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from core.utils.general import generate_olid

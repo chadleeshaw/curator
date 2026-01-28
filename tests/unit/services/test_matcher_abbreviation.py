@@ -2,9 +2,6 @@
 Tests for abbreviation matching in TrackingMatcher
 """
 
-import sys
-from pathlib import Path
-
 # Path setup handled by conftest.py
 
 from services.importer.matcher import TrackingMatcher, WEIGHT_TITLE_ABBREVIATION

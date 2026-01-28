@@ -4,7 +4,6 @@ Test suite for FileOrganizer (Organizer)
 """
 
 import sys
-import shutil
 import tempfile
 from pathlib import Path  # noqa: E402
 from datetime import datetime  # noqa: E402
@@ -118,7 +117,7 @@ def test_library_directory_creation():
         assert not organize_path.exists()
 
         # Create processor
-        processor = FileOrganizer(str(organize_path))
+        FileOrganizer(str(organize_path))
 
         # Path should now exist
         assert organize_path.exists()

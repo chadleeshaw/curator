@@ -437,10 +437,6 @@ class IssueDiscoveryService:
         from core.constants.validation import (
             NEWSNAB_BOOK_CATEGORIES,
             NEWSNAB_PERIODICAL_CATEGORIES,
-            PERIODICAL_PATTERNS,
-            ANTI_PERIODICAL_PATTERNS,
-            FILE_SIZE_MIN_MB,
-            FILE_SIZE_MAX_MB,
         )
 
         title = search_result.get("title", "")

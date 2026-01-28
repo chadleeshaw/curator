@@ -5,13 +5,10 @@ Metadata operations for periodicals
 from datetime import datetime
 from typing import Any, Dict
 
-from fastapi import HTTPException
 
 from core.constants.date import NUMBER_TO_MONTH
-from core.constants.errors import ErrorMessages
 from core.utils.db import mark_json_modified, with_db_session
 from core.utils.error_handling import handle_api_errors
-from models.database import Periodical
 
 from . import _shared
 

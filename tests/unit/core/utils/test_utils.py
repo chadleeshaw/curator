@@ -7,12 +7,9 @@ Test Coverage:
 - PDF/EPUB file discovery
 """
 
-import sys
-import tempfile
 from pathlib import Path
-from unittest.mock import patch, mock_open
+from unittest.mock import patch
 
-import pytest
 
 # Path setup handled by conftest.py
 

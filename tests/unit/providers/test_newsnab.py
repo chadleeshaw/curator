@@ -1,4 +1,3 @@
-import sys
 from pathlib import Path  # noqa: E402
 
 # Path setup handled by conftest.py

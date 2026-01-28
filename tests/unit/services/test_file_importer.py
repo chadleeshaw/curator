@@ -3,9 +3,7 @@
 Test suite for services.file_importer module
 """
 
-import sys
 from pathlib import Path
-from unittest.mock import Mock, patch
 
 # Path setup handled by conftest.py
 

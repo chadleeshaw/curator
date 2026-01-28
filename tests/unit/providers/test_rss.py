@@ -10,9 +10,7 @@ Test Coverage:
 - Result mapping to SearchResult objects
 """
 
-import sys
 from datetime import datetime
-from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 from time import struct_time
 

@@ -3,11 +3,8 @@
 Test suite for core.thumbnail_utils module
 """
 
-import sys
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
 from PIL import Image
-import io
 
 # Path setup handled by conftest.py
 

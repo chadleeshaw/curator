@@ -10,7 +10,7 @@ from typing import Any, Callable, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import func, or_
 
-from core.constants.country import COUNTRY_INDICATORS, LANGUAGE_TO_COUNTRY
+from core.constants.country import LANGUAGE_TO_COUNTRY
 from core.constants.errors import ErrorMessages
 from core.constants.language import LANGUAGE_KEYWORDS
 from core.parsers.country import detect_country

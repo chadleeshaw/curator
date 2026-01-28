@@ -2,8 +2,6 @@
 Tests for automatic metadata enhancement from text scan and OCR results.
 """
 
-import sys
-from pathlib import Path
 from datetime import datetime
 
 # Path setup handled by conftest.py

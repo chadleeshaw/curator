@@ -10,10 +10,9 @@ Models:
     SyncStatus: Tracks sync state for each provider
 """
 
-from datetime import datetime
 from typing import Any, Dict
 
-from sqlalchemy import Boolean, Column, DateTime, Float, Integer, JSON, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Float, Integer, JSON, String
 from sqlalchemy.ext.declarative import declarative_base
 
 from core.parsers import utc_now as utcnow

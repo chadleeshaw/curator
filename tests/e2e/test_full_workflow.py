@@ -3,21 +3,18 @@ Integration tests for end-to-end workflows
 Tests complete user journeys through the application
 """
 
-import sys
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 # Path setup handled by conftest.py
 
 from core.auth import AuthManager
 from core.database import DatabaseManager
-from models.database import Base, DownloadSubmission, Periodical, PeriodicalTracking
+from models.database import DownloadSubmission, Periodical, PeriodicalTracking
 from services import DownloadManager
 from services import FileImporter
 from services import FileOrganizer

@@ -7,11 +7,8 @@ Test Coverage:
 - Integration with pdf2image library
 """
 
-import sys
-from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
-import pytest
 
 # Path setup handled by conftest.py
 

@@ -2,7 +2,6 @@
 Test suite for ConfigLoader functionality
 """
 
-import sys
 from pathlib import Path
 
 import pytest

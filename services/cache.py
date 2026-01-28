@@ -14,10 +14,8 @@ Classes:
     ProviderSyncService: Syncs with search providers in background
 """
 
-import hashlib
 import logging
 import os
-import shutil
 import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
@@ -28,7 +26,6 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from core.constants.cache import (
     CACHE_CLEANUP_BATCH_SIZE,
-    CACHE_DB_FILENAME,
     CACHE_RETENTION_DAYS,
     FTS5_TOKENIZER,
     FUZZY_MATCH_SIMILARITY_THRESHOLD,

@@ -17,8 +17,6 @@ from services import DownloadManager
 from models.database import (
     Base,
     PeriodicalTracking,
-    DownloadSubmission,
-    SearchResult as DBSearchResult,
 )
 from core.interfaces import SearchProvider, DownloadClient, SearchResult
 

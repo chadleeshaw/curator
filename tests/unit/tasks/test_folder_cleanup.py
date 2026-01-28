@@ -9,11 +9,6 @@ Tests folder cleanup logic including:
 - Exhaustive scanning
 """
 
-import shutil
-from pathlib import Path
-
-import pytest
-
 from tasks.folder_cleanup import FolderCleanup
 
 
@@ -381,7 +376,7 @@ class TestComplexScenarios:
         (incomplete / "temp.002").touch()
 
         cleanup = FolderCleanup(str(tmp_path), str(tmp_path), dry_run=False)
-        stats = cleanup.cleanup_directory(tmp_path, "test")
+        cleanup.cleanup_directory(tmp_path, "test")
 
         # Main folder should be protected (has PDF)
         # UNPACK subfolder should be deleted (only temp files)
@@ -402,7 +397,7 @@ class TestComplexScenarios:
         bad.mkdir()
 
         cleanup = FolderCleanup(str(tmp_path), str(tmp_path), dry_run=False)
-        stats = cleanup.cleanup_directory(tmp_path, "test")
+        cleanup.cleanup_directory(tmp_path, "test")
 
         # .covers should be completely untouched
         assert covers.exists()

@@ -4,8 +4,6 @@ Comprehensive test suite for Parser.
 Tests all parsing use cases and dataclass models.
 """
 
-import sys
-import tempfile
 from datetime import datetime
 from pathlib import Path
 

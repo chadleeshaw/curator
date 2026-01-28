@@ -3,8 +3,6 @@
 Test suite for core.constants module
 """
 
-import sys
-from pathlib import Path
 
 # Path setup handled by conftest.py
 

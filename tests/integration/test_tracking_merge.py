@@ -2,7 +2,6 @@
 Integration test for tracking merge functionality with library view grouping
 """
 
-import sys
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -335,13 +334,12 @@ class TestTrackingMergeIntegration:
             # Mock the library_base_dir to use our temp directory
             import web.routers.tracking as tracking_module
 
-            original_merge = tracking_module.merge_tracking
+            tracking_module.merge_tracking
 
             async def patched_merge(target_id, source_ids):
                 # Temporarily patch the library_base_dir
                 db_session = session_factory()
                 try:
-                    from models.database import DownloadSubmission
                     from models.database import Periodical as Mag
 
                     # Get target tracking record

@@ -3,14 +3,11 @@
 Test suite for core.auth module
 """
 
-import sys
-from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 # Path setup handled by conftest.py
 
 from core.auth import AuthManager
-from models.database import Credentials
 
 
 def test_auth_manager_initialization():

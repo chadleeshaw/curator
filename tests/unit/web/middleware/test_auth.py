@@ -3,9 +3,7 @@
 Test suite for web.middleware.auth module
 """
 
-import sys
-from pathlib import Path
-from unittest.mock import Mock, AsyncMock
+from unittest.mock import Mock
 import pytest
 
 # Path setup handled by conftest.py

@@ -3,8 +3,6 @@
 Test suite for web.middleware.rate_limit module
 """
 
-import sys
-from pathlib import Path
 from unittest.mock import Mock
 
 # Path setup handled by conftest.py

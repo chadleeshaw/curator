@@ -7,7 +7,6 @@ vs "Kids Travel", "PC Gamer US" vs "PC Gamer United States").
 """
 
 import logging
-import re
 from typing import List, Set
 
 from core.constants.edition import (

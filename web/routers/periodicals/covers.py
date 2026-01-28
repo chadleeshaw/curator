@@ -15,7 +15,6 @@ from core.constants.ocr import PDF_COVER_DPI_OCR
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from core.utils.pdf import extract_cover_from_pdf
-from models.database import Periodical
 from services.ocr.service import OCRService
 
 from . import _shared

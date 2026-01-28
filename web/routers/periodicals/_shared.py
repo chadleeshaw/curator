@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy.orm import Session
 
 from core.constants.category import CATEGORIES
-from core.constants.date import MONTH_TO_NUMBER, NUMBER_TO_MONTH_ABBR
+from core.constants.date import MONTH_TO_NUMBER
 from core.constants.errors import ErrorMessages
 from models.database import Periodical
 

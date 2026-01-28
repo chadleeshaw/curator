@@ -2,7 +2,6 @@
 Test suite for tracking router endpoints
 """
 
-import sys
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -489,7 +488,6 @@ class TestTrackingMerge:
             assert mag.title == "National Geographic"
 
         # Should have 2 groups in library view (by title+language)
-        from sqlalchemy import func
 
         title_lang_groups = session.query(Periodical.title, Periodical.language).distinct().all()
         assert len(title_lang_groups) == 2
@@ -614,7 +612,7 @@ class TestTitleChangeFileReorganization:
             )
             session.add(magazine)
             session.commit()
-            magazine_id = magazine.id
+            magazine.id
 
             # Verify old files exist
             assert old_pdf.exists(), "Old PDF should exist"
@@ -624,7 +622,7 @@ class TestTitleChangeFileReorganization:
             from web.routers.tracking import _reorganize_periodical_files
 
             # Update the tracking title
-            old_title = tracking.title
+            tracking.title
             new_title = "New Magazine Name"
             tracking.title = new_title
 
@@ -706,7 +704,6 @@ class TestTitleChangeFileReorganization:
 
             # This simulates what happens in the update endpoint
             # Special editions should be skipped
-            from core.utils.general import is_special_edition
 
             is_special = special_magazine.extra_metadata.get("special_edition") is not None
             assert is_special, "Should detect as special edition"

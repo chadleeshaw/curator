@@ -3,9 +3,7 @@
 Test suite for core.parsers.title module
 """
 
-import sys
 from datetime import datetime
-from pathlib import Path
 
 # Path setup handled by conftest.py
 

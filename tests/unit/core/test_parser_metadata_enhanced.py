@@ -346,7 +346,7 @@ class TestConfidenceScoring:
             "year": 2024,
             "month": 1,
         }
-        confidence1 = extractor._calculate_confidence(metadata1)
+        extractor._calculate_confidence(metadata1)
 
         # With volume/issue (should be same or higher)
         metadata2 = {

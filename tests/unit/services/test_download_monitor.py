@@ -9,10 +9,9 @@ sys.path.insert(0, ".")
 
 import pytest
 from pathlib import Path
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import Mock
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 from core.config import ConfigLoader
 from tasks import DownloadMonitor
@@ -21,12 +20,6 @@ from services import FileImporter
 from core.interfaces import DownloadClient
 from models.database import (
     Base,
-    Credentials,
-    Download,
-    DownloadSubmission,
-    Periodical,
-    PeriodicalTracking,
-    SearchResult,
 )
 
 

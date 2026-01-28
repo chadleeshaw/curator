@@ -902,12 +902,11 @@ class FileOrganizer:
                     continue
 
                 # Get country and tracking info from tracking record if available
-                country = None
                 tracking_title = None
                 if magazine.tracking_id:
                     tracking = db_session.query(PeriodicalTracking).filter_by(id=magazine.tracking_id).first()
                     if tracking:
-                        country = tracking.country
+                        tracking.country
                         tracking_title = tracking.title
 
                 # CRITICAL: Use the tracking title if available, otherwise use magazine title

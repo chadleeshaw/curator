@@ -149,7 +149,6 @@ class TestHandleApiErrors:
         @handle_api_errors("Test operation", logger)
         async def my_test_function():
             """This is a docstring"""
-            pass
 
         # Verify metadata is preserved
         assert my_test_function.__name__ == "my_test_function"

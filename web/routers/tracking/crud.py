@@ -8,15 +8,11 @@ from typing import Any, Dict, Optional, Tuple
 
 from fastapi import HTTPException, Query
 
-from core.constants.category import DEFAULT_CATEGORY
 from core.constants.errors import ErrorMessages
-from core.parsers import sanitize_filename
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from core.utils.general import (
-    cleanup_empty_directories,
     generate_olid,
-    is_special_edition,
 )
 from models.database import Periodical, PeriodicalTracking
 from services.file_operations import reorganize_periodical_files

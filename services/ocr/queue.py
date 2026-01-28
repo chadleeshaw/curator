@@ -308,7 +308,7 @@ class OCRQueueService:
 
         # Load metadata aggregation configuration
         config_loader = ConfigLoader()
-        metadata_config = config_loader.get_metadata()
+        config_loader.get_metadata()
 
         # Prepare jobs for processing
         job_data = []

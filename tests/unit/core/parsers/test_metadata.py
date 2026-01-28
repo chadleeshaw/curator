@@ -3,8 +3,6 @@
 Test suite for core.parsers.metadata module
 """
 
-import sys
-from datetime import datetime
 from pathlib import Path
 
 # Path setup handled by conftest.py
@@ -24,7 +22,7 @@ def test_metadata_extractor_initialization():
 def test_metadata_extractor_with_filename():
     """Test extracting metadata from filename"""
     extractor = FilenameParser()
-    result = extractor.extract_from_filename(Path("Wired Magazine - January 2024.pdf"))
+    extractor.extract_from_filename(Path("Wired Magazine - January 2024.pdf"))
     # FilenameParser has methods like extract() that work with Path objects
     # Test that it can be instantiated and has expected attributes
     assert hasattr(extractor, "system_folders")

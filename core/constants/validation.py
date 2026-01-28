@@ -6,7 +6,6 @@ Used to distinguish periodicals from books, collections, and other non-periodica
 
 from core.constants.category import (
     ACCEPTED_NEWSNAB_CATEGORIES,
-    CATEGORY_PATTERNS,
     REJECTED_NEWSNAB_CATEGORIES,
 )
 from core.constants.date import get_month_year_patterns, get_season_year_patterns

@@ -8,7 +8,7 @@ Run this to start the web server and periodical manager.
 import sys
 import logging
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict
 
 sys.path.insert(0, str(Path(__file__).parent))
 

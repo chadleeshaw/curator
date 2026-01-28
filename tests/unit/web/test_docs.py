@@ -3,12 +3,10 @@
 Test suite for web.docs module
 """
 
-import sys
-from pathlib import Path
 
 # Path setup handled by conftest.py
 
-from web.docs import OPENAPI_METADATA, OPENAPI_TAGS, DOCS_URLS
+from web.docs import OPENAPI_METADATA, OPENAPI_TAGS
 
 
 def test_openapi_metadata():

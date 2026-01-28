@@ -11,7 +11,6 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 from core.constants.category import DEFAULT_CATEGORY
 from core.constants.errors import ErrorMessages
-from core.utils import run_in_thread
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from core.utils.general import find_pdf_epub_files

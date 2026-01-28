@@ -3,7 +3,6 @@
 Test suite for core.parsers.models module
 """
 
-import sys
 from pathlib import Path
 from datetime import datetime
 

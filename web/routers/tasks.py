@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 from core.utils.error_handling import handle_api_errors
 from models.database import Periodical

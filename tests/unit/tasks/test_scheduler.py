@@ -5,7 +5,6 @@ Test suite for TaskScheduler
 
 import asyncio
 import sys
-import time
 from pathlib import Path
 from datetime import datetime
 
@@ -30,7 +29,6 @@ def test_schedule_periodic():
     assert scheduler.tasks["test_task"]["last_run"] is None
 
     print("Testing TaskScheduler.schedule_periodic()... ✓ PASS")
-    pass
 
 
 def test_get_status():
@@ -55,7 +53,6 @@ def test_get_status():
     assert status["tasks"]["task2"]["last_run"] is None
 
     print("Testing TaskScheduler.get_status()... ✓ PASS")
-    pass
 
 
 def test_start_and_stop():
@@ -92,7 +89,6 @@ def test_start_and_stop():
     assert scheduler.running is False
 
     print("Testing TaskScheduler.start()/stop()... ✓ PASS")
-    pass
 
 
 def test_scheduler_error_handling():
@@ -141,7 +137,6 @@ def test_scheduler_error_handling():
     assert task_info["backoff_seconds"] > 0, "Expected backoff > 0"
 
     print("Testing TaskScheduler error handling... ✓ PASS")
-    pass
 
 
 def test_multiple_tasks():
@@ -187,7 +182,6 @@ def test_multiple_tasks():
     assert len(status["tasks"]) == 3
 
     print("Testing TaskScheduler with multiple tasks... ✓ PASS")
-    pass
 
 
 def test_task_intervals():
@@ -205,7 +199,6 @@ def test_task_intervals():
     assert status["tasks"]["slow_task"]["interval"] == 300
 
     print("Testing TaskScheduler task intervals... ✓ PASS")
-    pass
 
 
 def test_run_immediately():
@@ -249,7 +242,6 @@ def test_run_immediately():
     assert execution_log["delayed"] == 0, f"Delayed task should not have run yet, got {execution_log['delayed']}"
 
     print("Testing TaskScheduler run_immediately parameter... ✓ PASS")
-    pass
 
 
 if __name__ == "__main__":

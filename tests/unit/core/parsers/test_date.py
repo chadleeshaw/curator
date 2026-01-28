@@ -4,9 +4,7 @@ Test suite for date parsing utilities.
 Tests month name mapping, abbreviation conversion, and date utilities.
 """
 
-import sys
 from datetime import UTC, datetime
-from pathlib import Path
 
 import pytest
 

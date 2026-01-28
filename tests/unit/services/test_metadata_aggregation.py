@@ -65,7 +65,7 @@ class TestMetadataAggregation:
             "field_overrides": {},
         }
 
-        result = _apply_scan_metadata_to_magazine(self.magazine, scan_metadata, metadata_config)
+        _apply_scan_metadata_to_magazine(self.magazine, scan_metadata, metadata_config)
 
         # OCR should be rejected, filename value should be preserved
         assert self.magazine.extra_metadata["year"] == 2023  # Should keep filename value
@@ -144,7 +144,7 @@ class TestMetadataAggregation:
             "field_overrides": {},
         }
 
-        result = _apply_scan_metadata_to_magazine(self.magazine, scan_metadata, metadata_config)
+        _apply_scan_metadata_to_magazine(self.magazine, scan_metadata, metadata_config)
 
         # Should use OCR (first in priority, meets threshold)
         assert self.magazine.extra_metadata["year"] == 2024
@@ -162,7 +162,7 @@ class TestMetadataAggregation:
         }
 
         # No config provided - should use defaults
-        result = _apply_scan_metadata_to_magazine(self.magazine, scan_metadata, None)
+        _apply_scan_metadata_to_magazine(self.magazine, scan_metadata, None)
 
         # Should use OCR-first defaults
         assert self.magazine.extra_metadata["year"] == 2024
@@ -184,7 +184,7 @@ class TestMetadataAggregation:
             "field_overrides": {},
         }
 
-        result = _apply_scan_metadata_to_magazine(self.magazine, scan_metadata, metadata_config)
+        _apply_scan_metadata_to_magazine(self.magazine, scan_metadata, metadata_config)
 
         # Should accept text_scan even though no confidence field
         # (treated as 100% which exceeds 50% threshold)
@@ -290,7 +290,7 @@ class TestMetadataAggregation:
             "field_overrides": {},
         }
 
-        result = _apply_scan_metadata_to_magazine(self.magazine, scan_metadata, metadata_config)
+        _apply_scan_metadata_to_magazine(self.magazine, scan_metadata, metadata_config)
 
         # Should use filename (first in priority)
         assert self.magazine.extra_metadata["year"] == 2022

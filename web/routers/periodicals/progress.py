@@ -4,14 +4,12 @@ Reading progress tracking for periodicals
 
 from typing import Any, Dict, Optional
 
-from fastapi import HTTPException
 from pydantic import BaseModel
 
-from core.constants.errors import ErrorMessages
 from core.parsers import utc_now
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
-from models.database import Periodical, ReadingProgress
+from models.database import ReadingProgress
 
 from . import _shared
 

@@ -3,10 +3,6 @@ Test suite for config router API endpoints
 Tests the masking of sensitive data and preservation of API keys
 """
 
-import sys
-from pathlib import Path
-from unittest.mock import MagicMock
-
 import pytest
 
 # Path setup handled by conftest.py

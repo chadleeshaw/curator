@@ -3,7 +3,6 @@ Test title normalization across tracking, library view, and folder organization.
 Ensures titles are consistently cleaned and grouped throughout the system.
 """
 
-import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path

@@ -3,9 +3,7 @@
 Test suite for core.db_utils module
 """
 
-import sys
-from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 # Path setup handled by conftest.py
 

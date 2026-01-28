@@ -2,9 +2,8 @@
 Test suite for download router endpoints
 """
 
-import sys
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 import pytest
 from sqlalchemy import create_engine

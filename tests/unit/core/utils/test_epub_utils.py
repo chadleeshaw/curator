@@ -3,10 +3,7 @@
 Test suite for core.epub_utils module
 """
 
-import sys
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
-from zipfile import ZipFile
 
 # Path setup handled by conftest.py
 
