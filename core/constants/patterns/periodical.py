@@ -77,6 +77,9 @@ ANTI_PERIODICAL_PATTERN_NOVEL_SERIES = r"\b(novel|trilogy|saga|series)\b"
 ANTI_PERIODICAL_PATTERN_CHAPTER = r"\bchapter\s+\d+\b"
 """Pattern for chapter indicators"""
 
+ANTI_PERIODICAL_PATTERN_VIDEO = r"\bvideo\b"
+"""Pattern for video content indicators"""
+
 # ==============================================================================
 # RELEASE GROUP AND QUALITY PATTERNS
 # ==============================================================================

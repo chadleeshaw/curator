@@ -162,6 +162,13 @@ class TestAntiPeriodicalFiltering:
         result = parser.extract_from_nzb_title("Independent.Film.2024.WEB-DL")
         assert result is None
 
+    def test_reject_video_keyword(self, parser):
+        """Reject titles with generic 'video' keyword."""
+        result = parser.extract_from_nzb_title("Training.Video.2024")
+        assert result is None
+        result = parser.extract_from_nzb_title("Educational Video Series")
+        assert result is None
+
     def test_reject_directors_cut(self, parser):
         """Reject director's cut releases."""
         result = parser.extract_from_nzb_title("Film.Directors.Cut.2024.BluRay")

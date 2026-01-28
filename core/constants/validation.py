@@ -136,6 +136,10 @@ ANTI_PERIODICAL_PATTERNS = [
     r"\b(soundtrack|ost|original[\s\-]?score|original[\s\-]?motion[\s\-]?picture)\b",
     r"\b(album|discography|live[\s\-]?concert)\b",
     # ============================================================================
+    # Video Content Indicators (generic)
+    # ============================================================================
+    r"\bvideo\b",  # Generic video content indicator
+    # ============================================================================
     # Release Group Tags (common in video releases)
     # ============================================================================
     r"\b(yify|rarbg|etrg|sparks|cmrg|fleet|ntb|shortbrehd)\b",
