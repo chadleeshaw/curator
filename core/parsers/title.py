@@ -212,6 +212,7 @@ class TitleMatcher:
             "RETAIL",
             "EXTENDED",
             "UNRATED",
+            "COMPLETE",
         ]
         for tag in release_tags:
             title = re.sub(rf"[\.\s]*{tag}", "", title, flags=re.IGNORECASE)
@@ -285,6 +286,9 @@ class TitleMatcher:
 
         # Clean up multiple spaces again after replacements
         title = re.sub(r"\s+", " ", title).strip()
+
+        # Remove trailing hyphens/dashes (left over from tag removal)
+        title = re.sub(r"[-\s]+$", "", title).strip()
 
         # Title case (capitalize first letter of each word)
         # But preserve special formatting for common periodicals
