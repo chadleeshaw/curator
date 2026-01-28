@@ -30,6 +30,7 @@ VALID_CONFIG_KEYS = {
     "metadata_providers",
     "download_client",
     "storage",
+    "cache",
     "matching",
     "import",
     "pdf",
