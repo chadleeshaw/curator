@@ -2,19 +2,22 @@
 File operations for periodicals
 """
 
+import mimetypes
 import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict
 
 from fastapi import HTTPException
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 
 from core.constants.category import DEFAULT_CATEGORY
 from core.constants.errors import ErrorMessages
 from core.parsers import sanitize_filename
-from core.utils.general import is_special_edition, cleanup_empty_directories
 from core.utils import run_in_thread
+from core.utils.db import with_db_session
+from core.utils.error_handling import handle_api_errors
+from core.utils.general import cleanup_empty_directories, is_special_edition
 from core.utils.epub_reader import get_epub_metadata, get_epub_chapter, get_epub_image
 from core.utils.comic_reader import (
     get_comic_metadata,
@@ -31,6 +34,7 @@ logger = _shared.logger
 
 
 @router.get("/periodicals/{periodical_id}/pdf")
+@handle_api_errors("Get file", logger)
 async def get_pdf(periodical_id: int):
     """
     Get magazine file (PDF, EPUB, CBZ, or CBR).
@@ -38,54 +42,35 @@ async def get_pdf(periodical_id: int):
     Files are served inline for browser viewing. Users with EPUB browser extensions
     can view EPUBs directly; others will get a download prompt.
     """
-    try:
 
-        def _db_operation():
-            db_session = _shared._session_factory()
-            try:
-                magazine = db_session.query(Periodical).filter(Periodical.id == periodical_id).first()
+    def fetch_file_path(db_session):
+        _, file_path = _shared.get_periodical_with_file(db_session, periodical_id)
+        return file_path
 
-                if not magazine:
-                    raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
+    file_path = await with_db_session(_shared._session_factory, fetch_file_path)
 
-                try:
-                    file_path = _shared.resolve_file_path(magazine.file_path)
-                except FileNotFoundError as e:
-                    raise HTTPException(status_code=404, detail=str(e))
+    # Detect file type and set appropriate media type and headers
+    file_extension = file_path.suffix.lower()
+    if file_extension == ".epub":
+        media_type = "application/epub+zip"
+    elif file_extension == ".pdf":
+        media_type = "application/pdf"
+    elif file_extension == ".cbz":
+        media_type = "application/vnd.comicbook+zip"
+    elif file_extension == ".cbr":
+        media_type = "application/vnd.comicbook-rar"
+    else:
+        # Fallback to octet-stream for unknown types
+        media_type = "application/octet-stream"
 
-                return file_path
-            finally:
-                db_session.close()
+    # Serve inline - browsers will display if they can, download if they can't
+    headers = {"Content-Disposition": f'inline; filename="{file_path.name}"'}
 
-        file_path = await run_in_thread(_db_operation)
-
-        # Detect file type and set appropriate media type and headers
-        file_extension = file_path.suffix.lower()
-        if file_extension == ".epub":
-            media_type = "application/epub+zip"
-        elif file_extension == ".pdf":
-            media_type = "application/pdf"
-        elif file_extension == ".cbz":
-            media_type = "application/vnd.comicbook+zip"
-        elif file_extension == ".cbr":
-            media_type = "application/vnd.comicbook-rar"
-        else:
-            # Fallback to octet-stream for unknown types
-            media_type = "application/octet-stream"
-
-        # Serve inline - browsers will display if they can, download if they can't
-        headers = {"Content-Disposition": f'inline; filename="{file_path.name}"'}
-
-        return FileResponse(file_path, media_type=media_type, headers=headers)
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Get file error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return FileResponse(file_path, media_type=media_type, headers=headers)
 
 
 @router.get("/periodicals/{periodical_id}/epub/metadata")
+@handle_api_errors("Get EPUB metadata", logger)
 async def get_epub_metadata_endpoint(periodical_id: int) -> Dict[str, Any]:
     """
     Get EPUB metadata and chapter list.
@@ -93,48 +78,32 @@ async def get_epub_metadata_endpoint(periodical_id: int) -> Dict[str, Any]:
     Returns:
         Dictionary with title, author, chapters list, and chapter count
     """
-    try:
 
-        def _db_operation():
-            db_session = _shared._session_factory()
-            try:
-                magazine = db_session.query(Periodical).filter(Periodical.id == periodical_id).first()
+    def operation(db):
+        magazine, file_path = _shared.get_periodical_with_file(db, periodical_id)
 
-                if not magazine:
-                    raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
+        # Verify it's an EPUB file
+        if file_path.suffix.lower() != ".epub":
+            raise HTTPException(status_code=400, detail="File is not an EPUB")
 
-                try:
-                    file_path = _shared.resolve_file_path(magazine.file_path)
-                except FileNotFoundError as e:
-                    raise HTTPException(status_code=404, detail=str(e))
+        return file_path
 
-                # Verify it's an EPUB file
-                if file_path.suffix.lower() != ".epub":
-                    raise HTTPException(status_code=400, detail="File is not an EPUB")
+    file_path = await with_db_session(_shared._session_factory, operation)
 
-                return file_path
-            finally:
-                db_session.close()
+    # Get EPUB metadata (this may take a moment for large EPUBs)
+    metadata = await run_in_thread(lambda: get_epub_metadata(file_path))
 
-        file_path = await run_in_thread(_db_operation)
+    if not metadata:
+        raise HTTPException(status_code=500, detail="Failed to extract EPUB metadata")
 
-        # Get EPUB metadata (this may take a moment for large EPUBs)
-        metadata = await run_in_thread(lambda: get_epub_metadata(file_path))
-
-        if not metadata:
-            raise HTTPException(status_code=500, detail="Failed to extract EPUB metadata")
-
-        return metadata
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Get EPUB metadata error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    return metadata
 
 
 @router.get("/periodicals/{periodical_id}/epub/chapter/{chapter_index}")
-async def get_epub_chapter_endpoint(periodical_id: int, chapter_index: int) -> HTMLResponse:
+@handle_api_errors("Get EPUB chapter", logger)
+async def get_epub_chapter_endpoint(
+    periodical_id: int, chapter_index: int
+) -> HTMLResponse:
     """
     Get specific EPUB chapter content as HTML.
 
@@ -145,50 +114,34 @@ async def get_epub_chapter_endpoint(periodical_id: int, chapter_index: int) -> H
     Returns:
         HTML content of the chapter
     """
-    try:
 
-        def _db_operation():
-            db_session = _shared._session_factory()
-            try:
-                magazine = db_session.query(Periodical).filter(Periodical.id == periodical_id).first()
+    def operation(db):
+        magazine, file_path = _shared.get_periodical_with_file(db, periodical_id)
 
-                if not magazine:
-                    raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
+        # Verify it's an EPUB file
+        if file_path.suffix.lower() != ".epub":
+            raise HTTPException(status_code=400, detail="File is not an EPUB")
 
-                try:
-                    file_path = _shared.resolve_file_path(magazine.file_path)
-                except FileNotFoundError as e:
-                    raise HTTPException(status_code=404, detail=str(e))
+        return file_path
 
-                # Verify it's an EPUB file
-                if file_path.suffix.lower() != ".epub":
-                    raise HTTPException(status_code=400, detail="File is not an EPUB")
+    file_path = await with_db_session(_shared._session_factory, operation)
 
-                return file_path
-            finally:
-                db_session.close()
+    # Get chapter content with periodical_id for image URL rewriting
+    chapter_html = await run_in_thread(
+        lambda: get_epub_chapter(file_path, chapter_index, periodical_id)
+    )
 
-        file_path = await run_in_thread(_db_operation)
+    if chapter_html is None:
+        raise HTTPException(status_code=404, detail="Chapter not found")
 
-        # Get chapter content with periodical_id for image URL rewriting
-        chapter_html = await run_in_thread(lambda: get_epub_chapter(file_path, chapter_index, periodical_id))
-
-        if chapter_html is None:
-            raise HTTPException(status_code=404, detail="Chapter not found")
-
-        response = HTMLResponse(content=chapter_html)
-        # Add cache headers for EPUB chapters (cache for 7 days)
-        response.headers["Cache-Control"] = "public, max-age=604800, immutable"
-        return response
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Get EPUB chapter error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    response = HTMLResponse(content=chapter_html)
+    # Add cache headers for EPUB chapters (cache for 7 days)
+    response.headers["Cache-Control"] = "public, max-age=604800, immutable"
+    return response
 
 
 @router.get("/periodicals/{periodical_id}/epub/image/{image_name}")
+@handle_api_errors("Get EPUB image", logger)
 async def get_epub_image_endpoint(periodical_id: int, image_name: str):
     """
     Get an image from an EPUB file.
@@ -200,54 +153,31 @@ async def get_epub_image_endpoint(periodical_id: int, image_name: str):
     Returns:
         Image data with appropriate content type
     """
-    try:
 
-        def _db_operation():
-            db_session = _shared._session_factory()
-            try:
-                magazine = db_session.query(Periodical).filter(Periodical.id == periodical_id).first()
+    def operation(db):
+        magazine, file_path = _shared.get_periodical_with_file(db, periodical_id)
 
-                if not magazine:
-                    raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
+        # Verify it's an EPUB file
+        if file_path.suffix.lower() != ".epub":
+            raise HTTPException(status_code=400, detail="File is not an EPUB")
 
-                try:
-                    file_path = _shared.resolve_file_path(magazine.file_path)
-                except FileNotFoundError as e:
-                    raise HTTPException(status_code=404, detail=str(e))
+        return file_path
 
-                # Verify it's an EPUB file
-                if file_path.suffix.lower() != ".epub":
-                    raise HTTPException(status_code=400, detail="File is not an EPUB")
+    file_path = await with_db_session(_shared._session_factory, operation)
 
-                return file_path
-            finally:
-                db_session.close()
+    # Get image content
+    image_data = await run_in_thread(lambda: get_epub_image(file_path, image_name))
 
-        file_path = await run_in_thread(_db_operation)
+    if image_data is None:
+        raise HTTPException(status_code=404, detail="Image not found")
 
-        # Get image content
-        image_data = await run_in_thread(lambda: get_epub_image(file_path, image_name))
+    # Determine content type from file extension
+    content_type = mimetypes.guess_type(image_name)[0] or "application/octet-stream"
 
-        if image_data is None:
-            raise HTTPException(status_code=404, detail="Image not found")
-
-        # Determine content type from file extension
-        import mimetypes
-
-        content_type = mimetypes.guess_type(image_name)[0] or "application/octet-stream"
-
-        from fastapi.responses import Response
-
-        response = Response(content=image_data, media_type=content_type)
-        # Add cache headers for EPUB images (cache for 7 days)
-        response.headers["Cache-Control"] = "public, max-age=604800, immutable"
-        return response
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Get EPUB image error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    response = Response(content=image_data, media_type=content_type)
+    # Add cache headers for EPUB images (cache for 7 days)
+    response.headers["Cache-Control"] = "public, max-age=604800, immutable"
+    return response
 
 
 # ============================================================================
@@ -256,6 +186,7 @@ async def get_epub_image_endpoint(periodical_id: int, image_name: str):
 
 
 @router.get("/periodicals/{periodical_id}/comic/metadata")
+@handle_api_errors("Get comic metadata", logger)
 async def get_comic_metadata_endpoint(periodical_id: int) -> Dict[str, Any]:
     """
     Get comic metadata and page list.
@@ -263,53 +194,35 @@ async def get_comic_metadata_endpoint(periodical_id: int) -> Dict[str, Any]:
     Returns:
         Dictionary with title, format, page_count, pages list, and cover_page index
     """
-    try:
 
-        def _db_operation():
-            db_session = _shared._session_factory()
-            try:
-                magazine = db_session.query(Periodical).filter(Periodical.id == periodical_id).first()
+    def operation(db):
+        magazine, file_path = _shared.get_periodical_with_file(db, periodical_id)
 
-                if not magazine:
-                    raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
+        # Verify it's a comic file
+        if file_path.suffix.lower() not in [".cbz", ".cbr"]:
+            raise HTTPException(status_code=400, detail="File is not a comic (CBZ/CBR)")
 
-                try:
-                    file_path = _shared.resolve_file_path(magazine.file_path)
-                except FileNotFoundError as e:
-                    raise HTTPException(status_code=404, detail=str(e))
+        # Get cover page index from extra_metadata (defaults to 0)
+        cover_page = 0
+        if magazine.extra_metadata and "cover_page" in magazine.extra_metadata:
+            # Convert from 1-based (stored) to 0-based (used by frontend)
+            cover_page = magazine.extra_metadata["cover_page"] - 1
 
-                # Verify it's a comic file
-                if file_path.suffix.lower() not in [".cbz", ".cbr"]:
-                    raise HTTPException(status_code=400, detail="File is not a comic (CBZ/CBR)")
+        return file_path, cover_page
 
-                # Get cover page index from extra_metadata (defaults to 0)
-                cover_page = 0
-                if magazine.extra_metadata and "cover_page" in magazine.extra_metadata:
-                    # Convert from 1-based (stored) to 0-based (used by frontend)
-                    cover_page = magazine.extra_metadata["cover_page"] - 1
+    file_path, cover_page = await with_db_session(_shared._session_factory, operation)
 
-                return file_path, cover_page
-            finally:
-                db_session.close()
+    # Get comic metadata
+    metadata = await run_in_thread(lambda: get_comic_metadata(file_path))
 
-        file_path, cover_page = await run_in_thread(_db_operation)
+    # Add cover page index to metadata
+    metadata["cover_page"] = cover_page
 
-        # Get comic metadata
-        metadata = await run_in_thread(lambda: get_comic_metadata(file_path))
-
-        # Add cover page index to metadata
-        metadata["cover_page"] = cover_page
-
-        return metadata
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Get comic metadata error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    return metadata
 
 
 @router.get("/periodicals/{periodical_id}/comic/page/{page_index}")
+@handle_api_errors("Get comic page", logger)
 async def get_comic_page_endpoint(periodical_id: int, page_index: int):
     """
     Get specific comic page as image.
@@ -321,63 +234,43 @@ async def get_comic_page_endpoint(periodical_id: int, page_index: int):
     Returns:
         Image data with appropriate content type
     """
-    try:
 
-        def _db_operation():
-            db_session = _shared._session_factory()
-            try:
-                magazine = db_session.query(Periodical).filter(Periodical.id == periodical_id).first()
+    def operation(db):
+        magazine, file_path = _shared.get_periodical_with_file(db, periodical_id)
 
-                if not magazine:
-                    raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
+        # Verify it's a comic file
+        if file_path.suffix.lower() not in [".cbz", ".cbr"]:
+            raise HTTPException(status_code=400, detail="File is not a comic (CBZ/CBR)")
 
-                try:
-                    file_path = _shared.resolve_file_path(magazine.file_path)
-                except FileNotFoundError as e:
-                    raise HTTPException(status_code=404, detail=str(e))
+        return file_path
 
-                # Verify it's a comic file
-                if file_path.suffix.lower() not in [".cbz", ".cbr"]:
-                    raise HTTPException(status_code=400, detail="File is not a comic (CBZ/CBR)")
+    file_path = await with_db_session(_shared._session_factory, operation)
 
-                return file_path
-            finally:
-                db_session.close()
+    # Get page image
+    image_data = await run_in_thread(lambda: get_comic_page(file_path, page_index))
 
-        file_path = await run_in_thread(_db_operation)
+    if image_data is None:
+        raise HTTPException(status_code=404, detail="Page not found")
 
-        # Get page image
-        image_data = await run_in_thread(lambda: get_comic_page(file_path, page_index))
+    # Determine content type from image data
 
-        if image_data is None:
-            raise HTTPException(status_code=404, detail="Page not found")
+    # Try to guess from magic bytes
+    content_type = "image/jpeg"  # Default
+    if image_data.startswith(b"\x89PNG"):
+        content_type = "image/png"
+    elif image_data.startswith(b"GIF"):
+        content_type = "image/gif"
+    elif image_data.startswith(b"RIFF") and b"WEBP" in image_data[:20]:
+        content_type = "image/webp"
 
-        # Determine content type from image data
-
-        # Try to guess from magic bytes
-        content_type = "image/jpeg"  # Default
-        if image_data.startswith(b"\x89PNG"):
-            content_type = "image/png"
-        elif image_data.startswith(b"GIF"):
-            content_type = "image/gif"
-        elif image_data.startswith(b"RIFF") and b"WEBP" in image_data[:20]:
-            content_type = "image/webp"
-
-        from fastapi.responses import Response
-
-        response = Response(content=image_data, media_type=content_type)
-        # Add cache headers for full-size pages (cache for 7 days)
-        response.headers["Cache-Control"] = "public, max-age=604800, immutable"
-        return response
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Get comic page error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    response = Response(content=image_data, media_type=content_type)
+    # Add cache headers for full-size pages (cache for 7 days)
+    response.headers["Cache-Control"] = "public, max-age=604800, immutable"
+    return response
 
 
 @router.get("/periodicals/{periodical_id}/comic/page/{page_index}/thumbnail")
+@handle_api_errors("Get comic page thumbnail", logger)
 async def get_comic_page_thumbnail_endpoint(periodical_id: int, page_index: int):
     """
     Get thumbnail of a specific comic page.
@@ -389,52 +282,36 @@ async def get_comic_page_thumbnail_endpoint(periodical_id: int, page_index: int)
     Returns:
         Thumbnail image data as JPEG
     """
-    try:
 
-        def _db_operation():
-            db_session = _shared._session_factory()
-            try:
-                magazine = db_session.query(Periodical).filter(Periodical.id == periodical_id).first()
+    def operation(db):
+        magazine, file_path = _shared.get_periodical_with_file(db, periodical_id)
 
-                if not magazine:
-                    raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
+        # Verify it's a comic file
+        if file_path.suffix.lower() not in [".cbz", ".cbr"]:
+            raise HTTPException(status_code=400, detail="File is not a comic (CBZ/CBR)")
 
-                try:
-                    file_path = _shared.resolve_file_path(magazine.file_path)
-                except FileNotFoundError as e:
-                    raise HTTPException(status_code=404, detail=str(e))
+        return file_path
 
-                # Verify it's a comic file
-                if file_path.suffix.lower() not in [".cbz", ".cbr"]:
-                    raise HTTPException(status_code=400, detail="File is not a comic (CBZ/CBR)")
+    file_path = await with_db_session(_shared._session_factory, operation)
 
-                return file_path
-            finally:
-                db_session.close()
+    # Get thumbnail
+    thumbnail_data = await run_in_thread(
+        lambda: get_comic_page_thumbnail(file_path, page_index)
+    )
 
-        file_path = await run_in_thread(_db_operation)
+    if thumbnail_data is None:
+        raise HTTPException(
+            status_code=404, detail="Page not found or thumbnail creation failed"
+        )
 
-        # Get thumbnail
-        thumbnail_data = await run_in_thread(lambda: get_comic_page_thumbnail(file_path, page_index))
-
-        if thumbnail_data is None:
-            raise HTTPException(status_code=404, detail="Page not found or thumbnail creation failed")
-
-        from fastapi.responses import Response
-
-        response = Response(content=thumbnail_data, media_type="image/jpeg")
-        # Add cache headers for thumbnails (cache for 7 days)
-        response.headers["Cache-Control"] = "public, max-age=604800, immutable"
-        return response
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Get comic page thumbnail error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    response = Response(content=thumbnail_data, media_type="image/jpeg")
+    # Add cache headers for thumbnails (cache for 7 days)
+    response.headers["Cache-Control"] = "public, max-age=604800, immutable"
+    return response
 
 
 @router.get("/periodicals/{periodical_id}/pdf/metadata")
+@handle_api_errors("Get PDF metadata", logger)
 async def get_pdf_metadata_endpoint(periodical_id: int) -> Dict[str, Any]:
     """
     Get PDF metadata including page count and cover page index.
@@ -442,53 +319,35 @@ async def get_pdf_metadata_endpoint(periodical_id: int) -> Dict[str, Any]:
     Returns:
         Dictionary with title, page_count, pages list, and cover_page index
     """
-    try:
 
-        def _db_operation():
-            db_session = _shared._session_factory()
-            try:
-                magazine = db_session.query(Periodical).filter(Periodical.id == periodical_id).first()
+    def operation(db):
+        magazine, file_path = _shared.get_periodical_with_file(db, periodical_id)
 
-                if not magazine:
-                    raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
+        # Check if file is PDF
+        if file_path.suffix.lower() != ".pdf":
+            raise HTTPException(status_code=400, detail="File is not a PDF")
 
-                try:
-                    file_path = _shared.resolve_file_path(magazine.file_path)
-                except FileNotFoundError as e:
-                    raise HTTPException(status_code=404, detail=str(e))
+        # Get cover page index from extra_metadata (defaults to 0)
+        cover_page = 0
+        if magazine.extra_metadata and "cover_page" in magazine.extra_metadata:
+            # Convert from 1-based (stored) to 0-based (used by frontend)
+            cover_page = magazine.extra_metadata["cover_page"] - 1
 
-                # Check if file is PDF
-                if file_path.suffix.lower() != ".pdf":
-                    raise HTTPException(status_code=400, detail="File is not a PDF")
+        return file_path, cover_page
 
-                # Get cover page index from extra_metadata (defaults to 0)
-                cover_page = 0
-                if magazine.extra_metadata and "cover_page" in magazine.extra_metadata:
-                    # Convert from 1-based (stored) to 0-based (used by frontend)
-                    cover_page = magazine.extra_metadata["cover_page"] - 1
+    file_path, cover_page = await with_db_session(_shared._session_factory, operation)
 
-                return file_path, cover_page
-            finally:
-                db_session.close()
+    # Get PDF metadata
+    metadata = await run_in_thread(lambda: get_pdf_metadata(file_path))
 
-        file_path, cover_page = await run_in_thread(_db_operation)
+    # Add cover page index to metadata
+    metadata["cover_page"] = cover_page
 
-        # Get PDF metadata
-        metadata = await run_in_thread(lambda: get_pdf_metadata(file_path))
-
-        # Add cover page index to metadata
-        metadata["cover_page"] = cover_page
-
-        return metadata
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Get PDF metadata error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    return metadata
 
 
 @router.get("/periodicals/{periodical_id}/pdf/page/{page_index}")
+@handle_api_errors("Get PDF page", logger)
 async def get_pdf_page_endpoint(periodical_id: int, page_index: int):
     """
     Get a specific page from a PDF as an image.
@@ -500,52 +359,34 @@ async def get_pdf_page_endpoint(periodical_id: int, page_index: int):
     Returns:
         Page image as JPEG
     """
-    try:
 
-        def _db_operation():
-            db_session = _shared._session_factory()
-            try:
-                magazine = db_session.query(Periodical).filter(Periodical.id == periodical_id).first()
+    def operation(db):
+        magazine, file_path = _shared.get_periodical_with_file(db, periodical_id)
 
-                if not magazine:
-                    raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
+        # Check if file is PDF
+        if file_path.suffix.lower() != ".pdf":
+            raise HTTPException(status_code=400, detail="File is not a PDF")
 
-                try:
-                    file_path = _shared.resolve_file_path(magazine.file_path)
-                except FileNotFoundError as e:
-                    raise HTTPException(status_code=404, detail=str(e))
+        return file_path
 
-                # Check if file is PDF
-                if file_path.suffix.lower() != ".pdf":
-                    raise HTTPException(status_code=400, detail="File is not a PDF")
+    file_path = await with_db_session(_shared._session_factory, operation)
 
-                return file_path
-            finally:
-                db_session.close()
+    # Get page image
+    page_data = await run_in_thread(lambda: get_pdf_page(file_path, page_index))
 
-        file_path = await run_in_thread(_db_operation)
+    if page_data is None:
+        raise HTTPException(
+            status_code=404, detail="Page not found or extraction failed"
+        )
 
-        # Get page image
-        page_data = await run_in_thread(lambda: get_pdf_page(file_path, page_index))
-
-        if page_data is None:
-            raise HTTPException(status_code=404, detail="Page not found or extraction failed")
-
-        from fastapi.responses import Response
-
-        response = Response(content=page_data, media_type="image/jpeg")
-        # Add cache headers for full-size pages (cache for 7 days)
-        response.headers["Cache-Control"] = "public, max-age=604800, immutable"
-        return response
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Get PDF page error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    response = Response(content=page_data, media_type="image/jpeg")
+    # Add cache headers for full-size pages (cache for 7 days)
+    response.headers["Cache-Control"] = "public, max-age=604800, immutable"
+    return response
 
 
 @router.get("/periodicals/{periodical_id}/pdf/page/{page_index}/thumbnail")
+@handle_api_errors("Get PDF page thumbnail", logger)
 async def get_pdf_page_thumbnail_endpoint(periodical_id: int, page_index: int):
     """
     Get a thumbnail of a specific page from a PDF.
@@ -557,53 +398,39 @@ async def get_pdf_page_thumbnail_endpoint(periodical_id: int, page_index: int):
     Returns:
         Thumbnail image as JPEG (200px height)
     """
-    try:
 
-        def _db_operation():
-            db_session = _shared._session_factory()
-            try:
-                magazine = db_session.query(Periodical).filter(Periodical.id == periodical_id).first()
+    def operation(db):
+        magazine, file_path = _shared.get_periodical_with_file(db, periodical_id)
 
-                if not magazine:
-                    raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
+        # Check if file is PDF
+        if file_path.suffix.lower() != ".pdf":
+            raise HTTPException(status_code=400, detail="File is not a PDF")
 
-                try:
-                    file_path = _shared.resolve_file_path(magazine.file_path)
-                except FileNotFoundError as e:
-                    raise HTTPException(status_code=404, detail=str(e))
+        return file_path
 
-                # Check if file is PDF
-                if file_path.suffix.lower() != ".pdf":
-                    raise HTTPException(status_code=400, detail="File is not a PDF")
+    file_path = await with_db_session(_shared._session_factory, operation)
 
-                return file_path
-            finally:
-                db_session.close()
+    # Get thumbnail
+    thumbnail_data = await run_in_thread(
+        lambda: get_pdf_page_thumbnail(file_path, page_index)
+    )
 
-        file_path = await run_in_thread(_db_operation)
+    if thumbnail_data is None:
+        raise HTTPException(
+            status_code=404, detail="Page not found or thumbnail creation failed"
+        )
 
-        # Get thumbnail
-        thumbnail_data = await run_in_thread(lambda: get_pdf_page_thumbnail(file_path, page_index))
-
-        if thumbnail_data is None:
-            raise HTTPException(status_code=404, detail="Page not found or thumbnail creation failed")
-
-        from fastapi.responses import Response
-
-        response = Response(content=thumbnail_data, media_type="image/jpeg")
-        # Add cache headers for thumbnails (cache for 7 days)
-        response.headers["Cache-Control"] = "public, max-age=604800, immutable"
-        return response
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Get PDF page thumbnail error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    response = Response(content=thumbnail_data, media_type="image/jpeg")
+    # Add cache headers for thumbnails (cache for 7 days)
+    response.headers["Cache-Control"] = "public, max-age=604800, immutable"
+    return response
 
 
 @router.post("/periodicals/{periodical_id}/move-to-tracking")
-async def move_issue_to_tracking(periodical_id: int, target_tracking_id: int) -> Dict[str, Any]:
+@handle_api_errors("Move issue to tracking", logger)
+async def move_issue_to_tracking(
+    periodical_id: int, target_tracking_id: int
+) -> Dict[str, Any]:
     """
     Move a single issue to a different tracking record.
     Useful for correcting misplaced issues.
@@ -612,141 +439,136 @@ async def move_issue_to_tracking(periodical_id: int, target_tracking_id: int) ->
         periodical_id: ID of the issue to move
         target_tracking_id: ID of the tracking record to move the issue to
     """
-    try:
 
-        def _db_operation():
-            db_session = _shared._session_factory()
+    def operation(db):
+        from models.database import PeriodicalTracking
+
+        # Get the magazine to move
+        magazine = _shared.get_periodical_or_404(db, periodical_id)
+
+        # Get the target tracking record
+        target_tracking = (
+            db.query(PeriodicalTracking)
+            .filter(PeriodicalTracking.id == target_tracking_id)
+            .first()
+        )
+        if not target_tracking:
+            raise HTTPException(
+                status_code=404, detail="Target tracking record not found"
+            )
+
+        old_title = magazine.title
+        old_tracking_id = magazine.tracking_id
+
+        # Get library directory from config or use default
+        library_base_dir = Path("./local/data").resolve()
+        category_prefix = "_"
+
+        # Update the magazine's tracking_id
+        magazine.tracking_id = target_tracking_id
+
+        # Check if this is a special edition
+        is_special = False
+        if magazine.extra_metadata and isinstance(magazine.extra_metadata, dict):
+            is_special = magazine.extra_metadata.get("special_edition") is not None
+        if not is_special:
+            is_special = is_special_edition(magazine.title)
+
+        # Only update title and reorganize files for regular editions
+        files_reorganized = False
+        old_dir_to_cleanup = None
+        if not is_special:
+            # Store old paths
+            old_pdf_path = Path(magazine.file_path)
+            old_cover_path = Path(magazine.cover_path) if magazine.cover_path else None
+
+            # Reorganize files to match new title structure (without language folder)
             try:
-                from models.database import PeriodicalTracking
-
-                # Get the magazine to move
-                magazine = db_session.query(Periodical).filter(Periodical.id == periodical_id).first()
-                if not magazine:
-                    raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
-
-                # Get the target tracking record
-                target_tracking = (
-                    db_session.query(PeriodicalTracking).filter(PeriodicalTracking.id == target_tracking_id).first()
+                # Extract metadata from current path structure
+                category = (
+                    magazine.extra_metadata.get("category", DEFAULT_CATEGORY)
+                    if magazine.extra_metadata
+                    else DEFAULT_CATEGORY
                 )
-                if not target_tracking:
-                    raise HTTPException(status_code=404, detail="Target tracking record not found")
+                issue_date = magazine.issue_date
 
-                old_title = magazine.title
-                old_tracking_id = magazine.tracking_id
+                # Build new path structure
+                safe_title = sanitize_filename(target_tracking.title)
+                month = issue_date.strftime("%B")
+                year = issue_date.strftime("%Y")
+                filename_base = f"{safe_title} - {month}{year}"
 
-                # Get library directory from config or use default
-                library_base_dir = Path("./local/data").resolve()
-                category_prefix = "_"
+                category_with_prefix = f"{category_prefix}{category}"
+                target_dir = library_base_dir / category_with_prefix / safe_title / year
+                target_dir.mkdir(parents=True, exist_ok=True)
 
-                # Update the magazine's tracking_id
-                magazine.tracking_id = target_tracking_id
+                new_pdf_path = target_dir / f"{filename_base}.pdf"
+                new_cover_path = (
+                    target_dir / f"{filename_base}.jpg" if old_cover_path else None
+                )
 
-                # Check if this is a special edition
-                is_special = False
-                if magazine.extra_metadata and isinstance(magazine.extra_metadata, dict):
-                    is_special = magazine.extra_metadata.get("special_edition") is not None
-                if not is_special:
-                    is_special = is_special_edition(magazine.title)
+                # Handle filename conflicts by appending timestamp
+                if new_pdf_path.exists() and new_pdf_path != old_pdf_path:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename_base_with_ts = (
+                        f"{safe_title} - {month}{year} ({timestamp})"
+                    )
+                    new_pdf_path = target_dir / f"{filename_base_with_ts}.pdf"
+                    if old_cover_path:
+                        new_cover_path = target_dir / f"{filename_base_with_ts}.jpg"
 
-                # Only update title and reorganize files for regular editions
-                files_reorganized = False
-                old_dir_to_cleanup = None
-                if not is_special:
-                    # Store old paths
-                    old_pdf_path = Path(magazine.file_path)
-                    old_cover_path = Path(magazine.cover_path) if magazine.cover_path else None
+                # Move PDF file
+                if old_pdf_path.exists() and new_pdf_path != old_pdf_path:
+                    # Store directory for cleanup before moving files
+                    old_dir_to_cleanup = old_pdf_path.parent
+                    shutil.move(str(old_pdf_path), str(new_pdf_path))
+                    logger.info(f"Moved PDF: {old_pdf_path} -> {new_pdf_path}")
+                    magazine.file_path = str(new_pdf_path)
+                    files_reorganized = True
+                elif new_pdf_path == old_pdf_path:
+                    # File is already in correct location
+                    magazine.file_path = str(new_pdf_path)
+                else:
+                    logger.warning(f"PDF file not found: {old_pdf_path}")
 
-                    # Reorganize files to match new title structure (without language folder)
-                    try:
-                        # Extract metadata from current path structure
-                        category = (
-                            magazine.extra_metadata.get("category", DEFAULT_CATEGORY)
-                            if magazine.extra_metadata
-                            else DEFAULT_CATEGORY
-                        )
-                        issue_date = magazine.issue_date
+                # Move cover file if it exists
+                if (
+                    old_cover_path
+                    and old_cover_path.exists()
+                    and new_cover_path
+                    and new_cover_path != old_cover_path
+                ):
+                    shutil.move(str(old_cover_path), str(new_cover_path))
+                    logger.info(f"Moved cover: {old_cover_path} -> {new_cover_path}")
+                    magazine.cover_path = str(new_cover_path)
+                elif new_cover_path:
+                    magazine.cover_path = str(new_cover_path)
 
-                        # Build new path structure
-                        safe_title = sanitize_filename(target_tracking.title)
-                        month = issue_date.strftime("%B")
-                        year = issue_date.strftime("%Y")
-                        filename_base = f"{safe_title} - {month}{year}"
+                # Update title after file operations
+                magazine.title = target_tracking.title
 
-                        category_with_prefix = f"{category_prefix}{category}"
-                        target_dir = library_base_dir / category_with_prefix / safe_title / year
-                        target_dir.mkdir(parents=True, exist_ok=True)
+            except Exception as e:
+                logger.error(f"Error reorganizing magazine files: {e}", exc_info=True)
+                # Still update the tracking_id and title even if file move failed
+                magazine.title = target_tracking.title
 
-                        new_pdf_path = target_dir / f"{filename_base}.pdf"
-                        new_cover_path = target_dir / f"{filename_base}.jpg" if old_cover_path else None
+        db.commit()
 
-                        # Handle filename conflicts by appending timestamp
-                        if new_pdf_path.exists() and new_pdf_path != old_pdf_path:
-                            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                            filename_base_with_ts = f"{safe_title} - {month}{year} ({timestamp})"
-                            new_pdf_path = target_dir / f"{filename_base_with_ts}.pdf"
-                            if old_cover_path:
-                                new_cover_path = target_dir / f"{filename_base_with_ts}.jpg"
+        # Clean up old directory after successful commit
+        if old_dir_to_cleanup and old_dir_to_cleanup.exists():
+            cleanup_empty_directories(old_dir_to_cleanup, library_base_dir)
 
-                        # Move PDF file
-                        if old_pdf_path.exists() and new_pdf_path != old_pdf_path:
-                            # Store directory for cleanup before moving files
-                            old_dir_to_cleanup = old_pdf_path.parent
-                            shutil.move(str(old_pdf_path), str(new_pdf_path))
-                            logger.info(f"Moved PDF: {old_pdf_path} -> {new_pdf_path}")
-                            magazine.file_path = str(new_pdf_path)
-                            files_reorganized = True
-                        elif new_pdf_path == old_pdf_path:
-                            # File is already in correct location
-                            magazine.file_path = str(new_pdf_path)
-                        else:
-                            logger.warning(f"PDF file not found: {old_pdf_path}")
+        msg = f"Moved issue from '{old_title}' to '{target_tracking.title}'"
+        if files_reorganized:
+            msg += " and reorganized files"
 
-                        # Move cover file if it exists
-                        if (
-                            old_cover_path
-                            and old_cover_path.exists()
-                            and new_cover_path
-                            and new_cover_path != old_cover_path
-                        ):
-                            shutil.move(str(old_cover_path), str(new_cover_path))
-                            logger.info(f"Moved cover: {old_cover_path} -> {new_cover_path}")
-                            magazine.cover_path = str(new_cover_path)
-                        elif new_cover_path:
-                            magazine.cover_path = str(new_cover_path)
+        logger.info(msg)
+        return {
+            "success": True,
+            "message": msg,
+            "old_tracking_id": old_tracking_id,
+            "new_tracking_id": target_tracking_id,
+            "files_reorganized": files_reorganized,
+        }
 
-                        # Update title after file operations
-                        magazine.title = target_tracking.title
-
-                    except Exception as e:
-                        logger.error(f"Error reorganizing magazine files: {e}", exc_info=True)
-                        # Still update the tracking_id and title even if file move failed
-                        magazine.title = target_tracking.title
-
-                db_session.commit()
-
-                # Clean up old directory after successful commit
-                if old_dir_to_cleanup and old_dir_to_cleanup.exists():
-                    cleanup_empty_directories(old_dir_to_cleanup, library_base_dir)
-
-                msg = f"Moved issue from '{old_title}' to '{target_tracking.title}'"
-                if files_reorganized:
-                    msg += " and reorganized files"
-
-                logger.info(msg)
-                return {
-                    "success": True,
-                    "message": msg,
-                    "old_tracking_id": old_tracking_id,
-                    "new_tracking_id": target_tracking_id,
-                    "files_reorganized": files_reorganized,
-                }
-            finally:
-                db_session.close()
-
-        return await run_in_thread(_db_operation)
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Move issue to tracking error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    return await with_db_session(_shared._session_factory, operation)

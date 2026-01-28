@@ -6,10 +6,13 @@ import logging
 from pathlib import Path
 from typing import Callable, Optional, Tuple
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from sqlalchemy.orm import Session
 
-from core.constants.date import MONTH_TO_NUMBER, NUMBER_TO_MONTH_ABBR
 from core.constants.category import CATEGORIES
+from core.constants.date import MONTH_TO_NUMBER, NUMBER_TO_MONTH_ABBR
+from core.constants.errors import ErrorMessages
+from models.database import Periodical
 
 router = APIRouter(prefix="/api", tags=["periodicals"])
 logger = logging.getLogger(__name__)
@@ -83,11 +86,15 @@ def resolve_file_path(stored_path: str) -> Path:
         # Search recursively for the file (last resort, slower)
         for candidate in _library_base_dir.rglob(filename):
             if candidate.is_file():
-                logger.warning(f"Found file by name search: {stored_path} -> {candidate}")
+                logger.warning(
+                    f"Found file by name search: {stored_path} -> {candidate}"
+                )
                 return candidate
 
     # File not found after all attempts
-    raise FileNotFoundError(f"File not found: {stored_path} (library_dir: {_library_base_dir})")
+    raise FileNotFoundError(
+        f"File not found: {stored_path} (library_dir: {_library_base_dir})"
+    )
 
 
 def parse_month_string(month_str: Optional[str]) -> Tuple[int, str]:
@@ -126,3 +133,88 @@ def parse_month_string(month_str: Optional[str]) -> Tuple[int, str]:
         month_num = 1
 
     return month_num, month_str
+
+
+def get_periodical_or_404(db_session: Session, periodical_id: int):
+    """
+    Fetch a periodical by ID or raise 404 HTTPException.
+
+    Args:
+        db_session: Active database session
+        periodical_id: ID of the periodical to fetch
+
+    Returns:
+        Periodical object
+
+    Raises:
+        HTTPException: 404 if periodical not found
+
+    Usage:
+        magazine = get_periodical_or_404(db, magazine_id)
+    """
+    magazine = (
+        db_session.query(Periodical).filter(Periodical.id == periodical_id).first()
+    )
+
+    if not magazine:
+        raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
+
+    return magazine
+
+
+def get_periodical_with_file(db_session: Session, periodical_id: int) -> Tuple:
+    """
+    Fetch a periodical by ID and resolve its file path.
+
+    This combines the common pattern of fetching a periodical and resolving
+    its file path with proper error handling.
+
+    Args:
+        db_session: Active database session
+        periodical_id: ID of the periodical to fetch
+
+    Returns:
+        Tuple of (periodical, resolved_file_path)
+
+    Raises:
+        HTTPException: 404 if periodical or file not found
+
+    Usage:
+        magazine, file_path = get_periodical_with_file(db, magazine_id)
+    """
+    magazine = get_periodical_or_404(db_session, periodical_id)
+
+    try:
+        file_path = resolve_file_path(magazine.file_path)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    return magazine, file_path
+
+
+def get_periodical_paths(
+    db_session: Session, periodical_id: int
+) -> Tuple[Path, Optional[Path]]:
+    """
+    Get file and cover paths for a periodical.
+
+    Args:
+        db_session: Active database session
+        periodical_id: ID of the periodical
+
+    Returns:
+        Tuple of (file_path, cover_path) as Path objects
+        cover_path is None if not set
+
+    Raises:
+        HTTPException: 404 if periodical not found
+
+    Usage:
+        file_path, cover_path = get_periodical_paths(db, magazine_id)
+    """
+    magazine = get_periodical_or_404(db_session, periodical_id)
+
+    file_path = Path(magazine.file_path)
+    cover_path = Path(magazine.cover_path) if magazine.cover_path else None
+
+    return file_path, cover_path
