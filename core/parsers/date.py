@@ -113,3 +113,73 @@ def parse_multi_month(month_str: str) -> Tuple[Optional[int], str]:
     if month_num:
         return month_num, NUMBER_TO_MONTH[month_num]
     return None, month_str.capitalize()
+
+
+def parse_numeric_month_range(month1_str: str, month2_str: str) -> Tuple[Optional[int], str]:
+    """
+    Parse numeric month range (e.g., "11.10" meaning Nov/Oct or Oct/Nov).
+
+    Args:
+        month1_str: First month number as string (1-12)
+        month2_str: Second month number as string (1-12)
+
+    Returns:
+        Tuple of (first_month_number, display_string)
+        Returns the earlier month number and a formatted display string like "October/November"
+        Returns (None, "") if either month is invalid
+
+    Examples:
+        >>> parse_numeric_month_range("11", "10")
+        (10, "October/November")
+        >>> parse_numeric_month_range("05", "06")
+        (5, "May/June")
+        >>> parse_numeric_month_range("12", "01")
+        (12, "December/January")
+    """
+    try:
+        month1 = int(month1_str)
+        month2 = int(month2_str)
+
+        # Validate both months are in valid range (1-12)
+        if not (1 <= month1 <= 12 and 1 <= month2 <= 12):
+            return None, ""
+
+        # Get month names
+        month1_name = NUMBER_TO_MONTH.get(month1)
+        month2_name = NUMBER_TO_MONTH.get(month2)
+
+        if not (month1_name and month2_name):
+            return None, ""
+
+        # Check if months are consecutive or span year boundary
+        # Examples:
+        # - 11, 10 -> Oct/Nov (consecutive, reversed order)
+        # - 10, 11 -> Oct/Nov (consecutive, normal order)
+        # - 12, 1  -> Dec/Jan (year boundary)
+        # - 5, 6   -> May/Jun (consecutive, normal order)
+
+        # Determine which is the "first" month chronologically
+        # If month1 > month2 by 1, they're consecutive but reversed (like 11, 10)
+        # If month2 > month1 by 1, they're consecutive normal order (like 10, 11)
+        # If month1 == 12 and month2 == 1, it's year boundary (Dec/Jan)
+
+        if month1 == month2 + 1:
+            # Reversed order: 11, 10 -> use month2 first
+            first_month = month2
+            display = f"{month2_name}/{month1_name}"
+        elif month1 == 12 and month2 == 1:
+            # Year boundary: Dec/Jan -> use month1 first (December)
+            first_month = month1
+            display = f"{month1_name}/{month2_name}"
+        else:
+            # Normal order or non-consecutive -> use lower month number first
+            first_month = min(month1, month2)
+            if month1 < month2:
+                display = f"{month1_name}/{month2_name}"
+            else:
+                display = f"{month2_name}/{month1_name}"
+
+        return first_month, display
+
+    except (ValueError, TypeError):
+        return None, ""

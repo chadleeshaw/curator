@@ -27,6 +27,9 @@ DATE_PATTERN_YEAR_ONLY = r"\b(\d{4})\b"
 DATE_PATTERN_MULTI_MONTH = r"(.+?)\s*[-–]?\s*([A-Za-z]+)[/\-&]([A-Za-z]+)\s*(\d{4})"
 """Pattern for multi-month periods: June/July 2024, Jun/Jul2024"""
 
+DATE_PATTERN_MULTI_MONTH_NUMERIC = r"(.+?)[\s.]+(\d{1,2})[\./\-](\d{1,2})[\s.]+(\d{4})"
+"""Pattern for numeric multi-month periods: 11.10 2019, 05/06 2023, 12-01 2024, Magazine.11.10.2019"""
+
 # ==============================================================================
 # MULTILINGUAL MONTH-YEAR PATTERNS
 # ==============================================================================

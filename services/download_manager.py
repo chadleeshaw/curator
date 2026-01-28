@@ -121,6 +121,11 @@ class DownloadManager:
                             raw_metadata=result.raw_metadata,
                         )
 
+                        # Skip if parser rejected as non-periodical (movies/TV/audiobooks)
+                        if parsed is None:
+                            logger.debug(f"Skipping non-periodical result: {result.title}")
+                            continue
+
                         # Apply language filter if specified
                         if language_filter and parsed.language != language_filter:
                             continue  # Skip results that don't match the language filter
@@ -288,6 +293,11 @@ class DownloadManager:
             url="",  # Not needed for duplicate check
             provider="",  # Not needed for duplicate check
         )
+
+        # Skip if parser rejected as non-periodical (movies/TV/audiobooks)
+        if parsed is None:
+            logger.debug(f"Skipping non-periodical result: {result_title}")
+            return False, None
 
         logger.debug(f"Parsed result title: '{result_title}' -> base_title: '{parsed.base_title}'")
 

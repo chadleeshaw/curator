@@ -388,6 +388,7 @@ class DiscoveredIssue(Base):
     year = Column(Integer, nullable=True, index=True)
     month = Column(Integer, nullable=True, index=True)
     language = Column(String(50), nullable=True, index=True)
+    country = Column(String(50), nullable=True, index=True)  # Country/region edition (e.g., "US", "UK", "AU")
 
     # Discovery tracking
     first_seen = Column(DateTime, default=utcnow, index=True)
@@ -443,6 +444,7 @@ class DiscoveredIssue(Base):
             "year": self.year,
             "month": self.month,
             "language": self.language,
+            "country": self.country,
             "first_seen": self.first_seen.isoformat() if self.first_seen else None,
             "last_seen": self.last_seen.isoformat() if self.last_seen else None,
             "times_seen": self.times_seen,

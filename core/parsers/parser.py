@@ -3,11 +3,14 @@ Main parser entry point for all parsing operations.
 Delegates to specialized parsers and returns standardized dataclasses.
 """
 
+import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
 from datetime import datetime
 
 from core.constants.language import DEFAULT_LANGUAGE
+
+logger = logging.getLogger(__name__)
 from core.parsers.models import (
     ParsedMetadata,
     ParsedFilename,
@@ -118,7 +121,7 @@ class Parser:
         provider: str,
         publication_date: Optional[datetime] = None,
         raw_metadata: Optional[Dict[str, Any]] = None,
-    ) -> ParsedSearchResult:
+    ) -> Optional[ParsedSearchResult]:
         """
         Parse a search result from download providers.
 
@@ -133,6 +136,7 @@ class Parser:
 
         Returns:
             ParsedSearchResult with cleaned and parsed data
+            Returns None if title matches anti-periodical patterns (movies/TV/audiobooks)
         """
         # Validate
         if not self.title_matcher.validate_before_parsing(title):
@@ -153,7 +157,13 @@ class Parser:
             )
 
         # Extract metadata from NZB title (includes date parsing)
+        # Returns None if the title matches anti-periodical patterns (movies/TV/audiobooks)
         nzb_metadata = self.filename_parser.extract_from_nzb_title(title)
+
+        # If title was rejected as non-periodical, return None
+        if nzb_metadata is None:
+            logger.debug(f"Title rejected as non-periodical content: {title}")
+            return None
 
         # Clean title
         cleaned_title = self.title_matcher.clean_release_title(title)

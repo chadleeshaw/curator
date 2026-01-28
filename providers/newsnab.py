@@ -26,6 +26,7 @@ from core.constants.providers import (
     SECONDS_PER_MINUTE,
 )
 from core.interfaces import SearchProvider, SearchResult
+from core.utils.query_expansion import expand_search_queries
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,10 @@ class NewsnabProvider(SearchProvider):
         # Rate limiting configuration
         self.max_requests_per_hour = config.get("max_requests_per_hour", NEWSNAB_DEFAULT_MAX_REQUESTS_PER_HOUR)
         self.request_delay_seconds = config.get("request_delay_seconds", NEWSNAB_DEFAULT_REQUEST_DELAY)
+
+        # Query expansion configuration
+        self.enable_query_expansion = config.get("enable_query_expansion", True)
+        self.max_expanded_queries = config.get("max_expanded_queries", 2)
 
         # Rate limit tracking
         self._request_times: List[float] = []
@@ -150,14 +155,14 @@ class NewsnabProvider(SearchProvider):
 
     def search(self, query: str = "", category: str = None) -> List[SearchResult]:
         """
-        Search Newsnab-compatible service for NZBs.
+        Search Newsnab-compatible service for NZBs with optional query expansion.
 
         Args:
             query: Magazine title to search for. Empty string triggers RSS mode.
             category: Optional category filter ("Magazines", "Comics", etc.)
 
         Returns:
-            List of SearchResult objects
+            List of SearchResult objects (deduplicated if query expansion is used)
         """
         # Check if we're rate limited
         if self._check_rate_limit():
@@ -167,24 +172,43 @@ class NewsnabProvider(SearchProvider):
         results = []
 
         try:
-            # Add delay between requests to avoid hitting rate limits
-            if self.request_delay_seconds > 0 and self._request_times:
-                time_since_last = time.time() - self._request_times[-1]
-                if time_since_last < self.request_delay_seconds:
-                    delay = self.request_delay_seconds - time_since_last
-                    logger.debug(f"[{self.name}] Delaying {delay:.1f}s before search")
-                    time.sleep(delay)
-
-            # Track this request
-            self._track_request()
-
-            # Use XML API - it's more reliable and well-supported
-            # (v1 JSON API often has issues with Prowlarr aggregators)
             # If query is empty, use RSS mode to fetch latest releases
             if not query or query.strip() == "":
-                results = self._search_xml_api_rss(category)
+                return self._search_xml_api_rss(category)
+
+            # Generate query variants if expansion is enabled
+            if self.enable_query_expansion and len(query.strip()) > 3:
+                queries = expand_search_queries(query, max_queries=self.max_expanded_queries, min_query_length=3)
+                logger.info(f"[{self.name}] Expanded '{query}' to {len(queries)} queries: {queries}")
             else:
-                results = self._search_xml_api(query, category)
+                queries = [query]
+
+            # Search with each query variant
+            seen_urls = set()
+            for search_query in queries:
+                # Add delay between requests to avoid hitting rate limits
+                if self.request_delay_seconds > 0 and self._request_times:
+                    time_since_last = time.time() - self._request_times[-1]
+                    if time_since_last < self.request_delay_seconds:
+                        delay = self.request_delay_seconds - time_since_last
+                        logger.debug(f"[{self.name}] Delaying {delay:.1f}s before search")
+                        time.sleep(delay)
+
+                # Track this request
+                self._track_request()
+
+                # Search with this query variant
+                variant_results = self._search_xml_api(search_query, category)
+
+                # Deduplicate by URL
+                for result in variant_results:
+                    if result.url not in seen_urls:
+                        results.append(result)
+                        seen_urls.add(result.url)
+
+                logger.debug(f"[{self.name}] Query '{search_query}' returned {len(variant_results)} results")
+
+            logger.info(f"[{self.name}] Total unique results across all queries: {len(results)}")
             return results
 
         except Exception as e:

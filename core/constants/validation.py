@@ -70,37 +70,80 @@ def get_periodical_patterns(languages: list[str] | None = None) -> list[str]:
 PERIODICAL_PATTERNS = get_periodical_patterns()
 
 # Patterns that indicate content is NOT a periodical (anti-patterns)
-# These suggest collections, anthologies, books, or compilations
+# These are checked FIRST to quickly filter out movies, TV shows, audiobooks, etc.
 ANTI_PERIODICAL_PATTERNS = [
-    # Collection/compilation indicators
-    r"\b(complete|full|entire)\s+(collection|series)\b",
-    r"\banthology\b",
-    r"\bomnibus\b",
-    r"\bcompendium\b",
-    r"\bcollected\s+(works|edition)\b",
-    # Range indicators (suggests collection of multiple issues/volumes)
-    r"\b(volumes?|issues?)\s+\d+\s*-\s*\d+\b",  # "Volumes 1-5", "Issues 10-20"
-    r"\b(vol|issue|no)\.?\s*\d+\s*-\s*\d+\b",  # "Vol 1-3", "No 5-10"
-    r"\byear\s+\d+\s+pack\b",  # "Year 2023 Pack"
-    r"\b\d{4}\s+(complete|full)\b",  # "2023 Complete"
-    # Book-specific patterns (novels, not periodicals)
-    r"\bedition\s+\d+(st|nd|rd|th)\b",  # "Edition 3rd" (textbooks)
-    r"\bISBN\b",  # Books have ISBNs
-    r"\b(hardcover|paperback)\b",  # Physical book formats
-    # Novel/series indicators
-    r"\bbook\s+\d+\b",  # "Book 1", "Book 2"
-    r"\b(novel|trilogy|saga)\b",
-    r"\bchapter\s+\d+\b",  # Chapters suggest book, not periodical
-    # Audiobooks and soundtracks
-    r"\b(audiobook|audio\s*book)\b",
-    r"\b(soundtrack|ost|original\s+(score|motion\s+picture))\b",
-    # Video content (movies, TV shows, documentaries)
-    r"\b(movie|film|documentary)\b",
-    r"\btv[\s\-]?(show|series|episode)\b",
-    r"\b(1080p|720p|4k|uhd|bluray|blu[\-\s]?ray|dvdrip|webrip|hdtv|bdrip|brrip)\b",  # Video quality indicators
-    r"\b(dvd|xvid|x264|x265|h[\.\s]?264|h[\.\s]?265|hevc|wmv)\b",  # Video codecs and formats
-    r"\.(mp4|avi|mkv|mov|wmv|iso|img)[\s\-]",  # Video extensions in title
-    r"\bsvengoolie\b",  # TV show host (not a periodical)
+    # ============================================================================
+    # Video Resolution & Quality Indicators (HIGHEST PRIORITY - most common)
+    # ============================================================================
+    # Resolution indicators
+    r"\b(2160p|1440p|1080p|720p|576p|480p|360p)\b",
+    r"\b(4k|8k|uhd|hd|sd|fhd|qhd)\b",
+    # Video quality/source indicators
+    r"\b(bluray|blu[\s\-]?ray|bdrip|brrip|bd[\-\s]?rip)\b",
+    r"\b(dvdrip|dvd[\-\s]?rip|dvdscr|dvd9|dvd5)\b",
+    r"\b(webrip|web[\-\s]?rip|webdl|web[\-\s]?dl|web\-dl)\b",
+    r"\b(hdtv|pdtv|hdcam|hdcam[\-\s]?rip|hdts)\b",
+    r"\b(cam[\-\s]?rip|telesync|ts|tc|telecine|ppv[\-\s]?rip|screener|scr)\b",
+    # Note: PROPER/REPACK removed - also used in magazine scene releases
+    # ============================================================================
+    # Video Codecs & Containers
+    # ============================================================================
+    # Modern codecs
+    r"\b(x264|x265|x\.264|x\.265)\b",
+    r"\b(h264|h265|h\.264|h\.265)\b",
+    r"\b(hevc|avc|vc[\-]?1)\b",
+    r"\b(av1|vp9|vp8)\b",
+    # Older/legacy codecs
+    r"\b(xvid|divx|mpeg|mpeg2|mpeg4)\b",
+    r"\b(wmv|wmv3|vc1)\b",
+    # Container formats
+    r"\b(matroska|mkv|remux)\b",
+    # ============================================================================
+    # Audio Codecs & Quality
+    # ============================================================================
+    r"\b(aac|ac3|dd5\.1|dd5|dts|dts[\-\s]?hd|dts[\-\s]?ma|truehd|atmos)\b",
+    r"\b(flac|opus|vorbis|mp3|eac3|e[\-\s]?ac[\-\s]?3)\b",
+    r"\b(5\.1|7\.1|2\.0|stereo|multi[\-\s]?audio|dual[\-\s]?audio)\b",
+    # ============================================================================
+    # Video File Extensions (when appearing in NZB titles)
+    # ============================================================================
+    r"\.(mp4|avi|mkv|mov|wmv|flv|m4v|mpg|mpeg|m2ts|ts|vob|iso|img)[\s\-\.\[]",
+    # ============================================================================
+    # TV Show Indicators
+    # ============================================================================
+    r"\btv[\s\-]?(show|series|episode|season)\b",
+    r"\b(s\d{1,2}[\s\-\.]?e\d{1,2}|season[\s\-\.]\d+|episode[\s\-\.]\d+)\b",  # S01E01, Season 1
+    r"\b\d{1,2}x\d{1,2}\b",  # 1x01 episode notation
+    r"\b(complete[\s\-]?series|tv[\s\-]?pack|season[\s\-]?pack)\b",
+    # ============================================================================
+    # Movie/Film Indicators
+    # ============================================================================
+    r"\b(movie|film|cinema|theatrical)\b",
+    r"\b(extended[\s\-]?cut|director[\s\-]?s[\s\-]?cut|unrated|uncut)\b",
+    r"\b(imax|criterion|restored)\b",
+    # ============================================================================
+    # Documentary Indicators
+    # ============================================================================
+    r"\b(documentary|docu[\s\-]?series|docuseries)\b",
+    # ============================================================================
+    # Audiobook Indicators
+    # ============================================================================
+    r"\b(audiobook|audio[\s\-]?book|unabridged|abridged)\b",
+    r"\b(narrated[\s\-]?by|narrator)\b",
+    # ============================================================================
+    # Music/Soundtrack Indicators
+    # ============================================================================
+    r"\b(soundtrack|ost|original[\s\-]?score|original[\s\-]?motion[\s\-]?picture)\b",
+    r"\b(album|discography|live[\s\-]?concert)\b",
+    # ============================================================================
+    # Release Group Tags (common in video releases)
+    # ============================================================================
+    r"\b(yify|rarbg|etrg|sparks|cmrg|fleet|ntb|shortbrehd)\b",
+    r"\b(svengoolie)\b",  # TV show host (not a periodical)
+    # ============================================================================
+    # Multi-Subtitle/Language (common in video)
+    # ============================================================================
+    r"\b(multi[\-\s]?sub|multisub|multi[\-\s]?lang)\b",
 ]
 
 
@@ -126,6 +169,8 @@ FILE_SIZE_RANGES = {
 
 # These don't directly indicate periodical/non-periodical,
 # but help with metadata extraction quality assessment
+# Note: "True PDF" is a PREFERRED quality for periodicals - indicates the PDF contains
+# both searchable text AND high-quality images (vs. image-only scans)
 QUALITY_INDICATORS = [
     "true pdf",
     "true.pdf",
@@ -135,6 +180,8 @@ QUALITY_INDICATORS = [
     "high quality",
     "scan",
     "digital",
+    "proper",  # Scene release terminology - used in both video and periodical releases
+    "repack",  # Scene release terminology - used in both video and periodical releases
 ]
 
 # Common release group patterns (for removal during parsing)

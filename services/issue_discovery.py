@@ -137,6 +137,11 @@ class IssueDiscoveryService:
                     raw_metadata=result,
                 )
 
+                # Skip if parser rejected as non-periodical (movies/TV/audiobooks)
+                if parsed is None:
+                    logger.debug(f"Skipping non-periodical result: {title}")
+                    continue
+
                 # Generate fuzzy match group for deduplication
                 # This normalizes the title to group similar results together
                 fuzzy_group = self._get_fuzzy_group_id(parsed.cleaned_title, parsed.publication_date)
@@ -181,6 +186,7 @@ class IssueDiscoveryService:
                         year=parsed.publication_date.year if parsed.publication_date else None,
                         month=parsed.publication_date.month if parsed.publication_date else None,
                         language=parsed.language,
+                        country=parsed.country,  # Store parsed country (e.g., "US", "UK", None)
                         first_seen=now,
                         last_seen=now,
                         times_seen=1,
@@ -629,6 +635,18 @@ class IssueDiscoveryService:
         Returns:
             True if issue matches tracking criteria, False otherwise
         """
+        # CRITICAL: Country matching - different countries are different periodicals
+        # National Geographic US != National Geographic UK
+        # Default: No country specified = USA
+        issue_country = self._normalize_country(issue.country or "US")
+        tracking_country = self._normalize_country(tracking.country or "US")
+
+        if issue_country != tracking_country:
+            logger.debug(
+                f"Skipping '{issue.title}': Country mismatch " f"(issue: {issue_country}, tracking: {tracking_country})"
+            )
+            return False
+
         # Rule 1: track_all_editions = True means download everything
         if tracking.track_all_editions:
             return True
@@ -697,6 +715,81 @@ class IssueDiscoveryService:
 
         # Clamp to 1-100
         return max(1, min(100, priority))
+
+    def _normalize_country(self, country: Optional[str]) -> str:
+        """
+        Normalize country code to standard 2-letter ISO format.
+
+        Uses the ISO_COUNTRIES constants to ensure consistent country codes.
+        Default: No country specified = USA ("US")
+
+        Args:
+            country: Country code or name (e.g., "USA", "US", "United States", "UK", None)
+
+        Returns:
+            Normalized 2-letter country code (e.g., "US", "UK", "AU")
+
+        Examples:
+            >>> _normalize_country("USA")
+            "US"
+            >>> _normalize_country("US")
+            "US"
+            >>> _normalize_country("United States")
+            "US"
+            >>> _normalize_country(None)
+            "US"
+        """
+        from core.constants.country import ISO_COUNTRIES
+
+        if not country:
+            return "US"  # Default to USA if no country specified
+
+        country_upper = country.strip().upper()
+
+        # Common 3-letter normalizations (USA, GBR, etc.)
+        three_letter_codes = {
+            "USA": "US",
+            "GBR": "UK",
+            "CAN": "CA",
+            "AUS": "AU",
+            "NZL": "NZ",
+            "DEU": "DE",
+            "FRA": "FR",
+            "ITA": "IT",
+            "ESP": "ES",
+            "JPN": "JP",
+            "CHN": "CN",
+        }
+
+        # Full name normalizations
+        full_names = {
+            "UNITED STATES": "US",
+            "UNITED KINGDOM": "UK",
+            "GREAT BRITAIN": "UK",
+            "HOLLAND": "NL",
+            "NEDERLAND": "NL",
+        }
+
+        # Try 3-letter code normalization first
+        if country_upper in three_letter_codes:
+            return three_letter_codes[country_upper]
+
+        # Try full name match
+        if country_upper in full_names:
+            return full_names[country_upper]
+
+        # Check if it's already a valid 2-letter ISO code
+        if len(country_upper) == 2 and country_upper in ISO_COUNTRIES:
+            return country_upper
+
+        # Try reverse lookup in ISO_COUNTRIES by name
+        for code, name in ISO_COUNTRIES.items():
+            if name.upper() == country_upper:
+                return code
+
+        # Default: If can't parse, assume USA
+        logger.warning(f"Could not normalize country '{country}', defaulting to US")
+        return "US"
 
     def _check_if_in_library(
         self, issue: DiscoveredIssue, tracking: PeriodicalTracking, session: Session

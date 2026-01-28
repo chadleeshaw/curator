@@ -12,6 +12,7 @@ from core.parsers.date import (
     utc_now,
     parse_month,
     parse_multi_month,
+    parse_numeric_month_range,
 )
 from core.parsers.filename import sanitize_filename
 from core.parsers.language import (
@@ -71,6 +72,7 @@ __all__ = [
     "utc_now",
     "parse_month",
     "parse_multi_month",
+    "parse_numeric_month_range",
     # Categorization
     "FileCategorizer",
     # Filename utilities

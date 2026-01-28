@@ -16,6 +16,7 @@ from core.constants.date import (
     NUMBER_TO_MONTH,
 )
 from core.constants.language import SUPPORTED_LANGUAGES
+from core.constants.validation import ANTI_PERIODICAL_PATTERNS
 from core.constants.patterns import (
     DATE_PATTERN_ABBR_MONTH_YEAR,
     DATE_PATTERN_ABBR_MONTH_YEAR_NO_BOUNDARY,
@@ -24,6 +25,7 @@ from core.constants.patterns import (
     DATE_PATTERN_ISO_MONTH,
     DATE_PATTERN_MONTH_YEAR_NUMERIC,
     DATE_PATTERN_MULTI_MONTH,
+    DATE_PATTERN_MULTI_MONTH_NUMERIC,
     DATE_PATTERN_YEAR_ONLY,
     NZB_COUNTRY_PATTERNS,
     NZB_EDITION_PATTERNS,
@@ -44,7 +46,7 @@ from core.constants.patterns import (
     TITLE_PATTERN_SPACE_MONTH_YEAR,
     TITLE_PATTERN_VOLUME_ISSUE,
 )
-from core.parsers.date import parse_month, parse_multi_month
+from core.parsers.date import parse_month, parse_multi_month, parse_numeric_month_range
 from core.utils.text import clean_title
 
 logger = logging.getLogger(__name__)
@@ -73,7 +75,7 @@ class FilenameParser:
         # Add language folders (should be skipped when extracting periodical names)
         self.system_folders.update(lang.lower() for lang in SUPPORTED_LANGUAGES)
 
-    def extract_from_nzb_title(self, nzb_title: str) -> Dict[str, Any]:
+    def extract_from_nzb_title(self, nzb_title: str) -> Optional[Dict[str, Any]]:
         """
         Extract comprehensive metadata from NZB-style filename.
 
@@ -89,8 +91,15 @@ class FilenameParser:
 
         Returns:
             Dict with extracted metadata including confidence score
+            Returns None if title matches anti-periodical patterns (movies/TV/audiobooks)
         """
         original_title = nzb_title
+
+        # EARLY CHECK: Reject non-periodical content (movies, TV shows, audiobooks) FIRST
+        # This is a performance optimization - no point parsing obvious video files
+        if self._has_anti_periodical_patterns(nzb_title):
+            logger.debug(f"Rejecting '{nzb_title}': Contains anti-periodical patterns (likely movie/TV/audiobook)")
+            return None
 
         # Remove file extension if present (but preserve years like "2021")
         if "." in nzb_title:
@@ -119,6 +128,31 @@ class FilenameParser:
             "confidence": "low",
             "issue_date": None,
         }
+
+        # Pre-check: Look for numeric multi-month patterns BEFORE normalization
+        # This handles cases like "11.10" which would be destroyed by dot-to-space conversion
+        numeric_month_match = re.search(DATE_PATTERN_MULTI_MONTH_NUMERIC, nzb_title)
+        numeric_month_data = None
+        if numeric_month_match:
+            title_part = numeric_month_match.group(1).strip()
+            month1_str = numeric_month_match.group(2)
+            month2_str = numeric_month_match.group(3)
+            year_str = numeric_month_match.group(4)
+            year = int(year_str)
+            month_num, display_string = parse_numeric_month_range(month1_str, month2_str)
+
+            if month_num and MIN_VALID_YEAR <= year <= MAX_VALID_YEAR:
+                # Store this data to use later
+                numeric_month_data = {
+                    "month": month_num,
+                    "month_name": display_string,
+                    "year": year,
+                    "issue_date": datetime(year, month_num, 1),
+                    "title_part": title_part,
+                    "month1": month1_str,
+                    "month2": month2_str,
+                }
+                logger.debug(f"Pre-detected numeric multi-month: {display_string} {year} from '{title_part}'")
 
         # Normalize delimiters: dots, underscores → spaces (but keep dashes)
         normalized = nzb_title.replace(".", " ").replace("_", " ")
@@ -190,6 +224,62 @@ class FilenameParser:
         # Step 6: Extract dates FIRST (before volume/issue to avoid conflicts)
         # This prevents "Jan2024" from being parsed as "issue 2024"
         date_extracted = False
+
+        # Format 0a: Use pre-detected numeric multi-month if found
+        if numeric_month_data:
+            metadata["year"] = numeric_month_data["year"]
+            metadata["month"] = numeric_month_data["month"]
+            metadata["month_name"] = numeric_month_data["month_name"]
+            metadata["issue_date"] = numeric_month_data["issue_date"]
+
+            # Remove the numeric month pattern from remaining text
+            # The pattern could be "11.10 2019" -> "11 10 2019" (dots converted to spaces)
+            # Or "11/10 2019" -> "11/10 2019" (slashes kept)
+            # Or "11-10 2019" -> "11-10 2019" (dashes kept)
+            m1 = numeric_month_data["month1"]
+            m2 = numeric_month_data["month2"]
+            year = str(numeric_month_data["year"])
+
+            # Try multiple removal patterns to handle different separators
+            patterns_to_try = [
+                rf"\b{m1}\s+{m2}\s+{year}\b",  # After dot normalization: "11 10 2019"
+                rf"\b{m1}/{m2}\s+{year}\b",  # Slash separator: "11/10 2019"
+                rf"\b{m1}-{m2}\s+{year}\b",  # Dash separator: "11-10 2019"
+            ]
+
+            for pattern in patterns_to_try:
+                new_text = re.sub(pattern, "", remaining_text, count=1)
+                if new_text != remaining_text:
+                    remaining_text = new_text
+                    break
+
+            remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
+            date_extracted = True
+            logger.debug(f"Used pre-detected numeric multi-month: {numeric_month_data['month_name']} {year}")
+
+        # Format 1: ISO full date (2024.01.20 or 2024-01-20)
+        if not date_extracted:
+            match = re.search(DATE_PATTERN_MULTI_MONTH_NUMERIC, remaining_text)
+            if match:
+                title_part, month1_str, month2_str, year_str = (
+                    match.group(1),
+                    match.group(2),
+                    match.group(3),
+                    match.group(4),
+                )
+                year = int(year_str)
+                month_num, display_string = parse_numeric_month_range(month1_str, month2_str)
+
+                if month_num and MIN_VALID_YEAR <= year <= MAX_VALID_YEAR:
+                    metadata["year"] = year
+                    metadata["month"] = month_num
+                    metadata["month_name"] = display_string
+                    metadata["issue_date"] = datetime(year, month_num, 1)
+                    # Only remove the date part, keep the title
+                    remaining_text = remaining_text[: match.start()] + title_part + remaining_text[match.end() :]
+                    remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
+                    date_extracted = True
+                    logger.debug(f"Extracted numeric multi-month: {display_string} {year}")
 
         # Format 1: ISO full date (2024.01.20 or 2024-01-20)
         if not date_extracted:
@@ -409,8 +499,13 @@ class FilenameParser:
         if is_nzb_style:
             logger.debug(f"Detected NZB-style filename, trying NZB parser first: {filename}")
             nzb_result = self.extract_from_nzb_title(filename)
+            # Check if result is None (rejected as non-periodical)
+            if nzb_result is None:
+                logger.debug(f"NZB parser rejected '{filename}' as non-periodical content")
+                # Don't return None here - fall through to try standard patterns
+                # (in case the anti-pattern check was a false positive)
             # Use NZB result if it has medium/high confidence
-            if nzb_result.get("confidence") in ["medium", "high"]:
+            elif nzb_result.get("confidence") in ["medium", "high"]:
                 logger.debug(f"NZB parsing succeeded with {nzb_result['confidence']} confidence")
                 # Convert NZB metadata format to standard metadata format
                 if nzb_result.get("issue_date"):
@@ -419,7 +514,8 @@ class FilenameParser:
                 if nzb_result.get("year") and nzb_result.get("month"):
                     nzb_result["issue_date"] = datetime(nzb_result["year"], nzb_result["month"], 1)
                     return nzb_result
-            logger.debug("NZB parsing failed or low confidence, falling back to standard patterns")
+            else:
+                logger.debug("NZB parsing failed or low confidence, falling back to standard patterns")
 
         # Try each pattern in order of specificity
         result = (
@@ -442,6 +538,11 @@ class FilenameParser:
         logger.info(f"Standard patterns failed, trying NZB-style parsing: {filename}")
         nzb_result = self.extract_from_nzb_title(filename)
 
+        # Check if result is None (rejected as non-periodical)
+        if nzb_result is None:
+            logger.info(f"NZB parser rejected '{filename}' as non-periodical content, using fallback metadata")
+            return metadata
+
         # Only use NZB result if it has medium/high confidence
         if nzb_result.get("confidence") in ["medium", "high"]:
             logger.info(f"NZB parsing succeeded with {nzb_result['confidence']} confidence")
@@ -458,31 +559,54 @@ class FilenameParser:
 
     def _try_multi_month_pattern(self, filename: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
-        Pattern: Multi-month periods like "Title - June/July 2024" or "Title Jun/Jul2024".
+        Pattern: Multi-month periods like "Title - June/July 2024" or "Title Jun/Jul2024"
+        or numeric formats like "Title 11.10 2019" (meaning Oct/Nov 2019).
         """
-        # Handles: "Title - Jun/Jul2024", "Title June/July 2024", "Title - December/January 2024"
+        # Try alphabetic multi-month first: "Title - Jun/Jul2024", "Title June/July 2024"
         match = re.search(DATE_PATTERN_MULTI_MONTH, filename)
 
-        if not match:
-            return None
+        if match:
+            title = match.group(1).strip()
+            month1_str = match.group(2)
+            month2_str = match.group(3)
+            year_str = match.group(4)
 
-        title = match.group(1).strip()
-        month1_str = match.group(2)
-        month2_str = match.group(3)
-        year_str = match.group(4)
+            month1_num = parse_month(month1_str)
+            if not month1_num:
+                return None
 
-        month1_num = parse_month(month1_str)
-        if not month1_num:
-            return None
+            year = int(year_str)
+            metadata["title"] = clean_title(title)
+            metadata["issue_date"] = datetime(year, month1_num, 1)
+            metadata["year"] = year
+            metadata["month_name"] = f"{month1_str.capitalize()}/{month2_str.capitalize()}"
 
-        year = int(year_str)
-        metadata["title"] = clean_title(title)
-        metadata["issue_date"] = datetime(year, month1_num, 1)
-        metadata["year"] = year
-        metadata["month_name"] = f"{month1_str.capitalize()}/{month2_str.capitalize()}"
+            logger.info(f"Extracted multi-month: {metadata['month_name']} {year}")
+            return metadata
 
-        logger.info(f"Extracted multi-month: {metadata['month_name']} {year}")
-        return metadata
+        # Try numeric multi-month: "Title 11.10 2019", "Title 05/06 2023"
+        match = re.search(DATE_PATTERN_MULTI_MONTH_NUMERIC, filename)
+
+        if match:
+            title = match.group(1).strip()
+            month1_str = match.group(2)
+            month2_str = match.group(3)
+            year_str = match.group(4)
+
+            month_num, display_string = parse_numeric_month_range(month1_str, month2_str)
+            if not month_num:
+                return None
+
+            year = int(year_str)
+            metadata["title"] = clean_title(title)
+            metadata["issue_date"] = datetime(year, month_num, 1)
+            metadata["year"] = year
+            metadata["month_name"] = display_string
+
+            logger.info(f"Extracted numeric multi-month: {metadata['month_name']} {year}")
+            return metadata
+
+        return None
 
     def _try_dash_month_year_pattern(self, filename: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
@@ -803,3 +927,37 @@ class FilenameParser:
             return cleaned
 
         return None
+
+    def _has_anti_periodical_patterns(self, title: str) -> bool:
+        """
+        Check if title contains anti-patterns indicating non-periodical content.
+
+        Anti-patterns include:
+        - Video quality/resolution: 1080p, 4k, BluRay, WEB-DL, etc.
+        - Video codecs: x264, x265, HEVC, XviD, etc.
+        - Audio codecs: AAC, DTS, DD5.1, etc.
+        - TV show indicators: S01E01, Season 1, Episode 2, etc.
+        - Movie/film keywords
+        - Audiobook indicators
+        - Release group tags common in video releases
+
+        This check is performed EARLY to quickly reject obvious non-periodical content
+        (movies, TV shows, audiobooks) before doing expensive parsing.
+
+        Args:
+            title: Title string to check
+
+        Returns:
+            True if anti-patterns found (NOT a periodical), False otherwise
+        """
+        # Normalize dots, underscores, and dashes to spaces for better pattern matching
+        # This catches patterns in NZB-style titles like "Movie.Name.2024.1080p.BluRay.x264"
+        normalized_title = title.replace(".", " ").replace("_", " ").replace("-", " ")
+        title_lower = normalized_title.lower()
+
+        for pattern in ANTI_PERIODICAL_PATTERNS:
+            if re.search(pattern, title_lower, re.IGNORECASE):
+                logger.debug(f"Found anti-periodical pattern in '{title}': matches '{pattern}'")
+                return True
+
+        return False

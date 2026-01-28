@@ -86,9 +86,10 @@ class TestPeriodicalValidation:
         assert service._validate_is_periodical(result) is False
 
     def test_rejects_full_series(self, service):
-        """Test: 'Batman Full Series 1940-2020'"""
+        """Test: 'Batman Full Series 1940-2020' - Updated: no longer rejected (not video content)"""
         result = {"title": "Batman Full Series 1940-2020"}
-        assert service._validate_is_periodical(result) is False
+        # Note: Book/collection patterns removed - only rejecting video/TV/audiobooks
+        assert service._validate_is_periodical(result) is True  # Now accepted as potential periodical
 
     def test_rejects_anthology(self, service):
         """Test: 'Science Fiction Anthology'"""
@@ -151,8 +152,8 @@ class TestPeriodicalValidation:
         assert service._validate_is_periodical(result) is True
 
     def test_rejects_magazine_category_with_anti_pattern(self, service):
-        """Test: Magazine category but title has collection pattern"""
-        result = {"title": "Complete Collection 2024", "category": "8010"}
+        """Test: Rejects if magazine category but has video anti-patterns (not book patterns)"""
+        result = {"category": "8010", "title": "Movie Title 2024 1080p BluRay"}
         assert service._validate_is_periodical(result) is False
 
     # ===================================================================
@@ -204,10 +205,10 @@ class TestPeriodicalValidation:
         assert service._has_periodical_patterns("Complete Collection") is False
 
     def test_has_anti_periodical_patterns(self, service):
-        """Test _has_anti_periodical_patterns detects collection indicators"""
-        assert service._has_anti_periodical_patterns("Complete Collection") is True
-        assert service._has_anti_periodical_patterns("Issues 1-10") is True
-        assert service._has_anti_periodical_patterns("Anthology") is True
+        """Test _has_anti_periodical_patterns detects video/movie/TV indicators"""
+        assert service._has_anti_periodical_patterns("Movie 2024 1080p BluRay") is True
+        assert service._has_anti_periodical_patterns("TV Show S01E01 720p") is True
+        assert service._has_anti_periodical_patterns("Documentary 2024 4K") is True
 
     def test_has_anti_periodical_patterns_returns_false(self, service):
         """Test _has_anti_periodical_patterns returns False for normal titles"""
@@ -223,7 +224,7 @@ class TestPeriodicalValidation:
         result = {"title": "WIRED MAGAZINE JANUARY 2024"}
         assert service._validate_is_periodical(result) is True
 
-        result_reject = {"title": "COMPLETE COLLECTION"}
+        result_reject = {"title": "MOVIE 2024 1080P BLURAY"}
         assert service._validate_is_periodical(result_reject) is False
 
     def test_handles_special_characters(self, service):
