@@ -16,6 +16,7 @@ from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from core.utils.pdf import extract_cover_from_pdf
 from services.ocr.service import OCRService
+from web.utils.responses import success_response
 
 from . import _shared
 
@@ -134,10 +135,9 @@ async def regenerate_cover(magazine_id: int, request_data: Dict[str, Any]) -> Di
 
         logger.info(f"Regenerated cover for magazine {magazine_id} from page {page_number}")
 
-        return {
-            "success": True,
-            "message": f"Cover regenerated from page {page_number}",
-            "cover_path": str(cover_path),
-        }
+        return success_response(
+            f"Cover regenerated from page {page_number}",
+            cover_path=str(cover_path),
+        )
 
     return await with_db_session(_shared._session_factory, operation)

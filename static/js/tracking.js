@@ -4,7 +4,7 @@
  * @module tracking
  */
 
-import { APIClient } from './api.js';
+import { APIClient, APIHelper } from './api.js';
 import { UIUtils, SortManager } from './ui-utils.js';
 import {
   ELEMENT_IDS,
@@ -68,8 +68,14 @@ export class TrackingManager {
    */
   async loadConstants() {
     try {
-      const response = await APIClient.get('/api/constants');
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.get('/api/constants');
+          return await response.json();
+        },
+        'Tracking',
+        ELEMENT_IDS.TRACKING_STATUS
+      );
       if (data.success) {
         SUPPORTED_LANGUAGES = data.languages ?? [];
         ISO_COUNTRIES = data.countries ?? {};
@@ -78,8 +84,7 @@ export class TrackingManager {
         LANGUAGE_KEYWORDS = data.language_keywords ?? {};
       }
     } catch (error) {
-      console.error('[Tracking] Failed to load constants:', error);
-      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Failed to load form options', 'error');
+      // Already logged and displayed by APIHelper
     }
   }
 
@@ -441,8 +446,14 @@ export class TrackingManager {
     };
 
     try {
-      const response = await APIClient.post('/api/periodicals/tracking/save', preferences);
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.post('/api/periodicals/tracking/save', preferences);
+          return await response.json();
+        },
+        'Tracking',
+        ELEMENT_IDS.TRACKING_STATUS
+      );
 
       if (data.success) {
         UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Tracking saved successfully', 'success');
@@ -462,8 +473,7 @@ export class TrackingManager {
         );
       }
     } catch (error) {
-      console.error('Error saving tracking:', error);
-      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, `Error: ${error.message}`, 'error');
+      // Already logged by APIHelper
     }
   }
 
@@ -476,10 +486,12 @@ export class TrackingManager {
   async loadTrackedPeriodicals() {
     try {
       const { field, order } = this.sortManager.getSortParams();
-      const response = await APIClient.authenticatedFetch(
-        `/api/periodicals/tracking?sort_by=${field}&sort_order=${order}`
-      );
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(async () => {
+        const response = await APIClient.authenticatedFetch(
+          `/api/periodicals/tracking?sort_by=${field}&sort_order=${order}`
+        );
+        return await response.json();
+      }, 'Tracking');
 
       const tracked = data.tracked_magazines ?? data.tracked ?? [];
 
@@ -680,10 +692,12 @@ export class TrackingManager {
   async showFailedDownloadsForTracking(trackingId, periodicalTitle) {
     try {
       // Try to fetch from new Issue Discovery system first
-      const discoveryResponse = await APIClient.authenticatedFetch(
-        `/api/discovered-issues?tracking_id=${trackingId}&status=failed,permanently_failed&limit=500`
-      );
-      const discoveryData = await discoveryResponse.json();
+      const discoveryData = await APIHelper.executeWithErrorHandling(async () => {
+        const discoveryResponse = await APIClient.authenticatedFetch(
+          `/api/discovered-issues?tracking_id=${trackingId}&status=failed,permanently_failed&limit=500`
+        );
+        return await discoveryResponse.json();
+      }, 'Tracking');
 
       let issues = (discoveryData.issues || []).map((issue) => ({
         id: issue.id,
@@ -697,10 +711,12 @@ export class TrackingManager {
 
       // If no issues found in new system, try legacy download submissions
       if (issues.length === 0) {
-        const submissionResponse = await APIClient.authenticatedFetch(
-          `/api/downloads/queue/all?status=failed`
-        );
-        const submissionData = await submissionResponse.json();
+        const submissionData = await APIHelper.executeWithErrorHandling(async () => {
+          const submissionResponse = await APIClient.authenticatedFetch(
+            `/api/downloads/queue/all?status=failed`
+          );
+          return await submissionResponse.json();
+        }, 'Tracking');
 
         // Filter by tracking ID and map to expected format
         const failedSubmissions = (submissionData.queue || []).filter(
@@ -787,10 +803,16 @@ export class TrackingManager {
    */
   async editTracking(trackingId) {
     try {
-      const response = await APIClient.authenticatedFetch(
-        `/api/periodicals/tracking/${trackingId}`
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.authenticatedFetch(
+            `/api/periodicals/tracking/${trackingId}`
+          );
+          return await response.json();
+        },
+        'Tracking',
+        ELEMENT_IDS.TRACKING_STATUS
       );
-      const data = await response.json();
 
       if (data.success) {
         const t = data.tracking;
@@ -885,10 +907,12 @@ export class TrackingManager {
       if (country) params.append('country', country);
       if (category) params.append('category', category);
 
-      const response = await APIClient.authenticatedFetch(
-        `/api/periodicals/search-providers?${params.toString()}`,
-        { method: 'POST' }
-      );
+      const response = await APIHelper.executeWithErrorHandling(async () => {
+        return await APIClient.authenticatedFetch(
+          `/api/periodicals/search-providers?${params.toString()}`,
+          { method: 'POST' }
+        );
+      }, 'Tracking');
       const data = await response.json();
 
       if (data.found && data.results.length > 0) {
@@ -1093,11 +1117,17 @@ export class TrackingManager {
    */
   async toggleIssueTracking(trackingId, editionId, track) {
     try {
-      const response = await APIClient.authenticatedFetch(
-        `/api/periodicals/tracking/${trackingId}/editions/${editionId}/track?track=${track}`,
-        { method: 'POST' }
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.authenticatedFetch(
+            `/api/periodicals/tracking/${trackingId}/editions/${editionId}/track?track=${track}`,
+            { method: 'POST' }
+          );
+          return await response.json();
+        },
+        'Tracking',
+        ELEMENT_IDS.TRACKING_STATUS
       );
-      const data = await response.json();
 
       if (data.success) {
         UIUtils.showStatus(
@@ -1282,8 +1312,14 @@ export class TrackingManager {
     if (!confirmed) return;
 
     try {
-      const response = await APIClient.delete(`/api/periodicals/tracking/${trackingId}`);
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.delete(`/api/periodicals/tracking/${trackingId}`);
+          return await response.json();
+        },
+        'Tracking',
+        ELEMENT_IDS.TRACKING_STATUS
+      );
 
       if (data.success) {
         UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Tracking removed', 'success');
@@ -1300,8 +1336,7 @@ export class TrackingManager {
         );
       }
     } catch (error) {
-      console.error('Error deleting tracking:', error);
-      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Error removing tracking', 'error');
+      // Already logged by APIHelper
     }
   }
 
@@ -1397,19 +1432,25 @@ window.saveEditedTracking = async function () {
   }
 
   try {
-    const response = await APIClient.put(`/api/periodicals/tracking/${trackingId}`, {
-      title,
-      category,
-      language,
-      country,
-      download_category: downloadCategory || null,
-      track_all_editions: mode === 'all',
-      track_new_only: mode === 'new',
-      delete_from_client_on_completion: !keepHistory, // Inverted: checked = keep, unchecked = auto-remove
-      organization_pattern: organizationPattern, // Send null if empty to use global default
-    });
+    const result = await APIHelper.executeWithErrorHandling(
+      async () => {
+        const response = await APIClient.put(`/api/periodicals/tracking/${trackingId}`, {
+          title,
+          category,
+          language,
+          country,
+          download_category: downloadCategory || null,
+          track_all_editions: mode === 'all',
+          track_new_only: mode === 'new',
+          delete_from_client_on_completion: !keepHistory, // Inverted: checked = keep, unchecked = auto-remove
+          organization_pattern: organizationPattern, // Send null if empty to use global default
+        });
+        return await response.json();
+      },
+      'Tracking',
+      ELEMENT_IDS.TRACKING_STATUS
+    );
 
-    const result = await response.json();
     if (result.success) {
       window.closeEditTrackingModal();
       tracking.loadTrackedPeriodicals();
@@ -1577,18 +1618,23 @@ window.openMergeModal = async function () {
   if (!tracking) return;
 
   try {
-    const response = await APIClient.get('/api/periodicals/tracking?limit=1000');
-    const data = await response.json();
+    const data = await APIHelper.executeWithErrorHandling(
+      async () => {
+        const response = await APIClient.get('/api/periodicals/tracking?limit=1000');
+        return await response.json();
+      },
+      'Tracking',
+      ELEMENT_IDS.TRACKING_STATUS
+    );
 
     const items = data.tracked_magazines || [];
 
     console.log('Merge modal check:', {
-      responseOk: response.ok,
       itemsLength: items.length,
-      shouldShowWarning: !response.ok || items.length < 2,
+      shouldShowWarning: items.length < 2,
     });
 
-    if (!response.ok || items.length < 2) {
+    if (items.length < 2) {
       console.log('Showing warning status');
       UIUtils.showStatus(
         ELEMENT_IDS.TRACKING_STATUS,
@@ -1673,8 +1719,14 @@ window.showMergeTargetSelection = async function () {
   }
 
   // Get the tracking data for selected items
-  const response = await APIClient.get('/api/periodicals/tracking?limit=1000');
-  const data = await response.json();
+  const data = await APIHelper.executeWithErrorHandling(
+    async () => {
+      const response = await APIClient.get('/api/periodicals/tracking?limit=1000');
+      return await response.json();
+    },
+    'Tracking',
+    ELEMENT_IDS.TRACKING_STATUS
+  );
   const selectedItems = (data.tracked_magazines || []).filter((item) =>
     selectedIds.includes(item.id)
   );
@@ -1738,27 +1790,28 @@ window.confirmMerge = async function () {
   }
 
   try {
-    const response = await APIClient.post(`/api/periodicals/tracking/${targetId}/merge`, {
-      source_ids: sourceIds,
-    });
+    const data = await APIHelper.executeWithErrorHandling(
+      async () => {
+        const response = await APIClient.post(`/api/periodicals/tracking/${targetId}/merge`, {
+          source_ids: sourceIds,
+        });
+        return await response.json();
+      },
+      'Tracking',
+      ELEMENT_IDS.TRACKING_STATUS
+    );
 
-    const data = await response.json();
-
-    if (response.ok) {
-      const filesMsg =
-        data.files_reorganized > 0 ? `, reorganized ${data.files_reorganized} files` : '';
-      UIUtils.showStatus(
-        ELEMENT_IDS.TRACKING_STATUS,
-        `${data.message}. Moved ${data.magazines_moved} magazines and ${data.submissions_moved} downloads${filesMsg}.`,
-        'success'
-      );
-      window.closeMergeModal();
-      const tracking = window.trackingManager;
-      if (tracking) {
-        tracking.loadTrackedPeriodicals();
-      }
-    } else {
-      throw new Error(data.detail || 'Merge failed');
+    const filesMsg =
+      data.files_reorganized > 0 ? `, reorganized ${data.files_reorganized} files` : '';
+    UIUtils.showStatus(
+      ELEMENT_IDS.TRACKING_STATUS,
+      `${data.message}. Moved ${data.magazines_moved} magazines and ${data.submissions_moved} downloads${filesMsg}.`,
+      'success'
+    );
+    window.closeMergeModal();
+    const tracking = window.trackingManager;
+    if (tracking) {
+      tracking.loadTrackedPeriodicals();
     }
   } catch (error) {
     console.error('Merge error:', error);
@@ -1775,36 +1828,33 @@ window.downloadIssue = async function (title, url, provider) {
       return;
     }
 
-    const response = await APIClient.post('/api/downloads/single-issue', {
-      tracking_id: trackingId,
-      title: title,
-      url: url,
-      provider: provider,
-    });
+    const data = await APIHelper.executeWithErrorHandling(
+      async () => {
+        const response = await APIClient.post('/api/downloads/single-issue', {
+          tracking_id: trackingId,
+          title: title,
+          url: url,
+          provider: provider,
+        });
+        return await response.json();
+      },
+      'Tracking',
+      ELEMENT_IDS.TRACKING_STATUS
+    );
 
-    const data = await response.json();
-
-    if (response.ok) {
-      // Handle different submission statuses
-      let message;
-      if (data.status === 'queued') {
-        message = '✓ Download queued (will be submitted when slot available)';
-      } else if (data.job_id) {
-        message = `✓ Download submitted! Job ID: ${data.job_id}`;
-      } else {
-        message = `✓ Download ${data.status}`;
-      }
-
-      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, message, 'success');
-      setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), TIMEOUTS.AUTO_HIDE_LONG);
-      // Keep search modal open so user can continue browsing
+    // Handle different submission statuses
+    let message;
+    if (data.status === 'queued') {
+      message = '✓ Download queued (will be submitted when slot available)';
+    } else if (data.job_id) {
+      message = `✓ Download submitted! Job ID: ${data.job_id}`;
     } else {
-      UIUtils.showStatus(
-        ELEMENT_IDS.TRACKING_STATUS,
-        data.detail || 'Failed to queue download',
-        'error'
-      );
+      message = `✓ Download ${data.status}`;
     }
+
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, message, 'success');
+    setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), TIMEOUTS.AUTO_HIDE_LONG);
+    // Keep search modal open so user can continue browsing
   } catch (err) {
     console.error('Download error:', err);
     UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, `Error: ${err.message}`, 'error');
@@ -1862,9 +1912,14 @@ window.saveNewTracking = async () => {
       params.append('country', country);
     }
 
-    const response = await APIClient.post(`/api/periodicals/track?${params.toString()}`, {});
-
-    const data = await response.json();
+    const data = await APIHelper.executeWithErrorHandling(
+      async () => {
+        const response = await APIClient.post(`/api/periodicals/track?${params.toString()}`, {});
+        return await response.json();
+      },
+      'Tracking',
+      ELEMENT_IDS.TRACKING_STATUS
+    );
 
     if (data.success) {
       // Now update with the tracking mode, download category, country, and organization pattern
@@ -1879,7 +1934,17 @@ window.saveNewTracking = async () => {
       if (organizationPattern) {
         updateData.organization_pattern = organizationPattern;
       }
-      await APIClient.put(`/api/periodicals/tracking/${data.tracking_id}`, updateData);
+      await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.put(
+            `/api/periodicals/tracking/${data.tracking_id}`,
+            updateData
+          );
+          return await response.json();
+        },
+        'Tracking',
+        ELEMENT_IDS.TRACKING_STATUS
+      );
 
       UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Tracking started successfully', 'success');
       tracking.closeTrackNewPeriodicalModal();
@@ -1918,8 +1983,17 @@ async function reorganizeTrackingFiles(trackingId, _title) {
   try {
     UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Reorganizing files...', 'info');
 
-    const response = await APIClient.post(`/api/periodicals/tracking/${trackingId}/reorganize`, {});
-    const result = await response.json();
+    const result = await APIHelper.executeWithErrorHandling(
+      async () => {
+        const response = await APIClient.post(
+          `/api/periodicals/tracking/${trackingId}/reorganize`,
+          {}
+        );
+        return await response.json();
+      },
+      'Tracking',
+      ELEMENT_IDS.TRACKING_STATUS
+    );
 
     if (result.success) {
       UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, result.message, 'success');

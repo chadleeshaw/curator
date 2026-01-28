@@ -4,6 +4,7 @@
  */
 
 import { AuthManager } from './auth.js?v=1767733177';
+import { APIClient, APIHelper } from './api.js';
 import { UIUtils } from './ui-utils.js?v=1767733177';
 import { library } from './library.js?v=1767733177';
 import { tracking } from './tracking.js?v=1767733177';
@@ -181,18 +182,18 @@ function showQueueView(queueType) {
 async function updateQueueBadges() {
   try {
     // Get download queue stats (use efficient status endpoint that only counts)
-    const downloadResponse = await fetch('/api/downloads/queue/status', {
-      headers: { Authorization: `Bearer ${AuthManager.getToken()}` },
-    });
-    const downloadData = await downloadResponse.json();
+    const downloadData = await APIHelper.executeWithErrorHandling(async () => {
+      const downloadResponse = await APIClient.get('/api/downloads/queue/status');
+      return await downloadResponse.json();
+    }, 'Main');
     const activeDownloads = downloadData.active || 0;
     document.getElementById('download-queue-badge').textContent = activeDownloads;
 
     // Get OCR queue stats
-    const ocrResponse = await fetch('/api/ocr/queue/stats', {
-      headers: { Authorization: `Bearer ${AuthManager.getToken()}` },
-    });
-    const ocrData = await ocrResponse.json();
+    const ocrData = await APIHelper.executeWithErrorHandling(async () => {
+      const ocrResponse = await APIClient.get('/api/ocr/queue/stats');
+      return await ocrResponse.json();
+    }, 'Main');
     const activeOcr = (ocrData.pending || 0) + (ocrData.processing || 0);
     document.getElementById('ocr-queue-badge').textContent = activeOcr;
   } catch (error) {
@@ -206,10 +207,10 @@ async function updateQueueBadges() {
 async function updateHeaderStats() {
   try {
     // Get periodicals count from stats endpoint
-    const response = await fetch('/api/periodicals/stats/count', {
-      headers: { Authorization: `Bearer ${AuthManager.getToken()}` },
-    });
-    const data = await response.json();
+    const data = await APIHelper.executeWithErrorHandling(async () => {
+      const response = await APIClient.get('/api/periodicals/stats/count');
+      return await response.json();
+    }, 'Main');
     document.getElementById('header-periodicals-count').textContent = data.total || 0;
   } catch (error) {
     console.error('[Main] Error updating header stats:', error);

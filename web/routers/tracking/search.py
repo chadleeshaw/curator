@@ -11,6 +11,7 @@ from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from models.database import PeriodicalTracking
 from models.database import SearchResult as DBSearchResult
+from web.utils.responses import success_response, error_response
 
 from . import _shared
 
@@ -71,21 +72,20 @@ async def search_tracked_periodical_issues(tracking_id: int) -> Dict[str, Any]:
                     logger.warning(f"Error saving search result: {e}")
 
             db.commit()
-            return {
-                "success": True,
-                "magazine": tracking.title,
-                "tracking_id": tracking.id,
-                "results": result_dicts,
-                "count": len(result_dicts),
-            }
+            return success_response(
+                None,
+                magazine=tracking.title,
+                tracking_id=tracking.id,
+                results=result_dicts,
+                count=len(result_dicts),
+            )
         else:
-            return {
-                "success": False,
-                "magazine": tracking.title,
-                "tracking_id": tracking.id,
-                "message": f"No issues found for '{tracking.title}'",
-                "results": [],
-                "count": 0,
-            }
+            return error_response(
+                f"No issues found for '{tracking.title}'",
+                magazine=tracking.title,
+                tracking_id=tracking.id,
+                results=[],
+                count=0,
+            )
 
     return await with_db_session(_shared._session_factory, operation)

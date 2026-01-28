@@ -389,8 +389,10 @@ export class LibraryManager {
 
     try {
       // Fetch languages with counts from API
-      const response = await APIClient.authenticatedFetch('/api/periodicals/languages');
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(async () => {
+        const response = await APIClient.authenticatedFetch('/api/periodicals/languages');
+        return await response.json();
+      }, 'Library');
 
       if (data.success && data.languages) {
         // Keep the "All" option
@@ -788,17 +790,23 @@ export class LibraryManager {
     const deleteAllIssues = true; // Always delete all issues when deleting from library page
 
     try {
-      const response = await APIClient.authenticatedFetch(
-        `/api/periodicals/${this.pendingDeleteId}?delete_files=${deleteFiles}&remove_tracking=${removeTracking}&delete_all_issues=${deleteAllIssues}`,
-        { method: 'DELETE' }
+      const result = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.authenticatedFetch(
+            `/api/periodicals/${this.pendingDeleteId}?delete_files=${deleteFiles}&remove_tracking=${removeTracking}&delete_all_issues=${deleteAllIssues}`,
+            { method: 'DELETE' }
+          );
+
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail ?? 'Failed to delete periodical');
+          }
+
+          return await response.json();
+        },
+        'Library',
+        'import-status'
       );
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail ?? 'Failed to delete periodical');
-      }
-
-      const result = await response.json();
 
       if (result.success) {
         UIUtils.showStatus('import-status', result.message, 'success');
@@ -825,8 +833,10 @@ export class LibraryManager {
   async viewPDF(magazineId, _title) {
     try {
       // Get magazine metadata to check file type
-      const response = await APIClient.get(`/api/periodicals/${magazineId}`);
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(async () => {
+        const response = await APIClient.get(`/api/periodicals/${magazineId}`);
+        return await response.json();
+      }, 'Library');
 
       // Check file type and open appropriate reader
       if (data.file_path) {

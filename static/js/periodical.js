@@ -4,7 +4,7 @@
  * special edition management, and issue organization.
  */
 
-import { APIClient } from './api.js';
+import { APIClient, APIHelper } from './api.js';
 import { CSS_CLASSES } from './constants.js';
 
 // Parse years data and special editions from data attributes
@@ -226,8 +226,10 @@ function createIssueCard(issue) {
 async function openPDF(magazineId) {
   try {
     // Get magazine metadata to check file type
-    const response = await APIClient.get(`/api/periodicals/${magazineId}`);
-    const data = await response.json();
+    const data = await APIHelper.executeWithErrorHandling(async () => {
+      const response = await APIClient.get(`/api/periodicals/${magazineId}`);
+      return await response.json();
+    }, 'Periodical');
 
     // Check file type and open appropriate reader
     if (data.file_path) {
@@ -265,8 +267,10 @@ async function openPDF(magazineId) {
 // View metadata - opens the metadata modal
 async function viewMetadata(magazineId) {
   try {
-    const response = await APIClient.get(`/api/periodicals/${magazineId}`);
-    const data = await response.json();
+    const data = await APIHelper.executeWithErrorHandling(async () => {
+      const response = await APIClient.get(`/api/periodicals/${magazineId}`);
+      return await response.json();
+    }, 'Periodical');
     displayMetadata(data);
   } catch (error) {
     console.error('[Periodical] Error fetching metadata:', error);
@@ -642,15 +646,18 @@ async function saveMetadataEdit() {
   const shouldRegenerateCover = coverPage && parseInt(coverPage) !== currentCoverPage;
 
   try {
-    const _response = await APIClient.put(`/api/periodicals/${currentMagazineId}`, updates);
+    await APIHelper.executeWithErrorHandling(async () => {
+      await APIClient.put(`/api/periodicals/${currentMagazineId}`, updates);
+    }, 'Periodical');
 
     // Regenerate cover if page number changed
     if (shouldRegenerateCover) {
       showNotification('🔄 Regenerating cover from page ' + coverPage, 'info');
-      const _coverResponse = await APIClient.post(
-        `/api/periodicals/${currentMagazineId}/regenerate-cover`,
-        { page_number: parseInt(coverPage) }
-      );
+      await APIHelper.executeWithErrorHandling(async () => {
+        await APIClient.post(`/api/periodicals/${currentMagazineId}/regenerate-cover`, {
+          page_number: parseInt(coverPage),
+        });
+      }, 'Periodical');
     }
 
     await viewMetadata(currentMagazineId);
@@ -729,9 +736,11 @@ async function confirmDeleteIssue() {
   const isLastIssue = issueCards.length === 1;
 
   try {
-    const response = await APIClient.delete(
-      `/api/periodicals/${pendingDeleteId}?delete_files=${deleteFiles}&mark_as_bad=${markAsBad}`
-    );
+    const response = await APIHelper.executeWithErrorHandling(async () => {
+      return await APIClient.delete(
+        `/api/periodicals/${pendingDeleteId}?delete_files=${deleteFiles}&mark_as_bad=${markAsBad}`
+      );
+    }, 'Periodical');
 
     const result = await response.json();
 
@@ -792,8 +801,10 @@ async function openMoveIssueModal() {
 
   try {
     // Fetch all tracking records
-    const response = await APIClient.get('/api/periodicals/tracking?limit=1000');
-    const data = await response.json();
+    const data = await APIHelper.executeWithErrorHandling(async () => {
+      const response = await APIClient.get('/api/periodicals/tracking?limit=1000');
+      return await response.json();
+    }, 'Periodical');
 
     const trackingRecords = data.tracked_magazines || [];
 
@@ -850,9 +861,11 @@ async function confirmMoveIssue() {
     const issueCards = document.querySelectorAll('.issue-card');
     const isLastIssue = issueCards.length === 1;
 
-    const response = await APIClient.post(
-      `/api/periodicals/${currentMagazineId}/move-to-tracking?target_tracking_id=${targetTrackingId}`
-    );
+    const response = await APIHelper.executeWithErrorHandling(async () => {
+      return await APIClient.post(
+        `/api/periodicals/${currentMagazineId}/move-to-tracking?target_tracking_id=${targetTrackingId}`
+      );
+    }, 'Periodical');
 
     const result = await response.json();
 
@@ -903,9 +916,11 @@ async function toggleSpecialEdition() {
   toggleBtn.textContent = 'Updating...';
 
   try {
-    const response = await APIClient.post(
-      `/api/periodicals/${currentMagazineId}/toggle-special-edition?is_special=${!isCurrentlySpecial}`
-    );
+    const response = await APIHelper.executeWithErrorHandling(async () => {
+      return await APIClient.post(
+        `/api/periodicals/${currentMagazineId}/toggle-special-edition?is_special=${!isCurrentlySpecial}`
+      );
+    }, 'Periodical');
 
     const result = await response.json();
 

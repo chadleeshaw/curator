@@ -13,6 +13,7 @@ from core.utils.error_handling import handle_api_errors
 from models.database import Periodical
 from core.utils import run_in_thread
 from core.utils.db import with_db_session
+from web.utils.responses import success_response, error_response
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 logger = logging.getLogger(__name__)
@@ -236,11 +237,11 @@ async def get_tasks_status():
 
     logger.debug(f"Tasks Status - Returning {len(tasks)} tasks to client")
 
-    return {
-        "success": True,
-        "tasks": tasks,
-        "timezone": os.environ.get("TZ", "UTC"),
-    }
+    return success_response(
+        None,
+        tasks=tasks,
+        timezone=os.environ.get("TZ", "UTC"),
+    )
 
 
 @router.post("/run/{task_id}")
@@ -250,22 +251,20 @@ async def run_task_manually(task_id: str):
     if task_id == "download_monitor":
         if _download_monitor_task:
             await _download_monitor_task.run()
-            return {
-                "success": True,
-                "task_name": "Auto-Import",
-                "message": "Auto-import task executed",
-            }
+            return success_response(
+                "Auto-import task executed",
+                task_name="Auto-Import",
+            )
         else:
-            return {"success": False, "message": "Download monitor not available"}
+            return error_response("Download monitor not available")
 
     elif task_id == "auto_download":
         # Note: This manual trigger should be handled by the task scheduler
         # For now, just return success to indicate the task exists
-        return {
-            "success": True,
-            "task_name": "Auto-Download",
-            "message": "Auto-download task will run on its scheduled interval (30 minutes)",
-        }
+        return success_response(
+            "Auto-download task will run on its scheduled interval (30 minutes)",
+            task_name="Auto-Download",
+        )
 
     elif task_id == "folder_cleanup":
         if _folder_cleanup_task:
@@ -274,13 +273,12 @@ async def run_task_manually(task_id: str):
                 f"Folder cleanup executed. Deleted: {stats.get('total_deleted', 0)} folders, "
                 f"Freed: {stats.get('total_size_freed', 0) / (1024 * 1024):.2f} MB"
             )
-            return {
-                "success": True,
-                "task_name": "Auto-Cleanup",
-                "message": message,
-            }
+            return success_response(
+                message,
+                task_name="Auto-Cleanup",
+            )
         else:
-            return {"success": False, "message": "Folder cleanup not available"}
+            return error_response("Folder cleanup not available")
 
     elif task_id == "auto_metadata":
         # Run auto-metadata task to backfill and sync metadata
@@ -317,22 +315,20 @@ async def run_task_manually(task_id: str):
             f"Text scans queued: {stats.get('text_scan_queued', 0)}, "
             f"Errors: {stats.get('errors', 0)}"
         )
-        return {
-            "success": True,
-            "task_name": "Auto-Metadata",
-            "message": message,
-            "stats": stats,
-        }
+        return success_response(
+            message,
+            task_name="Auto-Metadata",
+            stats=stats,
+        )
 
     elif task_id == "provider_cache_sync":
         # Trigger cache sync manually
         # Note: This should ideally be handled by the task scheduler
         # For now, just return a message
-        return {
-            "success": True,
-            "task_name": "Auto-Cache",
-            "message": "Provider cache sync will run on its scheduled interval (30 minutes). Check Cache Management in Settings for manual sync.",
-        }
+        return success_response(
+            "Provider cache sync will run on its scheduled interval (30 minutes). Check Cache Management in Settings for manual sync.",
+            task_name="Auto-Cache",
+        )
 
     elif task_id == "cleanup_orphaned_covers":
         # Manually trigger cover cleanup and generation (run in thread to avoid blocking)
@@ -399,11 +395,10 @@ async def run_task_manually(task_id: str):
             }
 
         result = await with_db_session(_session_factory, operation)
-        return {
-            "success": True,
-            "task_name": "Auto-Thumbnail",
-            "message": result["message"],
-        }
+        return success_response(
+            result["message"],
+            task_name="Auto-Thumbnail",
+        )
 
     else:
-        return {"success": False, "message": f"Unknown task: {task_id}"}
+        return error_response(f"Unknown task: {task_id}")

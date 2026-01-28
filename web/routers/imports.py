@@ -15,6 +15,7 @@ from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from core.utils.general import find_pdf_epub_files
 from web.schemas import ImportOptionsRequest
+from web.utils.responses import success_response
 
 router = APIRouter(prefix="/api/import", tags=["imports"])
 logger = logging.getLogger(__name__)
@@ -128,11 +129,10 @@ async def import_from_library_dir(
     all_files = find_pdf_epub_files(library_dir, recursive=True)
 
     if not all_files:
-        return {
-            "success": True,
-            "imported": 0,
-            "message": f"No PDF or EPUB files found in library directory: {library_dir}",
-        }
+        return success_response(
+            f"No PDF or EPUB files found in library directory: {library_dir}",
+            imported=0,
+        )
 
     async def process_library_dir_imports():
         """Background task to process imports from library directory"""
@@ -174,11 +174,10 @@ async def import_from_library_dir(
 
     background_tasks.add_task(process_library_dir_imports)
 
-    return {
-        "success": True,
-        "imported": len(all_files),
-        "message": f"Started importing {len(all_files)} files from library directory",
-    }
+    return success_response(
+        f"Started importing {len(all_files)} files from library directory",
+        imported=len(all_files),
+    )
 
 
 @router.post("/reorganize")

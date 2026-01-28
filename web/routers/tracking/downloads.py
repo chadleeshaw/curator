@@ -12,6 +12,7 @@ from core.utils.db import mark_json_modified
 from core.utils.error_handling import handle_api_errors
 from models.database import PeriodicalTracking
 from web.schemas import APIError
+from web.utils.responses import success_response
 
 from . import _shared
 
@@ -76,13 +77,12 @@ async def track_single_issue(tracking_id: int, edition_id: str, track: bool = Qu
         action = "marked for tracking" if track else "unmarked from tracking"
         logger.info(f"Issue {edition_id} {action} for periodical '{tracking.title}'")
 
-        return {
-            "success": True,
-            "message": f"Issue {action}",
-            "tracking_id": tracking.id,
-            "edition_id": edition_id,
-            "tracked": track,
-            "total_selected": len([v for v in tracking.selected_editions.values() if v]),
-        }
+        return success_response(
+            f"Issue {action}",
+            tracking_id=tracking.id,
+            edition_id=edition_id,
+            tracked=track,
+            total_selected=len([v for v in tracking.selected_editions.values() if v]),
+        )
 
     return await with_db_session(_shared._session_factory, operation)

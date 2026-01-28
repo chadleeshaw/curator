@@ -20,6 +20,7 @@ from core.utils.general import (
 )
 from models.database import PeriodicalTracking
 from web.schemas import TrackingPreferencesRequest
+from web.utils.responses import success_response
 from . import _shared
 from .merge import _reorganize_periodical_files
 
@@ -88,13 +89,12 @@ async def save_tracking_preferences(
     # The scheduled auto-download task will pick up changes on its next run.
     # This keeps the API response fast (<100ms instead of 5-6 seconds).
 
-    return {
-        "success": True,
-        "tracking_id": result["tracking_id"],
-        "message": f"Tracking preferences saved for '{request.title}'",
-        "track_all_editions": result["track_all_editions"],
-        "selected_count": result["selected_count"],
-    }
+    return success_response(
+        f"Tracking preferences saved for '{request.title}'",
+        tracking_id=result["tracking_id"],
+        track_all_editions=result["track_all_editions"],
+        selected_count=result["selected_count"],
+    )
 
 
 @router.post("/periodicals/tracking/{tracking_id}/reorganize")
@@ -219,12 +219,11 @@ async def reorganize_tracking_files(tracking_id: int) -> Dict[str, Any]:
     if files_failed > 0:
         message += f" ({files_failed} failed)"
 
-    return {
-        "success": True,
-        "message": message,
-        "files_reorganized": files_reorganized,
-        "files_failed": files_failed,
-    }
+    return success_response(
+        message,
+        files_reorganized=files_reorganized,
+        files_failed=files_failed,
+    )
 
 
 @router.put("/periodicals/tracking/{tracking_id}")
@@ -389,11 +388,10 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
     # The scheduled auto-download task will pick up changes on its next run.
     # This keeps the API response fast (<100ms instead of 5-6 seconds).
 
-    response = {
-        "success": True,
-        "message": "Tracking updated successfully",
-        "tracking": tracking_data,
-    }
+    response = success_response(
+        "Tracking updated successfully",
+        tracking=tracking_data,
+    )
 
     if title_changed:
         response["files_reorganized"] = files_reorganized

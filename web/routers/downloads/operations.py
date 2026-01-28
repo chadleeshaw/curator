@@ -11,6 +11,7 @@ from core.constants.errors import ErrorMessages
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from models.database import DownloadSubmission
+from web.utils.responses import success_response
 
 from . import _shared
 
@@ -28,11 +29,11 @@ async def retry_download(submission_id: int) -> Dict[str, Any]:
             raise HTTPException(status_code=404, detail=ErrorMessages.SUBMISSION_NOT_FOUND)
 
         result = _shared._download_manager.retry_submission(submission_id, db)
-        return {
-            "success": result["success"],
-            "message": result.get("message", "Retry submitted"),
-            "submission_id": submission_id,
-        }
+        return success_response(
+            message=result.get("message", "Retry submitted"),
+            submission_id=submission_id,
+            success=result["success"],
+        )
 
     return await with_db_session(_shared._session_factory, operation)
 
@@ -51,11 +52,7 @@ async def clear_pending_downloads() -> Dict[str, Any]:
         count = pending_query.count()
 
         if count == 0:
-            return {
-                "success": True,
-                "deleted": 0,
-                "message": "No pending downloads to clear",
-            }
+            return success_response("No pending downloads to clear", deleted=0)
 
         # Delete all pending downloads
         pending_query.delete()
@@ -63,11 +60,10 @@ async def clear_pending_downloads() -> Dict[str, Any]:
 
         _shared.logger.info(f"Cleared {count} pending downloads from queue")
 
-        return {
-            "success": True,
-            "deleted": count,
-            "message": f"Cleared {count} pending download(s) from queue",
-        }
+        return success_response(
+            f"Cleared {count} pending download(s) from queue",
+            deleted=count,
+        )
 
     return await with_db_session(_shared._session_factory, operation)
 
@@ -86,11 +82,7 @@ async def clear_queued_downloads() -> Dict[str, Any]:
         count = queued_query.count()
 
         if count == 0:
-            return {
-                "success": True,
-                "deleted": 0,
-                "message": "No queued downloads to clear",
-            }
+            return success_response("No queued downloads to clear", deleted=0)
 
         # Delete all queued downloads
         queued_query.delete()
@@ -98,11 +90,10 @@ async def clear_queued_downloads() -> Dict[str, Any]:
 
         _shared.logger.info(f"Cleared {count} queued downloads from queue")
 
-        return {
-            "success": True,
-            "deleted": count,
-            "message": f"Cleared {count} queued download(s) from queue",
-        }
+        return success_response(
+            f"Cleared {count} queued download(s) from queue",
+            deleted=count,
+        )
 
     return await with_db_session(_shared._session_factory, operation)
 
@@ -121,11 +112,7 @@ async def clear_failed_downloads() -> Dict[str, Any]:
         count = failed_query.count()
 
         if count == 0:
-            return {
-                "success": True,
-                "deleted": 0,
-                "message": "No failed downloads to clear",
-            }
+            return success_response("No failed downloads to clear", deleted=0)
 
         # Delete all failed downloads
         failed_query.delete()
@@ -133,11 +120,10 @@ async def clear_failed_downloads() -> Dict[str, Any]:
 
         _shared.logger.info(f"Cleared {count} failed downloads from queue")
 
-        return {
-            "success": True,
-            "deleted": count,
-            "message": f"Cleared {count} failed download(s) from queue",
-        }
+        return success_response(
+            f"Cleared {count} failed download(s) from queue",
+            deleted=count,
+        )
 
     return await with_db_session(_shared._session_factory, operation)
 
@@ -156,7 +142,7 @@ async def delete_from_queue(submission_id: int) -> Dict[str, Any]:
         db.delete(submission)
         db.commit()
 
-        return {"success": True, "message": f"Removed '{title}' from queue"}
+        return success_response(f"Removed '{title}' from queue")
 
     return await with_db_session(_shared._session_factory, operation)
 
@@ -177,10 +163,9 @@ async def cleanup_old_submissions(days_old: int = 30, status_filter: str = None)
         query.delete()
         db.commit()
 
-        return {
-            "success": True,
-            "deleted": count,
-            "message": f"Cleaned up {count} old submissions",
-        }
+        return success_response(
+            f"Cleaned up {count} old submissions",
+            deleted=count,
+        )
 
     return await with_db_session(_shared._session_factory, operation)

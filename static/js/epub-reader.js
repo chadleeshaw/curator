@@ -5,7 +5,7 @@
 
 /* global URL, DOMParser, IntersectionObserver */
 
-import { APIClient } from './api.js';
+import { APIClient, APIHelper } from './api.js';
 import { mediaWorker, Priority } from './media-worker-manager.js';
 
 class EPUBReader {
@@ -58,8 +58,10 @@ class EPUBReader {
    */
   async loadMetadata() {
     try {
-      const response = await APIClient.get(`/api/periodicals/${this.magazineId}/epub/metadata`);
-      this.metadata = await response.json();
+      this.metadata = await APIHelper.executeWithErrorHandling(async () => {
+        const response = await APIClient.get(`/api/periodicals/${this.magazineId}/epub/metadata`);
+        return await response.json();
+      }, 'EPUBReader');
 
       // Update UI with metadata
       document.getElementById('book-title').textContent = this.metadata.title || 'EPUB Reader';
@@ -130,10 +132,12 @@ class EPUBReader {
         console.log(`Loading chapter ${index + 1} from cache`);
         html = this.chapterCache.get(index);
       } else {
-        const response = await APIClient.get(
-          `/api/periodicals/${this.magazineId}/epub/chapter/${index}`
-        );
-        html = await response.text();
+        html = await APIHelper.executeWithErrorHandling(async () => {
+          const response = await APIClient.get(
+            `/api/periodicals/${this.magazineId}/epub/chapter/${index}`
+          );
+          return await response.text();
+        }, 'EPUBReader');
         // Cache the chapter
         this.chapterCache.set(index, html);
       }
@@ -348,8 +352,10 @@ class EPUBReader {
    */
   async loadProgress() {
     try {
-      const response = await APIClient.get(`/api/periodicals/${this.magazineId}/progress`);
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(async () => {
+        const response = await APIClient.get(`/api/periodicals/${this.magazineId}/progress`);
+        return await response.json();
+      }, 'EPUBReader');
 
       if (data.progress && data.progress.current_chapter !== null) {
         // Load the saved chapter (unless URL specifies a different chapter)
@@ -385,10 +391,12 @@ class EPUBReader {
     if (!this.metadata) return;
 
     try {
-      await APIClient.post(`/api/periodicals/${this.magazineId}/progress`, {
-        current_chapter: this.currentChapterIndex,
-        total_pages: this.metadata.chapters.length,
-      });
+      await APIHelper.executeWithErrorHandling(async () => {
+        await APIClient.post(`/api/periodicals/${this.magazineId}/progress`, {
+          current_chapter: this.currentChapterIndex,
+          total_pages: this.metadata.chapters.length,
+        });
+      }, 'EPUBReader');
       console.log(
         `Progress saved: chapter ${this.currentChapterIndex + 1}/${this.metadata.chapters.length}`
       );

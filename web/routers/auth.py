@@ -19,6 +19,7 @@ from web.schemas import (
     UpdateUserRequest,
 )
 from web.middleware.auth import AuthMiddleware
+from web.utils.responses import success_response
 
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
 logger = logging.getLogger(__name__)
@@ -129,7 +130,7 @@ async def setup_credentials(
     if not success:
         raise HTTPException(status_code=400, detail=message)
 
-    return {"success": True, "message": message}
+    return success_response(message)
 
 
 @router.post("/login")
@@ -142,7 +143,7 @@ async def login(request: LoginRequest, auth_manager: "AuthManager" = Depends(get
         raise HTTPException(status_code=401, detail=message)
 
     token = auth_manager.create_token(request.username)
-    return {"success": True, "token": token, "message": "Login successful"}
+    return success_response("Login successful", token=token)
 
 
 @router.post("/change-password")
@@ -158,18 +159,18 @@ async def change_password(
     if not success:
         raise HTTPException(status_code=400, detail=message)
 
-    return {"success": True, "message": message}
+    return success_response(message)
 
 
 @router.get("/user/info")
 @handle_api_errors("Get user info", logger)
 async def get_user_info(current_username: str = Depends(get_verify_token)):
     """Get current user information"""
-    return {
-        "success": True,
-        "username": current_username,
-        "has_password": True,  # Always true if authenticated
-    }
+    return success_response(
+        None,
+        username=current_username,
+        has_password=True,  # Always true if authenticated
+    )
 
 
 @router.post("/user/update")
@@ -200,10 +201,11 @@ async def update_user(
         if not success:
             raise HTTPException(status_code=400, detail=message)
 
-    return {"success": True, "message": "Account updated successfully"}
+    return success_response("Account updated successfully")
 
 
 @router.get("/api-token")
+@handle_api_errors("Get API token", logger)
 async def get_api_token(
     username: str = Depends(get_verify_token),
     auth_manager: "AuthManager" = Depends(get_auth_manager),
@@ -217,14 +219,14 @@ async def get_api_token(
         if not success:
             raise HTTPException(status_code=500, detail="Failed to generate API token")
 
-    return {
-        "success": True,
-        "api_token": api_token,
-        "message": "API token retrieved successfully",
-    }
+    return success_response(
+        "API token retrieved successfully",
+        api_token=api_token,
+    )
 
 
 @router.post("/api-token/regenerate")
+@handle_api_errors("Regenerate API token", logger)
 async def regenerate_api_token(
     username: str = Depends(get_verify_token),
     auth_manager: "AuthManager" = Depends(get_auth_manager),
@@ -235,8 +237,7 @@ async def regenerate_api_token(
     if not success:
         raise HTTPException(status_code=500, detail="Failed to generate new API token")
 
-    return {
-        "success": True,
-        "api_token": new_token,
-        "message": "API token regenerated successfully",
-    }
+    return success_response(
+        "API token regenerated successfully",
+        api_token=new_token,
+    )

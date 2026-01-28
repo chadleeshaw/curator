@@ -3,7 +3,7 @@
  * Handles file import from downloads folder and organized data directory
  */
 
-import { APIClient } from './api.js';
+import { APIClient, APIHelper } from './api.js';
 import { UIUtils } from './ui-utils.js';
 import { library } from './library.js';
 import { CSS_CLASSES } from './constants.js';
@@ -28,19 +28,20 @@ export class ImportsManager {
     const messageDiv = document.getElementById('import-message');
 
     try {
-      const response = await fetch('/api/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          import: {
-            organization_pattern: pattern,
-            enable_text_scan: enableTextScan,
-            enable_ocr: enableOcr,
-          },
-        }),
-      });
-
-      const _result = await response.json();
+      await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.post('/api/config', {
+            import: {
+              organization_pattern: pattern,
+              enable_text_scan: enableTextScan,
+              enable_ocr: enableOcr,
+            },
+          });
+          return await response.json();
+        },
+        'Imports',
+        'import-message'
+      );
 
       messageDiv.textContent = '✓ Organization pattern saved';
       messageDiv.style.background = '#e8f5e9';
@@ -68,29 +69,33 @@ export class ImportsManager {
     const autoTrack = document.getElementById('import-auto-track').checked;
     const trackingMode = document.getElementById('import-tracking-mode').value;
 
+    const statusDiv = document.getElementById('import-status');
+
+    // Show importing status
+    statusDiv.textContent = '📁 Importing from data directory...';
+    statusDiv.style.background = 'var(--surface-variant)';
+    statusDiv.style.color = 'var(--text-primary)';
+    statusDiv.classList.remove(CSS_CLASSES.HIDDEN);
+
+    // Close modal
+    library.closeImportModal();
+
     try {
-      const statusDiv = document.getElementById('import-status');
-
-      // Show importing status
-      statusDiv.textContent = '📁 Importing from data directory...';
-      statusDiv.style.background = 'var(--surface-variant)';
-      statusDiv.style.color = 'var(--text-primary)';
-      statusDiv.classList.remove(CSS_CLASSES.HIDDEN);
-
-      // Close modal
-      library.closeImportModal();
-
-      // Import from library directory (files are already organized, no pattern needed)
-      const response = await APIClient.authenticatedFetch('/api/import/from-library-dir', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          auto_track: autoTrack && trackingMode !== 'none',
-          tracking_mode: trackingMode,
-        }),
-      });
-
-      const result = await response.json();
+      const result = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.authenticatedFetch('/api/import/from-library-dir', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              auto_track: autoTrack && trackingMode !== 'none',
+              tracking_mode: trackingMode,
+            }),
+          });
+          return await response.json();
+        },
+        'Imports',
+        'import-status'
+      );
 
       if (result.success) {
         UIUtils.showStatus('import-status', result.message, 'success');
@@ -115,8 +120,14 @@ export class ImportsManager {
   async checkAndImportDownloads() {
     try {
       // First check status
-      const statusResponse = await APIClient.authenticatedFetch('/api/import/status');
-      const statusData = await statusResponse.json();
+      const statusData = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const statusResponse = await APIClient.authenticatedFetch('/api/import/status');
+          return await statusResponse.json();
+        },
+        'Imports',
+        'import-status'
+      );
 
       const statusDiv = document.getElementById('import-status');
 
@@ -134,11 +145,16 @@ export class ImportsManager {
       statusDiv.classList.remove(CSS_CLASSES.HIDDEN);
 
       // Start import
-      const response = await APIClient.authenticatedFetch('/api/import/process', {
-        method: 'POST',
-      });
-
-      const result = await response.json();
+      const result = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.authenticatedFetch('/api/import/process', {
+            method: 'POST',
+          });
+          return await response.json();
+        },
+        'Imports',
+        'import-status'
+      );
 
       if (result.status === 'processing') {
         UIUtils.showStatus('import-status', result.message, 'success');

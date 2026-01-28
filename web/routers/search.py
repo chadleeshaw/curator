@@ -21,6 +21,7 @@ from core.utils.error_handling import handle_api_errors
 from models.database import DownloadSubmission, Periodical, SearchResult
 from services.issue_discovery import IssueDiscoveryService
 from web.schemas import APIError, SearchRequest
+from web.utils.responses import success_response
 
 router = APIRouter(prefix="/api", tags=["search"])
 logger = logging.getLogger(__name__)
@@ -926,7 +927,7 @@ async def get_periodical_editions(magazine_title: str) -> Dict[str, Any]:
             logger.warning(f"Error searching provider {provider.__class__.__name__}: {e}")
 
     if results:
-        return {"success": True, "results": results}
+        return success_response(None, results=results)
     else:
         raise HTTPException(status_code=404, detail=f"Could not find editions for {magazine_title}")
 

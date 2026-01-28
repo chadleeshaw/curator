@@ -3,7 +3,7 @@
  * Handles OCR job queue management and monitoring
  */
 
-import { APIClient } from './api.js?v=1767733177';
+import { APIClient, APIHelper } from './api.js?v=1767733177';
 import { UIUtils } from './ui-utils.js?v=1767733177';
 import {
   ELEMENT_IDS as _ELEMENT_IDS,
@@ -30,8 +30,10 @@ export class OCRQueueManager {
    */
   async loadConstants() {
     try {
-      const response = await APIClient.get('/api/constants');
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(async () => {
+        const response = await APIClient.get('/api/constants');
+        return await response.json();
+      }, 'OCRQueue');
       if (data.success && data.max_ocr_retries) {
         this.maxRetries = data.max_ocr_retries;
       }
@@ -45,13 +47,18 @@ export class OCRQueueManager {
    */
   async loadQueue() {
     try {
-      const [queueResponse, statsResponse] = await Promise.all([
-        APIClient.authenticatedFetch('/api/ocr/queue'),
-        APIClient.authenticatedFetch('/api/ocr/queue/stats'),
-      ]);
+      const [queueData, statsData] = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const [queueResponse, statsResponse] = await Promise.all([
+            APIClient.authenticatedFetch('/api/ocr/queue'),
+            APIClient.authenticatedFetch('/api/ocr/queue/stats'),
+          ]);
 
-      const queueData = await queueResponse.json();
-      const statsData = await statsResponse.json();
+          return [await queueResponse.json(), await statsResponse.json()];
+        },
+        'OCRQueue',
+        'ocr-queue-status'
+      );
 
       // Update badge count
       this.updateBadgeCount(statsData);
@@ -59,8 +66,7 @@ export class OCRQueueManager {
       // Display queue
       this.displayQueue(queueData, statsData);
     } catch (error) {
-      console.error('[OCR Queue] Error loading queue:', error);
-      UIUtils.showStatus('ocr-queue-status', 'Error loading OCR queue', 'error');
+      // Already logged and displayed by APIHelper
     }
   }
 
@@ -350,8 +356,10 @@ export class OCRQueueManager {
    */
   async showJobDetails(jobId) {
     try {
-      const response = await APIClient.authenticatedFetch('/api/ocr/queue');
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(async () => {
+        const response = await APIClient.authenticatedFetch('/api/ocr/queue');
+        return await response.json();
+      }, 'OCRQueue');
       const job = data.jobs.find((j) => j.id === jobId);
 
       if (!job) {
@@ -462,9 +470,11 @@ export class OCRQueueManager {
    */
   async retryJob(jobId) {
     try {
-      const response = await APIClient.authenticatedFetch(`/api/ocr/retry/${jobId}`, {
-        method: 'POST',
-      });
+      const response = await APIHelper.executeWithErrorHandling(async () => {
+        return await APIClient.authenticatedFetch(`/api/ocr/retry/${jobId}`, {
+          method: 'POST',
+        });
+      }, 'OCRQueue');
 
       if (response.ok) {
         UIUtils.showToast('OCR job queued for retry', 'success');
@@ -474,8 +484,7 @@ export class OCRQueueManager {
         UIUtils.showToast(error.detail || 'Failed to retry job', 'error');
       }
     } catch (error) {
-      console.error('[OCR Queue] Error retrying job:', error);
-      UIUtils.showToast('Error retrying job', 'error');
+      // Already logged by APIHelper
     }
   }
 
@@ -541,9 +550,11 @@ export class OCRQueueManager {
    */
   async confirmDelete(jobId) {
     try {
-      const response = await APIClient.authenticatedFetch(`/api/ocr/queue/${jobId}`, {
-        method: 'DELETE',
-      });
+      const response = await APIHelper.executeWithErrorHandling(async () => {
+        return await APIClient.authenticatedFetch(`/api/ocr/queue/${jobId}`, {
+          method: 'DELETE',
+        });
+      }, 'OCRQueue');
 
       if (response.ok) {
         UIUtils.showToast('OCR job removed', 'success');
@@ -556,8 +567,7 @@ export class OCRQueueManager {
         UIUtils.showToast(error.detail || 'Failed to delete job', 'error');
       }
     } catch (error) {
-      console.error('[OCR Queue] Error deleting job:', error);
-      UIUtils.showToast('Error deleting job', 'error');
+      // Already logged by APIHelper
     }
   }
 
@@ -568,8 +578,10 @@ export class OCRQueueManager {
   async deleteJob(jobId) {
     try {
       // Fetch job details to get the title
-      const response = await APIClient.authenticatedFetch('/api/ocr/queue');
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(async () => {
+        const response = await APIClient.authenticatedFetch('/api/ocr/queue');
+        return await response.json();
+      }, 'OCRQueue');
       const job = data.jobs.find((j) => j.id === jobId);
 
       if (!job) {
@@ -737,9 +749,11 @@ export class OCRQueueManager {
    */
   async executeClearFailedJobs() {
     try {
-      const response = await APIClient.authenticatedFetch('/api/ocr/queue/failed', {
-        method: 'DELETE',
-      });
+      const response = await APIHelper.executeWithErrorHandling(async () => {
+        return await APIClient.authenticatedFetch('/api/ocr/queue/failed', {
+          method: 'DELETE',
+        });
+      }, 'OCRQueue');
 
       if (response.ok) {
         const result = await response.json();
@@ -750,8 +764,7 @@ export class OCRQueueManager {
         UIUtils.showToast(error.detail || 'Failed to clear jobs', 'error');
       }
     } catch (error) {
-      console.error('[OCR Queue] Error clearing failed jobs:', error);
-      UIUtils.showToast('Error clearing failed jobs', 'error');
+      // Already logged by APIHelper
     }
   }
 }

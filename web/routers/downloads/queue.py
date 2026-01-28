@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from models.database import DownloadSubmission, PeriodicalTracking
+from web.utils.responses import success_response
 
 from . import _shared
 
@@ -50,9 +51,8 @@ async def get_download_queue_all(status: Optional[str] = None) -> Dict[str, Any]
         for s in submissions:
             status_counts[s.status.value] = status_counts.get(s.status.value, 0) + 1
 
-        return {
-            "success": True,
-            "queue": [
+        return success_response(
+            queue=[
                 {
                     "submission_id": s.id,
                     "tracking_id": s.tracking_id,
@@ -69,9 +69,9 @@ async def get_download_queue_all(status: Optional[str] = None) -> Dict[str, Any]
                 }
                 for s in submissions
             ],
-            "count": len(submissions),
-            "status_counts": status_counts,
-        }
+            count=len(submissions),
+            status_counts=status_counts,
+        )
 
     return await with_db_session(_shared._session_factory, operation)
 
@@ -121,12 +121,11 @@ async def get_download_queue_status() -> Dict[str, Any]:
             .count(),
         }
 
-        return {
-            "success": True,
-            "max_concurrent": _shared._download_manager.max_downloads,
-            "active": active_downloads,
-            "available_slots": available_slots,
-            "status_counts": status_counts,
-        }
+        return success_response(
+            max_concurrent=_shared._download_manager.max_downloads,
+            active=active_downloads,
+            available_slots=available_slots,
+            status_counts=status_counts,
+        )
 
     return await with_db_session(_shared._session_factory, operation)

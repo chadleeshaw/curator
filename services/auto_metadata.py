@@ -19,12 +19,12 @@ from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
 
 from core.database import DatabaseManager
-from core.constants.category import CATEGORIES
 from core.utils.metadata_builder import (
     build_derived_metadata,
     build_file_scan,
     sync_issue_date_from_derived,
 )
+from core.utils.files import resolve_periodical_file_path
 from core.parsers.parser import Parser
 from models.database import Periodical, OCRJob
 from services.text_scan_service import TextScanService
@@ -158,37 +158,31 @@ class AutoMetadataService:
         if stored_path.exists():
             return False
 
-        # Try to resolve the path
+        # Try to resolve the path using utility function
         try:
-            # Find the library folder marker (e.g., "_Magazines", "_Comics", etc.)
-            parts = stored_path.parts
-            # Build category markers from constants (e.g., "_Magazines", "_Comics")
-            category_markers = [f"{self.category_prefix}{category}" for category in CATEGORIES]
+            resolved = resolve_periodical_file_path(
+                stored_path=str(stored_path),
+                library_base_dir=self.library_base_dir,
+                category_prefix=self.category_prefix,
+            )
+            # Path was successfully resolved, update database
+            periodical.file_path = str(resolved)
+            logger.info(f"Fixed file path for periodical {periodical.id}: {stored_path} -> {resolved}")
+            return True
 
-            for i, part in enumerate(parts):
-                if part in category_markers:
-                    # Reconstruct path from category marker onwards
-                    relative_path = Path(*parts[i:])
-                    resolved = self.library_base_dir / relative_path
-
-                    if resolved.exists():
-                        periodical.file_path = str(resolved)
-                        logger.info(f"Fixed file path for periodical {periodical.id}: {stored_path} -> {resolved}")
-                        return True
-                    break
-
+        except FileNotFoundError:
             # Last resort: search by filename
-            filename = stored_path.name
-            for candidate in self.library_base_dir.rglob(filename):
-                if candidate.is_file():
-                    periodical.file_path = str(candidate)
-                    logger.warning(
-                        f"Fixed file path by name search for periodical {periodical.id}: {stored_path} -> {candidate}"
-                    )
-                    return True
-
-        except Exception as e:
-            logger.warning(f"Failed to fix file path for periodical {periodical.id}: {e}")
+            try:
+                filename = stored_path.name
+                for candidate in self.library_base_dir.rglob(filename):
+                    if candidate.is_file():
+                        periodical.file_path = str(candidate)
+                        logger.warning(
+                            f"Fixed file path by name search for periodical {periodical.id}: {stored_path} -> {candidate}"
+                        )
+                        return True
+            except Exception as e:
+                logger.warning(f"Failed to fix file path for periodical {periodical.id}: {e}")
 
         return False
 

@@ -25,6 +25,7 @@ from core.constants.language import DEFAULT_LANGUAGE
 from core.utils.pdf import extract_cover_from_pdf as extract_cover_util
 from core.utils.epub import extract_cover_from_epub
 from core.utils.cbz import extract_cover_from_cbz, extract_cover_from_cbr
+from core.utils.files import resolve_periodical_file_path
 from core.parsers import sanitize_filename, detect_country
 from services.importer.sidecar import read_sidecar_file
 from services.importer.matcher import TrackingMatcher
@@ -894,10 +895,17 @@ class FileOrganizer:
             original_file_path = magazine.file_path
             try:
                 files_found += 1
-                current_path = Path(magazine.file_path)
 
-                if not current_path.exists():
-                    logger.debug(f"File not found, skipping: {current_path}")
+                # Try to resolve the file path (handles environment differences like Docker paths)
+                try:
+                    current_path = resolve_periodical_file_path(
+                        stored_path=magazine.file_path,
+                        library_base_dir=self.library_dir,
+                        category_prefix=self.category_prefix,
+                    )
+                except FileNotFoundError:
+                    # Path could not be resolved - skip this file
+                    logger.debug(f"File not found, skipping: {magazine.file_path}")
                     files_skipped += 1
                     continue
 
@@ -906,7 +914,6 @@ class FileOrganizer:
                 if magazine.tracking_id:
                     tracking = db_session.query(PeriodicalTracking).filter_by(id=magazine.tracking_id).first()
                     if tracking:
-                        tracking.country
                         tracking_title = tracking.title
 
                 # CRITICAL: Use the tracking title if available, otherwise use magazine title

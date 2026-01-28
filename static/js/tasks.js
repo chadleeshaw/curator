@@ -3,7 +3,7 @@
  * Handles scheduled tasks display and execution
  */
 
-import { APIClient } from './api.js';
+import { APIClient, APIHelper } from './api.js';
 import { UIUtils } from './ui-utils.js';
 
 export class TasksManager {
@@ -12,8 +12,10 @@ export class TasksManager {
    */
   async loadCategories() {
     try {
-      const response = await APIClient.get('/api/constants/categories');
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(async () => {
+        const response = await APIClient.get('/api/constants/categories');
+        return await response.json();
+      }, 'Tasks');
 
       if (data.success && data.categories) {
         this.populateCategoryDropdown(data.categories);
@@ -59,8 +61,10 @@ export class TasksManager {
   async loadScheduledTasks() {
     try {
       console.log('[Tasks] Starting loadScheduledTasks...');
-      const response = await APIClient.authenticatedFetch('/api/tasks/status');
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(async () => {
+        const response = await APIClient.authenticatedFetch('/api/tasks/status');
+        return await response.json();
+      }, 'Tasks');
       console.log('[Tasks] API Response:', data);
       console.log('[Tasks] Found tasks:', data.tasks?.length || 0);
       data.tasks?.forEach((task, idx) => {
@@ -159,10 +163,16 @@ export class TasksManager {
    */
   async runTaskManually(taskId) {
     try {
-      const response = await APIClient.authenticatedFetch(`/api/tasks/run/${taskId}`, {
-        method: 'POST',
-      });
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.authenticatedFetch(`/api/tasks/run/${taskId}`, {
+            method: 'POST',
+          });
+          return await response.json();
+        },
+        'Tasks',
+        'tasks-status'
+      );
 
       if (data.success) {
         UIUtils.showStatus(
@@ -220,14 +230,19 @@ export class TasksManager {
         params.append('pattern', pattern);
       }
 
-      const response = await APIClient.authenticatedFetch(
-        `/api/import/reorganize?${params.toString()}`,
-        {
-          method: 'POST',
-        }
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.authenticatedFetch(
+            `/api/import/reorganize?${params.toString()}`,
+            {
+              method: 'POST',
+            }
+          );
+          return await response.json();
+        },
+        'Tasks',
+        'reorganize-status'
       );
-
-      const data = await response.json();
 
       // Debug logging
       console.log('[Preview] API Response:', data);
@@ -302,14 +317,19 @@ export class TasksManager {
         params.append('pattern', pattern);
       }
 
-      const response = await APIClient.authenticatedFetch(
-        `/api/import/reorganize?${params.toString()}`,
-        {
-          method: 'POST',
-        }
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.authenticatedFetch(
+            `/api/import/reorganize?${params.toString()}`,
+            {
+              method: 'POST',
+            }
+          );
+          return await response.json();
+        },
+        'Tasks',
+        'reorganize-status'
       );
-
-      const data = await response.json();
 
       if (data.success) {
         this.displayReorganizeResults(data, false);

@@ -30,6 +30,7 @@ def set_dependencies(session_factory: Callable) -> None:
 
 
 @router.get("/api/version")
+@handle_api_errors("Get version", logger)
 async def get_version():
     """Get application version information"""
     return JSONResponse(content=get_version_info())

@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse, HTMLResponse, Response
 from core.utils import run_in_thread
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
+from web.utils.responses import success_response
 from core.utils.files import get_library_dir
 from core.utils.general import cleanup_empty_directories, is_special_edition
 from core.utils.epub_reader import get_epub_metadata, get_epub_chapter, get_epub_image
@@ -486,12 +487,11 @@ async def move_issue_to_tracking(periodical_id: int, target_tracking_id: int) ->
             msg += " and reorganized files"
 
         logger.info(msg)
-        return {
-            "success": True,
-            "message": msg,
-            "old_tracking_id": old_tracking_id,
-            "new_tracking_id": target_tracking_id,
-            "files_reorganized": files_reorganized,
-        }
+        return success_response(
+            msg,
+            old_tracking_id=old_tracking_id,
+            new_tracking_id=target_tracking_id,
+            files_reorganized=files_reorganized,
+        )
 
     return await with_db_session(_shared._session_factory, operation)

@@ -17,6 +17,7 @@ from core.utils.general import (
 from models.database import Periodical, PeriodicalTracking
 from services.file_operations import reorganize_periodical_files
 from web.schemas import APIError
+from web.utils.responses import success_response, error_response
 
 from . import _shared
 
@@ -62,11 +63,10 @@ async def start_tracking_periodical(
     def operation(db):
         existing = db.query(PeriodicalTracking).filter(PeriodicalTracking.olid == olid).first()
         if existing:
-            return {
-                "success": False,
-                "message": f"Already tracking '{title}'",
-                "tracking_id": existing.id,
-            }
+            return error_response(
+                f"Already tracking '{title}'",
+                tracking_id=existing.id,
+            )
 
         tracking = PeriodicalTracking(
             olid=olid,
@@ -83,12 +83,11 @@ async def start_tracking_periodical(
         db.commit()
 
         logger.info(f"Started tracking periodical: {title}")
-        return {
-            "success": True,
-            "tracking_id": tracking.id,
-            "message": f"Started tracking '{title}'",
-            "olid": olid,
-        }
+        return success_response(
+            f"Started tracking '{title}'",
+            tracking_id=tracking.id,
+            olid=olid,
+        )
 
     return await with_db_session(_shared._session_factory, operation)
 
@@ -121,9 +120,9 @@ async def list_tracked_periodicals(skip: int = 0, limit: int = 50) -> Dict[str, 
         tracked = db.query(PeriodicalTracking).offset(skip).limit(limit).all()
         total = db.query(PeriodicalTracking).count()
 
-        return {
-            "success": True,
-            "tracked": [
+        return success_response(
+            None,
+            tracked=[
                 {
                     "id": m.id,
                     "olid": m.olid,
@@ -135,10 +134,10 @@ async def list_tracked_periodicals(skip: int = 0, limit: int = 50) -> Dict[str, 
                 }
                 for m in tracked
             ],
-            "total": total,
-            "skip": skip,
-            "limit": limit,
-        }
+            total=total,
+            skip=skip,
+            limit=limit,
+        )
 
     return await with_db_session(_shared._session_factory, operation)
 
@@ -229,13 +228,13 @@ async def list_tracked_magazines(
                 }
             )
 
-        return {
-            "success": True,
-            "tracked_magazines": tracked_list,
-            "total": total,
-            "skip": skip,
-            "limit": limit,
-        }
+        return success_response(
+            None,
+            tracked_magazines=tracked_list,
+            total=total,
+            skip=skip,
+            limit=limit,
+        )
 
     return await with_db_session(_shared._session_factory, operation)
 
@@ -250,9 +249,9 @@ async def get_tracking_details(tracking_id: int) -> Dict[str, Any]:
         if not tracking:
             raise HTTPException(status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND)
 
-        return {
-            "success": True,
-            "tracking": {
+        return success_response(
+            None,
+            tracking={
                 "id": tracking.id,
                 "olid": tracking.olid,
                 "title": tracking.title,
@@ -273,7 +272,7 @@ async def get_tracking_details(tracking_id: int) -> Dict[str, Any]:
                 ),
                 "created_at": (tracking.created_at.isoformat() if tracking.created_at else None),
             },
-        }
+        )
 
     return await with_db_session(_shared._session_factory, operation)
 
@@ -335,6 +334,6 @@ async def delete_tracking(tracking_id: int) -> Dict[str, Any]:
         db.commit()
 
         logger.info(f"Deleted tracking for magazine: {title}")
-        return {"success": True, "message": f"Stopped tracking '{title}'"}
+        return success_response(f"Stopped tracking '{title}'")
 
     return await with_db_session(_shared._session_factory, operation)

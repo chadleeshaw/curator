@@ -16,6 +16,7 @@ from core.utils.general import cleanup_empty_directories, is_special_edition
 from models.database import PeriodicalTracking
 from services.file_operations import reorganize_periodical_files
 from web.schemas import APIError
+from web.utils.responses import success_response
 
 from . import _shared
 
@@ -218,13 +219,12 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
             f"Moved {periodicals_moved} magazines, reorganized {files_reorganized} files."
         )
 
-        return {
-            "success": True,
-            "message": f"Merged {len(sources)} tracking record{'s' if len(sources) > 1 else ''} into '{target.title}'",
-            "periodicals_moved": periodicals_moved,
-            "submissions_moved": submissions_moved,
-            "files_reorganized": files_reorganized,
-            "merged_titles": source_titles,
-        }
+        return success_response(
+            f"Merged {len(sources)} tracking record{'s' if len(sources) > 1 else ''} into '{target.title}'",
+            periodicals_moved=periodicals_moved,
+            submissions_moved=submissions_moved,
+            files_reorganized=files_reorganized,
+            merged_titles=source_titles,
+        )
 
     return await with_db_session(_shared._session_factory, operation)

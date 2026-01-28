@@ -9,6 +9,7 @@ from typing import Any, Dict
 from core.constants.date import NUMBER_TO_MONTH
 from core.utils.db import mark_json_modified, with_db_session
 from core.utils.error_handling import handle_api_errors
+from web.utils.responses import success_response
 
 from . import _shared
 
@@ -55,11 +56,10 @@ async def toggle_special_edition(magazine_id: int, is_special: bool) -> Dict[str
 
         db.commit()
 
-        return {
-            "success": True,
-            "message": message,
-            "is_special_edition": is_special,
-        }
+        return success_response(
+            message,
+            is_special_edition=is_special,
+        )
 
     return await with_db_session(_shared._session_factory, operation)
 
@@ -146,16 +146,15 @@ async def update_periodical(magazine_id: int, updates: Dict[str, Any]) -> Dict[s
         db.commit()
         db.refresh(magazine)
 
-        return {
-            "success": True,
-            "message": "Metadata updated successfully",
-            "periodical": {
+        return success_response(
+            "Metadata updated successfully",
+            periodical={
                 "id": magazine.id,
                 "title": magazine.title,
                 "language": magazine.language,
                 "issue_date": (magazine.issue_date.isoformat() if magazine.issue_date else None),
                 "metadata": magazine.extra_metadata,
             },
-        }
+        )
 
     return await with_db_session(_shared._session_factory, operation)

@@ -12,6 +12,7 @@ from core.utils.error_handling import handle_api_errors
 from core.utils.general import generate_olid
 from models.database import Periodical, PeriodicalTracking
 from web.schemas import PeriodicalResponse
+from web.utils.responses import success_response, list_response
 
 from . import _shared
 
@@ -266,8 +267,8 @@ async def list_periodicals(
             # Priority 3: Database column (fallback)
             return mag.title
 
-        return {
-            "periodicals": [
+        return success_response(
+            periodicals=[
                 {
                     "id": m.id,
                     "title": get_best_title(m),
@@ -292,10 +293,10 @@ async def list_periodicals(
                 }
                 for m in magazines
             ],
-            "total": total_titles,
-            "skip": skip,
-            "limit": limit,
-        }
+            total=total_titles,
+            skip=skip,
+            limit=limit,
+        )
 
     return await with_db_session(_shared._session_factory, operation)
 
@@ -325,10 +326,9 @@ async def get_languages() -> Dict[str, Any]:
             .all()
         )
 
-        return {
-            "success": True,
-            "languages": [{"language": lang, "count": count} for lang, count in language_counts],
-        }
+        return success_response(
+            languages=[{"language": lang, "count": count} for lang, count in language_counts],
+        )
 
     return await with_db_session(_shared._session_factory, operation)
 
@@ -470,10 +470,7 @@ async def delete_periodical(
                 message += " (prevented auto-download)"
             if remove_tracking:
                 message += " (tracking removed)"
-            return {
-                "success": True,
-                "message": message,
-            }
+            return success_response(message)
         else:
             logger.info(f"Deleted {deleted_count} issue(s) from library (files retained): {title}")
             if deleted_count > 1:
@@ -484,10 +481,7 @@ async def delete_periodical(
                 message += " (prevented auto-download)"
             if remove_tracking:
                 message += " (tracking removed)"
-            return {
-                "success": True,
-                "message": message,
-            }
+            return success_response(message)
 
     return await with_db_session(_shared._session_factory, operation)
 
@@ -542,20 +536,19 @@ async def purge_database() -> Dict[str, Any]:
             f"{ocr_count} OCR jobs, and {issue_count} discovered issues."
         )
 
-        return {
-            "success": True,
-            "message": f"Database purged successfully. Removed {magazine_count} library entries, "
+        return success_response(
+            message=f"Database purged successfully. Removed {magazine_count} library entries, "
             f"{tracking_count} tracking records, {download_count} downloads, "
             f"{ocr_count} OCR jobs, and {issue_count} discovered issues. "
             f"Files on disk remain untouched.",
-            "counts": {
+            counts={
                 "magazines": magazine_count,
                 "tracking": tracking_count,
                 "downloads": download_count,
                 "ocr_jobs": ocr_count,
                 "discovered_issues": issue_count,
             },
-        }
+        )
 
     return await with_db_session(_shared._session_factory, operation)
 
@@ -585,11 +578,10 @@ async def purge_cache() -> Dict[str, Any]:
 
         logger.info(f"Search cache purged successfully. Removed {cache_count} cached search results.")
 
-        return {
-            "success": True,
-            "message": f"Search cache purged successfully. Removed {cache_count} cached search results.",
-            "count": cache_count,
-        }
+        return success_response(
+            message=f"Search cache purged successfully. Removed {cache_count} cached search results.",
+            count=cache_count,
+        )
 
     return await with_db_session(_shared._session_factory, operation)
 

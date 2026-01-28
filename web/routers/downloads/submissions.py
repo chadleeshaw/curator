@@ -17,6 +17,7 @@ from web.schemas import (
     DownloadSubmissionResponse,
 )
 from core.utils.db import with_db_session
+from web.utils.responses import success_response
 
 from . import _shared
 
@@ -63,15 +64,14 @@ async def download_all_periodical_issues(
             )
 
         results = _shared._download_manager.download_all_periodical_issues(request.tracking_id, db)
-        return {
-            "success": True,
-            "tracking_id": request.tracking_id,
-            "magazine": tracking.title,
-            "submitted": results["submitted"],
-            "skipped": results["skipped"],
-            "failed": results["failed"],
-            "message": f"Started downloading issues: {results['submitted']} submitted, {results['skipped']} skipped",
-        }
+        return success_response(
+            message=f"Started downloading issues: {results['submitted']} submitted, {results['skipped']} skipped",
+            tracking_id=request.tracking_id,
+            magazine=tracking.title,
+            submitted=results["submitted"],
+            skipped=results["skipped"],
+            failed=results["failed"],
+        )
 
     return await with_db_session(_shared._session_factory, operation)
 

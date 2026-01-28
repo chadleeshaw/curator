@@ -6,9 +6,8 @@
  * Contains core functionality - provider management needs full implementation
  */
 
-import { APIClient } from './api.js';
+import { APIClient, APIHelper } from './api.js';
 import { UIUtils } from './ui-utils.js';
-import { AuthManager } from './auth.js';
 import {
   ELEMENT_IDS as _ELEMENT_IDS,
   STATUS_MESSAGES as _STATUS_MESSAGES,
@@ -565,8 +564,14 @@ export class SettingsManager {
    */
   async saveProviderSettings() {
     try {
-      const response = await APIClient.post('/api/config', this.currentConfig);
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.post('/api/config', this.currentConfig);
+          return await response.json();
+        },
+        'Settings',
+        'settings-status'
+      );
 
       if (data.success) {
         UIUtils.showStatus('settings-status', 'Settings saved successfully', 'success');
@@ -603,10 +608,16 @@ export class SettingsManager {
     }
 
     try {
-      const response = await APIClient.post('/api/config', {
-        download_client: downloadClientConfig,
-      });
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.post('/api/config', {
+            download_client: downloadClientConfig,
+          });
+          return await response.json();
+        },
+        'Settings',
+        'settings-status'
+      );
 
       if (data.success) {
         UIUtils.showStatus('settings-status', 'Download client settings saved', 'success');
@@ -650,8 +661,14 @@ export class SettingsManager {
         api_key: apiKey,
       };
 
-      const response = await APIClient.post('/api/config/test-download-client', testPayload);
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.post('/api/config/test-download-client', testPayload);
+          return await response.json();
+        },
+        'Settings',
+        'settings-status'
+      );
 
       if (data.success) {
         const versionInfo = data.version ? ` (v${data.version})` : '';
@@ -700,8 +717,14 @@ export class SettingsManager {
         api_key: key,
       };
 
-      const response = await APIClient.post('/api/config/test-provider', testPayload);
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.post('/api/config/test-provider', testPayload);
+          return await response.json();
+        },
+        'Settings',
+        'settings-status'
+      );
 
       if (data.success) {
         const serverInfo = data.server_info
@@ -760,10 +783,16 @@ export class SettingsManager {
       updatedProviders[index] = providerUpdate;
 
       // Save config
-      const saveResponse = await APIClient.post('/api/config', {
-        search_providers: updatedProviders,
-      });
-      const saveData = await saveResponse.json();
+      const saveData = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const saveResponse = await APIClient.post('/api/config', {
+            search_providers: updatedProviders,
+          });
+          return await saveResponse.json();
+        },
+        'Settings',
+        'settings-status'
+      );
 
       if (saveData.success) {
         UIUtils.showStatus('settings-status', 'Search provider updated successfully', 'success');
@@ -798,10 +827,16 @@ export class SettingsManager {
       updatedProviders.splice(index, 1);
 
       // Save config
-      const saveResponse = await APIClient.post('/api/config', {
-        search_providers: updatedProviders,
-      });
-      const saveData = await saveResponse.json();
+      const saveData = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const saveResponse = await APIClient.post('/api/config', {
+            search_providers: updatedProviders,
+          });
+          return await saveResponse.json();
+        },
+        'Settings',
+        'settings-status'
+      );
 
       if (saveData.success) {
         UIUtils.showStatus('settings-status', 'Search provider removed successfully', 'success');
@@ -888,14 +923,16 @@ export class SettingsManager {
       updatedProviders.push(newProvider);
 
       // Save config
-      const saveResponse = await APIClient.post('/api/config', {
-        search_providers: updatedProviders,
-      });
-      if (!saveResponse || !saveResponse.ok) {
-        const errorData = await saveResponse.json().catch(() => ({ message: 'Unknown error' }));
-        throw new Error(errorData.message || 'Failed to save configuration');
-      }
-      const saveData = await saveResponse.json();
+      const saveData = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const saveResponse = await APIClient.post('/api/config', {
+            search_providers: updatedProviders,
+          });
+          return await saveResponse.json();
+        },
+        'Settings',
+        'settings-status'
+      );
 
       if (saveData.success) {
         UIUtils.showStatus('settings-status', 'Search provider added successfully', 'success');
@@ -934,8 +971,14 @@ export class SettingsManager {
         cache_dir: cacheDir,
       };
 
-      const response = await APIClient.post('/api/config', { storage: storageConfig });
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.post('/api/config', { storage: storageConfig });
+          return await response.json();
+        },
+        'Settings',
+        'settings-status'
+      );
 
       if (data.success) {
         UIUtils.showStatus('settings-status', 'Storage settings saved', 'success');
@@ -962,8 +1005,14 @@ export class SettingsManager {
         duplicate_date_threshold_days: parseInt(duplicateThreshold) || 5,
       };
 
-      const response = await APIClient.post('/api/config', { matching: matchingConfig });
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.post('/api/config', { matching: matchingConfig });
+          return await response.json();
+        },
+        'Settings',
+        'matching-message'
+      );
 
       if (data.success) {
         UIUtils.showStatus('matching-message', 'Matching settings saved', 'success');
@@ -1009,8 +1058,14 @@ export class SettingsManager {
         },
       };
 
-      const response = await APIClient.post('/api/config/save', { metadata: metadataConfig });
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.post('/api/config/save', { metadata: metadataConfig });
+          return await response.json();
+        },
+        'Settings',
+        'metadata-message'
+      );
 
       if (data.success) {
         await this.loadSettings();
@@ -1051,8 +1106,14 @@ export class SettingsManager {
         log_file: logFile,
       };
 
-      const response = await APIClient.post('/api/config/save', { logging: loggingConfig });
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.post('/api/config/save', { logging: loggingConfig });
+          return await response.json();
+        },
+        'Settings',
+        'settings-status'
+      );
 
       if (data.success) {
         await this.loadSettings();
@@ -1102,8 +1163,14 @@ export class SettingsManager {
         enable_ocr: enableOcr ?? true,
       };
 
-      const response = await APIClient.post('/api/config/save', { import: importConfig });
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.post('/api/config/save', { import: importConfig });
+          return await response.json();
+        },
+        'Settings',
+        'import-message'
+      );
 
       if (data.success) {
         await this.loadSettings();
@@ -1154,8 +1221,14 @@ export class SettingsManager {
         max_concurrent: parseInt(maxConcurrent) || 10,
       };
 
-      const response = await APIClient.post('/api/config', { downloads: downloadsConfig });
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.post('/api/config', { downloads: downloadsConfig });
+          return await response.json();
+        },
+        'Settings',
+        'downloads-message'
+      );
 
       if (data.success) {
         UIUtils.showStatus('downloads-message', 'Downloads settings saved', 'success');
@@ -1203,8 +1276,14 @@ export class SettingsManager {
           current.very_slow_search_interval !== undefined ? current.very_slow_search_interval : 168;
       }
 
-      const response = await APIClient.post('/api/config', { tasks: tasksConfig });
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.post('/api/config', { tasks: tasksConfig });
+          return await response.json();
+        },
+        'Settings',
+        'tasks-message'
+      );
 
       if (data.success) {
         UIUtils.showStatus('tasks-message', 'Task settings saved', 'success');
@@ -1254,8 +1333,14 @@ export class SettingsManager {
           current.ocr_processor_interval !== undefined ? current.ocr_processor_interval : 10;
       }
 
-      const response = await APIClient.post('/api/config', { tasks: tasksConfig });
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.post('/api/config', { tasks: tasksConfig });
+          return await response.json();
+        },
+        'Settings',
+        'discovery-message'
+      );
 
       if (data.success) {
         UIUtils.showStatus('discovery-message', 'Discovery settings saved', 'success');
@@ -1286,8 +1371,14 @@ export class SettingsManager {
         cover_quality_high: parseInt(coverQualityHigh) || 85,
       };
 
-      const response = await APIClient.post('/api/config/save', { pdf: pdfConfig });
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.post('/api/config/save', { pdf: pdfConfig });
+          return await response.json();
+        },
+        'Settings',
+        'pdf-message'
+      );
 
       if (data.success) {
         await this.loadSettings();
@@ -1319,8 +1410,14 @@ export class SettingsManager {
         sharpen_kernel: parseInt(sharpenKernel) || 5,
       };
 
-      const response = await APIClient.post('/api/config/save', { ocr: ocrConfig });
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.post('/api/config/save', { ocr: ocrConfig });
+          return await response.json();
+        },
+        'Settings',
+        'ocr-message'
+      );
 
       if (data.success) {
         await this.loadSettings();
@@ -1349,8 +1446,14 @@ export class SettingsManager {
       };
 
       // Save config without restarting
-      const response = await APIClient.post('/api/config/save', { tasks: tasksConfig });
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.post('/api/config/save', { tasks: tasksConfig });
+          return await response.json();
+        },
+        'Settings',
+        'ocr-worker-message'
+      );
 
       if (data.success) {
         // Reload settings to show updated values in UI
@@ -1425,8 +1528,14 @@ export class SettingsManager {
         payload.new_password = newPassword;
       }
 
-      const response = await APIClient.post('/api/auth/user/update', payload);
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.post('/api/auth/user/update', payload);
+          return await response.json();
+        },
+        'Settings',
+        'settings-status'
+      );
 
       if (data.success) {
         UIUtils.showStatus('settings-status', 'Account settings updated successfully', 'success');
@@ -1543,19 +1652,15 @@ export class SettingsManager {
    */
   async loadAPIToken() {
     try {
-      const response = await fetch('/api/auth/api-token', {
-        headers: {
-          Authorization: `Bearer ${AuthManager.getToken()}`,
-        },
-      });
+      const data = await APIHelper.executeWithErrorHandling(async () => {
+        const response = await APIClient.get('/api/auth/api-token');
+        return await response.json();
+      }, 'Settings');
 
-      if (response.ok) {
-        const data = await response.json();
-        const tokenDisplay = document.getElementById('api-token-display');
-        if (tokenDisplay && data.api_token) {
-          tokenDisplay.value = data.api_token;
-          tokenDisplay.type = 'password'; // Start as hidden
-        }
+      const tokenDisplay = document.getElementById('api-token-display');
+      if (tokenDisplay && data.api_token) {
+        tokenDisplay.value = data.api_token;
+        tokenDisplay.type = 'password'; // Start as hidden
       }
     } catch (error) {
       console.error('Error loading API token:', error);
@@ -1609,15 +1714,16 @@ export class SettingsManager {
     if (!confirmed) return;
 
     try {
-      const response = await fetch('/api/auth/api-token/regenerate', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${AuthManager.getToken()}`,
+      const result = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.post('/api/auth/api-token/regenerate', {});
+          return await response.json();
         },
-      });
+        'Settings',
+        'api-token-message'
+      );
 
-      const result = await response.json();
-      if (response.ok && result.success) {
+      if (result.success) {
         const tokenDisplay = document.getElementById('api-token-display');
         tokenDisplay.value = result.api_token;
         tokenDisplay.type = 'password';

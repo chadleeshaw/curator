@@ -11,6 +11,7 @@ from typing import Any, Dict
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 from core.utils.error_handling import handle_api_errors
+from web.utils.responses import success_response, error_response
 
 router = APIRouter(prefix="/api/config", tags=["configuration"])
 logger = logging.getLogger(__name__)
@@ -123,12 +124,11 @@ async def update_config(config_update: Dict[str, Any], background_tasks: Backgro
 
     background_tasks.add_task(restart_process)
 
-    return {
-        "success": True,
-        "status": "success",
-        "message": "Configuration updated. Application restarting...",
-        "config": safe_config,
-    }
+    return success_response(
+        "Configuration updated. Application restarting...",
+        status="success",
+        config=safe_config,
+    )
 
 
 @router.post("/save")
@@ -150,12 +150,11 @@ async def save_config_only(config_update: Dict[str, Any]):
 
     logger.info("Configuration saved via UI (no restart)")
 
-    return {
-        "success": True,
-        "status": "success",
-        "message": "Configuration saved. Restart required for changes to take effect.",
-        "config": safe_config,
-    }
+    return success_response(
+        "Configuration saved. Restart required for changes to take effect.",
+        status="success",
+        config=safe_config,
+    )
 
 
 @router.post("/reload")
@@ -191,6 +190,7 @@ async def restart_application(background_tasks: BackgroundTasks):
 
 
 @router.post("/test-provider")
+@handle_api_errors("Test provider connection", logger)
 async def test_provider_connection(provider_config: Dict[str, Any]):
     """
     Test connection to a search provider.
@@ -213,10 +213,7 @@ async def test_provider_connection(provider_config: Dict[str, Any]):
             provider = NewsnabProvider(provider_config)
             result = provider.test_connection()
         elif provider_type == "rss":
-            return {
-                "success": True,
-                "message": "RSS providers don't require authentication",
-            }
+            return success_response("RSS providers don't require authentication")
         else:
             raise HTTPException(status_code=400, detail=f"Unknown provider type: {provider_type}")
 
@@ -224,16 +221,14 @@ async def test_provider_connection(provider_config: Dict[str, Any]):
 
     except ValueError as e:
         # Configuration errors (e.g., missing API key)
-        return {
-            "success": False,
-            "message": str(e),
-        }
+        return error_response(str(e))
     except Exception as e:
         logger.error(f"Test provider connection error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/test-download-client")
+@handle_api_errors("Test download client connection", logger)
 async def test_download_client_connection(client_config: Dict[str, Any]):
     """
     Test connection to a download client.
@@ -267,10 +262,7 @@ async def test_download_client_connection(client_config: Dict[str, Any]):
 
     except ValueError as e:
         # Configuration errors (e.g., missing API key/password)
-        return {
-            "success": False,
-            "message": str(e),
-        }
+        return error_response(str(e))
     except Exception as e:
         logger.error(f"Test download client connection error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

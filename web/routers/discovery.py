@@ -19,6 +19,7 @@ from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from models.database import DiscoveredIssue, PeriodicalTracking
 from services import IssueDiscoveryService, SearchScheduler
+from web.utils.responses import success_response
 
 logger = logging.getLogger(__name__)
 
@@ -223,11 +224,10 @@ async def retry_discovered_issue(
         # Get updated issue
         issue = db.query(DiscoveredIssue).filter(DiscoveredIssue.id == issue_id).first()
 
-        return {
-            "success": True,
-            "message": "Issue reset and marked as wanted",
-            "issue": issue.to_dict() if issue else None,
-        }
+        return success_response(
+            "Issue reset and marked as wanted",
+            issue=issue.to_dict() if issue else None,
+        )
 
     return await with_db_session(_session_factory, operation)
 

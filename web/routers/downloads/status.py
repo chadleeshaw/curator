@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from models.database import DownloadSubmission, PeriodicalTracking
+from web.utils.responses import success_response
 
 from . import _shared
 
@@ -51,13 +52,12 @@ async def get_download_status_for_tracking(tracking_id: int) -> Dict[str, Any]:
                 }
             )
 
-        return {
-            "success": True,
-            "tracking_id": tracking_id,
-            "magazine": tracking.title,
-            "submissions": status_list,
-            "count": len(status_list),
-        }
+        return success_response(
+            tracking_id=tracking_id,
+            magazine=tracking.title,
+            submissions=status_list,
+            count=len(status_list),
+        )
 
     return await with_db_session(_shared._session_factory, operation)
 
@@ -76,9 +76,8 @@ async def get_completed_downloads() -> Dict[str, Any]:
             .all()
         )
 
-        return {
-            "success": True,
-            "downloads": [
+        return success_response(
+            downloads=[
                 {
                     "id": d.id,
                     "title": d.result_title,
@@ -88,7 +87,7 @@ async def get_completed_downloads() -> Dict[str, Any]:
                 }
                 for d in completed
             ],
-            "count": len(completed),
-        }
+            count=len(completed),
+        )
 
     return await with_db_session(_shared._session_factory, operation)

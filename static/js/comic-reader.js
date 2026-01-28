@@ -5,7 +5,7 @@
 
 /* global URL, Image */
 
-import { APIClient } from './api.js';
+import { APIClient, APIHelper } from './api.js';
 import { mediaWorker, Priority } from './media-worker-manager.js';
 
 class ComicReader {
@@ -77,8 +77,10 @@ class ComicReader {
    */
   async loadMetadata() {
     try {
-      const response = await APIClient.get(`/api/periodicals/${this.magazineId}/comic/metadata`);
-      this.metadata = await response.json();
+      this.metadata = await APIHelper.executeWithErrorHandling(async () => {
+        const response = await APIClient.get(`/api/periodicals/${this.magazineId}/comic/metadata`);
+        return await response.json();
+      }, 'ComicReader');
 
       // Store cover page index from metadata (defaults to 0)
       this.coverPageIndex = this.metadata.cover_page || 0;
@@ -552,8 +554,10 @@ class ComicReader {
    */
   async loadProgress() {
     try {
-      const response = await APIClient.get(`/api/periodicals/${this.magazineId}/progress`);
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(async () => {
+        const response = await APIClient.get(`/api/periodicals/${this.magazineId}/progress`);
+        return await response.json();
+      }, 'ComicReader');
 
       if (data.progress && data.progress.current_page !== null) {
         // Load the saved page (unless URL specifies a different page)
@@ -589,10 +593,12 @@ class ComicReader {
     if (!this.metadata) return;
 
     try {
-      await APIClient.post(`/api/periodicals/${this.magazineId}/progress`, {
-        current_page: this.currentPageIndex,
-        total_pages: this.metadata.pages.length,
-      });
+      await APIHelper.executeWithErrorHandling(async () => {
+        await APIClient.post(`/api/periodicals/${this.magazineId}/progress`, {
+          current_page: this.currentPageIndex,
+          total_pages: this.metadata.pages.length,
+        });
+      }, 'ComicReader');
       console.log(
         `Progress saved: page ${this.currentPageIndex + 1}/${this.metadata.pages.length}`
       );

@@ -20,52 +20,60 @@ from core.constants.language import (
     SUPPORTED_LANGUAGES,
     LANGUAGE_KEYWORDS,
 )
+from core.utils.error_handling import handle_api_errors
+from web.utils.responses import success_response
 
 router = APIRouter(prefix="/api", tags=["metadata"])
 logger = logging.getLogger(__name__)
 
 
 @router.get("/constants/languages")
+@handle_api_errors("Get supported languages", logger)
 async def get_supported_languages() -> Dict[str, Any]:
     """Get list of supported languages"""
-    return {"success": True, "languages": SUPPORTED_LANGUAGES}
+    return success_response(None, languages=SUPPORTED_LANGUAGES)
 
 
 @router.get("/constants/categories")
+@handle_api_errors("Get categories", logger)
 async def get_categories() -> Dict[str, Any]:
     """Get list of content categories"""
-    return {"success": True, "categories": CATEGORIES}
+    return success_response(None, categories=CATEGORIES)
 
 
 @router.get("/constants/countries")
+@handle_api_errors("Get ISO countries", logger)
 async def get_iso_countries() -> Dict[str, Any]:
     """Get ISO country codes and names"""
-    return {"success": True, "countries": ISO_COUNTRIES}
+    return success_response(None, countries=ISO_COUNTRIES)
 
 
 @router.get("/constants")
+@handle_api_errors("Get all constants", logger)
 async def get_all_constants() -> Dict[str, Any]:
     """Get all UI-relevant constants"""
-    return {
-        "success": True,
-        "languages": SUPPORTED_LANGUAGES,
-        "categories": CATEGORIES,
-        "countries": ISO_COUNTRIES,
-        "language_to_country": LANGUAGE_TO_COUNTRY,
-        "country_indicators": COUNTRY_INDICATORS,
-        "language_keywords": LANGUAGE_KEYWORDS,
-        "max_download_retries": MAX_DOWNLOAD_RETRIES,
-    }
+    return success_response(
+        None,
+        languages=SUPPORTED_LANGUAGES,
+        categories=CATEGORIES,
+        countries=ISO_COUNTRIES,
+        language_to_country=LANGUAGE_TO_COUNTRY,
+        country_indicators=COUNTRY_INDICATORS,
+        language_keywords=LANGUAGE_KEYWORDS,
+        max_download_retries=MAX_DOWNLOAD_RETRIES,
+    )
 
 
 # Deprecated endpoints - kept for compatibility
 @router.get("/metadata/languages")
+@handle_api_errors("Get supported languages (legacy)", logger)
 async def get_supported_languages_legacy() -> Dict[str, Any]:
     """Get list of supported languages (legacy)"""
     return await get_supported_languages()
 
 
 @router.get("/metadata/countries")
+@handle_api_errors("Get supported countries", logger)
 async def get_supported_countries() -> Dict[str, Any]:
     """Get list of supported countries with ISO codes (legacy)"""
     countries = [{"code": code, "name": name} for code, name in ISO_COUNTRIES.items()]
@@ -73,4 +81,4 @@ async def get_supported_countries() -> Dict[str, Any]:
     # Sort by name
     countries.sort(key=lambda x: x["name"])
 
-    return {"success": True, "countries": countries}
+    return success_response(None, countries=countries)

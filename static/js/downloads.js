@@ -4,7 +4,7 @@
  * @module downloads
  */
 
-import { APIClient } from './api.js?v=1767733177';
+import { APIClient, APIHelper } from './api.js?v=1767733177';
 import { UIUtils } from './ui-utils.js?v=1767733177';
 import {
   ELEMENT_IDS as _ELEMENT_IDS,
@@ -71,8 +71,10 @@ export class DownloadsManager {
    */
   async loadConstants() {
     try {
-      const response = await APIClient.get('/api/constants');
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(async () => {
+        const response = await APIClient.get('/api/constants');
+        return await response.json();
+      }, 'Downloads');
       if (data.success && data.max_download_retries) {
         this.maxRetries = data.max_download_retries;
       }
@@ -94,14 +96,19 @@ export class DownloadsManager {
     try {
       // Fetch failed and permanently_failed issues
       const statuses = this.showPermanentlyFailed ? 'failed,permanently_failed' : 'failed';
-      const response = await APIClient.authenticatedFetch(
-        `/api/discovered-issues?status=${statuses}&limit=500`
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.authenticatedFetch(
+            `/api/discovered-issues?status=${statuses}&limit=500`
+          );
+          return await response.json();
+        },
+        'Downloads',
+        'downloads-status'
       );
-      const data = await response.json();
       this.displayFailedDownloads(data);
     } catch (error) {
-      console.error('[Downloads] Failed to load failed issues:', error);
-      UIUtils.showStatus('downloads-status', 'Error loading failed issues', 'error');
+      // Already logged and displayed by APIHelper
     }
   }
 
@@ -246,13 +253,19 @@ export class DownloadsManager {
         : 'downloads-status';
 
     try {
-      const response = await APIClient.authenticatedFetch(
-        `/api/discovered-issues/${issueId}/retry`,
-        {
-          method: 'POST',
-        }
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.authenticatedFetch(
+            `/api/discovered-issues/${issueId}/retry`,
+            {
+              method: 'POST',
+            }
+          );
+          return await response.json();
+        },
+        'Downloads',
+        statusId
       );
-      const data = await response.json();
 
       if (data.success) {
         UIUtils.showStatus(statusId, 'Issue reset and queued for retry', 'success');
@@ -261,8 +274,7 @@ export class DownloadsManager {
         throw new Error(data.message ?? 'Failed to retry');
       }
     } catch (error) {
-      console.error('[Downloads] Failed to retry issue:', error);
-      UIUtils.showStatus(statusId, `Error: ${error.message}`, 'error');
+      // Already logged and displayed by APIHelper
     }
   }
 
@@ -279,8 +291,10 @@ export class DownloadsManager {
       const url = '/api/downloads/queue/all';
       console.log('[Queue] Fetching from:', url);
 
-      const response = await APIClient.authenticatedFetch(url);
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(async () => {
+        const response = await APIClient.authenticatedFetch(url);
+        return await response.json();
+      }, 'Downloads');
 
       console.log('[Queue] API Response:', data);
       console.log('[Queue] Items in queue:', data.queue?.length ?? 0);
@@ -911,11 +925,13 @@ export class DownloadsManager {
       const { submission_id: submissionId, issue } = failedItems[i];
       try {
         progress.update(i + 1, 'Retrying...', `Processing: ${issue ?? 'Unknown'}`);
-        const response = await APIClient.authenticatedFetch(
-          `/api/downloads/queue/retry/${submissionId}`,
-          { method: 'POST' }
-        );
-        const data = await response.json();
+        const data = await APIHelper.executeWithErrorHandling(async () => {
+          const response = await APIClient.authenticatedFetch(
+            `/api/downloads/queue/retry/${submissionId}`,
+            { method: 'POST' }
+          );
+          return await response.json();
+        }, 'Downloads');
         if (data.success) {
           succeeded++;
         } else {
@@ -962,11 +978,13 @@ export class DownloadsManager {
       const { submission_id: submissionId, issue } = this.currentModalItems[i];
       try {
         progress.update(i + 1, 'Deleting...', `Processing: ${issue ?? 'Unknown'}`);
-        const response = await APIClient.authenticatedFetch(
-          `/api/downloads/queue/${submissionId}`,
-          { method: 'DELETE' }
-        );
-        const data = await response.json();
+        const data = await APIHelper.executeWithErrorHandling(async () => {
+          const response = await APIClient.authenticatedFetch(
+            `/api/downloads/queue/${submissionId}`,
+            { method: 'DELETE' }
+          );
+          return await response.json();
+        }, 'Downloads');
         if (data.success) {
           succeeded++;
         } else {
@@ -1016,10 +1034,15 @@ export class DownloadsManager {
       const { id, title } = this.currentModalItems[i];
       try {
         progress.update(i + 1, 'Retrying...', `Processing: ${title ?? 'Unknown'}`);
-        const response = await APIClient.authenticatedFetch(`/api/discovered-issues/${id}/retry`, {
-          method: 'POST',
-        });
-        const data = await response.json();
+        const data = await APIHelper.executeWithErrorHandling(async () => {
+          const response = await APIClient.authenticatedFetch(
+            `/api/discovered-issues/${id}/retry`,
+            {
+              method: 'POST',
+            }
+          );
+          return await response.json();
+        }, 'Downloads');
         if (data.success) {
           succeeded++;
         } else {
@@ -1069,11 +1092,17 @@ export class DownloadsManager {
     }
 
     try {
-      const response = await APIClient.authenticatedFetch(
-        `/api/downloads/queue/retry/${submissionId}`,
-        { method: 'POST' }
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.authenticatedFetch(
+            `/api/downloads/queue/retry/${submissionId}`,
+            { method: 'POST' }
+          );
+          return await response.json();
+        },
+        'Downloads',
+        statusId
       );
-      const data = await response.json();
 
       if (data.success) {
         UIUtils.showStatus(statusId, data.message, 'success');
@@ -1083,8 +1112,7 @@ export class DownloadsManager {
         UIUtils.showStatus(statusId, data.message ?? 'Failed to retry', 'error');
       }
     } catch (error) {
-      console.error('[Downloads] Error retrying download:', error);
-      UIUtils.showStatus(statusId, error.message, 'error');
+      // Already logged by APIHelper
     }
   }
 
@@ -1113,10 +1141,19 @@ export class DownloadsManager {
     }
 
     try {
-      const response = await APIClient.authenticatedFetch(`/api/downloads/queue/${submissionId}`, {
-        method: 'DELETE',
-      });
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.authenticatedFetch(
+            `/api/downloads/queue/${submissionId}`,
+            {
+              method: 'DELETE',
+            }
+          );
+          return await response.json();
+        },
+        'Downloads',
+        statusId
+      );
 
       if (data.success) {
         UIUtils.showStatus(statusId, data.message, 'success');
@@ -1126,8 +1163,7 @@ export class DownloadsManager {
         UIUtils.showStatus(statusId, data.message ?? 'Failed to remove', 'error');
       }
     } catch (error) {
-      console.error('[Downloads] Error removing from queue:', error);
-      UIUtils.showStatus(statusId, error.message, 'error');
+      // Already logged by APIHelper
     }
   }
 
@@ -1176,8 +1212,10 @@ export class DownloadsManager {
     const hours = parseInt(hoursInput?.value, 10) || 24;
 
     try {
-      const response = await APIClient.authenticatedFetch('/api/downloads/queue/all');
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(async () => {
+        const response = await APIClient.authenticatedFetch('/api/downloads/queue/all');
+        return await response.json();
+      }, 'Downloads');
 
       const now = new Date();
       const count = data.queue.filter((item) => {
@@ -1215,16 +1253,21 @@ export class DownloadsManager {
     const hours = parseInt(hoursInput?.value, 10) || 24;
 
     try {
-      const response = await APIClient.authenticatedFetch('/api/downloads/queue/cleanup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: status || undefined,
-          older_than_hours: hours,
-        }),
-      });
-
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.authenticatedFetch('/api/downloads/queue/cleanup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              status: status || undefined,
+              older_than_hours: hours,
+            }),
+          });
+          return await response.json();
+        },
+        'Downloads',
+        'downloads-status'
+      );
 
       if (data.success) {
         UIUtils.showStatus('downloads-status', data.message, 'success');
@@ -1235,8 +1278,7 @@ export class DownloadsManager {
         UIUtils.showStatus('downloads-status', data.message ?? 'Cleanup failed', 'error');
       }
     } catch (error) {
-      console.error('[Downloads] Error executing cleanup:', error);
-      UIUtils.showStatus('downloads-status', error.message, 'error');
+      // Already logged by APIHelper
     }
   }
 
@@ -1289,11 +1331,16 @@ export class DownloadsManager {
 
       UIUtils.showStatus('downloads-status', '🗑️ Clearing pending downloads...', 'info');
 
-      const response = await APIClient.authenticatedFetch('/api/downloads/queue/pending', {
-        method: 'DELETE',
-      });
-
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.authenticatedFetch('/api/downloads/queue/pending', {
+            method: 'DELETE',
+          });
+          return await response.json();
+        },
+        'Downloads',
+        'downloads-status'
+      );
 
       if (data.success) {
         UIUtils.showStatus('downloads-status', data.message, 'success');
@@ -1305,8 +1352,7 @@ export class DownloadsManager {
         UIUtils.showStatus('downloads-status', data.message || 'Failed to clear pending', 'error');
       }
     } catch (error) {
-      console.error('[Downloads] Error clearing pending downloads:', error);
-      UIUtils.showStatus('downloads-status', `Error: ${error.message}`, 'error');
+      // Already logged by APIHelper
     }
   }
 
@@ -1351,11 +1397,16 @@ export class DownloadsManager {
 
       UIUtils.showStatus('downloads-status', '🗑️ Clearing queued downloads...', 'info');
 
-      const response = await APIClient.authenticatedFetch('/api/downloads/queue/queued', {
-        method: 'DELETE',
-      });
-
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.authenticatedFetch('/api/downloads/queue/queued', {
+            method: 'DELETE',
+          });
+          return await response.json();
+        },
+        'Downloads',
+        'downloads-status'
+      );
 
       if (data.success) {
         UIUtils.showStatus('downloads-status', data.message, 'success');
@@ -1391,11 +1442,16 @@ export class DownloadsManager {
 
       UIUtils.showStatus('downloads-status', '🗑️ Clearing failed downloads...', 'info');
 
-      const response = await APIClient.authenticatedFetch('/api/downloads/queue/failed', {
-        method: 'DELETE',
-      });
-
-      const data = await response.json();
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.authenticatedFetch('/api/downloads/queue/failed', {
+            method: 'DELETE',
+          });
+          return await response.json();
+        },
+        'Downloads',
+        'downloads-status'
+      );
 
       if (data.success) {
         UIUtils.showStatus('downloads-status', data.message, 'success');
@@ -1411,8 +1467,7 @@ export class DownloadsManager {
         );
       }
     } catch (error) {
-      console.error('[Downloads] Error clearing failed downloads:', error);
-      UIUtils.showStatus('downloads-status', `Error: ${error.message}`, 'error');
+      // Already logged by APIHelper
     }
   }
 }
