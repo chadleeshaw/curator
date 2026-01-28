@@ -259,12 +259,19 @@ async def run_task_manually(task_id: str):
             return error_response("Download monitor not available")
 
     elif task_id == "auto_download":
-        # Note: This manual trigger should be handled by the task scheduler
-        # For now, just return success to indicate the task exists
-        return success_response(
-            "Auto-download task will run on its scheduled interval (30 minutes)",
-            task_name="Auto-Download",
-        )
+        # Manually trigger auto-download task via scheduler
+        if _task_scheduler:
+            try:
+                await _task_scheduler.run_task_now("auto_download")
+                return success_response(
+                    "Auto-download task executed successfully",
+                    task_name="Auto-Download",
+                )
+            except Exception as e:
+                logger.error(f"Error running auto-download task: {e}", exc_info=True)
+                return error_response(f"Failed to run auto-download task: {str(e)}")
+        else:
+            return error_response("Task scheduler not available")
 
     elif task_id == "folder_cleanup":
         if _folder_cleanup_task:
@@ -322,13 +329,19 @@ async def run_task_manually(task_id: str):
         )
 
     elif task_id == "provider_cache_sync":
-        # Trigger cache sync manually
-        # Note: This should ideally be handled by the task scheduler
-        # For now, just return a message
-        return success_response(
-            "Provider cache sync will run on its scheduled interval (30 minutes). Check Cache Management in Settings for manual sync.",
-            task_name="Auto-Cache",
-        )
+        # Manually trigger provider cache sync via scheduler
+        if _task_scheduler:
+            try:
+                await _task_scheduler.run_task_now("provider_cache_sync")
+                return success_response(
+                    "Provider cache sync executed successfully",
+                    task_name="Auto-Cache",
+                )
+            except Exception as e:
+                logger.error(f"Error running provider cache sync: {e}", exc_info=True)
+                return error_response(f"Failed to run provider cache sync: {str(e)}")
+        else:
+            return error_response("Task scheduler not available")
 
     elif task_id == "cleanup_orphaned_covers":
         # Manually trigger cover cleanup and generation (run in thread to avoid blocking)

@@ -155,6 +155,30 @@ class TaskScheduler:
         self.running = False
         logger.info("Task scheduler stopped")
 
+    async def run_task_now(self, task_name: str) -> bool:
+        """Manually trigger a task to run immediately
+
+        Args:
+            task_name: Name of the task to run
+
+        Returns:
+            True if task was found and executed, False otherwise
+        """
+        if task_name not in self.tasks:
+            logger.warning(f"Task not found: {task_name}")
+            return False
+
+        task_info = self.tasks[task_name]
+        logger.info(f"Manually triggering task: {task_name}")
+
+        try:
+            await task_info["func"]()
+            logger.info(f"Manual task execution completed: {task_name}")
+            return True
+        except Exception as e:
+            logger.error(f"Error in manual task execution {task_name}: {e}", exc_info=True)
+            raise
+
     def get_status(self) -> dict:
         """Get scheduler status with failure and backoff info"""
         return {

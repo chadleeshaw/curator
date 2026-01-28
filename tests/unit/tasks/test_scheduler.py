@@ -244,6 +244,34 @@ def test_run_immediately():
     print("Testing TaskScheduler run_immediately parameter... ✓ PASS")
 
 
+def test_run_task_now():
+    """Test manually running a task"""
+    scheduler = TaskScheduler()
+
+    task_executed = {"count": 0}
+
+    async def dummy_task():
+        task_executed["count"] += 1
+
+    # Schedule a task (not immediately)
+    scheduler.schedule_periodic("manual_test", dummy_task, 3600, run_immediately=False)
+
+    # Manually trigger it
+    async def run_test():
+        success = await scheduler.run_task_now("manual_test")
+        assert success is True
+        assert task_executed["count"] == 1
+
+        # Try running non-existent task
+        success = await scheduler.run_task_now("nonexistent_task")
+        assert success is False
+        assert task_executed["count"] == 1  # Should not have changed
+
+    asyncio.run(run_test())
+
+    print("Testing TaskScheduler.run_task_now()... ✓ PASS")
+
+
 if __name__ == "__main__":
     print("\n🧪 Task Scheduler Tests\n")
     print("=" * 50)
@@ -291,6 +319,12 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Testing TaskScheduler run_immediately parameter... ❌ FAIL: {e}")
         results["run_immediately"] = False
+
+    try:
+        results["run_task_now"] = test_run_task_now()
+    except Exception as e:
+        print(f"Testing TaskScheduler.run_task_now()... ❌ FAIL: {e}")
+        results["run_task_now"] = False
 
     print("\n" + "=" * 50)
     print("Test Summary")

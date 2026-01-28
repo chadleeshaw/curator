@@ -265,6 +265,7 @@ async def lifespan(app: FastAPI):
             - Evaluates issues against tracking rules
             - Downloads from priority queue
             """
+            logger.info("Starting auto-download task")
             try:
                 db_session = session_factory()
                 try:
@@ -477,6 +478,7 @@ async def lifespan(app: FastAPI):
         # Define provider cache sync task wrapper (if sync service is available)
         async def provider_cache_sync_task():
             """Sync provider cache with latest releases from providers (runs every 30 min by default)"""
+            logger.info("Starting provider cache sync task")
             if provider_sync_service:
                 try:
                     stats = await provider_sync_service.sync_all_providers()
