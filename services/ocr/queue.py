@@ -70,8 +70,12 @@ def _apply_scan_metadata_to_magazine(
             "field_overrides": DEFAULT_FIELD_CONFIDENCE_OVERRIDES,
         }
 
-    source_priority = metadata_config.get("source_priority", ["ocr", "text_scan", "filename"])
-    confidence_thresholds = metadata_config.get("confidence_thresholds", {"ocr": 70, "text_scan": 50, "filename": 0})
+    source_priority = metadata_config.get(
+        "source_priority", ["ocr", "text_scan", "filename"]
+    )
+    confidence_thresholds = metadata_config.get(
+        "confidence_thresholds", {"ocr": 70, "text_scan": 50, "filename": 0}
+    )
     field_overrides = metadata_config.get("field_overrides", {})
 
     # Gather metadata from all sources
@@ -99,10 +103,14 @@ def _apply_scan_metadata_to_magazine(
 
             # Get confidence score (if available)
             confidence_key = f"{field}_confidence"
-            confidence = source_data.get(confidence_key, 100)  # Default 100 if no confidence
+            confidence = source_data.get(
+                confidence_key, 100
+            )  # Default 100 if no confidence
 
             # Get threshold for this source/field combination
-            threshold = field_config.get(source_name, confidence_thresholds.get(source_name, 0))
+            threshold = field_config.get(
+                source_name, confidence_thresholds.get(source_name, 0)
+            )
 
             # Check if confidence meets threshold
             if confidence is None or confidence >= threshold:
@@ -128,7 +136,9 @@ def _apply_scan_metadata_to_magazine(
                 break  # Stop trying other sources for this field
 
             # Confidence didn't meet threshold
-            logger.debug(f"Skipped {source_name} for {field}: confidence {confidence}% < threshold {threshold}%")
+            logger.debug(
+                f"Skipped {source_name} for {field}: confidence {confidence}% < threshold {threshold}%"
+            )
 
     # Update issue_date if we have year
     if updated and magazine.extra_metadata.get("year"):
@@ -148,12 +158,17 @@ def _apply_scan_metadata_to_magazine(
             current_year = magazine.issue_date.year if magazine.issue_date else 1900
             if current_year < 1900 or (  # noqa: W504
                 magazine.created_at  # noqa: W504
-                and abs((magazine.issue_date - magazine.created_at).total_seconds()) < 60
+                and abs((magazine.issue_date - magazine.created_at).total_seconds())
+                < 60
             ):
                 magazine.issue_date = new_date
-                logger.info(f"Updated issue_date to {new_date.strftime('%Y-%m')} for {magazine.title}")
+                logger.info(
+                    f"Updated issue_date to {new_date.strftime('%Y-%m')} for {magazine.title}"
+                )
         except (ValueError, TypeError) as e:
-            logger.warning(f"Invalid date from metadata (year={year}, month={month}): {e}")
+            logger.warning(
+                f"Invalid date from metadata (year={year}, month={month}): {e}"
+            )
 
     return updated
 
@@ -231,7 +246,9 @@ class OCRQueueService:
             db.query(OCRJob)
             .filter(
                 OCRJob.periodical_id == periodical_id,
-                OCRJob.status.in_([OCRJob.StatusEnum.PENDING, OCRJob.StatusEnum.PROCESSING]),
+                OCRJob.status.in_(
+                    [OCRJob.StatusEnum.PENDING, OCRJob.StatusEnum.PROCESSING]
+                ),
             )
             .first()
         )
@@ -251,10 +268,14 @@ class OCRQueueService:
         db.commit()
         db.refresh(job)
 
-        logger.info(f"Queued OCR job {job.id} for magazine {periodical_id} (priority={priority})")
+        logger.info(
+            f"Queued OCR job {job.id} for magazine {periodical_id} (priority={priority})"
+        )
         return job
 
-    def process_queue(self, db: Session, batch_size: int = 1, max_retries: int = 1) -> Dict[str, int]:
+    def process_queue(
+        self, db: Session, batch_size: int = 1, max_retries: int = 1
+    ) -> Dict[str, int]:
         """
         Process pending OCR jobs from the queue in batches.
 
@@ -282,7 +303,9 @@ class OCRQueueService:
         )
 
         if stuck_jobs:
-            logger.warning(f"Found {len(stuck_jobs)} stuck OCR jobs, resetting to PENDING")
+            logger.warning(
+                f"Found {len(stuck_jobs)} stuck OCR jobs, resetting to PENDING"
+            )
             for job in stuck_jobs:
                 job.status = OCRJob.StatusEnum.PENDING
                 job.started_at = None
@@ -304,7 +327,9 @@ class OCRQueueService:
             logger.debug("No pending OCR jobs to process")
             return stats
 
-        logger.info(f"Processing {len(pending_jobs)} OCR jobs (batch_size={batch_size})")
+        logger.info(
+            f"Processing {len(pending_jobs)} OCR jobs (batch_size={batch_size})"
+        )
 
         # Load metadata aggregation configuration
         config_loader = ConfigLoader()
@@ -314,10 +339,14 @@ class OCRQueueService:
         job_data = []
         for job in pending_jobs:
             # Get magazine and cover path
-            magazine = db.query(Periodical).filter(Periodical.id == job.periodical_id).first()
+            magazine = (
+                db.query(Periodical).filter(Periodical.id == job.periodical_id).first()
+            )
 
             if not magazine:
-                logger.warning(f"Magazine {job.periodical_id} not found for OCR job {job.id}")
+                logger.warning(
+                    f"Magazine {job.periodical_id} not found for OCR job {job.id}"
+                )
                 job.status = OCRJob.StatusEnum.FAILED
                 job.last_error = "Magazine not found"
                 stats["failed"] += 1
@@ -369,17 +398,25 @@ class OCRQueueService:
 
                                 if max(img.size) > OCR_IMAGE_MAX_DIMENSION:
                                     ratio = OCR_IMAGE_MAX_DIMENSION / max(img.size)
-                                    new_size = tuple(int(dim * ratio) for dim in img.size)
+                                    new_size = tuple(
+                                        int(dim * ratio) for dim in img.size
+                                    )
                                     img = img.resize(new_size, Image.Resampling.LANCZOS)
-                                    logger.debug(f"Resized OCR PNG from {images[0].size} to {new_size}")
+                                    logger.debug(
+                                        f"Resized OCR PNG from {images[0].size} to {new_size}"
+                                    )
 
                                 img.save(str(png_path), "PNG")
                                 png_generated = True
                                 logger.debug(f"Generated OCR PNG: {png_path}")
                             else:
-                                logger.warning(f"Failed to generate OCR PNG from {pdf_path}")
+                                logger.warning(
+                                    f"Failed to generate OCR PNG from {pdf_path}"
+                                )
                         except Exception as e:
-                            logger.error(f"Error generating OCR PNG for magazine {magazine.id}: {e}")
+                            logger.error(
+                                f"Error generating OCR PNG for magazine {magazine.id}: {e}"
+                            )
 
                     if png_path.exists():
                         cover_path = str(png_path)
@@ -429,16 +466,24 @@ class OCRQueueService:
                 # Refresh objects from DB to avoid stale state
                 db.expire_all()
                 job = db.query(OCRJob).filter(OCRJob.id == job_id).first()
-                magazine = db.query(Periodical).filter(Periodical.id == magazine_id).first()
+                magazine = (
+                    db.query(Periodical).filter(Periodical.id == magazine_id).first()
+                )
 
                 if not job or not magazine:
-                    logger.error(f"Job or magazine not found after processing: job={job_id}, magazine={magazine_id}")
+                    logger.error(
+                        f"Job or magazine not found after processing: job={job_id}, magazine={magazine_id}"
+                    )
                     stats["failed"] += 1
                     stats["processed"] += 1
                     continue
 
                 # Ensure started_at is timezone-aware (SQLite stores naive datetimes)
-                started_at = job.started_at.replace(tzinfo=UTC) if job.started_at.tzinfo is None else job.started_at
+                started_at = (
+                    job.started_at.replace(tzinfo=UTC)
+                    if job.started_at.tzinfo is None
+                    else job.started_at
+                )
                 processing_time = (datetime.now(UTC) - started_at).total_seconds()
 
                 if result.get("success"):
@@ -455,7 +500,9 @@ class OCRQueueService:
 
                     magazine.parsed_metadata["ocr_scan"] = metadata
                     extraction_method = metadata.get("extraction_method", "ocr_image")
-                    logger.info(f"Stored OCR scan metadata for {magazine.title} (method: {extraction_method})")
+                    logger.info(
+                        f"Stored OCR scan metadata for {magazine.title} (method: {extraction_method})"
+                    )
 
                     # Rebuild derived_metadata with all scan results
                     from core.utils.metadata_builder import (
@@ -468,33 +515,48 @@ class OCRQueueService:
                         text_scan=magazine.parsed_metadata.get("text_scan"),
                         ocr_scan=metadata,
                     )
-                    logger.info(f"Enhanced {magazine.title} with metadata from OCR scan")
+                    logger.info(
+                        f"Enhanced {magazine.title} with metadata from OCR scan"
+                    )
 
                     # Sync issue_date from derived_metadata (keeps column in sync with best data)
-                    new_issue_date = sync_issue_date_from_derived(magazine.derived_metadata)
+                    new_issue_date = sync_issue_date_from_derived(
+                        magazine.derived_metadata
+                    )
                     if new_issue_date:
                         magazine.issue_date = new_issue_date
-                        logger.debug(f"Updated issue_date to {new_issue_date.strftime('%Y-%m')} from derived_metadata")
+                        logger.debug(
+                            f"Updated issue_date to {new_issue_date.strftime('%Y-%m')} from derived_metadata"
+                        )
 
                     # Flag the JSON fields as modified so SQLAlchemy persists them
-                    from sqlalchemy.orm.attributes import flag_modified
+                    from core.utils.db import mark_json_modified
 
-                    flag_modified(magazine, "parsed_metadata")
-                    flag_modified(magazine, "derived_metadata")
+                    mark_json_modified(magazine, "parsed_metadata", "derived_metadata")
 
                     # Clean up OCR PNG file immediately after successful processing
                     try:
-                        cover_dir = Path(magazine.cover_path).parent if magazine.cover_path else None
+                        cover_dir = (
+                            Path(magazine.cover_path).parent
+                            if magazine.cover_path
+                            else None
+                        )
                         if cover_dir:
                             ocr_covers_dir = cover_dir.parent / ".ocr_covers"
                             png_path = ocr_covers_dir / f"{magazine.id}_ocr.png"
                             if png_path.exists():
                                 png_path.unlink()
-                                logger.debug(f"Cleaned up OCR PNG after successful processing: {png_path}")
+                                logger.debug(
+                                    f"Cleaned up OCR PNG after successful processing: {png_path}"
+                                )
                     except Exception as cleanup_error:
-                        logger.warning(f"Failed to cleanup OCR PNG for magazine {magazine_id}: {cleanup_error}")
+                        logger.warning(
+                            f"Failed to cleanup OCR PNG for magazine {magazine_id}: {cleanup_error}"
+                        )
 
-                    logger.info(f"OCR job {job_id} completed in {processing_time:.1f}s for {magazine.title}")
+                    logger.info(
+                        f"OCR job {job_id} completed in {processing_time:.1f}s for {magazine.title}"
+                    )
                     stats["succeeded"] += 1
                 else:
                     # Worker reported error
@@ -505,15 +567,23 @@ class OCRQueueService:
 
                     # Clean up OCR PNG file after failed processing too
                     try:
-                        cover_dir = Path(magazine.cover_path).parent if magazine.cover_path else None
+                        cover_dir = (
+                            Path(magazine.cover_path).parent
+                            if magazine.cover_path
+                            else None
+                        )
                         if cover_dir:
                             ocr_covers_dir = cover_dir.parent / ".ocr_covers"
                             png_path = ocr_covers_dir / f"{magazine.id}_ocr.png"
                             if png_path.exists():
                                 png_path.unlink()
-                                logger.debug(f"Cleaned up OCR PNG after failed processing: {png_path}")
+                                logger.debug(
+                                    f"Cleaned up OCR PNG after failed processing: {png_path}"
+                                )
                     except Exception as cleanup_error:
-                        logger.warning(f"Failed to cleanup OCR PNG for magazine {magazine_id}: {cleanup_error}")
+                        logger.warning(
+                            f"Failed to cleanup OCR PNG for magazine {magazine_id}: {cleanup_error}"
+                        )
 
                     logger.error(f"OCR job {job_id} failed: {error_msg}")
                     stats["failed"] += 1
@@ -533,7 +603,9 @@ class OCRQueueService:
                         job.last_error = f"{error_type}: {error_msg[:500]}"
                         job.completed_at = datetime.now(UTC)
                 except Exception as update_error:
-                    logger.error(f"Failed to update job status for {job_id}: {update_error}")
+                    logger.error(
+                        f"Failed to update job status for {job_id}: {update_error}"
+                    )
                 stats["failed"] += 1
 
             stats["processed"] += 1
@@ -571,23 +643,40 @@ class OCRQueueService:
         )
 
         if stuck_jobs:
-            logger.warning(f"Found {len(stuck_jobs)} stuck OCR jobs, resetting to PENDING")
+            logger.warning(
+                f"Found {len(stuck_jobs)} stuck OCR jobs, resetting to PENDING"
+            )
             for job in stuck_jobs:
                 job.status = OCRJob.StatusEnum.PENDING
                 job.started_at = None
             db.commit()
 
-        pending_count = db.query(OCRJob).filter(OCRJob.status == OCRJob.StatusEnum.PENDING).count()
+        pending_count = (
+            db.query(OCRJob).filter(OCRJob.status == OCRJob.StatusEnum.PENDING).count()
+        )
 
-        processing_count = db.query(OCRJob).filter(OCRJob.status == OCRJob.StatusEnum.PROCESSING).count()
+        processing_count = (
+            db.query(OCRJob)
+            .filter(OCRJob.status == OCRJob.StatusEnum.PROCESSING)
+            .count()
+        )
 
-        completed_count = db.query(OCRJob).filter(OCRJob.status == OCRJob.StatusEnum.COMPLETED).count()
+        completed_count = (
+            db.query(OCRJob)
+            .filter(OCRJob.status == OCRJob.StatusEnum.COMPLETED)
+            .count()
+        )
 
-        failed_count = db.query(OCRJob).filter(OCRJob.status == OCRJob.StatusEnum.FAILED).count()
+        failed_count = (
+            db.query(OCRJob).filter(OCRJob.status == OCRJob.StatusEnum.FAILED).count()
+        )
 
         # Get oldest pending job
         oldest_pending = (
-            db.query(OCRJob).filter(OCRJob.status == OCRJob.StatusEnum.PENDING).order_by(OCRJob.created_at).first()
+            db.query(OCRJob)
+            .filter(OCRJob.status == OCRJob.StatusEnum.PENDING)
+            .order_by(OCRJob.created_at)
+            .first()
         )
 
         return {
@@ -631,7 +720,9 @@ class OCRQueueService:
         deleted = (
             db.query(OCRJob)
             .filter(
-                OCRJob.status.in_([OCRJob.StatusEnum.COMPLETED, OCRJob.StatusEnum.FAILED]),
+                OCRJob.status.in_(
+                    [OCRJob.StatusEnum.COMPLETED, OCRJob.StatusEnum.FAILED]
+                ),
                 OCRJob.completed_at < cutoff,
             )
             .delete()

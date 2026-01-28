@@ -6,7 +6,7 @@
 
 /* global IntersectionObserver */
 
-import { APIClient } from './api.js';
+import { APIClient, APIHelper } from './api.js';
 import { UIUtils, SortManager } from './ui-utils.js';
 import {
   ELEMENT_IDS as _ELEMENT_IDS,
@@ -274,13 +274,15 @@ export class LibraryManager {
    * await library.loadPeriodicals();
    */
   async loadPeriodicals() {
-    try {
+    const data = await APIHelper.executeWithErrorHandling(async () => {
       const { field, order } = this.sortManager.getSortParams();
       const response = await APIClient.authenticatedFetch(
         `/api/periodicals?sort_by=${field}&sort_order=${order}`
       );
-      const data = await response.json();
+      return await response.json();
+    }, 'Library');
 
+    if (data) {
       // Store all periodicals unfiltered
       this.allPeriodicals = data.periodicals || [];
 
@@ -289,8 +291,6 @@ export class LibraryManager {
 
       // Apply filters and render
       this.applyFiltersAndRender();
-    } catch (error) {
-      console.error('[Library] Failed to load periodicals:', error);
     }
   }
 

@@ -10,6 +10,8 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
+from core.utils.error_handling import handle_api_errors
+
 router = APIRouter(prefix="/api/config", tags=["configuration"])
 logger = logging.getLogger(__name__)
 
@@ -80,127 +82,112 @@ def _deep_merge(base: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @router.get("")
+@handle_api_errors("Get config", logger)
 async def get_config():
     """Get current configuration"""
-    try:
-        # Reload from file to ensure we have the latest (including manual edits)
-        _config_loader.reload_config()
-        config = _config_loader.get_all_config()
+    # Reload from file to ensure we have the latest (including manual edits)
+    _config_loader.reload_config()
+    config = _config_loader.get_all_config()
 
-        # Mask sensitive data in response
-        safe_config = _mask_sensitive_config(config)
+    # Mask sensitive data in response
+    safe_config = _mask_sensitive_config(config)
 
-        return {"status": "success", "config": safe_config}
-    except Exception as e:
-        logger.error(f"Get config error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {"status": "success", "config": safe_config}
 
 
 @router.post("")
+@handle_api_errors("Update config", logger)
 async def update_config(config_update: Dict[str, Any], background_tasks: BackgroundTasks):
     """Update configuration and restart application"""
-    try:
-        # Reload from file to ensure we have the latest (including manual edits)
-        _config_loader.reload_config()
-        current_config = _config_loader.get_all_config()
+    # Reload from file to ensure we have the latest (including manual edits)
+    _config_loader.reload_config()
+    current_config = _config_loader.get_all_config()
 
-        # Deep merge the update with current config
-        updated_config = _deep_merge(current_config, config_update)
+    # Deep merge the update with current config
+    updated_config = _deep_merge(current_config, config_update)
 
-        # Save to file
-        _config_loader.save_config(updated_config)
+    # Save to file
+    _config_loader.save_config(updated_config)
 
-        # Return masked config
-        safe_config = _mask_sensitive_config(updated_config)
+    # Return masked config
+    safe_config = _mask_sensitive_config(updated_config)
 
-        logger.info("Configuration updated via UI")
+    logger.info("Configuration updated via UI")
 
-        # Schedule restart in background
-        def restart_process():
-            import time
+    # Schedule restart in background
+    def restart_process():
+        import time
 
-            time.sleep(1)  # Give time for response to be sent
-            os.execv(sys.executable, [sys.executable] + sys.argv)
+        time.sleep(1)  # Give time for response to be sent
+        os.execv(sys.executable, [sys.executable] + sys.argv)
 
-        background_tasks.add_task(restart_process)
+    background_tasks.add_task(restart_process)
 
-        return {
-            "success": True,
-            "status": "success",
-            "message": "Configuration updated. Application restarting...",
-            "config": safe_config,
-        }
-    except Exception as e:
-        logger.error(f"Update config error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "success": True,
+        "status": "success",
+        "message": "Configuration updated. Application restarting...",
+        "config": safe_config,
+    }
 
 
 @router.post("/save")
+@handle_api_errors("Save config", logger)
 async def save_config_only(config_update: Dict[str, Any]):
     """Save configuration without restarting"""
-    try:
-        # Reload from file to ensure we have the latest (including manual edits)
-        _config_loader.reload_config()
-        current_config = _config_loader.get_all_config()
+    # Reload from file to ensure we have the latest (including manual edits)
+    _config_loader.reload_config()
+    current_config = _config_loader.get_all_config()
 
-        # Deep merge the update with current config
-        updated_config = _deep_merge(current_config, config_update)
+    # Deep merge the update with current config
+    updated_config = _deep_merge(current_config, config_update)
 
-        # Save to file
-        _config_loader.save_config(updated_config)
+    # Save to file
+    _config_loader.save_config(updated_config)
 
-        # Return masked config
-        safe_config = _mask_sensitive_config(updated_config)
+    # Return masked config
+    safe_config = _mask_sensitive_config(updated_config)
 
-        logger.info("Configuration saved via UI (no restart)")
+    logger.info("Configuration saved via UI (no restart)")
 
-        return {
-            "success": True,
-            "status": "success",
-            "message": "Configuration saved. Restart required for changes to take effect.",
-            "config": safe_config,
-        }
-    except Exception as e:
-        logger.error(f"Save config error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "success": True,
+        "status": "success",
+        "message": "Configuration saved. Restart required for changes to take effect.",
+        "config": safe_config,
+    }
 
 
 @router.post("/reload")
+@handle_api_errors("Reload config", logger)
 async def reload_config():
     """Reload configuration and reinitialize providers"""
-    try:
-        # Note: This would typically call a reinitialization function
-        # But that logic needs to stay in main app due to global state dependencies
-        # This endpoint signals the need to reload but actual reloading happens elsewhere
-        _config_loader.reload_config()
+    # Note: This would typically call a reinitialization function
+    # But that logic needs to stay in main app due to global state dependencies
+    # This endpoint signals the need to reload but actual reloading happens elsewhere
+    _config_loader.reload_config()
 
-        return {
-            "status": "success",
-            "message": "Configuration reloaded. Providers will be reinitialized.",
-        }
-    except Exception as e:
-        logger.error(f"Reload config error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "status": "success",
+        "message": "Configuration reloaded. Providers will be reinitialized.",
+    }
 
 
 @router.post("/restart")
+@handle_api_errors("Restart application", logger)
 async def restart_application(background_tasks: BackgroundTasks):
     """Restart the application"""
-    try:
-        logger.info("Restart request received - restarting application")
+    logger.info("Restart request received - restarting application")
 
-        def restart_process():
-            import time
+    def restart_process():
+        import time
 
-            time.sleep(1)  # Give time for response to be sent
-            os.execv(sys.executable, [sys.executable] + sys.argv)
+        time.sleep(1)  # Give time for response to be sent
+        os.execv(sys.executable, [sys.executable] + sys.argv)
 
-        background_tasks.add_task(restart_process)
+    background_tasks.add_task(restart_process)
 
-        return {"status": "success", "message": "Application restarting..."}
-    except Exception as e:
-        logger.error(f"Restart error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {"status": "success", "message": "Application restarting..."}
 
 
 @router.post("/test-provider")

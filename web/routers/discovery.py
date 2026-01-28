@@ -15,7 +15,8 @@ from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import and_, desc, func
 from sqlalchemy.orm import sessionmaker
 
-from core.utils import run_in_thread
+from core.utils.db import with_db_session
+from core.utils.error_handling import handle_api_errors
 from models.database import DiscoveredIssue, PeriodicalTracking
 from services import IssueDiscoveryService, SearchScheduler
 
@@ -42,12 +43,15 @@ def set_dependencies(
 
 
 @router.get("")
+@handle_api_errors("List discovered issues", logger)
 async def list_discovered_issues(
     tracking_id: Optional[int] = Query(None, description="Filter by tracking ID"),
     status: Optional[str] = Query(None, description="Filter by download status"),
     limit: int = Query(50, ge=1, le=500, description="Maximum results to return"),
     offset: int = Query(0, ge=0, description="Number of results to skip"),
-    sort: str = Query("priority", description="Sort field: priority, first_seen, last_seen"),
+    sort: str = Query(
+        "priority", description="Sort field: priority, first_seen, last_seen"
+    ),
 ) -> Dict[str, Any]:
     """
     List discovered issues with optional filters.
@@ -64,92 +68,92 @@ async def list_discovered_issues(
     if _session_factory is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
 
-    def _db_operation():
-        db = _session_factory()
-        try:
-            # Build query
-            query = db.query(DiscoveredIssue)
+    def operation(db):
+        # Build query
+        query = db.query(DiscoveredIssue)
 
-            # Apply filters
-            if tracking_id:
-                query = query.filter(DiscoveredIssue.tracking_id == tracking_id)
+        # Apply filters
+        if tracking_id:
+            query = query.filter(DiscoveredIssue.tracking_id == tracking_id)
 
-            if status:
-                # Validate status (can be single or comma-separated)
-                valid_statuses = [
-                    "discovered",
-                    "wanted",
-                    "queued",
-                    "downloading",
-                    "completed",
-                    "failed",
-                    "permanently_failed",
-                    "ignored",
-                ]
+        if status:
+            # Validate status (can be single or comma-separated)
+            valid_statuses = [
+                "discovered",
+                "wanted",
+                "queued",
+                "downloading",
+                "completed",
+                "failed",
+                "permanently_failed",
+                "ignored",
+            ]
 
-                # Handle comma-separated statuses
-                statuses = [s.strip() for s in status.split(",")]
+            # Handle comma-separated statuses
+            statuses = [s.strip() for s in status.split(",")]
 
-                # Validate all statuses
-                for s in statuses:
-                    if s not in valid_statuses:
-                        raise HTTPException(
-                            status_code=400,
-                            detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}",
-                        )
+            # Validate all statuses
+            for s in statuses:
+                if s not in valid_statuses:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}",
+                    )
 
-                # Filter by status(es)
-                if len(statuses) == 1:
-                    query = query.filter(DiscoveredIssue.download_status == statuses[0])
-                else:
-                    query = query.filter(DiscoveredIssue.download_status.in_(statuses))
+            # Filter by status(es)
+            if len(statuses) == 1:
+                query = query.filter(DiscoveredIssue.download_status == statuses[0])
+            else:
+                query = query.filter(DiscoveredIssue.download_status.in_(statuses))
 
-            # Get total count before pagination
-            total_count = query.count()
+        # Get total count before pagination
+        total_count = query.count()
 
-            # Apply sorting
-            if sort == "first_seen":
-                query = query.order_by(desc(DiscoveredIssue.first_seen))
-            elif sort == "last_seen":
-                query = query.order_by(desc(DiscoveredIssue.last_seen))
-            else:  # priority (default)
-                query = query.order_by(
-                    desc(DiscoveredIssue.download_priority),
-                    DiscoveredIssue.first_seen,
-                )
+        # Apply sorting
+        if sort == "first_seen":
+            query = query.order_by(desc(DiscoveredIssue.first_seen))
+        elif sort == "last_seen":
+            query = query.order_by(desc(DiscoveredIssue.last_seen))
+        else:  # priority (default)
+            query = query.order_by(
+                desc(DiscoveredIssue.download_priority),
+                DiscoveredIssue.first_seen,
+            )
 
-            # Apply pagination
-            issues = query.offset(offset).limit(limit).all()
+        # Apply pagination
+        issues = query.offset(offset).limit(limit).all()
 
-            # Get tracking titles for all issues
-            tracking_ids = {issue.tracking_id for issue in issues}
-            trackings = db.query(PeriodicalTracking).filter(PeriodicalTracking.id.in_(tracking_ids)).all()
-            tracking_map = {t.id: t.title for t in trackings}
+        # Get tracking titles for all issues
+        tracking_ids = {issue.tracking_id for issue in issues}
+        trackings = (
+            db.query(PeriodicalTracking)
+            .filter(PeriodicalTracking.id.in_(tracking_ids))
+            .all()
+        )
+        tracking_map = {t.id: t.title for t in trackings}
 
-            # Build response
-            result = []
-            for issue in issues:
-                result.append(
-                    {
-                        **issue.to_dict(),
-                        "tracking_title": tracking_map.get(issue.tracking_id, "Unknown"),
-                    }
-                )
+        # Build response
+        result = []
+        for issue in issues:
+            result.append(
+                {
+                    **issue.to_dict(),
+                    "tracking_title": tracking_map.get(issue.tracking_id, "Unknown"),
+                }
+            )
 
-            return {
-                "issues": result,
-                "total": total_count,
-                "limit": limit,
-                "offset": offset,
-            }
+        return {
+            "issues": result,
+            "total": total_count,
+            "limit": limit,
+            "offset": offset,
+        }
 
-        finally:
-            db.close()
-
-    return await run_in_thread(_db_operation)
+    return await with_db_session(_session_factory, operation)
 
 
 @router.get("/{issue_id}")
+@handle_api_errors("Get discovered issue", logger)
 async def get_discovered_issue(issue_id: int) -> Dict[str, Any]:
     """
     Get details for a specific discovered issue.
@@ -159,49 +163,53 @@ async def get_discovered_issue(issue_id: int) -> Dict[str, Any]:
     if _session_factory is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
 
-    def _db_operation():
-        db = _session_factory()
-        try:
-            issue = db.query(DiscoveredIssue).filter(DiscoveredIssue.id == issue_id).first()
+    def operation(db):
+        issue = db.query(DiscoveredIssue).filter(DiscoveredIssue.id == issue_id).first()
 
-            if not issue:
-                raise HTTPException(status_code=404, detail="Issue not found")
+        if not issue:
+            raise HTTPException(status_code=404, detail="Issue not found")
 
-            # Get tracking info
-            tracking = db.query(PeriodicalTracking).filter(PeriodicalTracking.id == issue.tracking_id).first()
+        # Get tracking info
+        tracking = (
+            db.query(PeriodicalTracking)
+            .filter(PeriodicalTracking.id == issue.tracking_id)
+            .first()
+        )
 
-            # Get submission history if available
-            submission_history = []
-            if issue.submission_ids:
-                from models.database import DownloadSubmission
+        # Get submission history if available
+        submission_history = []
+        if issue.submission_ids:
+            from models.database import DownloadSubmission
 
-                submissions = db.query(DownloadSubmission).filter(DownloadSubmission.id.in_(issue.submission_ids)).all()
-                submission_history = [
-                    {
-                        "id": s.id,
-                        "job_id": s.job_id,
-                        "status": s.status.value if s.status else None,
-                        "attempt_count": s.attempt_count,
-                        "last_error": s.last_error,
-                        "created_at": s.created_at.isoformat() if s.created_at else None,
-                    }
-                    for s in submissions
-                ]
+            submissions = (
+                db.query(DownloadSubmission)
+                .filter(DownloadSubmission.id.in_(issue.submission_ids))
+                .all()
+            )
+            submission_history = [
+                {
+                    "id": s.id,
+                    "job_id": s.job_id,
+                    "status": s.status.value if s.status else None,
+                    "attempt_count": s.attempt_count,
+                    "last_error": s.last_error,
+                    "created_at": s.created_at.isoformat() if s.created_at else None,
+                }
+                for s in submissions
+            ]
 
-            return {
-                **issue.to_dict(),
-                "tracking_title": tracking.title if tracking else "Unknown",
-                "tracking_info": tracking.to_dict() if tracking else None,
-                "submission_history": submission_history,
-            }
+        return {
+            **issue.to_dict(),
+            "tracking_title": tracking.title if tracking else "Unknown",
+            "tracking_info": tracking.to_dict() if tracking else None,
+            "submission_history": submission_history,
+        }
 
-        finally:
-            db.close()
-
-    return await run_in_thread(_db_operation)
+    return await with_db_session(_session_factory, operation)
 
 
 @router.post("/{issue_id}/retry")
+@handle_api_errors("Retry discovered issue", logger)
 async def retry_discovered_issue(
     issue_id: int, reset_attempts: bool = Query(True, description="Reset attempt count")
 ) -> Dict[str, Any]:
@@ -217,33 +225,31 @@ async def retry_discovered_issue(
     if _session_factory is None or _issue_discovery_service is None:
         raise HTTPException(status_code=500, detail="Service not initialized")
 
-    def _db_operation():
-        db = _session_factory()
-        try:
-            success = _issue_discovery_service.retry_permanently_failed(issue_id, db, reset_attempts)
+    def operation(db):
+        success = _issue_discovery_service.retry_permanently_failed(
+            issue_id, db, reset_attempts
+        )
 
-            if not success:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Could not retry issue (not found or not marked as permanently_failed)",
-                )
+        if not success:
+            raise HTTPException(
+                status_code=400,
+                detail="Could not retry issue (not found or not marked as permanently_failed)",
+            )
 
-            # Get updated issue
-            issue = db.query(DiscoveredIssue).filter(DiscoveredIssue.id == issue_id).first()
+        # Get updated issue
+        issue = db.query(DiscoveredIssue).filter(DiscoveredIssue.id == issue_id).first()
 
-            return {
-                "success": True,
-                "message": "Issue reset and marked as wanted",
-                "issue": issue.to_dict() if issue else None,
-            }
+        return {
+            "success": True,
+            "message": "Issue reset and marked as wanted",
+            "issue": issue.to_dict() if issue else None,
+        }
 
-        finally:
-            db.close()
-
-    return await run_in_thread(_db_operation)
+    return await with_db_session(_session_factory, operation)
 
 
 @router.get("/stats/summary")
+@handle_api_errors("Get discovery statistics", logger)
 async def get_discovery_statistics() -> Dict[str, Any]:
     """
     Get overall statistics for the Issue Discovery & Tracking system.
@@ -253,93 +259,93 @@ async def get_discovery_statistics() -> Dict[str, Any]:
     if _session_factory is None or _search_scheduler is None:
         raise HTTPException(status_code=500, detail="Service not initialized")
 
-    def _db_operation():
-        db = _session_factory()
-        try:
-            # Get counts by status
-            status_counts = {}
-            for status in [
-                "discovered",
-                "wanted",
-                "queued",
-                "downloading",
-                "completed",
-                "failed",
-                "permanently_failed",
-                "ignored",
-            ]:
-                count = db.query(DiscoveredIssue).filter(DiscoveredIssue.download_status == status).count()
-                status_counts[status] = count
-
-            # Get priority distribution
-            high_priority = (
+    def operation(db):
+        # Get counts by status
+        status_counts = {}
+        for status in [
+            "discovered",
+            "wanted",
+            "queued",
+            "downloading",
+            "completed",
+            "failed",
+            "permanently_failed",
+            "ignored",
+        ]:
+            count = (
                 db.query(DiscoveredIssue)
-                .filter(
-                    and_(
-                        DiscoveredIssue.download_status.in_(["wanted", "failed"]),
-                        DiscoveredIssue.download_priority >= 70,
-                    )
-                )
+                .filter(DiscoveredIssue.download_status == status)
                 .count()
             )
+            status_counts[status] = count
 
-            medium_priority = (
-                db.query(DiscoveredIssue)
-                .filter(
-                    and_(
-                        DiscoveredIssue.download_status.in_(["wanted", "failed"]),
-                        DiscoveredIssue.download_priority >= 40,
-                        DiscoveredIssue.download_priority < 70,
-                    )
+        # Get priority distribution
+        high_priority = (
+            db.query(DiscoveredIssue)
+            .filter(
+                and_(
+                    DiscoveredIssue.download_status.in_(["wanted", "failed"]),
+                    DiscoveredIssue.download_priority >= 70,
                 )
-                .count()
             )
+            .count()
+        )
 
-            low_priority = (
-                db.query(DiscoveredIssue)
-                .filter(
-                    and_(
-                        DiscoveredIssue.download_status.in_(["wanted", "failed"]),
-                        DiscoveredIssue.download_priority < 40,
-                    )
+        medium_priority = (
+            db.query(DiscoveredIssue)
+            .filter(
+                and_(
+                    DiscoveredIssue.download_status.in_(["wanted", "failed"]),
+                    DiscoveredIssue.download_priority >= 40,
+                    DiscoveredIssue.download_priority < 70,
                 )
-                .count()
             )
+            .count()
+        )
 
-            # Get search scheduler statistics
-            search_stats = _search_scheduler.get_search_statistics(db)
-
-            # Get top providers
-            top_providers = (
-                db.query(
-                    DiscoveredIssue.latest_provider,
-                    func.count(DiscoveredIssue.id).label("count"),  # pylint: disable=not-callable
+        low_priority = (
+            db.query(DiscoveredIssue)
+            .filter(
+                and_(
+                    DiscoveredIssue.download_status.in_(["wanted", "failed"]),
+                    DiscoveredIssue.download_priority < 40,
                 )
-                .filter(DiscoveredIssue.latest_provider.isnot(None))
-                .group_by(DiscoveredIssue.latest_provider)
-                .order_by(desc("count"))
-                .limit(5)
-                .all()
             )
+            .count()
+        )
 
-            return {
-                "status_counts": status_counts,
-                "priority_distribution": {
-                    "high": high_priority,
-                    "medium": medium_priority,
-                    "low": low_priority,
-                },
-                "search_stats": search_stats,
-                "top_providers": [{"provider": p[0], "count": p[1]} for p in top_providers],
-            }
+        # Get search scheduler statistics
+        search_stats = _search_scheduler.get_search_statistics(db)
 
-        finally:
-            db.close()
+        # Get top providers
+        top_providers = (
+            db.query(
+                DiscoveredIssue.latest_provider,
+                func.count(DiscoveredIssue.id).label("count"),  # pylint: disable=not-callable
+            )
+            .filter(DiscoveredIssue.latest_provider.isnot(None))
+            .group_by(DiscoveredIssue.latest_provider)
+            .order_by(desc("count"))
+            .limit(5)
+            .all()
+        )
 
-    return await run_in_thread(_db_operation)
+        return {
+            "status_counts": status_counts,
+            "priority_distribution": {
+                "high": high_priority,
+                "medium": medium_priority,
+                "low": low_priority,
+            },
+            "search_stats": search_stats,
+            "top_providers": [{"provider": p[0], "count": p[1]} for p in top_providers],
+        }
+
+    return await with_db_session(_session_factory, operation)
 
 
 @router.get("/stats/by-tracking")
+@handle_api_errors("Get statistics by tracking", logger)
 async def get_statistics_by_tracking() -> Dict[str, List[Dict[str, Any]]]:
     """
     Get discovery statistics grouped by tracked periodical.
@@ -349,69 +355,72 @@ async def get_statistics_by_tracking() -> Dict[str, List[Dict[str, Any]]]:
     if _session_factory is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
 
-    def _db_operation():
-        db = _session_factory()
-        try:
-            # Get all tracking records
-            trackings = db.query(PeriodicalTracking).all()
+    def operation(db):
+        # Get all tracking records
+        trackings = db.query(PeriodicalTracking).all()
 
-            result = []
-            for tracking in trackings:
-                # Count issues by status for this tracking
-                total = db.query(DiscoveredIssue).filter(DiscoveredIssue.tracking_id == tracking.id).count()
+        result = []
+        for tracking in trackings:
+            # Count issues by status for this tracking
+            total = (
+                db.query(DiscoveredIssue)
+                .filter(DiscoveredIssue.tracking_id == tracking.id)
+                .count()
+            )
 
-                wanted = (
-                    db.query(DiscoveredIssue)
-                    .filter(
-                        and_(
-                            DiscoveredIssue.tracking_id == tracking.id,
-                            DiscoveredIssue.download_status == "wanted",
-                        )
+            wanted = (
+                db.query(DiscoveredIssue)
+                .filter(
+                    and_(
+                        DiscoveredIssue.tracking_id == tracking.id,
+                        DiscoveredIssue.download_status == "wanted",
                     )
-                    .count()
                 )
+                .count()
+            )
 
-                completed = (
-                    db.query(DiscoveredIssue)
-                    .filter(
-                        and_(
-                            DiscoveredIssue.tracking_id == tracking.id,
-                            DiscoveredIssue.download_status == "completed",
-                        )
+            completed = (
+                db.query(DiscoveredIssue)
+                .filter(
+                    and_(
+                        DiscoveredIssue.tracking_id == tracking.id,
+                        DiscoveredIssue.download_status == "completed",
                     )
-                    .count()
                 )
+                .count()
+            )
 
-                permanently_faileds = (
-                    db.query(DiscoveredIssue)
-                    .filter(
-                        and_(
-                            DiscoveredIssue.tracking_id == tracking.id,
-                            DiscoveredIssue.download_status == "permanently_failed",
-                        )
+            permanently_faileds = (
+                db.query(DiscoveredIssue)
+                .filter(
+                    and_(
+                        DiscoveredIssue.tracking_id == tracking.id,
+                        DiscoveredIssue.download_status == "permanently_failed",
                     )
-                    .count()
                 )
+                .count()
+            )
 
-                result.append(
-                    {
-                        "tracking_id": tracking.id,
-                        "title": tracking.title,
-                        "language": tracking.language,
-                        "total_discovered": total,
-                        "wanted": wanted,
-                        "completed": completed,
-                        "permanently_faileds": permanently_faileds,
-                        "last_searched": (tracking.last_searched.isoformat() if tracking.last_searched else None),
-                        "search_interval_hours": tracking.search_interval_hours,
-                        "searches_without_new_issues": tracking.searches_without_new_issues,
-                        "total_issues_discovered": tracking.total_issues_discovered,
-                    }
-                )
+            result.append(
+                {
+                    "tracking_id": tracking.id,
+                    "title": tracking.title,
+                    "language": tracking.language,
+                    "total_discovered": total,
+                    "wanted": wanted,
+                    "completed": completed,
+                    "permanently_faileds": permanently_faileds,
+                    "last_searched": (
+                        tracking.last_searched.isoformat()
+                        if tracking.last_searched
+                        else None
+                    ),
+                    "search_interval_hours": tracking.search_interval_hours,
+                    "searches_without_new_issues": tracking.searches_without_new_issues,
+                    "total_issues_discovered": tracking.total_issues_discovered,
+                }
+            )
 
-            return {"trackings": result}
+        return {"trackings": result}
 
-        finally:
-            db.close()
-
-    return await run_in_thread(_db_operation)
+    return await with_db_session(_session_factory, operation)

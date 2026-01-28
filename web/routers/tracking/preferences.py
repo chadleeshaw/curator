@@ -10,6 +10,7 @@ from fastapi import HTTPException
 
 from core.constants.category import DEFAULT_CATEGORY
 from core.constants.errors import ErrorMessages
+from core.utils.error_handling import handle_api_errors
 from core.utils.general import (
     is_special_edition,
     generate_olid,
@@ -29,80 +30,84 @@ import shutil
 
 
 @router.post("/periodicals/tracking/save")
+@handle_api_errors("Save tracking preferences", logger)
 async def save_tracking_preferences(
     request: TrackingPreferencesRequest,
 ) -> Dict[str, Any]:
     """Save magazine tracking preferences"""
-    try:
 
-        def _save():
-            db_session = _shared._session_factory()
-            try:
-                olid = request.olid or generate_olid(request.title)
-                existing = db_session.query(PeriodicalTracking).filter(PeriodicalTracking.olid == olid).first()
+    def _save():
+        db_session = _shared._session_factory()
+        try:
+            olid = request.olid or generate_olid(request.title)
+            existing = (
+                db_session.query(PeriodicalTracking)
+                .filter(PeriodicalTracking.olid == olid)
+                .first()
+            )
 
-                if existing:
-                    existing.title = request.title
-                    existing.category = getattr(request, "category", None)
-                    existing.language = getattr(request, "language", "English")
-                    existing.country = getattr(request, "country", None)
-                    existing.first_publish_year = request.first_publish_year
-                    existing.track_all_editions = request.track_all_editions
-                    existing.track_new_only = request.track_new_only
-                    existing.selected_editions = request.selected_editions
-                    existing.selected_years = request.selected_years
-                    existing.periodical_metadata = request.metadata
-                    existing.last_metadata_update = datetime.now(UTC)
-                    tracking = existing
-                else:
-                    tracking = PeriodicalTracking(
-                        olid=olid,
-                        title=request.title,
-                        category=getattr(request, "category", None),
-                        language=getattr(request, "language", "English"),
-                        country=getattr(request, "country", None),
-                        first_publish_year=request.first_publish_year,
-                        track_all_editions=request.track_all_editions,
-                        track_new_only=request.track_new_only,
-                        selected_editions=request.selected_editions,
-                        selected_years=request.selected_years,
-                        periodical_metadata=request.metadata,
-                        last_metadata_update=datetime.now(UTC),
-                    )
-                    db_session.add(tracking)
+            if existing:
+                existing.title = request.title
+                existing.category = getattr(request, "category", None)
+                existing.language = getattr(request, "language", "English")
+                existing.country = getattr(request, "country", None)
+                existing.first_publish_year = request.first_publish_year
+                existing.track_all_editions = request.track_all_editions
+                existing.track_new_only = request.track_new_only
+                existing.selected_editions = request.selected_editions
+                existing.selected_years = request.selected_years
+                existing.periodical_metadata = request.metadata
+                existing.last_metadata_update = datetime.now(UTC)
+                tracking = existing
+            else:
+                tracking = PeriodicalTracking(
+                    olid=olid,
+                    title=request.title,
+                    category=getattr(request, "category", None),
+                    language=getattr(request, "language", "English"),
+                    country=getattr(request, "country", None),
+                    first_publish_year=request.first_publish_year,
+                    track_all_editions=request.track_all_editions,
+                    track_new_only=request.track_new_only,
+                    selected_editions=request.selected_editions,
+                    selected_years=request.selected_years,
+                    periodical_metadata=request.metadata,
+                    last_metadata_update=datetime.now(UTC),
+                )
+                db_session.add(tracking)
 
-                db_session.commit()
+            db_session.commit()
 
-                return {
-                    "tracking_id": tracking.id,
-                    "title": tracking.title,
-                    "track_all_editions": tracking.track_all_editions,
-                    "track_new_only": tracking.track_new_only,
-                    "selected_editions": tracking.selected_editions,
-                    "selected_count": len([v for v in tracking.selected_editions.values() if v]),
-                }
-            finally:
-                db_session.close()
+            return {
+                "tracking_id": tracking.id,
+                "title": tracking.title,
+                "track_all_editions": tracking.track_all_editions,
+                "track_new_only": tracking.track_new_only,
+                "selected_editions": tracking.selected_editions,
+                "selected_count": len(
+                    [v for v in tracking.selected_editions.values() if v]
+                ),
+            }
+        finally:
+            db_session.close()
 
-        result = await run_in_thread(_save)
+    result = await run_in_thread(_save)
 
-        # Note: We don't trigger immediate auto-download here to avoid blocking the response.
-        # The scheduled auto-download task will pick up changes on its next run.
-        # This keeps the API response fast (<100ms instead of 5-6 seconds).
+    # Note: We don't trigger immediate auto-download here to avoid blocking the response.
+    # The scheduled auto-download task will pick up changes on its next run.
+    # This keeps the API response fast (<100ms instead of 5-6 seconds).
 
-        return {
-            "success": True,
-            "tracking_id": result["tracking_id"],
-            "message": f"Tracking preferences saved for '{request.title}'",
-            "track_all_editions": result["track_all_editions"],
-            "selected_count": result["selected_count"],
-        }
-    except Exception as e:
-        logger.error(f"Save tracking preferences error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "success": True,
+        "tracking_id": result["tracking_id"],
+        "message": f"Tracking preferences saved for '{request.title}'",
+        "track_all_editions": result["track_all_editions"],
+        "selected_count": result["selected_count"],
+    }
 
 
 @router.post("/periodicals/tracking/{tracking_id}/reorganize")
+@handle_api_errors("Reorganize tracking files", logger)
 async def reorganize_tracking_files(tracking_id: int) -> Dict[str, Any]:
     """
     Reorganize all files for a specific tracking record to match its organization pattern.
@@ -110,334 +115,392 @@ async def reorganize_tracking_files(tracking_id: int) -> Dict[str, Any]:
     This is called after a user changes the organization pattern for a periodical
     and confirms they want to reorganize existing files.
     """
-    try:
 
-        def _reorganize():
-            db_session = _shared._session_factory()
-            try:
-                tracking = db_session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
-                if not tracking:
-                    raise HTTPException(status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND)
+    def _reorganize():
+        db_session = _shared._session_factory()
+        try:
+            tracking = (
+                db_session.query(PeriodicalTracking)
+                .filter(PeriodicalTracking.id == tracking_id)
+                .first()
+            )
+            if not tracking:
+                raise HTTPException(
+                    status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND
+                )
 
+            from models.database import Periodical
+
+            # Get library directory from config
+            library_base_dir = Path(
+                _shared._storage_config.get("library_dir", "./local/data")
+            ).resolve()
+            category_prefix = _shared._import_config.get("category_prefix", "_")
+
+            # Get organization pattern (per-periodical or global default)
+            organization_pattern = tracking.organization_pattern
+
+            # Get all magazines linked to this tracking record
+            magazines = (
+                db_session.query(Periodical)
+                .filter(Periodical.tracking_id == tracking_id)
+                .all()
+            )
+
+            files_reorganized = 0
+            files_failed = 0
+            directories_to_cleanup = set()
+
+            # Use FileOrganizer to reorganize files with the pattern
+            from services.file_organizer import FileOrganizer
+
+            organizer = FileOrganizer(
+                str(library_base_dir), category_prefix=category_prefix
+            )
+
+            for magazine in magazines:
+                # Check if this is a special edition
+                is_special = False
+                if magazine.extra_metadata and isinstance(
+                    magazine.extra_metadata, dict
+                ):
+                    is_special = (
+                        magazine.extra_metadata.get("special_edition") is not None
+                    )
+                if not is_special:
+                    is_special = is_special_edition(magazine.title)
+
+                # Only reorganize regular editions
+                if not is_special:
+                    # Store old directory for cleanup
+                    old_pdf_path = Path(magazine.file_path)
+                    if old_pdf_path.exists():
+                        title_dir = old_pdf_path.parent.parent
+                        directories_to_cleanup.add(title_dir)
+
+                    try:
+                        # Build metadata dict for organizer
+                        metadata = {
+                            "title": tracking.title,
+                            "issue_date": magazine.issue_date,
+                            "year": magazine.issue_date.year,
+                            "month_name": magazine.issue_date.strftime("%B"),
+                            "language": (
+                                magazine.extra_metadata.get("language")
+                                if magazine.extra_metadata
+                                else None
+                            ),
+                        }
+
+                        # Get category from metadata
+                        category = (
+                            magazine.extra_metadata.get("category")
+                            if magazine.extra_metadata
+                            else DEFAULT_CATEGORY
+                        )
+
+                        # Reorganize using FileOrganizer with custom pattern
+                        new_pdf_path = organizer.organize(
+                            old_pdf_path, metadata, category, organization_pattern
+                        )
+
+                        if new_pdf_path:
+                            # Check for UNIQUE constraint conflicts
+                            existing_record = (
+                                db_session.query(Periodical)
+                                .filter_by(file_path=str(new_pdf_path))
+                                .first()
+                            )
+                            if existing_record and existing_record.id != magazine.id:
+                                logger.error(
+                                    f"Cannot update magazine {magazine.id}: Target path {new_pdf_path} "
+                                    f"already exists in database for magazine {existing_record.id}."
+                                )
+                                files_failed += 1
+                                # Roll back the file move
+                                try:
+                                    if (
+                                        new_pdf_path.exists()
+                                        and not old_pdf_path.exists()
+                                    ):
+                                        shutil.move(
+                                            str(new_pdf_path), str(old_pdf_path)
+                                        )
+                                except Exception as rollback_error:
+                                    logger.error(
+                                        f"Failed to rollback file move: {rollback_error}"
+                                    )
+                            else:
+                                magazine.file_path = str(new_pdf_path)
+                                # Cover path is handled by organizer
+                                files_reorganized += 1
+                                logger.info(
+                                    f"Reorganized: {magazine.title} ({magazine.issue_date.strftime('%b %Y')})"
+                                )
+                        else:
+                            logger.warning(
+                                f"Failed to reorganize magazine ID {magazine.id}"
+                            )
+                            files_failed += 1
+                    except Exception as e:
+                        logger.error(
+                            f"Error reorganizing magazine ID {magazine.id}: {e}",
+                            exc_info=True,
+                        )
+                        files_failed += 1
+
+            db_session.commit()
+
+            return {
+                "files_reorganized": files_reorganized,
+                "files_failed": files_failed,
+                "directories_to_cleanup": directories_to_cleanup,
+                "library_base_dir": library_base_dir,
+            }
+        finally:
+            db_session.close()
+
+    result = await run_in_thread(_reorganize)
+    files_reorganized = result["files_reorganized"]
+    files_failed = result["files_failed"]
+    directories_to_cleanup = result["directories_to_cleanup"]
+    library_base_dir = result["library_base_dir"]
+
+    # Clean up empty directories
+    for directory in directories_to_cleanup:
+        if directory.exists():
+            cleanup_empty_directories(directory, library_base_dir)
+
+    message = f"Successfully reorganized {files_reorganized} file(s)"
+    if files_failed > 0:
+        message += f" ({files_failed} failed)"
+
+    return {
+        "success": True,
+        "message": message,
+        "files_reorganized": files_reorganized,
+        "files_failed": files_failed,
+    }
+
+
+@router.put("/periodicals/tracking/{tracking_id}")
+@handle_api_errors("Update tracking", logger)
+async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
+    """Update magazine tracking record"""
+
+    def _update():
+        db_session = _shared._session_factory()
+        try:
+            tracking = (
+                db_session.query(PeriodicalTracking)
+                .filter(PeriodicalTracking.id == tracking_id)
+                .first()
+            )
+            if not tracking:
+                raise HTTPException(
+                    status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND
+                )
+
+            # Store old values for change detection
+            old_title = tracking.title
+            old_pattern = tracking.organization_pattern
+            title_changed = "title" in updates and updates["title"] != old_title
+            pattern_changed = (
+                "organization_pattern" in updates
+                and updates["organization_pattern"] != old_pattern
+            )
+
+            if "title" in updates:
+                tracking.title = updates["title"]
+            if "category" in updates:
+                tracking.category = updates["category"]
+            if "language" in updates:
+                tracking.language = updates["language"]
+            if "country" in updates:
+                tracking.country = updates["country"]
+            if "download_category" in updates:
+                tracking.download_category = updates["download_category"]
+            if "track_all_editions" in updates:
+                tracking.track_all_editions = updates["track_all_editions"]
+            if "track_new_only" in updates:
+                tracking.track_new_only = updates["track_new_only"]
+            if "delete_from_client_on_completion" in updates:
+                tracking.delete_from_client_on_completion = updates[
+                    "delete_from_client_on_completion"
+                ]
+            if "organization_pattern" in updates:
+                tracking.organization_pattern = updates["organization_pattern"]
+
+            # If title changed, reorganize all files for this tracking record
+            files_reorganized = 0
+            directories_to_cleanup = set()
+            library_base_dir = None
+
+            if title_changed:
                 from models.database import Periodical
 
                 # Get library directory from config
-                library_base_dir = Path(_shared._storage_config.get("library_dir", "./local/data")).resolve()
+                library_base_dir = Path(
+                    _shared._storage_config.get("library_dir", "./local/data")
+                ).resolve()
                 category_prefix = _shared._import_config.get("category_prefix", "_")
 
-                # Get organization pattern (per-periodical or global default)
-                organization_pattern = tracking.organization_pattern
-
                 # Get all magazines linked to this tracking record
-                magazines = db_session.query(Periodical).filter(Periodical.tracking_id == tracking_id).all()
-
-                files_reorganized = 0
-                files_failed = 0
-                directories_to_cleanup = set()
-
-                # Use FileOrganizer to reorganize files with the pattern
-                from services.file_organizer import FileOrganizer
-
-                organizer = FileOrganizer(str(library_base_dir), category_prefix=category_prefix)
+                magazines = (
+                    db_session.query(Periodical)
+                    .filter(Periodical.tracking_id == tracking_id)
+                    .all()
+                )
 
                 for magazine in magazines:
                     # Check if this is a special edition
                     is_special = False
-                    if magazine.extra_metadata and isinstance(magazine.extra_metadata, dict):
-                        is_special = magazine.extra_metadata.get("special_edition") is not None
+                    if magazine.extra_metadata and isinstance(
+                        magazine.extra_metadata, dict
+                    ):
+                        is_special = (
+                            magazine.extra_metadata.get("special_edition") is not None
+                        )
                     if not is_special:
                         is_special = is_special_edition(magazine.title)
 
                     # Only reorganize regular editions
                     if not is_special:
-                        # Store old directory for cleanup
+                        # Store old title directory for cleanup (parent of year directory)
                         old_pdf_path = Path(magazine.file_path)
                         if old_pdf_path.exists():
+                            # Add title directory (grandparent of PDF) not just year directory
+                            # Structure: title_dir/year/magazine.pdf
                             title_dir = old_pdf_path.parent.parent
                             directories_to_cleanup.add(title_dir)
 
-                        try:
-                            # Build metadata dict for organizer
-                            metadata = {
-                                "title": tracking.title,
-                                "issue_date": magazine.issue_date,
-                                "year": magazine.issue_date.year,
-                                "month_name": magazine.issue_date.strftime("%B"),
-                                "language": (
-                                    magazine.extra_metadata.get("language") if magazine.extra_metadata else None
-                                ),
-                            }
+                        # Reorganize files to match new title structure
+                        new_pdf_path, new_cover_path = _reorganize_periodical_files(
+                            magazine,
+                            tracking.title,
+                            library_base_dir,
+                            category_prefix,
+                        )
 
-                            # Get category from metadata
-                            category = (
-                                magazine.extra_metadata.get("category") if magazine.extra_metadata else DEFAULT_CATEGORY
+                        # Update database paths if reorganization succeeded
+                        if new_pdf_path:
+                            # Check if target path already exists in database (UNIQUE constraint check)
+                            existing_record = (
+                                db_session.query(Periodical)
+                                .filter_by(file_path=new_pdf_path)
+                                .first()
                             )
-
-                            # Reorganize using FileOrganizer with custom pattern
-                            new_pdf_path = organizer.organize(old_pdf_path, metadata, category, organization_pattern)
-
-                            if new_pdf_path:
-                                # Check for UNIQUE constraint conflicts
-                                existing_record = (
-                                    db_session.query(Periodical).filter_by(file_path=str(new_pdf_path)).first()
+                            if existing_record and existing_record.id != magazine.id:
+                                logger.error(
+                                    f"Cannot update magazine {magazine.id}: Target path {new_pdf_path} "
+                                    f"already exists in database for magazine {existing_record.id}. "
+                                    f"This is a data integrity issue that needs manual resolution."
                                 )
-                                if existing_record and existing_record.id != magazine.id:
+                                # Roll back the file move since we can't update the database
+                                try:
+                                    old_pdf_path = Path(magazine.file_path)
+                                    if (
+                                        Path(new_pdf_path).exists()
+                                        and not old_pdf_path.exists()
+                                    ):
+                                        shutil.move(new_pdf_path, str(old_pdf_path))
+                                        logger.info(
+                                            f"Rolled back file move: {new_pdf_path} -> {old_pdf_path}"
+                                        )
+                                except Exception as rollback_error:
                                     logger.error(
-                                        f"Cannot update magazine {magazine.id}: Target path {new_pdf_path} "
-                                        f"already exists in database for magazine {existing_record.id}."
-                                    )
-                                    files_failed += 1
-                                    # Roll back the file move
-                                    try:
-                                        if new_pdf_path.exists() and not old_pdf_path.exists():
-                                            shutil.move(str(new_pdf_path), str(old_pdf_path))
-                                    except Exception as rollback_error:
-                                        logger.error(f"Failed to rollback file move: {rollback_error}")
-                                else:
-                                    magazine.file_path = str(new_pdf_path)
-                                    # Cover path is handled by organizer
-                                    files_reorganized += 1
-                                    logger.info(
-                                        f"Reorganized: {magazine.title} ({magazine.issue_date.strftime('%b %Y')})"
+                                        f"Failed to rollback file move for magazine {magazine.id}: {rollback_error}"
                                     )
                             else:
-                                logger.warning(f"Failed to reorganize magazine ID {magazine.id}")
-                                files_failed += 1
-                        except Exception as e:
-                            logger.error(
-                                f"Error reorganizing magazine ID {magazine.id}: {e}",
-                                exc_info=True,
+                                magazine.file_path = new_pdf_path
+                                if new_cover_path:
+                                    magazine.cover_path = new_cover_path
+                                files_reorganized += 1
+                                logger.info(
+                                    f"Reorganized files for: {magazine.title} ({magazine.issue_date.strftime('%b %Y')})"
+                                )
+                        else:
+                            logger.warning(
+                                f"Failed to reorganize files for magazine ID {magazine.id}, keeping original paths"
                             )
-                            files_failed += 1
 
-                db_session.commit()
+                        # Update magazine title to match tracking title
+                        magazine.title = tracking.title
 
-                return {
-                    "files_reorganized": files_reorganized,
-                    "files_failed": files_failed,
-                    "directories_to_cleanup": directories_to_cleanup,
-                    "library_base_dir": library_base_dir,
-                }
-            finally:
-                db_session.close()
+            db_session.commit()
 
-        result = await run_in_thread(_reorganize)
-        files_reorganized = result["files_reorganized"]
-        files_failed = result["files_failed"]
-        directories_to_cleanup = result["directories_to_cleanup"]
-        library_base_dir = result["library_base_dir"]
+            # Count files affected by pattern change (for confirmation prompt)
+            files_affected_by_pattern = 0
+            if pattern_changed:
+                from models.database import Periodical
 
-        # Clean up empty directories
+                files_affected_by_pattern = (
+                    db_session.query(Periodical)
+                    .filter(Periodical.tracking_id == tracking_id)
+                    .count()
+                )
+
+            # Extract tracking data before closing session
+            tracking_data = {
+                "id": tracking.id,
+                "title": tracking.title,
+                "track_all_editions": tracking.track_all_editions,
+                "track_new_only": tracking.track_new_only,
+                "delete_from_client_on_completion": tracking.delete_from_client_on_completion,
+            }
+
+            return {
+                "tracking_data": tracking_data,
+                "old_title": old_title,
+                "title_changed": title_changed,
+                "pattern_changed": pattern_changed,
+                "files_affected_by_pattern": files_affected_by_pattern,
+                "files_reorganized": files_reorganized,
+                "directories_to_cleanup": directories_to_cleanup,
+                "library_base_dir": library_base_dir,
+            }
+        finally:
+            db_session.close()
+
+    result = await run_in_thread(_update)
+    tracking_data = result["tracking_data"]
+    title_changed = result["title_changed"]
+    pattern_changed = result["pattern_changed"]
+    files_affected_by_pattern = result["files_affected_by_pattern"]
+    files_reorganized = result["files_reorganized"]
+    directories_to_cleanup = result["directories_to_cleanup"]
+    library_base_dir = result["library_base_dir"]
+    old_title = result["old_title"]
+
+    # Clean up empty directories after successful commit
+    if title_changed and files_reorganized > 0:
         for directory in directories_to_cleanup:
             if directory.exists():
                 cleanup_empty_directories(directory, library_base_dir)
 
-        message = f"Successfully reorganized {files_reorganized} file(s)"
-        if files_failed > 0:
-            message += f" ({files_failed} failed)"
+        logger.info(
+            f"Title changed from '{old_title}' to '{tracking_data['title']}', reorganized {files_reorganized} files"
+        )
 
-        return {
-            "success": True,
-            "message": message,
-            "files_reorganized": files_reorganized,
-            "files_failed": files_failed,
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Reorganize tracking files error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    # Note: We don't trigger immediate auto-download here to avoid blocking the response.
+    # The scheduled auto-download task will pick up changes on its next run.
+    # This keeps the API response fast (<100ms instead of 5-6 seconds).
 
+    response = {
+        "success": True,
+        "message": "Tracking updated successfully",
+        "tracking": tracking_data,
+    }
 
-@router.put("/periodicals/tracking/{tracking_id}")
-async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
-    """Update magazine tracking record"""
-    try:
+    if title_changed:
+        response["files_reorganized"] = files_reorganized
+        response["message"] = (
+            f"Tracking updated successfully. Reorganized {files_reorganized} files."
+        )
 
-        def _update():
-            db_session = _shared._session_factory()
-            try:
-                tracking = db_session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
-                if not tracking:
-                    raise HTTPException(status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND)
+    # If pattern changed, include count for confirmation prompt
+    if pattern_changed:
+        response["pattern_changed"] = True
+        response["files_affected"] = files_affected_by_pattern
 
-                # Store old values for change detection
-                old_title = tracking.title
-                old_pattern = tracking.organization_pattern
-                title_changed = "title" in updates and updates["title"] != old_title
-                pattern_changed = "organization_pattern" in updates and updates["organization_pattern"] != old_pattern
-
-                if "title" in updates:
-                    tracking.title = updates["title"]
-                if "category" in updates:
-                    tracking.category = updates["category"]
-                if "language" in updates:
-                    tracking.language = updates["language"]
-                if "country" in updates:
-                    tracking.country = updates["country"]
-                if "download_category" in updates:
-                    tracking.download_category = updates["download_category"]
-                if "track_all_editions" in updates:
-                    tracking.track_all_editions = updates["track_all_editions"]
-                if "track_new_only" in updates:
-                    tracking.track_new_only = updates["track_new_only"]
-                if "delete_from_client_on_completion" in updates:
-                    tracking.delete_from_client_on_completion = updates["delete_from_client_on_completion"]
-                if "organization_pattern" in updates:
-                    tracking.organization_pattern = updates["organization_pattern"]
-
-                # If title changed, reorganize all files for this tracking record
-                files_reorganized = 0
-                directories_to_cleanup = set()
-                library_base_dir = None
-
-                if title_changed:
-                    from models.database import Periodical
-
-                    # Get library directory from config
-                    library_base_dir = Path(_shared._storage_config.get("library_dir", "./local/data")).resolve()
-                    category_prefix = _shared._import_config.get("category_prefix", "_")
-
-                    # Get all magazines linked to this tracking record
-                    magazines = db_session.query(Periodical).filter(Periodical.tracking_id == tracking_id).all()
-
-                    for magazine in magazines:
-                        # Check if this is a special edition
-                        is_special = False
-                        if magazine.extra_metadata and isinstance(magazine.extra_metadata, dict):
-                            is_special = magazine.extra_metadata.get("special_edition") is not None
-                        if not is_special:
-                            is_special = is_special_edition(magazine.title)
-
-                        # Only reorganize regular editions
-                        if not is_special:
-                            # Store old title directory for cleanup (parent of year directory)
-                            old_pdf_path = Path(magazine.file_path)
-                            if old_pdf_path.exists():
-                                # Add title directory (grandparent of PDF) not just year directory
-                                # Structure: title_dir/year/magazine.pdf
-                                title_dir = old_pdf_path.parent.parent
-                                directories_to_cleanup.add(title_dir)
-
-                            # Reorganize files to match new title structure
-                            new_pdf_path, new_cover_path = _reorganize_periodical_files(
-                                magazine,
-                                tracking.title,
-                                library_base_dir,
-                                category_prefix,
-                            )
-
-                            # Update database paths if reorganization succeeded
-                            if new_pdf_path:
-                                # Check if target path already exists in database (UNIQUE constraint check)
-                                existing_record = db_session.query(Periodical).filter_by(file_path=new_pdf_path).first()
-                                if existing_record and existing_record.id != magazine.id:
-                                    logger.error(
-                                        f"Cannot update magazine {magazine.id}: Target path {new_pdf_path} "
-                                        f"already exists in database for magazine {existing_record.id}. "
-                                        f"This is a data integrity issue that needs manual resolution."
-                                    )
-                                    # Roll back the file move since we can't update the database
-                                    try:
-                                        old_pdf_path = Path(magazine.file_path)
-                                        if Path(new_pdf_path).exists() and not old_pdf_path.exists():
-                                            shutil.move(new_pdf_path, str(old_pdf_path))
-                                            logger.info(f"Rolled back file move: {new_pdf_path} -> {old_pdf_path}")
-                                    except Exception as rollback_error:
-                                        logger.error(
-                                            f"Failed to rollback file move for magazine {magazine.id}: {rollback_error}"
-                                        )
-                                else:
-                                    magazine.file_path = new_pdf_path
-                                    if new_cover_path:
-                                        magazine.cover_path = new_cover_path
-                                    files_reorganized += 1
-                                    logger.info(
-                                        f"Reorganized files for: {magazine.title} ({magazine.issue_date.strftime('%b %Y')})"
-                                    )
-                            else:
-                                logger.warning(
-                                    f"Failed to reorganize files for magazine ID {magazine.id}, keeping original paths"
-                                )
-
-                            # Update magazine title to match tracking title
-                            magazine.title = tracking.title
-
-                db_session.commit()
-
-                # Count files affected by pattern change (for confirmation prompt)
-                files_affected_by_pattern = 0
-                if pattern_changed:
-                    from models.database import Periodical
-
-                    files_affected_by_pattern = (
-                        db_session.query(Periodical).filter(Periodical.tracking_id == tracking_id).count()
-                    )
-
-                # Extract tracking data before closing session
-                tracking_data = {
-                    "id": tracking.id,
-                    "title": tracking.title,
-                    "track_all_editions": tracking.track_all_editions,
-                    "track_new_only": tracking.track_new_only,
-                    "delete_from_client_on_completion": tracking.delete_from_client_on_completion,
-                }
-
-                return {
-                    "tracking_data": tracking_data,
-                    "old_title": old_title,
-                    "title_changed": title_changed,
-                    "pattern_changed": pattern_changed,
-                    "files_affected_by_pattern": files_affected_by_pattern,
-                    "files_reorganized": files_reorganized,
-                    "directories_to_cleanup": directories_to_cleanup,
-                    "library_base_dir": library_base_dir,
-                }
-            finally:
-                db_session.close()
-
-        result = await run_in_thread(_update)
-        tracking_data = result["tracking_data"]
-        title_changed = result["title_changed"]
-        pattern_changed = result["pattern_changed"]
-        files_affected_by_pattern = result["files_affected_by_pattern"]
-        files_reorganized = result["files_reorganized"]
-        directories_to_cleanup = result["directories_to_cleanup"]
-        library_base_dir = result["library_base_dir"]
-        old_title = result["old_title"]
-
-        # Clean up empty directories after successful commit
-        if title_changed and files_reorganized > 0:
-            for directory in directories_to_cleanup:
-                if directory.exists():
-                    cleanup_empty_directories(directory, library_base_dir)
-
-            logger.info(
-                f"Title changed from '{old_title}' to '{tracking_data['title']}', reorganized {files_reorganized} files"
-            )
-
-        # Note: We don't trigger immediate auto-download here to avoid blocking the response.
-        # The scheduled auto-download task will pick up changes on its next run.
-        # This keeps the API response fast (<100ms instead of 5-6 seconds).
-
-        response = {
-            "success": True,
-            "message": "Tracking updated successfully",
-            "tracking": tracking_data,
-        }
-
-        if title_changed:
-            response["files_reorganized"] = files_reorganized
-            response["message"] = f"Tracking updated successfully. Reorganized {files_reorganized} files."
-
-        # If pattern changed, include count for confirmation prompt
-        if pattern_changed:
-            response["pattern_changed"] = True
-            response["files_affected"] = files_affected_by_pattern
-
-        return response
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Update tracking error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    return response

@@ -169,3 +169,105 @@ export class APIClient {
     });
   }
 }
+
+/**
+ * API Helper class for common API operation patterns
+ * Provides utilities for executing API calls with standard error handling and UI updates
+ * @class
+ */
+export class APIHelper {
+  /**
+   * Execute an API call with automatic error handling and optional status display
+   *
+   * Handles:
+   * - Error logging with context
+   * - User-friendly error messages
+   * - Status element updates
+   * - Error re-throwing for caller handling
+   *
+   * @param {Function} apiCall - Async function that performs the API call and returns data
+   * @param {string} errorContext - Context for error messages (e.g., "Library", "Tracking")
+   * @param {string|null} [statusElementId=null] - Optional status element ID to update on error
+   * @returns {Promise<any>} The API response data
+   * @throws {Error} Re-throws any errors after logging
+   *
+   * @example
+   * // Basic usage with error logging only
+   * const data = await APIHelper.executeWithErrorHandling(
+   *   async () => {
+   *     const response = await APIClient.get('/api/periodicals');
+   *     return await response.json();
+   *   },
+   *   'Library'
+   * );
+   *
+   * @example
+   * // With status element updates
+   * const data = await APIHelper.executeWithErrorHandling(
+   *   async () => {
+   *     const response = await APIClient.post('/api/tracking', {...});
+   *     return await response.json();
+   *   },
+   *   'Tracking',
+   *   'tracking-status'
+   * );
+   */
+  static async executeWithErrorHandling(apiCall, errorContext, statusElementId = null) {
+    try {
+      return await apiCall();
+    } catch (error) {
+      console.error(`[${errorContext}] API operation failed:`, error);
+
+      if (statusElementId) {
+        // Import UIUtils dynamically to avoid circular dependencies
+        const message = error.toUserMessage ? error.toUserMessage() : error.message;
+        const statusElement = document.getElementById(statusElementId);
+        if (statusElement) {
+          statusElement.textContent = message;
+          statusElement.className = 'status-message error';
+          statusElement.style.display = 'block';
+        }
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Execute an API call with loading state management
+   *
+   * Automatically shows/hides loading indicator and handles errors
+   *
+   * @param {Function} apiCall - Async function that performs the API call
+   * @param {string} errorContext - Context for error messages
+   * @param {string} loadingElementId - ID of loading indicator element
+   * @param {string|null} [statusElementId=null] - Optional status element for error display
+   * @returns {Promise<any>} The API response data
+   *
+   * @example
+   * const data = await APIHelper.executeWithLoading(
+   *   async () => {
+   *     const response = await APIClient.get('/api/periodicals');
+   *     return await response.json();
+   *   },
+   *   'Library',
+   *   'loading-indicator',
+   *   'library-status'
+   * );
+   */
+  static async executeWithLoading(apiCall, errorContext, loadingElementId, statusElementId = null) {
+    const loadingElement = document.getElementById(loadingElementId);
+
+    try {
+      if (loadingElement) {
+        loadingElement.style.display = 'block';
+      }
+
+      return await this.executeWithErrorHandling(apiCall, errorContext, statusElementId);
+    } finally {
+      if (loadingElement) {
+        loadingElement.style.display = 'none';
+      }
+    }
+  }
+}
