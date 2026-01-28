@@ -22,6 +22,7 @@ import pytest
 from core.parsers.metadata import FilenameParser
 
 
+# pylint: disable=too-many-public-methods
 class TestEnhancedNZBParsing:
     """Test enhanced NZB filename parsing with comprehensive patterns."""
 

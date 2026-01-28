@@ -334,8 +334,6 @@ class TestTrackingMergeIntegration:
             # Mock the library_base_dir to use our temp directory
             import web.routers.tracking as tracking_module
 
-            tracking_module.merge_tracking
-
             async def patched_merge(target_id, source_ids):
                 # Temporarily patch the library_base_dir
                 db_session = session_factory()

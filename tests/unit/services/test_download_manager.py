@@ -9,6 +9,8 @@ Tests cover:
 - Normalization and variant extraction
 """
 
+# pylint: disable=too-many-lines
+
 import sys
 
 sys.path.insert(0, ".")

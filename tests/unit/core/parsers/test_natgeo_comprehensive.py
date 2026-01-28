@@ -402,7 +402,7 @@ class TestNationalGeographicComprehensive:
             # Check month name display contains expected string
             month_name = result.get("month_name", "")
             assert (
-                expected_display.split("/")[0].lower() in month_name.lower()
+                expected_display.split("/", maxsplit=1)[0].lower() in month_name.lower()
             ), f"Expected '{expected_display}' pattern in month_name, got: {month_name}"
 
     def test_nzb_style_filenames(self, parser):

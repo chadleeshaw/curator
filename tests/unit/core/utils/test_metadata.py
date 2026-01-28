@@ -184,9 +184,7 @@ class TestGetMetadataField:
     def test_handles_structured_derived_metadata(self):
         """Extracts value from structured derived_metadata format"""
         periodical = MagicMock()
-        periodical.derived_metadata = {
-            "category": {"value": "Structured Category", "source": "ocr"}
-        }
+        periodical.derived_metadata = {"category": {"value": "Structured Category", "source": "ocr"}}
         periodical.extra_metadata = None
 
         result = get_metadata_field(periodical, "category")

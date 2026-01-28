@@ -612,7 +612,6 @@ class TestTitleChangeFileReorganization:
             )
             session.add(magazine)
             session.commit()
-            magazine.id
 
             # Verify old files exist
             assert old_pdf.exists(), "Old PDF should exist"
@@ -622,7 +621,6 @@ class TestTitleChangeFileReorganization:
             from web.routers.tracking import _reorganize_periodical_files
 
             # Update the tracking title
-            tracking.title
             new_title = "New Magazine Name"
             tracking.title = new_title
 

@@ -1024,9 +1024,6 @@ class DownloadManager:
             client_status_value = client_status.get("status")
             new_status = status_map.get(client_status_value, DownloadSubmission.StatusEnum.PENDING)
 
-            # Track previous status to detect transitions
-            submission.status
-
             # Update submission
             submission.status = new_status
             submission.updated_at = utc_now()

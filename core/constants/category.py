@@ -58,7 +58,7 @@ NEWSNAB_CATEGORY_MAP = {
     "7010": CATEGORY_MAGAZINE,  # Books/Mags (Magazines)
     "7020": CATEGORY_BOOK,  # Books/EBook
     "7030": CATEGORY_COMIC,  # Books/Comics
-    "6000": None,  # XXX (parent) - requires pattern-based categorization (magazines, comics, or books)
+    "6000": None,  # NOTE (parent) - requires pattern-based categorization (magazines, comics, or books)
     "8000": None,  # Other (parent) - requires pattern-based categorization (can be any type)
     "8010": None,  # Other/Misc - requires pattern-based categorization (can be any type)
 }

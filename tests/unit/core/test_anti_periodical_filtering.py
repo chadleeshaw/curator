@@ -14,6 +14,7 @@ import pytest
 from core.parsers.metadata import FilenameParser
 
 
+# pylint: disable=too-many-public-methods
 class TestAntiPeriodicalFiltering:
     """Test that non-periodical content is correctly rejected."""
 

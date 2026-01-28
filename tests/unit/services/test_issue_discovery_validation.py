@@ -14,6 +14,7 @@ import pytest
 from services.issue_discovery import IssueDiscoveryService
 
 
+# pylint: disable=too-many-public-methods
 class TestPeriodicalValidation:
     """Test validation of periodical vs non-periodical content."""
 
