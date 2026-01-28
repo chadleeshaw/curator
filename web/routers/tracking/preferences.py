@@ -40,11 +40,7 @@ async def save_tracking_preferences(
         db_session = _shared._session_factory()
         try:
             olid = request.olid or generate_olid(request.title)
-            existing = (
-                db_session.query(PeriodicalTracking)
-                .filter(PeriodicalTracking.olid == olid)
-                .first()
-            )
+            existing = db_session.query(PeriodicalTracking).filter(PeriodicalTracking.olid == olid).first()
 
             if existing:
                 existing.title = request.title
@@ -84,9 +80,7 @@ async def save_tracking_preferences(
                 "track_all_editions": tracking.track_all_editions,
                 "track_new_only": tracking.track_new_only,
                 "selected_editions": tracking.selected_editions,
-                "selected_count": len(
-                    [v for v in tracking.selected_editions.values() if v]
-                ),
+                "selected_count": len([v for v in tracking.selected_editions.values() if v]),
             }
         finally:
             db_session.close()
@@ -119,33 +113,21 @@ async def reorganize_tracking_files(tracking_id: int) -> Dict[str, Any]:
     def _reorganize():
         db_session = _shared._session_factory()
         try:
-            tracking = (
-                db_session.query(PeriodicalTracking)
-                .filter(PeriodicalTracking.id == tracking_id)
-                .first()
-            )
+            tracking = db_session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
             if not tracking:
-                raise HTTPException(
-                    status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND
-                )
+                raise HTTPException(status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND)
 
             from models.database import Periodical
 
             # Get library directory from config
-            library_base_dir = Path(
-                _shared._storage_config.get("library_dir", "./local/data")
-            ).resolve()
+            library_base_dir = Path(_shared._storage_config.get("library_dir", "./local/data")).resolve()
             category_prefix = _shared._import_config.get("category_prefix", "_")
 
             # Get organization pattern (per-periodical or global default)
             organization_pattern = tracking.organization_pattern
 
             # Get all magazines linked to this tracking record
-            magazines = (
-                db_session.query(Periodical)
-                .filter(Periodical.tracking_id == tracking_id)
-                .all()
-            )
+            magazines = db_session.query(Periodical).filter(Periodical.tracking_id == tracking_id).all()
 
             files_reorganized = 0
             files_failed = 0
@@ -154,19 +136,13 @@ async def reorganize_tracking_files(tracking_id: int) -> Dict[str, Any]:
             # Use FileOrganizer to reorganize files with the pattern
             from services.file_organizer import FileOrganizer
 
-            organizer = FileOrganizer(
-                str(library_base_dir), category_prefix=category_prefix
-            )
+            organizer = FileOrganizer(str(library_base_dir), category_prefix=category_prefix)
 
             for magazine in magazines:
                 # Check if this is a special edition
                 is_special = False
-                if magazine.extra_metadata and isinstance(
-                    magazine.extra_metadata, dict
-                ):
-                    is_special = (
-                        magazine.extra_metadata.get("special_edition") is not None
-                    )
+                if magazine.extra_metadata and isinstance(magazine.extra_metadata, dict):
+                    is_special = magazine.extra_metadata.get("special_edition") is not None
                 if not is_special:
                     is_special = is_special_edition(magazine.title)
 
@@ -185,31 +161,21 @@ async def reorganize_tracking_files(tracking_id: int) -> Dict[str, Any]:
                             "issue_date": magazine.issue_date,
                             "year": magazine.issue_date.year,
                             "month_name": magazine.issue_date.strftime("%B"),
-                            "language": (
-                                magazine.extra_metadata.get("language")
-                                if magazine.extra_metadata
-                                else None
-                            ),
+                            "language": (magazine.extra_metadata.get("language") if magazine.extra_metadata else None),
                         }
 
                         # Get category from metadata
                         category = (
-                            magazine.extra_metadata.get("category")
-                            if magazine.extra_metadata
-                            else DEFAULT_CATEGORY
+                            magazine.extra_metadata.get("category") if magazine.extra_metadata else DEFAULT_CATEGORY
                         )
 
                         # Reorganize using FileOrganizer with custom pattern
-                        new_pdf_path = organizer.organize(
-                            old_pdf_path, metadata, category, organization_pattern
-                        )
+                        new_pdf_path = organizer.organize(old_pdf_path, metadata, category, organization_pattern)
 
                         if new_pdf_path:
                             # Check for UNIQUE constraint conflicts
                             existing_record = (
-                                db_session.query(Periodical)
-                                .filter_by(file_path=str(new_pdf_path))
-                                .first()
+                                db_session.query(Periodical).filter_by(file_path=str(new_pdf_path)).first()
                             )
                             if existing_record and existing_record.id != magazine.id:
                                 logger.error(
@@ -219,28 +185,17 @@ async def reorganize_tracking_files(tracking_id: int) -> Dict[str, Any]:
                                 files_failed += 1
                                 # Roll back the file move
                                 try:
-                                    if (
-                                        new_pdf_path.exists()
-                                        and not old_pdf_path.exists()
-                                    ):
-                                        shutil.move(
-                                            str(new_pdf_path), str(old_pdf_path)
-                                        )
+                                    if new_pdf_path.exists() and not old_pdf_path.exists():
+                                        shutil.move(str(new_pdf_path), str(old_pdf_path))
                                 except Exception as rollback_error:
-                                    logger.error(
-                                        f"Failed to rollback file move: {rollback_error}"
-                                    )
+                                    logger.error(f"Failed to rollback file move: {rollback_error}")
                             else:
                                 magazine.file_path = str(new_pdf_path)
                                 # Cover path is handled by organizer
                                 files_reorganized += 1
-                                logger.info(
-                                    f"Reorganized: {magazine.title} ({magazine.issue_date.strftime('%b %Y')})"
-                                )
+                                logger.info(f"Reorganized: {magazine.title} ({magazine.issue_date.strftime('%b %Y')})")
                         else:
-                            logger.warning(
-                                f"Failed to reorganize magazine ID {magazine.id}"
-                            )
+                            logger.warning(f"Failed to reorganize magazine ID {magazine.id}")
                             files_failed += 1
                     except Exception as e:
                         logger.error(
@@ -291,24 +246,15 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
     def _update():
         db_session = _shared._session_factory()
         try:
-            tracking = (
-                db_session.query(PeriodicalTracking)
-                .filter(PeriodicalTracking.id == tracking_id)
-                .first()
-            )
+            tracking = db_session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
             if not tracking:
-                raise HTTPException(
-                    status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND
-                )
+                raise HTTPException(status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND)
 
             # Store old values for change detection
             old_title = tracking.title
             old_pattern = tracking.organization_pattern
             title_changed = "title" in updates and updates["title"] != old_title
-            pattern_changed = (
-                "organization_pattern" in updates
-                and updates["organization_pattern"] != old_pattern
-            )
+            pattern_changed = "organization_pattern" in updates and updates["organization_pattern"] != old_pattern
 
             if "title" in updates:
                 tracking.title = updates["title"]
@@ -325,9 +271,7 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
             if "track_new_only" in updates:
                 tracking.track_new_only = updates["track_new_only"]
             if "delete_from_client_on_completion" in updates:
-                tracking.delete_from_client_on_completion = updates[
-                    "delete_from_client_on_completion"
-                ]
+                tracking.delete_from_client_on_completion = updates["delete_from_client_on_completion"]
             if "organization_pattern" in updates:
                 tracking.organization_pattern = updates["organization_pattern"]
 
@@ -340,27 +284,17 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
                 from models.database import Periodical
 
                 # Get library directory from config
-                library_base_dir = Path(
-                    _shared._storage_config.get("library_dir", "./local/data")
-                ).resolve()
+                library_base_dir = Path(_shared._storage_config.get("library_dir", "./local/data")).resolve()
                 category_prefix = _shared._import_config.get("category_prefix", "_")
 
                 # Get all magazines linked to this tracking record
-                magazines = (
-                    db_session.query(Periodical)
-                    .filter(Periodical.tracking_id == tracking_id)
-                    .all()
-                )
+                magazines = db_session.query(Periodical).filter(Periodical.tracking_id == tracking_id).all()
 
                 for magazine in magazines:
                     # Check if this is a special edition
                     is_special = False
-                    if magazine.extra_metadata and isinstance(
-                        magazine.extra_metadata, dict
-                    ):
-                        is_special = (
-                            magazine.extra_metadata.get("special_edition") is not None
-                        )
+                    if magazine.extra_metadata and isinstance(magazine.extra_metadata, dict):
+                        is_special = magazine.extra_metadata.get("special_edition") is not None
                     if not is_special:
                         is_special = is_special_edition(magazine.title)
 
@@ -385,11 +319,7 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
                         # Update database paths if reorganization succeeded
                         if new_pdf_path:
                             # Check if target path already exists in database (UNIQUE constraint check)
-                            existing_record = (
-                                db_session.query(Periodical)
-                                .filter_by(file_path=new_pdf_path)
-                                .first()
-                            )
+                            existing_record = db_session.query(Periodical).filter_by(file_path=new_pdf_path).first()
                             if existing_record and existing_record.id != magazine.id:
                                 logger.error(
                                     f"Cannot update magazine {magazine.id}: Target path {new_pdf_path} "
@@ -399,14 +329,9 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
                                 # Roll back the file move since we can't update the database
                                 try:
                                     old_pdf_path = Path(magazine.file_path)
-                                    if (
-                                        Path(new_pdf_path).exists()
-                                        and not old_pdf_path.exists()
-                                    ):
+                                    if Path(new_pdf_path).exists() and not old_pdf_path.exists():
                                         shutil.move(new_pdf_path, str(old_pdf_path))
-                                        logger.info(
-                                            f"Rolled back file move: {new_pdf_path} -> {old_pdf_path}"
-                                        )
+                                        logger.info(f"Rolled back file move: {new_pdf_path} -> {old_pdf_path}")
                                 except Exception as rollback_error:
                                     logger.error(
                                         f"Failed to rollback file move for magazine {magazine.id}: {rollback_error}"
@@ -435,9 +360,7 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
                 from models.database import Periodical
 
                 files_affected_by_pattern = (
-                    db_session.query(Periodical)
-                    .filter(Periodical.tracking_id == tracking_id)
-                    .count()
+                    db_session.query(Periodical).filter(Periodical.tracking_id == tracking_id).count()
                 )
 
             # Extract tracking data before closing session
@@ -494,9 +417,7 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
 
     if title_changed:
         response["files_reorganized"] = files_reorganized
-        response["message"] = (
-            f"Tracking updated successfully. Reorganized {files_reorganized} files."
-        )
+        response["message"] = f"Tracking updated successfully. Reorganized {files_reorganized} files."
 
     # If pattern changed, include count for confirmation prompt
     if pattern_changed:

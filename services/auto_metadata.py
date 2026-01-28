@@ -163,9 +163,7 @@ class AutoMetadataService:
             # Find the library folder marker (e.g., "_Magazines", "_Comics", etc.)
             parts = stored_path.parts
             # Build category markers from constants (e.g., "_Magazines", "_Comics")
-            category_markers = [
-                f"{self.category_prefix}{category}" for category in CATEGORIES
-            ]
+            category_markers = [f"{self.category_prefix}{category}" for category in CATEGORIES]
 
             for i, part in enumerate(parts):
                 if part in category_markers:
@@ -175,9 +173,7 @@ class AutoMetadataService:
 
                     if resolved.exists():
                         periodical.file_path = str(resolved)
-                        logger.info(
-                            f"Fixed file path for periodical {periodical.id}: {stored_path} -> {resolved}"
-                        )
+                        logger.info(f"Fixed file path for periodical {periodical.id}: {stored_path} -> {resolved}")
                         return True
                     break
 
@@ -192,15 +188,11 @@ class AutoMetadataService:
                     return True
 
         except Exception as e:
-            logger.warning(
-                f"Failed to fix file path for periodical {periodical.id}: {e}"
-            )
+            logger.warning(f"Failed to fix file path for periodical {periodical.id}: {e}")
 
         return False
 
-    def _backfill_derived_metadata(
-        self, periodical: Periodical, session: Session
-    ) -> bool:
+    def _backfill_derived_metadata(self, periodical: Periodical, session: Session) -> bool:
         """
         Backfill derived_metadata from existing data.
 
@@ -237,22 +229,14 @@ class AutoMetadataService:
 
                     mark_json_modified(periodical, "parsed_metadata")
 
-                    logger.debug(
-                        f"Regenerated file_scan for periodical {periodical.id}"
-                    )
+                    logger.debug(f"Regenerated file_scan for periodical {periodical.id}")
             except Exception as e:
-                logger.warning(
-                    f"Failed to regenerate file_scan for {periodical.id}: {e}"
-                )
+                logger.warning(f"Failed to regenerate file_scan for {periodical.id}: {e}")
 
         # Build derived_metadata from parsed_metadata
         # Always rebuild to incorporate any updated scan data
         parsed_metadata = periodical.parsed_metadata or {}
-        if (
-            parsed_metadata.get("file_scan")
-            or parsed_metadata.get("text_scan")
-            or parsed_metadata.get("ocr_scan")
-        ):
+        if parsed_metadata.get("file_scan") or parsed_metadata.get("text_scan") or parsed_metadata.get("ocr_scan"):
             periodical.derived_metadata = build_derived_metadata(
                 file_scan=parsed_metadata.get("file_scan"),
                 text_scan=parsed_metadata.get("text_scan"),
@@ -281,15 +265,9 @@ class AutoMetadataService:
         new_issue_date = sync_issue_date_from_derived(periodical.derived_metadata)
 
         if new_issue_date and new_issue_date != periodical.issue_date:
-            old_date = (
-                periodical.issue_date.strftime("%Y-%m")
-                if periodical.issue_date
-                else "None"
-            )
+            old_date = periodical.issue_date.strftime("%Y-%m") if periodical.issue_date else "None"
             periodical.issue_date = new_issue_date
-            logger.debug(
-                f"Synced issue_date for {periodical.id}: {old_date} -> {new_issue_date.strftime('%Y-%m')}"
-            )
+            logger.debug(f"Synced issue_date for {periodical.id}: {old_date} -> {new_issue_date.strftime('%Y-%m')}")
             return True
 
         return False
@@ -410,9 +388,7 @@ class AutoMetadataService:
                 )
 
                 # Sync issue_date
-                new_issue_date = sync_issue_date_from_derived(
-                    periodical.derived_metadata
-                )
+                new_issue_date = sync_issue_date_from_derived(periodical.derived_metadata)
                 if new_issue_date:
                     periodical.issue_date = new_issue_date
 
@@ -466,9 +442,7 @@ class AutoMetadataService:
             if field in extra:
                 del extra[field]
                 cleaned = True
-                logger.debug(
-                    f"Removed duplicate field '{field}' from extra_metadata for periodical {periodical.id}"
-                )
+                logger.debug(f"Removed duplicate field '{field}' from extra_metadata for periodical {periodical.id}")
 
         # Move scan results from extra_metadata to parsed_metadata
         # Old imports may have stored text_scan/ocr_metadata in extra_metadata
@@ -476,18 +450,14 @@ class AutoMetadataService:
             parsed["text_scan"] = extra["text_scan"]
             del extra["text_scan"]
             cleaned = True
-            logger.debug(
-                f"Moved text_scan from extra_metadata to parsed_metadata for periodical {periodical.id}"
-            )
+            logger.debug(f"Moved text_scan from extra_metadata to parsed_metadata for periodical {periodical.id}")
 
         if "ocr_metadata" in extra:
             # Rename ocr_metadata to ocr_scan for consistency
             parsed["ocr_scan"] = extra["ocr_metadata"]
             del extra["ocr_metadata"]
             cleaned = True
-            logger.debug(
-                f"Moved ocr_metadata to parsed_metadata as ocr_scan for periodical {periodical.id}"
-            )
+            logger.debug(f"Moved ocr_metadata to parsed_metadata as ocr_scan for periodical {periodical.id}")
 
         # Save changes if any cleanup was done
         if cleaned:

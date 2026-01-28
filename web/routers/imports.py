@@ -138,9 +138,7 @@ async def import_from_library_dir(
         db_session = None
         original_pattern = None
         try:
-            logger.info(
-                f"Import settings: auto_track={options.auto_track}, " f"tracking_mode={options.tracking_mode}"
-            )
+            logger.info(f"Import settings: auto_track={options.auto_track}, " f"tracking_mode={options.tracking_mode}")
             db_session = _session_factory()
 
             # Temporarily override organization pattern if provided

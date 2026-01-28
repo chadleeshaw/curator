@@ -69,9 +69,7 @@ async def toggle_special_edition(magazine_id: int, is_special: bool) -> Dict[str
 
 @router.put("/periodicals/{magazine_id}")
 @handle_api_errors("Update periodical", logger)
-async def update_periodical(
-    magazine_id: int, updates: Dict[str, Any]
-) -> Dict[str, Any]:
+async def update_periodical(magazine_id: int, updates: Dict[str, Any]) -> Dict[str, Any]:
     """Update periodical metadata"""
 
     def operation(db):
@@ -109,9 +107,7 @@ async def update_periodical(
             if not year_provided:
                 magazine.extra_metadata["year"] = magazine.issue_date.year
             if not month_provided or not updates.get("month"):
-                magazine.extra_metadata["month"] = NUMBER_TO_MONTH.get(
-                    magazine.issue_date.month, ""
-                )
+                magazine.extra_metadata["month"] = NUMBER_TO_MONTH.get(magazine.issue_date.month, "")
 
         # Reconstruct issue_date when year is provided
         # This keeps the database field in sync for sorting/filtering
@@ -160,9 +156,7 @@ async def update_periodical(
                 "id": magazine.id,
                 "title": magazine.title,
                 "language": magazine.language,
-                "issue_date": (
-                    magazine.issue_date.isoformat() if magazine.issue_date else None
-                ),
+                "issue_date": (magazine.issue_date.isoformat() if magazine.issue_date else None),
                 "metadata": magazine.extra_metadata,
             },
         }

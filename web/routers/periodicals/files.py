@@ -101,9 +101,7 @@ async def get_epub_metadata_endpoint(periodical_id: int) -> Dict[str, Any]:
 
 @router.get("/periodicals/{periodical_id}/epub/chapter/{chapter_index}")
 @handle_api_errors("Get EPUB chapter", logger)
-async def get_epub_chapter_endpoint(
-    periodical_id: int, chapter_index: int
-) -> HTMLResponse:
+async def get_epub_chapter_endpoint(periodical_id: int, chapter_index: int) -> HTMLResponse:
     """
     Get specific EPUB chapter content as HTML.
 
@@ -127,9 +125,7 @@ async def get_epub_chapter_endpoint(
     file_path = await with_db_session(_shared._session_factory, operation)
 
     # Get chapter content with periodical_id for image URL rewriting
-    chapter_html = await run_in_thread(
-        lambda: get_epub_chapter(file_path, chapter_index, periodical_id)
-    )
+    chapter_html = await run_in_thread(lambda: get_epub_chapter(file_path, chapter_index, periodical_id))
 
     if chapter_html is None:
         raise HTTPException(status_code=404, detail="Chapter not found")
@@ -295,14 +291,10 @@ async def get_comic_page_thumbnail_endpoint(periodical_id: int, page_index: int)
     file_path = await with_db_session(_shared._session_factory, operation)
 
     # Get thumbnail
-    thumbnail_data = await run_in_thread(
-        lambda: get_comic_page_thumbnail(file_path, page_index)
-    )
+    thumbnail_data = await run_in_thread(lambda: get_comic_page_thumbnail(file_path, page_index))
 
     if thumbnail_data is None:
-        raise HTTPException(
-            status_code=404, detail="Page not found or thumbnail creation failed"
-        )
+        raise HTTPException(status_code=404, detail="Page not found or thumbnail creation failed")
 
     response = Response(content=thumbnail_data, media_type="image/jpeg")
     # Add cache headers for thumbnails (cache for 7 days)
@@ -375,9 +367,7 @@ async def get_pdf_page_endpoint(periodical_id: int, page_index: int):
     page_data = await run_in_thread(lambda: get_pdf_page(file_path, page_index))
 
     if page_data is None:
-        raise HTTPException(
-            status_code=404, detail="Page not found or extraction failed"
-        )
+        raise HTTPException(status_code=404, detail="Page not found or extraction failed")
 
     response = Response(content=page_data, media_type="image/jpeg")
     # Add cache headers for full-size pages (cache for 7 days)
@@ -411,14 +401,10 @@ async def get_pdf_page_thumbnail_endpoint(periodical_id: int, page_index: int):
     file_path = await with_db_session(_shared._session_factory, operation)
 
     # Get thumbnail
-    thumbnail_data = await run_in_thread(
-        lambda: get_pdf_page_thumbnail(file_path, page_index)
-    )
+    thumbnail_data = await run_in_thread(lambda: get_pdf_page_thumbnail(file_path, page_index))
 
     if thumbnail_data is None:
-        raise HTTPException(
-            status_code=404, detail="Page not found or thumbnail creation failed"
-        )
+        raise HTTPException(status_code=404, detail="Page not found or thumbnail creation failed")
 
     response = Response(content=thumbnail_data, media_type="image/jpeg")
     # Add cache headers for thumbnails (cache for 7 days)
@@ -428,9 +414,7 @@ async def get_pdf_page_thumbnail_endpoint(periodical_id: int, page_index: int):
 
 @router.post("/periodicals/{periodical_id}/move-to-tracking")
 @handle_api_errors("Move issue to tracking", logger)
-async def move_issue_to_tracking(
-    periodical_id: int, target_tracking_id: int
-) -> Dict[str, Any]:
+async def move_issue_to_tracking(periodical_id: int, target_tracking_id: int) -> Dict[str, Any]:
     """
     Move a single issue to a different tracking record.
     Useful for correcting misplaced issues.
@@ -447,15 +431,9 @@ async def move_issue_to_tracking(
         magazine = _shared.get_periodical_or_404(db, periodical_id)
 
         # Get the target tracking record
-        target_tracking = (
-            db.query(PeriodicalTracking)
-            .filter(PeriodicalTracking.id == target_tracking_id)
-            .first()
-        )
+        target_tracking = db.query(PeriodicalTracking).filter(PeriodicalTracking.id == target_tracking_id).first()
         if not target_tracking:
-            raise HTTPException(
-                status_code=404, detail="Target tracking record not found"
-            )
+            raise HTTPException(status_code=404, detail="Target tracking record not found")
 
         old_title = magazine.title
         old_tracking_id = magazine.tracking_id
@@ -503,16 +481,12 @@ async def move_issue_to_tracking(
                 target_dir.mkdir(parents=True, exist_ok=True)
 
                 new_pdf_path = target_dir / f"{filename_base}.pdf"
-                new_cover_path = (
-                    target_dir / f"{filename_base}.jpg" if old_cover_path else None
-                )
+                new_cover_path = target_dir / f"{filename_base}.jpg" if old_cover_path else None
 
                 # Handle filename conflicts by appending timestamp
                 if new_pdf_path.exists() and new_pdf_path != old_pdf_path:
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    filename_base_with_ts = (
-                        f"{safe_title} - {month}{year} ({timestamp})"
-                    )
+                    filename_base_with_ts = f"{safe_title} - {month}{year} ({timestamp})"
                     new_pdf_path = target_dir / f"{filename_base_with_ts}.pdf"
                     if old_cover_path:
                         new_cover_path = target_dir / f"{filename_base_with_ts}.jpg"
@@ -532,12 +506,7 @@ async def move_issue_to_tracking(
                     logger.warning(f"PDF file not found: {old_pdf_path}")
 
                 # Move cover file if it exists
-                if (
-                    old_cover_path
-                    and old_cover_path.exists()
-                    and new_cover_path
-                    and new_cover_path != old_cover_path
-                ):
+                if old_cover_path and old_cover_path.exists() and new_cover_path and new_cover_path != old_cover_path:
                     shutil.move(str(old_cover_path), str(new_cover_path))
                     logger.info(f"Moved cover: {old_cover_path} -> {new_cover_path}")
                     magazine.cover_path = str(new_cover_path)

@@ -49,9 +49,7 @@ async def list_discovered_issues(
     status: Optional[str] = Query(None, description="Filter by download status"),
     limit: int = Query(50, ge=1, le=500, description="Maximum results to return"),
     offset: int = Query(0, ge=0, description="Number of results to skip"),
-    sort: str = Query(
-        "priority", description="Sort field: priority, first_seen, last_seen"
-    ),
+    sort: str = Query("priority", description="Sort field: priority, first_seen, last_seen"),
 ) -> Dict[str, Any]:
     """
     List discovered issues with optional filters.
@@ -125,11 +123,7 @@ async def list_discovered_issues(
 
         # Get tracking titles for all issues
         tracking_ids = {issue.tracking_id for issue in issues}
-        trackings = (
-            db.query(PeriodicalTracking)
-            .filter(PeriodicalTracking.id.in_(tracking_ids))
-            .all()
-        )
+        trackings = db.query(PeriodicalTracking).filter(PeriodicalTracking.id.in_(tracking_ids)).all()
         tracking_map = {t.id: t.title for t in trackings}
 
         # Build response
@@ -170,22 +164,14 @@ async def get_discovered_issue(issue_id: int) -> Dict[str, Any]:
             raise HTTPException(status_code=404, detail="Issue not found")
 
         # Get tracking info
-        tracking = (
-            db.query(PeriodicalTracking)
-            .filter(PeriodicalTracking.id == issue.tracking_id)
-            .first()
-        )
+        tracking = db.query(PeriodicalTracking).filter(PeriodicalTracking.id == issue.tracking_id).first()
 
         # Get submission history if available
         submission_history = []
         if issue.submission_ids:
             from models.database import DownloadSubmission
 
-            submissions = (
-                db.query(DownloadSubmission)
-                .filter(DownloadSubmission.id.in_(issue.submission_ids))
-                .all()
-            )
+            submissions = db.query(DownloadSubmission).filter(DownloadSubmission.id.in_(issue.submission_ids)).all()
             submission_history = [
                 {
                     "id": s.id,
@@ -226,9 +212,7 @@ async def retry_discovered_issue(
         raise HTTPException(status_code=500, detail="Service not initialized")
 
     def operation(db):
-        success = _issue_discovery_service.retry_permanently_failed(
-            issue_id, db, reset_attempts
-        )
+        success = _issue_discovery_service.retry_permanently_failed(issue_id, db, reset_attempts)
 
         if not success:
             raise HTTPException(
@@ -272,11 +256,7 @@ async def get_discovery_statistics() -> Dict[str, Any]:
             "permanently_failed",
             "ignored",
         ]:
-            count = (
-                db.query(DiscoveredIssue)
-                .filter(DiscoveredIssue.download_status == status)
-                .count()
-            )
+            count = db.query(DiscoveredIssue).filter(DiscoveredIssue.download_status == status).count()
             status_counts[status] = count
 
         # Get priority distribution
@@ -362,11 +342,7 @@ async def get_statistics_by_tracking() -> Dict[str, List[Dict[str, Any]]]:
         result = []
         for tracking in trackings:
             # Count issues by status for this tracking
-            total = (
-                db.query(DiscoveredIssue)
-                .filter(DiscoveredIssue.tracking_id == tracking.id)
-                .count()
-            )
+            total = db.query(DiscoveredIssue).filter(DiscoveredIssue.tracking_id == tracking.id).count()
 
             wanted = (
                 db.query(DiscoveredIssue)
@@ -410,11 +386,7 @@ async def get_statistics_by_tracking() -> Dict[str, List[Dict[str, Any]]]:
                     "wanted": wanted,
                     "completed": completed,
                     "permanently_faileds": permanently_faileds,
-                    "last_searched": (
-                        tracking.last_searched.isoformat()
-                        if tracking.last_searched
-                        else None
-                    ),
+                    "last_searched": (tracking.last_searched.isoformat() if tracking.last_searched else None),
                     "search_interval_hours": tracking.search_interval_hours,
                     "searches_without_new_issues": tracking.searches_without_new_issues,
                     "total_issues_discovered": tracking.total_issues_discovered,

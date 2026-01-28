@@ -52,27 +52,19 @@ async def download_all_periodical_issues(
 ) -> Dict[str, Any]:
     """Search for and download all available issues of a tracked periodical"""
     if not _shared._download_manager:
-        raise HTTPException(
-            status_code=503, detail=ErrorMessages.DOWNLOAD_MANAGER_UNAVAILABLE
-        )
+        raise HTTPException(status_code=503, detail=ErrorMessages.DOWNLOAD_MANAGER_UNAVAILABLE)
 
     def _download():
         db_session = _shared._session_factory()
         try:
-            tracking = (
-                db_session.query(PeriodicalTracking)
-                .filter(PeriodicalTracking.id == request.tracking_id)
-                .first()
-            )
+            tracking = db_session.query(PeriodicalTracking).filter(PeriodicalTracking.id == request.tracking_id).first()
             if not tracking:
                 raise HTTPException(
                     status_code=404,
                     detail=f"Tracking record not found: {request.tracking_id}",
                 )
 
-            results = _shared._download_manager.download_all_periodical_issues(
-                request.tracking_id, db_session
-            )
+            results = _shared._download_manager.download_all_periodical_issues(request.tracking_id, db_session)
             return {
                 "success": True,
                 "tracking_id": request.tracking_id,
@@ -95,18 +87,12 @@ async def download_single_issue(
 ) -> DownloadSubmissionResponse:
     """Download a single issue"""
     if not _shared._download_manager:
-        raise HTTPException(
-            status_code=503, detail=ErrorMessages.DOWNLOAD_MANAGER_UNAVAILABLE
-        )
+        raise HTTPException(status_code=503, detail=ErrorMessages.DOWNLOAD_MANAGER_UNAVAILABLE)
 
     def _download():
         db_session = _shared._session_factory()
         try:
-            tracking = (
-                db_session.query(PeriodicalTracking)
-                .filter(PeriodicalTracking.id == request.tracking_id)
-                .first()
-            )
+            tracking = db_session.query(PeriodicalTracking).filter(PeriodicalTracking.id == request.tracking_id).first()
             if not tracking:
                 raise HTTPException(
                     status_code=404,
@@ -118,16 +104,12 @@ async def download_single_issue(
                 "url": request.url,
                 "provider": request.provider or "manual",
                 "publication_date": (
-                    datetime.fromisoformat(request.publication_date)
-                    if request.publication_date
-                    else None
+                    datetime.fromisoformat(request.publication_date) if request.publication_date else None
                 ),
                 "raw_metadata": {},
             }
 
-            submission = _shared._download_manager.download_single_issue(
-                request.tracking_id, search_result, db_session
-            )
+            submission = _shared._download_manager.download_single_issue(request.tracking_id, search_result, db_session)
             if not submission:
                 # Check if there's a failed submission with error details
                 failed_submission = (
@@ -135,8 +117,7 @@ async def download_single_issue(
                     .filter(
                         DownloadSubmission.tracking_id == request.tracking_id,
                         DownloadSubmission.result_title == request.title,
-                        DownloadSubmission.status
-                        == DownloadSubmission.StatusEnum.FAILED,
+                        DownloadSubmission.status == DownloadSubmission.StatusEnum.FAILED,
                     )
                     .order_by(DownloadSubmission.created_at.desc())
                     .first()
@@ -154,8 +135,7 @@ async def download_single_issue(
                     .filter(
                         DownloadSubmission.tracking_id == request.tracking_id,
                         DownloadSubmission.result_title == request.title,
-                        DownloadSubmission.status
-                        == DownloadSubmission.StatusEnum.SKIPPED,
+                        DownloadSubmission.status == DownloadSubmission.StatusEnum.SKIPPED,
                     )
                     .order_by(DownloadSubmission.created_at.desc())
                     .first()

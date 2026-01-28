@@ -40,12 +40,7 @@ def set_dependencies(
     provider_cache_service: Any = None,
 ) -> None:
     """Set dependencies from main app"""
-    global \
-        _search_providers, \
-        _metadata_providers, \
-        _title_matcher, \
-        _session_factory, \
-        _provider_cache_service
+    global _search_providers, _metadata_providers, _title_matcher, _session_factory, _provider_cache_service
     _search_providers = search_providers
     _metadata_providers = metadata_providers
     _title_matcher = title_matcher
@@ -77,9 +72,7 @@ def _get_fuzzy_group_id(title: str) -> str:
     return "-".join(group_words)
 
 
-def _filter_edition_variants(
-    results: List[Dict[str, Any]], query: str
-) -> List[Dict[str, Any]]:
+def _filter_edition_variants(results: List[Dict[str, Any]], query: str) -> List[Dict[str, Any]]:
     """
     Filter out edition variants that don't match the query.
 
@@ -109,9 +102,7 @@ def _filter_edition_variants(
 
     # Extract edition variant from query
     query_variant = _title_matcher._extract_edition_variant(query)
-    logger.debug(
-        f"Filtering edition variants: Query '{query}' has variant: {query_variant}"
-    )
+    logger.debug(f"Filtering edition variants: Query '{query}' has variant: {query_variant}")
     logger.debug(f"Examining {len(results)} results...")
 
     for result in results:
@@ -130,14 +121,10 @@ def _filter_edition_variants(
 
         # Compare variants (None == None is OK, any mismatch is filtered)
         if (query_variant is None and result_variant is None) or (
-            query_variant is not None
-            and result_variant is not None
-            and query_variant == result_variant
+            query_variant is not None and result_variant is not None and query_variant == result_variant
         ):
             filtered.append(result)
-            logger.debug(
-                f"  ✓ KEEP: '{raw_title}' → '{normalized_title}' (variant: {result_variant})"
-            )
+            logger.debug(f"  ✓ KEEP: '{raw_title}' → '{normalized_title}' (variant: {result_variant})")
         else:
             logger.debug(
                 f"  ✗ FILTERED: '{raw_title}' → '{normalized_title}' (variant: {result_variant}) "
@@ -247,8 +234,7 @@ def _filter_by_language_and_country(
             if detected_language in LANGUAGE_TO_COUNTRY:
                 detected_country = LANGUAGE_TO_COUNTRY[detected_language]
                 logger.debug(
-                    f"Inferred country {detected_country} from language {detected_language}: "
-                    f"{result['title'][:50]}"
+                    f"Inferred country {detected_country} from language {detected_language}: " f"{result['title'][:50]}"
                 )
 
         # If we detected a country but no language, infer language from country
@@ -256,8 +242,7 @@ def _filter_by_language_and_country(
             if detected_country in country_to_language:
                 detected_language = country_to_language[detected_country]
                 logger.debug(
-                    f"Inferred language {detected_language} from country {detected_country}: "
-                    f"{result['title'][:50]}"
+                    f"Inferred language {detected_language} from country {detected_country}: " f"{result['title'][:50]}"
                 )
 
         # Default to US/English if no indicators found (most common)
@@ -279,10 +264,7 @@ def _filter_by_language_and_country(
         # Keep result if it matches all specified filters
         if language_match and country_match:
             filtered.append(result)
-            logger.debug(
-                f"Match: '{result['title'][:50]}' - "
-                f"Detected: {detected_language}/{detected_country}"
-            )
+            logger.debug(f"Match: '{result['title'][:50]}' - " f"Detected: {detected_language}/{detected_country}")
         else:
             logger.debug(
                 f"Filtered out: '{result['title'][:50]}' - "
@@ -352,10 +334,7 @@ def _save_search_results_to_cache(
                 db_session.query(SearchResult)
                 .filter(SearchResult.fuzzy_match_group_id == fuzzy_group_id)
                 .filter(SearchResult.query == query)
-                .filter(
-                    func.date_trunc("month", SearchResult.publication_date)
-                    == func.date_trunc("month", pub_date)
-                )
+                .filter(func.date_trunc("month", SearchResult.publication_date) == func.date_trunc("month", pub_date))
                 .first()
             )
         else:
@@ -475,9 +454,7 @@ async def search(request: SearchRequest) -> Dict[str, Any]:
     # Try provider cache first if available
     if _provider_cache_service:
         try:
-            cached_releases = _provider_cache_service.search(
-                request.query.strip(), limit=100
-            )
+            cached_releases = _provider_cache_service.search(request.query.strip(), limit=100)
             if cached_releases:
                 logger.info(f"Found {len(cached_releases)} results from provider cache")
                 for release in cached_releases:
@@ -488,8 +465,7 @@ async def search(request: SearchRequest) -> Dict[str, Any]:
                             "provider": release.provider_name,
                             "publication_date": (
                                 release.raw_metadata.get("upload_date")
-                                if release.raw_metadata
-                                and release.raw_metadata.get("upload_date")
+                                if release.raw_metadata and release.raw_metadata.get("upload_date")
                                 else None
                             ),
                             "raw_metadata": release.raw_metadata or {},
@@ -497,9 +473,7 @@ async def search(request: SearchRequest) -> Dict[str, Any]:
                         }
                     )
         except Exception as e:
-            logger.warning(
-                f"Provider cache search failed, falling back to direct providers: {e}"
-            )
+            logger.warning(f"Provider cache search failed, falling back to direct providers: {e}")
 
     # Determine which providers to search
     providers = _search_providers if _search_providers else []
@@ -517,11 +491,7 @@ async def search(request: SearchRequest) -> Dict[str, Any]:
                         "title": result.title,
                         "url": result.url,
                         "provider": result.provider,
-                        "publication_date": (
-                            result.publication_date.isoformat()
-                            if result.publication_date
-                            else None
-                        ),
+                        "publication_date": (result.publication_date.isoformat() if result.publication_date else None),
                         "raw_metadata": result.raw_metadata,
                     }
                 )
@@ -536,9 +506,7 @@ async def search(request: SearchRequest) -> Dict[str, Any]:
         grouped_results = []
         for group_id, results in deduplicated.items():
             if results:
-                best = sorted(
-                    results, key=lambda x: x.get("match_score", 0), reverse=True
-                )[0]
+                best = sorted(results, key=lambda x: x.get("match_score", 0), reverse=True)[0]
                 grouped_results.append(best)
         return {
             "mode": "automatic",
@@ -580,19 +548,11 @@ async def search(request: SearchRequest) -> Dict[str, Any]:
 @handle_api_errors("Search periodical providers", logger)
 async def search_periodical_providers(
     query: str = Query(..., description="Periodical title to search for"),
-    language: str = Query(
-        None, description="Filter by language (e.g., English, German)"
-    ),
+    language: str = Query(None, description="Filter by language (e.g., English, German)"),
     country: str = Query(None, description="Filter by country code (e.g., US, UK, DE)"),
-    category: str = Query(
-        None, description="Filter by category (e.g., Periodicals, Comics)"
-    ),
-    tracking_id: int = Query(
-        None, description="Scope library status to specific tracking ID"
-    ),
-    force_refresh: bool = Query(
-        False, description="Bypass cache and fetch fresh results"
-    ),
+    category: str = Query(None, description="Filter by category (e.g., Periodicals, Comics)"),
+    tracking_id: int = Query(None, description="Scope library status to specific tracking ID"),
+    force_refresh: bool = Query(False, description="Bypass cache and fetch fresh results"),
     cache_ttl_days: int = Query(7, description="Cache validity in days"),
 ) -> Dict[str, Any]:
     """
@@ -611,20 +571,14 @@ async def search_periodical_providers(
 
     try:
         if not query or len(query.strip()) < 2:
-            raise HTTPException(
-                status_code=400, detail="Query must be at least 2 characters"
-            )
+            raise HTTPException(status_code=400, detail="Query must be at least 2 characters")
 
-        logger.info(
-            f"Searching for issues: '{query}' (tracking_id={tracking_id}, force_refresh={force_refresh})"
-        )
+        logger.info(f"Searching for issues: '{query}' (tracking_id={tracking_id}, force_refresh={force_refresh})")
 
         # === STEP 1: Load Cached Results ===
         cached_results = []
         if not force_refresh:
-            cached_results = _get_cached_search_results(
-                db_session, query, tracking_id, cache_ttl_days
-            )
+            cached_results = _get_cached_search_results(db_session, query, tracking_id, cache_ttl_days)
             logger.debug(f"Found {len(cached_results)} cached results for '{query}'")
 
         # === STEP 2: Fetch Fresh Results from Providers ===
@@ -634,13 +588,9 @@ async def search_periodical_providers(
         # Try provider cache first if available
         if _provider_cache_service and not force_refresh:
             try:
-                cached_releases = _provider_cache_service.search(
-                    query.strip(), limit=100
-                )
+                cached_releases = _provider_cache_service.search(query.strip(), limit=100)
                 if cached_releases:
-                    logger.info(
-                        f"Found {len(cached_releases)} results from provider cache"
-                    )
+                    logger.info(f"Found {len(cached_releases)} results from provider cache")
                     fresh_results.extend(
                         [
                             {
@@ -648,11 +598,8 @@ async def search_periodical_providers(
                                 "url": r.download_url,  # Note: cache uses download_url not url
                                 "provider": r.provider_name,
                                 "publication_date": (
-                                    datetime.fromisoformat(
-                                        r.raw_metadata.get("upload_date")
-                                    )
-                                    if r.raw_metadata
-                                    and r.raw_metadata.get("upload_date")
+                                    datetime.fromisoformat(r.raw_metadata.get("upload_date"))
+                                    if r.raw_metadata and r.raw_metadata.get("upload_date")
                                     else None
                                 ),
                                 "metadata": r.raw_metadata or {},
@@ -662,9 +609,7 @@ async def search_periodical_providers(
                         ]
                     )
             except Exception as e:
-                logger.warning(
-                    f"Provider cache search failed, falling back to direct providers: {e}"
-                )
+                logger.warning(f"Provider cache search failed, falling back to direct providers: {e}")
 
         if _search_providers:
             for provider in _search_providers:
@@ -689,9 +634,7 @@ async def search_periodical_providers(
 
             # If category filter was used but no results found, try again without category
             if category and len(fresh_results) == 0:
-                logger.info(
-                    f"No results with category '{category}', expanding search to all categories"
-                )
+                logger.info(f"No results with category '{category}', expanding search to all categories")
                 for provider in _search_providers:
                     try:
                         provider_results = provider.search(query.strip(), category=None)
@@ -732,9 +675,7 @@ async def search_periodical_providers(
         # === STEP 6: Apply Language/Country Filters ===
         filter_language = language if language else "English"
         filter_country = country if country else "US"
-        filtered_results = _filter_by_language_and_country(
-            all_results, filter_language, filter_country
-        )
+        filtered_results = _filter_by_language_and_country(all_results, filter_language, filter_country)
         logger.debug(
             f"After language/country filter: {len(filtered_results)} results (language={filter_language}, country={filter_country})"
         )
@@ -762,14 +703,12 @@ async def search_periodical_providers(
 
             for lib_item in library_items:
                 if result.get("publication_date") and _title_matcher:
-                    is_match, score = (
-                        _title_matcher.matches_library_item_with_date_range(
-                            provider_title=result["title"],
-                            provider_date=result["publication_date"],
-                            library_title=lib_item.title,
-                            library_date=lib_item.issue_date,
-                            date_tolerance_days=7,
-                        )
+                    is_match, score = _title_matcher.matches_library_item_with_date_range(
+                        provider_title=result["title"],
+                        provider_date=result["publication_date"],
+                        library_title=lib_item.title,
+                        library_date=lib_item.issue_date,
+                        date_tolerance_days=7,
                     )
 
                     if is_match:
@@ -805,13 +744,9 @@ async def search_periodical_providers(
         )
 
         if tracking_id:
-            failed_downloads = [
-                d for d in failed_downloads if d.tracking_id == tracking_id
-            ]
+            failed_downloads = [d for d in failed_downloads if d.tracking_id == tracking_id]
 
-        failed_fuzzy_groups = {
-            d.fuzzy_match_group for d in failed_downloads if d.fuzzy_match_group
-        }
+        failed_fuzzy_groups = {d.fuzzy_match_group for d in failed_downloads if d.fuzzy_match_group}
 
         # Mark failed downloads
         for result in deduplicated_results:
@@ -832,16 +767,12 @@ async def search_periodical_providers(
                 if is_match:
                     # For library-only items, append year to title so frontend parser can extract it
                     year = lib_item.issue_date.year if lib_item.issue_date else None
-                    title_with_year = (
-                        f"{lib_item.title} {year}" if year else lib_item.title
-                    )
+                    title_with_year = f"{lib_item.title} {year}" if year else lib_item.title
 
                     library_matches.append(
                         {
                             "title": title_with_year,
-                            "publication_date": lib_item.issue_date.isoformat()
-                            if lib_item.issue_date
-                            else None,
+                            "publication_date": lib_item.issue_date.isoformat() if lib_item.issue_date else None,
                             "status": "in_library",
                             "status_badge": "📚 In Library",
                             "library_item_id": lib_item.id,
@@ -857,9 +788,7 @@ async def search_periodical_providers(
                     )
 
         # Apply same language/country filter to library items
-        library_matches = _filter_by_language_and_country(
-            library_matches, filter_language, filter_country
-        )
+        library_matches = _filter_by_language_and_country(library_matches, filter_language, filter_country)
 
         # === STEP 11: Combine and Sort Results ===
         final_results = library_matches + deduplicated_results
@@ -890,17 +819,11 @@ async def search_periodical_providers(
                 "found": True,
                 "results": final_results,
                 "library_matches": len(library_matches),
-                "available_to_download": len(
-                    [r for r in deduplicated_results if r.get("status") == "available"]
-                ),
+                "available_to_download": len([r for r in deduplicated_results if r.get("status") == "available"]),
                 "total_results": len(final_results),
                 "provider_errors": provider_errors if provider_errors else None,
                 "from_cache": len(cached_results) > 0,
-                "cache_age_days": (
-                    (datetime.utcnow() - cached_results[0].created_at).days
-                    if cached_results
-                    else None
-                ),
+                "cache_age_days": ((datetime.utcnow() - cached_results[0].created_at).days if cached_results else None),
                 "message": f"Found {len(final_results)} results for '{query}'",
             }
         else:
@@ -917,11 +840,7 @@ async def search_periodical_providers(
                 "total_results": 0,
                 "provider_errors": provider_errors if provider_errors else None,
                 "from_cache": len(cached_results) > 0,
-                "cache_age_days": (
-                    datetime.utcnow() - cached_results[0].created_at
-                ).days
-                if cached_results
-                else None,
+                "cache_age_days": (datetime.utcnow() - cached_results[0].created_at).days if cached_results else None,
             }
 
     finally:
@@ -939,9 +858,7 @@ async def search_periodical_providers(
                 "application/json": {
                     "example": {
                         "periodical": "Wired",
-                        "editions": [
-                            {"title": "Wired - Jan 2024", "url": "http://..."}
-                        ],
+                        "editions": [{"title": "Wired - Jan 2024", "url": "http://..."}],
                         "total": 1,
                     }
                 }
@@ -970,9 +887,7 @@ async def get_periodical_editions(magazine_title: str) -> Dict[str, Any]:
 
     if not _search_providers:
         logger.error(ErrorMessages.SEARCH_PROVIDERS_UNAVAILABLE)
-        raise HTTPException(
-            status_code=503, detail=ErrorMessages.SEARCH_PROVIDERS_UNAVAILABLE
-        )
+        raise HTTPException(status_code=503, detail=ErrorMessages.SEARCH_PROVIDERS_UNAVAILABLE)
 
     # Search across search providers for specific editions
     results = []
@@ -980,13 +895,9 @@ async def get_periodical_editions(magazine_title: str) -> Dict[str, Any]:
     # Try provider cache first if available
     if _provider_cache_service:
         try:
-            cached_releases = _provider_cache_service.search(
-                magazine_title.strip(), limit=100
-            )
+            cached_releases = _provider_cache_service.search(magazine_title.strip(), limit=100)
             if cached_releases:
-                logger.info(
-                    f"Found {len(cached_releases)} results from provider cache for '{magazine_title}'"
-                )
+                logger.info(f"Found {len(cached_releases)} results from provider cache for '{magazine_title}'")
                 for release in cached_releases:
                     results.append(
                         type(
@@ -997,11 +908,8 @@ async def get_periodical_editions(magazine_title: str) -> Dict[str, Any]:
                                 "url": release.download_url,
                                 "provider": release.provider_name,
                                 "publication_date": (
-                                    datetime.fromisoformat(
-                                        release.raw_metadata.get("upload_date")
-                                    )
-                                    if release.raw_metadata
-                                    and release.raw_metadata.get("upload_date")
+                                    datetime.fromisoformat(release.raw_metadata.get("upload_date"))
+                                    if release.raw_metadata and release.raw_metadata.get("upload_date")
                                     else None
                                 ),
                                 "raw_metadata": release.raw_metadata or {},
@@ -1009,25 +917,19 @@ async def get_periodical_editions(magazine_title: str) -> Dict[str, Any]:
                         )()
                     )
         except Exception as e:
-            logger.warning(
-                f"Provider cache search failed, falling back to direct providers: {e}"
-            )
+            logger.warning(f"Provider cache search failed, falling back to direct providers: {e}")
 
     for provider in _search_providers:
         try:
             provider_results = provider.search(magazine_title.strip())
             results.extend(provider_results)
         except Exception as e:
-            logger.warning(
-                f"Error searching provider {provider.__class__.__name__}: {e}"
-            )
+            logger.warning(f"Error searching provider {provider.__class__.__name__}: {e}")
 
     if results:
         return {"success": True, "results": results}
     else:
-        raise HTTPException(
-            status_code=404, detail=f"Could not find editions for {magazine_title}"
-        )
+        raise HTTPException(status_code=404, detail=f"Could not find editions for {magazine_title}")
 
 
 @router.get("/indexer-cache/status")

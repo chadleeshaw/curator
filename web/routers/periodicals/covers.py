@@ -54,18 +54,14 @@ async def get_cover(
         thumbnail: If True (default), returns optimized thumbnail for UI. If False, returns full resolution.
     """
 
-    cover_path = await with_db_session(
-        _shared._session_factory, lambda db: _get_cover_path(db, magazine_id)
-    )
+    cover_path = await with_db_session(_shared._session_factory, lambda db: _get_cover_path(db, magazine_id))
 
     # Return thumbnail for UI (fast loading)
     if thumbnail:
         from core.utils.thumbnail import get_or_create_thumbnail
 
         loop = asyncio.get_event_loop()
-        thumbnail_path = await loop.run_in_executor(
-            None, get_or_create_thumbnail, cover_path
-        )
+        thumbnail_path = await loop.run_in_executor(None, get_or_create_thumbnail, cover_path)
         response = FileResponse(thumbnail_path, media_type="image/jpeg")
         return add_cache_headers(response, max_age=86400)  # Cache for 24 hours
 
@@ -90,9 +86,7 @@ def _get_cover_path(db_session, magazine_id):
 
 @router.post("/periodicals/{magazine_id}/regenerate-cover")
 @handle_api_errors("Regenerate cover", logger)
-async def regenerate_cover(
-    magazine_id: int, request_data: Dict[str, Any]
-) -> Dict[str, Any]:
+async def regenerate_cover(magazine_id: int, request_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Regenerate cover image from a specific PDF page.
 
@@ -127,14 +121,10 @@ async def regenerate_cover(
                 page_number=page_number,
             )
         else:
-            cover_path = extract_cover_from_pdf(
-                pdf_path, cover_dir, page_number=page_number
-            )
+            cover_path = extract_cover_from_pdf(pdf_path, cover_dir, page_number=page_number)
 
         if not cover_path:
-            raise HTTPException(
-                status_code=500, detail="Failed to extract cover from PDF"
-            )
+            raise HTTPException(status_code=500, detail="Failed to extract cover from PDF")
 
         # Update database with new cover path and page number
         magazine.cover_path = str(cover_path)
@@ -143,9 +133,7 @@ async def regenerate_cover(
         magazine.extra_metadata["cover_page"] = page_number
         db.commit()
 
-        logger.info(
-            f"Regenerated cover for magazine {magazine_id} from page {page_number}"
-        )
+        logger.info(f"Regenerated cover for magazine {magazine_id} from page {page_number}")
 
         return {
             "success": True,

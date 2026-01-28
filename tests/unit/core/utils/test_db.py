@@ -115,9 +115,7 @@ class TestMarkJsonModified:
         mock_obj = Mock()
 
         # Execute
-        mark_json_modified(
-            mock_obj, "extra_metadata", "derived_metadata", "custom_data"
-        )
+        mark_json_modified(mock_obj, "extra_metadata", "derived_metadata", "custom_data")
 
         # Verify all fields were marked
         assert mock_flag_modified.call_count == 3

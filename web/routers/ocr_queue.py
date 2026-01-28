@@ -58,9 +58,7 @@ async def get_ocr_queue(status: Optional[str] = None):
         # Build response with magazine details
         result = []
         for job in jobs:
-            magazine = (
-                db.query(Periodical).filter(Periodical.id == job.periodical_id).first()
-            )
+            magazine = db.query(Periodical).filter(Periodical.id == job.periodical_id).first()
             if not magazine:
                 continue
 
@@ -75,9 +73,7 @@ async def get_ocr_queue(status: Optional[str] = None):
                     "magazine_id": job.periodical_id,
                     "magazine_title": magazine.title,
                     "magazine_issue": issue_display,
-                    "magazine_year": (
-                        magazine.issue_date.year if magazine.issue_date else None
-                    ),
+                    "magazine_year": (magazine.issue_date.year if magazine.issue_date else None),
                     "tracking_id": magazine.tracking_id,
                     "tracking_title": None,  # Will be populated below
                     "status": job.status.value,
@@ -87,15 +83,9 @@ async def get_ocr_queue(status: Optional[str] = None):
                     "last_error": job.last_error,
                     "ocr_metadata": job.ocr_metadata,
                     "processing_time_seconds": job.processing_time_seconds,
-                    "created_at": (
-                        job.created_at.isoformat() if job.created_at else None
-                    ),
-                    "started_at": (
-                        job.started_at.isoformat() if job.started_at else None
-                    ),
-                    "completed_at": (
-                        job.completed_at.isoformat() if job.completed_at else None
-                    ),
+                    "created_at": (job.created_at.isoformat() if job.created_at else None),
+                    "started_at": (job.started_at.isoformat() if job.started_at else None),
+                    "completed_at": (job.completed_at.isoformat() if job.completed_at else None),
                 }
             )
 
@@ -104,19 +94,13 @@ async def get_ocr_queue(status: Optional[str] = None):
 
         tracking_ids = {j["tracking_id"] for j in result if j["tracking_id"]}
         if tracking_ids:
-            trackings = (
-                db.query(PeriodicalTracking)
-                .filter(PeriodicalTracking.id.in_(tracking_ids))
-                .all()
-            )
+            trackings = db.query(PeriodicalTracking).filter(PeriodicalTracking.id.in_(tracking_ids)).all()
             tracking_map = {t.id: t.title for t in trackings}
 
             # Update tracking_title in results
             for job_data in result:
                 if job_data["tracking_id"]:
-                    job_data["tracking_title"] = tracking_map.get(
-                        job_data["tracking_id"], job_data["magazine_title"]
-                    )
+                    job_data["tracking_title"] = tracking_map.get(job_data["tracking_id"], job_data["magazine_title"])
                 else:
                     job_data["tracking_title"] = job_data["magazine_title"]
 
@@ -207,9 +191,7 @@ async def clear_failed_ocr_jobs():
 
     def operation(db):
         # Delete all failed jobs
-        failed_jobs = (
-            db.query(OCRJob).filter(OCRJob.status == OCRJob.StatusEnum.FAILED).all()
-        )
+        failed_jobs = db.query(OCRJob).filter(OCRJob.status == OCRJob.StatusEnum.FAILED).all()
 
         count = len(failed_jobs)
 
@@ -240,9 +222,7 @@ async def clear_pending_ocr_jobs():
 
     def operation(db):
         # Delete all pending jobs
-        pending_jobs = (
-            db.query(OCRJob).filter(OCRJob.status == OCRJob.StatusEnum.PENDING).all()
-        )
+        pending_jobs = db.query(OCRJob).filter(OCRJob.status == OCRJob.StatusEnum.PENDING).all()
 
         count = len(pending_jobs)
 
@@ -281,16 +261,12 @@ async def delete_ocr_job(job_id: int):
             raise HTTPException(status_code=404, detail=ErrorMessages.OCR_JOB_NOT_FOUND)
 
         # Log appropriate message based on status
-        action = (
-            "cancelled" if job.status == OCRJob.StatusEnum.PROCESSING else "deleted"
-        )
+        action = "cancelled" if job.status == OCRJob.StatusEnum.PROCESSING else "deleted"
 
         db.delete(job)
         db.commit()
 
-        logger.info(
-            f"{action.capitalize()} OCR job {job_id} (status: {job.status.value})"
-        )
+        logger.info(f"{action.capitalize()} OCR job {job_id} (status: {job.status.value})")
 
         return {"message": f"Job {action} successfully"}
 
@@ -299,9 +275,7 @@ async def delete_ocr_job(job_id: int):
 
 @router.post("/queue/{magazine_id}")
 @handle_api_errors("Queue magazine OCR", logger)
-async def queue_magazine_ocr(
-    magazine_id: int, priority: int = OCRJob.PriorityEnum.NORMAL.value
-):
+async def queue_magazine_ocr(magazine_id: int, priority: int = OCRJob.PriorityEnum.NORMAL.value):
     """
     Manually queue OCR for a magazine.
 
@@ -335,9 +309,7 @@ async def queue_magazine_ocr(
                 db.query(OCRJob)
                 .filter(
                     OCRJob.periodical_id == magazine_id,
-                    OCRJob.status.in_(
-                        [OCRJob.StatusEnum.PENDING, OCRJob.StatusEnum.PROCESSING]
-                    ),
+                    OCRJob.status.in_([OCRJob.StatusEnum.PENDING, OCRJob.StatusEnum.PROCESSING]),
                 )
                 .first()
             )

@@ -36,14 +36,7 @@ def set_dependencies(
     folder_cleanup_task: Optional[Any] = None,
 ) -> None:  # pylint: disable=too-many-positional-arguments
     """Set dependencies from main app"""
-    global \
-        _session_factory, \
-        _download_monitor_task, \
-        _file_importer, \
-        _storage_config, \
-        _ocr_processor_task, \
-        _task_scheduler, \
-        _folder_cleanup_task
+    global _session_factory, _download_monitor_task, _file_importer, _storage_config, _ocr_processor_task, _task_scheduler, _folder_cleanup_task
     _session_factory = session_factory
     _download_monitor_task = download_monitor_task
     _file_importer = file_importer
@@ -64,9 +57,7 @@ async def get_tasks_status():
         dm_last_run = getattr(_download_monitor_task, "last_run_time", None)
         dm_status = getattr(_download_monitor_task, "last_status", None)
         dm_stats = getattr(_download_monitor_task, "stats", {})
-        logger.debug(
-            f"Tasks Status - Download Monitor: last_run={dm_last_run}, status={dm_status}"
-        )
+        logger.debug(f"Tasks Status - Download Monitor: last_run={dm_last_run}, status={dm_status}")
 
         # Get interval from scheduler
         dm_interval = 30
@@ -86,12 +77,8 @@ async def get_tasks_status():
                 "last_status": dm_status,
                 "stats": {
                     "total_runs": dm_stats.get("total_runs", 0),
-                    "client_downloads_processed": dm_stats.get(
-                        "client_downloads_processed", 0
-                    ),
-                    "client_downloads_failed": dm_stats.get(
-                        "client_downloads_failed", 0
-                    ),
+                    "client_downloads_processed": dm_stats.get("client_downloads_processed", 0),
+                    "client_downloads_failed": dm_stats.get("client_downloads_failed", 0),
                     "folder_files_imported": dm_stats.get("folder_files_imported", 0),
                     "last_client_check": dm_stats.get("last_client_check"),
                     "last_folder_scan": dm_stats.get("last_folder_scan"),
@@ -144,9 +131,7 @@ async def get_tasks_status():
         "next_run": None,
         "last_status": None,
     }
-    if scheduler_status and "cleanup_orphaned_covers" in scheduler_status.get(
-        "tasks", {}
-    ):
+    if scheduler_status and "cleanup_orphaned_covers" in scheduler_status.get("tasks", {}):
         task_data = scheduler_status["tasks"]["cleanup_orphaned_covers"]
         last_run = task_data.get("last_run")
         failure_count = task_data.get("failure_count", 0)
@@ -355,36 +340,22 @@ async def run_task_manually(task_id: str):
             try:
                 # Get all periodicals
                 all_periodicals = db_session.query(Periodical).all()
-                periodicals_with_covers = [
-                    m
-                    for m in all_periodicals
-                    if m.cover_path and Path(m.cover_path).exists()
-                ]
+                periodicals_with_covers = [m for m in all_periodicals if m.cover_path and Path(m.cover_path).exists()]
                 periodicals_without_covers = [
-                    m
-                    for m in all_periodicals
-                    if m.file_path
-                    and (not m.cover_path or not Path(m.cover_path).exists())
+                    m for m in all_periodicals if m.file_path and (not m.cover_path or not Path(m.cover_path).exists())
                 ]
 
-                db_cover_paths = {
-                    str(Path(m.cover_path).resolve()) for m in periodicals_with_covers
-                }
+                db_cover_paths = {str(Path(m.cover_path).resolve()) for m in periodicals_with_covers}
 
                 # Find all cover files on disk
-                covers_dir = (
-                    Path(_storage_config.get("library_base_dir", "./local/data"))
-                    / ".covers"
-                )
+                covers_dir = Path(_storage_config.get("library_base_dir", "./local/data")) / ".covers"
                 covers_dir.mkdir(parents=True, exist_ok=True)
 
                 # Part 1: Delete orphaned covers
                 deleted_count = 0
                 if covers_dir.exists():
                     # Get absolute paths of all cover files on disk
-                    cover_files = set(
-                        str(f.resolve()) for f in covers_dir.glob("*.jpg")
-                    )
+                    cover_files = set(str(f.resolve()) for f in covers_dir.glob("*.jpg"))
                     orphaned_covers = cover_files - db_cover_paths
 
                     for orphan_path in orphaned_covers:
@@ -392,9 +363,7 @@ async def run_task_manually(task_id: str):
                             Path(orphan_path).unlink()
                             deleted_count += 1
                         except Exception as e:
-                            logger.error(
-                                f"Error deleting orphaned cover {orphan_path}: {e}"
-                            )
+                            logger.error(f"Error deleting orphaned cover {orphan_path}: {e}")
 
                 # Part 2: Generate missing covers
                 generated_count = 0
@@ -415,20 +384,14 @@ async def run_task_manually(task_id: str):
                 # Build result message
                 messages = []
                 if deleted_count > 0:
-                    messages.append(
-                        f"Deleted {deleted_count} orphaned cover file{'s' if deleted_count != 1 else ''}"
-                    )
+                    messages.append(f"Deleted {deleted_count} orphaned cover file{'s' if deleted_count != 1 else ''}")
                 if generated_count > 0:
-                    messages.append(
-                        f"Generated {generated_count} missing cover{'s' if generated_count != 1 else ''}"
-                    )
+                    messages.append(f"Generated {generated_count} missing cover{'s' if generated_count != 1 else ''}")
 
                 if messages:
                     message = "Cleanup executed. " + ", ".join(messages) + "."
                 else:
-                    message = (
-                        "No orphaned covers found and all periodicals have covers."
-                    )
+                    message = "No orphaned covers found and all periodicals have covers."
 
                 return {
                     "deleted": deleted_count,

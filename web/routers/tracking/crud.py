@@ -56,16 +56,12 @@ async def start_tracking_periodical(
 ) -> Dict[str, Any]:
     """Start tracking a periodical"""
     if not title or len(title.strip()) < 2:
-        raise HTTPException(
-            status_code=400, detail="Title must be at least 2 characters"
-        )
+        raise HTTPException(status_code=400, detail="Title must be at least 2 characters")
 
     olid = generate_olid(title)
 
     def operation(db):
-        existing = (
-            db.query(PeriodicalTracking).filter(PeriodicalTracking.olid == olid).first()
-        )
+        existing = db.query(PeriodicalTracking).filter(PeriodicalTracking.olid == olid).first()
         if existing:
             return {
                 "success": False,
@@ -109,9 +105,7 @@ async def start_tracking_periodical(
                 "application/json": {
                     "example": {
                         "success": True,
-                        "tracked": [
-                            {"id": 1, "title": "Wired", "publisher": "Condé Nast"}
-                        ],
+                        "tracked": [{"id": 1, "title": "Wired", "publisher": "Condé Nast"}],
                         "total": 1,
                     }
                 }
@@ -162,11 +156,7 @@ async def list_tracked_magazines(
         query = db.query(PeriodicalTracking)
 
         if sort_by == "category":
-            sort_expr = (
-                PeriodicalTracking.category.desc()
-                if is_descending
-                else PeriodicalTracking.category.asc()
-            )
+            sort_expr = PeriodicalTracking.category.desc() if is_descending else PeriodicalTracking.category.asc()
             query = query.order_by(sort_expr, PeriodicalTracking.title.asc())
         elif sort_by == "tracking_mode":
             if is_descending:
@@ -180,11 +170,7 @@ async def list_tracked_magazines(
                     PeriodicalTracking.track_new_only.desc(),
                 )
         else:
-            sort_expr = (
-                PeriodicalTracking.title.desc()
-                if is_descending
-                else PeriodicalTracking.title.asc()
-            )
+            sort_expr = PeriodicalTracking.title.desc() if is_descending else PeriodicalTracking.title.asc()
             query = query.order_by(sort_expr)
 
         tracked = query.offset(skip).limit(limit).all()
@@ -199,9 +185,7 @@ async def list_tracked_magazines(
 
         tracked_list = []
         for t in tracked:
-            library_count = (
-                db.query(Periodical).filter(Periodical.tracking_id == t.id).count()
-            )
+            library_count = db.query(Periodical).filter(Periodical.tracking_id == t.id).count()
 
             # Count failed downloads from both sources for backward compatibility:
             # 1. New Issue Discovery system (canonical going forward)
@@ -210,9 +194,7 @@ async def list_tracked_magazines(
                 db.query(DiscoveredIssue)
                 .filter(
                     DiscoveredIssue.tracking_id == t.id,
-                    DiscoveredIssue.download_status.in_(
-                        ["failed", "permanently_failed"]
-                    ),
+                    DiscoveredIssue.download_status.in_(["failed", "permanently_failed"]),
                 )
                 .count()
             )
@@ -240,9 +222,7 @@ async def list_tracked_magazines(
                     "track_all_editions": t.track_all_editions,
                     "track_new_only": t.track_new_only,
                     "selected_count": (
-                        len([v for v in t.selected_editions.values() if v])
-                        if t.selected_editions
-                        else 0
+                        len([v for v in t.selected_editions.values() if v]) if t.selected_editions else 0
                     ),
                     "total_known": t.total_editions_known,
                     "library_count": library_count,
@@ -268,15 +248,9 @@ async def get_tracking_details(tracking_id: int) -> Dict[str, Any]:
     """Get detailed tracking information for a specific magazine"""
 
     def operation(db):
-        tracking = (
-            db.query(PeriodicalTracking)
-            .filter(PeriodicalTracking.id == tracking_id)
-            .first()
-        )
+        tracking = db.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
         if not tracking:
-            raise HTTPException(
-                status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND
-            )
+            raise HTTPException(status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND)
 
         return {
             "success": True,
@@ -297,13 +271,9 @@ async def get_tracking_details(tracking_id: int) -> Dict[str, Any]:
                 "selected_years": tracking.selected_years,
                 "metadata": tracking.periodical_metadata,
                 "last_metadata_update": (
-                    tracking.last_metadata_update.isoformat()
-                    if tracking.last_metadata_update
-                    else None
+                    tracking.last_metadata_update.isoformat() if tracking.last_metadata_update else None
                 ),
-                "created_at": (
-                    tracking.created_at.isoformat() if tracking.created_at else None
-                ),
+                "created_at": (tracking.created_at.isoformat() if tracking.created_at else None),
             },
         }
 
@@ -373,12 +343,7 @@ def _reorganize_periodical_files(
             return None, None
 
         # Move cover file if it exists
-        if (
-            old_cover_path
-            and old_cover_path.exists()
-            and new_cover_path
-            and new_cover_path != old_cover_path
-        ):
+        if old_cover_path and old_cover_path.exists() and new_cover_path and new_cover_path != old_cover_path:
             shutil.move(str(old_cover_path), str(new_cover_path))
             logger.info(f"Moved cover: {old_cover_path} -> {new_cover_path}")
 
@@ -396,11 +361,7 @@ def _reorganize_periodical_files(
     responses={
         200: {
             "description": "Tracking stopped successfully",
-            "content": {
-                "application/json": {
-                    "example": {"success": True, "message": "Stopped tracking 'Wired'"}
-                }
-            },
+            "content": {"application/json": {"example": {"success": True, "message": "Stopped tracking 'Wired'"}}},
         },
         404: {"description": ErrorMessages.TRACKING_NOT_FOUND, "model": APIError},
         500: {"description": "Failed to delete tracking", "model": APIError},
@@ -411,15 +372,9 @@ async def delete_tracking(tracking_id: int) -> Dict[str, Any]:
     """Delete a magazine tracking record"""
 
     def operation(db):
-        tracking = (
-            db.query(PeriodicalTracking)
-            .filter(PeriodicalTracking.id == tracking_id)
-            .first()
-        )
+        tracking = db.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
         if not tracking:
-            raise HTTPException(
-                status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND
-            )
+            raise HTTPException(status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND)
 
         title = tracking.title
         db.delete(tracking)

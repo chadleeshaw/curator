@@ -20,20 +20,12 @@ from . import _shared
 async def retry_download(submission_id: int) -> Dict[str, Any]:
     """Retry a failed download submission"""
     if not _shared._download_manager:
-        raise HTTPException(
-            status_code=503, detail=ErrorMessages.DOWNLOAD_MANAGER_UNAVAILABLE
-        )
+        raise HTTPException(status_code=503, detail=ErrorMessages.DOWNLOAD_MANAGER_UNAVAILABLE)
 
     def operation(db):
-        submission = (
-            db.query(DownloadSubmission)
-            .filter(DownloadSubmission.id == submission_id)
-            .first()
-        )
+        submission = db.query(DownloadSubmission).filter(DownloadSubmission.id == submission_id).first()
         if not submission:
-            raise HTTPException(
-                status_code=404, detail=ErrorMessages.SUBMISSION_NOT_FOUND
-            )
+            raise HTTPException(status_code=404, detail=ErrorMessages.SUBMISSION_NOT_FOUND)
 
         result = _shared._download_manager.retry_submission(submission_id, db)
         return {
@@ -156,15 +148,9 @@ async def delete_from_queue(submission_id: int) -> Dict[str, Any]:
     """Remove a submission from the download queue"""
 
     def operation(db):
-        submission = (
-            db.query(DownloadSubmission)
-            .filter(DownloadSubmission.id == submission_id)
-            .first()
-        )
+        submission = db.query(DownloadSubmission).filter(DownloadSubmission.id == submission_id).first()
         if not submission:
-            raise HTTPException(
-                status_code=404, detail=ErrorMessages.SUBMISSION_NOT_FOUND
-            )
+            raise HTTPException(status_code=404, detail=ErrorMessages.SUBMISSION_NOT_FOUND)
 
         title = submission.result_title
         db.delete(submission)
@@ -177,22 +163,15 @@ async def delete_from_queue(submission_id: int) -> Dict[str, Any]:
 
 @_shared.router.post("/queue/cleanup")
 @handle_api_errors("Cleanup old submissions", _shared.logger)
-async def cleanup_old_submissions(
-    days_old: int = 30, status_filter: str = None
-) -> Dict[str, Any]:
+async def cleanup_old_submissions(days_old: int = 30, status_filter: str = None) -> Dict[str, Any]:
     """Clean up old download submissions"""
 
     def operation(db):
         cutoff_date = datetime.now(UTC) - timedelta(days=days_old)
 
-        query = db.query(DownloadSubmission).filter(
-            DownloadSubmission.created_at < cutoff_date
-        )
+        query = db.query(DownloadSubmission).filter(DownloadSubmission.created_at < cutoff_date)
         if status_filter:
-            query = query.filter(
-                DownloadSubmission.status
-                == DownloadSubmission.StatusEnum[status_filter.upper()]
-            )
+            query = query.filter(DownloadSubmission.status == DownloadSubmission.StatusEnum[status_filter.upper()])
 
         count = query.count()
         query.delete()

@@ -86,15 +86,11 @@ def resolve_file_path(stored_path: str) -> Path:
         # Search recursively for the file (last resort, slower)
         for candidate in _library_base_dir.rglob(filename):
             if candidate.is_file():
-                logger.warning(
-                    f"Found file by name search: {stored_path} -> {candidate}"
-                )
+                logger.warning(f"Found file by name search: {stored_path} -> {candidate}")
                 return candidate
 
     # File not found after all attempts
-    raise FileNotFoundError(
-        f"File not found: {stored_path} (library_dir: {_library_base_dir})"
-    )
+    raise FileNotFoundError(f"File not found: {stored_path} (library_dir: {_library_base_dir})")
 
 
 def parse_month_string(month_str: Optional[str]) -> Tuple[int, str]:
@@ -152,9 +148,7 @@ def get_periodical_or_404(db_session: Session, periodical_id: int):
     Usage:
         magazine = get_periodical_or_404(db, magazine_id)
     """
-    magazine = (
-        db_session.query(Periodical).filter(Periodical.id == periodical_id).first()
-    )
+    magazine = db_session.query(Periodical).filter(Periodical.id == periodical_id).first()
 
     if not magazine:
         raise HTTPException(status_code=404, detail=ErrorMessages.MAGAZINE_NOT_FOUND)
@@ -192,9 +186,7 @@ def get_periodical_with_file(db_session: Session, periodical_id: int) -> Tuple:
     return magazine, file_path
 
 
-def get_periodical_paths(
-    db_session: Session, periodical_id: int
-) -> Tuple[Path, Optional[Path]]:
+def get_periodical_paths(db_session: Session, periodical_id: int) -> Tuple[Path, Optional[Path]]:
     """
     Get file and cover paths for a periodical.
 

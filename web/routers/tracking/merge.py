@@ -91,12 +91,7 @@ def _reorganize_periodical_files(
             return None, None
 
         # Move cover file if it exists
-        if (
-            old_cover_path
-            and old_cover_path.exists()
-            and new_cover_path
-            and new_cover_path != old_cover_path
-        ):
+        if old_cover_path and old_cover_path.exists() and new_cover_path and new_cover_path != old_cover_path:
             shutil.move(str(old_cover_path), str(new_cover_path))
             logger.info(f"Moved cover: {old_cover_path} -> {new_cover_path}")
 
@@ -132,9 +127,7 @@ def _reorganize_periodical_files(
     },
 )
 @handle_api_errors("Merge tracking records", logger)
-async def merge_tracking(
-    target_id: int, source_ids: Dict[str, list[int]]
-) -> Dict[str, Any]:
+async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Dict[str, Any]:
     """
     Merge multiple tracking records into a single target record.
 
@@ -151,9 +144,7 @@ async def merge_tracking(
     source_id_list = source_ids["source_ids"]
 
     if target_id in source_id_list:
-        raise HTTPException(
-            status_code=400, detail="Target tracking ID cannot be in source list"
-        )
+        raise HTTPException(status_code=400, detail="Target tracking ID cannot be in source list")
 
     def _merge():
         db_session = _shared._session_factory()
@@ -161,22 +152,12 @@ async def merge_tracking(
             from models.database import Periodical, DownloadSubmission
 
             # Get target tracking record
-            target = (
-                db_session.query(PeriodicalTracking)
-                .filter(PeriodicalTracking.id == target_id)
-                .first()
-            )
+            target = db_session.query(PeriodicalTracking).filter(PeriodicalTracking.id == target_id).first()
             if not target:
-                raise HTTPException(
-                    status_code=404, detail="Target tracking record not found"
-                )
+                raise HTTPException(status_code=404, detail="Target tracking record not found")
 
             # Get source tracking records
-            sources = (
-                db_session.query(PeriodicalTracking)
-                .filter(PeriodicalTracking.id.in_(source_id_list))
-                .all()
-            )
+            sources = db_session.query(PeriodicalTracking).filter(PeriodicalTracking.id.in_(source_id_list)).all()
             if len(sources) != len(source_id_list):
                 raise HTTPException(
                     status_code=404,
@@ -196,23 +177,15 @@ async def merge_tracking(
             # Move periodicals from source to target
             for source in sources:
                 # Update periodicals to point to target tracking and normalize title
-                periodicals = (
-                    db_session.query(Periodical)
-                    .filter(Periodical.tracking_id == source.id)
-                    .all()
-                )
+                periodicals = db_session.query(Periodical).filter(Periodical.tracking_id == source.id).all()
                 for periodical in periodicals:
                     periodical.tracking_id = target.id
 
                     # Only update title if this is NOT a special edition
                     # Special editions need to keep their distinct title to be grouped separately
                     is_special = False
-                    if periodical.extra_metadata and isinstance(
-                        periodical.extra_metadata, dict
-                    ):
-                        is_special = (
-                            periodical.extra_metadata.get("special_edition") is not None
-                        )
+                    if periodical.extra_metadata and isinstance(periodical.extra_metadata, dict):
+                        is_special = periodical.extra_metadata.get("special_edition") is not None
 
                     # Also check title using the is_special_edition function
                     if not is_special:
@@ -239,11 +212,7 @@ async def merge_tracking(
                         # Update database paths if reorganization succeeded
                         if new_pdf_path:
                             # Check if target path already exists in database (UNIQUE constraint check)
-                            existing_record = (
-                                db_session.query(Periodical)
-                                .filter_by(file_path=new_pdf_path)
-                                .first()
-                            )
+                            existing_record = db_session.query(Periodical).filter_by(file_path=new_pdf_path).first()
                             if existing_record and existing_record.id != periodical.id:
                                 logger.error(
                                     f"Cannot update periodical {periodical.id}: Target path {new_pdf_path} "
@@ -253,14 +222,9 @@ async def merge_tracking(
                                 # Roll back the file move since we can't update the database
                                 try:
                                     old_pdf_path = Path(periodical.file_path)
-                                    if (
-                                        Path(new_pdf_path).exists()
-                                        and not old_pdf_path.exists()
-                                    ):
+                                    if Path(new_pdf_path).exists() and not old_pdf_path.exists():
                                         shutil.move(new_pdf_path, str(old_pdf_path))
-                                        logger.info(
-                                            f"Rolled back file move: {new_pdf_path} -> {old_pdf_path}"
-                                        )
+                                        logger.info(f"Rolled back file move: {new_pdf_path} -> {old_pdf_path}")
                                 except Exception as rollback_error:
                                     logger.error(
                                         f"Failed to rollback file move for periodical {periodical.id}: {rollback_error}"
@@ -285,9 +249,7 @@ async def merge_tracking(
 
                 # Update download submissions to point to target tracking
                 submissions = (
-                    db_session.query(DownloadSubmission)
-                    .filter(DownloadSubmission.tracking_id == source.id)
-                    .all()
+                    db_session.query(DownloadSubmission).filter(DownloadSubmission.tracking_id == source.id).all()
                 )
                 for submission in submissions:
                     submission.tracking_id = target.id

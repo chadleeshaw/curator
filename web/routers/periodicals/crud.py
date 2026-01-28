@@ -117,9 +117,7 @@ async def list_periodicals(
         )
 
         # Left join with tracking to get the primary title for display
-        query = query.outerjoin(
-            PeriodicalTracking, Periodical.tracking_id == PeriodicalTracking.id
-        )
+        query = query.outerjoin(PeriodicalTracking, Periodical.tracking_id == PeriodicalTracking.id)
 
         # Calculate issue counts for sorting (if needed)
         if sort_by == "issue_count":
@@ -157,11 +155,7 @@ async def list_periodicals(
             )
 
             # Sort by issue count
-            sort_expr = (
-                count_subquery.c.issue_count.desc()
-                if is_descending
-                else count_subquery.c.issue_count.asc()
-            )
+            sort_expr = count_subquery.c.issue_count.desc() if is_descending else count_subquery.c.issue_count.asc()
             query = query.order_by(
                 sort_expr,
                 func.coalesce(PeriodicalTracking.title, Periodical.title).asc(),
@@ -185,18 +179,10 @@ async def list_periodicals(
                 func.coalesce(PeriodicalTracking.title, Periodical.title).asc(),
             )
         elif sort_by == "issue_date":
-            sort_expr = (
-                Periodical.issue_date.desc()
-                if is_descending
-                else Periodical.issue_date.asc()
-            )
+            sort_expr = Periodical.issue_date.desc() if is_descending else Periodical.issue_date.asc()
             query = query.order_by(sort_expr)
         elif sort_by == "created_at":
-            sort_expr = (
-                Periodical.created_at.desc()
-                if is_descending
-                else Periodical.created_at.asc()
-            )
+            sort_expr = Periodical.created_at.desc() if is_descending else Periodical.created_at.asc()
             query = query.order_by(sort_expr)
         else:  # Default to title
             sort_expr = (
@@ -263,11 +249,7 @@ async def list_periodicals(
         tracking_titles = {}
         for mag in magazines:
             if mag.tracking_id and mag.tracking_id not in tracking_titles:
-                tracking = (
-                    db.query(PeriodicalTracking)
-                    .filter(PeriodicalTracking.id == mag.tracking_id)
-                    .first()
-                )
+                tracking = db.query(PeriodicalTracking).filter(PeriodicalTracking.id == mag.tracking_id).first()
                 if tracking:
                     tracking_titles[mag.tracking_id] = tracking.title
 
@@ -292,9 +274,7 @@ async def list_periodicals(
                     "id": m.id,
                     "title": get_best_title(m),
                     "language": m.language or "English",
-                    "issue_date": (
-                        m.issue_date.date().isoformat() if m.issue_date else None
-                    ),
+                    "issue_date": (m.issue_date.date().isoformat() if m.issue_date else None),
                     "file_path": m.file_path,
                     "cover_path": m.cover_path,
                     "content_hash": m.content_hash,
@@ -349,9 +329,7 @@ async def get_languages() -> Dict[str, Any]:
 
         return {
             "success": True,
-            "languages": [
-                {"language": lang, "count": count} for lang, count in language_counts
-            ],
+            "languages": [{"language": lang, "count": count} for lang, count in language_counts],
         }
 
     return await with_db_session(_shared._session_factory, operation)
@@ -407,9 +385,7 @@ async def delete_periodical(
         if delete_all_issues:
             # Get all magazines with the same title and language
             magazines_to_delete = (
-                db.query(Periodical)
-                .filter(Periodical.title == title, Periodical.language == language)
-                .all()
+                db.query(Periodical).filter(Periodical.title == title, Periodical.language == language).all()
             )
         else:
             # Only delete the single specified magazine
@@ -432,18 +408,14 @@ async def delete_periodical(
 
             # Find discovered issues for the deleted magazine(s)
             # Match by tracking_id (periodicals.tracking_id -> discovered_issues.tracking_id)
-            tracking_ids = [
-                mag.tracking_id for mag in magazines_to_delete if mag.tracking_id
-            ]
+            tracking_ids = [mag.tracking_id for mag in magazines_to_delete if mag.tracking_id]
             if tracking_ids:
                 # Mark all related discovered issues as permanently_failed to prevent re-download
                 issues = (
                     db.query(DiscoveredIssue)
                     .filter(
                         DiscoveredIssue.tracking_id.in_(tracking_ids),
-                        DiscoveredIssue.download_status.in_(
-                            ["discovered", "wanted", "failed"]
-                        ),
+                        DiscoveredIssue.download_status.in_(["discovered", "wanted", "failed"]),
                     )
                     .all()
                 )
@@ -451,15 +423,11 @@ async def delete_periodical(
                 marked_count = 0
                 for issue in issues:
                     issue.download_status = "permanently_failed"
-                    issue.last_error = (
-                        "Manually marked as bad file (user deleted from library)"
-                    )
+                    issue.last_error = "Manually marked as bad file (user deleted from library)"
                     marked_count += 1
 
                 if marked_count > 0:
-                    logger.info(
-                        f"Marked {marked_count} discovered issue(s) as permanently failed for: {title}"
-                    )
+                    logger.info(f"Marked {marked_count} discovered issue(s) as permanently failed for: {title}")
 
         db.commit()
 
@@ -470,11 +438,7 @@ async def delete_periodical(
             from models.database import PeriodicalTracking
 
             olid = generate_olid(title)
-            tracking = (
-                db.query(PeriodicalTracking)
-                .filter(PeriodicalTracking.olid == olid)
-                .first()
-            )
+            tracking = db.query(PeriodicalTracking).filter(PeriodicalTracking.olid == olid).first()
             if tracking:
                 db.delete(tracking)
                 db.commit()
@@ -499,9 +463,7 @@ async def delete_periodical(
                 except Exception as e:
                     logger.warning(f"Could not delete cover file {cover_path}: {e}")
 
-            logger.info(
-                f"Deleted {deleted_count} issue(s) and files from disk: {title}"
-            )
+            logger.info(f"Deleted {deleted_count} issue(s) and files from disk: {title}")
             if deleted_count > 1:
                 message = f"Deleted {deleted_count} issues of '{title}' and their files from disk"
             else:
@@ -515,9 +477,7 @@ async def delete_periodical(
                 "message": message,
             }
         else:
-            logger.info(
-                f"Deleted {deleted_count} issue(s) from library (files retained): {title}"
-            )
+            logger.info(f"Deleted {deleted_count} issue(s) from library (files retained): {title}")
             if deleted_count > 1:
                 message = f"Removed {deleted_count} issues of '{title}' from library (files retained on disk)"
             else:
@@ -625,9 +585,7 @@ async def purge_cache() -> Dict[str, Any]:
         # Commit deletion
         db.commit()
 
-        logger.info(
-            f"Search cache purged successfully. Removed {cache_count} cached search results."
-        )
+        logger.info(f"Search cache purged successfully. Removed {cache_count} cached search results.")
 
         return {
             "success": True,
@@ -692,6 +650,4 @@ async def get_periodicals_count() -> Dict[str, int]:
     Returns:
         Dictionary with total count
     """
-    return await with_db_session(
-        _shared._session_factory, lambda db: {"total": db.query(Periodical).count()}
-    )
+    return await with_db_session(_shared._session_factory, lambda db: {"total": db.query(Periodical).count()})
