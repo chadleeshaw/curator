@@ -577,6 +577,12 @@ class FileImporter:
                 magazine.tracking_id = target_tracking.id
                 target_tracking.last_metadata_update = datetime.now()
 
+                # Update tracking language if not already set (or if this is more specific)
+                # This ensures tracking records get language info from imports
+                if not target_tracking.language and parsed.language:
+                    target_tracking.language = parsed.language
+                    logger.debug(f"Updated tracking language to '{parsed.language}' for: {target_tracking.title}")
+
                 # Magazine title and folder already match tracking title from organization step above
                 # No need to reorganize since we used the tracking title from the start
                 logger.debug(f"Linked magazine to tracking: {target_tracking.title} (ID: {target_tracking.id})")

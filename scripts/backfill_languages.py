@@ -32,9 +32,11 @@ def backfill_languages(dry_run=True):
     session = _session_factory()
     try:
         # Find all periodicals with NULL or empty language
-        periodicals = session.query(Periodical).filter(
-            (Periodical.language == None) | (Periodical.language == "")  # noqa: E711
-        ).all()
+        periodicals = (
+            session.query(Periodical)
+            .filter((Periodical.language == None) | (Periodical.language == ""))  # noqa: E711
+            .all()
+        )
 
         print(f"Found {len(periodicals)} periodicals with missing language field")
 
