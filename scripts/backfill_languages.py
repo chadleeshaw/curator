@@ -27,7 +27,7 @@ def backfill_languages(dry_run=True):
     """
     config_loader = ConfigLoader()
     config = config_loader.config
-    
+
     # Initialize database manager
     db_url = f"sqlite:///{config['database']['path']}"
     db_manager = DatabaseManager(db_url)
