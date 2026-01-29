@@ -81,11 +81,11 @@ class ProviderCacheService:
         logger.info(f"Provider cache initialized: {cache_db_path}")
 
     def _initialize_database(self):
-        """Create database tables and FTS5 virtual table for full-text search"""
+        """Create database tables, compound indexes, and FTS5 virtual table for full-text search"""
         # Create all tables
         CacheBase.metadata.create_all(self._engine)
 
-        # Create FTS5 virtual table for full-text search on title
+        # Create FTS5 virtual table and compound indexes for full-text search
         with self._engine.connect() as conn:
             # Check if FTS5 table exists
             result = conn.execute(
@@ -143,65 +143,201 @@ class ProviderCacheService:
                 conn.commit()
                 logger.info("Created FTS5 virtual table for full-text search")
 
+            # Create compound indexes for common filter combinations (if they don't exist)
+            # These dramatically speed up filtered searches
+            try:
+                conn.execute(
+                    text(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_category_language_date
+                        ON cached_releases(category, language, upload_date DESC)
+                        """
+                    )
+                )
+                conn.execute(
+                    text(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_fuzzy_group_date
+                        ON cached_releases(fuzzy_match_group, upload_date DESC)
+                        """
+                    )
+                )
+                conn.execute(
+                    text(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_normalized_title_date
+                        ON cached_releases(normalized_title, upload_date DESC)
+                        """
+                    )
+                )
+                conn.commit()
+                logger.info("Created compound indexes for optimized filtering")
+            except Exception as e:
+                logger.debug(f"Compound indexes may already exist: {e}")
+
     def search(
         self,
         query: str,
         category: Optional[str] = None,
         language: Optional[str] = None,
         limit: int = 50,
+        offset: int = 0,
+        deduplicate: bool = True,
     ) -> List[Dict[str, Any]]:
         """
-        Search cached releases using FTS5 full-text search.
+        Search cached releases using FTS5 full-text search with optional pagination and deduplication.
 
         Args:
             query: Search query
             category: Optional category filter
             language: Optional language filter
             limit: Maximum number of results (default: 50)
+            offset: Offset for pagination (default: 0)
+            deduplicate: Use SQL-based deduplication to return best match per fuzzy group (default: True)
 
         Returns:
             List of matching releases as dictionaries
         """
         session = self._session_factory()
         try:
-            # Use FTS5 for full-text search
-            sql_query = text(
-                """
-                SELECT cr.* FROM cached_releases cr
-                INNER JOIN cached_releases_fts fts ON cr.id = fts.rowid
-                WHERE cached_releases_fts MATCH :query
-                """
+            if deduplicate:
+                # Use SQL window function for efficient deduplication at database level
+                # This selects the best (most recent) release per fuzzy_match_group
+                subquery = text(
+                    """
+                    SELECT cr.*,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY cr.fuzzy_match_group
+                               ORDER BY cr.upload_date DESC, cr.last_seen DESC
+                           ) as rn
+                    FROM cached_releases cr
+                    INNER JOIN cached_releases_fts fts ON cr.id = fts.rowid
+                    WHERE cached_releases_fts MATCH :fts_query
+                    """
+                )
+
+                params = {"fts_query": query}
+
+                # Add filters to subquery
+                if category:
+                    subquery = text(str(subquery).replace("WHERE", "WHERE cr.category = :category AND"))
+                    params["category"] = category
+
+                if language:
+                    subquery = text(str(subquery).replace("WHERE", "WHERE cr.language = :language AND"))
+                    params["language"] = language
+
+                # Wrap in outer query to filter by row number and apply pagination
+                final_query = text(
+                    f"""
+                    SELECT * FROM ({subquery})
+                    WHERE rn = 1
+                    ORDER BY upload_date DESC, last_seen DESC
+                    LIMIT :limit OFFSET :offset
+                    """
+                )
+                params["limit"] = limit
+                params["offset"] = offset
+
+                result = session.execute(final_query, params)
+                # Convert rows directly to dicts to avoid extra queries
+                columns = result.keys()
+                releases = [dict(zip(columns, row)) for row in result.fetchall()]
+
+            else:
+                # No deduplication - use simple ORM query with join
+                query_obj = (
+                    session.query(CachedRelease)
+                    .join(
+                        text("cached_releases_fts ON cached_releases.id = cached_releases_fts.rowid"),
+                        isouter=False,
+                    )
+                    .filter(text("cached_releases_fts MATCH :fts_query"))
+                    .params(fts_query=query)
+                )
+
+                # Add category filter if specified
+                if category:
+                    query_obj = query_obj.filter(CachedRelease.category == category)
+
+                # Add language filter if specified
+                if language:
+                    query_obj = query_obj.filter(CachedRelease.language == language)
+
+                # Order by upload_date (newest first), then last_seen, with pagination
+                query_obj = (
+                    query_obj.order_by(CachedRelease.upload_date.desc(), CachedRelease.last_seen.desc())
+                    .limit(limit)
+                    .offset(offset)
+                )
+
+                # Execute single optimized query and convert to dicts
+                releases = [release.to_dict() for release in query_obj.all()]
+
+            logger.info(
+                f"Cache search: found {len(releases)} results for query '{query}' "
+                f"(offset={offset}, limit={limit}, dedupe={deduplicate})"
             )
+            return releases
 
-            params = {"query": query}
+        finally:
+            session.close()
 
-            # Add category filter if specified
+    def count(
+        self,
+        query: str,
+        category: Optional[str] = None,
+        language: Optional[str] = None,
+        deduplicate: bool = True,
+    ) -> int:
+        """
+        Get total count of matching releases for pagination.
+
+        Args:
+            query: Search query
+            category: Optional category filter
+            language: Optional language filter
+            deduplicate: Count deduplicated results (default: True)
+
+        Returns:
+            Total count of matching releases
+        """
+        session = self._session_factory()
+        try:
+            if deduplicate:
+                # Count distinct fuzzy_match_groups
+                sql_query = text(
+                    """
+                    SELECT COUNT(DISTINCT cr.fuzzy_match_group)
+                    FROM cached_releases cr
+                    INNER JOIN cached_releases_fts fts ON cr.id = fts.rowid
+                    WHERE cached_releases_fts MATCH :fts_query
+                    """
+                )
+            else:
+                # Count all matching releases
+                sql_query = text(
+                    """
+                    SELECT COUNT(*)
+                    FROM cached_releases cr
+                    INNER JOIN cached_releases_fts fts ON cr.id = fts.rowid
+                    WHERE cached_releases_fts MATCH :fts_query
+                    """
+                )
+
+            params = {"fts_query": query}
+
+            # Add filters
             if category:
-                sql_query = text(str(sql_query) + " AND cr.category = :category")
+                sql_query = text(str(sql_query).replace("WHERE", "WHERE cr.category = :category AND"))
                 params["category"] = category
 
-            # Add language filter if specified
             if language:
-                sql_query = text(str(sql_query) + " AND cr.language = :language")
+                sql_query = text(str(sql_query).replace("WHERE", "WHERE cr.language = :language AND"))
                 params["language"] = language
 
-            # Order by upload_date (newest first), then last_seen
-            sql_query = text(str(sql_query) + " ORDER BY cr.upload_date DESC, cr.last_seen DESC LIMIT :limit")
-            params["limit"] = limit
-
-            # Execute query
             result = session.execute(sql_query, params)
-            rows = result.fetchall()
-
-            # Convert to CachedRelease objects and then to dicts
-            releases = []
-            for row in rows:
-                release = session.get(CachedRelease, row[0])  # row[0] is the id
-                if release:
-                    releases.append(release.to_dict())
-
-            logger.info(f"Cache search: found {len(releases)} results for query '{query}'")
-            return releases
+            return result.scalar()
 
         finally:
             session.close()
