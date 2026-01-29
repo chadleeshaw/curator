@@ -90,8 +90,54 @@ def generate_query_variants(query: str, max_variants: int = 5) -> List[str]:
     if significant_words and len(significant_words) != len(words):
         variants.add(" ".join(significant_words))
 
-    # Convert to list and sort by length (longer = more specific)
-    variant_list = sorted(list(variants), key=len, reverse=True)
+    # Priority 7: Generate abbreviated variants (e.g., "Magazine USA" → "MG USA")
+    if len(words) >= 2:
+        # Abbreviate first word if it's long enough (4+ chars) and not already abbreviated
+        first_word = words[0]
+        if len(first_word) >= 4 and first_word.upper() != first_word:
+            # Generate 2-letter abbreviation using prominent consonants
+            # Skip position-1 consonants to avoid unwanted abbreviations
+            # "Magazine" → "MG" (M at pos 0, G at pos 2)
+            # "Wired" → "WR" (W at pos 0, R at pos 2)
+            consonants = []
+            for i, char in enumerate(first_word):
+                if char.isalpha() and char.lower() not in "aeiouy":
+                    # Skip consonants immediately after first letter
+                    if i != 1:
+                        consonants.append(char.upper())
+                        if len(consonants) == 2:
+                            break
+
+            # Fallback: use first 2 letters if we don't have 2 consonants
+            if len(consonants) < 2 and len(first_word) >= 2:
+                initials = first_word[0].upper() + first_word[1].upper()
+            else:
+                initials = "".join(consonants[:2]) if len(consonants) >= 2 else None
+
+            if initials and len(initials) == 2:
+                # Create variant with initials + remaining words
+                abbreviated = f"{initials} {' '.join(words[1:])}"
+                variants.add(abbreviated)
+
+                # Also create variant with initials only (no regional indicators)
+                remaining_words = [w for w in words[1:] if w.lower() not in REGIONAL_EDITION_INDICATORS]
+                if remaining_words:
+                    variants.add(f"{initials} {' '.join(remaining_words)}")
+                else:
+                    variants.add(initials)
+
+    # Convert to list and sort by custom ranking
+    # Ranking priority:
+    # 1. Original query (most specific)
+    # 2. Last N words (often the actual magazine title)
+    # 3. Longer variants (more specific)
+    # 4. Shorter variants (broader match)
+    def rank_variant(v: str) -> tuple:
+        is_original = 1 if v == query_clean else 0
+        is_last_words = 1 if len(words) > 2 and v == " ".join(words[-2:]) else 0
+        return (-is_original, -is_last_words, -len(v))
+
+    variant_list = sorted(list(variants), key=rank_variant)
 
     # Limit to max_variants and ensure original query is always first
     if query_clean in variant_list:

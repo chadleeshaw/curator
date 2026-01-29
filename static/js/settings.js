@@ -297,6 +297,21 @@ export class SettingsManager {
         </div>
         <div style="margin: 10px 0;">
           <label style="display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" id="search-provider-query-expansion-${index}" ${provider.enable_query_expansion !== false ? 'checked' : ''}>
+            <span style="font-weight: 600;">Enable Query Expansion</span>
+            <span style="font-weight: 400; color: var(--text-secondary); font-size: 12px;">(Generates search variants to improve match rates)</span>
+          </label>
+        </div>
+        <div style="margin: 10px 0;">
+          <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">
+            Max Expanded Queries <span style="font-weight: 400; color: var(--text-secondary); font-size: 12px;">(Number of query variants, 1-5)</span>:
+          </label>
+          <input type="number" id="search-provider-max-queries-${index}" value="${provider.max_expanded_queries || 3}"
+                min="1" max="5"
+                style="width: 100px; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
+        </div>
+        <div style="margin: 10px 0;">
+          <label style="display: flex; align-items: center; gap: 8px;">
             <input type="checkbox" id="search-provider-enabled-${index}" ${provider.enabled ? 'checked' : ''}>
             Enabled
           </label>
@@ -749,6 +764,8 @@ export class SettingsManager {
       const key = keyInput.value; // Only use the actual input value, not data-original-key
       const categories = document.getElementById(`search-provider-categories-${index}`).value;
       const enabled = document.getElementById(`search-provider-enabled-${index}`).checked;
+      const enableQueryExpansion = document.getElementById(`search-provider-query-expansion-${index}`).checked;
+      const maxExpandedQueries = parseInt(document.getElementById(`search-provider-max-queries-${index}`).value) || 3;
 
       if (!name || !url) {
         UIUtils.showStatus('settings-status', 'Please fill in provider name and URL', 'error');
@@ -761,6 +778,8 @@ export class SettingsManager {
         name: name,
         api_url: url,
         enabled: enabled,
+        enable_query_expansion: enableQueryExpansion,
+        max_expanded_queries: Math.max(1, Math.min(5, maxExpandedQueries)), // Clamp between 1-5
       };
 
       // Add categories if provided (optional field)

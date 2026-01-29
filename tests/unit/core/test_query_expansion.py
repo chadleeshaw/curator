@@ -98,8 +98,10 @@ class TestGenerateQueryVariants:
         variants = generate_query_variants("National Geographic Kids Travel")
         # First should be original (most specific)
         assert variants[0] == "National Geographic Kids Travel"
-        # Longer variants should come before shorter ones
-        for i in range(len(variants) - 1):
+        # Second should prioritize last N words (often the actual magazine title)
+        assert variants[1] == "Kids Travel"
+        # Rest should be ordered by specificity (longer = more specific)
+        for i in range(2, len(variants) - 1):
             assert len(variants[i]) >= len(variants[i + 1])
 
 

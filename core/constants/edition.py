@@ -7,32 +7,90 @@ Edition and variant constants for distinguishing different publication types
 # ==============================================================================
 
 REGIONAL_EDITION_INDICATORS = {
+    # Directions
     "africa",
     "south",
     "north",
     "east",
     "west",
+    # Regions
     "europe",
     "asia",
     "america",
+    "international",
+    "worldwide",
+    "global",
+    # North America
     "usa",
     "uk",
     "us",
-    "australia",
     "canada",
+    "mexico",
+    # South America
+    "brazil",
+    "argentina",
+    "chile",
+    "colombia",
+    "peru",
+    "venezuela",
+    # Europe - Western
     "france",
     "germany",
     "italy",
     "spain",
-    "mexico",
-    "brazil",
-    "argentina",
+    "portugal",
+    "netherlands",
+    "belgium",
+    "switzerland",
+    "austria",
+    # Europe - Nordic
+    "sweden",
+    "norway",
+    "denmark",
+    "finland",
+    "iceland",
+    # Europe - Eastern
+    "poland",
+    "czech",
+    "hungary",
+    "romania",
+    "bulgaria",
+    "greece",
+    "croatia",
+    "slovenia",
+    "slovakia",
+    "lithuania",
+    "latvia",
+    "estonia",
+    # British Isles
+    "ireland",
+    "scotland",
+    "wales",
+    # Asia
     "japan",
     "china",
     "korea",
-    "international",
-    "worldwide",
-    "global",
+    "india",
+    "indonesia",
+    "thailand",
+    "malaysia",
+    "singapore",
+    "philippines",
+    "vietnam",
+    "taiwan",
+    # Oceania
+    "australia",
+    "newzealand",
+    # Africa
+    "southafrica",
+    "egypt",
+    "nigeria",
+    "kenya",
+    # Middle East & Eastern Europe
+    "russia",
+    "ukraine",
+    "turkey",
+    "israel",
 }
 """Regional/country names that indicate regional editions, not special editions"""
 

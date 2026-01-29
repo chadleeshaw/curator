@@ -63,7 +63,7 @@ class NewsnabProvider(SearchProvider):
 
         # Query expansion configuration
         self.enable_query_expansion = config.get("enable_query_expansion", True)
-        self.max_expanded_queries = config.get("max_expanded_queries", 2)
+        self.max_expanded_queries = config.get("max_expanded_queries", 3)
 
         # Rate limit tracking
         self._request_times: List[float] = []

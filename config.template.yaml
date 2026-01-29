@@ -28,6 +28,12 @@ search_providers:
     max_requests_per_hour: 100 # Self-imposed limit (default: 100 requests/hour)
     request_delay_seconds: 1.0 # Delay between requests (default: 1 second)
 
+    # Query expansion settings (improves search match rates)
+    # Automatically generates search variants to find results with different naming
+    # Example: "Magazine Title Regional" → ["Magazine Title Regional", "Title Regional", "MG Title Regional"]
+    enable_query_expansion: true # Enable/disable query expansion (default: true)
+    max_expanded_queries: 3 # Number of query variants to try (default: 3, range: 1-5)
+
   # RSS Provider (optional - for fast new release discovery)
   # Uncomment and configure to enable RSS-based searching
   # - type: rss
