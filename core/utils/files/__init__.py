@@ -1,12 +1,13 @@
 """
 File utilities for consistent path resolution and operations.
 
-DEPRECATED: This module has been reorganized into core.utils.files/
-Import from the new location instead:
-    from core.utils.files import get_library_dir, resolve_periodical_file_path, etc.
+This module provides utilities organized by concern:
+- paths: Path resolution and library management
+- operations: File operations and scanning
+- formats: Format detection and conversions
 """
 
-# Re-export from new location for backward compatibility
+# Path management utilities
 from core.utils.files.paths import (
     get_library_dir,
     get_category_prefix,
@@ -18,6 +19,7 @@ from core.utils.files.paths import (
 )
 
 __all__ = [
+    # Path utilities
     "get_library_dir",
     "get_category_prefix",
     "resolve_periodical_file_path",

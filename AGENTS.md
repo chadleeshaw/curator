@@ -396,18 +396,24 @@ def helper_function(x):
 
 - Use ES6 modules (`import`/`export`)
 - Named exports for utilities, default for classes
+- Modules organized in subdirectories (`core/`, `features/`, `readers/`)
+- Import using relative paths from subdirectories
 - Example:
 
 ```javascript
-// errors.js
+// core/errors.js
 export class APIError extends Error { ... }
 export class ValidationError extends Error { ... }
 
-// api.js
+// core/api.js
 import { AuthManager } from './auth.js';
 import { APIError, NetworkError } from './errors.js';
 
 export class APIClient { ... }
+
+// features/library.js
+import { APIClient } from '../core/api.js';
+import { UIUtils } from '../core/ui-utils.js';
 ```
 
 #### Formatting
@@ -527,9 +533,18 @@ curator/
 ├── providers/      # Search providers (Newsnab, RSS)
 ├── clients/        # Download clients (SABnzbd, NZBGet)
 ├── services/       # Business logic (file import, organization, OCR)
-├── scheduler/      # Background tasks (download monitor, OCR processor)
+├── schedulers/     # Background tasks (download monitor, OCR processor)
 ├── web/            # FastAPI app, routers, middleware, schemas
+│   └── routers/    # API routers (some organized in subdirectories)
+│       ├── periodicals/  # Periodical management endpoints
+│       ├── tracking/     # Tracking management endpoints
+│       ├── downloads/    # Download management endpoints
+│       └── search/       # Search endpoints
 ├── static/         # Frontend assets (JS, CSS, templates)
+│   └── js/         # JavaScript modules (organized by domain)
+│       ├── core/         # Core utilities (api, auth, errors, ui-utils)
+│       ├── features/     # Feature modules (library, tracking, downloads, etc.)
+│       └── readers/      # Reader modules (pdf, epub, comic)
 ├── tests/          # Test suite (pytest)
 └── main.py         # Application entry point
 ```
@@ -539,6 +554,7 @@ curator/
 #### FastAPI Routers
 
 - Located in `web/routers/`
+- Complex routers organized in subdirectories (e.g., `periodicals/`, `tracking/`, `search/`)
 - Use dependency injection for database sessions
 - Return typed responses with schemas
 - Example:
@@ -576,15 +592,29 @@ async def list_periodicals(
 
 ### Frontend Patterns
 
+#### JavaScript Module Organization
+
+JavaScript modules are organized by domain in `static/js/`:
+
+- **`core/`** - Core utilities (API client, auth, errors, constants, UI utilities)
+  - `api.js`, `auth.js`, `errors.js`, `constants.js`, `ui-utils.js`
+- **`features/`** - Feature modules (library, tracking, downloads, settings, etc.)
+  - `library.js`, `tracking.js`, `downloads.js`, `ocr-queue.js`, `settings.js`, `tasks.js`, `imports.js`, `config.js`
+- **`readers/`** - Content readers (PDF, EPUB, Comic)
+  - `page-reader.js`, `pdf-reader.js`, `epub-reader.js`, `comic-reader.js`, `reader-utils.js`
+- Root level: `main.js`, `event-handlers.js`, `periodical.js`, `login.js`
+
+Each subdirectory includes an `index.js` for convenient barrel exports.
+
 #### API Communication
 
-- Use `APIClient` class from `api.js`
+- Use `APIClient` class from `core/api.js`
 - Automatic auth token handling
 - Consistent error handling with custom error classes
 - Example:
 
 ```javascript
-import { APIClient } from './api.js';
+import { APIClient } from './core/api.js';
 
 async function loadPeriodicals() {
   try {

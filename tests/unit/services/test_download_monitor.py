@@ -14,7 +14,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from core.config import ConfigLoader
-from tasks import DownloadMonitor
+from schedulers import DownloadMonitor
 from services import DownloadManager
 from services import FileImporter
 from core.interfaces import DownloadClient

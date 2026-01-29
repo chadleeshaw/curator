@@ -4,8 +4,8 @@
  * special edition management, and issue organization.
  */
 
-import { APIClient, APIHelper } from './api.js';
-import { CSS_CLASSES } from './constants.js';
+import { APIClient, APIHelper } from './core/api.js';
+import { CSS_CLASSES } from './core/constants.js';
 
 // Parse years data and special editions from data attributes
 const container = document.getElementById('periodical-container');

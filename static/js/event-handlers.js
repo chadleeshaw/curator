@@ -6,7 +6,7 @@
  * The window.* assignments will be removed in a future phase after HTML migration.
  */
 
-import { CSS_CLASSES } from './constants.js';
+import { CSS_CLASSES } from './core/constants.js';
 
 export class EventHandlers {
   /**

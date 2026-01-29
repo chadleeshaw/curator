@@ -5,7 +5,7 @@
 
 /* global DOMParser, IntersectionObserver */
 
-import { APIClient, APIHelper } from './api.js';
+import { APIClient, APIHelper } from '../core/api.js';
 import { mediaWorker, Priority } from './media-worker-manager.js';
 import {
   FullscreenManager,

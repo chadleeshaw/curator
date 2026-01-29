@@ -15,13 +15,17 @@ from core.utils.error_handling import handle_api_errors
 from web.utils.responses import success_response
 from core.utils.files import get_library_dir
 from core.utils.general import cleanup_empty_directories, is_special_edition
-from core.utils.epub_reader import get_epub_metadata, get_epub_chapter, get_epub_image
-from core.utils.comic_reader import (
+from core.utils.readers import (
+    get_epub_metadata,
+    get_epub_chapter,
+    get_epub_image,
     get_comic_metadata,
     get_comic_page,
     get_comic_page_thumbnail,
+    get_pdf_metadata,
+    get_pdf_page,
+    get_pdf_page_thumbnail,
 )
-from core.utils.pdf_reader import get_pdf_metadata, get_pdf_page, get_pdf_page_thumbnail
 from services.file_operations import reorganize_periodical_files
 
 from . import _shared

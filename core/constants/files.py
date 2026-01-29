@@ -63,6 +63,9 @@ ORGANIZED_FILENAME_SEPARATOR = " - "
 SUPPORTED_FILE_EXTENSIONS = {".pdf", ".epub", ".cbz", ".cbr"}
 """Set of file extensions that Curator can process"""
 
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
+"""Set of common image file extensions"""
+
 BLACKLISTED_FILE_EXTENSIONS = {
     # Video files
     ".mp4",

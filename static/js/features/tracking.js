@@ -4,8 +4,8 @@
  * @module tracking
  */
 
-import { APIClient, APIHelper } from './api.js';
-import { UIUtils, SortManager } from './ui-utils.js';
+import { APIClient, APIHelper } from '../core/api.js';
+import { UIUtils, SortManager } from '../core/ui-utils.js';
 import {
   ELEMENT_IDS,
   STATUS_MESSAGES,
@@ -16,7 +16,7 @@ import {
   NUMBER_TO_MONTH,
   MONTH_NAMES_LOWER,
   MONTH_ABBR_LOWER,
-} from './constants.js';
+} from '../core/constants.js';
 
 /** @type {string[]} Supported languages loaded from backend */
 let SUPPORTED_LANGUAGES = [];

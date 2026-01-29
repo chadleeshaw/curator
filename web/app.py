@@ -20,7 +20,7 @@ from services import (
     IssueDiscoveryService,
     SearchScheduler,
 )
-from tasks import (
+from schedulers import (
     TaskScheduler,
     DownloadMonitor,
     CoverCleanup,

@@ -4,14 +4,14 @@
  * @module downloads
  */
 
-import { APIClient, APIHelper } from './api.js?v=1767733177';
-import { UIUtils } from './ui-utils.js?v=1767733177';
+import { APIClient, APIHelper } from '../core/api.js?v=1767733177';
+import { UIUtils } from '../core/ui-utils.js?v=1767733177';
 import {
   ELEMENT_IDS as _ELEMENT_IDS,
   STATUS_MESSAGES as _STATUS_MESSAGES,
   CSS_CLASSES,
   TIMEOUTS as _TIMEOUTS,
-} from './constants.js';
+} from '../core/constants.js';
 
 /**
  * @typedef {Object} DiscoveredIssue

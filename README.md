@@ -2,17 +2,26 @@
 
 Automatically discover, download, and organize periodicals (magazines, comics, newspapers) with a modern web interface.
 
-## Features
+## ✨ Features
 
-- 🔍 **Smart Search** - Multi-provider search with fuzzy matching to avoid duplicates
+- 🔍 **Smart Search** - Multi-provider search with intelligent deduplication
 - 📥 **Auto Downloads** - Track periodicals for automatic downloads via SABnzbd/NZBGet
 - 📚 **Clean Library** - Automatic organization with consistent naming and cover art
-- 🤖 **OCR Metadata** - Extracts issue numbers and dates from cover images
-- 🌐 **Web Interface** - Browse, search, and manage your collection
+- 🤖 **OCR Metadata** - Extract issue numbers and dates from cover images
+- 🌐 **Web Interface** - Modern, responsive UI to browse and manage your collection
+- 🔄 **Background Tasks** - Automated monitoring, cleanup, and processing
 
-## Quick Start with Docker
+## 🚀 Quick Start
 
-### 1. Create Configuration
+## 🚀 Quick Start
+
+### Prerequisites
+
+- Docker installed
+- Newsnab indexer (Prowlarr recommended)
+- Download client (SABnzbd or NZBGet)
+
+### 1. Setup Configuration
 
 ```bash
 # Create directories
@@ -21,11 +30,11 @@ mkdir -p local/config local/data local/downloads
 # Copy sample config
 cp config.template.yaml local/config/config.yaml
 
-# Edit with your API keys
+# Edit with your settings
 nano local/config/config.yaml
 ```
 
-Add your Newsnab provider (Prowlarr recommended) and download client:
+**Minimal config** - Add your provider and download client:
 
 ```yaml
 search_providers:
@@ -44,50 +53,19 @@ download_client:
 
 ### 2. Run with Docker
 
-```bash
-docker run -d \
-  --name curator \
-  -p 8000:8000 \
-  -v $(pwd)/local/config:/app/local/config \
-  -v $(pwd)/local/data:/app/local/data \
-  -v $(pwd)/local/downloads:/app/local/downloads \
-  chadleeshaw/curator:latest
-```
-
-### 3. Access the Web UI
-
-Open http://localhost:8000 in your browser and start searching!
-
-## Docker Options
-
-### Low Memory Mode (< 4GB RAM)
-
-Disable OCR to reduce memory usage:
+**Option A: Docker Run**
 
 ```bash
 docker run -d \
   --name curator \
   -p 8000:8000 \
-  -e DISABLE_OCR=true \
   -v $(pwd)/local/config:/app/local/config \
   -v $(pwd)/local/data:/app/local/data \
   -v $(pwd)/local/downloads:/app/local/downloads \
   chadleeshaw/curator:latest
 ```
 
-### Custom Port
-
-```bash
-docker run -d \
-  --name curator \
-  -p 3000:8000 \
-  -v $(pwd)/local/config:/app/local/config \
-  -v $(pwd)/local/data:/app/local/data \
-  -v $(pwd)/local/downloads:/app/local/downloads \
-  chadleeshaw/curator:latest
-```
-
-## Docker Compose (Recommended)
+**Option B: Docker Compose (Recommended)**
 
 Create `docker-compose.yml`:
 
@@ -106,44 +84,54 @@ services:
       - ./local/downloads:/app/local/downloads
     environment:
       - TZ=America/New_York
-      # - DISABLE_OCR=true  # Uncomment for low memory
+      # - DISABLE_OCR=true  # Uncomment for low memory mode
 ```
 
-Then run:
+Then start:
 
 ```bash
 docker-compose up -d
 ```
 
-## Using Curator
+### 3. Access the Web UI
+
+Open **http://localhost:8000** and start managing your periodicals!
+
+## 📖 Using Curator
 
 ### Search & Download
 
-1. Navigate to **Search** in the web UI
-2. Enter a periodical title (e.g., "National Geographic")
-3. Choose automatic or manual mode
-4. Select results to download
+1. **Search** → Enter periodical title (e.g., "National Geographic")
+2. Choose automatic deduplication or manual provider selection
+3. Select results and download
 
 ### Track for Auto-Downloads
 
-1. Go to **Tracking**
-2. Search for a periodical
-3. Configure download preferences:
+1. **Tracking** → Search for a periodical
+2. Configure preferences:
    - Track all editions
-   - Track new issues only
+   - Track new issues only  
    - Select specific editions
-4. Curator will automatically download new issues
+3. Curator automatically downloads new issues as they're released
 
 ### Browse Library
 
-View your organized collection in **Library** with:
-
+**Library** tab shows your organized collection with:
 - Cover thumbnails
-- Metadata (issue dates, numbers)
-- Special editions marked
-- Quick file access
+- Metadata (dates, issue numbers, special editions)
+- Quick file access and management
 
-## Configuration Options
+## ⚙️ Configuration
+
+## ⚙️ Configuration
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DISABLE_OCR` | `false` | Disable OCR processing (reduces memory usage) |
+| `TZ` | System | Set timezone (e.g., `America/New_York`) |
+| `CURATOR_CONFIG_PATH` | `local/config/config.yaml` | Custom config file location |
 
 ### Search Providers
 
@@ -188,15 +176,7 @@ download_client:
 
 ### Storage Paths
 
-```yaml
-storage:
-  db_path: './local/config/periodicals.db'
-  download_dir: './local/downloads' # Where downloads arrive
-  library_dir: './local/data' # Where files are organized
-  cache_dir: './local/cache'
-```
-
-### File Organization
+Organize your library with custom patterns:
 
 ```yaml
 import:
@@ -205,7 +185,7 @@ import:
   enable_ocr: true
 ```
 
-Results in structure:
+**Example structure:**
 
 ```
 local/data/
@@ -217,7 +197,7 @@ local/data/
         └── National Geographic - 2024-01.pdf
 ```
 
-## Development Setup
+## 🛠 Development Setup
 
 For local development without Docker:
 
@@ -226,80 +206,86 @@ For local development without Docker:
 pip install -r requirements.txt
 npm install
 
-# Install Git hooks (runs ci-lint before push)
-make install-hooks
-
 # Copy config
 cp config.template.yaml local/config/config.yaml
+
+# Install Git hooks (auto-runs linters before push)
+make install-hooks
 
 # Run application
 python main.py
 ```
 
-**Run tests:**
+**Available commands:**
 
 ```bash
-make test           # All tests
+make test           # Run all tests
 make test-unit      # Fast unit tests only
 make lint           # Check code style
-make ci-lint        # CI linters (run before push)
+make ci-lint        # CI linters (matches GitHub Actions)
 make format         # Auto-format code
 ```
 
-**Git Hooks:**
+The project includes a pre-push Git hook that runs `make ci-lint` automatically to ensure code quality.
 
-The project includes a pre-push hook that automatically runs `make ci-lint` to ensure code quality before pushing. Install with:
+## 📋 Requirements
 
-```bash
-make install-hooks
-```
+- **Docker**: Any recent version
+- **RAM**: 4GB+ recommended (2GB+ with `DISABLE_OCR=true`)
+- **Disk**: Depends on collection size
+- **Services**: 
+  - Newsnab indexer (Prowlarr recommended)
+  - Download client (SABnzbd or NZBGet)
 
-To bypass the hook (not recommended):
+## 🔧 Troubleshooting
 
-```bash
-git push --no-verify
-```
-
-## Requirements
-
-- **Docker**: Any recent version (Docker Desktop or Docker Engine)
-- **RAM**: 4GB+ (2GB+ with `DISABLE_OCR=true`)
-- **Disk**: Depends on your collection size
-- **Services**: Newsnab indexer (Prowlarr) and download client (SABnzbd/NZBGet)
-
-## Troubleshooting
+### Container Issues
 
 **Container keeps restarting:**
+```bash
+# Check logs
+docker logs curator
 
-- Check logs: `docker logs curator`
-- If exit code 137: Out of memory - try `DISABLE_OCR=true`
-- If exit code 132: CPU doesn't support AVX2 - use `DISABLE_OCR=true`
+# Common fixes:
+# - Exit code 137: Out of memory → Add DISABLE_OCR=true
+# - Exit code 132: No AVX2 support → Add DISABLE_OCR=true
+```
 
 **Can't connect to download client:**
-
-- Check `api_url` in config
-- If using Docker networks, use container names (e.g., `http://sabnzbd:8080`)
-- Verify API key is correct
+- Verify `api_url` in config (use container names if on Docker network)
+- Check API key is correct
+- Ensure download client is running
 
 **No search results:**
-
-- Verify Newsnab/Prowlarr is running
+- Verify Prowlarr/indexer is running and accessible
 - Check API key and URL in config
-- View logs: `docker logs curator`
+- Review logs: `docker logs curator`
 
-## Architecture
+## 🏗 Architecture
 
 ```
 curator/
-├── core/           # Configuration, auth, parsers, utilities
-├── clients/        # Download clients (SABnzbd, NZBGet)
-├── models/         # Database models
+├── core/           # Configuration, parsers, utilities
+├── models/         # Database models (SQLAlchemy)
 ├── providers/      # Search providers (Newsnab, RSS)
+├── clients/        # Download clients (SABnzbd, NZBGet)
 ├── services/       # Business logic (import, organize, OCR)
-├── tasks/          # Background jobs (monitoring, cleanup)
-├── web/            # FastAPI routes and middleware
-└── static/         # Web UI (vanilla JavaScript)
+├── schedulers/     # Background tasks (monitoring, cleanup)
+├── web/            # FastAPI API & routers
+│   └── routers/    # API endpoints (organized by domain)
+└── static/         # Web UI (JavaScript ES6 modules)
+    └── js/         # Frontend code (core, features, readers)
 ```
+
+## 📄 License
+
+MIT License - See [LICENSE](LICENSE) file for details.
+
+## 💬 Support
+
+- 📚 [Documentation](https://github.com/chadleeshaw/curator/wiki)
+- 🐛 [Report Issues](https://github.com/chadleeshaw/curator/issues)
+- 💭
 
 ## License
 

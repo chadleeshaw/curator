@@ -3,7 +3,7 @@
  * Common functionality for PDF, Comic, and EPUB readers
  */
 
-import { APIClient, APIHelper } from './api.js';
+import { APIClient, APIHelper } from '../core/api.js';
 
 /**
  * Fullscreen Manager

@@ -3,8 +3,8 @@
  * Handles scheduled tasks display and execution
  */
 
-import { APIClient, APIHelper } from './api.js';
-import { UIUtils } from './ui-utils.js';
+import { APIClient, APIHelper } from '../core/api.js';
+import { UIUtils } from '../core/ui-utils.js';
 
 export class TasksManager {
   /**

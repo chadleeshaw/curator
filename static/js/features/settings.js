@@ -6,14 +6,14 @@
  * Contains core functionality - provider management needs full implementation
  */
 
-import { APIClient, APIHelper } from './api.js';
-import { UIUtils } from './ui-utils.js';
+import { APIClient, APIHelper } from '../core/api.js';
+import { UIUtils } from '../core/ui-utils.js';
 import {
   ELEMENT_IDS as _ELEMENT_IDS,
   STATUS_MESSAGES as _STATUS_MESSAGES,
   CSS_CLASSES,
   TIMEOUTS,
-} from './constants.js';
+} from '../core/constants.js';
 
 export class SettingsManager {
   constructor() {
