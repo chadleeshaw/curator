@@ -239,14 +239,33 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
 
             # Check derived_metadata first (new location)
             if p.derived_metadata and isinstance(p.derived_metadata, dict):
-                special_data = p.derived_metadata.get("special_edition")
-                if special_data:
-                    if isinstance(special_data, dict):
-                        special_edition_value = special_data.get("value")
+                # Check boolean is_special_edition flag (primary indicator)
+                special_bool = p.derived_metadata.get("is_special_edition")
+                if special_bool:
+                    if isinstance(special_bool, dict):
+                        is_special = bool(special_bool.get("value"))
                     else:
-                        special_edition_value = special_data
-                    if special_edition_value:
-                        is_special = True
+                        is_special = bool(special_bool)
+
+                # Get special edition name for display (if it's a special edition)
+                if is_special:
+                    special_name = p.derived_metadata.get("special_edition_name")
+                    if special_name:
+                        if isinstance(special_name, dict):
+                            special_edition_value = special_name.get("value")
+                        else:
+                            special_edition_value = special_name
+
+                # Legacy field name (backwards compatibility - both flag and name in one field)
+                if not is_special:
+                    special_data = p.derived_metadata.get("special_edition")
+                    if special_data:
+                        if isinstance(special_data, dict):
+                            special_edition_value = special_data.get("value")
+                        else:
+                            special_edition_value = special_data
+                        if special_edition_value:
+                            is_special = True
 
             # Fallback to extra_metadata (legacy location)
             if not is_special and p.extra_metadata and isinstance(p.extra_metadata, dict):
