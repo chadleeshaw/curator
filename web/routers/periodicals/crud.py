@@ -20,6 +20,101 @@ router = _shared.router
 logger = _shared.logger
 
 
+# Helper functions for list_periodicals query building
+
+
+def _build_group_key_expression():
+    """
+    Build the group key expression used for grouping periodicals.
+
+    Groups by tracking_id when present, otherwise uses periodical.id.
+    This allows tracked items to be grouped together while keeping
+    untracked items separate.
+
+    Returns:
+        SQLAlchemy case expression for grouping
+    """
+    return case(
+        (Periodical.tracking_id.isnot(None), Periodical.tracking_id),
+        else_=Periodical.id,
+    )
+
+
+def _build_date_subquery(db):
+    """
+    Build subquery to find the most recent issue date for each group.
+
+    Args:
+        db: Database session
+
+    Returns:
+        SQLAlchemy subquery with group_key, language, and max_date columns
+    """
+    return (
+        db.query(
+            _build_group_key_expression().label("group_key"),
+            Periodical.language,
+            func.max(Periodical.issue_date).label("max_date"),
+        )
+        .group_by("group_key", Periodical.language)
+        .subquery()
+    )
+
+
+def _build_id_subquery(db, date_subquery):
+    """
+    Build subquery to find the highest ID among records with max_date.
+
+    This acts as a tiebreaker when multiple issues have the same date.
+
+    Args:
+        db: Database session
+        date_subquery: Subquery from _build_date_subquery
+
+    Returns:
+        SQLAlchemy subquery with group_key, language, and max_id columns
+    """
+    group_key_expr = _build_group_key_expression()
+    return (
+        db.query(
+            group_key_expr.label("group_key"),
+            Periodical.language,
+            func.max(Periodical.id).label("max_id"),
+        )
+        .join(
+            date_subquery,
+            (group_key_expr == date_subquery.c.group_key)
+            & (Periodical.language == date_subquery.c.language)
+            & (Periodical.issue_date == date_subquery.c.max_date),
+        )
+        .group_by("group_key", Periodical.language)
+        .subquery()
+    )
+
+
+def _build_count_subquery(db):
+    """
+    Build subquery to count total issues per group.
+
+    Used when sorting by issue_count.
+
+    Args:
+        db: Database session
+
+    Returns:
+        SQLAlchemy subquery with group_key, language, and issue_count columns
+    """
+    return (
+        db.query(
+            _build_group_key_expression().label("group_key"),
+            Periodical.language,
+            func.count(Periodical.id).label("issue_count"),  # pylint: disable=not-callable
+        )
+        .group_by("group_key", Periodical.language)
+        .subquery()
+    )
+
+
 @router.get("/periodicals")
 @handle_api_errors("List periodicals", logger)
 async def list_periodicals(
@@ -43,74 +138,15 @@ async def list_periodicals(
         # Validate sort_order
         is_descending = sort_order.lower() == "desc"
 
-        # Group by tracking_id (when present) OR title+language (for untracked items)
-        # This allows merged tracking records to show as one entry while preserving
-        # separate entries for untracked items
-
-        # For grouping, use tracking.title when tracking_id exists, otherwise use magazine.title
-        # This ensures merged items show under the primary tracking title
-        # Subquery 1: Find the max issue_date for each group
-        date_subquery = (
-            db.query(
-                case(
-                    (
-                        Periodical.tracking_id.isnot(None),
-                        Periodical.tracking_id,
-                    ),
-                    else_=Periodical.id,
-                ).label("group_key"),
-                Periodical.language,
-                func.max(Periodical.issue_date).label("max_date"),
-            )
-            .group_by("group_key", Periodical.language)
-            .subquery()
-        )
-
-        # Subquery 2: Among rows with max_date, find the max id (tiebreaker for same date)
-        id_subquery = (
-            db.query(
-                case(
-                    (
-                        Periodical.tracking_id.isnot(None),
-                        Periodical.tracking_id,
-                    ),
-                    else_=Periodical.id,
-                ).label("group_key"),
-                Periodical.language,
-                func.max(Periodical.id).label("max_id"),
-            )
-            .join(
-                date_subquery,
-                (
-                    case(
-                        (
-                            Periodical.tracking_id.isnot(None),
-                            Periodical.tracking_id,
-                        ),
-                        else_=Periodical.id,
-                    )
-                    == date_subquery.c.group_key
-                )
-                & (Periodical.language == date_subquery.c.language)
-                & (Periodical.issue_date == date_subquery.c.max_date),
-            )
-            .group_by("group_key", Periodical.language)
-            .subquery()
-        )
+        # Build subqueries for grouping and finding latest issue per group
+        date_subquery = _build_date_subquery(db)
+        id_subquery = _build_id_subquery(db, date_subquery)
+        group_key_expr = _build_group_key_expression()
 
         # Join to get full magazine record for each group's latest issue
         query = db.query(Periodical).join(
             id_subquery,
-            (
-                case(
-                    (
-                        Periodical.tracking_id.isnot(None),
-                        Periodical.tracking_id,
-                    ),
-                    else_=Periodical.id,
-                )
-                == id_subquery.c.group_key
-            )
+            (group_key_expr == id_subquery.c.group_key)
             & (Periodical.language == id_subquery.c.language)
             & (Periodical.id == id_subquery.c.max_id),
         )
@@ -120,36 +156,12 @@ async def list_periodicals(
 
         # Calculate issue counts for sorting (if needed)
         if sort_by == "issue_count":
-            # Create subquery to count issues for each group
-            count_subquery = (
-                db.query(
-                    case(
-                        (
-                            Periodical.tracking_id.isnot(None),
-                            Periodical.tracking_id,
-                        ),
-                        else_=Periodical.id,
-                    ).label("group_key"),
-                    Periodical.language,
-                    func.count(Periodical.id).label("issue_count"),  # pylint: disable=not-callable
-                )
-                .group_by("group_key", Periodical.language)
-                .subquery()
-            )
+            count_subquery = _build_count_subquery(db)
 
             # Join the count subquery
             query = query.outerjoin(
                 count_subquery,
-                (
-                    case(
-                        (
-                            Periodical.tracking_id.isnot(None),
-                            Periodical.tracking_id,
-                        ),
-                        else_=Periodical.id,
-                    )
-                    == count_subquery.c.group_key
-                )
+                (group_key_expr == count_subquery.c.group_key)
                 & (Periodical.language == count_subquery.c.language),
             )
 
@@ -193,19 +205,12 @@ async def list_periodicals(
 
         magazines = query.offset(skip).limit(limit).all()
 
-        # Get total count of unique groups
+        # Get total count of unique groups using helper
+        group_key_expr = _build_group_key_expression()
         total_query = db.query(
             func.count(  # pylint: disable=not-callable
                 func.distinct(  # pylint: disable=not-callable
-                    case(
-                        (
-                            Periodical.tracking_id.isnot(None),
-                            Periodical.tracking_id,
-                        ),
-                        else_=Periodical.id,
-                    )
-                    .concat("_")
-                    .concat(func.coalesce(Periodical.language, "English"))
+                    group_key_expr.concat("_").concat(func.coalesce(Periodical.language, "English"))
                 )
             )
         )

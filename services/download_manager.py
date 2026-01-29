@@ -1,13 +1,11 @@
 """
 Download manager for handling periodical downloads.
-Manages search, deduplication, submission, and status tracking.
+Coordinates search, deduplication, submission, and status tracking.
 """
 
 # pylint: disable=too-many-lines
 
 import logging
-import re
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -17,20 +15,19 @@ from core.interfaces import DownloadClient, SearchProvider
 from core.constants.app import (
     DEFAULT_FUZZY_THRESHOLD,
     MAX_DOWNLOAD_RETRIES,
-    PROVIDER_SEARCH_TIMEOUT,
 )
 from core.constants.category import DEFAULT_CATEGORY
 from core.constants.files import BLACKLISTED_FILE_EXTENSIONS
-from core.parsers import normalize_month_name, utc_now
-from core.parsers import LANGUAGE_INDICATORS
-from core.parsers import TitleMatcher, Parser
+from core.parsers import utc_now, TitleMatcher, Parser
 from core.parsers.categorizer import FileCategorizer
+from core.utils.fuzzy_matching import get_fuzzy_group_id
 from models.database import (
     DownloadSubmission,
     Periodical,
     PeriodicalTracking,
 )
 from models.database import SearchResult as DBSearchResult
+from services.download import SearchService, DeduplicationService, SubmissionService, QueueProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +67,12 @@ class DownloadManager:
         self.parser = Parser(fuzzy_threshold=fuzzy_threshold)
         self.provider_cache_service = provider_cache_service
         self.categorizer = FileCategorizer()
+        
+        # Initialize services
+        self.search_service = SearchService(search_providers, fuzzy_threshold)
+        self.deduplication_service = DeduplicationService()
+        self.submission_service = SubmissionService()
+        self.queue_processor = QueueProcessor(download_client, max_downloads)
 
     def search_periodical_issues(self, periodical_title: str, session: Session) -> List[Dict[str, Any]]:
         """
@@ -82,119 +85,7 @@ class DownloadManager:
         Returns:
             List of search results with deduplication grouping
         """
-        search_title = periodical_title
-        language_filter = None
-        # Build pattern from centralized language list
-        language_names = "|".join([lang.capitalize() for lang in LANGUAGE_INDICATORS.keys()])
-        language_pattern = rf"\s+-\s+({language_names})$"
-        match = re.search(language_pattern, periodical_title, re.IGNORECASE)
-        if match:
-            search_title = periodical_title[: match.start()].strip()
-            language_filter = match.group(1)
-            logger.info(f"Searching for '{search_title}' with language filter: {language_filter}")
-
-        all_results = []
-
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            for provider in self.search_providers:
-                try:
-                    logger.debug(f"Searching {provider.name} for: {search_title}")
-
-                    # Execute search with timeout
-                    future = executor.submit(provider.search, search_title)
-                    try:
-                        results = future.result(timeout=PROVIDER_SEARCH_TIMEOUT)
-                    except FuturesTimeoutError:
-                        logger.warning(
-                            f"Search timeout ({PROVIDER_SEARCH_TIMEOUT}s) for {provider.name} "
-                            f"searching '{periodical_title}'"
-                        )
-                        continue
-
-                    for result in results:
-                        # Parse search result using unified parser
-                        parsed = self.parser.parse_search_result(
-                            title=result.title,
-                            url=result.url,
-                            provider=result.provider,
-                            publication_date=result.publication_date,
-                            raw_metadata=result.raw_metadata,
-                        )
-
-                        # Skip if parser rejected as non-periodical (movies/TV/audiobooks)
-                        if parsed is None:
-                            logger.debug(f"Skipping non-periodical result: {result.title}")
-                            continue
-
-                        # Apply language filter if specified
-                        if language_filter and parsed.language != language_filter:
-                            continue  # Skip results that don't match the language filter
-
-                        # Apply edition variant filter to match search behavior
-                        # Normalize title for edition detection (dots → spaces)
-                        normalized_search = search_title.replace(".", " ").replace("_", " ")
-                        normalized_result = parsed.title.replace(".", " ").replace("_", " ")
-
-                        search_variant = self.title_matcher._extract_edition_variant(normalized_search)
-                        result_variant = self.title_matcher._extract_edition_variant(normalized_result)
-
-                        # Skip results with mismatched edition variants
-                        # (e.g., searching "National Geographic" shouldn't return "National Geographic Little Kids")
-                        if not (
-                            (search_variant is None and result_variant is None)
-                            or (
-                                search_variant is not None
-                                and result_variant is not None
-                                and search_variant == result_variant
-                            )
-                        ):
-                            logger.debug(
-                                f"Skipping edition variant mismatch: '{parsed.title}' (variant: {result_variant}) "
-                                f"doesn't match search '{search_title}' (variant: {search_variant})"
-                            )
-                            continue
-
-                        all_results.append(
-                            {
-                                "title": parsed.title,
-                                "original_title": parsed.original_title,
-                                "url": parsed.url,
-                                "provider": parsed.provider,
-                                "publication_date": parsed.publication_date,
-                                "raw_metadata": parsed.raw_metadata,
-                            }
-                        )
-
-                except Exception as e:
-                    logger.error(f"Error searching {provider.name} for '{periodical_title}': {e}")
-
-        logger.debug(
-            f"Found {len(all_results)} results for '{periodical_title}' across {len(self.search_providers)} providers"
-        )
-        return all_results
-
-    def _get_fuzzy_group_id(self, title: str) -> str:
-        """
-        Get a normalized group ID for fuzzy matching duplicates.
-        Uses title matching to create consistent grouping.
-
-        Args:
-            title: Title to normalize
-
-        Returns:
-            Group ID string
-        """
-        # Normalize title: lowercase, remove special chars, collapse spaces
-        normalized = " ".join(title.lower().split())
-
-        # Normalize common month abbreviations to full names for better matching
-        words = []
-        for word in normalized.split():
-            words.append(normalize_month_name(word))
-
-        # Keep first few significant words as group ID
-        group_words = [w for w in words if len(w) > 2][:3]
-        return "-".join(group_words)
+        return self.search_service.search_periodical_issues(periodical_title, session)
 
     def _create_submission_record(
         self,
@@ -228,23 +119,17 @@ class DownloadManager:
         Returns:
             Created DownloadSubmission record
         """
-        fuzzy_group = self._get_fuzzy_group_id(search_result["title"])
-
-        submission = DownloadSubmission(
-            tracking_id=tracking_id,
-            search_result_id=search_result_db_id,
+        return self.submission_service.create_submission_record(
+            tracking_id,
+            search_result,
+            status,
+            session,
+            search_result_db_id=search_result_db_id,
             job_id=job_id,
-            status=status,
-            source_url=search_result["url"],
-            result_title=search_result["title"],
-            fuzzy_match_group=fuzzy_group,
+            error_message=error_message,
             client_name=client_name,
             attempt_count=attempt_count,
-            last_error=error_message,
         )
-        session.add(submission)
-        session.commit()
-        return submission
 
     def check_duplicate_submission(
         self, tracking_id: int, result_title: str, session: Session
@@ -260,30 +145,12 @@ class DownloadManager:
         Returns:
             Tuple of (is_duplicate, existing_submission_record)
         """
-        # Create group ID for this result
-        fuzzy_group = self._get_fuzzy_group_id(result_title)
-
-        # Check for similar results already submitted
-        # Include QUEUED status to prevent duplicate queueing
-        existing = (
-            session.query(DownloadSubmission)
-            .filter(
-                DownloadSubmission.tracking_id == tracking_id,
-                DownloadSubmission.fuzzy_match_group == fuzzy_group,
-                DownloadSubmission.status.in_(
-                    [
-                        DownloadSubmission.StatusEnum.QUEUED,
-                        DownloadSubmission.StatusEnum.PENDING,
-                        DownloadSubmission.StatusEnum.DOWNLOADING,
-                        DownloadSubmission.StatusEnum.COMPLETED,
-                    ]
-                ),
-            )
-            .first()
+        # Check submissions table for duplicates
+        is_dup, existing = self.deduplication_service.check_duplicate_submission(
+            result_title, tracking_id, session
         )
-
-        if existing:
-            logger.debug(f"Skipping duplicate: '{result_title}' (similar to '{existing.result_title}')")
+        
+        if is_dup:
             return True, existing
 
         # Also check if already in library (Periodical table)
@@ -369,7 +236,7 @@ class DownloadManager:
                 return None
 
         # Create fuzzy match group for this result
-        fuzzy_group = self._get_fuzzy_group_id(search_result["title"])
+        fuzzy_group = get_fuzzy_group_id(search_result["title"])
 
         # Check if this title/group has failed too many times (bad file)
         # Use fuzzy_match_group instead of URL because providers may return different URLs
@@ -1079,16 +946,7 @@ class DownloadManager:
         Returns:
             List of completed submissions with file paths
         """
-        completed = (
-            session.query(DownloadSubmission)
-            .filter(
-                DownloadSubmission.status == DownloadSubmission.StatusEnum.COMPLETED,
-                DownloadSubmission.file_path.isnot(None),
-            )
-            .all()
-        )
-
-        return completed
+        return self.submission_service.get_completed_downloads(session)
 
     def mark_processed(self, submission_id: int, session: Session) -> bool:
         """
@@ -1101,19 +959,7 @@ class DownloadManager:
         Returns:
             True if successful
         """
-        submission = session.query(DownloadSubmission).filter(DownloadSubmission.id == submission_id).first()
-
-        if not submission:
-            logger.warning(f"Submission not found: {submission_id}")
-            return False
-
-        # Mark as processed by setting file_path to None
-        # (indicates it's been moved/processed)
-        submission.file_path = None
-        session.commit()
-
-        logger.info(f"Marked submission as processed: {submission_id}")
-        return True
+        return self.submission_service.mark_processed(submission_id, session)
 
     def get_pending_downloads(self, session: Session) -> List[DownloadSubmission]:
         """
@@ -1125,20 +971,7 @@ class DownloadManager:
         Returns:
             List of active submissions
         """
-        pending = (
-            session.query(DownloadSubmission)
-            .filter(
-                DownloadSubmission.status.in_(
-                    [
-                        DownloadSubmission.StatusEnum.PENDING,
-                        DownloadSubmission.StatusEnum.DOWNLOADING,
-                    ]
-                )
-            )
-            .all()
-        )
-        logger.debug(f"Found {len(pending)} pending submissions")
-        return pending
+        return self.submission_service.get_pending_downloads(session)
 
     def retry_submission(self, submission_id: int, session: Session) -> Dict[str, Any]:
         """
@@ -1234,143 +1067,7 @@ class DownloadManager:
         Returns:
             Dict with processing results
         """
-        try:
-            # Count active downloads
-            active_count = (
-                session.query(DownloadSubmission)
-                .filter(
-                    DownloadSubmission.status.in_(
-                        [
-                            DownloadSubmission.StatusEnum.PENDING,
-                            DownloadSubmission.StatusEnum.DOWNLOADING,
-                        ]
-                    )
-                )
-                .count()
-            )
-
-            available_slots = max(0, self.max_downloads - active_count)
-
-            if available_slots == 0:
-                logger.debug(
-                    f"[DownloadManager] No download slots available ({active_count}/{self.max_downloads} active)"
-                )
-                return {
-                    "processed": 0,
-                    "submitted": 0,
-                    "failed": 0,
-                    "active_count": active_count,
-                    "available_slots": 0,
-                }
-
-            # Get queued submissions (oldest first)
-            queued = (
-                session.query(DownloadSubmission)
-                .filter(DownloadSubmission.status == DownloadSubmission.StatusEnum.QUEUED)
-                .order_by(DownloadSubmission.created_at.asc())
-                .limit(available_slots)
-                .all()
-            )
-
-            if not queued:
-                logger.debug(
-                    f"[DownloadManager] No queued downloads to process "
-                    f"({available_slots} slots available, {active_count}/{self.max_downloads} active)"
-                )
-                return {
-                    "processed": 0,
-                    "submitted": 0,
-                    "failed": 0,
-                    "active_count": active_count,
-                    "available_slots": available_slots,
-                }
-
-            logger.info(
-                f"[DownloadManager] Processing {len(queued)} queued downloads "
-                f"({available_slots} slots available, {active_count}/{self.max_downloads} active)"
-            )
-
-            submitted_count = 0
-            failed_count = 0
-
-            for submission in queued:
-                try:
-                    # Get tracking for category
-                    tracking = (
-                        session.query(PeriodicalTracking)
-                        .filter(PeriodicalTracking.id == submission.tracking_id)
-                        .first()
-                    )
-
-                    download_category = None
-                    if tracking and tracking.download_category:
-                        download_category = tracking.download_category
-                    elif self.default_category:
-                        download_category = self.default_category
-
-                    # Submit to download client
-                    logger.debug(f"[DownloadManager] Submitting queued download: {submission.result_title}")
-                    job_id = self.download_client.submit(
-                        nzb_url=submission.source_url,
-                        title=submission.result_title,
-                        category=download_category,
-                    )
-
-                    if job_id:
-                        # Update submission to PENDING
-                        submission.status = DownloadSubmission.StatusEnum.PENDING
-                        submission.job_id = job_id
-                        submission.client_name = self.download_client.name
-                        submission.attempt_count = 1
-                        submission.updated_at = datetime.now()
-                        session.commit()
-
-                        logger.info(
-                            f"[DownloadManager] Submitted queued download: {submission.result_title} (job_id: {job_id})"
-                        )
-                        submitted_count += 1
-                    else:
-                        # Client rejected
-                        submission.status = DownloadSubmission.StatusEnum.FAILED
-                        submission.last_error = "Client rejected submission"
-                        submission.updated_at = datetime.now()
-                        session.commit()
-
-                        logger.warning(f"[DownloadManager] Client rejected queued download: {submission.result_title}")
-                        failed_count += 1
-
-                except Exception as e:
-                    logger.error(
-                        f"[DownloadManager] Error processing queued download {submission.id}: {e}",
-                        exc_info=True,
-                    )
-                    submission.status = DownloadSubmission.StatusEnum.FAILED
-                    submission.last_error = str(e)
-                    submission.updated_at = datetime.now()
-                    session.commit()
-                    failed_count += 1
-
-            logger.info(
-                f"[DownloadManager] Queue processing complete: {submitted_count} submitted, {failed_count} failed"
-            )
-
-            return {
-                "processed": len(queued),
-                "submitted": submitted_count,
-                "failed": failed_count,
-                "active_count": active_count,
-                "available_slots": available_slots,
-            }
-
-        except Exception as e:
-            logger.error(f"[DownloadManager] Error processing queue: {e}", exc_info=True)
-            session.rollback()
-            return {
-                "processed": 0,
-                "submitted": 0,
-                "failed": 0,
-                "error": str(e),
-            }
+        return self.queue_processor.process_queue(session)
 
 
 # Export all public items for wildcard imports

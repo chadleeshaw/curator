@@ -15,20 +15,16 @@ from typing import Any, Dict, Optional, Tuple
 
 from core.constants.country import ISO_COUNTRIES
 from core.constants.files import (
-    PDF_COVER_DPI_HIGH,
-    PDF_COVER_QUALITY_HIGH,
     VOLUME_PREFIX,
     ISSUE_PREFIX,
     ORGANIZED_FILENAME_SEPARATOR,
 )
 from core.constants.language import DEFAULT_LANGUAGE
-from core.utils.pdf import extract_cover_from_pdf as extract_cover_util
-from core.utils.epub import extract_cover_from_epub
-from core.utils.cbz import extract_cover_from_cbz, extract_cover_from_cbr
 from core.utils.files import resolve_periodical_file_path
 from core.parsers import sanitize_filename, detect_country
 from services.importer.sidecar import read_sidecar_file
 from services.importer.matcher import TrackingMatcher
+from services.cover_extractor import CoverExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -557,6 +553,9 @@ class FileOrganizer:
         """
         Extract cover from periodical file (PDF, EPUB, CBZ, or CBR).
 
+        DEPRECATED: Use CoverExtractor.extract_cover() instead.
+        This method is maintained for backward compatibility.
+
         Args:
             pdf_path: Path to periodical file
             output_path: Where to save the cover JPG
@@ -564,47 +563,7 @@ class FileOrganizer:
         Returns:
             True if successful, False otherwise
         """
-        file_path_obj = Path(pdf_path)
-        output_path_obj = Path(output_path)
-        output_dir = output_path_obj.parent
-        extension = file_path_obj.suffix.lower()
-
-        result = None
-
-        if extension == ".pdf":
-            result = extract_cover_util(
-                file_path_obj,
-                output_dir,
-                dpi=PDF_COVER_DPI_HIGH,
-                quality=PDF_COVER_QUALITY_HIGH,
-            )
-        elif extension == ".epub":
-            result = extract_cover_from_epub(
-                file_path_obj,
-                output_dir,
-                quality=PDF_COVER_QUALITY_HIGH,
-            )
-        elif extension == ".cbz":
-            result = extract_cover_from_cbz(
-                file_path_obj,
-                output_dir,
-                quality=PDF_COVER_QUALITY_HIGH,
-            )
-        elif extension == ".cbr":
-            result = extract_cover_from_cbr(
-                file_path_obj,
-                output_dir,
-                quality=PDF_COVER_QUALITY_HIGH,
-            )
-        else:
-            logger.warning(f"Unsupported file type for cover extraction: {extension}")
-            return False
-
-        if result:
-            if result != output_path_obj:
-                result.rename(output_path_obj)
-            return True
-        return False
+        return CoverExtractor.extract_cover(pdf_path, output_path)
 
     def auto_fix_tracking_ids(
         self,

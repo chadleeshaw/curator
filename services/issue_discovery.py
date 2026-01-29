@@ -17,6 +17,7 @@ from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from core.parsers import Parser, utc_now
+from core.utils.fuzzy_matching import get_fuzzy_group_id
 from models.database import DiscoveredIssue, Periodical, PeriodicalTracking
 
 logger = logging.getLogger(__name__)
@@ -144,7 +145,7 @@ class IssueDiscoveryService:
 
                 # Generate fuzzy match group for deduplication
                 # This normalizes the title to group similar results together
-                fuzzy_group = self._get_fuzzy_group_id(parsed.cleaned_title, parsed.publication_date)
+                fuzzy_group = get_fuzzy_group_id(parsed.cleaned_title, parsed.publication_date)
 
                 # Check if we've already discovered this issue
                 existing = (
@@ -587,38 +588,6 @@ class IssueDiscoveryService:
             return False
 
         return True
-
-    def _get_fuzzy_group_id(self, title: str, publication_date: Optional[datetime] = None) -> str:
-        """
-        Generate a fuzzy match group ID for deduplication.
-
-        Normalizes the title to group similar search results together.
-        This prevents duplicate downloads of the same issue from different providers.
-
-        Args:
-            title: Cleaned title from parser
-            publication_date: Publication date if available
-
-        Returns:
-            Normalized string for grouping
-        """
-        # Convert to lowercase and strip whitespace
-        normalized = title.lower().strip()
-
-        # Remove common noise words
-        noise_words = ["the", "magazine", "comic", "edition"]
-        for word in noise_words:
-            normalized = normalized.replace(f" {word} ", " ")
-
-        # Remove extra whitespace
-        normalized = " ".join(normalized.split())
-
-        # Add date component if available
-        if publication_date:
-            date_str = publication_date.strftime("%Y-%m")
-            normalized = f"{normalized}_{date_str}"
-
-        return normalized
 
     def _should_download(self, issue: DiscoveredIssue, tracking: PeriodicalTracking) -> bool:
         """
