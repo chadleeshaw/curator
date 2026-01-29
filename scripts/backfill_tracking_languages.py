@@ -13,7 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.config import ConfigLoader
-from core.database import session_factory
+from core.database import DatabaseManager
 from core.constants.language import DEFAULT_LANGUAGE
 from models.database import PeriodicalTracking, Periodical
 
@@ -29,9 +29,12 @@ def backfill_tracking_languages(dry_run=True):
     """
     config_loader = ConfigLoader()
     config = config_loader.config
-    _session_factory = session_factory(config)
+    
+    # Initialize database manager
+    db_url = f"sqlite:///{config['database']['path']}"
+    db_manager = DatabaseManager(db_url)
 
-    session = _session_factory()
+    session = db_manager.session_factory()
     try:
         # Find all tracking records with NULL or empty language
         tracking_records = (
