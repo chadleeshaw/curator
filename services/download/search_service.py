@@ -45,12 +45,12 @@ class SearchService:
         """
         search_title = periodical_title
         language_filter = None
-        
+
         # Extract language filter from title if present
         language_names = "|".join([lang.capitalize() for lang in LANGUAGE_INDICATORS.keys()])
         language_pattern = rf"\s+-\s+({language_names})$"
         match = re.search(language_pattern, periodical_title, re.IGNORECASE)
-        
+
         if match:
             search_title = periodical_title[: match.start()].strip()
             language_filter = match.group(1)

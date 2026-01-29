@@ -162,10 +162,7 @@ class SubmissionService:
             return False
 
         if submission.attempt_count >= MAX_DOWNLOAD_RETRIES:
-            logger.warning(
-                f"Cannot retry submission {submission.id}: "
-                f"max retries ({MAX_DOWNLOAD_RETRIES}) reached"
-            )
+            logger.warning(f"Cannot retry submission {submission.id}: " f"max retries ({MAX_DOWNLOAD_RETRIES}) reached")
             return False
 
         return True

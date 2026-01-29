@@ -161,8 +161,7 @@ async def list_periodicals(
             # Join the count subquery
             query = query.outerjoin(
                 count_subquery,
-                (group_key_expr == count_subquery.c.group_key)
-                & (Periodical.language == count_subquery.c.language),
+                (group_key_expr == count_subquery.c.group_key) & (Periodical.language == count_subquery.c.language),
             )
 
             # Sort by issue count

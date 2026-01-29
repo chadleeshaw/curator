@@ -67,7 +67,7 @@ class DownloadManager:
         self.parser = Parser(fuzzy_threshold=fuzzy_threshold)
         self.provider_cache_service = provider_cache_service
         self.categorizer = FileCategorizer()
-        
+
         # Initialize services
         self.search_service = SearchService(search_providers, fuzzy_threshold)
         self.deduplication_service = DeduplicationService()
@@ -146,10 +146,8 @@ class DownloadManager:
             Tuple of (is_duplicate, existing_submission_record)
         """
         # Check submissions table for duplicates
-        is_dup, existing = self.deduplication_service.check_duplicate_submission(
-            result_title, tracking_id, session
-        )
-        
+        is_dup, existing = self.deduplication_service.check_duplicate_submission(result_title, tracking_id, session)
+
         if is_dup:
             return True, existing
 

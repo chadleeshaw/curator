@@ -90,7 +90,7 @@ class QueueProcessor:
             try:
                 # Get tracking info for category
                 tracking = session.query(PeriodicalTracking).filter_by(id=submission.tracking_id).first()
-                
+
                 if not tracking:
                     logger.error(f"Tracking {submission.tracking_id} not found for submission {submission.id}")
                     submission.status = DownloadSubmission.StatusEnum.FAILED
@@ -134,8 +134,7 @@ class QueueProcessor:
                 continue
 
         logger.info(
-            f"Queue processing complete: {submitted_count} submitted, "
-            f"{skipped_count} skipped, {len(errors)} errors"
+            f"Queue processing complete: {submitted_count} submitted, " f"{skipped_count} skipped, {len(errors)} errors"
         )
 
         return {
