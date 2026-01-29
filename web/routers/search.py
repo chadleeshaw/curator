@@ -4,7 +4,7 @@ Search routes for periodicals
 
 import logging
 import re
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -292,7 +292,7 @@ def _get_cached_search_results(
     Returns:
         List of cached SearchResult models
     """
-    cutoff_date = datetime.utcnow() - timedelta(days=cache_ttl_days)
+    cutoff_date = datetime.now(UTC) - timedelta(days=cache_ttl_days)
 
     cached_query = (
         db_session.query(SearchResult)
