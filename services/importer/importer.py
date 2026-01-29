@@ -558,6 +558,7 @@ class FileImporter:
             magazine = Periodical(
                 title=organization_title,  # Use organization_title (tracking title if matched)
                 issue_date=parsed.issue_date or datetime.now(),
+                language=parsed.language or DEFAULT_LANGUAGE,  # Set language from parsed metadata
                 file_path=str(organized_path),
                 cover_path=str(cover_path) if cover_path else None,
                 content_hash=content_hash,
