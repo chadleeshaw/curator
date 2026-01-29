@@ -6,7 +6,17 @@ Edition and variant constants for distinguishing different publication types
 # Regional Edition Indicators
 # ==============================================================================
 
-REGIONAL_EDITION_INDICATORS = {
+NORTH_AMERICAN_EDITION_INDICATORS = {
+    # US-specific indicators - these can be safely removed from queries
+    # because US magazines typically don't include the country in their
+    # official name (e.g., "Time" not "Time US")
+    "usa",
+    "us",
+    "america",
+}
+"""US edition indicators that can be removed during query expansion"""
+
+OTHER_REGIONAL_EDITION_INDICATORS = {
     # Directions
     "africa",
     "south",
@@ -16,14 +26,10 @@ REGIONAL_EDITION_INDICATORS = {
     # Regions
     "europe",
     "asia",
-    "america",
     "international",
     "worldwide",
     "global",
-    # North America
-    "usa",
-    "uk",
-    "us",
+    # North America (non-US)
     "canada",
     "mexico",
     # South America
@@ -63,6 +69,7 @@ REGIONAL_EDITION_INDICATORS = {
     "latvia",
     "estonia",
     # British Isles
+    "uk",
     "ireland",
     "scotland",
     "wales",
@@ -92,7 +99,16 @@ REGIONAL_EDITION_INDICATORS = {
     "turkey",
     "israel",
 }
-"""Regional/country names that indicate regional editions, not special editions"""
+"""
+Regional/country names for non-North American editions.
+
+These should be PRESERVED during query expansion because international editions
+actually include the country name as part of their identity (e.g., "Vogue France"
+is different from "Vogue US").
+"""
+
+REGIONAL_EDITION_INDICATORS = NORTH_AMERICAN_EDITION_INDICATORS | OTHER_REGIONAL_EDITION_INDICATORS
+"""Combined set of all regional/country edition indicators (for backward compatibility)"""
 
 
 # ==============================================================================

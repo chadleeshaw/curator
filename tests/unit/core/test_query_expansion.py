@@ -52,12 +52,12 @@ class TestGenerateQueryVariants:
         assert "Nature" in variants
 
     def test_removes_regional_indicators(self):
-        """Test that regional indicators like 'US', 'UK' are removed"""
+        """Test that US regional indicators are removed"""
         variants = generate_query_variants("Wired US")
         assert "Wired" in variants
 
-        variants = generate_query_variants("PC Gamer UK")
-        assert "PC Gamer" in variants
+        variants = generate_query_variants("Time USA")
+        assert "Time" in variants
 
     def test_removes_edition_variants(self):
         """Test that edition variants like 'Kids', 'Professional' are removed"""

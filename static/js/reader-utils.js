@@ -80,7 +80,10 @@ export class FullscreenManager {
    * Toggle fullscreen mode
    */
   toggle() {
-    console.log(`[${this.logPrefix}] toggleFullscreen called, current isFullscreen:`, this.isFullscreen);
+    console.log(
+      `[${this.logPrefix}] toggleFullscreen called, current isFullscreen:`,
+      this.isFullscreen
+    );
 
     const doc = document;
     const docEl = document.documentElement;
@@ -174,7 +177,10 @@ export class FullscreenManager {
    * Enable CSS-based fullscreen fallback (for iOS)
    */
   _enableFallback() {
-    console.log(`[${this.logPrefix}] enableFullscreenFallback called, current state:`, this.isFullscreen);
+    console.log(
+      `[${this.logPrefix}] enableFullscreenFallback called, current state:`,
+      this.isFullscreen
+    );
 
     if (this.isFullscreen) {
       console.log(`[${this.logPrefix}] Exiting CSS fallback fullscreen`);
@@ -205,7 +211,9 @@ export class FullscreenManager {
     if (btn) {
       btn.classList.toggle('active', this.isFullscreen);
       btn.title = this.isFullscreen ? 'Exit fullscreen' : 'Fullscreen';
-      console.log(`[${this.logPrefix}] Button updated to ${this.isFullscreen ? 'active' : 'inactive'}`);
+      console.log(
+        `[${this.logPrefix}] Button updated to ${this.isFullscreen ? 'active' : 'inactive'}`
+      );
     }
 
     if (sidebar) {

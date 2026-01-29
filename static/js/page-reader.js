@@ -470,8 +470,7 @@ export class PageReader {
 
     const currentPageTitle = document.getElementById('current-page-title');
     if (currentPageTitle) {
-      currentPageTitle.textContent =
-        `Page ${this.currentPageIndex + 1} of ${this.metadata.pages.length}`;
+      currentPageTitle.textContent = `Page ${this.currentPageIndex + 1} of ${this.metadata.pages.length}`;
     }
 
     const prevBtn = document.getElementById('prev-btn');

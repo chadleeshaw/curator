@@ -764,8 +764,11 @@ export class SettingsManager {
       const key = keyInput.value; // Only use the actual input value, not data-original-key
       const categories = document.getElementById(`search-provider-categories-${index}`).value;
       const enabled = document.getElementById(`search-provider-enabled-${index}`).checked;
-      const enableQueryExpansion = document.getElementById(`search-provider-query-expansion-${index}`).checked;
-      const maxExpandedQueries = parseInt(document.getElementById(`search-provider-max-queries-${index}`).value) || 3;
+      const enableQueryExpansion = document.getElementById(
+        `search-provider-query-expansion-${index}`
+      ).checked;
+      const maxExpandedQueries =
+        parseInt(document.getElementById(`search-provider-max-queries-${index}`).value) || 3;
 
       if (!name || !url) {
         UIUtils.showStatus('settings-status', 'Please fill in provider name and URL', 'error');

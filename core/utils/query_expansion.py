@@ -11,11 +11,56 @@ from typing import List, Set
 
 from core.constants.edition import (
     EDITION_VARIANT_INDICATORS,
-    REGIONAL_EDITION_INDICATORS,
+    NORTH_AMERICAN_EDITION_INDICATORS,
+    OTHER_REGIONAL_EDITION_INDICATORS,
 )
 from core.constants.title import COMMON_PERIODICAL_WORDS
 
 logger = logging.getLogger(__name__)
+
+
+def _contains_protected_country(words: List[str]) -> bool:
+    """
+    Check if a list of words contains a protected (non-North American) country indicator.
+
+    Args:
+        words: List of words to check
+
+    Returns:
+        True if any word is a protected country indicator
+    """
+    return any(w.lower() in OTHER_REGIONAL_EDITION_INDICATORS for w in words)
+
+
+def _is_too_generic(words: List[str]) -> bool:
+    """
+    Check if a variant is too generic (only common periodical words + countries/regions).
+
+    Variants like "Magazine Germany" or "Journal Russia" are too broad and would
+    return too many false positives.
+
+    Args:
+        words: List of words to check
+
+    Returns:
+        True if the variant would be too generic
+    """
+    if not words:
+        return True
+
+    # Check if all words are either common periodical words or country indicators
+    all_words_lower = [w.lower() for w in words]
+    for word in all_words_lower:
+        if (
+            word not in COMMON_PERIODICAL_WORDS
+            and word not in OTHER_REGIONAL_EDITION_INDICATORS
+            and word not in NORTH_AMERICAN_EDITION_INDICATORS
+        ):
+            # Found a meaningful word - not too generic
+            return False
+
+    # All words are either common periodical words or countries - too generic
+    return True
 
 
 def generate_query_variants(query: str, max_variants: int = 5) -> List[str]:
@@ -25,7 +70,10 @@ def generate_query_variants(query: str, max_variants: int = 5) -> List[str]:
     Strategy:
     1. Original query (highest priority)
     2. Remove common periodical words ("Magazine", "Journal", etc.)
-    3. Remove regional indicators ("US", "UK", "USA", etc.)
+    3. Remove North American regional indicators ("US", "UK", "USA", "Canada")
+       - International editions (Russia, Germany, France, etc.) are preserved
+       - US/UK magazines typically don't include country in their name
+       - International editions DO include country as part of their identity
     4. Remove edition variants ("Kids", "Professional", "Travel", etc.)
     5. Extract significant words (remove articles, keep meaningful terms)
 
@@ -49,6 +97,12 @@ def generate_query_variants(query: str, max_variants: int = 5) -> List[str]:
          "PC Gamer US",
          "PC Gamer Magazine",
          "PC Gamer"]
+
+        >>> generate_query_variants("Magazine Russia")
+        ["Magazine Russia",
+         "MG Russia",
+         "Russia"]
+        # Note: "Magazine" alone is NOT generated - Russia is preserved
     """
     if not query or len(query.strip()) < 2:
         return [query]
@@ -67,8 +121,10 @@ def generate_query_variants(query: str, max_variants: int = 5) -> List[str]:
     if filtered_words and len(filtered_words) != len(words):
         variants.add(" ".join(filtered_words))
 
-    # Priority 3: Remove regional indicators
-    regional_filtered = [w for w in words if w.lower() not in REGIONAL_EDITION_INDICATORS]
+    # Priority 3: Remove North American regional indicators only
+    # International editions (Russia, Germany, France, etc.) preserve their country
+    # because it's part of their identity
+    regional_filtered = [w for w in words if w.lower() not in NORTH_AMERICAN_EDITION_INDICATORS]
     if regional_filtered and len(regional_filtered) != len(words):
         variants.add(" ".join(regional_filtered))
 
@@ -78,12 +134,20 @@ def generate_query_variants(query: str, max_variants: int = 5) -> List[str]:
         variants.add(" ".join(edition_filtered))
 
     # Priority 5: Try combinations - keep first N significant words
+    # BUT: Never drop protected (non-North American) country indicators
+    # AND: Never create variants that are too generic (only common words + country)
     if len(words) > 2:
-        # Keep first 2 words (e.g., "National Geographic" from "National Geographic Kids Travel")
-        variants.add(" ".join(words[:2]))
+        # Keep first 2 words if it doesn't drop a protected country and isn't too generic
+        first_two = words[:2]
+        dropped_words = words[2:]
+        if not _contains_protected_country(dropped_words) and not _is_too_generic(first_two):
+            variants.add(" ".join(first_two))
 
-        # Keep last 2 words (e.g., "Kids Travel" from "National Geographic Kids Travel")
-        variants.add(" ".join(words[-2:]))
+        # Keep last 2 words if it doesn't drop a protected country and isn't too generic
+        last_two = words[-2:]
+        dropped_words = words[:-2]
+        if not _contains_protected_country(dropped_words) and not _is_too_generic(last_two):
+            variants.add(" ".join(last_two))
 
     # Priority 6: Remove articles and keep just significant words
     significant_words = [w for w in words if w.lower() not in {"the", "a", "an"}]
@@ -109,7 +173,7 @@ def generate_query_variants(query: str, max_variants: int = 5) -> List[str]:
                             break
 
             # Fallback: use first 2 letters if we don't have 2 consonants
-            if len(consonants) < 2 and len(first_word) >= 2:
+            if len(first_word) >= 2 > len(consonants):
                 initials = first_word[0].upper() + first_word[1].upper()
             else:
                 initials = "".join(consonants[:2]) if len(consonants) >= 2 else None
@@ -119,8 +183,8 @@ def generate_query_variants(query: str, max_variants: int = 5) -> List[str]:
                 abbreviated = f"{initials} {' '.join(words[1:])}"
                 variants.add(abbreviated)
 
-                # Also create variant with initials only (no regional indicators)
-                remaining_words = [w for w in words[1:] if w.lower() not in REGIONAL_EDITION_INDICATORS]
+                # Also create variant with initials only (no North American regional indicators)
+                remaining_words = [w for w in words[1:] if w.lower() not in NORTH_AMERICAN_EDITION_INDICATORS]
                 if remaining_words:
                     variants.add(f"{initials} {' '.join(remaining_words)}")
                 else:
