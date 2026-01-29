@@ -13,7 +13,7 @@ import { ocrQueue } from './features/ocr-queue.js?v=1767733177';
 import { settings } from './features/settings.js?v=1767733177';
 import { tasks } from './features/tasks.js?v=1767733177';
 import { imports } from './features/imports.js?v=1767733177';
-import EventHandlers from './event-handlers.js?v=1767733177';
+import { EventHandlers } from './event-handlers.js?v=1767733177';
 import { CSS_CLASSES } from './core/constants.js';
 
 /**
