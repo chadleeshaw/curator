@@ -29,7 +29,9 @@ def backfill_languages(dry_run=True):
     config = config_loader.config
 
     # Initialize database manager
-    db_url = f"sqlite:///{config['database']['path']}"
+    storage_config = config.get("storage", {})
+    db_path = storage_config.get("db_path", "./data/periodicals.db")
+    db_url = f"sqlite:///{db_path}"
     db_manager = DatabaseManager(db_url)
 
     session = db_manager.session_factory()
