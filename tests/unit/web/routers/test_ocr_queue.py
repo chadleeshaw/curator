@@ -55,7 +55,7 @@ class TestGetOcrQueue:
         """Test getting all OCR jobs"""
         from datetime import datetime, UTC
         from models.database import Periodical
-        
+
         engine, session_factory = test_db
         ocr_queue.set_dependencies(session_factory)
         session = session_factory()
@@ -90,7 +90,7 @@ class TestGetOcrQueue:
         """Test getting OCR jobs filtered by status"""
         from datetime import datetime, UTC
         from models.database import Periodical
-        
+
         engine, session_factory = test_db
         ocr_queue.set_dependencies(session_factory)
         session = session_factory()
@@ -131,11 +131,13 @@ class TestGetOcrStats:
         session = session_factory()
 
         # Create jobs with different statuses
-        session.add_all([
-            OCRJob(periodical_id=1, status=OCRJob.StatusEnum.PENDING, priority=1),
-            OCRJob(periodical_id=2, status=OCRJob.StatusEnum.COMPLETED, priority=2),
-            OCRJob(periodical_id=3, status=OCRJob.StatusEnum.FAILED, priority=1),
-        ])
+        session.add_all(
+            [
+                OCRJob(periodical_id=1, status=OCRJob.StatusEnum.PENDING, priority=1),
+                OCRJob(periodical_id=2, status=OCRJob.StatusEnum.COMPLETED, priority=2),
+                OCRJob(periodical_id=3, status=OCRJob.StatusEnum.FAILED, priority=1),
+            ]
+        )
         session.commit()
         session.close()
 
@@ -208,11 +210,13 @@ class TestClearFailedOcrJobs:
         ocr_queue.set_dependencies(session_factory)
         session = session_factory()
 
-        session.add_all([
-            OCRJob(periodical_id=1, status=OCRJob.StatusEnum.FAILED, priority=1),
-            OCRJob(periodical_id=2, status=OCRJob.StatusEnum.FAILED, priority=2),
-            OCRJob(periodical_id=3, status=OCRJob.StatusEnum.COMPLETED, priority=1),
-        ])
+        session.add_all(
+            [
+                OCRJob(periodical_id=1, status=OCRJob.StatusEnum.FAILED, priority=1),
+                OCRJob(periodical_id=2, status=OCRJob.StatusEnum.FAILED, priority=2),
+                OCRJob(periodical_id=3, status=OCRJob.StatusEnum.COMPLETED, priority=1),
+            ]
+        )
         session.commit()
         session.close()
 
@@ -239,11 +243,13 @@ class TestClearPendingOcrJobs:
         ocr_queue.set_dependencies(session_factory)
         session = session_factory()
 
-        session.add_all([
-            OCRJob(periodical_id=1, status=OCRJob.StatusEnum.PENDING, priority=1),
-            OCRJob(periodical_id=2, status=OCRJob.StatusEnum.PENDING, priority=2),
-            OCRJob(periodical_id=3, status=OCRJob.StatusEnum.COMPLETED, priority=1),
-        ])
+        session.add_all(
+            [
+                OCRJob(periodical_id=1, status=OCRJob.StatusEnum.PENDING, priority=1),
+                OCRJob(periodical_id=2, status=OCRJob.StatusEnum.PENDING, priority=2),
+                OCRJob(periodical_id=3, status=OCRJob.StatusEnum.COMPLETED, priority=1),
+            ]
+        )
         session.commit()
         session.close()
 

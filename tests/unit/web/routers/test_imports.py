@@ -38,16 +38,12 @@ def mock_file_importer():
     importer = MagicMock()
     importer.import_file.return_value = (True, "success", {"imported": 1})
     importer.import_files_from_directory.return_value = {"imported": 5, "failed": 0}
-    
+
     # Mock organizer for reorganize endpoint
     mock_organizer = MagicMock()
-    mock_organizer.reorganize_from_database.return_value = {
-        "moved": 0,
-        "errors": [],
-        "dry_run": False
-    }
+    mock_organizer.reorganize_from_database.return_value = {"moved": 0, "errors": [], "dry_run": False}
     importer.organizer = mock_organizer
-    
+
     return importer
 
 
