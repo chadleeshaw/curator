@@ -454,21 +454,67 @@ class FileImporter:
                             self._cleanup_download_file(pdf_path)
                         return {}
 
+            # Determine category early so we can use it for tracking match
+            category = self.categorizer.categorize(parsed.title)
+
+            # IMPORTANT: Find tracking match BEFORE organizing files
+            # This ensures we use the canonical tracking title for organization
+            # instead of the parsed title, preventing folder fragmentation
+            # (e.g., "Playboy US", "Playboy USA", "Playboy - USA" all go to "Playboy USA" folder)
+
+            target_tracking = None
+
+            if tracking_id:
+                # Tracking ID provided from download submission - validate and use it
+                target_tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
+                if target_tracking:
+                    logger.info(
+                        f"Using provided tracking_id={tracking_id} ('{target_tracking.title}') for '{tracking_title}'"
+                    )
+                else:
+                    logger.warning(f"Provided tracking_id={tracking_id} not found, will try to find best match")
+
+            if not target_tracking:
+                # Try to find best match using the tracking matcher
+                all_tracking = session.query(PeriodicalTracking).all()
+                if all_tracking:
+                    match_result = self.tracking_matcher.find_best_match(
+                        parsed_title=tracking_title,
+                        tracking_records=all_tracking,
+                        parsed_language=parsed.language,
+                        parsed_country=parsed.country,
+                        parsed_category=category,
+                    )
+
+                    if match_result and match_result.is_match:
+                        target_tracking = (
+                            session.query(PeriodicalTracking)
+                            .filter(PeriodicalTracking.id == match_result.tracking_id)
+                            .first()
+                        )
+                        logger.info(
+                            f"Matched '{tracking_title}' to existing tracking '{match_result.tracking_title}' "
+                            f"(ID: {match_result.tracking_id}, score: {match_result.score})"
+                        )
+
+            # Use tracking title for organization if we have a match
+            # This ensures all files for the same periodical go to the same folder
+            organization_title = target_tracking.title if target_tracking else tracking_title
+
             cover_path = self._extract_cover(pdf_path)
 
             # OCR will be queued for background processing instead of running inline
             # This improves import speed and allows concurrent OCR processing
             should_queue_ocr = use_ocr and (cover_path or pdf_path) and OCRService.is_available()
 
-            category = self.categorizer.categorize(parsed.title)
-
             if skip_organize:
                 organized_path = pdf_path
                 logger.info(f"Using file in place (already in library): {pdf_path}")
             else:
                 # Convert parsed data to metadata dict for organizer
+                # Use organization_title (tracking title if matched, otherwise parsed title)
                 metadata = {
-                    "title": tracking_title,
+                    "title": organization_title,
                     "issue_date": parsed.issue_date,
                     "year": parsed.year,
                     "month_name": parsed.month_name,
@@ -510,7 +556,7 @@ class FileImporter:
             )
 
             magazine = Periodical(
-                title=tracking_title,
+                title=organization_title,  # Use organization_title (tracking title if matched)
                 issue_date=parsed.issue_date or datetime.now(),
                 file_path=str(organized_path),
                 cover_path=str(cover_path) if cover_path else None,
@@ -522,108 +568,16 @@ class FileImporter:
 
             session.add(magazine)
 
-            # Manage tracking record based on import settings
-            # Priority:
-            # 1. If tracking_id is provided (from DownloadSubmission), use that
-            # 2. Otherwise, try to match with existing tracking using the matcher
-            # 3. If no match, create new tracking or leave untracked based on auto_track setting
-
-            target_tracking = None
-
-            if tracking_id:
-                # Tracking ID provided from download submission - validate and use it
-                target_tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
-                if target_tracking:
-                    logger.info(
-                        f"Using provided tracking_id={tracking_id} ('{target_tracking.title}') for '{tracking_title}'"
-                    )
-                else:
-                    logger.warning(f"Provided tracking_id={tracking_id} not found, will try to find best match")
-
-            if not target_tracking:
-                # Try to find best match using the tracking matcher
-                all_tracking = session.query(PeriodicalTracking).all()
-                if all_tracking:
-                    match_result = self.tracking_matcher.find_best_match(
-                        parsed_title=tracking_title,
-                        tracking_records=all_tracking,
-                        parsed_language=parsed.language,
-                        parsed_country=parsed.country,
-                        parsed_category=category,
-                    )
-
-                    if match_result and match_result.is_match:
-                        target_tracking = (
-                            session.query(PeriodicalTracking)
-                            .filter(PeriodicalTracking.id == match_result.tracking_id)
-                            .first()
-                        )
-                        logger.info(
-                            f"Matched '{tracking_title}' to existing tracking '{match_result.tracking_title}' "
-                            f"(ID: {match_result.tracking_id}, score: {match_result.score})"
-                        )
+            # Link to tracking if we found a match
+            # The tracking match was already found above, so we just need to link and update metadata
 
             if target_tracking:
                 # Link to existing tracking
                 magazine.tracking_id = target_tracking.id
                 target_tracking.last_metadata_update = datetime.now()
 
-                # IMPORTANT: Ensure magazine title matches tracking title for consistency
-                # The tracking title is the canonical name, magazine and folder should match it
-                if magazine.title != target_tracking.title:
-                    logger.info(
-                        f"Updating magazine title to match tracking: '{magazine.title}' -> '{target_tracking.title}'"
-                    )
-                    magazine.title = target_tracking.title
-
-                    # If file was already in library, reorganize it to match tracking title
-                    if not skip_organize and organized_path:
-                        logger.info(f"Reorganizing file to match tracking title: {target_tracking.title}")
-                        try:
-                            # Build new path with tracking title
-                            safe_tracking_title = sanitize_filename(target_tracking.title)
-                            month = (
-                                parsed.issue_date.strftime("%B") if parsed.issue_date else datetime.now().strftime("%B")
-                            )
-                            year = (
-                                parsed.issue_date.strftime("%Y") if parsed.issue_date else datetime.now().strftime("%Y")
-                            )
-                            filename_base = f"{safe_tracking_title} - {month}{year}"
-
-                            category_with_prefix = f"{self.category_prefix}{category}"
-                            new_target_dir = self.library_base_dir / category_with_prefix / safe_tracking_title / year
-                            new_target_dir.mkdir(parents=True, exist_ok=True)
-
-                            new_pdf_path = new_target_dir / f"{filename_base}.pdf"
-
-                            # Only move if paths are different
-                            if organized_path != new_pdf_path:
-                                # Check if target path already exists in database (UNIQUE constraint check)
-                                existing_record = (
-                                    session.query(Periodical).filter_by(file_path=str(new_pdf_path)).first()
-                                )
-                                if existing_record and existing_record.id != magazine.id:
-                                    logger.warning(
-                                        f"Cannot reorganize magazine {magazine.id}: Target path {new_pdf_path} "
-                                        f"already exists in database for magazine {existing_record.id}. "
-                                        f"Keeping original path: {organized_path}"
-                                    )
-                                else:
-                                    shutil.move(str(organized_path), str(new_pdf_path))
-                                    organized_path = new_pdf_path
-                                    magazine.file_path = str(new_pdf_path)
-                                    logger.info(f"Moved file to match tracking title: {new_pdf_path}")
-
-                                    # Also move cover if it exists
-                                    if cover_path and cover_path.exists():
-                                        new_cover_path = new_target_dir / f"{filename_base}.jpg"
-                                        shutil.move(str(cover_path), str(new_cover_path))
-                                        magazine.cover_path = str(new_cover_path)
-                                        logger.info(f"Moved cover to match tracking title: {new_cover_path}")
-                        except Exception as e:
-                            logger.warning(f"Failed to reorganize file to match tracking title: {e}")
-                            # Continue with import even if reorganization fails
-
+                # Magazine title and folder already match tracking title from organization step above
+                # No need to reorganize since we used the tracking title from the start
                 logger.debug(f"Linked magazine to tracking: {target_tracking.title} (ID: {target_tracking.id})")
 
                 # IMPORTANT: DO NOT update tracking mode for existing tracking records
