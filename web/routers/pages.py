@@ -133,17 +133,11 @@ async def view_periodical_by_id(id: int = Query(...)):
                         is_special = bool(special_bool.get("value"))
                     else:
                         is_special = bool(special_bool)
-                    logger.info(
-                        f"[ByID] Found is_special_edition for {p.title} (ID {p.id}): "
-                        f"special_bool={special_bool}, is_special={is_special}"
-                    )
 
             if is_special:
-                logger.info(f"[ByID] Adding {p.title} (ID {p.id}) to special_editions")
                 special_editions.append(periodical_data)
             else:
                 year = p.issue_date.year if p.issue_date else "Unknown"
-                logger.info(f"[ByID] Adding {p.title} (ID {p.id}) to year {year}")
                 periodicals_by_year[year].append(periodical_data)
 
         # Sort years in descending order
@@ -287,10 +281,6 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
                         is_special = bool(special_bool.get("value"))
                     else:
                         is_special = bool(special_bool)
-                    logger.info(
-                        f"Found is_special_edition for {p.title} (ID {p.id}): "
-                        f"special_bool={special_bool}, is_special={is_special}"
-                    )
 
                 # Get special edition name for display (if it's a special edition)
                 if is_special:
@@ -330,11 +320,9 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
                 is_special = True
 
             if is_special:
-                logger.info(f"Adding {p.title} (ID {p.id}) to special_editions")
                 special_editions.append(periodical_data)
             else:
                 year = p.issue_date.year if p.issue_date else "Unknown"
-                logger.info(f"Adding {p.title} (ID {p.id}) to year {year}")
                 periodicals_by_year[year].append(periodical_data)
 
         # Sort years in descending order

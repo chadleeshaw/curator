@@ -121,7 +121,25 @@ def generate_query_variants(query: str, max_variants: int = 5) -> List[str]:
     if filtered_words and len(filtered_words) != len(words):
         variants.add(" ".join(filtered_words))
 
-    # Priority 3: Remove North American regional indicators only
+    # Priority 3: Generate US/USA variants and remove North American regional indicators
+    # For US editions, generate both "US" and "USA" variants since providers
+    # may list titles either way (e.g., "Wired US" vs "Wired USA")
+    # Also generate variant without regional indicator (e.g., "Wired")
+    has_us = "us" in [w.lower() for w in words]
+    has_usa = "usa" in [w.lower() for w in words]
+
+    if has_us or has_usa:
+        # Generate variant with alternate US/USA form
+        if has_us:
+            # Generate USA variant
+            usa_words = [w if w.lower() != "us" else "USA" for w in words]
+            variants.add(" ".join(usa_words))
+        elif has_usa:
+            # Generate US variant
+            us_words = [w if w.lower() != "usa" else "US" for w in words]
+            variants.add(" ".join(us_words))
+
+    # Also generate variant without North American regional indicators
     # International editions (Russia, Germany, France, etc.) preserve their country
     # because it's part of their identity
     regional_filtered = [w for w in words if w.lower() not in NORTH_AMERICAN_EDITION_INDICATORS]
@@ -194,12 +212,21 @@ def generate_query_variants(query: str, max_variants: int = 5) -> List[str]:
     # Ranking priority:
     # 1. Original query (most specific)
     # 2. Last N words (often the actual magazine title)
-    # 3. Longer variants (more specific)
-    # 4. Shorter variants (broader match)
+    # 3. Variants without regional indicators (broader, higher match rate)
+    # 4. US/USA swap variants (specific alternative forms)
+    # 5. Longer variants (more specific)
+    # 6. Shorter variants (broader match)
     def rank_variant(v: str) -> tuple:
         is_original = 1 if v == query_clean else 0
         is_last_words = 1 if len(words) > 2 and v == " ".join(words[-2:]) else 0
-        return (-is_original, -is_last_words, -len(v))
+
+        # Check if this is a variant without regional indicators
+        # (original had US/USA but this variant doesn't)
+        had_regional = any(w.lower() in NORTH_AMERICAN_EDITION_INDICATORS for w in words)
+        has_regional = any(w.lower() in NORTH_AMERICAN_EDITION_INDICATORS for w in v.split())
+        is_regional_removed = 1 if had_regional and not has_regional else 0
+
+        return (-is_original, -is_last_words, -is_regional_removed, -len(v))
 
     variant_list = sorted(list(variants), key=rank_variant)
 
@@ -242,12 +269,17 @@ def expand_search_queries(
         ["PC Gamer US",
          "PC Gamer"]
     """
-    variants = generate_query_variants(query, max_variants=max_queries * 2)
+    # Check if query contains US/USA - if so, add 1 to max to ensure both variants are included
+    words = query.split()
+    has_us_variant = any(w.lower() in {"us", "usa"} for w in words)
+    effective_max = max_queries + 1 if has_us_variant else max_queries
+
+    variants = generate_query_variants(query, max_variants=effective_max * 2)
 
     # Filter variants that are too short
     valid_variants = [v for v in variants if len(v) >= min_query_length]
 
-    # Return top N
-    result = valid_variants[:max_queries]
+    # Return top N (with bonus slot for US/USA variants)
+    result = valid_variants[:effective_max]
     logger.debug(f"Expanded query '{query}' to {len(result)} searches: {result}")
     return result

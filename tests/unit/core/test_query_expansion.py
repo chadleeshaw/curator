@@ -59,6 +59,24 @@ class TestGenerateQueryVariants:
         variants = generate_query_variants("Time USA")
         assert "Time" in variants
 
+    def test_generates_us_usa_variants(self):
+        """Test that US/USA variants are generated for better provider matching"""
+        # "Wired US" should generate "Wired USA" variant
+        variants = generate_query_variants("Wired US")
+        assert "Wired US" in variants  # Original
+        assert "Wired USA" in variants  # US→USA variant
+        assert "Wired" in variants  # Regional indicator removed
+
+        # "Time USA" should generate "Time US" variant
+        variants = generate_query_variants("Time USA")
+        assert "Time USA" in variants  # Original
+        assert "Time US" in variants  # USA→US variant
+        assert "Time" in variants  # Regional indicator removed
+
+        # Should not generate standalone "US" or "USA" (handled by _is_too_generic)
+        assert "US" not in variants
+        assert "USA" not in variants
+
     def test_removes_edition_variants(self):
         """Test that edition variants like 'Kids', 'Professional' are removed"""
         variants = generate_query_variants("National Geographic Kids")
