@@ -195,17 +195,6 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
                     # Update title after file operations
                     periodical.title = target.title
 
-                # Synchronize language to match target tracking (only if target has language set)
-                # This ensures consistency after merge while preserving multi-language scenarios
-                # where the target tracking intentionally has no language to group multiple editions
-                if target.language and periodical.language != target.language:
-                    old_lang = periodical.language
-                    periodical.language = target.language
-                    logger.debug(
-                        f"Synchronized language from '{old_lang}' to '{target.language}' "
-                        f"for periodical: {periodical.title}"
-                    )
-
                 periodicals_moved += 1
 
             # Update download submissions to point to target tracking
