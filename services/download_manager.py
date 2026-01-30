@@ -915,7 +915,8 @@ class DownloadManager:
                 if submission.attempt_count > MAX_DOWNLOAD_RETRIES:
                     logger.error(
                         f"[DownloadManager] Max retries reached for '{submission.result_title}' "
-                        f"- marking as bad file (will not retry)"
+                        f"- marking as permanently failed (will not retry). "
+                        f"Reason: {submission.last_error}"
                     )
 
             session.commit()

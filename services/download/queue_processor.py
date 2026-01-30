@@ -80,7 +80,11 @@ class QueueProcessor:
             .all()
         )
 
-        logger.info(f"Processing {len(queued)} queued downloads")
+        # Only log at INFO level if there are items to process
+        if len(queued) > 0:
+            logger.info(f"Processing {len(queued)} queued downloads")
+        else:
+            logger.debug("No queued downloads to process")
 
         submitted_count = 0
         skipped_count = 0
@@ -133,9 +137,14 @@ class QueueProcessor:
                 errors.append(f"Submission {submission.id}: {str(e)}")
                 continue
 
-        logger.info(
-            f"Queue processing complete: {submitted_count} submitted, " f"{skipped_count} skipped, {len(errors)} errors"
-        )
+        # Only log completion at INFO level if there was actual activity
+        if len(queued) > 0 or len(errors) > 0:
+            logger.info(
+                f"Queue processing complete: {submitted_count} submitted, "
+                f"{skipped_count} skipped, {len(errors)} errors"
+            )
+        else:
+            logger.debug("Queue processing complete: no items processed")
 
         return {
             "checked": len(queued),

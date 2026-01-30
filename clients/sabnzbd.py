@@ -223,7 +223,27 @@ class SABnzbdClient(DownloadClient):
                         }
                     elif "fail" in slot_status or "abort" in slot_status:
                         fail_message = slot.get("fail_message", "No details available")
-                        logger.warning(f"[SABnzbd] Job {job_id} failed: {slot_status} - {fail_message}")
+
+                        # Extract additional failure details from stage_log
+                        stage_log = slot.get("stage_log", [])
+                        failure_details = []
+                        for stage in stage_log:
+                            stage_name = stage.get("name", "")
+                            actions = stage.get("actions", [])
+                            for action in actions:
+                                if any(
+                                    keyword in action.lower()
+                                    for keyword in ["missing", "failed", "error", "incomplete"]
+                                ):
+                                    failure_details.append(f"{stage_name}: {action}")
+
+                        # Build comprehensive error message
+                        error_parts = [f"Download {slot_status}: {fail_message}"]
+                        if failure_details:
+                            error_parts.append(" | ".join(failure_details))
+                        error_message = " - ".join(error_parts)
+
+                        logger.warning(f"[SABnzbd] Job {job_id} failed: {error_message}")
 
                         # Check if failure was due to encryption
                         encryption_indicators = [
@@ -240,7 +260,7 @@ class SABnzbdClient(DownloadClient):
                         return {
                             "status": "failed",
                             "progress": 0,
-                            "error": f"Download {slot_status}: {fail_message}",
+                            "error": error_message,
                             "encrypted": is_encrypted,
                         }
                     else:
