@@ -38,8 +38,8 @@ def sync_tracking_languages(dry_run: bool = True) -> None:
     """
     # Load config to get database URL
     config_loader = ConfigLoader()
-    config = config_loader.load()
-    db_url = config.get("database", {}).get("url", "sqlite:///local/data/periodicals.db")
+    storage_config = config_loader.get_storage()
+    db_url = f"sqlite:///{storage_config.get('db_path', './local/data/periodicals.db')}"
 
     db_manager = DatabaseManager(db_url)
     db_manager.create_tables()
