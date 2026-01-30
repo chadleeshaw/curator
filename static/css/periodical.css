@@ -490,25 +490,34 @@ body.dark-mode #status-message.status-error {
   }
 
   .issue-actions {
-    gap: 6px;
-    justify-content: space-between;
+    gap: 8px;
+    justify-content: center;
+    width: 100%;
+    padding: 0 12px;
+    box-sizing: border-box;
   }
 
-  .open-pdf-btn {
-    flex: 1;
-    min-width: 0;
-    padding: 8px;
+  .open-pdf-btn,
+  .metadata-btn,
+  .delete-issue-btn {
+    flex: 0 0 auto !important;
+    width: 38px !important;
+    height: 38px !important;
+    min-width: 38px !important;
+    padding: 0 !important;
     font-size: 18px;
     display: flex;
     align-items: center;
     justify-content: center;
+    border-radius: 8px !important;
   }
 
-  .metadata-btn,
-  .delete-issue-btn {
-    flex: 1;
-    min-width: 0;
-    width: auto;
-    height: 40px;
+  .open-pdf-btn {
+    background: var(--primary-color);
+    color: white;
+  }
+
+  .open-pdf-btn:hover {
+    background: var(--primary-dark);
   }
 }

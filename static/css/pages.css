@@ -1261,6 +1261,7 @@
   .tracked-card-meta {
     font-size: 12px !important;
     gap: 8px !important;
+    justify-content: flex-start;
   }
 
   .meta-item {
