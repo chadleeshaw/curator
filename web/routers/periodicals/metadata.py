@@ -37,15 +37,24 @@ async def toggle_special_edition(magazine_id: int, is_special: bool) -> Dict[str
 
         # Update special edition status in derived_metadata
         if is_special:
-            # Mark as special edition - store as structured data
-            magazine.derived_metadata["special_edition"] = {
+            # Mark as special edition - store as structured data with proper field names
+            magazine.derived_metadata["is_special_edition"] = {
+                "value": True,
+                "source": "manual",
+            }
+            magazine.derived_metadata["special_edition_name"] = {
                 "value": magazine.title,
                 "source": "manual",
             }
             logger.info(f"Marked issue as special edition: {magazine.title}")
             message = f"Marked '{magazine.title}' as a special edition"
         else:
-            # Unmark as special edition
+            # Unmark as special edition - remove both fields
+            if "is_special_edition" in magazine.derived_metadata:
+                del magazine.derived_metadata["is_special_edition"]
+            if "special_edition_name" in magazine.derived_metadata:
+                del magazine.derived_metadata["special_edition_name"]
+            # Also remove legacy field if present
             if "special_edition" in magazine.derived_metadata:
                 del magazine.derived_metadata["special_edition"]
             logger.info(f"Unmarked special edition: {magazine.title}")

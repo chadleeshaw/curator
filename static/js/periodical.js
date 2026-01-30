@@ -792,8 +792,11 @@ async function confirmDeleteIssue() {
           window.location.href = '/#library';
         }, 1000);
       } else {
-        // Otherwise reload to show updated list
-        location.reload();
+        // Redirect to library to avoid staying on deleted periodical's page
+        statusDiv.textContent = '✓ Issue deleted. Returning to library...';
+        setTimeout(() => {
+          window.location.href = '/#library';
+        }, 1000);
       }
     }, 1500);
   } catch (error) {

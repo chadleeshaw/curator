@@ -109,26 +109,51 @@ async def view_periodical_by_id(id: int = Query(...)):
                 detail=f"No periodicals found for '{display_title}'",
             )
 
-        # Group periodicals by year
+        # Group periodicals by year and separate special editions
         periodicals_by_year = defaultdict(list)
+        special_editions = []
+
         for p in periodicals:
-            year = p.issue_date.year if p.issue_date else "Unknown"
-            periodicals_by_year[year].append(
-                {
-                    "id": p.id,
-                    "title": p.title,
-                    "issue_date": (p.issue_date.date().isoformat() if p.issue_date else None),
-                    "cover_path": p.cover_path,
-                    "file_path": p.file_path,
-                }
-            )
+            periodical_data = {
+                "id": p.id,
+                "title": p.title,
+                "issue_date": (p.issue_date.date().isoformat() if p.issue_date else None),
+                "cover_path": p.cover_path,
+                "file_path": p.file_path,
+                "extra_metadata": p.extra_metadata or {},
+                "derived_metadata": p.derived_metadata or {},
+            }
+
+            # Check if this is a special edition
+            is_special = False
+            if p.derived_metadata and isinstance(p.derived_metadata, dict):
+                special_bool = p.derived_metadata.get("is_special_edition")
+                if special_bool:
+                    if isinstance(special_bool, dict):
+                        is_special = bool(special_bool.get("value"))
+                    else:
+                        is_special = bool(special_bool)
+                    logger.info(
+                        f"[ByID] Found is_special_edition for {p.title} (ID {p.id}): "
+                        f"special_bool={special_bool}, is_special={is_special}"
+                    )
+
+            if is_special:
+                logger.info(f"[ByID] Adding {p.title} (ID {p.id}) to special_editions")
+                special_editions.append(periodical_data)
+            else:
+                year = p.issue_date.year if p.issue_date else "Unknown"
+                logger.info(f"[ByID] Adding {p.title} (ID {p.id}) to year {year}")
+                periodicals_by_year[year].append(periodical_data)
 
         # Sort years in descending order
         sorted_years = sorted(periodicals_by_year.keys(), reverse=True)
 
-        return display_title, sorted_years, periodicals_by_year
+        return display_title, sorted_years, periodicals_by_year, special_editions
 
-    display_title, sorted_years, periodicals_by_year = await with_db_session(_session_factory, operation)
+    display_title, sorted_years, periodicals_by_year, special_editions = await with_db_session(
+        _session_factory, operation
+    )
 
     # Read the periodical template
     try:
@@ -137,6 +162,20 @@ async def view_periodical_by_id(id: int = Query(...)):
     except FileNotFoundError:
         logger.error("periodical.html template not found")
         raise HTTPException(status_code=500, detail="Periodical template not found")
+
+    # Build special editions data
+    special_editions_data = []
+    if special_editions:
+        for p in special_editions:
+            special_data = {
+                "id": p["id"],
+                "title": p["title"],
+                "issue_date": p["issue_date"],
+                "cover_url": f"/api/periodicals/{p['id']}/cover",
+                "extra_metadata": p.get("extra_metadata", {}),
+                "derived_metadata": p.get("derived_metadata", {}),
+            }
+            special_editions_data.append(special_data)
 
     # Build years data JSON
     years_data = []
@@ -158,10 +197,11 @@ async def view_periodical_by_id(id: int = Query(...)):
     # Replace template variables
     # For JSON in HTML attributes, escape quotes properly
     years_json = json.dumps(years_data).replace('"', "&quot;")
+    special_editions_json = json.dumps(special_editions_data).replace('"', "&quot;")
 
     html_content = template_content.replace("{{PERIODICAL_TITLE}}", display_title)
     html_content = html_content.replace("{{YEARS_DATA}}", years_json)
-    html_content = html_content.replace("{{SPECIAL_EDITIONS_DATA}}", "[]")
+    html_content = html_content.replace("{{SPECIAL_EDITIONS_DATA}}", special_editions_json)
 
     return HTMLResponse(content=html_content)
 
@@ -231,6 +271,7 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
                 "cover_path": p.cover_path,
                 "file_path": p.file_path,
                 "extra_metadata": p.extra_metadata or {},
+                "derived_metadata": p.derived_metadata or {},
             }
 
             # Check if this is a special edition by checking derived_metadata first, then extra_metadata, then title
@@ -246,6 +287,10 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
                         is_special = bool(special_bool.get("value"))
                     else:
                         is_special = bool(special_bool)
+                    logger.info(
+                        f"Found is_special_edition for {p.title} (ID {p.id}): "
+                        f"special_bool={special_bool}, is_special={is_special}"
+                    )
 
                 # Get special edition name for display (if it's a special edition)
                 if is_special:
@@ -285,9 +330,11 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
                 is_special = True
 
             if is_special:
+                logger.info(f"Adding {p.title} (ID {p.id}) to special_editions")
                 special_editions.append(periodical_data)
             else:
                 year = p.issue_date.year if p.issue_date else "Unknown"
+                logger.info(f"Adding {p.title} (ID {p.id}) to year {year}")
                 periodicals_by_year[year].append(periodical_data)
 
         # Sort years in descending order
@@ -324,6 +371,8 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
                 "title": p["title"],
                 "issue_date": p["issue_date"],
                 "cover_url": f"/api/periodicals/{p['id']}/cover",
+                "extra_metadata": p.get("extra_metadata", {}),
+                "derived_metadata": p.get("derived_metadata", {}),
             }
             # Add special edition name if available
             if "special_edition_name" in p:
