@@ -126,6 +126,13 @@ async def update_periodical(magazine_id: int, updates: Dict[str, Any]) -> Dict[s
         if "volume" in updates:
             magazine.extra_metadata["volume"] = updates["volume"]
 
+        # Handle cover page number (stored in extra_metadata)
+        if "cover_page" in updates:
+            cover_page_value = updates["cover_page"]
+            if cover_page_value and isinstance(cover_page_value, int) and cover_page_value > 0:
+                magazine.extra_metadata["cover_page"] = cover_page_value
+                logger.info(f"Updated cover page to {cover_page_value} for magazine {magazine_id}")
+
         # Handle special edition in derived_metadata (structured storage)
         if magazine.derived_metadata is None:
             magazine.derived_metadata = {}

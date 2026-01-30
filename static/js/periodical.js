@@ -664,8 +664,11 @@ async function saveMetadataEdit() {
   const specialEditionName = document.getElementById('edit-special-edition').value;
   updates.special_edition = specialEditionName || null;
 
-  // Check if cover page number has changed
+  // Include cover page number
   const coverPage = document.getElementById('edit-cover-page').value;
+  updates.cover_page = coverPage ? parseInt(coverPage) : 1;
+
+  // Check if cover page number has changed
   const currentCoverPage = currentMagazineData.metadata?.cover_page || 1;
   const shouldRegenerateCover = coverPage && parseInt(coverPage) !== currentCoverPage;
 
@@ -712,6 +715,9 @@ function showNotification(message, type) {
 
   if (type === 'success') {
     notification.style.background = '#10b981';
+    notification.style.color = 'white';
+  } else if (type === 'info') {
+    notification.style.background = '#8b5cf6';
     notification.style.color = 'white';
   } else {
     notification.style.background = '#ef4444';

@@ -428,7 +428,7 @@ class TestTrackingMerge:
         session.close()
 
     def test_merge_tracking_with_different_languages(self, test_db):
-        """Test that merging preserves language differences while normalizing titles"""
+        """Test that merging synchronizes language to target tracking"""
         engine, session_factory = test_db
         session = session_factory()
 
@@ -436,23 +436,25 @@ class TestTrackingMerge:
 
         set_dependencies(session_factory, None, None)
 
-        # Create tracking records
+        # Create tracking records with explicit languages
         tracking1 = PeriodicalTracking(
             olid="OL111W",
             title="National Geographic",
+            language="English",  # Explicitly set
             track_all_editions=True,
             last_metadata_update=datetime.now(UTC),
         )
         tracking2 = PeriodicalTracking(
             olid="OL222W",
             title="NatGeo Magazine",
+            language="German",  # Different language
             track_all_editions=True,
             last_metadata_update=datetime.now(UTC),
         )
         session.add_all([tracking1, tracking2])
         session.commit()
 
-        # Create magazines in different languages
+        # Create magazines matching their tracking languages
         mag1_en = Periodical(
             title="National Geographic",
             language="English",
@@ -474,23 +476,23 @@ class TestTrackingMerge:
         target_id = tracking1.id
         source_id = tracking2.id
 
-        # Merge
+        # Merge - German tracking into English tracking
         import asyncio
 
         asyncio.run(merge_tracking(target_id=target_id, source_ids={"source_ids": [source_id]}))
 
         session.expire_all()
 
-        # Both magazines should have same title but different languages
+        # Both magazines should have same title AND same language (synced to target)
         all_magazines = session.query(Periodical).all()
         assert len(all_magazines) == 2
         for mag in all_magazines:
             assert mag.title == "National Geographic"
+            assert mag.language == "English"  # Both synced to target language
 
-        # Should have 2 groups in library view (by title+language)
-
+        # Should have 1 group in library view (same title+language)
         title_lang_groups = session.query(Periodical.title, Periodical.language).distinct().all()
-        assert len(title_lang_groups) == 2
+        assert len(title_lang_groups) == 1  # Consistent language after merge
 
         session.close()
 

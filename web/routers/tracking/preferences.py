@@ -238,8 +238,10 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
 
         # Store old values for change detection
         old_title = tracking.title
+        old_language = tracking.language
         old_pattern = tracking.organization_pattern
         title_changed = "title" in updates and updates["title"] != old_title
+        language_changed = "language" in updates and updates["language"] != old_language
         pattern_changed = "organization_pattern" in updates and updates["organization_pattern"] != old_pattern
 
         if "title" in updates:
@@ -335,6 +337,24 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
                     # Update magazine title to match tracking title
                     magazine.title = tracking.title
 
+        # If language changed, update all linked periodicals to match new language
+        language_updates = 0
+        if language_changed:
+            from models.database import Periodical
+
+            # Get all magazines linked to this tracking record
+            magazines = db.query(Periodical).filter(Periodical.tracking_id == tracking_id).all()
+
+            for magazine in magazines:
+                # Update language to match tracking
+                if magazine.language != tracking.language:
+                    magazine.language = tracking.language
+                    language_updates += 1
+                    logger.info(
+                        f"Updated language for: {magazine.title} ({magazine.issue_date.strftime('%b %Y')}) "
+                        f"from '{old_language}' to '{tracking.language}'"
+                    )
+
         db.commit()
 
         # Count files affected by pattern change (for confirmation prompt)
@@ -348,6 +368,7 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
         tracking_data = {
             "id": tracking.id,
             "title": tracking.title,
+            "language": tracking.language,
             "track_all_editions": tracking.track_all_editions,
             "track_new_only": tracking.track_new_only,
             "delete_from_client_on_completion": tracking.delete_from_client_on_completion,
@@ -356,7 +377,10 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
         return {
             "tracking_data": tracking_data,
             "old_title": old_title,
+            "old_language": old_language,
             "title_changed": title_changed,
+            "language_changed": language_changed,
+            "language_updates": language_updates,
             "pattern_changed": pattern_changed,
             "files_affected_by_pattern": files_affected_by_pattern,
             "files_reorganized": files_reorganized,
@@ -367,12 +391,15 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
     result = await with_db_session(_shared._session_factory, operation)
     tracking_data = result["tracking_data"]
     title_changed = result["title_changed"]
+    language_changed = result["language_changed"]
+    language_updates = result["language_updates"]
     pattern_changed = result["pattern_changed"]
     files_affected_by_pattern = result["files_affected_by_pattern"]
     files_reorganized = result["files_reorganized"]
     directories_to_cleanup = result["directories_to_cleanup"]
     library_base_dir = result["library_base_dir"]
     old_title = result["old_title"]
+    old_language = result["old_language"]
 
     # Clean up empty directories after successful commit
     if title_changed and files_reorganized > 0:
@@ -384,6 +411,13 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
             f"Title changed from '{old_title}' to '{tracking_data['title']}', reorganized {files_reorganized} files"
         )
 
+    # Log language changes
+    if language_changed and language_updates > 0:
+        logger.info(
+            f"Language changed from '{old_language}' to '{tracking_data.get('language', 'English')}', "
+            f"updated {language_updates} periodical records"
+        )
+
     # Note: We don't trigger immediate auto-download here to avoid blocking the response.
     # The scheduled auto-download task will pick up changes on its next run.
     # This keeps the API response fast (<100ms instead of 5-6 seconds).
@@ -393,9 +427,17 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
         tracking=tracking_data,
     )
 
+    # Build informative message about changes
+    messages = []
     if title_changed:
         response["files_reorganized"] = files_reorganized
-        response["message"] = f"Tracking updated successfully. Reorganized {files_reorganized} files."
+        messages.append(f"Reorganized {files_reorganized} files")
+    if language_changed:
+        response["language_updates"] = language_updates
+        messages.append(f"Updated language for {language_updates} periodical records")
+
+    if messages:
+        response["message"] = f"Tracking updated successfully. {'. '.join(messages)}."
 
     # If pattern changed, include count for confirmation prompt
     if pattern_changed:
