@@ -428,7 +428,7 @@ class TestTrackingMerge:
         session.close()
 
     def test_merge_tracking_with_different_languages(self, test_db):
-        """Test that merging synchronizes language to target tracking"""
+        """Test that merging preserves language-based grouping"""
         engine, session_factory = test_db
         session = session_factory()
 
@@ -483,16 +483,19 @@ class TestTrackingMerge:
 
         session.expire_all()
 
-        # Both magazines should have same title AND same language (synced to target)
+        # Both magazines should have same title but preserve their languages
         all_magazines = session.query(Periodical).all()
         assert len(all_magazines) == 2
         for mag in all_magazines:
             assert mag.title == "National Geographic"
-            assert mag.language == "English"  # Both synced to target language
+        
+        # Languages should remain distinct
+        languages = {mag.language for mag in all_magazines}
+        assert languages == {"English", "German"}  # Both languages preserved
 
-        # Should have 1 group in library view (same title+language)
+        # Should have 2 groups in library view (same title, different languages)
         title_lang_groups = session.query(Periodical.title, Periodical.language).distinct().all()
-        assert len(title_lang_groups) == 1  # Consistent language after merge
+        assert len(title_lang_groups) == 2  # Separate language editions
 
         session.close()
 
