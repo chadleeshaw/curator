@@ -167,6 +167,12 @@ async def list_tracked_magazines(
                     PeriodicalTracking.track_all_editions.desc(),
                     PeriodicalTracking.track_new_only.desc(),
                 )
+        elif sort_by == "language":
+            sort_expr = PeriodicalTracking.language.desc() if is_descending else PeriodicalTracking.language.asc()
+            query = query.order_by(sort_expr, PeriodicalTracking.title.asc())
+        elif sort_by == "created_at":
+            sort_expr = PeriodicalTracking.created_at.desc() if is_descending else PeriodicalTracking.created_at.asc()
+            query = query.order_by(sort_expr)
         else:
             sort_expr = PeriodicalTracking.title.desc() if is_descending else PeriodicalTracking.title.asc()
             query = query.order_by(sort_expr)
