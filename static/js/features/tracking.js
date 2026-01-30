@@ -916,15 +916,32 @@ export class TrackingManager {
       const data = await response.json();
 
       if (data.found && data.results.length > 0) {
+        // Parse and curate results first to get deduplicated issues
+        const curatedIssues = this.parseAndCurateIssues(data.results);
+        
+        // Calculate accurate counts from deduplicated issues
+        let libraryCount = 0;
+        let availableCount = 0;
+        let totalCount = 0;
+        
+        Object.values(curatedIssues).forEach(yearGroup => {
+          yearGroup.forEach(issue => {
+            totalCount++;
+            if (issue.status === 'in_library') {
+              libraryCount++;
+            } else if (issue.status === 'available') {
+              availableCount++;
+            }
+          });
+        });
+        
         // Store summary stats for display
-        this.libraryCount = data.library_matches || 0;
-        this.availableCount = data.available_to_download || 0;
-        this.totalCount = data.total_results || 0;
+        this.libraryCount = libraryCount;
+        this.availableCount = availableCount;
+        this.totalCount = totalCount;
         this.fromCache = data.from_cache || false;
         this.cacheAgeDays = data.cache_age_days || 0;
 
-        // Parse and curate results
-        const curatedIssues = this.parseAndCurateIssues(data.results);
         this.displayCuratedIssues(curatedIssues, title);
       } else {
         let errorInfo = '';
@@ -1167,12 +1184,15 @@ export class TrackingManager {
       cacheInfo = ` <span style="font-size: 0.85em; color: var(--text-secondary);">(cached ${this.cacheAgeDays}d ago)</span>`;
     }
 
+    // Store available issues for bulk download
+    this.availableIssues = [];
+
     let html = `
       <div class="search-summary">
         <h3>Search Results for "${title}"${cacheInfo}</h3>
         <div class="summary-stats">
           <span class="stat">📚 <strong>${this.libraryCount || 0}</strong> in library</span>
-          <span class="stat">📥 <strong>${this.availableCount || 0}</strong> available</span>
+          <span class="stat${this.availableCount > 0 ? ' clickable-stat' : ''}" ${this.availableCount > 0 ? 'onclick="downloadAllAvailable()" title="Click to download all available issues"' : ''}>📥 <strong>${this.availableCount || 0}</strong> available</span>
           <span class="stat">🎯 <strong>${this.totalCount || 0}</strong> total</span>
         </div>
       </div>
@@ -1273,6 +1293,17 @@ export class TrackingManager {
           window.issueVariants = window.issueVariants || {};
           window.issueVariants[issueKey] = issue.variants;
           cardHtml += ` onclick='selectIssueWithVariants("${issueKey}", ${issue.already_downloaded || false}, ${issue.download_failed || false})'`;
+          
+          // Store available issues for bulk download
+          // Find first variant that hasn't failed
+          if (status === 'available' && issue.variants.length > 0) {
+            const firstNonFailedVariant = issue.variants.find(v => !v.download_failed) || issue.variants[0];
+            this.availableIssues.push({
+              title: firstNonFailedVariant.title,
+              url: firstNonFailedVariant.url,
+              provider: firstNonFailedVariant.provider
+            });
+          }
         }
 
         cardHtml += `>
@@ -1816,6 +1847,64 @@ window.confirmMerge = async function () {
   } catch (error) {
     console.error('Merge error:', error);
     UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, `✗ ${error.message}`, 'error');
+  }
+};
+
+// Download all available issues
+window.downloadAllAvailable = async function () {
+  try {
+    const trackingId = window.currentTrackingId;
+    if (!trackingId) {
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Error: No tracking ID available', 'error');
+      return;
+    }
+
+    const tracking = window.trackingManager;
+    if (!tracking || !tracking.availableIssues || tracking.availableIssues.length === 0) {
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'No available issues to download', 'info');
+      return;
+    }
+
+    const count = tracking.availableIssues.length;
+    const confirmed = await UIUtils.confirm(
+      'Download All Available Issues',
+      `Are you sure you want to download all <strong>${count}</strong> available issues?`
+    );
+    if (!confirmed) return;
+
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, `Downloading ${count} issues...`, 'info');
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    // Download each issue sequentially to avoid overwhelming the server
+    for (const issue of tracking.availableIssues) {
+      try {
+        const response = await APIClient.post('/api/downloads/single-issue', {
+          tracking_id: trackingId,
+          title: issue.title,
+          url: issue.url,
+          provider: issue.provider,
+        });
+        const data = await response.json();
+        
+        if (data.status === 'queued' || data.job_id) {
+          successCount++;
+        } else {
+          errorCount++;
+        }
+      } catch (err) {
+        console.error(`Failed to download ${issue.title}:`, err);
+        errorCount++;
+      }
+    }
+
+    const message = `Submitted ${successCount} downloads${errorCount > 0 ? `, ${errorCount} failed` : ''}`;
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, message, errorCount > 0 ? 'warning' : 'success');
+    setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), TIMEOUTS.AUTO_HIDE_LONG);
+  } catch (err) {
+    console.error('Bulk download error:', err);
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, `Error: ${err.message}`, 'error');
   }
 };
 

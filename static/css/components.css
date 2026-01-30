@@ -1783,6 +1783,25 @@
   font-size: 1.1em;
 }
 
+.summary-stats .clickable-stat {
+  cursor: pointer !important;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.summary-stats .clickable-stat:hover {
+  background: var(--primary-color);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.summary-stats .clickable-stat:hover strong {
+  color: white;
+}
+
 /* Status Badge Inline (within issue cards) */
 .status-badge-inline {
   display: inline-block;
