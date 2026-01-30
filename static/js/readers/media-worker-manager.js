@@ -34,7 +34,7 @@ export class MediaWorkerManager {
     if (this.initialized) return;
 
     try {
-      this.worker = new Worker('/static/js/reader-worker.js');
+      this.worker = new Worker('/static/js/readers/reader-worker.js');
       this.worker.onmessage = this.handleMessage.bind(this);
       this.worker.onerror = this.handleError.bind(this);
       this.initialized = true;
