@@ -488,7 +488,7 @@ class TestTrackingMerge:
         assert len(all_magazines) == 2
         for mag in all_magazines:
             assert mag.title == "National Geographic"
-        
+
         # Languages should remain distinct
         languages = {mag.language for mag in all_magazines}
         assert languages == {"English", "German"}  # Both languages preserved
