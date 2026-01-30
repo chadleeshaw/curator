@@ -469,6 +469,216 @@
   gap: 15px;
 }
 
+/* Tracking header and controls - matching library styles */
+.tracking-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.tracking-search-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.tracking-controls-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.filter-row label {
+  flex-shrink: 0;
+}
+
+.filter-row select {
+  flex: 1;
+  max-width: 300px;
+}
+
+/* ==========================================================================
+   Queue Page Styles
+   ========================================================================== */
+
+/* Queue header row - two column layout */
+.queue-view .queue-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 25px;
+  gap: 30px;
+}
+
+/* Left column: title, description, action buttons */
+.queue-view .queue-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.queue-view .queue-title {
+  color: var(--primary-color);
+  font-size: 24px;
+  margin: 0;
+}
+
+.queue-view .queue-description {
+  color: var(--text-secondary);
+  margin: 0;
+  font-size: 14px;
+}
+
+.queue-view .queue-actions-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.queue-view .queue-actions-row label {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.queue-clear-select {
+  padding: 6px 30px 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 14px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23888%22 stroke-width=%222%22%3e%3cpolyline points=%226 9 12 15 18 9%22%3e%3c/polyline%3e%3c/svg%3e');
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 14px;
+}
+
+/* Right column: sort and filter controls stacked vertically */
+.queue-view .queue-header-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.queue-view .queue-header-row .sort-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.queue-view .queue-header-row .sort-controls label {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.queue-view .queue-header-row .sort-controls select {
+  padding: 6px 30px 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 14px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23888%22 stroke-width=%222%22%3e%3cpolyline points=%226 9 12 15 18 9%22%3e%3c/polyline%3e%3c/svg%3e');
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 14px;
+}
+
+.queue-view .queue-header-row .filter-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.queue-view .queue-header-row .filter-row label {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.queue-view .queue-header-row .filter-row select {
+  width: 140px;
+  padding: 6px 30px 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 14px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23888%22 stroke-width=%222%22%3e%3cpolyline points=%226 9 12 15 18 9%22%3e%3c/polyline%3e%3c/svg%3e');
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 14px;
+}
+
+/* Queue Stats Grid */
+.queue-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 15px;
+}
+
+.queue-stat-item {
+  background: var(--surface);
+  padding: 15px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.queue-stat-number {
+  font-size: 1.5em;
+  font-weight: bold;
+}
+
+.queue-stat-label {
+  font-size: 0.85em;
+  color: var(--text-secondary);
+  margin-top: 5px;
+}
+
+.queue-stat-desc {
+  font-size: 0.7em;
+  color: var(--text-secondary);
+  margin-top: 2px;
+  font-style: italic;
+}
+
+/* Small buttons for queue actions */
+.btn-sm {
+  padding: 8px 14px;
+  font-size: 12px;
+  line-height: 1;
+}
+
 /* ==========================================================================
    Responsive Design
    ========================================================================== */
@@ -494,8 +704,27 @@
     font-size: 24px;
   }
 
+  /* Mobile nav - horizontal emoji-only buttons */
   nav {
-    flex-direction: column;
+    flex-direction: row;
+    justify-content: space-around;
+    padding: 6px;
+    gap: 4px;
+  }
+
+  .nav-btn {
+    flex: 1;
+    padding: 10px 4px;
+    min-width: 0;
+    font-size: 20px;
+  }
+
+  .nav-btn .nav-text {
+    display: none;
+  }
+
+  .nav-btn .nav-icon {
+    display: block;
   }
 
   .tab {
@@ -640,113 +869,170 @@
 
   /* Queue page - mobile layout */
   .queue-switcher {
-    flex-direction: column;
-    gap: 10px;
-    margin-bottom: 20px;
+    flex-direction: row;
+    gap: 8px;
+    margin-bottom: 15px;
   }
 
   .queue-switch-btn {
-    width: 100%;
+    flex: 1;
     justify-content: center;
-    padding: 14px 20px;
-    font-size: 15px;
-  }
-
-  /* Queue view - header section mobile */
-  #download-queue-view > div:first-of-type,
-  #ocr-queue-view > div:first-of-type {
-    flex-direction: column !important;
-    align-items: stretch !important;
-    gap: 15px !important;
-    margin-bottom: 15px !important;
-  }
-
-  /* Queue view headers */
-  #download-queue-view h2,
-  #ocr-queue-view h2 {
-    text-align: center;
-    font-size: 20px;
-    margin-bottom: 0 !important;
-  }
-
-  /* Filter buttons container - make 2-column grid */
-  #download-queue-view > div:first-of-type > div:last-child,
-  #ocr-queue-view > div:first-of-type > div:last-child {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
-    gap: 8px !important;
-    width: 100%;
-  }
-
-  .filter-btn {
-    width: 100%;
-    padding: 11px 8px;
-    font-size: 13px;
-    text-align: center;
-    margin: 0 !important;
-  }
-
-  /* Description and clear buttons section */
-  #download-queue-view > div:nth-of-type(2),
-  #ocr-queue-view > div:nth-of-type(2) {
-    margin-bottom: 20px !important;
-  }
-
-  #download-queue-view > div:nth-of-type(2) > p,
-  #ocr-queue-view > div:nth-of-type(2) > p {
-    text-align: center;
-    font-size: 13px;
-    line-height: 1.6;
-    margin-bottom: 12px !important;
-  }
-
-  /* Clear buttons container - stack vertically */
-  #download-queue-view > div:nth-of-type(2) > div,
-  #ocr-queue-view > div:nth-of-type(2) > div {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 10px !important;
-    justify-content: stretch !important;
-  }
-
-  /* Clear buttons - full width */
-  #download-clear-queued-btn,
-  #download-clear-pending-btn,
-  #download-clear-failed-btn,
-  #ocr-clear-processing-btn,
-  #ocr-clear-failed-btn,
-  #ocr-clear-completed-btn {
-    width: 100% !important;
-    margin: 0 !important;
-    padding: 12px 16px;
+    padding: 12px 8px;
     font-size: 14px;
   }
 
-  /* Queue stats grid - override inline styles */
-  #queue-stats > div,
-  #ocr-queue-stats > div {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
-    gap: 10px !important;
-    margin-bottom: 20px;
+  /* Queue views - mobile layout */
+  #download-queue-view,
+  #ocr-queue-view {
+    display: flex;
+    flex-direction: column;
   }
 
-  #queue-stats > div > div,
-  #ocr-queue-stats > div > div {
-    padding: 12px 8px !important;
+  /* Header row - stack columns on mobile */
+  #download-queue-view .queue-header-row,
+  #ocr-queue-view .queue-header-row {
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 5px;
+  }
+
+  /* Left column - center on mobile */
+  #download-queue-view .queue-header-left,
+  #ocr-queue-view .queue-header-left {
+    width: 100%;
+    align-items: center;
+    text-align: center;
+  }
+
+  #download-queue-view .queue-title,
+  #ocr-queue-view .queue-title {
+    font-size: 20px;
+  }
+
+  #download-queue-view .queue-description,
+  #ocr-queue-view .queue-description {
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  /* Action buttons - center on mobile */
+  #download-queue-view .queue-actions-row,
+  #ocr-queue-view .queue-actions-row {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  #download-queue-view .queue-actions-row .btn-sm,
+  #ocr-queue-view .queue-actions-row .btn-sm {
+    flex: 1;
+    min-width: 90px;
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+
+  /* Header controls - full width on mobile */
+  #download-queue-view .queue-header-controls,
+  #ocr-queue-view .queue-header-controls {
+    width: 100%;
+    align-items: stretch;
+    margin-bottom: 0;
+  }
+
+  #download-queue-view .queue-header-row .sort-controls,
+  #ocr-queue-view .queue-header-row .sort-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  #download-queue-view .queue-header-row .sort-controls select,
+  #ocr-queue-view .queue-header-row .sort-controls select {
+    flex: 1;
+    min-width: 0;
+  }
+
+  #download-queue-view .queue-header-row .filter-row,
+  #ocr-queue-view .queue-header-row .filter-row {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  #download-queue-view .queue-header-row .filter-row select,
+  #ocr-queue-view .queue-header-row .filter-row select {
+    flex: 1;
+    width: auto !important;
+    max-width: none !important;
+  }
+
+  #download-queue-view .queue-header-row .filter-row .btn-sm,
+  #ocr-queue-view .queue-header-row .filter-row .btn-sm {
+    flex: 0 0 auto;
+    min-width: auto;
+    width: auto;
+    padding: 8px 14px;
+    font-size: 14px;
+  }
+
+  /* Stats and remaining content */
+  #download-queue-view #downloads-status,
+  #ocr-queue-view #ocr-status {
+    order: 4;
+  }
+
+  #download-queue-view #queue-stats,
+  #ocr-queue-view #ocr-queue-stats {
+    order: 5;
+  }
+
+  #download-queue-view #queue-empty,
+  #ocr-queue-view #ocr-queue-empty {
+    order: 6;
+  }
+
+  #download-queue-view #queue-table-container,
+  #ocr-queue-view #ocr-queue-table-container {
+    order: 7;
+  }
+
+  /* Queue stats grid - compact horizontal layout like nav tabs */
+  .queue-stats-grid {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 0 !important;
+    padding: 4px 0 !important;
+    background: transparent !important;
+    border-radius: 0 !important;
+    margin-bottom: 10px !important;
+  }
+
+  .queue-stat-item {
+    flex: 1 !important;
+    padding: 4px 2px !important;
     min-width: 0 !important;
-    box-sizing: border-box !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
   }
 
-  .queue-stat-number,
-  .ocr-stat-number {
-    font-size: 1.5em !important;
+  .queue-stat-number {
+    font-size: 1.1em !important;
   }
 
-  #queue-stats > div > div > div:last-child,
-  #ocr-queue-stats > div > div > div:last-child {
-    font-size: 11px !important;
-    margin-top: 4px !important;
+  .queue-stat-label {
+    font-size: 0.65em !important;
+    margin-top: 2px !important;
+  }
+
+  /* Hide description on mobile */
+  .queue-stat-desc {
+    display: none !important;
+  }
+
+  /* Reduce margin on stats containers - equal top and bottom */
+  #queue-stats,
+  #ocr-queue-stats {
+    margin-top: 5px !important;
+    margin-bottom: 5px !important;
   }
 
   /* Queue tables - mobile responsive */
@@ -1240,13 +1526,14 @@
   .sort-controls {
     width: 100%;
     justify-content: space-between;
-    flex-direction: row;
+    flex-flow: row nowrap !important;
     align-items: center;
     gap: 10px;
   }
 
   .sort-controls label {
     font-size: 13px !important;
+    flex-shrink: 0;
   }
 
   .sort-controls select {
@@ -1260,9 +1547,24 @@
     width: 44px !important;
     height: 44px !important;
     min-height: 44px !important;
+    min-width: 44px !important;
     padding: 10px !important;
     font-size: 18px !important;
-    flex-shrink: 0;
+    flex-shrink: 0 !important;
+  }
+
+  /* Filter row for queue pages */
+  .filter-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .filter-row select {
+    flex: 1;
+    max-width: 100% !important;
+    padding: 10px 30px 10px 12px !important;
+    font-size: 13px !important;
   }
 
   /* Library search row - stack vertically */
@@ -1289,6 +1591,80 @@
     flex-direction: column !important;
     align-items: stretch !important;
     gap: 12px !important;
+  }
+
+  /* Tracking page controls - matching library styles */
+  .tracking-header-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+  }
+
+  .tracking-header-row h2 {
+    text-align: center !important;
+    margin-bottom: 0 !important;
+    font-size: 20px !important;
+    width: 100%;
+  }
+
+  /* Sort controls within tracking-header-row */
+  .tracking-header-row .sort-controls {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .tracking-header-row .sort-controls label {
+    flex-shrink: 0;
+    font-size: 13px !important;
+  }
+
+  .tracking-header-row .sort-controls select {
+    flex: 1;
+    min-width: 0;
+    font-size: 13px !important;
+  }
+
+  .tracking-search-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 15px;
+    margin-bottom: 20px;
+  }
+
+  .tracking-search-row .search-input-wrapper {
+    max-width: 100% !important;
+    width: 100%;
+  }
+
+  .tracking-search-row input {
+    width: 100%;
+    padding: 12px 14px !important;
+    font-size: 14px !important;
+  }
+
+  .tracking-search-row > div:last-child {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+  }
+
+  .tracking-controls-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tracking-controls-row > div {
+    flex-direction: column !important;
+    width: 100%;
+  }
+
+  .tracking-controls-row button {
+    width: 100%;
+    font-size: 13px;
+    padding: 10px 14px;
   }
 
   /* Category and Language filter groups */

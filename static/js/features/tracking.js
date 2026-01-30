@@ -5,7 +5,7 @@
  */
 
 import { APIClient, APIHelper } from '../core/api.js';
-import { UIUtils, SortManager } from '../core/ui-utils.js';
+import { UIUtils, SortManager, FilterManager } from '../core/ui-utils.js';
 import {
   ELEMENT_IDS,
   STATUS_MESSAGES,
@@ -39,7 +39,9 @@ export class TrackingManager {
    */
   constructor() {
     /** @type {SortManager} Manager for tracking list sorting */
-    this.sortManager = new SortManager('title', 'asc', () => this.loadTrackedPeriodicals());
+    this.sortManager = new SortManager('title', 'asc', () => this.applyFiltersAndRender());
+    /** @type {FilterManager} Manager for tracking filters */
+    this.filterManager = new FilterManager('trackingFilters', () => this.applyFiltersAndRender());
     /** @type {Object|null} Current periodical metadata from search */
     this.currentPeriodicalMetadata = null;
     /** @type {Object|null} Current editions data */
@@ -50,6 +52,10 @@ export class TrackingManager {
     this.mergeMode = false;
     /** @type {Set<number>} IDs selected for merge */
     this.selectedForMerge = new Set();
+    /** @type {Array} All tracked periodicals loaded from API (unfiltered) */
+    this.allTracked = [];
+    /** @type {boolean} Whether periodicals have been loaded at least once */
+    this.periodicalsLoaded = false;
   }
 
   /**
@@ -58,6 +64,8 @@ export class TrackingManager {
   async init() {
     await this.loadConstants();
     this.populateFormDropdowns();
+    this.loadCategories();
+    this.loadFilterState();
   }
 
   /**
@@ -85,6 +93,120 @@ export class TrackingManager {
       }
     } catch (error) {
       // Already logged and displayed by APIHelper
+    }
+  }
+
+  /**
+   * Load categories from API and populate dropdown
+   *
+   * @returns {Promise<void>}
+   */
+  async loadCategories() {
+    try {
+      const response = await APIClient.get('/api/constants/categories');
+      const data = await response.json();
+
+      if (data.success && data.categories) {
+        this.populateCategoryDropdown(data.categories);
+      }
+    } catch (error) {
+      console.error('[Tracking] Failed to load categories:', error);
+    }
+  }
+
+  /**
+   * Populate the category filter dropdown with categories
+   *
+   * @param {string[]} categories - Array of category names
+   * @returns {void}
+   */
+  populateCategoryDropdown(categories) {
+    const dropdown = document.getElementById('tracking-category-filter');
+    if (!dropdown) return;
+
+    // Keep the "All" option
+    dropdown.innerHTML = '<option value="all">All</option>';
+
+    // Add each category as an option
+    categories.forEach((category) => {
+      const option = document.createElement('option');
+      option.value = category;
+      option.textContent = category;
+      dropdown.appendChild(option);
+    });
+    
+    // Restore saved filter value
+    if (this.filterManager.categoryFilter) {
+      dropdown.value = this.filterManager.categoryFilter;
+    }
+  }
+
+  /**
+   * Load saved filter state from localStorage
+   *
+   * @returns {void}
+   */
+  loadFilterState() {
+    try {
+      // FilterManager handles loading from localStorage
+      this.filterManager.loadState();
+      
+      // Update UI elements
+      this.filterManager.updateUI(
+        'tracking-category-filter',
+        'tracking-language-filter',
+        'tracking-search-input'
+      );
+
+      // Update sort dropdown
+      const sortDropdown = document.getElementById('tracking-sort-select');
+      if (sortDropdown) sortDropdown.value = this.sortManager.field;
+
+      // Update sort toggle button
+      this.updateTrackingSortToggleButton();
+
+      console.log('[Tracking] Loaded saved filter state:', {
+        category: this.filterManager.categoryFilter,
+        language: this.filterManager.languageFilter,
+        sortField: this.sortManager.field,
+        sortOrder: this.sortManager.order,
+      });
+    } catch (error) {
+      console.warn('[Tracking] Failed to load saved filters:', error);
+    }
+  }
+
+  /**
+   * Save current filter state to localStorage
+   *
+   * @returns {void}
+   */
+  saveFilterState() {
+    try {
+      // FilterManager handles saving to localStorage
+      this.filterManager.saveState();
+      
+      // Also save sort settings
+      const filters = {
+        category: this.filterManager.categoryFilter,
+        language: this.filterManager.languageFilter,
+        sortField: this.sortManager.field,
+        sortOrder: this.sortManager.order,
+      };
+      localStorage.setItem('trackingFilters', JSON.stringify(filters));
+    } catch (error) {
+      console.warn('[Tracking] Failed to save filters:', error);
+    }
+  }
+
+  /**
+   * Update the sort toggle button display
+   */
+  updateTrackingSortToggleButton() {
+    const button = document.getElementById('tracking-sort-toggle');
+    if (button) {
+      button.textContent = this.sortManager.order === 'asc' ? '↑' : '↓';
+      button.title = `Sort ${this.sortManager.order === 'asc' ? 'descending' : 'ascending'}`;
     }
   }
 
@@ -495,29 +617,96 @@ export class TrackingManager {
 
       const tracked = data.tracked_magazines ?? data.tracked ?? [];
 
-      // Update statistics
-      this.updateTrackingStatistics(tracked);
+      // Store all tracked periodicals unfiltered
+      this.allTracked = tracked;
+      this.periodicalsLoaded = true;
 
-      const container = document.getElementById('tracked-list');
-      container.innerHTML = '';
+      // Load unique languages for language filter
+      await this.populateLanguageDropdown();
 
-      if (tracked.length === 0) {
-        container.innerHTML = `
-          <div class="empty-state">
-            <div class="empty-state-icon">📚</div>
-            <h3>No Tracked Periodicals</h3>
-            <p>Start tracking magazines, comics, or news publications to automatically monitor and download new issues.</p>
-            <button onclick="openTrackNewPeriodicalModal()" class="btn-primary" style="margin-top: 16px;">📌 Track Your First Periodical</button>
-          </div>
-        `;
-        return;
-      }
-
-      tracked.forEach((trackingItem) => {
-        container.appendChild(this.createTrackedCard(trackingItem));
-      });
+      // Apply filters and render
+      this.applyFiltersAndRender();
     } catch (error) {
       console.error('Error loading tracked periodicals:', error);
+    }
+  }
+
+  /**
+   * Apply current filters and render the filtered tracking list
+   *
+   * @returns {void}
+   */
+  applyFiltersAndRender() {
+    const container = document.getElementById('tracked-list');
+    if (!container) return;
+
+    // Don't apply filters if periodicals haven't been loaded yet
+    if (!this.periodicalsLoaded) {
+      console.log('[Tracking] No periodicals loaded yet, skipping filter application');
+      return;
+    }
+
+    container.innerHTML = '';
+
+    // Use filterManager to apply filters
+    const filtered = this.filterManager.applyFilters(this.allTracked, {
+      getCategoryFn: (t) => t.category || 'Unknown',
+      getLanguageFn: (t) => t.language || 'English',
+      getTitleFn: (t) => t.title || '',
+    });
+
+    // Update statistics with filtered results
+    this.updateTrackingStatistics(filtered);
+
+    // Render results
+    if (filtered.length === 0) {
+      const filterDesc = this.filterManager.getActiveFilterDescription();
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">📚</div>
+          <h3>No Tracked Periodicals Found</h3>
+          <p>No periodicals found${filterDesc}.</p>
+          ${!this.filterManager.hasActiveFilters() ? 
+            '<button onclick="openTrackNewPeriodicalModal()" class="btn-primary" style="margin-top: 16px;">📌 Track Your First Periodical</button>' : 
+            '<button onclick="clearTrackingFilters()" class="btn-secondary" style="margin-top: 16px;">✕ Clear Filters</button>'}
+        </div>
+      `;
+      return;
+    }
+
+    filtered.forEach((trackingItem) => {
+      container.appendChild(this.createTrackedCard(trackingItem));
+    });
+
+    console.log(`[Tracking] Rendered ${filtered.length} of ${this.allTracked.length} tracked periodicals`);
+  }
+
+  /**
+   * Populate the language filter dropdown with unique languages from tracked periodicals
+   *
+   * @returns {Promise<void>}
+   */
+  async populateLanguageDropdown() {
+    const dropdown = document.getElementById('tracking-language-filter');
+    if (!dropdown) return;
+
+    // Get unique languages from tracked periodicals
+    const languages = [...new Set(this.allTracked.map((t) => t.language || 'English'))].sort();
+
+    // Keep the "All" option
+    dropdown.innerHTML = '<option value="all">All</option>';
+
+    // Add each language as an option
+    languages.forEach((lang) => {
+      const option = document.createElement('option');
+      option.value = lang;
+      option.textContent = lang;
+      dropdown.appendChild(option);
+    });
+
+    // Restore saved filter value
+    if (this.filterManager.languageFilter && this.filterManager.languageFilter !== 'all') {
+      dropdown.value = this.filterManager.languageFilter;
     }
   }
 
@@ -2114,3 +2303,76 @@ async function reorganizeTrackingFiles(trackingId, _title) {
     );
   }
 }
+
+// ============================================================================
+// Global Function Exports for HTML Event Handlers
+// ============================================================================
+
+/**
+ * Set tracking filter (category or language)
+ * @param {string} type - Filter type ('category' or 'language')
+ * @param {string} value - Filter value
+ */
+window.setTrackingFilter = function (type, value) {
+  if (tracking && tracking.filterManager) {
+    tracking.filterManager.setFilter(type, value);
+    
+    // Update dropdown UI
+    if (type === 'category') {
+      const dropdown = document.getElementById('tracking-category-filter');
+      if (dropdown) dropdown.value = value;
+    } else if (type === 'language') {
+      const dropdown = document.getElementById('tracking-language-filter');
+      if (dropdown) dropdown.value = value;
+    }
+    
+    // If periodicals haven't been loaded yet, load them now
+    if (!tracking.periodicalsLoaded) {
+      tracking.loadTrackedPeriodicals();
+    }
+  }
+};
+
+/**
+ * Set tracking sort field
+ * @param {string} field - Sort field name
+ */
+window.setTrackingSortField = function (field) {
+  if (tracking && tracking.sortManager) {
+    tracking.sortManager.setField(field);
+  }
+};
+
+/**
+ * Toggle tracking sort order
+ */
+window.toggleTrackingSortOrder = function () {
+  if (tracking && tracking.sortManager) {
+    tracking.sortManager.toggleOrder();
+  }
+};
+
+/**
+ * Handle tracking search input
+ * @param {string} query - Search query
+ */
+window.onTrackingSearchInput = function (query) {
+  if (tracking && tracking.filterManager) {
+    tracking.filterManager.setSearch(query);
+  }
+};
+
+/**
+ * Clear all tracking filters
+ */
+window.clearTrackingFilters = function () {
+  if (tracking && tracking.filterManager) {
+    tracking.filterManager.clearFilters();
+    // Update UI to reflect cleared state
+    tracking.filterManager.updateUI(
+      'tracking-category-filter',
+      'tracking-language-filter',
+      'tracking-search-bar'
+    );
+  }
+};

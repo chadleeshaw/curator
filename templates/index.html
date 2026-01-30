@@ -37,11 +37,11 @@
       </header>
 
       <nav>
-        <button class="nav-btn" onclick="showTab('library', event)">📚 Library</button>
-        <button class="nav-btn" onclick="showTab('tracking', event)">📌 Track Periodicals</button>
-        <button class="nav-btn" onclick="showTab('tasks', event)">⚙️ Tasks</button>
-        <button class="nav-btn" onclick="showTab('queue', event)">📥 Queue</button>
-        <button class="nav-btn" onclick="showTab('settings', event)">🔧 Settings</button>
+        <button class="nav-btn" onclick="showTab('library', event)"><span class="nav-icon">📚</span><span class="nav-text">Library</span></button>
+        <button class="nav-btn" onclick="showTab('tracking', event)"><span class="nav-icon">📌</span><span class="nav-text">Track</span></button>
+        <button class="nav-btn" onclick="showTab('tasks', event)"><span class="nav-icon">⚙️</span><span class="nav-text">Tasks</span></button>
+        <button class="nav-btn" onclick="showTab('queue', event)"><span class="nav-icon">📥</span><span class="nav-text">Queue</span></button>
+        <button class="nav-btn" onclick="showTab('settings', event)"><span class="nav-icon">🔧</span><span class="nav-text">Settings</span></button>
       </nav>
 
       <!-- Library Tab -->
@@ -215,52 +215,164 @@
       <div id="tracking-tab" class="tab">
         <div class="tracking-container">
           <div class="tracked-periodicals">
-            <div class="tracked-header">
-              <h2>📌 Track Periodicals</h2>
-              <div class="tracked-header-row">
-                <div class="tracked-actions">
-                  <button onclick="openTrackNewPeriodicalModal()" class="btn-primary">
-                    📌 Track New Periodical
-                  </button>
-                  <button onclick="openMergeModal()" class="btn-secondary">
-                    🔀 Merge Tracking
-                  </button>
-                </div>
-                <div class="sort-controls">
-                  <div class="sort-buttons">
-                    <button
-                      class="sort-btn active"
-                      data-sort="title"
-                      onclick="setSortField('title')"
-                    >
-                      Title
-                    </button>
-                    <button
-                      class="sort-btn"
-                      data-sort="category"
-                      onclick="setSortField('category')"
-                    >
-                      Category
-                    </button>
-                    <button
-                      class="sort-btn"
-                      data-sort="tracking_mode"
-                      onclick="setSortField('tracking_mode')"
-                    >
-                      Tracking
-                    </button>
-                  </div>
-                  <button
-                    id="tracking-sort-toggle"
-                    class="sort-toggle-btn"
-                    onclick="toggleSortOrder()"
-                    title="Toggle ascending/descending"
-                  >
-                    ↑
-                  </button>
-                </div>
+            <!-- Header with Sort Controls -->
+            <div class="tracking-header-row">
+              <h2 style="margin: 0">📌 Track Periodicals</h2>
+
+              <!-- Sort Controls -->
+              <div class="sort-controls">
+                <label
+                  for="tracking-sort-select"
+                  style="color: var(--text-secondary); font-size: 0.9em; font-weight: 500"
+                  >Sort by:</label
+                >
+                <select
+                  id="tracking-sort-select"
+                  onchange="setTrackingSortField(this.value)"
+                  style="
+                    padding: 8px 12px;
+                    border: 1px solid var(--border-color);
+                    border-radius: 6px;
+                    background: var(--surface);
+                    color: var(--text-primary);
+                    font-size: 14px;
+                    cursor: pointer;
+                    -webkit-appearance: none;
+                    -moz-appearance: none;
+                    appearance: none;
+                    background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23f0f0f0%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3e%3cpolyline points=%226 9 12 15 18 9%22%3e%3c/polyline%3e%3c/svg%3e');
+                    background-repeat: no-repeat;
+                    background-position: right 10px center;
+                    background-size: 16px;
+                    padding-right: 35px;
+                  "
+                >
+                  <option value="title">Title</option>
+                  <option value="category">Category</option>
+                  <option value="tracking_mode">Tracking Mode</option>
+                  <option value="language">Language</option>
+                </select>
+                <button
+                  id="tracking-sort-toggle"
+                  class="sort-toggle-btn"
+                  onclick="toggleTrackingSortOrder()"
+                  title="Toggle ascending/descending"
+                >
+                  ↑
+                </button>
               </div>
             </div>
+
+            <!-- Search and Filter Bar -->
+            <div class="tracking-search-row mb-20">
+              <div class="search-input-wrapper" style="flex: 1; max-width: 500px">
+                <input
+                  type="text"
+                  id="tracking-search-input"
+                  name="tracking-search"
+                  placeholder="🔍 Search by title..."
+                  oninput="onTrackingSearchInput(this.value)"
+                  autocomplete="off"
+                  style="
+                    width: 100%;
+                    padding: 10px 14px;
+                    border: 1px solid var(--border-color);
+                    border-radius: 6px;
+                    background: var(--surface);
+                    color: var(--text-primary);
+                    font-size: 14px;
+                  "
+                />
+              </div>
+
+              <!-- Filter Controls -->
+              <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap">
+                <!-- Category Filter -->
+                <label
+                  for="tracking-category-filter"
+                  style="color: var(--text-secondary); font-size: 0.9em; font-weight: 500"
+                  >Category:</label
+                >
+                <select
+                  id="tracking-category-filter"
+                  onchange="setTrackingFilter('category', this.value)"
+                  style="
+                    padding: 8px 12px;
+                    border: 1px solid var(--border-color);
+                    border-radius: 6px;
+                    background: var(--surface);
+                    color: var(--text-primary);
+                    font-size: 14px;
+                    cursor: pointer;
+                    -webkit-appearance: none;
+                    -moz-appearance: none;
+                    appearance: none;
+                    background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23f0f0f0%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3e%3cpolyline points=%226 9 12 15 18 9%22%3e%3c/polyline%3e%3c/svg%3e');
+                    background-repeat: no-repeat;
+                    background-position: right 10px center;
+                    background-size: 16px;
+                    padding-right: 35px;
+                  "
+                >
+                  <option value="all">All</option>
+                  <!-- Categories loaded dynamically from API -->
+                </select>
+
+                <!-- Language Filter -->
+                <label
+                  for="tracking-language-filter"
+                  style="color: var(--text-secondary); font-size: 0.9em; font-weight: 500"
+                  >Language:</label
+                >
+                <select
+                  id="tracking-language-filter"
+                  onchange="setTrackingFilter('language', this.value)"
+                  style="
+                    padding: 8px 12px;
+                    border: 1px solid var(--border-color);
+                    border-radius: 6px;
+                    background: var(--surface);
+                    color: var(--text-primary);
+                    font-size: 14px;
+                    cursor: pointer;
+                    -webkit-appearance: none;
+                    -moz-appearance: none;
+                    appearance: none;
+                    background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23f0f0f0%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3e%3cpolyline points=%226 9 12 15 18 9%22%3e%3c/polyline%3e%3c/svg%3e');
+                    background-repeat: no-repeat;
+                    background-position: right 10px center;
+                    background-size: 16px;
+                    padding-right: 35px;
+                  "
+                >
+                  <option value="all">All</option>
+                  <!-- Languages loaded dynamically -->
+                </select>
+
+                <!-- Clear Filters Button -->
+                <button
+                  onclick="clearTrackingFilters()"
+                  class="btn-secondary"
+                  style="padding: 8px 14px; font-size: 13px"
+                  title="Clear all filters and search"
+                >
+                  ✕ Clear
+                </button>
+              </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="tracking-controls-row mb-40">
+              <div style="display: flex; gap: 10px; flex-wrap: wrap">
+                <button onclick="openTrackNewPeriodicalModal()" class="btn-primary">
+                  📌 Track New Periodical
+                </button>
+                <button onclick="openMergeModal()" class="btn-secondary">
+                  🔀 Merge Tracking
+                </button>
+              </div>
+            </div>
+
             <div id="tracking-status" class="hidden" style="margin-bottom: 20px"></div>
             <div id="tracked-list"></div>
           </div>
@@ -289,21 +401,8 @@
       <div id="queue-tab" class="tab">
         <div class="tasks-container">
           <!-- Queue Switcher Buttons -->
-          <div
-            class="queue-switcher"
-            style="
-              margin-bottom: 30px;
-              display: flex;
-              gap: 10px;
-              border-bottom: 2px solid var(--border);
-              padding-bottom: 10px;
-            "
-          >
-            <button
-              id="switch-download-queue"
-              class="queue-switch-btn active"
-              data-queue="download"
-            >
+          <div class="queue-switcher">
+            <button id="switch-download-queue" class="queue-switch-btn active" data-queue="download">
               📥 Downloads <span id="download-queue-badge" class="queue-badge">0</span>
             </button>
             <button id="switch-ocr-queue" class="queue-switch-btn" data-queue="ocr">
@@ -313,20 +412,53 @@
 
           <!-- Download Queue Section -->
           <div id="download-queue-view" class="queue-view">
-            <!-- Header with Filter Buttons -->
-            <div
-              style="
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 10px;
-                flex-wrap: wrap;
-                gap: 10px;
-              "
-            >
-              <div>
-                <h2 style="margin: 0">📥 Download Queue</h2>
+            <!-- Header Row: Left (title, desc, buttons) + Right (sort/filter) -->
+            <div class="queue-header-row">
+              <div class="queue-header-left">
+                <h2 class="queue-title">📥 Download Queue</h2>
+                <p class="queue-description">
+                  Monitor and manage your periodical downloads. Auto-refreshes every 5 seconds.
+                </p>
               </div>
+              <div class="queue-header-controls">
+                <div class="sort-controls">
+                  <label for="download-sort-select">Sort by:</label>
+                  <select id="download-sort-select" onchange="setDownloadSort(this.value)">
+                    <option value="title">Title</option>
+                    <option value="status">Status</option>
+                    <option value="priority">Priority</option>
+                    <option value="created_at">Date Added</option>
+                  </select>
+                  <button
+                    id="download-sort-toggle"
+                    class="sort-toggle-btn"
+                    onclick="toggleDownloadSortOrder()"
+                    title="Toggle sort order"
+                  >↑</button>
+                </div>
+                <div class="filter-row">
+                  <label for="download-status-filter">Status:</label>
+                  <select id="download-status-filter" onchange="setDownloadFilter(this.value)">
+                    <option value="all">All</option>
+                    <option value="queued">Queued</option>
+                    <option value="pending">Pending</option>
+                    <option value="downloading">Downloading</option>
+                    <option value="completed">Completed</option>
+                    <option value="failed">Failed</option>
+                    <option value="skipped">Skipped</option>
+                  </select>
+                  <button
+                    class="btn-danger btn-sm"
+                    onclick="window.downloads.clearByStatus(document.getElementById('download-status-filter').value)"
+                    title="Clear downloads with selected status"
+                    style="margin-left: 5px;"
+                  >🗑️</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Old Filter Buttons (hidden, kept for backward compatibility) -->
+            <div style="display: none">
               <!-- Filter Buttons -->
               <div style="display: flex; gap: 10px; flex-wrap: wrap">
                 <button
@@ -376,41 +508,6 @@
                   title="Show successfully completed downloads"
                 >
                   Completed
-                </button>
-              </div>
-            </div>
-
-            <div style="margin-bottom: 20px">
-              <p style="color: var(--text-secondary); margin: 0 0 10px 0">
-                Monitor and manage your periodical downloads. Auto-refreshes every 5 seconds.
-              </p>
-              <!-- Clear Buttons -->
-              <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end">
-                <button
-                  id="download-clear-queued-btn"
-                  class="btn-secondary"
-                  onclick="window.downloads.clearQueuedDownloads()"
-                  style="background: var(--status-info); color: white"
-                  title="Remove downloads waiting for an available slot (not yet sent to client)"
-                >
-                  🗑️ Clear Queued
-                </button>
-                <button
-                  id="download-clear-pending-btn"
-                  class="btn-secondary"
-                  onclick="window.downloads.clearPendingDownloads()"
-                  style="background: var(--status-warning); color: white"
-                  title="Remove downloads that have been sent to client but haven't started downloading yet"
-                >
-                  🗑️ Clear Pending
-                </button>
-                <button
-                  id="download-clear-failed-btn"
-                  class="btn-secondary"
-                  onclick="window.downloads.clearFailedDownloads()"
-                  style="background: var(--status-failed); color: white"
-                >
-                  🗑️ Clear Failed
                 </button>
               </div>
             </div>
@@ -488,72 +585,46 @@
 
           <!-- OCR Queue Section -->
           <div id="ocr-queue-view" class="queue-view hidden">
-            <!-- Header with Filter Buttons -->
-            <div
-              style="
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 10px;
-                flex-wrap: wrap;
-                gap: 10px;
-              "
-            >
-              <div>
-                <h2 style="margin: 0">🔍 OCR Processing Queue</h2>
+            <!-- Header Row: Left (title, desc, buttons) + Right (sort/filter) -->
+            <div class="queue-header-row">
+              <div class="queue-header-left">
+                <h2 class="queue-title">🔍 OCR Processing Queue</h2>
+                <p class="queue-description">
+                  Monitor OCR text extraction jobs. Auto-refreshes every 5 seconds.
+                </p>
               </div>
-              <!-- Filter Buttons -->
-              <div style="display: flex; gap: 10px; flex-wrap: wrap">
-                <button
-                  id="ocr-filter-all"
-                  class="filter-btn active"
-                  onclick="window.ocrQueue.setFilter('all')"
-                  title="Show all OCR jobs regardless of status"
-                >
-                  All
-                </button>
-                <button
-                  id="ocr-filter-active"
-                  class="filter-btn"
-                  onclick="window.ocrQueue.setFilter('active')"
-                  title="Show pending and processing OCR jobs"
-                >
-                  Active
-                </button>
-                <button
-                  id="ocr-filter-failed"
-                  class="filter-btn"
-                  onclick="window.ocrQueue.setFilter('failed')"
-                  title="Show failed OCR jobs"
-                >
-                  Failed
-                </button>
-                <button
-                  id="ocr-filter-completed"
-                  class="filter-btn"
-                  onclick="window.ocrQueue.setFilter('completed')"
-                  title="Show completed OCR jobs"
-                >
-                  Completed
-                </button>
-              </div>
-            </div>
-
-            <div style="margin-bottom: 20px">
-              <p style="color: var(--text-secondary); margin: 0 0 10px 0">
-                Monitor OCR text extraction jobs. Auto-refreshes every 5 seconds.
-              </p>
-              <!-- Clear Buttons -->
-              <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end">
-                <button
-                  id="ocr-clear-failed-btn"
-                  class="btn-secondary"
-                  onclick="window.ocrQueue.clearFailedJobs()"
-                  style="background: var(--status-failed); color: white"
-                  title="Remove all failed OCR jobs from the queue"
-                >
-                  🗑️ Clear Failed
-                </button>
+              <div class="queue-header-controls">
+                <div class="sort-controls">
+                  <label for="ocr-sort-select">Sort by:</label>
+                  <select id="ocr-sort-select" onchange="setOCRSort(this.value)">
+                    <option value="title">Title</option>
+                    <option value="status">Status</option>
+                    <option value="priority">Priority</option>
+                    <option value="created_at">Date Added</option>
+                  </select>
+                  <button
+                    id="ocr-sort-toggle"
+                    class="sort-toggle-btn"
+                    onclick="toggleOCRSortOrder()"
+                    title="Toggle sort order"
+                  >↑</button>
+                </div>
+                <div class="filter-row">
+                  <label for="ocr-status-filter">Status:</label>
+                  <select id="ocr-status-filter" onchange="setOCRFilter(this.value)">
+                    <option value="all">All</option>
+                    <option value="pending">Pending</option>
+                    <option value="processing">Processing</option>
+                    <option value="completed">Completed</option>
+                    <option value="failed">Failed</option>
+                  </select>
+                  <button
+                    class="btn-danger btn-sm"
+                    onclick="window.ocrQueue.clearByStatus(document.getElementById('ocr-status-filter').value)"
+                    title="Clear OCR jobs with selected status"
+                    style="margin-left: 5px;"
+                  >🗑️</button>
+                </div>
               </div>
             </div>
 
@@ -641,28 +712,28 @@
           <!-- Settings Sub-Tab Navigation -->
           <div class="settings-tabs-nav">
             <button class="settings-tab-btn active" onclick="showSettingsTab('providers', event)">
-              🔍 Providers
+              <span class="nav-icon">🔍</span><span class="nav-text">Providers</span>
             </button>
             <button class="settings-tab-btn" onclick="showSettingsTab('storage', event)">
-              💾 Storage & Paths
+              <span class="nav-icon">💾</span><span class="nav-text">Storage</span>
             </button>
             <button class="settings-tab-btn" onclick="showSettingsTab('matching', event)">
-              🎯 Matching & Metadata
+              <span class="nav-icon">🎯</span><span class="nav-text">Matching</span>
             </button>
             <button class="settings-tab-btn" onclick="showSettingsTab('tasks', event)">
-              📦 Downloads & Tasks
+              <span class="nav-icon">📦</span><span class="nav-text">Downloads</span>
             </button>
             <button class="settings-tab-btn" onclick="showSettingsTab('pdf-ocr', event)">
-              📝 PDF & OCR
+              <span class="nav-icon">📝</span><span class="nav-text">PDF/OCR</span>
             </button>
             <button class="settings-tab-btn" onclick="showSettingsTab('appearance', event)">
-              🎨 Appearance
+              <span class="nav-icon">🎨</span><span class="nav-text">Appearance</span>
             </button>
             <button class="settings-tab-btn" onclick="showSettingsTab('account', event)">
-              👤 Account & Security
+              <span class="nav-icon">👤</span><span class="nav-text">Account</span>
             </button>
             <button class="settings-tab-btn" onclick="showSettingsTab('advanced', event)">
-              ⚙️ Advanced
+              <span class="nav-icon">⚙️</span><span class="nav-text">Advanced</span>
             </button>
           </div>
 

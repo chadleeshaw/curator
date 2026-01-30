@@ -267,6 +267,44 @@ window.ocrQueue = ocrQueue;
 window.downloads = downloads;
 window.tasks = tasks;
 
+// Global window functions for download queue sort and filter handlers
+window.setDownloadSort = function (sort) {
+  if (window.downloads) {
+    window.downloads.setSort(sort);
+  }
+};
+
+window.toggleDownloadSortOrder = function () {
+  if (window.downloads) {
+    window.downloads.toggleSortOrder();
+  }
+};
+
+window.setDownloadFilter = function (filter) {
+  if (window.downloads) {
+    window.downloads.setFilter(filter);
+  }
+};
+
+// Global window functions for OCR queue sort and filter handlers
+window.setOCRSort = function (sort) {
+  if (window.ocrQueue) {
+    window.ocrQueue.setSort(sort);
+  }
+};
+
+window.toggleOCRSortOrder = function () {
+  if (window.ocrQueue) {
+    window.ocrQueue.toggleSortOrder();
+  }
+};
+
+window.setOCRFilter = function (filter) {
+  if (window.ocrQueue) {
+    window.ocrQueue.setFilter(filter);
+  }
+};
+
 // Export modules for debugging in console
 window.__modules = {
   library,

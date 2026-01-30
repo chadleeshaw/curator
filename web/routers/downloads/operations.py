@@ -128,6 +128,116 @@ async def clear_failed_downloads() -> Dict[str, Any]:
     return await with_db_session(_shared._session_factory, operation)
 
 
+@_shared.router.delete("/queue/completed")
+@handle_api_errors("Clear completed downloads", _shared.logger)
+async def clear_completed_downloads() -> Dict[str, Any]:
+    """Clear all completed downloads from the queue"""
+
+    def operation(db):
+        completed_query = db.query(DownloadSubmission).filter(
+            DownloadSubmission.status == DownloadSubmission.StatusEnum.COMPLETED
+        )
+
+        count = completed_query.count()
+
+        if count == 0:
+            return success_response("No completed downloads to clear", deleted=0)
+
+        completed_query.delete()
+        db.commit()
+
+        _shared.logger.info(f"Cleared {count} completed downloads from queue")
+
+        return success_response(
+            f"Cleared {count} completed download(s) from queue",
+            deleted=count,
+        )
+
+    return await with_db_session(_shared._session_factory, operation)
+
+
+@_shared.router.delete("/queue/downloading")
+@handle_api_errors("Clear downloading downloads", _shared.logger)
+async def clear_downloading_downloads() -> Dict[str, Any]:
+    """Clear all downloading downloads from the queue"""
+
+    def operation(db):
+        downloading_query = db.query(DownloadSubmission).filter(
+            DownloadSubmission.status == DownloadSubmission.StatusEnum.DOWNLOADING
+        )
+
+        count = downloading_query.count()
+
+        if count == 0:
+            return success_response("No downloading downloads to clear", deleted=0)
+
+        downloading_query.delete()
+        db.commit()
+
+        _shared.logger.info(f"Cleared {count} downloading downloads from queue")
+
+        return success_response(
+            f"Cleared {count} downloading download(s) from queue",
+            deleted=count,
+        )
+
+    return await with_db_session(_shared._session_factory, operation)
+
+
+@_shared.router.delete("/queue/skipped")
+@handle_api_errors("Clear skipped downloads", _shared.logger)
+async def clear_skipped_downloads() -> Dict[str, Any]:
+    """Clear all skipped downloads from the queue"""
+
+    def operation(db):
+        skipped_query = db.query(DownloadSubmission).filter(
+            DownloadSubmission.status == DownloadSubmission.StatusEnum.SKIPPED
+        )
+
+        count = skipped_query.count()
+
+        if count == 0:
+            return success_response("No skipped downloads to clear", deleted=0)
+
+        skipped_query.delete()
+        db.commit()
+
+        _shared.logger.info(f"Cleared {count} skipped downloads from queue")
+
+        return success_response(
+            f"Cleared {count} skipped download(s) from queue",
+            deleted=count,
+        )
+
+    return await with_db_session(_shared._session_factory, operation)
+
+
+@_shared.router.delete("/queue/all")
+@handle_api_errors("Clear all downloads", _shared.logger)
+async def clear_all_downloads() -> Dict[str, Any]:
+    """Clear all downloads from the queue"""
+
+    def operation(db):
+        all_query = db.query(DownloadSubmission)
+
+        count = all_query.count()
+
+        if count == 0:
+            return success_response("No downloads to clear", deleted=0)
+
+        all_query.delete()
+        db.commit()
+
+        _shared.logger.info(f"Cleared {count} downloads from queue")
+
+        return success_response(
+            f"Cleared {count} download(s) from queue",
+            deleted=count,
+        )
+
+    return await with_db_session(_shared._session_factory, operation)
+
+
 @_shared.router.delete("/queue/{submission_id}")
 @handle_api_errors("Delete from queue", _shared.logger)
 async def delete_from_queue(submission_id: int) -> Dict[str, Any]:

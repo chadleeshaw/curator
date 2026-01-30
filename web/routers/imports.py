@@ -40,7 +40,7 @@ async def import_from_downloads(
     background_tasks: BackgroundTasks, options: Optional[ImportOptionsRequest] = None
 ) -> Dict[str, Any]:
     """
-    Process PDFs from downloads folder and import them into the library.
+    Process PDF, EPUB, CBZ, and CBR files from downloads folder and import them into the library.
     Runs asynchronously in background.
 
     Args:
@@ -69,7 +69,7 @@ async def import_from_downloads(
 
     background_tasks.add_task(process_imports)
 
-    return status_response("processing", "Started importing PDFs from downloads folder")
+    return status_response("processing", "Started importing files from downloads folder")
 
 
 @router.get("/status")
@@ -85,16 +85,18 @@ async def get_import_status() -> Dict[str, Any]:
             "message": "Downloads directory not found",
         }
 
-    # Search recursively for PDF and EPUB files (matches process_downloads behavior)
+    # Search recursively for PDF, EPUB, CBZ, and CBR files (matches process_downloads behavior)
     all_files = find_pdf_epub_files(downloads_dir, recursive=True)
     pdf_files = [f for f in all_files if f.suffix == ".pdf"]
     epub_files = [f for f in all_files if f.suffix == ".epub"]
+    cbz_files = [f for f in all_files if f.suffix == ".cbz"]
+    cbr_files = [f for f in all_files if f.suffix == ".cbr"]
 
     return {
         "ready": len(all_files) > 0,
         "files": len(all_files),
         "file_list": [str(f.relative_to(downloads_dir)) for f in all_files],
-        "message": f"Found {len(all_files)} files ready to import ({len(pdf_files)} PDFs, {len(epub_files)} EPUBs)",
+        "message": f"Found {len(all_files)} files ready to import ({len(pdf_files)} PDFs, {len(epub_files)} EPUBs, {len(cbz_files)} CBZs, {len(cbr_files)} CBRs)",
     }
 
 
@@ -105,7 +107,7 @@ async def import_from_library_dir(
     options: ImportOptionsRequest,
 ) -> Dict[str, Any]:
     """
-    Import PDF and EPUB files from the organized data directory back into the library.
+    Import PDF, EPUB, CBZ, and CBR files from the organized data directory back into the library.
     Useful for syncing files that exist in the library directory but aren't in the database.
 
     Args:
@@ -122,12 +124,12 @@ async def import_from_library_dir(
     if not library_dir.exists():
         raise HTTPException(status_code=400, detail=f"Library directory not found: {library_dir}")
 
-    # Count files available for import (PDFs and EPUBs)
+    # Count files available for import (PDFs, EPUBs, CBZs, and CBRs)
     all_files = find_pdf_epub_files(library_dir, recursive=True)
 
     if not all_files:
         return success_response(
-            f"No PDF or EPUB files found in library directory: {library_dir}",
+            f"No files found in library directory: {library_dir}",
             imported=0,
         )
 

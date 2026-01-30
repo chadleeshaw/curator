@@ -7,7 +7,7 @@
 /* global IntersectionObserver */
 
 import { APIClient, APIHelper } from '../core/api.js';
-import { UIUtils, SortManager } from '../core/ui-utils.js';
+import { UIUtils, SortManager, FilterManager } from '../core/ui-utils.js';
 import {
   ELEMENT_IDS as _ELEMENT_IDS,
   STATUS_MESSAGES as _STATUS_MESSAGES,
@@ -28,14 +28,12 @@ export class LibraryManager {
   constructor() {
     /** @type {SortManager} Manager for library sorting */
     this.sortManager = new SortManager('title', 'asc', () => this.loadPeriodicals());
-    /** @type {string} Current category filter */
-    this.categoryFilter = 'all';
-    /** @type {string} Current language filter */
-    this.languageFilter = 'all';
-    /** @type {string} Current search query */
-    this.searchQuery = '';
+    /** @type {FilterManager} Manager for library filters */
+    this.filterManager = new FilterManager('libraryFilters', () => this.applyFiltersAndRender());
     /** @type {Array} All periodicals loaded from API (unfiltered) */
     this.allPeriodicals = [];
+    /** @type {boolean} Whether periodicals have been loaded at least once */
+    this.periodicalsLoaded = false;
     /** @type {number|null} ID of periodical pending deletion */
     this.pendingDeleteId = null;
     /** @type {string|null} Title of periodical pending deletion */
@@ -57,7 +55,30 @@ export class LibraryManager {
     this.loadCategories();
 
     // Load saved filter state from localStorage
-    this.loadFilterState();
+    const savedFilters = this.filterManager.loadState();
+    if (savedFilters) {
+      // Restore sort settings
+      if (savedFilters.sortField) {
+        this.sortManager.field = savedFilters.sortField;
+      }
+      if (savedFilters.sortOrder) {
+        this.sortManager.order = savedFilters.sortOrder;
+      }
+      // Update UI elements
+      this.filterManager.updateUI(
+        'library-category-filter',
+        'library-language-filter',
+        'library-search-input'
+      );
+      
+      // Update sort dropdown
+      const sortDropdown = document.getElementById('library-sort-select');
+      if (sortDropdown) {
+        sortDropdown.value = this.sortManager.field;
+      }
+      
+      this.updateLibrarySortToggleButton();
+    }
 
     // Setup keyboard shortcuts
     this.setupKeyboardShortcuts();
@@ -175,47 +196,29 @@ export class LibraryManager {
    */
   loadFilterState() {
     try {
-      const saved = localStorage.getItem('libraryFilters');
-      if (saved) {
-        const filters = JSON.parse(saved);
-        this.categoryFilter = filters.category || 'all';
-        this.languageFilter = filters.language || 'all';
-        // Don't restore search query - it should always start empty
-        this.searchQuery = '';
+      // FilterManager handles loading from localStorage
+      this.filterManager.loadState();
+      
+      // Update UI elements
+      this.filterManager.updateUI(
+        'library-category-filter',
+        'library-language-filter',
+        'library-search-input'
+      );
 
-        // Restore sort settings
-        if (filters.sortField) {
-          this.sortManager.field = filters.sortField;
-        }
-        if (filters.sortOrder) {
-          this.sortManager.order = filters.sortOrder;
-        }
+      // Update sort dropdown
+      const sortDropdown = document.getElementById('library-sort-select');
+      if (sortDropdown) sortDropdown.value = this.sortManager.field;
 
-        // Update UI elements
-        const categoryDropdown = document.getElementById('library-category-filter');
-        if (categoryDropdown) categoryDropdown.value = this.categoryFilter;
+      // Update sort toggle button
+      this.updateLibrarySortToggleButton();
 
-        const languageDropdown = document.getElementById('library-language-filter');
-        if (languageDropdown) languageDropdown.value = this.languageFilter;
-
-        // Update sort dropdown
-        const sortDropdown = document.getElementById('library-sort-select');
-        if (sortDropdown) sortDropdown.value = this.sortManager.field;
-
-        // Update sort toggle button
-        this.updateLibrarySortToggleButton();
-
-        // Ensure search input is empty
-        const searchInput = document.getElementById('library-search-input');
-        if (searchInput) searchInput.value = '';
-
-        console.log('[Library] Loaded saved filter state:', {
-          category: this.categoryFilter,
-          language: this.languageFilter,
-          sortField: this.sortManager.field,
-          sortOrder: this.sortManager.order,
-        });
-      }
+      console.log('[Library] Loaded saved filter state:', {
+        category: this.filterManager.categoryFilter,
+        language: this.filterManager.languageFilter,
+        sortField: this.sortManager.field,
+        sortOrder: this.sortManager.order,
+      });
     } catch (error) {
       console.warn('[Library] Failed to load saved filters:', error);
     }
@@ -228,12 +231,15 @@ export class LibraryManager {
    */
   saveFilterState() {
     try {
+      // FilterManager handles saving to localStorage
+      this.filterManager.saveState();
+      
+      // Also save sort settings
       const filters = {
-        category: this.categoryFilter,
-        language: this.languageFilter,
+        category: this.filterManager.categoryFilter,
+        language: this.filterManager.languageFilter,
         sortField: this.sortManager.field,
         sortOrder: this.sortManager.order,
-        // Don't save search query - it should always start fresh
       };
       localStorage.setItem('libraryFilters', JSON.stringify(filters));
       console.log('[Library] Saved filter state:', filters);
@@ -262,6 +268,11 @@ export class LibraryManager {
       option.textContent = category;
       dropdown.appendChild(option);
     });
+    
+    // Restore saved filter value
+    if (this.filterManager.categoryFilter) {
+      dropdown.value = this.filterManager.categoryFilter;
+    }
   }
 
   /**
@@ -285,6 +296,7 @@ export class LibraryManager {
     if (data) {
       // Store all periodicals unfiltered
       this.allPeriodicals = data.periodicals || [];
+      this.periodicalsLoaded = true;
 
       // Load unique languages for language filter (independent API call)
       await this.populateLanguageDropdown();
@@ -301,38 +313,26 @@ export class LibraryManager {
    */
   applyFiltersAndRender() {
     const grid = document.getElementById('periodicals-grid');
+    if (!grid) return;
+
+    // Don't apply filters if periodicals haven't been loaded yet
+    if (!this.periodicalsLoaded) {
+      console.log('[Library] No periodicals loaded yet, skipping filter application');
+      return;
+    }
+
     grid.innerHTML = '';
 
-    let filtered = [...this.allPeriodicals];
-
-    // Apply category filter
-    if (this.categoryFilter !== 'all') {
-      filtered = filtered.filter((p) => {
-        const category = p.metadata?.category || 'Unknown';
-        return category === this.categoryFilter;
-      });
-    }
-
-    // Apply language filter
-    if (this.languageFilter !== 'all') {
-      filtered = filtered.filter((p) => {
-        const language = p.language || 'English';
-        return language === this.languageFilter;
-      });
-    }
-
-    // Apply search query
-    if (this.searchQuery.trim()) {
-      const query = this.searchQuery.toLowerCase().trim();
-      filtered = filtered.filter((p) => {
-        const title = (p.title || '').toLowerCase();
-        return title.includes(query);
-      });
-    }
+    // Use filterManager to apply filters
+    const filtered = this.filterManager.applyFilters(this.allPeriodicals, {
+      getCategoryFn: (p) => p.metadata?.category || 'Unknown',
+      getLanguageFn: (p) => p.language || 'English',
+      getTitleFn: (p) => p.title || '',
+    });
 
     // Render results
     if (filtered.length === 0) {
-      const filterDesc = this.getActiveFilterDescription();
+      const filterDesc = this.filterManager.getActiveFilterDescription();
       grid.innerHTML = `<p>No periodicals found${filterDesc}</p>`;
       // Update header stats
       if (window.updateHeaderStats) {
@@ -353,29 +353,6 @@ export class LibraryManager {
     console.log(
       `[Library] Rendered ${filtered.length} of ${this.allPeriodicals.length} periodicals`
     );
-  }
-
-  /**
-   * Get a description of currently active filters for display
-   *
-   * @returns {string} Description of active filters (e.g., " matching 'comics' in Magazines")
-   */
-  getActiveFilterDescription() {
-    const parts = [];
-
-    if (this.searchQuery.trim()) {
-      parts.push(`matching '${this.searchQuery}'`);
-    }
-
-    if (this.categoryFilter !== 'all') {
-      parts.push(`in ${this.categoryFilter}`);
-    }
-
-    if (this.languageFilter !== 'all') {
-      parts.push(`(${this.languageFilter})`);
-    }
-
-    return parts.length > 0 ? ' ' + parts.join(' ') : '';
   }
 
   /**
@@ -407,7 +384,7 @@ export class LibraryManager {
         });
 
         // Restore saved selection
-        dropdown.value = this.languageFilter;
+        dropdown.value = this.filterManager.languageFilter;
       } else {
         console.warn('[Library] Failed to load languages from API');
       }
@@ -485,29 +462,23 @@ export class LibraryManager {
    * library.setLibraryFilter('language', 'English');
    */
   setLibraryFilter(filterType, value) {
+    // Use FilterManager to handle filter updates
+    this.filterManager.setFilter(filterType, value);
+    
+    // Update dropdown UI
     if (filterType === 'category') {
-      this.categoryFilter = value;
-
-      // Update dropdown selection
       const dropdown = document.getElementById('library-category-filter');
-      if (dropdown) {
-        dropdown.value = value;
-      }
+      if (dropdown) dropdown.value = value;
     } else if (filterType === 'language') {
-      this.languageFilter = value;
-
-      // Update dropdown selection
       const dropdown = document.getElementById('library-language-filter');
-      if (dropdown) {
-        dropdown.value = value;
-      }
+      if (dropdown) dropdown.value = value;
     }
-
-    // Save filter state
-    this.saveFilterState();
-
-    // Re-apply filters
-    this.applyFiltersAndRender();
+    
+    // If periodicals haven't been loaded yet, load them now
+    if (!this.periodicalsLoaded) {
+      this.loadPeriodicals();
+    }
+    // Otherwise FilterManager automatically triggers applyFiltersAndRender via callback
   }
 
   /**
@@ -520,13 +491,9 @@ export class LibraryManager {
    * library.onSearchInput('national geographic');
    */
   onSearchInput(query) {
-    this.searchQuery = query;
-
-    // Save filter state
-    this.saveFilterState();
-
-    // Re-apply filters (debounced would be better for performance, but simple for now)
-    this.applyFiltersAndRender();
+    // Use FilterManager to handle search updates
+    this.filterManager.setSearch(query);
+    // FilterManager automatically triggers applyFiltersAndRender via callback
   }
 
   /**
@@ -538,16 +505,15 @@ export class LibraryManager {
    * library.clearFilters();
    */
   clearFilters() {
-    this.categoryFilter = 'all';
-    this.languageFilter = 'all';
-    this.searchQuery = '';
-
-    // Update UI elements
-    const categoryDropdown = document.getElementById('library-category-filter');
-    if (categoryDropdown) categoryDropdown.value = 'all';
-
-    const languageDropdown = document.getElementById('library-language-filter');
-    if (languageDropdown) languageDropdown.value = 'all';
+    // Use FilterManager to clear filters
+    this.filterManager.clearFilters();
+    
+    // Update UI to reflect cleared state
+    this.filterManager.updateUI(
+      'library-category-filter',
+      'library-language-filter',
+      'library-search-input'
+    );
 
     const searchInput = document.getElementById('library-search-input');
     if (searchInput) searchInput.value = '';

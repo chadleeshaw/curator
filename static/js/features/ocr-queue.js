@@ -17,8 +17,16 @@ export class OCRQueueManager {
     this.refreshInterval = null;
     /** @type {number} Maximum OCR retry attempts */
     this.maxRetries = 3; // Default value, will be loaded from API
-    /** @type {string} Current filter (all, active, failed, completed) */
+    /** @type {string} Current filter (all, active, pending, processing, completed, failed) */
     this.currentFilter = 'all';
+    /** @type {string} Current sort field (title, status, priority, created_at) */
+    this.currentSort = 'title';
+    /** @type {boolean} Current sort order (true = ascending, false = descending) */
+    this.sortAscending = true;
+
+    // Load preferences from localStorage
+    this.loadSortPreference();
+    this.loadFilterPreference();
 
     // Load constants from API
     this.loadConstants();
@@ -107,22 +115,22 @@ export class OCRQueueManager {
     // Display stats
     if (statsData) {
       statsDiv.innerHTML = `
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px;">
-          <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <div class="ocr-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.pending};">${statsData.pending || 0}</div>
-            <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Pending</div>
+        <div class="queue-stats-grid">
+          <div class="queue-stat-item" title="Waiting to be processed">
+            <div class="queue-stat-number" style="color: ${colors.pending};">${statsData.pending || 0}</div>
+            <div class="queue-stat-label">Pending</div>
           </div>
-          <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <div class="ocr-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.processing};">${statsData.processing || 0}</div>
-            <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Processing</div>
+          <div class="queue-stat-item" title="Currently processing">
+            <div class="queue-stat-number" style="color: ${colors.processing};">${statsData.processing || 0}</div>
+            <div class="queue-stat-label">Active</div>
           </div>
-          <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <div class="ocr-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.completed};">${statsData.completed || 0}</div>
-            <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Completed</div>
+          <div class="queue-stat-item" title="Successfully completed">
+            <div class="queue-stat-number" style="color: ${colors.completed};">${statsData.completed || 0}</div>
+            <div class="queue-stat-label">Done</div>
           </div>
-          <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <div class="ocr-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.failed};">${statsData.failed || 0}</div>
-            <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Failed</div>
+          <div class="queue-stat-item" title="Failed">
+            <div class="queue-stat-number" style="color: ${colors.failed};">${statsData.failed || 0}</div>
+            <div class="queue-stat-label">Failed</div>
           </div>
         </div>
       `;
@@ -138,6 +146,10 @@ export class OCRQueueManager {
       filteredJobs = queueData.jobs.filter((job) => job.status === 'failed');
     } else if (this.currentFilter === 'completed') {
       filteredJobs = queueData.jobs.filter((job) => job.status === 'completed');
+    } else if (this.currentFilter === 'pending') {
+      filteredJobs = queueData.jobs.filter((job) => job.status === 'pending');
+    } else if (this.currentFilter === 'processing') {
+      filteredJobs = queueData.jobs.filter((job) => job.status === 'processing');
     }
     // 'all' filter shows everything
 
@@ -164,6 +176,43 @@ export class OCRQueueManager {
 
     // Group jobs by periodical (tracking_title)
     const grouped = this.groupJobsByPeriodical(filteredJobs);
+
+    // Sort jobs within each group
+    grouped.forEach((group) => {
+      group.jobs = this.sortJobs(group.jobs);
+    });
+
+    // Sort the groups themselves based on the first item in each group
+    if (this.currentSort !== 'title') {
+      // For non-title sorts, sort groups by the first item's sort field
+      grouped.sort((a, b) => {
+        if (a.jobs.length === 0 || b.jobs.length === 0) return 0;
+        
+        const firstA = a.jobs[0];
+        const firstB = b.jobs[0];
+        let comparison = 0;
+
+        switch (this.currentSort) {
+          case 'status':
+            comparison = (firstA.status || '').localeCompare(firstB.status || '');
+            break;
+          case 'priority':
+            comparison = (firstA.priority || 0) - (firstB.priority || 0);
+            break;
+          case 'created_at':
+            comparison = new Date(firstA.created_at || 0) - new Date(firstB.created_at || 0);
+            break;
+        }
+
+        return this.sortAscending ? comparison : -comparison;
+      });
+    } else {
+      // For title sort, sort groups alphabetically by periodical name
+      grouped.sort((a, b) => {
+        const comparison = a.periodical.localeCompare(b.periodical);
+        return this.sortAscending ? comparison : -comparison;
+      });
+    }
 
     // Build grouped table rows
     tbody.innerHTML = '';
@@ -663,13 +712,64 @@ export class OCRQueueManager {
   }
 
   /**
+   * Sort jobs based on current sort settings
+   * @param {Array} jobs - Array of job objects
+   * @returns {Array} Sorted array of jobs
+   */
+  sortJobs(jobs) {
+    const sorted = [...jobs]; // Create a copy to avoid mutating original
+
+    sorted.sort((a, b) => {
+      let comparison = 0;
+
+      switch (this.currentSort) {
+        case 'title':
+          comparison = (a.title || '').localeCompare(b.title || '');
+          break;
+        case 'status':
+          comparison = (a.status || '').localeCompare(b.status || '');
+          break;
+        case 'priority':
+          comparison = (a.priority || 0) - (b.priority || 0);
+          break;
+        case 'created_at':
+          comparison = new Date(a.created_at || 0) - new Date(b.created_at || 0);
+          break;
+        default:
+          comparison = 0;
+      }
+
+      // Apply ascending/descending order
+      return this.sortAscending ? comparison : -comparison;
+    });
+
+    return sorted;
+  }
+
+  /**
    * Set filter and reload queue
-   * @param {string} filter - Filter type (all, active, failed, completed)
+   * @param {string} filter - Filter type (all, active, pending, processing, completed, failed)
    */
   setFilter(filter) {
     this.currentFilter = filter;
 
-    // Update button states
+    // Save to localStorage in combined settings object
+    try {
+      const saved = localStorage.getItem('ocrQueueSettings');
+      const settings = saved ? JSON.parse(saved) : {};
+      settings.filter = { status: filter };
+      localStorage.setItem('ocrQueueSettings', JSON.stringify(settings));
+    } catch (error) {
+      console.warn('[OCR Queue] Failed to save filter:', error);
+    }
+
+    // Update dropdown
+    const dropdown = document.getElementById('ocr-status-filter');
+    if (dropdown) {
+      dropdown.value = filter;
+    }
+
+    // Update button states (for backward compatibility with old buttons)
     document.querySelectorAll('.filter-btn').forEach((btn) => {
       btn.classList.remove('active');
     });
@@ -680,6 +780,162 @@ export class OCRQueueManager {
 
     // Reload queue with new filter
     this.loadQueue();
+  }
+
+  /**
+   * Load filter preference from localStorage
+   * @returns {void}
+   */
+  loadFilterPreference() {
+    try {
+      const saved = localStorage.getItem('ocrQueueSettings');
+      if (saved) {
+        const settings = JSON.parse(saved);
+        this.currentFilter = settings.filter?.status || 'all';
+      }
+    } catch (error) {
+      console.warn('[OCR Queue] Failed to parse filter preference:', error);
+    }
+    // Update dropdown on page load
+    setTimeout(() => {
+      const dropdown = document.getElementById('ocr-status-filter');
+      if (dropdown) {
+        dropdown.value = this.currentFilter;
+      }
+    }, 100);
+  }
+
+  /**
+   * Load sort preference from localStorage
+   * @returns {void}
+   */
+  loadSortPreference() {
+    try {
+      const saved = localStorage.getItem('ocrQueueSettings');
+      if (saved) {
+        const settings = JSON.parse(saved);
+        this.currentSort = settings.sort?.field || 'title';
+        this.sortAscending = settings.sort?.ascending !== undefined ? settings.sort.ascending : true;
+      }
+    } catch (error) {
+      console.warn('[OCR Queue] Failed to parse sort preference:', error);
+    }
+    // Update dropdown and button on page load
+    setTimeout(() => {
+      const dropdown = document.getElementById('ocr-sort-select');
+      if (dropdown) {
+        dropdown.value = this.currentSort;
+      }
+      const toggleBtn = document.getElementById('ocr-sort-toggle');
+      if (toggleBtn) {
+        toggleBtn.textContent = this.sortAscending ? '↑' : '↓';
+      }
+    }, 100);
+  }
+
+  /**
+   * Set the current sort for the OCR queue
+   *
+   * @param {string} sort - Sort type (title, status, priority, created_at)
+   * @returns {void}
+   */
+  setSort(sort) {
+    this.currentSort = sort;
+    // Save to localStorage in combined settings object
+    try {
+      const saved = localStorage.getItem('ocrQueueSettings');
+      const settings = saved ? JSON.parse(saved) : {};
+      settings.sort = {
+        field: sort,
+        ascending: this.sortAscending
+      };
+      localStorage.setItem('ocrQueueSettings', JSON.stringify(settings));
+    } catch (error) {
+      console.warn('[OCR Queue] Failed to save sort:', error);
+    }
+    // Reload queue with new sort
+    this.loadQueue();
+  }
+
+  /**
+   * Toggle sort order for the OCR queue
+   * @returns {void}
+   */
+  toggleSortOrder() {
+    this.sortAscending = !this.sortAscending;
+    // Save to localStorage in combined settings object
+    try {
+      const saved = localStorage.getItem('ocrQueueSettings');
+      const settings = saved ? JSON.parse(saved) : {};
+      settings.sort = {
+        field: this.currentSort,
+        ascending: this.sortAscending
+      };
+      localStorage.setItem('ocrQueueSettings', JSON.stringify(settings));
+    } catch (error) {
+      console.warn('[OCR Queue] Failed to save sort order:', error);
+    }
+    // Update button
+    const toggleBtn = document.getElementById('ocr-sort-toggle');
+    if (toggleBtn) {
+      toggleBtn.textContent = this.sortAscending ? '↑' : '↓';
+    }
+    // Reload queue with new sort order
+    this.loadQueue();
+  }
+
+  /**
+   * Clear OCR jobs by status
+   *
+   * @param {string} status - Status to clear (all, pending, processing, completed, failed)
+   * @returns {Promise<void>}
+   */
+  async clearByStatus(status) {
+    try {
+      // Map status labels to values
+      const statusMap = {
+        all: 'all',
+        pending: 'pending',
+        processing: 'processing',
+        active: 'processing', // Handle 'active' label mapping to 'processing'
+        completed: 'completed',
+        done: 'completed', // Handle 'done' label mapping to 'completed'
+        failed: 'failed',
+      };
+
+      const actualStatus = statusMap[status.toLowerCase()] || status;
+
+      // Confirm before clearing
+      const confirmed = await UIUtils.confirm(
+        `Clear ${actualStatus.charAt(0).toUpperCase() + actualStatus.slice(1)} OCR Jobs`,
+        `Are you sure you want to clear ${actualStatus === 'all' ? 'all' : 'all ' + actualStatus} OCR jobs? This cannot be undone.`
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      UIUtils.showStatus('ocr-queue-status', `🗑️ Clearing ${actualStatus} OCR jobs...`, 'info');
+
+      const endpoint = `/api/ocr/queue/${actualStatus}`;
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.authenticatedFetch(endpoint, {
+            method: 'DELETE',
+          });
+          return await response.json();
+        },
+        'OCRQueue',
+        'ocr-queue-status'
+      );
+
+      if (data) {
+        UIUtils.showToast(`Cleared ${data.count || 0} OCR jobs`, 'success');
+        await this.loadQueue();
+      }
+    } catch (error) {
+      // Already logged by APIHelper
+    }
   }
 
   /**

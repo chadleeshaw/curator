@@ -572,6 +572,265 @@ export class SortManager {
   }
 }
 
+/**
+ * Filter Manager class for managing filter state and persistence
+ * @class
+ */
+export class FilterManager {
+  /**
+   * Create a new FilterManager instance
+   *
+   * @param {string} storageKey - The localStorage key for persisting filters
+   * @param {Function} onFilterChange - Callback function when filters change
+   */
+  constructor(storageKey, onFilterChange) {
+    /** @type {string} localStorage key */
+    this.storageKey = storageKey;
+    /** @type {Function} Callback when filters change */
+    this.onFilterChange = onFilterChange;
+    /** @type {string} Current category filter */
+    this.categoryFilter = 'all';
+    /** @type {string} Current language filter */
+    this.languageFilter = 'all';
+    /** @type {string} Current search query */
+    this.searchQuery = '';
+  }
+
+  /**
+   * Load saved filter state from localStorage
+   *
+   * @returns {Object} The loaded filter state
+   */
+  loadState() {
+    try {
+      const saved = localStorage.getItem(this.storageKey);
+      if (saved) {
+        const filters = JSON.parse(saved);
+        this.categoryFilter = filters.category || 'all';
+        this.languageFilter = filters.language || 'all';
+        // Don't restore search query - it should always start empty
+        this.searchQuery = '';
+        return filters;
+      }
+    } catch (error) {
+      console.warn(`[FilterManager] Failed to load saved filters from ${this.storageKey}:`, error);
+    }
+    return null;
+  }
+
+  /**
+   * Save current filter state to localStorage
+   *
+   * @returns {void}
+   */
+  saveState() {
+    try {
+      const filters = {
+        category: this.categoryFilter,
+        language: this.languageFilter,
+        // Don't save search query - it should always start fresh
+      };
+      localStorage.setItem(this.storageKey, JSON.stringify(filters));
+    } catch (error) {
+      console.warn(`[FilterManager] Failed to save filters to ${this.storageKey}:`, error);
+    }
+  }
+
+  /**
+   * Set a filter value and trigger callback
+   *
+   * @param {string} filterType - The type of filter ('category' or 'language')
+   * @param {string} value - The filter value
+   * @returns {void}
+   */
+  setFilter(filterType, value) {
+    if (filterType === 'category') {
+      this.categoryFilter = value;
+    } else if (filterType === 'language') {
+      this.languageFilter = value;
+    }
+    this.saveState();
+    if (this.onFilterChange) {
+      this.onFilterChange();
+    }
+  }
+
+  /**
+   * Set search query and trigger callback
+   *
+   * @param {string} query - The search query
+   * @returns {void}
+   */
+  setSearch(query) {
+    this.searchQuery = query;
+    // Don't save search query to localStorage
+    if (this.onFilterChange) {
+      this.onFilterChange();
+    }
+  }
+
+  /**
+   * Clear all filters and trigger callback
+   *
+   * @returns {void}
+   */
+  clearFilters() {
+    this.categoryFilter = 'all';
+    this.languageFilter = 'all';
+    this.searchQuery = '';
+    this.saveState();
+    if (this.onFilterChange) {
+      this.onFilterChange();
+    }
+  }
+
+  /**
+   * Populate a category dropdown with options
+   *
+   * @param {string} dropdownId - The ID of the select element
+   * @param {string[]} categories - Array of category names
+   * @returns {void}
+   */
+  populateCategoryDropdown(dropdownId, categories) {
+    const dropdown = document.getElementById(dropdownId);
+    if (!dropdown) return;
+
+    // Keep the "All" option
+    dropdown.innerHTML = '<option value="all">All</option>';
+
+    // Add each category as an option
+    categories.forEach((category) => {
+      const option = document.createElement('option');
+      option.value = category;
+      option.textContent = category;
+      dropdown.appendChild(option);
+    });
+
+    // Restore saved value
+    if (this.categoryFilter) {
+      dropdown.value = this.categoryFilter;
+    }
+  }
+
+  /**
+   * Populate a language dropdown with options
+   *
+   * @param {string} dropdownId - The ID of the select element
+   * @param {string[]} languages - Array of language names
+   * @returns {void}
+   */
+  populateLanguageDropdown(dropdownId, languages) {
+    const dropdown = document.getElementById(dropdownId);
+    if (!dropdown) return;
+
+    // Keep the "All" option
+    dropdown.innerHTML = '<option value="all">All</option>';
+
+    // Add each language as an option
+    languages.forEach((lang) => {
+      const option = document.createElement('option');
+      option.value = lang;
+      option.textContent = lang;
+      dropdown.appendChild(option);
+    });
+
+    // Restore saved value
+    if (this.languageFilter) {
+      dropdown.value = this.languageFilter;
+    }
+  }
+
+  /**
+   * Update UI elements with current filter state
+   *
+   * @param {string} categoryDropdownId - The ID of the category select element
+   * @param {string} languageDropdownId - The ID of the language select element
+   * @param {string} searchInputId - The ID of the search input element
+   * @returns {void}
+   */
+  updateUI(categoryDropdownId, languageDropdownId, searchInputId) {
+    const categoryDropdown = document.getElementById(categoryDropdownId);
+    if (categoryDropdown) categoryDropdown.value = this.categoryFilter;
+
+    const languageDropdown = document.getElementById(languageDropdownId);
+    if (languageDropdown) languageDropdown.value = this.languageFilter;
+
+    const searchInput = document.getElementById(searchInputId);
+    if (searchInput) searchInput.value = this.searchQuery || '';
+  }
+
+  /**
+   * Apply filters to an array of items
+   *
+   * @param {Array} items - The items to filter
+   * @param {Object} options - Filter options
+   * @param {Function} options.getCategoryFn - Function to extract category from an item
+   * @param {Function} options.getLanguageFn - Function to extract language from an item
+   * @param {Function} options.getTitleFn - Function to extract title from an item
+   * @returns {Array} The filtered items
+   */
+  applyFilters(items, { getCategoryFn, getLanguageFn, getTitleFn }) {
+    let filtered = [...items];
+
+    // Apply category filter
+    if (this.categoryFilter !== 'all') {
+      filtered = filtered.filter((item) => getCategoryFn(item) === this.categoryFilter);
+    }
+
+    // Apply language filter
+    if (this.languageFilter !== 'all') {
+      filtered = filtered.filter((item) => getLanguageFn(item) === this.languageFilter);
+    }
+
+    // Apply search query
+    if (this.searchQuery.trim()) {
+      const query = this.searchQuery.toLowerCase().trim();
+      filtered = filtered.filter((item) => {
+        const title = getTitleFn(item).toLowerCase();
+        return title.includes(query);
+      });
+    }
+
+    return filtered;
+  }
+
+  /**
+   * Get a description of currently active filters
+   *
+   * @returns {string} Description of active filters
+   */
+  getActiveFilterDescription() {
+    const parts = [];
+
+    if (this.searchQuery.trim()) {
+      parts.push(`matching '${this.searchQuery}'`);
+    }
+
+    if (this.categoryFilter !== 'all') {
+      parts.push(`in ${this.categoryFilter}`);
+    }
+
+    if (this.languageFilter !== 'all') {
+      parts.push(`(${this.languageFilter})`);
+    }
+
+    return parts.length > 0 ? ' ' + parts.join(' ') : '';
+  }
+
+  /**
+   * Check if any filters are active
+   *
+   * @returns {boolean} True if any filter is active
+   */
+  hasActiveFilters() {
+    return (
+      this.categoryFilter !== 'all' ||
+      this.languageFilter !== 'all' ||
+      this.searchQuery.trim() !== ''
+    );
+  }
+}
+
 // Expose functions globally for onclick handlers
 window.showTab = (tabName, event) => UIUtils.showTab(tabName, event);
 

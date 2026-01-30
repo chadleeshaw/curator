@@ -58,8 +58,16 @@ export class DownloadsManager {
     this.currentModalPeriodical = null;
     /** @type {string} Current filter in modal */
     this.currentModalFilter = 'all';
-    /** @type {string} Current filter for queue view (all, active, failed, completed) */
+    /** @type {string} Current filter for queue view (all, queued, pending, downloading, completed, failed, skipped) */
     this.currentFilter = 'all';
+    /** @type {string} Current sort field for queue view (title, status, priority, created_at) */
+    this.currentSort = 'title';
+    /** @type {boolean} Current sort order (true = ascending, false = descending) */
+    this.sortAscending = true;
+
+    // Load preferences from localStorage
+    this.loadSortPreference();
+    this.loadFilterPreference();
 
     // Load constants from API
     this.loadConstants();
@@ -355,36 +363,36 @@ export class DownloadsManager {
       } = statusCounts;
 
       statsDiv.innerHTML = `
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px;">
-          <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);" title="Waiting for download slot (not yet sent to client)">
-            <div class="queue-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.queued};">${queued}</div>
-            <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Queued</div>
-            <div style="font-size: 0.7em; color: var(--text-secondary); margin-top: 2px; font-style: italic;">Waiting for slot</div>
+        <div class="queue-stats-grid">
+          <div class="queue-stat-item" title="Waiting for download slot (not yet sent to client)">
+            <div class="queue-stat-number" style="color: ${colors.queued};">${queued}</div>
+            <div class="queue-stat-label">Queued</div>
+            <div class="queue-stat-desc">Waiting for slot</div>
           </div>
-          <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);" title="Sent to download client, waiting to start">
-            <div class="queue-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.pending};">${pending}</div>
-            <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Pending</div>
-            <div style="font-size: 0.7em; color: var(--text-secondary); margin-top: 2px; font-style: italic;">Sent to client</div>
+          <div class="queue-stat-item" title="Sent to download client, waiting to start">
+            <div class="queue-stat-number" style="color: ${colors.pending};">${pending}</div>
+            <div class="queue-stat-label">Pending</div>
+            <div class="queue-stat-desc">Sent to client</div>
           </div>
-          <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);" title="Actively downloading">
-            <div class="queue-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.downloading};">${downloading}</div>
-            <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Downloading</div>
-            <div style="font-size: 0.7em; color: var(--text-secondary); margin-top: 2px; font-style: italic;">In progress</div>
+          <div class="queue-stat-item" title="Actively downloading">
+            <div class="queue-stat-number" style="color: ${colors.downloading};">${downloading}</div>
+            <div class="queue-stat-label">DL</div>
+            <div class="queue-stat-desc">In progress</div>
           </div>
-          <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);" title="Successfully downloaded">
-            <div class="queue-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.completed};">${completed}</div>
-            <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Completed</div>
-            <div style="font-size: 0.7em; color: var(--text-secondary); margin-top: 2px; font-style: italic;">Done</div>
+          <div class="queue-stat-item" title="Successfully downloaded">
+            <div class="queue-stat-number" style="color: ${colors.completed};">${completed}</div>
+            <div class="queue-stat-label">Done</div>
+            <div class="queue-stat-desc">Completed</div>
           </div>
-          <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);" title="Download failed">
-            <div class="queue-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.failed};">${failed}</div>
-            <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Failed</div>
-            <div style="font-size: 0.7em; color: var(--text-secondary); margin-top: 2px; font-style: italic;">Error occurred</div>
+          <div class="queue-stat-item" title="Download failed">
+            <div class="queue-stat-number" style="color: ${colors.failed};">${failed}</div>
+            <div class="queue-stat-label">Failed</div>
+            <div class="queue-stat-desc">Error occurred</div>
           </div>
-          <div style="background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);" title="Skipped">
-            <div class="queue-stat-number" style="font-size: 1.5em; font-weight: bold; color: ${colors.skipped};">${skipped}</div>
-            <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">Skipped</div>
-            <div style="font-size: 0.7em; color: var(--text-secondary); margin-top: 2px; font-style: italic;">Not downloaded</div>
+          <div class="queue-stat-item" title="Skipped">
+            <div class="queue-stat-number" style="color: ${colors.skipped};">${skipped}</div>
+            <div class="queue-stat-label">Skip</div>
+            <div class="queue-stat-desc">Not downloaded</div>
           </div>
         </div>
       `;
@@ -402,6 +410,8 @@ export class DownloadsManager {
       filteredDownloads = data.queue.filter(({ status }) => status === 'failed');
     } else if (this.currentFilter === 'completed') {
       filteredDownloads = data.queue.filter(({ status }) => status === 'completed');
+    } else if (this.currentFilter === 'skipped') {
+      filteredDownloads = data.queue.filter(({ status }) => status === 'skipped');
     }
     // 'all' filter shows everything
 
@@ -419,6 +429,7 @@ export class DownloadsManager {
           downloading: 'No downloads in progress',
           failed: 'No failed downloads',
           completed: 'No completed downloads',
+          skipped: 'No skipped downloads',
         };
         emptyMessage.textContent = messages[this.currentFilter] || 'No downloads in queue';
       }
@@ -430,6 +441,43 @@ export class DownloadsManager {
 
     // Group by periodical
     const grouped = this.groupQueueByPeriodical(filteredDownloads);
+
+    // Sort items within each group
+    grouped.forEach((group) => {
+      group.items = this.sortItems(group.items);
+    });
+
+    // Sort the groups themselves based on the first item in each group
+    if (this.currentSort !== 'title') {
+      // For non-title sorts, sort groups by the first item's sort field
+      grouped.sort((a, b) => {
+        if (a.items.length === 0 || b.items.length === 0) return 0;
+        
+        const firstA = a.items[0];
+        const firstB = b.items[0];
+        let comparison = 0;
+
+        switch (this.currentSort) {
+          case 'status':
+            comparison = (firstA.status || '').localeCompare(firstB.status || '');
+            break;
+          case 'priority':
+            comparison = (firstA.priority || 0) - (firstB.priority || 0);
+            break;
+          case 'created_at':
+            comparison = new Date(firstA.created_at || 0) - new Date(firstB.created_at || 0);
+            break;
+        }
+
+        return this.sortAscending ? comparison : -comparison;
+      });
+    } else {
+      // For title sort, sort groups alphabetically by periodical name
+      grouped.sort((a, b) => {
+        const comparison = a.periodical.localeCompare(b.periodical);
+        return this.sortAscending ? comparison : -comparison;
+      });
+    }
 
     tbody.innerHTML = '';
     grouped.forEach((group) => {
@@ -1359,13 +1407,29 @@ export class DownloadsManager {
   /**
    * Set the current filter for the download queue
    *
-   * @param {string} filter - Filter type (all, active, failed, completed)
+   * @param {string} filter - Filter type (all, queued, pending, downloading, completed, failed, skipped)
    * @returns {void}
    */
   setFilter(filter) {
     this.currentFilter = filter;
 
-    // Update button states
+    // Save to localStorage in combined settings object
+    try {
+      const saved = localStorage.getItem('downloadQueueSettings');
+      const settings = saved ? JSON.parse(saved) : {};
+      settings.filter = { status: filter };
+      localStorage.setItem('downloadQueueSettings', JSON.stringify(settings));
+    } catch (error) {
+      console.warn('[Downloads] Failed to save filter:', error);
+    }
+
+    // Update dropdown
+    const dropdown = document.getElementById('download-status-filter');
+    if (dropdown) {
+      dropdown.value = filter;
+    }
+
+    // Update button states (for backward compatibility with old buttons)
     document.querySelectorAll('#download-queue-view .filter-btn').forEach((btn) => {
       btn.classList.remove('active');
     });
@@ -1376,6 +1440,144 @@ export class DownloadsManager {
 
     // Reload queue with new filter
     this.loadDownloadQueue();
+  }
+
+  /**
+   * Load filter preference from localStorage
+   * @returns {void}
+   */
+  loadFilterPreference() {
+    try {
+      const saved = localStorage.getItem('downloadQueueSettings');
+      if (saved) {
+        const settings = JSON.parse(saved);
+        this.currentFilter = settings.filter?.status || 'all';
+      }
+    } catch (error) {
+      console.warn('[Downloads] Failed to parse filter preference:', error);
+    }
+    // Update dropdown on page load
+    setTimeout(() => {
+      const dropdown = document.getElementById('download-status-filter');
+      if (dropdown) {
+        dropdown.value = this.currentFilter;
+      }
+    }, 100);
+  }
+
+  /**
+   * Load sort preference from localStorage
+   * @returns {void}
+   */
+  loadSortPreference() {
+    try {
+      const saved = localStorage.getItem('downloadQueueSettings');
+      if (saved) {
+        const settings = JSON.parse(saved);
+        this.currentSort = settings.sort?.field || 'title';
+        this.sortAscending = settings.sort?.ascending !== undefined ? settings.sort.ascending : true;
+      }
+    } catch (error) {
+      console.warn('[Downloads] Failed to parse sort preference:', error);
+    }
+    // Update dropdown and button on page load
+    setTimeout(() => {
+      const dropdown = document.getElementById('download-sort-select');
+      if (dropdown) {
+        dropdown.value = this.currentSort;
+      }
+      const toggleBtn = document.getElementById('download-sort-toggle');
+      if (toggleBtn) {
+        toggleBtn.textContent = this.sortAscending ? '↑' : '↓';
+      }
+    }, 100);
+  }
+
+  /**
+   * Set the current sort for the download queue
+   *
+   * @param {string} sort - Sort type (title, status, priority, created_at)
+   * @returns {void}
+   */
+  setSort(sort) {
+    this.currentSort = sort;
+    // Save to localStorage in combined settings object
+    try {
+      const saved = localStorage.getItem('downloadQueueSettings');
+      const settings = saved ? JSON.parse(saved) : {};
+      settings.sort = {
+        field: sort,
+        ascending: this.sortAscending
+      };
+      localStorage.setItem('downloadQueueSettings', JSON.stringify(settings));
+    } catch (error) {
+      console.warn('[Downloads] Failed to save sort:', error);
+    }
+    // Reload queue with new sort
+    this.loadDownloadQueue();
+  }
+
+  /**
+   * Toggle sort order for the download queue
+   * @returns {void}
+   */
+  toggleSortOrder() {
+    this.sortAscending = !this.sortAscending;
+    // Save to localStorage in combined settings object
+    try {
+      const saved = localStorage.getItem('downloadQueueSettings');
+      const settings = saved ? JSON.parse(saved) : {};
+      settings.sort = {
+        field: this.currentSort,
+        ascending: this.sortAscending
+      };
+      localStorage.setItem('downloadQueueSettings', JSON.stringify(settings));
+    } catch (error) {
+      console.warn('[Downloads] Failed to save sort order:', error);
+    }
+    // Update button
+    const toggleBtn = document.getElementById('download-sort-toggle');
+    if (toggleBtn) {
+      toggleBtn.textContent = this.sortAscending ? '↑' : '↓';
+    }
+    // Reload queue with new sort order
+    this.loadDownloadQueue();
+  }
+
+  /**
+   * Sort items based on current sort settings
+   * @param {Array} items - Array of download items
+   * @returns {Array} Sorted array of items
+   */
+  sortItems(items) {
+    const sorted = [...items]; // Create a copy to avoid mutating original
+
+    sorted.sort((a, b) => {
+      let comparison = 0;
+
+      switch (this.currentSort) {
+        case 'title':
+          comparison = (a.title || '').localeCompare(b.title || '');
+          break;
+        case 'status':
+          comparison = (a.status || '').localeCompare(b.status || '');
+          break;
+        case 'priority':
+          // Note: downloads may not have priority, default to 0
+          comparison = (a.priority || 0) - (b.priority || 0);
+          break;
+        case 'created_at':
+          comparison = new Date(a.created_at || 0) - new Date(b.created_at || 0);
+          break;
+        default:
+          comparison = 0;
+      }
+
+      // Apply ascending/descending order
+      return this.sortAscending ? comparison : -comparison;
+    });
+
+    return sorted;
   }
 
   /**
@@ -1420,6 +1622,62 @@ export class DownloadsManager {
     } catch (error) {
       console.error('[Downloads] Failed to clear queued downloads:', error);
       UIUtils.showStatus('downloads-status', `Error: ${error.message}`, 'error');
+    }
+  }
+
+  /**
+   * Clear downloads by status
+   *
+   * @param {string} status - Status to clear (all, queued, pending, downloading, completed, failed, skipped)
+   * @returns {Promise<void>}
+   */
+  async clearByStatus(status) {
+    try {
+      // Map status labels to values
+      const statusMap = {
+        all: 'all',
+        queued: 'queued',
+        pending: 'pending',
+        downloading: 'downloading',
+        completed: 'completed',
+        failed: 'failed',
+        skipped: 'skipped',
+      };
+
+      const actualStatus = statusMap[status.toLowerCase()] || status;
+
+      // Confirm before clearing
+      const confirmed = await UIUtils.confirm(
+        `Clear ${actualStatus.charAt(0).toUpperCase() + actualStatus.slice(1)} Downloads`,
+        `Are you sure you want to clear ${actualStatus === 'all' ? 'all' : 'all ' + actualStatus} downloads? This cannot be undone.`
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      UIUtils.showStatus('downloads-status', `🗑️ Clearing ${actualStatus} downloads...`, 'info');
+
+      const endpoint = `/api/downloads/queue/${actualStatus}`;
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.authenticatedFetch(endpoint, {
+            method: 'DELETE',
+          });
+          return await response.json();
+        },
+        'Downloads',
+        'downloads-status'
+      );
+
+      if (data.success) {
+        UIUtils.showStatus('downloads-status', data.message, 'success');
+        setTimeout(() => {
+          this.loadDownloadQueue();
+        }, 1500);
+      }
+    } catch (error) {
+      // Already logged by APIHelper
     }
   }
 

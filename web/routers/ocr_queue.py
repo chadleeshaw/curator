@@ -238,6 +238,94 @@ async def clear_pending_ocr_jobs():
     return await with_db_session(_session_factory, operation)
 
 
+@router.delete("/queue/completed")
+@handle_api_errors("Clear completed OCR jobs", logger)
+async def clear_completed_ocr_jobs():
+    """
+    Clear all completed OCR jobs from the queue.
+
+    Returns:
+        Number of jobs cleared
+    """
+    if _session_factory is None:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+
+    def operation(db):
+        completed_jobs = db.query(OCRJob).filter(OCRJob.status == OCRJob.StatusEnum.COMPLETED).all()
+
+        count = len(completed_jobs)
+
+        for job in completed_jobs:
+            db.delete(job)
+
+        db.commit()
+
+        logger.info(f"Cleared {count} completed OCR jobs from queue")
+
+        return {"message": f"Cleared {count} completed OCR jobs", "count": count}
+
+    return await with_db_session(_session_factory, operation)
+
+
+@router.delete("/queue/processing")
+@handle_api_errors("Clear processing OCR jobs", logger)
+async def clear_processing_ocr_jobs():
+    """
+    Clear all processing OCR jobs from the queue.
+    This will cancel any jobs currently being processed.
+
+    Returns:
+        Number of jobs cleared
+    """
+    if _session_factory is None:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+
+    def operation(db):
+        processing_jobs = db.query(OCRJob).filter(OCRJob.status == OCRJob.StatusEnum.PROCESSING).all()
+
+        count = len(processing_jobs)
+
+        for job in processing_jobs:
+            db.delete(job)
+
+        db.commit()
+
+        logger.info(f"Cleared {count} processing OCR jobs from queue")
+
+        return {"message": f"Cleared {count} processing OCR jobs", "count": count}
+
+    return await with_db_session(_session_factory, operation)
+
+
+@router.delete("/queue/all")
+@handle_api_errors("Clear all OCR jobs", logger)
+async def clear_all_ocr_jobs():
+    """
+    Clear all OCR jobs from the queue.
+
+    Returns:
+        Number of jobs cleared
+    """
+    if _session_factory is None:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+
+    def operation(db):
+        all_jobs = db.query(OCRJob).all()
+
+        count = len(all_jobs)
+
+        for job in all_jobs:
+            db.delete(job)
+
+        db.commit()
+
+        logger.info(f"Cleared {count} OCR jobs from queue")
+
+        return {"message": f"Cleared {count} OCR jobs", "count": count}
+
+    return await with_db_session(_session_factory, operation)
+
+
 @router.delete("/queue/{job_id}")
 @handle_api_errors("Delete OCR job", logger)
 async def delete_ocr_job(job_id: int):
