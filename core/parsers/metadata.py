@@ -508,6 +508,7 @@ class FilenameParser:
             elif nzb_result.get("confidence") in ["medium", "high"]:
                 logger.debug(f"NZB parsing succeeded with {nzb_result['confidence']} confidence")
                 # Convert NZB metadata format to standard metadata format
+                nzb_result["pattern"] = "nzb_style"
                 if nzb_result.get("issue_date"):
                     return nzb_result
                 # If no issue_date but has year/month, construct it
@@ -547,6 +548,7 @@ class FilenameParser:
         if nzb_result.get("confidence") in ["medium", "high"]:
             logger.info(f"NZB parsing succeeded with {nzb_result['confidence']} confidence")
             # Convert NZB metadata format to standard metadata format
+            nzb_result["pattern"] = "nzb_style_fallback"
             if nzb_result.get("issue_date"):
                 return nzb_result
             # If no issue_date but has year/month, construct it
@@ -555,6 +557,7 @@ class FilenameParser:
                 return nzb_result
 
         logger.info(f"No date pattern matched in filename: {filename}, using current date")
+        metadata["pattern"] = "no_match_fallback"
         return metadata
 
     def _try_multi_month_pattern(self, filename: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -580,6 +583,7 @@ class FilenameParser:
             metadata["issue_date"] = datetime(year, month1_num, 1)
             metadata["year"] = year
             metadata["month_name"] = f"{month1_str.capitalize()}/{month2_str.capitalize()}"
+            metadata["pattern"] = "multi_month"
 
             logger.info(f"Extracted multi-month: {metadata['month_name']} {year}")
             return metadata
@@ -602,6 +606,7 @@ class FilenameParser:
             metadata["issue_date"] = datetime(year, month_num, 1)
             metadata["year"] = year
             metadata["month_name"] = display_string
+            metadata["pattern"] = "multi_month_numeric"
 
             logger.info(f"Extracted numeric multi-month: {metadata['month_name']} {year}")
             return metadata
@@ -647,6 +652,7 @@ class FilenameParser:
         metadata["issue_date"] = datetime(year, month_num, 1)
         metadata["year"] = year
         metadata["month_name"] = normalized_month
+        metadata["pattern"] = "dash_month_year"
         return metadata
 
     def _try_dot_separated_pattern(self, filename: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -671,6 +677,7 @@ class FilenameParser:
         metadata["issue_date"] = datetime(year, month_num, 1)
         metadata["year"] = year
         metadata["month_name"] = normalized_month
+        metadata["pattern"] = "dot_separated"
         logger.info(f"Extracted '{metadata['title']}' {month_str} {year_str} from dot-separated filename")
         return metadata
 
@@ -716,6 +723,7 @@ class FilenameParser:
         metadata["issue_date"] = datetime(year, month_num, 1)
         metadata["year"] = year
         metadata["month_name"] = normalized_month
+        metadata["pattern"] = "space_month_year"
         return metadata
 
     def _try_iso_date_pattern(self, filename: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -732,8 +740,13 @@ class FilenameParser:
         month_str = match.group(3)
 
         try:
+            year = int(year_str)
+            month_num = int(month_str)
             metadata["title"] = clean_title(title)
-            metadata["issue_date"] = datetime(int(year_str), int(month_str), 1)
+            metadata["issue_date"] = datetime(year, month_num, 1)
+            metadata["year"] = year
+            metadata["month_name"] = NUMBER_TO_MONTH.get(month_num, "")
+            metadata["pattern"] = "iso_date"
             return metadata
         except ValueError:
             logger.warning(f"Invalid ISO date in filename: {filename}")
@@ -764,6 +777,7 @@ class FilenameParser:
         metadata["month_name"] = "January"
         metadata["edition_number"] = int(issue_num)
         metadata["is_special_edition"] = "special" in filename.lower() and "edition" in filename.lower()
+        metadata["pattern"] = "issue_number"
 
         logger.debug("Pattern match - Issue number format")
         return metadata
@@ -790,6 +804,7 @@ class FilenameParser:
         metadata["volume"] = int(volume_num)
         metadata["edition_number"] = int(issue_num)
         metadata["is_special_edition"] = False
+        metadata["pattern"] = "volume_issue"
 
         logger.debug("Pattern match - Volume and issue number format")
         return metadata
@@ -820,6 +835,7 @@ class FilenameParser:
         metadata["year"] = year
         metadata["month_name"] = season.capitalize()
         metadata["is_special_edition"] = False
+        metadata["pattern"] = "seasonal"
 
         logger.debug("Pattern match - Seasonal format")
         return metadata
@@ -850,6 +866,7 @@ class FilenameParser:
         metadata["issue_date"] = datetime(year, month_num, 1)
         metadata["year"] = year
         metadata["month_name"] = month_str.capitalize()
+        metadata["pattern"] = "date_only"
 
         if magazine_name:
             metadata["title"] = magazine_name
@@ -878,6 +895,8 @@ class FilenameParser:
             return None
 
         metadata["issue_date"] = datetime(year, 1, 1)
+        metadata["year"] = year
+        metadata["pattern"] = "year_only"
 
         if magazine_name:
             metadata["title"] = magazine_name

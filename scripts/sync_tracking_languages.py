@@ -17,6 +17,7 @@ from pathlib import Path
 # Add parent directory to path to import project modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from core.config import ConfigLoader
 from core.database import DatabaseManager
 from models.database import Periodical, PeriodicalTracking
 
@@ -35,9 +36,14 @@ def sync_tracking_languages(dry_run: bool = True) -> None:
     Args:
         dry_run: If True, only report what would be changed without making changes
     """
-    db_manager = DatabaseManager()
-    db_manager.init_db()
-    session = db_manager.get_session()
+    # Load config to get database URL
+    config_loader = ConfigLoader()
+    config = config_loader.load()
+    db_url = config.get("database", {}).get("url", "sqlite:///local/data/periodicals.db")
+
+    db_manager = DatabaseManager(db_url)
+    db_manager.create_tables()
+    session = db_manager.session_factory()
 
     try:
         # Get all tracking records
