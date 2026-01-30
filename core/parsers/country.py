@@ -308,6 +308,8 @@ def detect_country(text: str, default: Optional[str] = None) -> Optional[str]:
         "SO",
         "DO",
         "GO",
+        "TH",
+        "THE",
     }
 
     # Patterns to match country codes in various contexts

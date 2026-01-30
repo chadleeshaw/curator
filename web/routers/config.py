@@ -145,13 +145,26 @@ async def save_config_only(config_update: Dict[str, Any]):
     # Save to file
     _config_loader.save_config(updated_config)
 
+    # Apply logging level changes immediately (no restart needed)
+    if "logging" in config_update and "level" in config_update["logging"]:
+        new_level = config_update["logging"]["level"].upper()
+        level_value = getattr(logging, new_level, logging.INFO)
+
+        # Update all loggers
+        logging.getLogger().setLevel(level_value)
+        for name in logging.Logger.manager.loggerDict:
+            log = logging.getLogger(name)
+            log.setLevel(level_value)
+
+        logger.info(f"Logging level changed to {new_level} (applied immediately)")
+
     # Return masked config
     safe_config = _mask_sensitive_config(updated_config)
 
     logger.info("Configuration saved via UI (no restart)")
 
     return success_response(
-        "Configuration saved. Restart required for changes to take effect.",
+        "Configuration saved successfully.",
         status="success",
         config=safe_config,
     )

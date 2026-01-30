@@ -966,6 +966,9 @@ export class TrackingManager {
 
     results.forEach((result) => {
       const parsed = this.parseIssueTitle(result.title);
+      if (!parsed) {
+        console.warn('[Tracking] Could not parse title:', result.title);
+      }
       if (parsed) {
         // If month/issue not found in title, try to extract from publication_date
         if (parsed.month === 0 && result.publication_date) {
@@ -1063,22 +1066,27 @@ export class TrackingManager {
     }
 
     // Extract year-month pattern (e.g., "2007-11" or "2007 11")
-    const yearMonthMatch = title.match(/(\d{4})[\s.-](\d{1,2})(?:\D|$)/);
+    // But NOT "2600" which is the magazine title
+    const yearMonthMatch = title.match(/(?<!2)(\d{4})[\s.-](\d{1,2})(?:\D|$)/);
     if (yearMonthMatch) {
-      year = parseInt(yearMonthMatch[1]);
-      const num = parseInt(yearMonthMatch[2]);
-      if (num >= 1 && num <= 12) {
-        month = num;
+      const potentialYear = parseInt(yearMonthMatch[1]);
+      if (potentialYear >= 1900 && potentialYear <= 2100) {
+        year = potentialYear;
+        const num = parseInt(yearMonthMatch[2]);
+        if (num >= 1 && num <= 12) {
+          month = num;
+        }
       }
     }
 
     // If no year-month found, try other patterns
     if (!year) {
       const patterns = [
-        /(?:No\.|Issue|#)\.?(\d+)\.?(\d{4})/, // No.405.2026 or Issue.12.2025
+        /(?:No\.|Issue|#)\.?\s?(\d+)[\s.].*?(\d{4})/, // No.405 2026 or No.01.2015
         /(\d{4})[\s.](?:Issue|No\.)?[\s.]?(\d+)/, // 2026 No. 405 or 2026 405
-        /Vol\.?(\d+).*?(\d{4})/, // Vol.123 2026
-        /(\d{4})/, // Just a year
+        /Vol\.?\s?(\d+).*?(\d{4})/, // Vol. 123 2026
+        /[.-](\d{4})(?:[.-]|$)/, // Year after dash or dot (e.g., -2014 or .2015)
+        /(?:^|\s)(\d{4})(?:\s|$)/, // Just a year (with word boundaries)
       ];
 
       for (const pattern of patterns) {
@@ -1086,18 +1094,20 @@ export class TrackingManager {
         if (match) {
           if (match.length === 2) {
             const num = parseInt(match[1]);
-            if (num > 1900 && num < 2100) {
+            // Skip 2600 (magazine title) when looking for years
+            if (num >= 1900 && num <= 2100 && num !== 2600) {
               year = num;
               break;
             }
-          } else {
+          } else if (match.length >= 3) {
             const num1 = parseInt(match[1]);
             const num2 = parseInt(match[2]);
 
-            if (num2 > 1900 && num2 < 2100) {
+            // Determine which is year and which is issue
+            if (num2 >= 1900 && num2 <= 2100 && num2 !== 2600) {
               year = num2;
               issue = num1;
-            } else if (num1 > 1900 && num1 < 2100) {
+            } else if (num1 >= 1900 && num1 <= 2100 && num1 !== 2600) {
               year = num1;
               issue = num2;
             }

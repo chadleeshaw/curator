@@ -170,9 +170,9 @@ def _filter_non_periodicals(results: List[Dict[str, Any]]) -> List[Dict[str, Any
         if validator._validate_is_periodical(search_result):
             filtered.append(result)
         else:
-            logger.debug(f"Filtered out non-periodical: {result.get('title', '')}")
+            logger.debug(f"[FILTER] Rejected as non-periodical: {result.get('title', '')}")
 
-    logger.debug(f"Filtered {len(results) - len(filtered)} non-periodical results")
+    logger.debug(f"[FILTER] Filtered {len(results) - len(filtered)} non-periodical results, kept {len(filtered)}")
     return filtered
 
 
@@ -663,10 +663,12 @@ async def search_periodical_providers(
         # === STEP 3: Merge Cached + Fresh (Deduplicated) ===
         all_results = _merge_search_results(cached_results, fresh_results)
         logger.debug(f"Merged to {len(all_results)} total results")
+        total_before_filtering = len(all_results)
 
         # === STEP 4: Filter Non-Periodicals ===
         # Remove movies, audiobooks, soundtracks, and other unsupported content
         all_results = _filter_non_periodicals(all_results)
+        non_periodical_filtered = total_before_filtering - len(all_results)
         logger.debug(f"After non-periodical filter: {len(all_results)} results")
 
         # === STEP 5: Save Fresh Results to Cache ===
@@ -676,14 +678,18 @@ async def search_periodical_providers(
         # === STEP 6: Apply Language/Country Filters ===
         filter_language = language if language else "English"
         filter_country = country if country else "US"
+        results_before_lang = len(all_results)
         filtered_results = _filter_by_language_and_country(all_results, filter_language, filter_country)
+        language_country_filtered = results_before_lang - len(filtered_results)
         logger.debug(
             f"After language/country filter: {len(filtered_results)} results (language={filter_language}, country={filter_country})"
         )
 
         # Filter out edition variants (kids, traveller, etc.)
-        logger.debug(f"Before edition variant filter: {len(filtered_results)} results")
+        results_before_edition = len(filtered_results)
+        logger.debug(f"Before edition variant filter: {results_before_edition} results")
         filtered_results = _filter_edition_variants(filtered_results, query)
+        edition_filtered = results_before_edition - len(filtered_results)
         logger.debug(f"After edition variant filter: {len(filtered_results)} results")
 
         # === STEP 7: Load Library Items (Scoped by tracking_id) ===
@@ -698,6 +704,9 @@ async def search_periodical_providers(
         # Remove provider results that already exist in library using fuzzy + date range matching
         deduplicated_results = []
 
+        logger.debug(
+            f"Starting deduplication: {len(filtered_results)} results to check against {len(library_items)} library items"
+        )
         for result in filtered_results:
             # Check if this result matches any library item
             is_duplicate = False
@@ -731,6 +740,22 @@ async def search_periodical_providers(
                 if result.get("publication_date"):
                     result["publication_date"] = result["publication_date"].isoformat()
                 deduplicated_results.append(result)
+
+        duplicates_removed = len(filtered_results) - len(deduplicated_results)
+        logger.debug(
+            f"After library deduplication: {len(deduplicated_results)} results remain (removed {duplicates_removed} duplicates)"
+        )
+
+        # Log comprehensive filter summary
+        logger.info(
+            f"📊 Search summary for '{query}': "
+            f"{len(deduplicated_results)} results | "
+            f"Filters: language={filter_language}, country={filter_country} | "
+            f"Removed: {non_periodical_filtered} non-periodicals, "
+            f"{language_country_filtered} language/country mismatches, "
+            f"{edition_filtered} edition variants, "
+            f"{duplicates_removed} library duplicates"
+        )
 
         # === STEP 9: Check Failed Downloads ===
         failed_downloads = (
@@ -815,7 +840,9 @@ async def search_periodical_providers(
 
         # === STEP 12: Return Response ===
         if final_results:
-            logger.info(f"Found {len(final_results)} results for: {query}")
+            # Log first 3 titles for debugging parsing issues
+            sample_titles = [r.get("title", "N/A") for r in final_results[:3]]
+            logger.debug(f"Sample result titles: {sample_titles}")
             return {
                 "found": True,
                 "results": final_results,

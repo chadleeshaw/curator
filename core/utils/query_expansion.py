@@ -249,5 +249,5 @@ def expand_search_queries(
 
     # Return top N
     result = valid_variants[:max_queries]
-    logger.info(f"Expanded query '{query}' to {len(result)} searches: {result}")
+    logger.debug(f"Expanded query '{query}' to {len(result)} searches: {result}")
     return result

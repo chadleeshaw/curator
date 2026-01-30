@@ -424,10 +424,12 @@ class IssueDiscoveryService:
         """
         Validate that a search result represents a periodical issue, not a book/collection.
 
-        Uses multiple validation layers:
-        1. Newsnab category codes (explicit periodical/book categories)
-        2. Title pattern analysis (periodical indicators vs anti-patterns)
-        3. File size heuristics (typical periodical size ranges)
+        Uses pattern analysis to identify periodicals regardless of category:
+        1. Title pattern analysis (periodical indicators vs anti-patterns)
+        2. File size heuristics (typical periodical size ranges)
+
+        Note: We do NOT filter by Newsnab category because book categories (7000)
+        often contain magazines in PDF/EPUB format. Pattern matching is sufficient.
 
         Args:
             search_result: Search result dictionary from provider
@@ -435,48 +437,30 @@ class IssueDiscoveryService:
         Returns:
             True if likely a periodical, False if likely book/collection
         """
-        from core.constants.validation import (
-            NEWSNAB_BOOK_CATEGORIES,
-            NEWSNAB_PERIODICAL_CATEGORIES,
-        )
-
         title = search_result.get("title", "")
 
-        # Layer 1: Check Newsnab category if available
-        category = search_result.get("category", "")
-        if category:
-            # Explicit book categories - reject
-            if any(cat in category for cat in NEWSNAB_BOOK_CATEGORIES):
-                logger.debug(f"Rejecting '{title}': Book category detected ({category})")
-                return False
+        logger.debug(f"[VALIDATION] Validating title: {title}")
 
-            # Explicit periodical categories - accept (but still check patterns as safety)
-            # Note: 6000 (Adult) and 8000 (Misc) are included because periodicals are sometimes categorized there
-            # We still validate patterns to filter out books/collections/videos in these categories
-            if any(cat in category for cat in NEWSNAB_PERIODICAL_CATEGORIES):
-                logger.debug(f"Accepting '{title}': Periodical category ({category})")
-                # Still run pattern check to catch mis-categorized collections
-                if self._has_anti_periodical_patterns(title):
-                    logger.warning(f"Rejecting '{title}': Periodical category but has anti-patterns")
-                    return False
-                return True
-
-        # Layer 2: Pattern analysis (most important for uncategorized results)
+        # Layer 1: Pattern analysis (most important - works across all categories)
         # Check anti-patterns FIRST - reject collections/books even if they have dates
         if self._has_anti_periodical_patterns(title):
-            logger.debug(f"Rejecting '{title}': Has anti-periodical patterns (collection/book)")
+            logger.debug(f"[VALIDATION] Rejecting '{title}': Has anti-periodical patterns")
             return False
 
         if not self._has_periodical_patterns(title):
-            logger.debug(f"Rejecting '{title}': No periodical patterns found")
+            logger.debug(f"[VALIDATION] Rejecting '{title}': No periodical patterns found")
             return False
 
-        # Layer 3: File size heuristics (if available)
+        # Has periodical patterns - accept regardless of category
+        logger.debug(f"[VALIDATION] ✓ ACCEPTED: {title}")
+        return True
+
+        # Layer 2: File size heuristics (if available)
         if not self._validate_file_size(search_result):
-            logger.debug(f"Rejecting '{title}': Suspicious file size")
+            logger.debug(f"[VALIDATION] Rejecting '{title}': Suspicious file size")
             return False
 
-        logger.debug(f"Accepting '{title}': Passed validation")
+        logger.debug(f"[VALIDATION] ✓ ACCEPTED: {title}")
         return True
 
     def _has_periodical_patterns(self, title: str) -> bool:

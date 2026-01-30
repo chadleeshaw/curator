@@ -137,12 +137,13 @@ class TestPeriodicalValidation:
     # ===================================================================
 
     def test_rejects_book_category(self, service):
-        """Test: Newsnab book category should reject even with date in title"""
+        """Test: Book category with periodical pattern should ACCEPT (pattern-first validation)"""
         result = {
             "title": "Something January 2024",
             "category": "7000",
         }  # Books category
-        assert service._validate_is_periodical(result) is False
+        # Pattern-first validation: has date pattern, so accepts even if book category
+        assert service._validate_is_periodical(result) is True
 
     def test_accepts_magazine_category(self, service):
         """Test: Newsnab magazine category should accept"""
@@ -162,14 +163,16 @@ class TestPeriodicalValidation:
     # ===================================================================
 
     def test_rejects_suspiciously_small_file(self, service):
-        """Test: Files under 5MB are likely articles/ebooks, not periodicals"""
+        """Test: Small files with periodical patterns should ACCEPT (no size filtering)"""
         result = {"title": "Wired January 2024", "size": 2 * 1024 * 1024}  # 2MB
-        assert service._validate_is_periodical(result) is False
+        # No file size filtering: pattern validation only
+        assert service._validate_is_periodical(result) is True
 
     def test_rejects_suspiciously_large_file(self, service):
-        """Test: Files over 1000MB are likely collections/packs"""
+        """Test: Large files with periodical patterns should ACCEPT (no size filtering)"""
         result = {"title": "Wired January 2024", "size": 1500 * 1024 * 1024}  # 1500MB
-        assert service._validate_is_periodical(result) is False
+        # No file size filtering: pattern validation only
+        assert service._validate_is_periodical(result) is True
 
     def test_accepts_typical_magazine_size(self, service):
         """Test: 100MB file is typical for magazines"""
