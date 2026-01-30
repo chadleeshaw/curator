@@ -258,6 +258,13 @@ export class LibraryManager {
     const dropdown = document.getElementById('library-category-filter');
     if (!dropdown) return;
 
+    // Store current value before rebuilding
+    const currentValue = this.filterManager.categoryFilter || dropdown.value;
+
+    // Temporarily remove the onchange handler to prevent triggering during rebuild
+    const originalOnChange = dropdown.onchange;
+    dropdown.onchange = null;
+
     // Keep the "All" option
     dropdown.innerHTML = '<option value="all">All</option>';
 
@@ -270,9 +277,12 @@ export class LibraryManager {
     });
     
     // Restore saved filter value
-    if (this.filterManager.categoryFilter) {
-      dropdown.value = this.filterManager.categoryFilter;
+    if (currentValue && currentValue !== 'all') {
+      dropdown.value = currentValue;
     }
+
+    // Restore the onchange handler
+    dropdown.onchange = originalOnChange;
   }
 
   /**

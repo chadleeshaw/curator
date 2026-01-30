@@ -126,7 +126,7 @@ export class OCRQueueManager {
           </div>
           <div class="queue-stat-item" title="Successfully completed">
             <div class="queue-stat-number" style="color: ${colors.completed};">${statsData.completed || 0}</div>
-            <div class="queue-stat-label">Done</div>
+            <div class="queue-stat-label">Completed</div>
           </div>
           <div class="queue-stat-item" title="Failed">
             <div class="queue-stat-number" style="color: ${colors.failed};">${statsData.failed || 0}</div>

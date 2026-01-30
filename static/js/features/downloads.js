@@ -376,12 +376,12 @@ export class DownloadsManager {
           </div>
           <div class="queue-stat-item" title="Actively downloading">
             <div class="queue-stat-number" style="color: ${colors.downloading};">${downloading}</div>
-            <div class="queue-stat-label">DL</div>
+            <div class="queue-stat-label">Active</div>
             <div class="queue-stat-desc">In progress</div>
           </div>
           <div class="queue-stat-item" title="Successfully downloaded">
             <div class="queue-stat-number" style="color: ${colors.completed};">${completed}</div>
-            <div class="queue-stat-label">Done</div>
+            <div class="queue-stat-label">Completed</div>
             <div class="queue-stat-desc">Completed</div>
           </div>
           <div class="queue-stat-item" title="Download failed">
