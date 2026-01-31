@@ -1,0 +1,805 @@
+/**
+ * Shared styles for PDF, Comic, and EPUB readers
+ * Provides consistent layout, controls, and responsive behavior
+ */
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  background: var(--background);
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Header */
+.reader-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-color);
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.reader-title {
+  font-size: 1.1em;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.btn {
+  padding: 8px 16px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+
+.btn:hover {
+  opacity: 0.85;
+}
+
+.btn-secondary {
+  background: var(--surface-variant);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+/* Main Layout */
+.reader-container {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 200px;
+  background: var(--surface);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+/* EPUB sidebar is wider for longer chapter titles */
+.epub-sidebar {
+  width: 280px;
+}
+
+.sidebar-header {
+  padding: 15px;
+  border-bottom: 1px solid var(--border-color);
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.page-list,
+.chapter-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: 8px;
+}
+
+/* Page items (PDF/Comic) */
+.page-item {
+  cursor: pointer;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  transition: all 0.2s;
+  margin-bottom: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.page-item:hover {
+  border-color: var(--primary-color);
+}
+
+.page-item.active {
+  border-color: var(--primary-color);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 15%);
+}
+
+.page-thumbnail {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: var(--surface-variant);
+}
+
+.page-number {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgb(0 0 0 / 70%);
+  color: white;
+  padding: 4px 8px;
+  font-size: 0.75em;
+  text-align: center;
+}
+
+.page-item.active .page-number {
+  background: var(--primary-color);
+}
+
+/* Chapter items (EPUB) */
+.chapter-list {
+  padding: 0;
+}
+
+.chapter-item {
+  padding: 12px 15px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-color);
+  transition: background 0.2s;
+  color: var(--text-primary);
+  font-size: 0.95em;
+}
+
+.chapter-item:hover {
+  background: var(--surface-variant);
+}
+
+.chapter-item.active {
+  background: var(--primary-color);
+  color: white;
+  font-weight: 500;
+}
+
+.chapter-number {
+  color: var(--text-secondary);
+  font-size: 0.85em;
+  margin-right: 8px;
+}
+
+.chapter-item.active .chapter-number {
+  color: rgb(255 255 255 / 80%);
+}
+
+/* Content Area */
+.content-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.content-header {
+  background: var(--surface-variant);
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.page-title-display,
+.chapter-title-display {
+  font-weight: 500;
+  color: var(--text-primary);
+  font-size: 1em;
+}
+
+.fit-controls,
+.zoom-controls,
+.view-controls {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.fit-controls-label,
+.controls-label {
+  font-size: 0.85em;
+  color: var(--text-secondary);
+  margin-right: 5px;
+}
+
+.fit-btn,
+.control-btn {
+  padding: 4px 10px;
+  background: var(--background);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8em;
+  transition: all 0.2s;
+}
+
+.fit-btn:hover,
+.control-btn:hover {
+  background: var(--surface);
+}
+
+.fit-btn.active,
+.control-btn.active {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+.nav-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.nav-btn {
+  padding: 6px 12px;
+  background: var(--background);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: background 0.2s;
+}
+
+.nav-btn:hover:not(:disabled) {
+  background: var(--surface);
+}
+
+.nav-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Hide header arrow buttons on desktop (they're only for mobile) */
+.header-actions .nav-btn {
+  display: none;
+}
+
+/* Page/Chapter Content */
+.page-content,
+.chapter-content {
+  flex: 1;
+  overflow-y: auto;
+  background: #1a1a1a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chapter-content {
+  padding: 40px;
+  background: var(--background);
+  display: block;
+}
+
+.page-image-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.page-image {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  animation: fade-in 0.15s ease-in;
+}
+
+/* Fit modes for PDF/Comic */
+.page-image-container.fit-width .page-image {
+  width: 100%;
+  height: auto;
+  max-height: none;
+}
+
+.page-image-container.fit-height .page-image {
+  height: 100%;
+  width: auto;
+  max-width: none;
+}
+
+.page-image-container.original .page-image {
+  max-width: none;
+  max-height: none;
+}
+
+/* Two-page spread mode (PDF/Comic) */
+.page-spread-container {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  height: 100%;
+  width: 100%;
+  overflow: auto;
+}
+
+.spread-image {
+  max-height: 100%;
+  max-width: 50%;
+  object-fit: contain;
+  animation: fade-in 0.15s ease-in;
+}
+
+.page-spread-container.fit-width {
+  align-items: flex-start;
+  overflow-x: auto;
+}
+
+.page-spread-container.fit-width .spread-image {
+  max-width: 50%;
+  height: auto;
+  max-height: none;
+}
+
+.page-spread-container.fit-height .spread-image {
+  height: 100%;
+  width: auto;
+  max-width: none;
+}
+
+.page-spread-container.original .spread-image {
+  max-width: none;
+  max-height: none;
+  width: auto;
+  height: auto;
+}
+
+/* EPUB content styling */
+.chapter-content-inner {
+  max-width: 800px;
+  margin: 0 auto;
+  line-height: 1.8;
+  font-size: 1.05em;
+}
+
+.chapter-content-inner h1,
+.chapter-content-inner h2,
+.chapter-content-inner h3 {
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  color: var(--text-primary);
+}
+
+.chapter-content-inner p {
+  margin-bottom: 1em;
+  text-align: left !important; /* Override EPUB centering */
+}
+
+.chapter-content-inner img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 1.5em auto;
+}
+
+.chapter-content-inner table {
+  text-align: left !important; /* Override EPUB table centering */
+  margin-left: 0 !important;
+  margin-right: auto !important;
+}
+
+.chapter-content-inner td {
+  text-align: left !important;
+}
+
+/* Disable internal EPUB links to prevent 404 errors */
+.chapter-content-inner a {
+  color: var(--text-primary);
+  text-decoration: none;
+  pointer-events: none;
+  cursor: text;
+}
+
+/* Loading State */
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-secondary);
+  font-size: 1.1em;
+}
+
+.spinner {
+  border: 3px solid var(--border-color);
+  border-top-color: var(--primary-color);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+  margin-bottom: 15px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* Error State */
+.error {
+  color: var(--error-color);
+  padding: 20px;
+  text-align: center;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    left: -200px;
+    height: 100%;
+    z-index: 100;
+    transition: left 0.3s;
+  }
+
+  /* EPUB sidebar is wider */
+  .sidebar.epub-sidebar {
+    width: 280px;
+    left: -280px;
+  }
+
+  .sidebar.open {
+    left: 0;
+  }
+
+  .reader-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 10px 15px;
+  }
+
+  .reader-title {
+    font-size: 0.95em;
+    text-align: center;
+    white-space: normal;
+    line-height: 1.3;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .header-actions .btn {
+    flex: 1;
+    padding: 10px 12px;
+    font-size: 0.85em;
+  }
+
+  .header-actions .nav-btn {
+    flex: 0 0 44px;
+    padding: 10px 8px;
+    font-size: 1.2em;
+    min-width: 44px;
+    height: 44px;
+    display: flex; /* Show arrow buttons on mobile */
+    align-items: center;
+    justify-content: center;
+  }
+
+  .content-header {
+    flex-wrap: wrap;
+    padding: 6px 8px;
+    gap: 4px;
+    position: relative;
+  }
+
+  .page-title-display,
+  .chapter-title-display {
+    width: 100%;
+    font-size: 0.8em;
+    text-align: center;
+    margin-bottom: 2px;
+  }
+
+  /* Single row for all controls on mobile */
+  .zoom-controls,
+  .fit-controls,
+  .view-controls {
+    order: 1;
+    display: flex;
+    flex-direction: row;
+    gap: 4px;
+    position: static;
+    width: auto;
+    flex: 0 0 auto;
+  }
+
+  .zoom-controls {
+    justify-content: flex-start;
+  }
+
+  .fit-controls {
+    justify-content: center;
+    flex: 1;
+  }
+
+  .view-controls {
+    justify-content: flex-end;
+  }
+
+  /* Hide text labels on mobile, show only icons */
+  .fit-controls-label,
+  .controls-label {
+    display: none;
+  }
+
+  /* Make buttons icon-only and compact */
+  .fit-btn,
+  .control-btn {
+    padding: 6px;
+    font-size: 1em;
+    min-height: 32px;
+    min-width: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Hide button text on mobile for fit mode buttons only, convert to icon-only */
+  .fit-controls .fit-btn[data-mode='fit-width']::before {
+    content: '↔️';
+  }
+
+  .fit-controls .fit-btn[data-mode='fit-height']::before {
+    content: '↕️';
+  }
+
+  .fit-controls .fit-btn[data-mode='original']::before {
+    content: '🔍';
+  }
+
+  .fit-controls .fit-btn {
+    font-size: 0;
+  }
+
+  .fit-controls .fit-btn::before {
+    font-size: 16px;
+  }
+
+  /* View controls buttons (spread/fullscreen) keep their emoji content */
+  .view-controls .fit-btn {
+    font-size: 1.2em;
+  }
+
+  #zoom-level {
+    font-size: 0.75em;
+    min-width: 40px;
+    padding: 0 4px;
+  }
+
+  .nav-buttons {
+    display: none; /* Hide navigation buttons on mobile - use swipe gestures */
+  }
+
+  .nav-btn {
+    display: none; /* Hide navigation buttons on mobile - use swipe gestures */
+  }
+
+  .page-content {
+    padding: 5px;
+  }
+
+  .page-image-container {
+    padding: 5px;
+  }
+
+  .page-spread-container {
+    padding: 5px;
+    gap: 5px;
+  }
+
+  .chapter-content {
+    padding: 15px;
+  }
+
+  .chapter-content-inner {
+    font-size: 0.95em;
+    line-height: 1.7;
+  }
+
+  .mobile-overlay {
+    inset: 0;
+    background: rgb(0 0 0 / 50%);
+    z-index: 99;
+  }
+
+  .mobile-overlay.active {
+    display: block;
+  }
+}
+
+/* Landscape mobile optimization */
+@media (max-width: 926px) and (max-height: 428px) and (orientation: landscape) {
+  .reader-header {
+    padding: 6px 12px;
+    gap: 6px;
+  }
+
+  .reader-title {
+    font-size: 0.85em;
+    line-height: 1.2;
+  }
+
+  .header-actions .btn {
+    padding: 6px 12px;
+    font-size: 0.85em;
+  }
+
+  .content-header {
+    padding: 4px 8px;
+    gap: 4px;
+  }
+
+  .page-title-display,
+  .chapter-title-display {
+    font-size: 0.8em;
+    margin-bottom: 2px;
+  }
+
+  .fit-btn,
+  .control-btn {
+    padding: 4px 6px;
+    font-size: 0.7em;
+  }
+
+  .fit-controls-label,
+  .controls-label {
+    font-size: 0.7em;
+  }
+
+  .nav-buttons {
+    margin-top: 2px;
+  }
+
+  .nav-btn {
+    padding: 6px 10px;
+    font-size: 0.8em;
+  }
+
+  .view-controls {
+    bottom: 38px;
+  }
+
+  .page-content {
+    padding: 2px;
+  }
+
+  .page-image-container,
+  .page-spread-container {
+    padding: 2px;
+  }
+}
+
+/* Fullscreen Mode - Auto-hide Toolbar */
+:fullscreen .reader-header,
+:fullscreen .content-header {
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  transition: transform 0.3s ease-in-out;
+}
+
+:fullscreen .reader-header {
+  top: 0;
+  transform: translateY(-100%);
+  padding-top: 12px;
+}
+
+:fullscreen .content-header {
+  /* Position content-header to start hidden above the viewport */
+  top: 0;
+  transform: translateY(-200%);
+}
+
+/* Show toolbars on hover/tap in fullscreen - they slide down together */
+:fullscreen .reader-header.show-toolbar {
+  transform: translateY(0);
+}
+
+:fullscreen .content-header.show-toolbar {
+  /* Slide down to position directly below reader-header using calculated offset */
+  transform: translateY(var(--reader-header-offset, 61px));
+}
+
+/* Adjust content area in fullscreen to use full height */
+:fullscreen .content-area {
+  padding-top: 0;
+}
+
+:fullscreen .page-content,
+:fullscreen .chapter-content {
+  height: 100vh;
+}
+
+/* Fallback fullscreen for iOS and browsers without Fullscreen API support */
+body.fullscreen-fallback {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  z-index: 9999;
+}
+
+body.fullscreen-fallback .reader-header,
+body.fullscreen-fallback .content-header {
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 10000;
+  transition: transform 0.3s ease-in-out;
+}
+
+body.fullscreen-fallback .reader-header {
+  top: 0;
+  transform: translateY(-100%);
+  padding-top: 12px;
+}
+
+body.fullscreen-fallback .content-header {
+  top: 0;
+  transform: translateY(-200%);
+}
+
+body.fullscreen-fallback .reader-header.show-toolbar {
+  transform: translateY(0);
+}
+
+body.fullscreen-fallback .content-header.show-toolbar {
+  transform: translateY(var(--reader-header-offset, 61px));
+}
+
+body.fullscreen-fallback .content-area {
+  padding-top: 0;
+  height: 100vh;
+}
+
+body.fullscreen-fallback .page-content,
+body.fullscreen-fallback .chapter-content {
+  height: 100vh;
+}

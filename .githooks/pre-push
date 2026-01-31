@@ -1,0 +1,31 @@
+#!/bin/bash
+#
+# Pre-push hook that runs CI linting checks
+# This ensures code passes all CI checks before pushing to remote
+#
+
+echo "🔍 Running pre-push checks..."
+echo ""
+
+# Run CI linting (matches GitHub Actions exactly)
+if ! make ci-lint; then
+    echo ""
+    echo "❌ Pre-push check failed!"
+    echo ""
+    echo "Your code did not pass CI linting checks."
+    echo "Please fix the issues above before pushing."
+    echo ""
+    echo "To fix formatting issues, run:"
+    echo "  make format"
+    echo ""
+    echo "To skip this check (NOT recommended), use:"
+    echo "  git push --no-verify"
+    echo ""
+    exit 1
+fi
+
+echo ""
+echo "✅ All pre-push checks passed!"
+echo ""
+
+exit 0

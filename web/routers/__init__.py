@@ -2,16 +2,28 @@
 API routers for the Curator application
 """
 
-from . import auth, config, downloads, imports, pages, periodicals, search, tasks, tracking
+from . import (
+    auth,
+    config,
+    discovery,
+    downloads,
+    imports,
+    pages,
+    periodicals,
+    search,
+    tasks,
+    tracking,
+)
 
 __all__ = [
     "auth",
-    "search",
-    "periodicals",
-    "tracking",
+    "config",
+    "discovery",
     "downloads",
     "imports",
-    "tasks",
-    "config",
     "pages",
+    "periodicals",
+    "search",
+    "tasks",
+    "tracking",
 ]

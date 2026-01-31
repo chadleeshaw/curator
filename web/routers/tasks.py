@@ -3,11 +3,17 @@ Task management routes
 """
 
 import logging
+import os
 from pathlib import Path
+from typing import Any, Callable, Dict, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
-from models.database import Magazine
+from core.utils.error_handling import handle_api_errors
+from models.database import Periodical
+from core.utils import run_in_thread
+from core.utils.db import with_db_session
+from web.utils.responses import success_response, error_response
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 logger = logging.getLogger(__name__)
@@ -15,154 +21,403 @@ logger = logging.getLogger(__name__)
 # Global state (injected from main app)
 _session_factory = None
 _download_monitor_task = None
+_ocr_processor_task = None
+_folder_cleanup_task = None
 _file_importer = None
 _storage_config = None
+_task_scheduler = None
 
 
-def set_dependencies(session_factory, download_monitor_task, file_importer, storage_config):
+def set_dependencies(
+    session_factory: Callable,
+    download_monitor_task: Any,
+    file_importer: Any,
+    storage_config: Dict[str, Any],
+    ocr_processor_task: Optional[Any] = None,
+    task_scheduler: Optional[Any] = None,
+    folder_cleanup_task: Optional[Any] = None,
+) -> None:  # pylint: disable=too-many-positional-arguments
     """Set dependencies from main app"""
-    global _session_factory, _download_monitor_task, _file_importer, _storage_config
+    global _session_factory, _download_monitor_task, _file_importer, _storage_config, _ocr_processor_task, _task_scheduler, _folder_cleanup_task
     _session_factory = session_factory
     _download_monitor_task = download_monitor_task
     _file_importer = file_importer
     _storage_config = storage_config
+    _ocr_processor_task = ocr_processor_task
+    _task_scheduler = task_scheduler
+    _folder_cleanup_task = folder_cleanup_task
 
 
 @router.get("/status")
+@handle_api_errors("Get tasks status", logger)
 async def get_tasks_status():
     """Get status of all scheduled tasks"""
-    try:
-        tasks = []
+    tasks = []
 
-        # Download monitor task
-        if _download_monitor_task:
-            dm_last_run = getattr(_download_monitor_task, 'last_run_time', None)
-            dm_status = getattr(_download_monitor_task, 'last_status', None)
-            logger.debug(f"Tasks Status - Download Monitor: last_run={dm_last_run}, status={dm_status}")
+    # Download monitor task
+    if _download_monitor_task:
+        dm_last_run = getattr(_download_monitor_task, "last_run_time", None)
+        dm_status = getattr(_download_monitor_task, "last_status", None)
+        dm_stats = getattr(_download_monitor_task, "stats", {})
+        logger.debug(f"Tasks Status - Download Monitor: last_run={dm_last_run}, status={dm_status}")
 
-            tasks.append({
+        # Get interval from scheduler
+        dm_interval = 30
+        if _task_scheduler:
+            scheduler_status = _task_scheduler.get_status()
+            if "download_monitor" in scheduler_status.get("tasks", {}):
+                dm_interval = scheduler_status["tasks"]["download_monitor"]["interval"]
+
+        tasks.append(
+            {
                 "id": "download_monitor",
-                "name": "Download Monitor",
-                "description": "Monitors download status and processes completed downloads",
-                "interval": 30,
+                "name": "Auto-Import",
+                "description": "Automatically imports completed downloads and organizes files into the library",
+                "interval": dm_interval,
                 "last_run": dm_last_run,
-                "next_run": getattr(_download_monitor_task, 'next_run_time', None),
+                "next_run": getattr(_download_monitor_task, "next_run_time", None),
                 "last_status": dm_status,
-            })
-        else:
-            logger.debug("Tasks Status - Download Monitor task not available")
+                "stats": {
+                    "total_runs": dm_stats.get("total_runs", 0),
+                    "client_downloads_processed": dm_stats.get("client_downloads_processed", 0),
+                    "client_downloads_failed": dm_stats.get("client_downloads_failed", 0),
+                    "folder_files_imported": dm_stats.get("folder_files_imported", 0),
+                    "last_client_check": dm_stats.get("last_client_check"),
+                    "last_folder_scan": dm_stats.get("last_folder_scan"),
+                },
+            }
+        )
+    else:
+        logger.debug("Tasks Status - Download Monitor task not available")
 
-        # Import task (from task scheduler if available)
-        tasks.append({
-            "id": "auto_import",
-            "name": "Auto Import",
-            "description": "Automatically imports periodicals from downloads folder",
-            "interval": 300,
-            "last_run": None,
-            "next_run": None,
-            "last_status": None,
-        })
+    # Get scheduler status if available
+    scheduler_status = None
+    if _task_scheduler:
+        scheduler_status = _task_scheduler.get_status()
 
-        # Cleanup covers task
-        tasks.append({
-            "id": "cleanup_orphaned_covers",
-            "name": "Cleanup Orphaned Covers",
-            "description": "Removes cover files that aren't tied to any periodical",
-            "interval": 86400,
-            "last_run": None,
-            "next_run": None,
-            "last_status": None,
-        })
+    # Auto-download task (from task scheduler if available)
+    auto_download_info = {
+        "id": "auto_download",
+        "name": "Auto-Download",
+        "description": "Automatically searches for and downloads new issues of tracked periodicals",
+        "interval": 1800,
+        "last_run": None,
+        "next_run": None,
+        "last_status": None,
+    }
+    if scheduler_status and "auto_download" in scheduler_status.get("tasks", {}):
+        task_data = scheduler_status["tasks"]["auto_download"]
+        last_run = task_data.get("last_run")
+        failure_count = task_data.get("failure_count", 0)
+        # Only set status if task has run at least once
+        status = None
+        if last_run:
+            status = "failed" if failure_count > 0 else "success"
+        auto_download_info.update(
+            {
+                "interval": task_data.get("interval", 1800),
+                "last_run": last_run,
+                "next_run": task_data.get("next_run"),
+                "last_status": status,
+            }
+        )
+    tasks.append(auto_download_info)
 
-        logger.debug(f"Tasks Status - Returning {len(tasks)} tasks to client")
+    # Cleanup covers task
+    cleanup_covers_info = {
+        "id": "cleanup_orphaned_covers",
+        "name": "Auto-Thumbnail",
+        "description": "Automatically generates and manages thumbnail images for periodicals",
+        "interval": 86400,
+        "last_run": None,
+        "next_run": None,
+        "last_status": None,
+    }
+    if scheduler_status and "cleanup_orphaned_covers" in scheduler_status.get("tasks", {}):
+        task_data = scheduler_status["tasks"]["cleanup_orphaned_covers"]
+        last_run = task_data.get("last_run")
+        failure_count = task_data.get("failure_count", 0)
+        # Only set status if task has run at least once
+        status = None
+        if last_run:
+            status = "failed" if failure_count > 0 else "success"
+        cleanup_covers_info.update(
+            {
+                "interval": task_data.get("interval", 86400),
+                "last_run": last_run,
+                "next_run": task_data.get("next_run"),
+                "last_status": status,
+            }
+        )
+    tasks.append(cleanup_covers_info)
 
-        return {
-            "success": True,
-            "tasks": tasks,
-        }
+    # Folder cleanup task
+    folder_cleanup_info = {
+        "id": "folder_cleanup",
+        "name": "Auto-Cleanup",
+        "description": "Automatically removes empty folders and folders containing only non-importable files from downloads and library",
+        "interval": 86400,
+        "last_run": None,
+        "next_run": None,
+        "last_status": None,
+    }
+    if scheduler_status and "folder_cleanup" in scheduler_status.get("tasks", {}):
+        task_data = scheduler_status["tasks"]["folder_cleanup"]
+        last_run = task_data.get("last_run")
+        failure_count = task_data.get("failure_count", 0)
+        # Only set status if task has run at least once
+        status = None
+        if last_run:
+            status = "failed" if failure_count > 0 else "success"
+        folder_cleanup_info.update(
+            {
+                "interval": task_data.get("interval", 86400),
+                "last_run": last_run,
+                "next_run": task_data.get("next_run"),
+                "last_status": status,
+            }
+        )
+    tasks.append(folder_cleanup_info)
 
-    except Exception as e:
-        logger.error(f"Error getting task status: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error getting task status: {str(e)}")
+    # Auto-metadata task (scheduled weekly, not manual-only anymore)
+    auto_metadata_info = {
+        "id": "auto_metadata",
+        "name": "Auto-Metadata",
+        "description": "Backfills derived_metadata, syncs issue_date, and queues missing OCR/text scans for all periodicals",
+        "interval": 604800,  # 7 days
+        "last_run": None,
+        "next_run": None,
+        "last_status": None,
+    }
+    if scheduler_status and "auto_metadata" in scheduler_status.get("tasks", {}):
+        task_data = scheduler_status["tasks"]["auto_metadata"]
+        last_run = task_data.get("last_run")
+        failure_count = task_data.get("failure_count", 0)
+        # Only set status if task has run at least once
+        status = None
+        if last_run:
+            status = "failed" if failure_count > 0 else "success"
+        auto_metadata_info.update(
+            {
+                "interval": task_data.get("interval", 604800),
+                "last_run": last_run,
+                "next_run": task_data.get("next_run"),
+                "last_status": status,
+            }
+        )
+    tasks.append(auto_metadata_info)
+
+    # Auto-cache task (provider cache sync)
+    auto_cache_info = {
+        "id": "provider_cache_sync",
+        "name": "Auto-Cache",
+        "description": "Automatically syncs the provider cache with latest releases from search providers",
+        "interval": 1800,  # 30 minutes default
+        "last_run": None,
+        "next_run": None,
+        "last_status": None,
+    }
+    if scheduler_status and "provider_cache_sync" in scheduler_status.get("tasks", {}):
+        task_data = scheduler_status["tasks"]["provider_cache_sync"]
+        last_run = task_data.get("last_run")
+        failure_count = task_data.get("failure_count", 0)
+        # Only set status if task has run at least once
+        status = None
+        if last_run:
+            status = "failed" if failure_count > 0 else "success"
+        auto_cache_info.update(
+            {
+                "interval": task_data.get("interval", 1800),
+                "last_run": last_run,
+                "next_run": task_data.get("next_run"),
+                "last_status": status,
+            }
+        )
+    tasks.append(auto_cache_info)
+
+    logger.debug(f"Tasks Status - Returning {len(tasks)} tasks to client")
+
+    return success_response(
+        None,
+        tasks=tasks,
+        timezone=os.environ.get("TZ", "UTC"),
+    )
 
 
 @router.post("/run/{task_id}")
+@handle_api_errors("Run task manually", logger)
 async def run_task_manually(task_id: str):
     """Manually trigger a scheduled task"""
-    try:
-        if task_id == "download_monitor":
-            if _download_monitor_task:
-                await _download_monitor_task.run()
-                return {
-                    "success": True,
-                    "task_name": "Download Monitor",
-                    "message": "Download monitor task executed",
-                }
-            else:
-                return {"success": False, "message": "Download monitor not available"}
-
-        elif task_id == "auto_import":
-            if _file_importer:
-                # Trigger import from downloads
-                db_session = _session_factory()
-                try:
-                    downloads_dir = Path("local/downloads")
-                    if downloads_dir.exists():
-                        for pdf_file in downloads_dir.glob("*.pdf"):
-                            await _file_importer.import_pdf(str(pdf_file))
-                finally:
-                    db_session.close()
-
-                return {
-                    "success": True,
-                    "task_name": "Auto Import",
-                    "message": "Import task executed",
-                }
-            else:
-                return {"success": False, "message": "File importer not available"}
-
-        elif task_id == "cleanup_orphaned_covers":
-            # Manually trigger cover cleanup
-            db_session = _session_factory()
-            try:
-                # Get all covers in the database
-                periodicals = db_session.query(Magazine).filter(Magazine.cover_path is not None).all()
-                db_cover_paths = {m.cover_path for m in periodicals if m.cover_path}
-
-                # Find all cover files on disk
-                covers_dir = Path(_storage_config.get("organize_base_dir", "./local/data")) / ".covers"
-                if covers_dir.exists():
-                    cover_files = set(str(f) for f in covers_dir.glob("*.jpg"))
-
-                    # Find orphaned covers (files that exist on disk but not in DB)
-                    orphaned_covers = cover_files - db_cover_paths
-
-                    # Delete orphaned covers
-                    deleted_count = 0
-                    for orphan_path in orphaned_covers:
-                        try:
-                            Path(orphan_path).unlink()
-                            deleted_count += 1
-                        except Exception as e:
-                            logger.error(f"Error deleting orphaned cover {orphan_path}: {e}")
-
-                    return {
-                        "success": True,
-                        "task_name": "Cleanup Orphaned Covers",
-                        "message": f"Cleanup executed. Deleted {deleted_count} orphaned cover files.",
-                    }
-                else:
-                    return {
-                        "success": True,
-                        "task_name": "Cleanup Orphaned Covers",
-                        "message": "Covers directory does not exist yet.",
-                    }
-            finally:
-                db_session.close()
-
+    if task_id == "download_monitor":
+        if _download_monitor_task:
+            logger.info("Starting auto-import task (manual trigger)")
+            await _download_monitor_task.run()
+            return success_response(
+                "Auto-import task executed",
+                task_name="Auto-Import",
+            )
         else:
-            return {"success": False, "message": f"Unknown task: {task_id}"}
+            return error_response("Download monitor not available")
 
-    except Exception as e:
-        logger.error(f"Error running task {task_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error running task: {str(e)}")
+    elif task_id == "auto_download":
+        # Manually trigger auto-download task via scheduler
+        if _task_scheduler:
+            try:
+                await _task_scheduler.run_task_now("auto_download")
+                return success_response(
+                    "Auto-download task executed successfully",
+                    task_name="Auto-Download",
+                )
+            except Exception as e:
+                logger.error(f"Error running auto-download task: {e}", exc_info=True)
+                return error_response(f"Failed to run auto-download task: {str(e)}")
+        else:
+            return error_response("Task scheduler not available")
+
+    elif task_id == "folder_cleanup":
+        if _folder_cleanup_task:
+            logger.info("Starting folder cleanup task (manual trigger)")
+            stats = await run_in_thread(_folder_cleanup_task.run)
+            message = (
+                f"Folder cleanup executed. Deleted: {stats.get('total_deleted', 0)} folders, "
+                f"Freed: {stats.get('total_size_freed', 0) / (1024 * 1024):.2f} MB"
+            )
+            return success_response(
+                message,
+                task_name="Auto-Cleanup",
+            )
+        else:
+            return error_response("Folder cleanup not available")
+
+    elif task_id == "auto_metadata":
+        # Run auto-metadata task to backfill and sync metadata
+        logger.info("Starting auto-metadata task (manual trigger)")
+
+        def _run_auto_metadata():
+            from services.auto_metadata import AutoMetadataService
+            from core.database import DatabaseManager
+            from core.config import ConfigLoader
+
+            config_loader = ConfigLoader()
+            storage = config_loader.get_storage()
+            import_config = config_loader.get_import()
+            db_path = storage.get("db_path", "local/data/curator.db")
+            db_manager = DatabaseManager(f"sqlite:///{db_path}")
+
+            service = AutoMetadataService(
+                db_manager,
+                library_base_dir=storage.get("library_dir"),
+                category_prefix=import_config.get("category_prefix", "_"),
+            )
+            session = db_manager.session_factory()
+            try:
+                return service.run_full_scan(session)
+            finally:
+                session.close()
+
+        stats = await run_in_thread(_run_auto_metadata)
+        message = (
+            f"Auto-metadata executed. "
+            f"Processed: {stats.get('total_periodicals', 0)}, "
+            f"Metadata cleaned: {stats.get('metadata_cleaned', 0)}, "
+            f"Derived metadata backfilled: {stats.get('derived_metadata_backfilled', 0)}, "
+            f"Issue dates synced: {stats.get('issue_date_synced', 0)}, "
+            f"OCR queued: {stats.get('ocr_queued', 0)}, "
+            f"Text scans queued: {stats.get('text_scan_queued', 0)}, "
+            f"Errors: {stats.get('errors', 0)}"
+        )
+        return success_response(
+            message,
+            task_name="Auto-Metadata",
+            stats=stats,
+        )
+
+    elif task_id == "provider_cache_sync":
+        # Manually trigger provider cache sync via scheduler
+        if _task_scheduler:
+            try:
+                await _task_scheduler.run_task_now("provider_cache_sync")
+                return success_response(
+                    "Provider cache sync executed successfully",
+                    task_name="Auto-Cache",
+                )
+            except Exception as e:
+                logger.error(f"Error running provider cache sync: {e}", exc_info=True)
+                return error_response(f"Failed to run provider cache sync: {str(e)}")
+        else:
+            return error_response("Task scheduler not available")
+
+    elif task_id == "cleanup_orphaned_covers":
+        # Manually trigger cover cleanup and generation (run in thread to avoid blocking)
+        logger.info("Starting cover cleanup task (manual trigger)")
+
+        def operation(db):
+            # Get all periodicals
+            all_periodicals = db.query(Periodical).all()
+            periodicals_with_covers = [m for m in all_periodicals if m.cover_path and Path(m.cover_path).exists()]
+            periodicals_without_covers = [
+                m for m in all_periodicals if m.file_path and (not m.cover_path or not Path(m.cover_path).exists())
+            ]
+
+            db_cover_paths = {str(Path(m.cover_path).resolve()) for m in periodicals_with_covers}
+
+            # Find all cover files on disk
+            covers_dir = Path(_storage_config.get("library_base_dir", "./local/data")) / ".covers"
+            covers_dir.mkdir(parents=True, exist_ok=True)
+
+            # Part 1: Delete orphaned covers
+            deleted_count = 0
+            if covers_dir.exists():
+                # Get absolute paths of all cover files on disk
+                cover_files = set(str(f.resolve()) for f in covers_dir.glob("*.jpg"))
+                orphaned_covers = cover_files - db_cover_paths
+
+                for orphan_path in orphaned_covers:
+                    try:
+                        Path(orphan_path).unlink()
+                        deleted_count += 1
+                    except Exception as e:
+                        logger.error(f"Error deleting orphaned cover {orphan_path}: {e}")
+
+            # Part 2: Generate missing covers
+            generated_count = 0
+            for magazine in periodicals_without_covers:
+                pdf_path = Path(magazine.file_path)
+                if not pdf_path.exists():
+                    continue
+
+                # Extract cover from PDF
+                cover_path = _file_importer._extract_cover(pdf_path)
+                if cover_path:
+                    magazine.cover_path = str(cover_path)
+                    generated_count += 1
+
+            if generated_count > 0:
+                db.commit()
+
+            # Build result message
+            messages = []
+            if deleted_count > 0:
+                messages.append(f"Deleted {deleted_count} orphaned cover file{'s' if deleted_count != 1 else ''}")
+            if generated_count > 0:
+                messages.append(f"Generated {generated_count} missing cover{'s' if generated_count != 1 else ''}")
+
+            if messages:
+                message = "Cleanup executed. " + ", ".join(messages) + "."
+            else:
+                message = "No orphaned covers found and all periodicals have covers."
+
+            return {
+                "deleted": deleted_count,
+                "generated": generated_count,
+                "message": message,
+            }
+
+        result = await with_db_session(_session_factory, operation)
+        return success_response(
+            result["message"],
+            task_name="Auto-Thumbnail",
+        )
+
+    else:
+        return error_response(f"Unknown task: {task_id}")

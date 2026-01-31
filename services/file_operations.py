@@ -1,0 +1,198 @@
+"""
+File reorganization utilities for periodicals.
+
+This module provides shared utilities for reorganizing periodical files
+(PDF and cover images) across different parts of the application.
+"""
+
+import logging
+import shutil
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Optional, Tuple
+
+from core.constants import DEFAULT_CATEGORY
+from core.parsers import sanitize_filename
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class FileReorganizationResult:
+    """Result of a file reorganization operation"""
+
+    success: bool
+    new_pdf_path: Optional[str]
+    new_cover_path: Optional[str]
+    error: Optional[str] = None
+    files_moved: bool = False
+
+
+def reorganize_periodical_files(
+    periodical,
+    new_title: str,
+    library_base_dir: Path,
+    category_prefix: str = "_",
+    update_db: bool = True,
+) -> FileReorganizationResult:
+    """
+    Reorganize periodical files to match new title structure.
+
+    This function handles the complete reorganization of a periodical's files:
+    1. Extracts metadata from the periodical object
+    2. Builds new directory structure based on title/date
+    3. Handles filename conflicts by appending timestamps
+    4. Moves PDF and cover files
+    5. Optionally updates the database object
+
+    Args:
+        periodical: Periodical database object with file_path, cover_path, issue_date, etc.
+        new_title: New title to use for folder organization
+        library_base_dir: Base directory for organized files
+        category_prefix: Prefix for category folders (default: "_")
+        update_db: Whether to update the periodical object with new paths (default: True)
+
+    Returns:
+        FileReorganizationResult with success status and new paths
+
+    Example:
+        result = reorganize_periodical_files(
+            magazine,
+            "Wired (US)",
+            Path("./local/data"),
+            category_prefix="_"
+        )
+        if result.success:
+            print(f"Moved to: {result.new_pdf_path}")
+    """
+    try:
+        old_pdf_path = Path(periodical.file_path)
+        old_cover_path = Path(periodical.cover_path) if periodical.cover_path else None
+
+        # Extract metadata from periodical
+        category = (
+            periodical.extra_metadata.get("category", DEFAULT_CATEGORY)
+            if periodical.extra_metadata
+            else DEFAULT_CATEGORY
+        )
+        issue_date = periodical.issue_date
+
+        # Build new path structure
+        safe_title = sanitize_filename(new_title)
+        month = issue_date.strftime("%B")
+        year = issue_date.strftime("%Y")
+        filename_base = f"{safe_title} - {month}{year}"
+
+        category_with_prefix = f"{category_prefix}{category}"
+        target_dir = library_base_dir / category_with_prefix / safe_title / year
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        new_pdf_path = target_dir / f"{filename_base}.pdf"
+        new_cover_path = target_dir / f"{filename_base}.jpg" if old_cover_path else None
+
+        # Handle filename conflicts by appending timestamp
+        if new_pdf_path.exists() and new_pdf_path != old_pdf_path:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename_base_with_ts = f"{safe_title} - {month}{year} ({timestamp})"
+            new_pdf_path = target_dir / f"{filename_base_with_ts}.pdf"
+            if old_cover_path:
+                new_cover_path = target_dir / f"{filename_base_with_ts}.jpg"
+
+        # Check if files need to be moved
+        files_moved = False
+
+        # Move PDF file
+        if old_pdf_path.exists() and new_pdf_path != old_pdf_path:
+            shutil.move(str(old_pdf_path), str(new_pdf_path))
+            logger.info(f"Moved PDF: {old_pdf_path} -> {new_pdf_path}")
+            files_moved = True
+            if update_db:
+                periodical.file_path = str(new_pdf_path)
+        elif new_pdf_path == old_pdf_path:
+            # File is already in correct location
+            if update_db:
+                periodical.file_path = str(new_pdf_path)
+        else:
+            logger.warning(f"PDF file not found: {old_pdf_path}")
+            return FileReorganizationResult(
+                success=False,
+                new_pdf_path=None,
+                new_cover_path=None,
+                error=f"PDF file not found: {old_pdf_path}",
+            )
+
+        # Move cover file if it exists
+        if old_cover_path and old_cover_path.exists() and new_cover_path and new_cover_path != old_cover_path:
+            shutil.move(str(old_cover_path), str(new_cover_path))
+            logger.info(f"Moved cover: {old_cover_path} -> {new_cover_path}")
+            files_moved = True
+            if update_db:
+                periodical.cover_path = str(new_cover_path)
+        elif new_cover_path and update_db:
+            periodical.cover_path = str(new_cover_path)
+
+        return FileReorganizationResult(
+            success=True,
+            new_pdf_path=str(new_pdf_path),
+            new_cover_path=str(new_cover_path) if new_cover_path else None,
+            files_moved=files_moved,
+        )
+
+    except Exception as e:
+        logger.error(f"Error reorganizing periodical files: {e}", exc_info=True)
+        return FileReorganizationResult(success=False, new_pdf_path=None, new_cover_path=None, error=str(e))
+
+
+def move_files_with_cleanup(
+    old_pdf_path: Path,
+    new_pdf_path: Path,
+    old_cover_path: Optional[Path] = None,
+    new_cover_path: Optional[Path] = None,
+) -> Tuple[bool, Optional[str]]:
+    """
+    Move PDF and cover files with proper error handling.
+
+    This is a lower-level utility for moving files when you already
+    have the source and target paths computed.
+
+    Args:
+        old_pdf_path: Current PDF file path
+        new_pdf_path: Target PDF file path
+        old_cover_path: Current cover file path (optional)
+        new_cover_path: Target cover file path (optional)
+
+    Returns:
+        Tuple of (success: bool, error_message: Optional[str])
+
+    Example:
+        success, error = move_files_with_cleanup(
+            Path("/old/magazine.pdf"),
+            Path("/new/magazine.pdf"),
+            Path("/old/magazine.jpg"),
+            Path("/new/magazine.jpg")
+        )
+    """
+    try:
+        # Verify source PDF exists
+        if not old_pdf_path.exists():
+            return False, f"Source PDF not found: {old_pdf_path}"
+
+        # Create target directory
+        new_pdf_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Move PDF
+        if new_pdf_path != old_pdf_path:
+            shutil.move(str(old_pdf_path), str(new_pdf_path))
+            logger.info(f"Moved PDF: {old_pdf_path} -> {new_pdf_path}")
+
+        # Move cover if provided
+        if old_cover_path and old_cover_path.exists() and new_cover_path and new_cover_path != old_cover_path:
+            shutil.move(str(old_cover_path), str(new_cover_path))
+            logger.info(f"Moved cover: {old_cover_path} -> {new_cover_path}")
+
+        return True, None
+
+    except Exception as e:
+        logger.error(f"Error moving files: {e}", exc_info=True)
+        return False, str(e)

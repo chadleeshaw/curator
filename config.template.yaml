@@ -1,0 +1,325 @@
+# Configuration template for Curator
+# Copy this to local/config/config.yaml and update with your settings
+
+# ==============================================================================
+# Search Providers
+# ==============================================================================
+# Providers used to search for and download periodical issues
+# You can configure multiple providers (Newsnab indexers, RSS feeds)
+
+search_providers:
+  # Newsnab Provider (e.g., NZBHydra2, NZBGeek, etc.)
+  - type: newsnab
+    name: Newsnab Provider
+    api_url: https://your-newsnab-server.com/api
+    api_key: your-api-key-here
+    enabled: true
+
+    # Newsnab categories to search
+    # 7000 = Other Misc, 7010 = Magazines, 7020 = Ebooks, 7030 = Comics
+    # 6000 = Adult, 8000 = Other (varies by indexer)
+    categories: '7000,7010,7020,7030'
+
+    # Rate limiting settings (to avoid provider bans)
+    # NOTE: With provider cache enabled (see cache section below), these limits become
+    # much less important since searches use local cache instead of hitting providers.
+    # Cache sync makes only ~4-8 API calls/hour (RSS mode), far below typical limits.
+    # You can safely increase these limits when cache is enabled.
+    max_requests_per_hour: 100 # Self-imposed limit (default: 100 requests/hour)
+    request_delay_seconds: 1.0 # Delay between requests (default: 1 second)
+
+    # Query expansion settings (improves search match rates)
+    # Automatically generates search variants to find results with different naming
+    # Example: "Magazine Title Regional" → ["Magazine Title Regional", "Title Regional", "MG Title Regional"]
+    enable_query_expansion: true # Enable/disable query expansion (default: true)
+    max_expanded_queries: 3 # Number of query variants to try (default: 3, range: 1-5)
+
+  # RSS Provider (optional - for fast new release discovery)
+  # Uncomment and configure to enable RSS-based searching
+  # - type: rss
+  #   name: RSS Feed Provider
+  #   feed_url: https://your-indexer.com/rss
+  #   enabled: true
+  #
+  #   # RSS caching settings (dramatically speeds up searches)
+  #   cache_ttl: 3600 # Cache TTL in seconds (1 hour)
+  #   enable_cache: true # Enable/disable caching
+
+download_client:
+  type: sabnzbd
+  name: SABnzbd
+  api_url: http://localhost:8080
+  api_key: your-sabnzbd-api-key
+  default_category: books
+
+storage:
+  db_path: ./local/config/periodicals.db
+  download_dir: ./local/downloads
+  library_dir: ./local/data
+  cache_dir: ./local/cache
+
+# ==============================================================================
+# Provider Cache Configuration
+# ==============================================================================
+# Local caching of provider search results to dramatically reduce API calls
+# and improve search performance. Eliminates rate limit issues.
+#
+# How it works:
+# - Background sync fetches latest releases from providers (RSS mode)
+# - Search queries use local cache first (instant, no API calls)
+# - Download URLs are cached (NZB files fetched on-demand by download client)
+#
+# Benefits:
+# - 95%+ reduction in provider API calls
+# - Sub-100ms search response times (vs 1-5 seconds)
+# - Minimal storage usage (~1MB for 1000 releases)
+# - Eliminates rate limit errors
+# - Works offline for cached content
+
+cache:
+  # Enable/disable provider cache
+  # When enabled, search results are cached locally for fast searching
+  # When disabled, all searches go directly to providers (traditional behavior)
+  enabled: true
+
+  # Cache retention in days
+  # Releases older than this are automatically deleted during cleanup
+  # Recommended: 90 days (balances storage vs search coverage)
+  # Storage estimate: ~1MB for 90 days of releases (URL-only caching)
+  retention_days: 90
+
+  # Sync settings - background synchronization with providers
+  sync:
+    # Sync interval in seconds
+    # How often to fetch latest releases from providers
+    # Recommended: 1800-3600 (30 min - 1 hour)
+    # Note: Each sync only makes 2-4 API calls (RSS mode per provider)
+    interval_seconds: 1800 # 30 minutes
+
+    # Number of releases to fetch per provider
+    # Initial sync: First time syncing a provider
+    # Incremental sync: Subsequent syncs (fetches releases since last sync)
+    initial_sync_limit: 100 # Fetch 100 releases on first sync
+    incremental_sync_limit: 100 # Fetch 100 releases per sync
+
+import:
+  # Organization pattern for file structure
+  # Available patterns (can also use custom pattern with {tags}):
+  #   '{category}/{title}/{year}/' - Default: organized by year (requires date)
+  #   '{category}/{title}/Vol{volume}/' - Volume-based (for series with volumes but no dates)
+  #   '{category}/{title}/' - Flat structure (all issues in title folder)
+  #   '{category}/{title}/Vol{volume}/{year}/' - Hybrid volume-year structure
+  #
+  # Available tags: {category}, {title}, {year}, {month}, {day}, {language}, {volume}, {issue}
+  #
+  # Smart auto-selection: If pattern is not specified or uses default, the system will
+  # automatically select the best pattern based on available metadata:
+  #   - Has date → uses year-based pattern
+  #   - Has volume but no date → uses volume-based pattern
+  #   - Has issue but no date → uses flat pattern
+  #   - No metadata → uses flat pattern with warning
+  organization_pattern: '{category}/{title}/{year}/'
+  auto_track_imports: true
+  enable_text_scan: true # Enable direct text extraction from PDF/EPUB during import (fast)
+  enable_ocr: true # Enable OCR for image-based text extraction (slower, queued)
+  category_prefix: _
+
+metadata:
+  # Metadata aggregation settings - controls how metadata from different sources is combined
+  # When multiple sources provide conflicting metadata (e.g. OCR says 2024, filename says 2023),
+  # this configuration determines which source wins based on priority order and confidence scores.
+
+  # Source priority order for metadata aggregation (first = highest priority)
+  # Available sources:
+  #   - ocr: Optical Character Recognition from cover images (has per-field confidence scores)
+  #   - text_scan: Direct text extraction from native PDFs/EPUBs (always 100% confidence)
+  #   - filename: Metadata parsed from the filename (always 100% confidence)
+  # Default: OCR first (most accurate for scanned magazines), then text_scan, then filename
+  source_priority:
+    - ocr
+    - text_scan
+    - filename
+
+  # Minimum confidence thresholds (0-100) for each source
+  # Source must meet or exceed threshold for its value to be used
+  # If a source's confidence is below threshold, the next source in priority order is tried
+  confidence_thresholds:
+    ocr: 70 # OCR must be 70%+ confident (has per-field confidence scores)
+    text_scan: 50 # Text scan usually high quality (no confidence scores, treated as 100%)
+    filename: 0 # Always accept filename parsing (no confidence scores, treated as 100%)
+
+  # Per-field confidence overrides (optional)
+  # Allows fine-tuning thresholds for specific metadata fields
+  # If not specified, uses the general source threshold from confidence_thresholds above
+  field_overrides:
+    year:
+      ocr: 80 # Years are critical - require higher confidence from OCR
+    month:
+      ocr: 60 # Month names are easier to OCR - lower threshold is acceptable
+    issue_number:
+      ocr: 75 # Issue numbers are moderately important
+    volume:
+      ocr: 75 # Volume numbers are moderately important
+    # special_edition: No override, uses general ocr threshold (70%)
+
+  # Notes:
+  # - If this metadata section is not present, system uses OCR-first defaults shown above
+  # - Each metadata field (year, month, issue_number, etc.) is evaluated independently
+  # - Different fields can come from different sources based on which source passes first
+  # - To revert to old behavior (filename always wins), use:
+  #     source_priority: [filename, text_scan, ocr]
+  #     confidence_thresholds: {filename: 0, text_scan: 0, ocr: 0}
+
+matching:
+  # Fuzzy matching threshold (0-100) for duplicate detection
+  # Higher = stricter matching, Lower = more lenient
+  fuzzy_threshold: 80
+
+  # Days threshold for considering publications as duplicates
+  # Publications with same title within this many days are considered duplicates
+  duplicate_date_threshold_days: 5
+
+pdf:
+  # DPI settings for cover extraction (higher = better quality, slower)
+  cover_dpi_low: 60 # For thumbnails/previews
+  cover_dpi_high: 200 # For high-quality covers
+
+  # JPEG quality (1-100) for cover images
+  cover_quality_low: 50 # For thumbnails
+  cover_quality_high: 85 # For high-quality covers
+
+downloads:
+  # Maximum number of retry attempts for failed downloads
+  # Note: Currently not configurable via YAML - hardcoded in core/constants/app.py
+  max_retries: 1
+
+  # Maximum number of concurrent downloads allowed system-wide
+  # This is the total limit across all tracked periodicals
+  # With provider cache enabled, API rate limits are no longer a concern
+  # (cache sync uses minimal API calls), so this can be safely increased
+  max_concurrent: 30
+
+# OCR (Optical Character Recognition) Configuration
+# Controls image preprocessing for OCR text extraction
+ocr:
+  # Image resize width for OCR processing (pixels)
+  # Smaller = faster processing, larger = better accuracy
+  # Default: 1200 pixels balances speed and quality
+  resize_width: 1200
+
+  # Contrast enhancement factor
+  # Higher values increase contrast for better text recognition
+  # Range: 1.0-2.0, Default: 1.5
+  contrast_enhance: 1.5
+
+  # Denoise strength (h parameter for fastNlMeansDenoising)
+  # Higher values remove more noise but may blur text
+  # Range: 5-15, Default: 10
+  denoise_h: 10
+
+  # Sharpening kernel size (must be odd number)
+  # Larger values create stronger sharpening effect
+  # Common values: 3, 5, 7. Default: 5
+  sharpen_kernel: 5
+
+tasks:
+  # Task interval settings (in seconds)
+  # How often each background task runs
+
+  # Auto-download: Search for and download new tracked issues
+  # IMPORTANT: With the new Issue Discovery & Tracking system, this interval
+  # determines how often the scheduler runs (not how often each periodical is searched).
+  # The system now intelligently selects 1-2 periodicals per run using adaptive scheduling.
+  #
+  # Recommended: 1800-3600 (30 min - 1 hour)
+  # - Runs more frequently to process the download queue
+  # - Each run only searches 1-2 periodicals (not all)
+  # - Individual periodicals have their own adaptive intervals
+  auto_download_interval: 1800 # 30 minutes (recommended with new system)
+
+  # Download monitor: Check download status and import completed files
+  download_monitor_interval: 30 # 30 seconds
+
+  # Cover cleanup: Remove orphaned covers and generate missing ones
+  cleanup_covers_interval: 86400 # 24 hours
+
+  # OCR cover generator: Generate high-res cover PNGs for OCR processing
+  # Note: This task runs as part of the import process, interval not currently used
+  # ocr_cover_generator_interval: 300 # 5 minutes
+
+  # OCR processor: Run OCR text extraction on queued covers
+  ocr_processor_interval: 10 # 10 seconds
+
+  # OCR worker settings
+  ocr_max_workers: 1 # Number of parallel OCR processes
+  ocr_batch_size: 5 # Max jobs to process per batch
+
+  # ==============================================================================
+  # Issue Discovery & Tracking System
+  # Controls adaptive search scheduling and issue discovery behavior
+  # ==============================================================================
+
+  # Maximum number of periodicals to search per auto_download_task run
+  # With provider cache enabled, this can be much higher without overwhelming providers
+  # Higher = faster discovery of new issues across your tracked periodicals
+  # Recommended: 5-10 with cache enabled (was 1-2 without cache)
+  max_periodicals_per_search: 10
+
+  # Search interval settings (in hours)
+  # The system adapts search frequency based on discovery success:
+  # - Finds new issues → rapid interval (searches more often)
+  # - No new issues for 1-2 searches → normal interval
+  # - No new issues for 3-5 searches → slow interval
+  # - No new issues for 6+ searches → very slow interval
+  #
+  # With provider cache, these can be more aggressive since searches are local
+  rapid_search_interval: 0.5 # Search every 30 minutes when finding new issues
+  normal_search_interval: 2 # Search every 2 hours by default
+  slow_search_interval: 12 # Search twice daily when no new issues
+  very_slow_search_interval: 48 # Search every 2 days when very quiet
+
+  # Note: empty_search_threshold is hardcoded in SearchScheduler (currently 3)
+  # After 3 consecutive empty searches, interval increases to slow
+  # After 6 consecutive empty searches, interval increases to very_slow
+
+logging:
+  level: INFO
+  log_file: ./local/logs/periodical_manager.log
+
+server:
+  host: 0.0.0.0
+  port: 8000
+
+# JWT Authentication Secret
+# Used for signing JWT tokens for user authentication
+# If not specified, a secret will be auto-generated on first run and saved to config
+# IMPORTANT: Keep this secret! Anyone with this can create valid authentication tokens
+jwt_secret: null # Auto-generated if null/empty
+
+
+# ==============================================================================
+# Advanced Configuration Notes
+# ==============================================================================
+
+# Environment Variable Overrides:
+# The following environment variables can override config file settings:
+#
+# Storage paths:
+#   CURATOR_CONFIG_PATH - Path to config file (default: local/config/config.yaml)
+#   CURATOR_DB_PATH - Database file path
+#   CURATOR_DOWNLOAD_DIR - Download directory
+#   CURATOR_LIBRARY_DIR - Organization directory
+#   CURATOR_CACHE_DIR - Cache directory
+#
+# Logging:
+#   CURATOR_LOG_FILE - Log file path
+#   CURATOR_LOG_LEVEL - Log level (DEBUG, INFO, WARNING, ERROR)
+#
+# Server:
+#   CURATOR_HOST - Server host (default: 0.0.0.0)
+#   CURATOR_PORT - Server port (default: 8000)
+#
+# Special modes:
+#   CURATOR_DRY_RUN - Set to "true" for dry run mode (no file moves)
+#   DISABLE_OCR - Set to "true" to disable OCR features
+#   USE_GPU - Set to "0" for CPU-only mode (default)

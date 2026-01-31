@@ -1,53 +1,66 @@
+# Version control
+.git
+.gitignore
+.gitattributes
+
 # Python
-__pycache__/
+__pycache__
 *.py[cod]
 *$py.class
 *.so
 .Python
-.venv/
+.venv
 venv/
 ENV/
 env/
 
-# Local development
-local/config/*.db
-local/config/*.db-*
-local/downloads/*
-local/data/*
-local/cache/*
-local/logs/*
-
-# Keep config template but ignore actual config with secrets
-!local/config/
-local/config/config.yaml
-
-# Tests
-tests/
-.pytest_cache/
+# Testing
+.pytest_cache
 .coverage
 htmlcov/
+.tox/
+test_cache/
+test_downloads/
+test_data/
 
-# IDEs
-.vscode/
-.idea/
+# IDE
+.vscode
+.idea
 *.swp
 *.swo
 *~
 
-# Git
-.git/
-.gitignore
+# CI/CD
+.github
 
 # Documentation
-README.md
 *.md
+docs/
 
-# Build files
-Makefile
-eslint.config.mjs
-setup.cfg
+# Local development
+local/
+curator.db
+*.db
+*.db-journal
 
-# Node
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node (if any)
 node_modules/
-package.json
-package-lock.json
+npm-debug.log
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore

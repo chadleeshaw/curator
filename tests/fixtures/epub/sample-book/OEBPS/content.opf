@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="BookID">
+    <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+        <dc:title>Test Book for Curator</dc:title>
+        <dc:creator>Test Author</dc:creator>
+        <dc:language>en</dc:language>
+        <dc:identifier id="BookID">test-book-001</dc:identifier>
+        <dc:publisher>Test Publisher</dc:publisher>
+        <dc:date>2026-01-14</dc:date>
+        <dc:subject>Testing</dc:subject>
+        <dc:subject>Fiction</dc:subject>
+        <dc:description>A sample EPUB book for testing the Curator application</dc:description>
+        <meta property="dcterms:modified">2026-01-14T00:00:00Z</meta>
+    </metadata>
+    <manifest>
+        <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+        <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+        <item id="chapter1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+        <item id="chapter2" href="chapter2.xhtml" media-type="application/xhtml+xml"/>
+        <item id="stylesheet" href="style.css" media-type="text/css"/>
+    </manifest>
+    <spine toc="ncx">
+        <itemref idref="nav"/>
+        <itemref idref="chapter1"/>
+        <itemref idref="chapter2"/>
+    </spine>
+</package>

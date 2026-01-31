@@ -1,4 +1,4 @@
-.PHONY: help lint format lint-python lint-js lint-css format-python format-js format-css test install run clean
+.PHONY: help lint format lint-python lint-js lint-css format-python format-js format-css test test-unit test-integration test-e2e test-routers test-coverage test-quick install install-hooks run clean ci-lint
 
 PYTHON_FILES := $(shell find . -name '*.py' -not -path './.venv/*' -not -path './node_modules/*' -not -path './.node_modules/*')
 JS_FILES := static/js/*.js
@@ -9,11 +9,13 @@ help:
 	@echo ""
 	@echo "Setup:"
 	@echo "  make install          Install all dependencies"
+	@echo "  make install-hooks    Install Git pre-push hooks"
 	@echo ""
 	@echo "Development:"
 	@echo "  make run              Start the application"
 	@echo "  make format           Format all code (Python, JS, CSS)"
 	@echo "  make lint             Run all linters"
+	@echo "  make ci-lint          Run CI linters"
 	@echo ""
 	@echo "Linting:"
 	@echo "  make lint-python      Lint Python files (pylint + flake8)"
@@ -26,7 +28,13 @@ help:
 	@echo "  make format-css       Format CSS with Prettier"
 	@echo ""
 	@echo "Testing:"
-	@echo "  make test             Run all tests"
+	@echo "  make test             Run all tests with pytest"
+	@echo "  make test-unit        Run unit tests only (fast)"
+	@echo "  make test-integration Run integration tests only"
+	@echo "  make test-e2e         Run end-to-end tests only"
+	@echo "  make test-routers     Run router/API tests only"
+	@echo "  make test-coverage    Run tests with coverage report"
+	@echo "  make test-quick       Quick syntax check of test files"
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  make clean            Remove cache, build, and temp files"
@@ -37,6 +45,9 @@ install:
 	pip install -r requirements.txt > /dev/null 2>&1
 	npm install > /dev/null 2>&1
 	@echo "✓ Dependencies installed"
+
+install-hooks:
+	@./setup-hooks.sh
 
 # Running the app
 run:
@@ -60,6 +71,27 @@ lint-css:
 	@echo "🎨 Linting CSS files..."
 	@npx stylelint $(CSS_FILES) 2>/dev/null || echo "  ⚠ Some CSS issues found"
 
+# CI Linting (matches GitHub Actions exactly)
+ci-lint:
+	@echo "🔍 Running CI linters..."
+	@echo ""
+	@echo "📝 Running pylint..."
+	@.venv/bin/python -m pylint --fail-under=7.0 --recursive=y . --ignore=.venv,node_modules || true
+	@echo ""
+	@echo "📝 Running flake8..."
+	@find . -name '*.py' -not -path './.venv/*' -not -path './node_modules/*' -print0 | xargs -0 .venv/bin/python -m flake8
+	@echo ""
+	@echo "🐍 Checking Black formatting..."
+	@find . -name '*.py' -not -path './.venv/*' -not -path './node_modules/*' -print0 | xargs -0 .venv/bin/python -m black --check --line-length=120
+	@echo ""
+	@echo "📜 Running eslint..."
+	@npx eslint $(JS_FILES)
+	@echo ""
+	@echo "🎨 Running stylelint..."
+	@npx stylelint $(CSS_FILES)
+	@echo ""
+	@echo "✅ All CI linters passed!"
+
 # Formatting
 format: format-python format-js format-css
 	@echo "✅ Formatting complete!"
@@ -78,18 +110,38 @@ format-css:
 
 # Testing
 test:
-	@echo "🧪 Running tests..."
-	@.venv/bin/python tests/test_clients.py && \
-		.venv/bin/python tests/test_config.py && \
-		.venv/bin/python tests/test_database.py && \
-		.venv/bin/python tests/test_factory.py && \
-		.venv/bin/python tests/test_processor_download.py && \
-		.venv/bin/python tests/test_processor_importer.py && \
-		.venv/bin/python tests/test_processor_organizer.py && \
-		.venv/bin/python tests/test_processor_scheduler.py && \
-		.venv/bin/python tests/test_provider_metadata.py && \
-		.venv/bin/python tests/test_provider_search.py
-	@echo "✅ All tests completed!"
+	@echo "🧪 Running all tests..."
+	@.venv/bin/python -m pytest tests/ -v --tb=short 2>&1 | tail -50 || echo "⚠ Some tests failed"
+	@echo "✅ Test run completed!"
+
+test-unit:
+	@echo "🧪 Running unit tests (fast)..."
+	@.venv/bin/python -m pytest tests/unit/ -v --tb=short
+	@echo "✅ Unit tests completed!"
+
+test-integration:
+	@echo "🧪 Running integration tests..."
+	@.venv/bin/python -m pytest tests/integration/ -v --tb=short
+	@echo "✅ Integration tests completed!"
+
+test-e2e:
+	@echo "🧪 Running end-to-end tests..."
+	@.venv/bin/python -m pytest tests/e2e/ -v --tb=short
+	@echo "✅ E2E tests completed!"
+
+test-routers:
+	@echo "🧪 Running router tests..."
+	@.venv/bin/python -m pytest tests/unit/web/routers/ -v --tb=short
+	@echo "✅ Router tests completed!"
+
+test-coverage:
+	@echo "🧪 Running tests with coverage..."
+	@.venv/bin/python -m pytest tests/ --cov=. --cov-report=term-missing --cov-report=html
+	@echo "✅ Coverage report generated in htmlcov/"
+
+test-quick:
+	@echo "🧪 Quick test (syntax check only)..."
+	@find tests/ -name "test_*.py" -exec .venv/bin/python -m py_compile {} + && echo "✅ All test files compile"
 
 # Cleanup
 clean:

@@ -2,16 +2,18 @@
 Authentication module for managing login credentials
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Optional, Tuple
 
 import jwt
 
+from core.constants.app import TOKEN_EXPIRATION_HOURS
+from core.parsers import utc_now
+from core.utils.db import get_db_session
 from models.database import Credentials
 
 # JWT configuration constants
 JWT_ALGORITHM = "HS256"
-TOKEN_EXPIRATION_HOURS = 24
 
 
 class AuthManager:
@@ -22,18 +24,26 @@ class AuthManager:
         self.jwt_secret = jwt_secret
 
     def credentials_exist(self) -> bool:
-        """Check if credentials have been set up"""
-        session = self.session_factory()
-        try:
+        """
+        Check if credentials have been set up.
+
+        Returns:
+            True if credentials exist in database, False otherwise
+        """
+        with get_db_session(self.session_factory) as session:
             count = session.query(Credentials).count()
             return count > 0
-        finally:
-            session.close()
 
     def create_credentials(self, username: str, password: str) -> Tuple[bool, str]:
         """
         Create the initial login credentials.
-        Returns (success, message)
+
+        Args:
+            username: Username for login
+            password: Password for login (will be hashed before storage)
+
+        Returns:
+            Tuple of (success, message) where success is True if credentials created successfully
         """
         session = self.session_factory()
         try:
@@ -42,8 +52,8 @@ class AuthManager:
             if existing:
                 return False, "Credentials already exist"
 
-            # Create new credentials
-            creds = Credentials(username=username)
+            # Create new credentials with lowercase username
+            creds = Credentials(username=username.lower())
             creds.set_password(password)
             session.add(creds)
             session.commit()
@@ -57,11 +67,18 @@ class AuthManager:
     def verify_credentials(self, username: str, password: str) -> Tuple[bool, str]:
         """
         Verify user credentials.
-        Returns (success, message)
+
+        Args:
+            username: Username to verify
+            password: Password to verify
+
+        Returns:
+            Tuple of (success, message) where success is True if credentials are valid
         """
         session = self.session_factory()
         try:
-            creds = session.query(Credentials).filter_by(username=username).first()
+            # Query using lowercase username for case-insensitive comparison
+            creds = session.query(Credentials).filter_by(username=username.lower()).first()
             if not creds:
                 return False, "Invalid username or password"
 
@@ -75,11 +92,19 @@ class AuthManager:
             session.close()
 
     def create_token(self, username: str) -> str:
-        """Create a JWT token for authenticated user"""
+        """
+        Create a JWT token for authenticated user.
+
+        Args:
+            username: Username to encode in the token
+
+        Returns:
+            JWT token string valid for TOKEN_EXPIRATION_HOURS hours
+        """
         payload = {
             "username": username,
-            "iat": datetime.utcnow(),
-            "exp": datetime.utcnow() + timedelta(hours=TOKEN_EXPIRATION_HOURS),
+            "iat": utc_now(),
+            "exp": utc_now() + timedelta(hours=TOKEN_EXPIRATION_HOURS),
         }
         token = jwt.encode(payload, self.jwt_secret, algorithm=JWT_ALGORITHM)
         return token
@@ -87,7 +112,12 @@ class AuthManager:
     def verify_token(self, token: str) -> Tuple[bool, Optional[str]]:
         """
         Verify a JWT token.
-        Returns (is_valid, username or None)
+
+        Args:
+            token: JWT token string to verify
+
+        Returns:
+            Tuple of (is_valid, username) where username is None if token is invalid or expired
         """
         try:
             payload = jwt.decode(token, self.jwt_secret, algorithms=[JWT_ALGORITHM])
@@ -101,7 +131,14 @@ class AuthManager:
     def update_credentials(self, username: str, old_password: str, new_password: str) -> Tuple[bool, str]:
         """
         Update the password.
-        Returns (success, message)
+
+        Args:
+            username: Current username (not used, kept for API compatibility)
+            old_password: Current password for verification
+            new_password: New password to set
+
+        Returns:
+            Tuple of (success, message) where success is True if password updated successfully
         """
         session = self.session_factory()
         try:
@@ -113,7 +150,7 @@ class AuthManager:
                 return False, "Current password is incorrect"
 
             creds.set_password(new_password)
-            creds.updated_at = datetime.utcnow()
+            creds.updated_at = utc_now()
             session.commit()
             return True, "Password updated successfully"
         except Exception as e:
@@ -125,25 +162,93 @@ class AuthManager:
     def update_username(self, old_username: str, new_username: str) -> Tuple[bool, str]:
         """
         Update the username.
-        Returns (success, message)
+
+        Args:
+            old_username: Current username
+            new_username: New username to set
+
+        Returns:
+            Tuple of (success, message) where success is True if username updated successfully
         """
         session = self.session_factory()
         try:
-            creds = session.query(Credentials).filter_by(username=old_username).first()
+            # Query using lowercase username for case-insensitive comparison
+            creds = session.query(Credentials).filter_by(username=old_username.lower()).first()
             if not creds:
                 return False, "User not found"
 
-            # Check if new username already exists
-            existing = session.query(Credentials).filter_by(username=new_username).first()
+            # Check if new username already exists (case-insensitive)
+            existing = session.query(Credentials).filter_by(username=new_username.lower()).first()
             if existing:
                 return False, "Username already exists"
 
-            creds.username = new_username
-            creds.updated_at = datetime.utcnow()
+            creds.username = new_username.lower()
+            creds.updated_at = utc_now()
             session.commit()
             return True, "Username updated successfully"
         except Exception as e:
             session.rollback()
             return False, f"Error updating username: {str(e)}"
+        finally:
+            session.close()
+
+    def get_api_token(self) -> Tuple[bool, Optional[str]]:
+        """
+        Get the current API token.
+
+        Returns:
+            Tuple of (success, api_token) where api_token is None if doesn't exist
+        """
+        session = self.session_factory()
+        try:
+            creds = session.query(Credentials).first()
+            if not creds:
+                return False, None
+            return True, creds.api_token
+        except Exception:
+            return False, None
+        finally:
+            session.close()
+
+    def regenerate_api_token(self) -> Tuple[bool, Optional[str]]:
+        """
+        Regenerate and return a new API token.
+
+        Returns:
+            Tuple of (success, new_api_token) where new_api_token is the generated token
+        """
+        session = self.session_factory()
+        try:
+            creds = session.query(Credentials).first()
+            if not creds:
+                return False, None
+
+            new_token = creds.generate_api_token()
+            session.commit()
+            return True, new_token
+        except Exception:
+            session.rollback()
+            return False, None
+        finally:
+            session.close()
+
+    def verify_api_token(self, token: str) -> Tuple[bool, Optional[str]]:
+        """
+        Verify an API token and return the username if valid.
+
+        Args:
+            token: API token to verify
+
+        Returns:
+            Tuple of (is_valid, username) where username is None if token is invalid
+        """
+        session = self.session_factory()
+        try:
+            creds = session.query(Credentials).filter_by(api_token=token).first()
+            if not creds:
+                return False, None
+            return True, creds.username
+        except Exception:
+            return False, None
         finally:
             session.close()

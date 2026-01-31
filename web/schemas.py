@@ -4,7 +4,46 @@ Pydantic models for request and response validation
 
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+# ==============================================================================
+# Standard API Responses
+# ==============================================================================
+
+
+class APIResponse(BaseModel):
+    """Standard successful API response"""
+
+    success: bool = True
+    message: str
+    data: Optional[Dict[str, Any]] = None
+
+
+class APIError(BaseModel):
+    """Standard error response"""
+
+    success: bool = False
+    error: str = Field(..., description="Error type or category")
+    message: str = Field(..., description="Human-readable error message")
+    details: Optional[Dict[str, Any]] = Field(None, description="Additional error details")
+
+
+class ValidationErrorDetail(BaseModel):
+    """Detailed validation error information"""
+
+    field: str
+    message: str
+    value: Optional[Any] = None
+
+
+class ValidationError(APIError):
+    """Validation error response with field-level details"""
+
+    error: str = "validation_error"
+    validation_errors: List[ValidationErrorDetail] = Field(
+        default_factory=list, description="List of validation errors"
+    )
+
 
 # ==============================================================================
 # Authentication
@@ -34,14 +73,24 @@ class ChangePasswordRequest(BaseModel):
 
 class UpdateUserRequest(BaseModel):
     """Request to update username and/or password"""
+
     current_password: str
     username: Optional[str] = None
     new_password: Optional[str] = None
 
 
+class APITokenResponse(BaseModel):
+    """Response containing the API token"""
+
+    success: bool
+    api_token: Optional[str] = None
+    message: str
+
+
 # ==============================================================================
 # Search
 # ==============================================================================
+
 
 class SearchRequest(BaseModel):
     query: str
@@ -58,48 +107,54 @@ class SearchResultResponse(BaseModel):
     match_score: Optional[int] = None
 
 
-class MagazineSearchResponse(BaseModel):
-    """Response from Open Library magazine search"""
+class PeriodicalSearchResponse(BaseModel):
+    """Response from Open Library periodical search"""
 
     olid: str
     title: str
-    publisher: Optional[str]
     first_publish_year: Optional[int]
-    issn: Optional[str]
     isbn: Optional[str]
     edition_count: int
 
 
 # ==============================================================================
-# Magazines/Periodicals
+# Periodicals (Magazines, Comics, Books, Documents)
 # ==============================================================================
 
-class MagazineResponse(BaseModel):
+
+class PeriodicalResponse(BaseModel):
     id: int
     title: str
-    publisher: Optional[str]
+    language: Optional[str]
+    category: Optional[str] = None  # Content category
     issue_date: str
     file_path: str
     cover_path: Optional[str]
-    metadata: Optional[Dict[str, Any]]
+    content_hash: Optional[str]
+    tracking_id: Optional[int]
+    created_at: Optional[str]
+    updated_at: Optional[str]
+    metadata: Optional[Dict[str, Any]]  # Legacy field (alias for extra_metadata)
+    parsed_metadata: Optional[Dict[str, Any]] = None  # Raw scan results
+    derived_metadata: Optional[Dict[str, Any]] = None  # Final merged metadata
+    extra_metadata: Optional[Dict[str, Any]] = None  # Import/provenance info
 
 
 class EditionInfo(BaseModel):
-    """Single edition of a magazine"""
+    """Single edition of a periodical"""
 
     olid: str
     title: str
     publish_date: str
     publishers: List[str]
     isbn: Optional[str]
-    issn: Optional[str]
     number_of_pages: Optional[int]
     physical_format: str
     language: str
 
 
-class MagazineEditionsResponse(BaseModel):
-    """Response with all editions of a magazine"""
+class PeriodicalEditionsResponse(BaseModel):
+    """Response with all editions of a periodical"""
 
     work_olid: str
     title: str
@@ -113,14 +168,14 @@ class MagazineEditionsResponse(BaseModel):
 # Tracking
 # ==============================================================================
 
+
 class TrackingPreferencesRequest(BaseModel):
     """Request to save tracking preferences for a magazine"""
 
     olid: str
     title: str
-    publisher: Optional[str] = None
-    issn: Optional[str] = None
     first_publish_year: Optional[int] = None
+    country: Optional[str] = None
     track_all_editions: bool = False
     track_new_only: bool = False
     selected_editions: Dict[str, bool] = {}
@@ -134,6 +189,7 @@ class TrackingPreferencesResponse(BaseModel):
     id: int
     olid: str
     title: str
+    country: Optional[str] = None
     track_all_editions: bool
     selected_editions: Dict[str, bool]
     selected_years: List[int]
@@ -142,6 +198,7 @@ class TrackingPreferencesResponse(BaseModel):
 # ==============================================================================
 # Downloads
 # ==============================================================================
+
 
 class DownloadAllIssuesRequest(BaseModel):
     """Request to download all issues of a tracked periodical"""
@@ -190,10 +247,12 @@ class DownloadStatusResponse(BaseModel):
 # Import
 # ==============================================================================
 
+
 class ImportOptionsRequest(BaseModel):
     """Request with import options"""
 
     category: Optional[str] = None  # None for auto-detect
-    organization_pattern: Optional[str] = "data/{category}/{title}/{year}/"  # File organization pattern with tags
+    organization_pattern: Optional[str] = "{category}/{title}/{year}/"  # File organization pattern with tags
     auto_track: bool = True
+    tracking_mode: str = "all"  # "all", "new", "watch", or "none"
     scan_nested: bool = True

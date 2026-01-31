@@ -1,555 +1,2593 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Curator</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🪙</text></svg>">
-    <link rel="stylesheet" href="/static/css/base.css">
-    <link rel="stylesheet" href="/static/css/themes.css">
-    <link rel="stylesheet" href="/static/css/layout.css">
-    <link rel="stylesheet" href="/static/css/components.css">
-    <link rel="stylesheet" href="/static/css/pages.css">
-    <script type="module" src="/static/js/main.js"></script>
-</head>
-<body>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🪙</text></svg>"
+    />
+    <link rel="stylesheet" href="/static/css/base.css?v=1769743008" />
+    <link rel="stylesheet" href="/static/css/themes.css?v=1769743008" />
+    <link rel="stylesheet" href="/static/css/layout.css?v=1769743008" />
+    <link rel="stylesheet" href="/static/css/components.css?v=1769743008" />
+    <link rel="stylesheet" href="/static/css/pages.css?v=1769743008" />
+    <script type="module" src="/static/js/main.js?v=1769743008"></script>
+  </head>
+  <body>
     <div class="container">
-        <header>
-            <div class="header-logout">
-                <div>
-                    <h1>🪙 Curator</h1>
-                    <p>Search, download, and organize your periodicals</p>
-                </div>
-                <button class="logout-btn" onclick="logout()">🚪 Logout</button>
+      <header>
+        <div class="header-logout">
+          <div class="header-stats">
+            <div class="stat-badge">
+              <span class="stat-icon">📚</span>
+              <span id="header-periodicals-count">-</span>
             </div>
-        </header>
-
-        <nav>
-            <button class="nav-btn active" onclick="showTab('library', event)">📚 Library</button>
-            <button class="nav-btn" onclick="showTab('tracking', event)">📌 Track Periodicals</button>
-            <button class="nav-btn" onclick="showTab('tasks', event)">⚙️ Tasks</button>
-            <button class="nav-btn" onclick="showTab('settings', event)">🔧 Settings</button>
-        </nav>
-
-        <!-- Library Tab -->
-        <div id="library-tab" class="tab active">
-            <div class="library-container">
-                <h2>Your PDF Library</h2>
-                <div class="library-header flex justify-between items-center gap-30 mb-40 flex-wrap">
-                    <div class="flex gap-10 flex-wrap">
-                        <button onclick="openImportModal()" class="btn-primary import-button-group">
-                            📁 Import Downloads Folder
-                        </button>
-                        <button onclick="importFromOrganizeDir()" class="btn-primary import-button-group">
-                            📁 Import Data Folder
-                        </button>
-                    </div>
-                    <div class="library-controls flex gap-15">
-                        <div class="sort-buttons">
-                            <button class="sort-btn active" data-lib-sort="title" onclick="setLibrarySortField('title')">Title</button>
-                            <button class="sort-btn" data-lib-sort="publisher" onclick="setLibrarySortField('publisher')">Publisher</button>
-                            <button class="sort-btn" data-lib-sort="issue_date" onclick="setLibrarySortField('issue_date')">Issue Date</button>
-                        </div>
-                        <button id="library-sort-toggle" class="sort-toggle-btn" onclick="toggleLibrarySortOrder()" title="Toggle ascending/descending">
-                            ↑
-                        </button>
-                    </div>
-                </div>
-                <div id="import-status" class="hidden import-status bg-success"></div>
-                <div id="periodicals-grid" class="periodical-grid"></div>
+          </div>
+          <div class="header-content">
+            <div class="coin-container">
+              <span class="coin-emoji">🪙</span>
             </div>
+            <h1>Curator</h1>
+            <p>Search, download, organize, and read your periodicals</p>
+          </div>
+          <button class="logout-btn" onclick="logout()">🚪 Logout</button>
         </div>
+      </header>
 
-        <!-- Periodical Tracking Tab -->
-        <div id="tracking-tab" class="tab">
-            <div class="tracking-container">
-                <div class="tracked-periodicals">
-                    <div class="tracked-header">
-                        <h2>Tracked Periodicals</h2>
-                        <button onclick="openTrackNewPeriodicalModal()" class="btn-primary">📌 Track New Periodical</button>
-                        <div class="sort-controls">
-                            <div class="sort-buttons">
-                                <button class="sort-btn active" data-sort="title" onclick="setSortField('title')">Title</button>
-                                <button class="sort-btn" data-sort="publisher" onclick="setSortField('publisher')">Publisher</button>
-                                <button class="sort-btn" data-sort="tracking_mode" onclick="setSortField('tracking_mode')">Tracking</button>
-                            </div>
-                            <button id="sort-toggle" class="sort-toggle-btn" onclick="toggleSortOrder()" title="Toggle ascending/descending">
-                                ↑
-                            </button>
-                        </div>
-                    </div>
-                    <div id="tracked-list"></div>
-                </div>
+      <nav>
+        <button class="nav-btn" onclick="showTab('library', event)"><span class="nav-icon">📚</span><span class="nav-text">Library</span></button>
+        <button class="nav-btn" onclick="showTab('tracking', event)"><span class="nav-icon">📌</span><span class="nav-text">Track</span></button>
+        <button class="nav-btn" onclick="showTab('tasks', event)"><span class="nav-icon">⚙️</span><span class="nav-text">Tasks</span></button>
+        <button class="nav-btn" onclick="showTab('queue', event)"><span class="nav-icon">📥</span><span class="nav-text">Queue</span></button>
+        <button class="nav-btn" onclick="showTab('settings', event)"><span class="nav-icon">🔧</span><span class="nav-text">Settings</span></button>
+      </nav>
+
+      <!-- Library Tab -->
+      <div id="library-tab" class="tab">
+        <div class="library-container">
+          <!-- Header with Sort Controls -->
+          <div class="library-header-row">
+            <h2 style="margin: 0">📚 Library</h2>
+
+            <!-- Sort Controls -->
+            <div class="sort-controls">
+              <label
+                for="library-sort-select"
+                style="color: var(--text-secondary); font-size: 0.9em; font-weight: 500"
+                >Sort by:</label
+              >
+              <select
+                id="library-sort-select"
+                onchange="setLibrarySortField(this.value)"
+                style="
+                  padding: 8px 12px;
+                  border: 1px solid var(--border-color);
+                  border-radius: 6px;
+                  background: var(--surface);
+                  color: var(--text-primary);
+                  font-size: 14px;
+                  cursor: pointer;
+                  -webkit-appearance: none;
+                  -moz-appearance: none;
+                  appearance: none;
+                  background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23f0f0f0%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3e%3cpolyline points=%226 9 12 15 18 9%22%3e%3c/polyline%3e%3c/svg%3e');
+                  background-repeat: no-repeat;
+                  background-position: right 10px center;
+                  background-size: 16px;
+                  padding-right: 35px;
+                "
+              >
+                <option value="title">Title</option>
+                <option value="category">Category</option>
+                <option value="issue_date">Issue Date</option>
+                <option value="created_at">Added Date</option>
+                <option value="issue_count">Number of Issues</option>
+              </select>
+              <button
+                id="library-sort-toggle"
+                class="sort-toggle-btn"
+                onclick="toggleLibrarySortOrder()"
+                title="Toggle ascending/descending"
+              >
+                ↑
+              </button>
             </div>
-        </div>
+          </div>
 
-        <!-- Tasks Tab -->
-        <div id="tasks-tab" class="tab">
-            <div class="tasks-container">
-                <!-- Scheduled Tasks Section -->
-                <div class="scheduled-tasks-section mb-40">
-                    <h2>⚙️ Scheduled Tasks</h2>
-                    <p>View automated tasks and their last execution times. You can manually trigger tasks as needed.</p>
-                    <div id="tasks-status" class="hidden"></div>
-                    <div id="scheduled-tasks-list" class="grid gap-15 mt-20">
-                        <!-- Will be populated by JavaScript -->
-                    </div>
-                </div>
-
-                <!-- Download Queue Section -->
-                <div class="download-queue-section">
-                    <h2>⬇️ Download Queue</h2>
-                <p>Monitor and manage your periodical downloads. See what's downloading, pending, completed, or failed.</p>
-                <div id="downloads-status" class="hidden"></div>
-
-                <div class="queue-controls my-30 flex gap-15 flex-wrap items-center justify-between">
-                    <div class="flex gap-10">
-                        <button onclick="loadDownloadQueue()" class="btn-secondary">🔄 Refresh</button>
-                        <button onclick="openCleanupModal()" class="btn-secondary">🧹 Cleanup Stuck Items</button>
-                    </div>
-                    <div class="sort-buttons flex gap-5">
-                        <button class="sort-btn active" data-queue-filter="" onclick="filterQueue('')">All</button>
-                        <button class="sort-btn" data-queue-filter="pending" onclick="filterQueue('pending')">Pending</button>
-                        <button class="sort-btn" data-queue-filter="downloading" onclick="filterQueue('downloading')">Downloading</button>
-                        <button class="sort-btn" data-queue-filter="completed" onclick="filterQueue('completed')">Completed</button>
-                        <button class="sort-btn" data-queue-filter="failed" onclick="filterQueue('failed')">Failed</button>
-                        <button class="sort-btn" data-queue-filter="skipped" onclick="filterQueue('skipped')">Skipped</button>
-                    </div>
-                </div>
-
-                <div class="queue-stats flex gap-20 mb-30 p-15 bg-surface-variant rounded-lg flex-wrap" id="queue-stats">
-                    <!-- Will be populated by JavaScript -->
-                </div>
-
-                <div id="queue-empty" class="hidden queue-empty-state">
-                    <p>No downloads in queue</p>
-                    <p class="text-base mt-10">💡 Tip: Use "Track Periodicals" tab → Find Issues → Download button to submit downloads for tracking</p>
-                </div>
-
-                <div id="queue-table-container" class="hidden">
-                    <table class="queue-table w-full border-collapse mt-20">
-                        <thead>
-                            <tr class="table-header-row">
-                                <th class="table-cell-left">Issue</th>
-                                <th class="table-cell-left">Magazine</th>
-                                <th class="table-cell-center">Status</th>
-                                <th class="table-cell-left">Submitted</th>
-                                <th class="table-cell-center">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="queue-body">
-                            <!-- Will be populated by JavaScript -->
-                        </tbody>
-                    </table>
-                </div>
-                </div>
+          <!-- Search and Filter Bar -->
+          <div class="library-search-row mb-20">
+            <div class="search-input-wrapper" style="flex: 1; max-width: 500px">
+              <input
+                type="text"
+                id="library-search-input"
+                name="library-search"
+                placeholder="🔍 Search by title..."
+                oninput="onLibrarySearchInput(this.value)"
+                autocomplete="off"
+                style="
+                  width: 100%;
+                  padding: 10px 14px;
+                  border: 1px solid var(--border-color);
+                  border-radius: 6px;
+                  background: var(--surface);
+                  color: var(--text-primary);
+                  font-size: 14px;
+                "
+              />
             </div>
-        </div>
 
-        <!-- Settings Tab -->
-        <div id="settings-tab" class="tab">
-            <div class="settings-container">
-                <div class="flex justify-between items-center mb-20">
-                    <h2>Configuration Settings</h2>
-                    <button onclick="restartApplication()" class="btn-danger">🔄 Restart Application</button>
-                </div>
+            <!-- Filter Controls -->
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap">
+              <!-- Category Filter -->
+              <label
+                for="library-category-filter"
+                style="color: var(--text-secondary); font-size: 0.9em; font-weight: 500"
+                >Category:</label
+              >
+              <select
+                id="library-category-filter"
+                onchange="setLibraryFilter('category', this.value)"
+                style="
+                  padding: 8px 12px;
+                  border: 1px solid var(--border-color);
+                  border-radius: 6px;
+                  background: var(--surface);
+                  color: var(--text-primary);
+                  font-size: 14px;
+                  cursor: pointer;
+                  -webkit-appearance: none;
+                  -moz-appearance: none;
+                  appearance: none;
+                  background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23f0f0f0%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3e%3cpolyline points=%226 9 12 15 18 9%22%3e%3c/polyline%3e%3c/svg%3e');
+                  background-repeat: no-repeat;
+                  background-position: right 10px center;
+                  background-size: 16px;
+                  padding-right: 35px;
+                "
+              >
+                <option value="all">All</option>
+                <!-- Categories loaded dynamically from API -->
+              </select>
 
-                <!-- Settings Navigation Shortcuts -->
-                <div class="settings-nav mb-30">
-                    <button class="settings-nav-btn" onclick="scrollToSection('search-providers-section')">🔍 Search Providers</button>
-                    <button class="settings-nav-btn" onclick="scrollToSection('download-client-section')">⬇️ Download Client</button>
-                    <button class="settings-nav-btn" onclick="scrollToSection('storage-section')">💾 Storage</button>
-                    <button class="settings-nav-btn" onclick="scrollToSection('matching-section')">🎯 Matching</button>
-                    <button class="settings-nav-btn" onclick="scrollToSection('logging-section')">📝 Logging</button>
-                    <button class="settings-nav-btn" onclick="scrollToSection('theme-section')">🎨 Theme</button>
-                    <button class="settings-nav-btn" onclick="scrollToSection('import-section')">📁 Import</button>
-                    <button class="settings-nav-btn" onclick="scrollToSection('user-account-section')">👤 Account</button>
-                </div>
+              <!-- Language Filter -->
+              <label
+                for="library-language-filter"
+                style="color: var(--text-secondary); font-size: 0.9em; font-weight: 500"
+                >Language:</label
+              >
+              <select
+                id="library-language-filter"
+                onchange="setLibraryFilter('language', this.value)"
+                style="
+                  padding: 8px 12px;
+                  border: 1px solid var(--border-color);
+                  border-radius: 6px;
+                  background: var(--surface);
+                  color: var(--text-primary);
+                  font-size: 14px;
+                  cursor: pointer;
+                  -webkit-appearance: none;
+                  -moz-appearance: none;
+                  appearance: none;
+                  background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23f0f0f0%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3e%3cpolyline points=%226 9 12 15 18 9%22%3e%3c/polyline%3e%3c/svg%3e');
+                  background-repeat: no-repeat;
+                  background-position: right 10px center;
+                  background-size: 16px;
+                  padding-right: 35px;
+                "
+              >
+                <option value="all">All</option>
+                <!-- Languages loaded dynamically -->
+              </select>
 
-                <div id="settings-status" class="hidden"></div>
-
-                <!-- Search Providers -->
-                <div id="search-providers-section" class="settings-section">
-                    <h3>Search Providers</h3>
-                    <p class="text-base text-muted mb-15">For finding and downloading periodical issues (Newsnab, RSS, etc.)</p>
-                    <div id="search-providers-list"></div>
-                    <button onclick="addSearchProvider()" class="save-btn">+ Add Search Provider</button>
-                    <div id="search-providers-message" class="hidden"></div>
-                </div>
-
-                <!-- Download Client Settings -->
-                <div id="download-client-section" class="settings-section">
-                    <h3>Download Client</h3>
-                    <div class="settings-field">
-                        <label for="download-client-type">Type:</label>
-                        <select id="download-client-type">
-                            <option value="sabnzbd">SABnzbd</option>
-                            <option value="nzbget">NZBGet</option>
-                        </select>
-                    </div>
-                    <div class="settings-field">
-                        <label for="download-client-name">Name:</label>
-                        <input type="text" id="download-client-name" placeholder="e.g., SABnzbd">
-                    </div>
-                    <div class="settings-field">
-                        <label for="download-client-url">API URL:</label>
-                        <input type="text" id="download-client-url" placeholder="http://192.168.1.112:9080">
-                    </div>
-                    <div class="settings-field">
-                        <label for="download-client-apikey">API Key:</label>
-                        <input type="password" id="download-client-apikey" placeholder="Enter your API key">
-                    </div>
-                    <button onclick="saveDownloadClientSettings()" class="save-btn">Save Download Client</button>
-                    <div id="download-client-message" class="hidden"></div>
-                </div>
-
-                <!-- Storage Settings -->
-                <div id="storage-section" class="settings-section">
-                    <h3>Storage Settings</h3>
-                    <div class="settings-field">
-                        <label for="storage-db-path">Database Path:</label>
-                        <input type="text" id="storage-db-path" placeholder="./data/magazines.db">
-                    </div>
-                    <div class="settings-field">
-                        <label for="storage-download-dir">Download Directory:</label>
-                        <input type="text" id="storage-download-dir" placeholder="./downloads">
-                    </div>
-                    <div class="settings-field">
-                        <label for="storage-organize-dir">Organize Directory:</label>
-                        <input type="text" id="storage-organize-dir" placeholder="./periodicals">
-                    </div>
-                    <div class="settings-field">
-                        <label for="storage-cache-dir">Cache Directory:</label>
-                        <input type="text" id="storage-cache-dir" placeholder="./cache">
-                    </div>
-                    <button onclick="saveStorageSettings()" class="save-btn">Save Storage Settings</button>
-                    <div id="storage-message" class="hidden"></div>
-                </div>
-
-                <!-- Matching Settings -->
-                <div id="matching-section" class="settings-section">
-                    <h3>Matching Settings</h3>
-                    <div class="settings-field">
-                        <label for="matching-fuzzy-threshold">Fuzzy Match Threshold (%):</label>
-                        <input type="number" id="matching-fuzzy-threshold" placeholder="80" min="0" max="100">
-                    </div>
-                    <button onclick="saveMatchingSettings()" class="save-btn">Save Matching Settings</button>
-                    <div id="matching-message" class="hidden"></div>
-                </div>
-
-                <!-- Logging Settings -->
-                <div id="logging-section" class="settings-section">
-                    <h3>Logging Settings</h3>
-                    <div class="settings-field">
-                        <label for="logging-level">Log Level:</label>
-                        <select id="logging-level">
-                            <option value="DEBUG">DEBUG</option>
-                            <option value="INFO">INFO</option>
-                            <option value="WARNING">WARNING</option>
-                            <option value="ERROR">ERROR</option>
-                        </select>
-                    </div>
-                    <div class="settings-field">
-                        <label for="logging-file">Log File:</label>
-                        <input type="text" id="logging-file" placeholder="./logs/periodical_manager.log">
-                    </div>
-                    <button onclick="saveLoggingSettings()" class="save-btn">Save Logging Settings</button>
-                    <div id="logging-message" class="hidden"></div>
-                </div>
-
-                <!-- Theme Settings -->
-                <div id="theme-section" class="settings-section">
-                    <h3>Theme Settings</h3>
-                    <div class="settings-field">
-                        <label for="theme-mode">Color Mode:</label>
-                        <select id="theme-mode">
-                            <option value="light">Light</option>
-                            <option value="dark">Dark</option>
-                        </select>
-                    </div>
-                    <button onclick="saveThemeSettings()" class="save-btn">Save Theme Settings</button>
-                    <div id="theme-message" class="hidden"></div>
-                </div>
-
-                <!-- Import & Organization Settings -->
-                <div id="import-section" class="settings-section">
-                    <h3>Import & Organization</h3>
-                    <div class="settings-field">
-                        <label for="import-organize-pattern">File Organization Pattern:</label>
-                        <input type="text" id="import-organize-pattern" placeholder="data/{category}/{title}/{year}/" class="w-full mt-8">
-                        <p class="text-sm text-hint mt-8">Available tags: {category}, {title}, {year}, {month}, {day}. Leave empty to disable organization.</p>
-                    </div>
-                    <p class="text-base text-muted mt-10">Nested folder scanning in Downloads is always enabled.</p>
-                    <button onclick="saveImportSettings()" class="save-btn">Save Import Settings</button>
-                    <div id="import-message" class="hidden"></div>
-                </div>
-
-                <!-- User Account Settings -->
-                <div id="user-account-section" class="settings-section">
-                    <h3>User Account</h3>
-                    <p class="text-base text-muted mb-15">Update your login credentials</p>
-                    <div class="settings-field">
-                        <label for="account-username">Username:</label>
-                        <input type="text" id="account-username" placeholder="Loading...">
-                    </div>
-                    <div class="settings-field">
-                        <label for="account-current-password">Current Password:</label>
-                        <input type="password" id="account-current-password" placeholder="Enter current password to make changes">
-                    </div>
-                    <div class="settings-field">
-                        <label for="account-new-password">New Password:</label>
-                        <input type="password" id="account-new-password" placeholder="Leave blank to keep current password">
-                    </div>
-                    <div class="settings-field">
-                        <label for="account-confirm-password">Confirm New Password:</label>
-                        <input type="password" id="account-confirm-password" placeholder="Confirm new password">
-                    </div>
-                    <button onclick="saveAccountSettings()" class="save-btn">Save Account Settings</button>
-                </div>
+              <!-- Clear Filters Button -->
+              <button
+                onclick="clearLibraryFilters()"
+                class="btn-secondary clear-filters-btn"
+                style="padding: 8px 14px; font-size: 13px"
+                title="Clear all filters and search"
+              >
+                <span class="clear-icon">✕</span><span class="clear-text"> Clear</span>
+              </button>
             </div>
+          </div>
+
+          <!-- Import Buttons -->
+          <div class="library-controls-row mb-40">
+            <div style="display: flex; gap: 10px; flex-wrap: wrap">
+              <button onclick="checkAndImportDownloads()" class="btn-primary import-button-group">
+                📁 Import Downloads Folder
+              </button>
+              <button onclick="importFromLibraryDir()" class="btn-primary import-button-group">
+                📁 Import Library Folder
+              </button>
+            </div>
+          </div>
+
+          <div id="import-status" class="hidden import-status bg-success"></div>
+          <div id="periodicals-grid" class="periodical-grid"></div>
         </div>
+      </div>
+
+      <!-- Periodical Tracking Tab -->
+      <div id="tracking-tab" class="tab">
+        <div class="tracking-container">
+          <div class="tracked-periodicals">
+            <!-- Header with Sort Controls -->
+            <div class="tracking-header-row">
+              <h2 style="margin: 0">📌 Track Periodicals</h2>
+
+              <!-- Sort Controls -->
+              <div class="sort-controls">
+                <label
+                  for="tracking-sort-select"
+                  style="color: var(--text-secondary); font-size: 0.9em; font-weight: 500"
+                  >Sort by:</label
+                >
+                <select
+                  id="tracking-sort-select"
+                  onchange="setTrackingSortField(this.value)"
+                  style="
+                    padding: 8px 12px;
+                    border: 1px solid var(--border-color);
+                    border-radius: 6px;
+                    background: var(--surface);
+                    color: var(--text-primary);
+                    font-size: 14px;
+                    cursor: pointer;
+                    -webkit-appearance: none;
+                    -moz-appearance: none;
+                    appearance: none;
+                    background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23f0f0f0%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3e%3cpolyline points=%226 9 12 15 18 9%22%3e%3c/polyline%3e%3c/svg%3e');
+                    background-repeat: no-repeat;
+                    background-position: right 10px center;
+                    background-size: 16px;
+                    padding-right: 35px;
+                  "
+                >
+                  <option value="title">Title</option>
+                  <option value="category">Category</option>
+                  <option value="created_at">Added Date</option>
+                  <option value="tracking_mode">Tracking Mode</option>
+                  <option value="language">Language</option>
+                </select>
+                <button
+                  id="tracking-sort-toggle"
+                  class="sort-toggle-btn"
+                  onclick="toggleTrackingSortOrder()"
+                  title="Toggle ascending/descending"
+                >
+                  ↑
+                </button>
+              </div>
+            </div>
+
+            <!-- Search and Filter Bar -->
+            <div class="tracking-search-row mb-20">
+              <div class="search-input-wrapper" style="flex: 1; max-width: 500px">
+                <input
+                  type="text"
+                  id="tracking-search-input"
+                  name="tracking-search"
+                  placeholder="🔍 Search by title..."
+                  oninput="onTrackingSearchInput(this.value)"
+                  autocomplete="off"
+                  style="
+                    width: 100%;
+                    padding: 10px 14px;
+                    border: 1px solid var(--border-color);
+                    border-radius: 6px;
+                    background: var(--surface);
+                    color: var(--text-primary);
+                    font-size: 14px;
+                  "
+                />
+              </div>
+
+              <!-- Filter Controls -->
+              <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap">
+                <!-- Category Filter -->
+                <label
+                  for="tracking-category-filter"
+                  style="color: var(--text-secondary); font-size: 0.9em; font-weight: 500"
+                  >Category:</label
+                >
+                <select
+                  id="tracking-category-filter"
+                  onchange="setTrackingFilter('category', this.value)"
+                  style="
+                    padding: 8px 12px;
+                    border: 1px solid var(--border-color);
+                    border-radius: 6px;
+                    background: var(--surface);
+                    color: var(--text-primary);
+                    font-size: 14px;
+                    cursor: pointer;
+                    -webkit-appearance: none;
+                    -moz-appearance: none;
+                    appearance: none;
+                    background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23f0f0f0%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3e%3cpolyline points=%226 9 12 15 18 9%22%3e%3c/polyline%3e%3c/svg%3e');
+                    background-repeat: no-repeat;
+                    background-position: right 10px center;
+                    background-size: 16px;
+                    padding-right: 35px;
+                  "
+                >
+                  <option value="all">All</option>
+                  <!-- Categories loaded dynamically from API -->
+                </select>
+
+                <!-- Language Filter -->
+                <label
+                  for="tracking-language-filter"
+                  style="color: var(--text-secondary); font-size: 0.9em; font-weight: 500"
+                  >Language:</label
+                >
+                <select
+                  id="tracking-language-filter"
+                  onchange="setTrackingFilter('language', this.value)"
+                  style="
+                    padding: 8px 12px;
+                    border: 1px solid var(--border-color);
+                    border-radius: 6px;
+                    background: var(--surface);
+                    color: var(--text-primary);
+                    font-size: 14px;
+                    cursor: pointer;
+                    -webkit-appearance: none;
+                    -moz-appearance: none;
+                    appearance: none;
+                    background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23f0f0f0%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3e%3cpolyline points=%226 9 12 15 18 9%22%3e%3c/polyline%3e%3c/svg%3e');
+                    background-repeat: no-repeat;
+                    background-position: right 10px center;
+                    background-size: 16px;
+                    padding-right: 35px;
+                  "
+                >
+                  <option value="all">All</option>
+                  <!-- Languages loaded dynamically -->
+                </select>
+
+                <!-- Clear Filters Button -->
+                <button
+                  onclick="clearTrackingFilters()"
+                  class="btn-secondary clear-filters-btn"
+                  style="padding: 8px 14px; font-size: 13px"
+                  title="Clear all filters and search"
+                >
+                  <span class="clear-icon">✕</span><span class="clear-text"> Clear</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="tracking-controls-row mb-40">
+              <div style="display: flex; gap: 10px; flex-wrap: wrap">
+                <button onclick="openTrackNewPeriodicalModal()" class="btn-primary">
+                  📌 Track New Periodical
+                </button>
+                <button onclick="openMergeModal()" class="btn-primary">
+                  🔀 Merge Tracking
+                </button>
+              </div>
+            </div>
+
+            <div id="tracking-status" class="hidden" style="margin-bottom: 20px"></div>
+            <div id="tracked-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tasks Tab -->
+      <div id="tasks-tab" class="tab">
+        <div class="tasks-container">
+          <!-- Scheduled Tasks Section -->
+          <div class="scheduled-tasks-section mb-40">
+            <h2>⚙️ Scheduled Tasks</h2>
+            <p>
+              View automated tasks and their last execution times. You can manually trigger tasks as
+              needed.
+            </p>
+            <div id="tasks-status" class="hidden"></div>
+            <div id="scheduled-tasks-list" class="grid gap-15 mt-20">
+              <!-- Will be populated by JavaScript -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Queue Tab -->
+      <div id="queue-tab" class="tab">
+        <div class="tasks-container">
+          <!-- Queue Switcher Buttons -->
+          <div class="queue-switcher">
+            <button id="switch-download-queue" class="queue-switch-btn active" data-queue="download">
+              📥 Downloads <span id="download-queue-badge" class="queue-badge">0</span>
+            </button>
+            <button id="switch-ocr-queue" class="queue-switch-btn" data-queue="ocr">
+              🔍 OCR Processing <span id="ocr-queue-badge" class="queue-badge">0</span>
+            </button>
+          </div>
+
+          <!-- Download Queue Section -->
+          <div id="download-queue-view" class="queue-view">
+            <!-- Header Row: Left (title, desc, buttons) + Right (sort/filter) -->
+            <div class="queue-header-row">
+              <div class="queue-header-left">
+                <h2 class="queue-title">📥 Download Queue</h2>
+                <p class="queue-description">
+                  Monitor and manage your periodical downloads. Auto-refreshes every 5 seconds.
+                </p>
+              </div>
+              <div class="queue-header-controls">
+                <div class="sort-controls">
+                  <label for="download-sort-select">Sort by:</label>
+                  <select id="download-sort-select" onchange="setDownloadSort(this.value)">
+                    <option value="title">Title</option>
+                    <option value="status">Status</option>
+                    <option value="priority">Priority</option>
+                    <option value="created_at">Date Added</option>
+                  </select>
+                  <button
+                    id="download-sort-toggle"
+                    class="sort-toggle-btn"
+                    onclick="toggleDownloadSortOrder()"
+                    title="Toggle sort order"
+                  >↑</button>
+                </div>
+                <div class="filter-row">
+                  <label for="download-status-filter">Status:</label>
+                  <select id="download-status-filter" onchange="setDownloadFilter(this.value)">
+                    <option value="all">All</option>
+                    <option value="queued">Queued</option>
+                    <option value="pending">Pending</option>
+                    <option value="downloading">Active</option>
+                    <option value="completed">Completed</option>
+                    <option value="failed">Failed</option>
+                    <option value="skipped">Skipped</option>
+                  </select>
+                  <button
+                    class="btn-danger btn-sm"
+                    onclick="window.downloads.clearByStatus(document.getElementById('download-status-filter').value)"
+                    title="Clear downloads with selected status"
+                    style="margin-left: 5px;"
+                  >🗑️</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Old Filter Buttons (hidden, kept for backward compatibility) -->
+            <div style="display: none">
+              <!-- Filter Buttons -->
+              <div style="display: flex; gap: 10px; flex-wrap: wrap">
+                <button
+                  id="download-filter-all"
+                  class="filter-btn active"
+                  onclick="window.downloads.setFilter('all')"
+                  title="Show all downloads regardless of status"
+                >
+                  All
+                </button>
+                <button
+                  id="download-filter-queued"
+                  class="filter-btn"
+                  onclick="window.downloads.setFilter('queued')"
+                  title="Show downloads waiting for an available slot (not yet sent to client)"
+                >
+                  Queued
+                </button>
+                <button
+                  id="download-filter-pending"
+                  class="filter-btn"
+                  onclick="window.downloads.setFilter('pending')"
+                  title="Show downloads sent to client but waiting to start"
+                >
+                  Pending
+                </button>
+                <button
+                  id="download-filter-downloading"
+                  class="filter-btn"
+                  onclick="window.downloads.setFilter('downloading')"
+                  title="Show downloads actively in progress"
+                >
+                  Downloading
+                </button>
+                <button
+                  id="download-filter-failed"
+                  class="filter-btn"
+                  onclick="window.downloads.setFilter('failed')"
+                  title="Show downloads that encountered errors"
+                >
+                  Failed
+                </button>
+                <button
+                  id="download-filter-completed"
+                  class="filter-btn"
+                  onclick="window.downloads.setFilter('completed')"
+                  title="Show successfully completed downloads"
+                >
+                  Completed
+                </button>
+              </div>
+            </div>
+
+            <div id="downloads-status" class="hidden"></div>
+
+            <div id="queue-stats" style="margin-bottom: 30px">
+              <!-- Will be populated by JavaScript -->
+            </div>
+
+            <div
+              id="queue-empty"
+              class="hidden"
+              style="
+                text-align: center;
+                padding: 60px 20px;
+                background: var(--surface-variant);
+                border-radius: 8px;
+                border: 1px solid var(--border);
+              "
+            >
+              <div style="font-size: 4em; margin-bottom: 15px; opacity: 0.3">📭</div>
+              <p style="font-size: 1.2em; color: var(--text-primary); margin-bottom: 10px">
+                No downloads in queue
+              </p>
+              <p style="color: var(--text-secondary); font-size: 0.95em">
+                💡 Tip: Go to <strong>Track Periodicals</strong> → Find Issues → Click Download to
+                submit downloads
+              </p>
+            </div>
+
+            <div
+              id="queue-table-container"
+              class="hidden"
+              style="
+                background: var(--surface-variant);
+                border-radius: 8px;
+                border: 1px solid var(--border);
+                padding: 20px;
+              "
+            >
+              <table class="queue-table w-full border-collapse">
+                <thead>
+                  <tr style="border-bottom: 2px solid var(--border)">
+                    <th
+                      style="
+                        text-align: left;
+                        padding: 12px;
+                        color: var(--text-secondary);
+                        font-weight: 500;
+                        font-size: 0.9em;
+                      "
+                    >
+                      Periodical
+                    </th>
+                    <th
+                      style="
+                        text-align: right;
+                        padding: 12px;
+                        color: var(--text-secondary);
+                        font-weight: 500;
+                        font-size: 0.9em;
+                      "
+                    >
+                      Summary
+                    </th>
+                  </tr>
+                </thead>
+                <tbody id="queue-body">
+                  <!-- Will be populated by JavaScript with grouped periodical rows -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- OCR Queue Section -->
+          <div id="ocr-queue-view" class="queue-view hidden">
+            <!-- Header Row: Left (title, desc, buttons) + Right (sort/filter) -->
+            <div class="queue-header-row">
+              <div class="queue-header-left">
+                <h2 class="queue-title">🔍 OCR Processing Queue</h2>
+                <p class="queue-description">
+                  Monitor OCR text extraction jobs. Auto-refreshes every 5 seconds.
+                </p>
+              </div>
+              <div class="queue-header-controls">
+                <div class="sort-controls">
+                  <label for="ocr-sort-select">Sort by:</label>
+                  <select id="ocr-sort-select" onchange="setOCRSort(this.value)">
+                    <option value="title">Title</option>
+                    <option value="status">Status</option>
+                    <option value="priority">Priority</option>
+                    <option value="created_at">Date Added</option>
+                  </select>
+                  <button
+                    id="ocr-sort-toggle"
+                    class="sort-toggle-btn"
+                    onclick="toggleOCRSortOrder()"
+                    title="Toggle sort order"
+                  >↑</button>
+                </div>
+                <div class="filter-row">
+                  <label for="ocr-status-filter">Status:</label>
+                  <select id="ocr-status-filter" onchange="setOCRFilter(this.value)">
+                    <option value="all">All</option>
+                    <option value="pending">Pending</option>
+                    <option value="processing">Active</option>
+                    <option value="completed">Completed</option>
+                    <option value="failed">Failed</option>
+                  </select>
+                  <button
+                    class="btn-danger btn-sm"
+                    onclick="window.ocrQueue.clearByStatus(document.getElementById('ocr-status-filter').value)"
+                    title="Clear OCR jobs with selected status"
+                    style="margin-left: 5px;"
+                  >🗑️</button>
+                </div>
+              </div>
+            </div>
+
+            <div id="ocr-queue-stats" style="margin-bottom: 30px">
+              <!-- Will be populated by JavaScript -->
+            </div>
+
+            <div
+              id="ocr-queue-empty"
+              class="hidden"
+              style="
+                text-align: center;
+                padding: 60px 20px;
+                background: var(--surface-variant);
+                border-radius: 8px;
+                border: 1px solid var(--border);
+              "
+            >
+              <div style="font-size: 4em; margin-bottom: 15px; opacity: 0.3">📋</div>
+              <p style="font-size: 1.2em; color: var(--text-primary); margin-bottom: 10px">
+                No OCR jobs in queue
+              </p>
+              <p style="color: var(--text-secondary); font-size: 0.95em">
+                💡 Tip: OCR jobs are queued automatically when magazines are imported and processed
+                in the background
+              </p>
+            </div>
+
+            <div
+              id="ocr-queue-table-container"
+              class="hidden"
+              style="
+                background: var(--surface-variant);
+                border-radius: 8px;
+                border: 1px solid var(--border);
+                padding: 20px;
+              "
+            >
+              <table class="queue-table w-full border-collapse">
+                <thead>
+                  <tr style="border-bottom: 2px solid var(--border)">
+                    <th
+                      style="
+                        text-align: left;
+                        padding: 12px;
+                        color: var(--text-secondary);
+                        font-weight: 500;
+                        font-size: 0.9em;
+                      "
+                    >
+                      Periodical
+                    </th>
+                    <th
+                      style="
+                        text-align: right;
+                        padding: 12px;
+                        color: var(--text-secondary);
+                        font-weight: 500;
+                        font-size: 0.9em;
+                      "
+                    >
+                      Summary
+                    </th>
+                  </tr>
+                </thead>
+                <tbody id="ocr-queue-body">
+                  <!-- Will be populated by JavaScript -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Settings Tab -->
+      <div id="settings-tab" class="tab">
+        <div class="settings-container">
+          <div class="flex justify-between items-center mb-20">
+            <h2>⚙️ Configuration Settings</h2>
+            <button onclick="restartApplication()" class="btn-danger">
+              🔄 Restart Application
+            </button>
+          </div>
+
+          <!-- Settings Sub-Tab Navigation -->
+          <div class="settings-tabs-nav">
+            <button class="settings-tab-btn active" onclick="showSettingsTab('providers', event)">
+              <span class="nav-icon">🔍</span><span class="nav-text">Providers</span>
+            </button>
+            <button class="settings-tab-btn" onclick="showSettingsTab('storage', event)">
+              <span class="nav-icon">💾</span><span class="nav-text">Storage</span>
+            </button>
+            <button class="settings-tab-btn" onclick="showSettingsTab('matching', event)">
+              <span class="nav-icon">🎯</span><span class="nav-text">Matching</span>
+            </button>
+            <button class="settings-tab-btn" onclick="showSettingsTab('tasks', event)">
+              <span class="nav-icon">📦</span><span class="nav-text">Downloads</span>
+            </button>
+            <button class="settings-tab-btn" onclick="showSettingsTab('pdf-ocr', event)">
+              <span class="nav-icon">📝</span><span class="nav-text">PDF/OCR</span>
+            </button>
+            <button class="settings-tab-btn" onclick="showSettingsTab('appearance', event)">
+              <span class="nav-icon">🎨</span><span class="nav-text">Appearance</span>
+            </button>
+            <button class="settings-tab-btn" onclick="showSettingsTab('account', event)">
+              <span class="nav-icon">👤</span><span class="nav-text">Account</span>
+            </button>
+            <button class="settings-tab-btn" onclick="showSettingsTab('advanced', event)">
+              <span class="nav-icon">⚙️</span><span class="nav-text">Advanced</span>
+            </button>
+          </div>
+
+          <div id="settings-status" class="hidden"></div>
+
+          <!-- Providers Settings Tab -->
+          <div id="settings-providers-tab" class="settings-sub-tab active">
+            <!-- Search Providers -->
+            <div id="search-providers-section" class="settings-section">
+              <h3>Search Providers</h3>
+              <p class="text-base text-muted mb-15">
+                For finding and downloading periodical issues (Newsnab, RSS, etc.)
+              </p>
+              <div id="search-providers-list"></div>
+              <button onclick="addSearchProvider()" class="save-btn">+ Add Search Provider</button>
+              <div id="search-providers-message" class="hidden"></div>
+            </div>
+
+            <!-- Download Client Settings -->
+            <div id="download-client-section" class="settings-section">
+              <h3>Download Client</h3>
+              <div class="settings-field">
+                <label for="download-client-type">Type:</label>
+                <select id="download-client-type">
+                  <option value="sabnzbd">SABnzbd</option>
+                  <option value="nzbget">NZBGet</option>
+                </select>
+              </div>
+              <div class="settings-field">
+                <label for="download-client-name">Name:</label>
+                <input type="text" id="download-client-name" placeholder="e.g., SABnzbd" />
+              </div>
+              <div class="settings-field">
+                <label for="download-client-url">API URL:</label>
+                <input
+                  type="text"
+                  id="download-client-url"
+                  placeholder="http://192.168.1.112:9080"
+                />
+              </div>
+              <div class="settings-field">
+                <label for="download-client-apikey">API Key:</label>
+                <input
+                  type="password"
+                  id="download-client-apikey"
+                  placeholder="Enter your API key"
+                />
+              </div>
+              <div style="display: flex; gap: 10px">
+                <button onclick="testDownloadClientConnection()" class="save-btn btn-secondary">
+                  Test Connection
+                </button>
+                <button onclick="saveDownloadClientSettings()" class="save-btn">
+                  Save Download Client
+                </button>
+              </div>
+              <div id="download-client-message" class="hidden"></div>
+            </div>
+          </div>
+
+          <!-- Storage & Paths Settings Tab -->
+          <div id="settings-storage-tab" class="settings-sub-tab">
+            <!-- Storage Settings -->
+            <div id="storage-section" class="settings-section">
+              <h3>Storage Settings</h3>
+              <div class="settings-field">
+                <label for="storage-db-path">Database Path:</label>
+                <input type="text" id="storage-db-path" placeholder="./data/periodicals.db" />
+              </div>
+              <div class="settings-field">
+                <label for="storage-download-dir">Download Directory:</label>
+                <input type="text" id="storage-download-dir" placeholder="./downloads" />
+              </div>
+              <div class="settings-field">
+                <label for="storage-library-dir">Library Directory:</label>
+                <input type="text" id="storage-library-dir" placeholder="./periodicals" />
+              </div>
+              <div class="settings-field">
+                <label for="storage-cache-dir">Cache Directory:</label>
+                <input type="text" id="storage-cache-dir" placeholder="./cache" />
+              </div>
+              <button onclick="saveStorageSettings()" class="save-btn">
+                Save Storage Settings
+              </button>
+              <div id="storage-message" class="hidden"></div>
+            </div>
+
+            <!-- Import & Organization Settings -->
+            <div id="import-section" class="settings-section">
+              <h3>Import & Organization</h3>
+              <div class="settings-field">
+                <label for="import-organization-pattern-select">File Organization Pattern:</label>
+                <select
+                  id="import-organization-pattern-select"
+                  onchange="handlePatternSelectChange('import')"
+                  style="
+                    width: 100%;
+                    padding: 8px 12px;
+                    border: 1px solid var(--border);
+                    border-radius: 4px;
+                    background: var(--background);
+                    color: var(--text-primary);
+                    margin-top: 8px;
+                  "
+                >
+                  <option value="default">{category}/{title}/{year}/ - Year-based (default)</option>
+                  <option value="volume">{category}/{title}/Vol{volume}/ - Volume-based</option>
+                  <option value="flat">{category}/{title}/ - Flat structure</option>
+                  <option value="volume_year">
+                    {category}/{title}/Vol{volume}/{year}/ - Hybrid
+                  </option>
+                  <option value="issue">
+                    {category}/{title}/Issues {issue_range}/ - Issue-based
+                  </option>
+                  <option value="custom">Custom pattern...</option>
+                </select>
+                <input
+                  type="text"
+                  id="import-organization-pattern-custom"
+                  placeholder="{category}/{title}/{year}/"
+                  class="w-full mt-8 hidden"
+                  style="
+                    padding: 8px 12px;
+                    border: 1px solid var(--border);
+                    border-radius: 4px;
+                    background: var(--background);
+                    color: var(--text-primary);
+                  "
+                />
+                <p class="text-sm text-hint mt-8">
+                  Available tags: {category}, {title}, {year}, {month}, {day}, {volume}, {issue},
+                  {language}
+                </p>
+              </div>
+              <div class="settings-field">
+                <label>
+                  <input type="checkbox" id="import-enable-text-scan" />
+                  Enable Text Scanning (PDF/EPUB)
+                </label>
+                <p class="text-sm text-hint mt-8">
+                  Extract text directly from PDF/EPUB files during import (fast, synchronous).
+                </p>
+              </div>
+              <div class="settings-field">
+                <label>
+                  <input type="checkbox" id="import-enable-ocr" />
+                  Enable OCR Text Extraction
+                </label>
+                <p class="text-sm text-hint mt-8">
+                  Use OCR on cover images for text extraction (slower, runs in background queue).
+                </p>
+              </div>
+              <p class="text-base text-muted mt-10">
+                Nested folder scanning in Downloads is always enabled.
+              </p>
+              <button onclick="saveImportSettings()" class="save-btn">Save Import Settings</button>
+              <div id="import-message" class="hidden"></div>
+            </div>
+
+            <!-- File Maintenance Section -->
+            <div id="file-maintenance-section" class="settings-section">
+              <h3>🗂️ File Maintenance</h3>
+              <p class="text-base text-muted mb-15">
+                Tools for reorganizing and maintaining your library files.
+              </p>
+
+              <div
+                style="
+                  padding: 20px;
+                  background: var(--surface-variant);
+                  border-radius: 8px;
+                  border: 1px solid var(--border);
+                  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+                "
+              >
+                <h4 style="margin-top: 0; margin-bottom: 15px; color: var(--text-primary)">
+                  📁 Reorganize Library Files
+                </h4>
+                <p style="color: var(--text-secondary); margin-bottom: 20px">
+                  Clean up messy folder structures and reorganize files to match your current
+                  organization pattern. This will move files to proper locations and remove old
+                  directories.
+                </p>
+
+                <div style="display: grid; gap: 15px; margin-bottom: 20px">
+                  <div class="settings-field">
+                    <label
+                      for="reorganize-category"
+                      style="display: block; margin-bottom: 8px; font-weight: 500"
+                      >Category:</label
+                    >
+                    <select
+                      id="reorganize-category"
+                      style="
+                        width: 100%;
+                        padding: 8px 12px;
+                        border: 1px solid var(--border);
+                        border-radius: 4px;
+                        background: var(--background);
+                        color: var(--text-primary);
+                      "
+                    >
+                      <!-- Categories populated dynamically from API -->
+                    </select>
+                  </div>
+
+                  <div class="settings-field">
+                    <label
+                      for="reorganization-pattern-select"
+                      style="display: block; margin-bottom: 8px; font-weight: 500"
+                      >Organization Pattern (optional):</label
+                    >
+                    <select
+                      id="reorganization-pattern-select"
+                      onchange="handlePatternSelectChange('reorganize')"
+                      style="
+                        width: 100%;
+                        padding: 8px 12px;
+                        border: 1px solid var(--border);
+                        border-radius: 4px;
+                        background: var(--background);
+                        color: var(--text-primary);
+                      "
+                    >
+                      <option value="">Use config default</option>
+                      <option value="default">
+                        {category}/{title}/{year}/ - Year-based (default)
+                      </option>
+                      <option value="volume">{category}/{title}/Vol{volume}/ - Volume-based</option>
+                      <option value="flat">{category}/{title}/ - Flat structure</option>
+                      <option value="volume_year">
+                        {category}/{title}/Vol{volume}/{year}/ - Hybrid
+                      </option>
+                      <option value="issue">
+                        {category}/{title}/Issues {issue_range}/ - Issue-based
+                      </option>
+                      <option value="custom">Custom pattern...</option>
+                    </select>
+                    <input
+                      type="text"
+                      id="reorganization-pattern-custom"
+                      placeholder="{category}/{title}/{year}/"
+                      class="hidden"
+                      style="
+                        width: 100%;
+                        padding: 8px 12px;
+                        border: 1px solid var(--border);
+                        border-radius: 4px;
+                        background: var(--background);
+                        color: var(--text-primary);
+                        margin-top: 8px;
+                      "
+                    />
+                    <p class="text-sm text-hint mt-8">
+                      Available tags: {category}, {title}, {year}, {month}, {day}, {volume},
+                      {issue}, {language}
+                    </p>
+                  </div>
+                </div>
+
+                <div style="display: flex; gap: 10px; flex-wrap: wrap">
+                  <button onclick="runReorganizePreview()" class="btn-primary">
+                    🔍 Preview Changes
+                  </button>
+                  <button
+                    onclick="runReorganize()"
+                    class="btn-secondary"
+                    style="background: var(--status-warning); color: white"
+                  >
+                    ▶️ Reorganize Files
+                  </button>
+                </div>
+
+                <div id="reorganize-status" class="hidden" style="margin-top: 20px"></div>
+                <div id="reorganize-results" style="margin-top: 20px"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Matching & Metadata Settings Tab -->
+          <div id="settings-matching-tab" class="settings-sub-tab">
+            <!-- Matching Settings -->
+            <div id="matching-section" class="settings-section">
+              <h3>Fuzzy Matching Settings</h3>
+              <div class="settings-field">
+                <label for="matching-fuzzy-threshold">Fuzzy Match Threshold (%):</label>
+                <input
+                  type="number"
+                  id="matching-fuzzy-threshold"
+                  placeholder="80"
+                  min="0"
+                  max="100"
+                />
+                <p class="text-sm text-hint mt-8">
+                  Higher values = stricter matching. Used for duplicate detection and title
+                  matching.
+                </p>
+              </div>
+              <div class="settings-field">
+                <label for="matching-duplicate-threshold">Duplicate Date Threshold (days):</label>
+                <input
+                  type="number"
+                  id="matching-duplicate-threshold"
+                  placeholder="5"
+                  min="0"
+                  max="365"
+                />
+                <p class="text-sm text-hint mt-8">
+                  Publications with same title within this many days are considered duplicates.
+                </p>
+              </div>
+              <button onclick="saveMatchingSettings()" class="save-btn">
+                Save Matching Settings
+              </button>
+              <div id="matching-message" class="hidden"></div>
+            </div>
+
+            <!-- Metadata Aggregation Settings -->
+            <div class="settings-section">
+              <h3>Metadata Aggregation</h3>
+              <p class="text-base text-muted mb-15">
+                Control how metadata from different sources (OCR, text scan, filename) is combined.
+              </p>
+
+              <div class="settings-field">
+                <label>Source Priority Order:</label>
+                <p class="text-sm text-muted mb-10">Drag to reorder. First = highest priority.</p>
+                <div id="metadata-source-priority-list" class="sortable-list">
+                  <div class="sortable-item" draggable="true" data-value="ocr">
+                    <span class="drag-handle">⋮⋮</span>
+                    <span class="item-label">🔍 OCR (Optical Character Recognition)</span>
+                    <span class="priority-badge">Priority 1</span>
+                  </div>
+                  <div class="sortable-item" draggable="true" data-value="text_scan">
+                    <span class="drag-handle">⋮⋮</span>
+                    <span class="item-label">📄 Text Scan (Direct PDF/EPUB extraction)</span>
+                    <span class="priority-badge">Priority 2</span>
+                  </div>
+                  <div class="sortable-item" draggable="true" data-value="filename">
+                    <span class="drag-handle">⋮⋮</span>
+                    <span class="item-label">📝 Filename Parsing</span>
+                    <span class="priority-badge">Priority 3</span>
+                  </div>
+                </div>
+                <p class="text-sm text-hint mt-8">
+                  When multiple sources provide metadata, the system tries them in this order until
+                  one meets the confidence threshold.
+                </p>
+              </div>
+
+              <h4 style="margin: 20px 0 10px 0; font-size: 16px">Minimum Confidence Thresholds</h4>
+              <p class="text-sm text-muted mb-15">
+                For each metadata field (year, month, issue number, etc.), the system tries sources
+                in priority order. A source is only used if its confidence score meets or exceeds
+                its threshold.
+              </p>
+              <div
+                style="
+                  padding: 12px;
+                  background: var(--surface-variant);
+                  border-left: 3px solid var(--primary-color);
+                  border-radius: 4px;
+                  margin-bottom: 20px;
+                "
+              >
+                <p class="text-sm" style="margin-bottom: 8px">
+                  <strong>Example:</strong> For a file "Magazine - Jan 2024.pdf":
+                </p>
+                <ul class="text-sm text-muted" style="margin-left: 20px; line-height: 1.6">
+                  <li>
+                    <strong>OCR</strong> reads "2023" but only 65% confident → Below 70% threshold →
+                    Skip ❌
+                  </li>
+                  <li><strong>Text Scan</strong> not available (scanned images) → Skip ❌</li>
+                  <li>
+                    <strong>Filename</strong> says "2024" (100% confidence) → Above 0% threshold →
+                    Use ✅
+                  </li>
+                </ul>
+                <p class="text-sm text-hint" style="margin-top: 8px">
+                  Result: Year = 2024 (from filename, since OCR wasn't confident enough)
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="metadata-confidence-ocr">OCR Confidence (%):</label>
+                <input
+                  type="number"
+                  id="metadata-confidence-ocr"
+                  placeholder="70"
+                  min="0"
+                  max="100"
+                />
+                <p class="text-sm text-hint mt-8">
+                  How confident OCR must be before using its values (default: 70%). OCR has
+                  per-field confidence scores based on text recognition quality.
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="metadata-confidence-text-scan">Text Scan Confidence (%):</label>
+                <input
+                  type="number"
+                  id="metadata-confidence-text-scan"
+                  placeholder="50"
+                  min="0"
+                  max="100"
+                />
+                <p class="text-sm text-hint mt-8">
+                  Threshold for direct text extraction from native PDFs/EPUBs (default: 50%). Text
+                  scan is treated as 100% confident when available.
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="metadata-confidence-filename">Filename Confidence (%):</label>
+                <input
+                  type="number"
+                  id="metadata-confidence-filename"
+                  placeholder="0"
+                  min="0"
+                  max="100"
+                />
+                <p class="text-sm text-hint mt-8">
+                  Threshold for filename parsing (default: 0%, always accept as fallback). Filename
+                  parsing is treated as 100% confident.
+                </p>
+              </div>
+
+              <h4 style="margin: 20px 0 10px 0; font-size: 16px">Per-Field Confidence Overrides</h4>
+              <p class="text-sm text-muted mb-15">
+                Fine-tune OCR confidence for specific metadata fields.
+              </p>
+
+              <div class="settings-field">
+                <label for="metadata-field-year">Year OCR Confidence (%):</label>
+                <input type="number" id="metadata-field-year" placeholder="80" min="0" max="100" />
+                <p class="text-sm text-hint mt-8">
+                  Years are critical - higher confidence recommended (default: 80%).
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="metadata-field-month">Month OCR Confidence (%):</label>
+                <input type="number" id="metadata-field-month" placeholder="60" min="0" max="100" />
+                <p class="text-sm text-hint mt-8">Month names are easier to OCR (default: 60%).</p>
+              </div>
+
+              <div class="settings-field">
+                <label for="metadata-field-issue-number">Issue Number OCR Confidence (%):</label>
+                <input
+                  type="number"
+                  id="metadata-field-issue-number"
+                  placeholder="75"
+                  min="0"
+                  max="100"
+                />
+                <p class="text-sm text-hint mt-8">
+                  Issue numbers are moderately important (default: 75%).
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="metadata-field-volume">Volume OCR Confidence (%):</label>
+                <input
+                  type="number"
+                  id="metadata-field-volume"
+                  placeholder="75"
+                  min="0"
+                  max="100"
+                />
+                <p class="text-sm text-hint mt-8">
+                  Volume numbers are moderately important (default: 75%).
+                </p>
+              </div>
+
+              <button onclick="saveMetadataSettings()" class="save-btn">
+                Save Metadata Settings
+              </button>
+              <div id="metadata-message" class="hidden"></div>
+            </div>
+          </div>
+
+          <!-- Downloads & Tasks Settings Tab -->
+          <div id="settings-tasks-tab" class="settings-sub-tab">
+            <!-- Download Settings -->
+            <div class="settings-section">
+              <h3>Download Settings</h3>
+              <p class="text-base text-muted mb-15">
+                Configure download limits and concurrent downloads.
+              </p>
+
+              <div class="settings-field">
+                <label for="downloads-max-retries">Max Retry Attempts:</label>
+                <input type="number" id="downloads-max-retries" placeholder="1" min="0" max="10" />
+                <p class="text-sm text-hint mt-8">
+                  Number of times to retry a failed download before marking it as failed (default:
+                  1).
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="downloads-max-concurrent">Max Concurrent Downloads:</label>
+                <input
+                  type="number"
+                  id="downloads-max-concurrent"
+                  placeholder="10"
+                  min="1"
+                  max="50"
+                />
+                <p class="text-sm text-hint mt-8">
+                  Maximum number of downloads allowed system-wide across all tracked periodicals
+                  (default: 10).
+                </p>
+              </div>
+
+              <button onclick="saveDownloadsSettings()" class="save-btn">
+                Save Download Settings
+              </button>
+              <div id="downloads-message" class="hidden"></div>
+            </div>
+
+            <!-- Task Intervals -->
+            <div class="settings-section">
+              <h3>Scheduled Task Intervals</h3>
+              <p class="text-base text-muted mb-15">
+                Control how often scheduled tasks run (in seconds). These intervals match the tasks
+                shown in the Tasks tab.
+              </p>
+
+              <div class="settings-field">
+                <label for="tasks-auto-download-interval">Auto-Download Interval (seconds):</label>
+                <input
+                  type="number"
+                  id="tasks-auto-download-interval"
+                  placeholder="1800"
+                  min="60"
+                  max="86400"
+                />
+                <p class="text-sm text-hint mt-8">
+                  How often to search for and download new tracked issues (default: 1800 = 30
+                  minutes).
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="tasks-download-monitor-interval">Auto-Import Interval (seconds):</label>
+                <input
+                  type="number"
+                  id="tasks-download-monitor-interval"
+                  placeholder="30"
+                  min="5"
+                  max="300"
+                />
+                <p class="text-sm text-hint mt-8">
+                  How often to check download status and import completed files (default: 30
+                  seconds).
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="tasks-cleanup-covers-interval"
+                  >Auto-Thumbnail Interval (seconds):</label
+                >
+                <input
+                  type="number"
+                  id="tasks-cleanup-covers-interval"
+                  placeholder="86400"
+                  min="3600"
+                  max="604800"
+                />
+                <p class="text-sm text-hint mt-8">
+                  How often to remove orphaned covers and generate missing ones (default: 86400 = 24
+                  hours).
+                </p>
+              </div>
+
+              <button onclick="saveTasksSettings()" class="save-btn">Save Task Settings</button>
+              <div id="tasks-message" class="hidden"></div>
+            </div>
+
+            <!-- Discovery Settings -->
+            <div class="settings-section">
+              <h3>Issue Discovery Settings</h3>
+              <p class="text-base text-muted mb-15">
+                Configure adaptive search scheduling for tracked periodicals. Instead of searching
+                ALL tracked periodicals every run (which would overwhelm providers), the system
+                searches a small batch per run and adjusts intervals based on discovery success.
+              </p>
+
+              <div class="settings-field">
+                <label for="tasks-max-periodicals-per-search">Max Periodicals Per Search:</label>
+                <input
+                  type="number"
+                  id="tasks-max-periodicals-per-search"
+                  placeholder="10"
+                  min="1"
+                  max="50"
+                />
+                <p class="text-sm text-hint mt-8">
+                  How many periodicals to search per auto-download run (default: 10). This does NOT
+                  search all periodicals—it searches a small batch and adapts intervals based on
+                  success. Higher values = more provider load but faster discovery. Lower values =
+                  gentler on providers but slower discovery.
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="tasks-rapid-search-interval">Rapid Search Interval (hours):</label>
+                <input
+                  type="number"
+                  id="tasks-rapid-search-interval"
+                  placeholder="0.5"
+                  min="0.25"
+                  max="24"
+                  step="0.25"
+                />
+                <p class="text-sm text-hint mt-8">
+                  How often to search periodicals that are actively finding new issues (default: 0.5
+                  hours = 30 minutes).
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="tasks-normal-search-interval">Normal Search Interval (hours):</label>
+                <input
+                  type="number"
+                  id="tasks-normal-search-interval"
+                  placeholder="2"
+                  min="0.5"
+                  max="48"
+                  step="0.5"
+                />
+                <p class="text-sm text-hint mt-8">
+                  Default search frequency for periodicals with 1-2 consecutive empty searches
+                  (default: 2 hours).
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="tasks-slow-search-interval">Slow Search Interval (hours):</label>
+                <input
+                  type="number"
+                  id="tasks-slow-search-interval"
+                  placeholder="12"
+                  min="1"
+                  max="168"
+                />
+                <p class="text-sm text-hint mt-8">
+                  How often to search periodicals with 3-5 consecutive empty searches (default: 12
+                  hours = twice daily).
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="tasks-very-slow-search-interval"
+                  >Very Slow Search Interval (hours):</label
+                >
+                <input
+                  type="number"
+                  id="tasks-very-slow-search-interval"
+                  placeholder="48"
+                  min="12"
+                  max="720"
+                />
+                <p class="text-sm text-hint mt-8">
+                  How often to search very quiet periodicals with 6+ consecutive empty searches
+                  (default: 48 hours = every 2 days).
+                </p>
+              </div>
+
+              <button onclick="saveDiscoverySettings()" class="save-btn">
+                Save Discovery Settings
+              </button>
+              <div id="discovery-message" class="hidden"></div>
+            </div>
+          </div>
+
+          <!-- PDF & OCR Settings Tab -->
+          <div id="settings-pdf-ocr-tab" class="settings-sub-tab">
+            <!-- PDF Settings -->
+            <div class="settings-section">
+              <h3>PDF Cover Extraction</h3>
+              <p class="text-base text-muted mb-15">
+                Configure DPI and quality for PDF cover extraction.
+              </p>
+
+              <div class="settings-field">
+                <label for="pdf-cover-dpi-low">Low DPI (thumbnails):</label>
+                <input type="number" id="pdf-cover-dpi-low" placeholder="60" min="30" max="150" />
+                <p class="text-sm text-hint mt-8">
+                  DPI for thumbnail/preview covers (lower = faster, smaller files).
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="pdf-cover-dpi-high">High DPI (quality):</label>
+                <input
+                  type="number"
+                  id="pdf-cover-dpi-high"
+                  placeholder="200"
+                  min="150"
+                  max="600"
+                />
+                <p class="text-sm text-hint mt-8">
+                  DPI for high-quality covers (higher = better quality, larger files).
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="pdf-cover-quality-low">Low JPEG Quality (%):</label>
+                <input
+                  type="number"
+                  id="pdf-cover-quality-low"
+                  placeholder="50"
+                  min="20"
+                  max="100"
+                />
+                <p class="text-sm text-hint mt-8">JPEG quality for thumbnail covers (1-100).</p>
+              </div>
+
+              <div class="settings-field">
+                <label for="pdf-cover-quality-high">High JPEG Quality (%):</label>
+                <input
+                  type="number"
+                  id="pdf-cover-quality-high"
+                  placeholder="85"
+                  min="50"
+                  max="100"
+                />
+                <p class="text-sm text-hint mt-8">JPEG quality for high-quality covers (1-100).</p>
+              </div>
+
+              <button onclick="savePDFSettings()" class="save-btn">Save PDF Settings</button>
+              <div id="pdf-message" class="hidden"></div>
+            </div>
+
+            <!-- OCR Settings -->
+            <div class="settings-section">
+              <h3>OCR Preprocessing</h3>
+              <p class="text-base text-muted mb-15">
+                Configure image preprocessing for better OCR accuracy.
+              </p>
+
+              <div class="settings-field">
+                <label for="ocr-resize-width">Resize Width (pixels):</label>
+                <input
+                  type="number"
+                  id="ocr-resize-width"
+                  placeholder="1200"
+                  min="600"
+                  max="3000"
+                />
+                <p class="text-sm text-hint mt-8">
+                  Image width for OCR processing (smaller = faster, larger = more accurate).
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="ocr-contrast-enhance">Contrast Enhancement Factor:</label>
+                <input
+                  type="number"
+                  id="ocr-contrast-enhance"
+                  placeholder="1.5"
+                  min="1.0"
+                  max="2.0"
+                  step="0.1"
+                />
+                <p class="text-sm text-hint mt-8">
+                  Contrast boost for better text recognition (1.0-2.0, default: 1.5).
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="ocr-denoise-h">Denoise Strength:</label>
+                <input type="number" id="ocr-denoise-h" placeholder="10" min="0" max="20" />
+                <p class="text-sm text-hint mt-8">
+                  Noise reduction strength (higher = more smoothing, may blur text).
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="ocr-sharpen-kernel">Sharpen Kernel Size:</label>
+                <input
+                  type="number"
+                  id="ocr-sharpen-kernel"
+                  placeholder="5"
+                  min="3"
+                  max="9"
+                  step="2"
+                />
+                <p class="text-sm text-hint mt-8">
+                  Sharpening kernel size (must be odd: 3, 5, 7, or 9).
+                </p>
+              </div>
+
+              <button onclick="saveOCRSettings()" class="save-btn">Save OCR Settings</button>
+              <div id="ocr-message" class="hidden"></div>
+            </div>
+
+            <!-- OCR Worker Settings -->
+            <div class="settings-section">
+              <h3>OCR Worker Configuration</h3>
+              <p class="text-base text-muted mb-15">
+                Configure OCR processing performance and resource usage.
+              </p>
+
+              <div class="settings-field">
+                <label for="ocr-worker-count">Worker Count:</label>
+                <input type="number" id="ocr-worker-count" placeholder="1" min="1" max="8" />
+                <p class="text-sm text-hint mt-8">
+                  Number of parallel OCR workers (1-8). More workers = faster processing but higher
+                  CPU/memory usage.
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="ocr-batch-size">Batch Size:</label>
+                <input type="number" id="ocr-batch-size" placeholder="5" min="1" max="20" />
+                <p class="text-sm text-hint mt-8">
+                  Number of jobs to process per batch (1-20). Larger batches process more files at
+                  once.
+                </p>
+              </div>
+
+              <button onclick="saveOCRWorkerSettings()" class="save-btn">
+                Save Worker Settings
+              </button>
+              <div id="ocr-worker-message" class="hidden"></div>
+            </div>
+          </div>
+
+          <!-- Appearance Settings Tab -->
+          <div id="settings-appearance-tab" class="settings-sub-tab">
+            <!-- Theme Settings -->
+            <div id="theme-section" class="settings-section">
+              <h3>Theme Settings</h3>
+              <div class="settings-field">
+                <label for="theme-mode">Color Mode:</label>
+                <select id="theme-mode">
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                </select>
+              </div>
+              <button onclick="saveThemeSettings()" class="save-btn">Save Theme Settings</button>
+              <div id="theme-message" class="hidden"></div>
+            </div>
+          </div>
+
+          <!-- Account & Security Settings Tab -->
+          <div id="settings-account-tab" class="settings-sub-tab">
+            <!-- User Account Settings -->
+            <div id="user-account-section" class="settings-section">
+              <h3>User Account</h3>
+              <p class="text-base text-muted mb-15">Update your login credentials</p>
+              <div class="settings-field">
+                <label for="account-username">Username:</label>
+                <input type="text" id="account-username" placeholder="Loading..." />
+              </div>
+              <div class="settings-field">
+                <label for="account-current-password">Current Password:</label>
+                <input
+                  type="password"
+                  id="account-current-password"
+                  placeholder="Enter current password to make changes"
+                />
+              </div>
+              <div class="settings-field">
+                <label for="account-new-password">New Password:</label>
+                <input
+                  type="password"
+                  id="account-new-password"
+                  placeholder="Leave blank to keep current password"
+                />
+              </div>
+              <div class="settings-field">
+                <label for="account-confirm-password">Confirm New Password:</label>
+                <input
+                  type="password"
+                  id="account-confirm-password"
+                  placeholder="Confirm new password"
+                />
+              </div>
+              <button onclick="saveAccountSettings()" class="save-btn">
+                Save Account Settings
+              </button>
+            </div>
+
+            <!-- API Token Management -->
+            <div id="api-token-section" class="settings-section">
+              <h3>🔑 API Token</h3>
+              <p class="text-base text-muted mb-15">
+                Use this token to authenticate API requests. Treat it like a password and keep it
+                secret.
+              </p>
+              <div class="settings-field">
+                <label for="api-token-display">Your API Token:</label>
+                <div class="flex gap-10 items-center">
+                  <input
+                    type="password"
+                    id="api-token-display"
+                    placeholder="Loading token..."
+                    readonly
+                    style="flex: 1"
+                  />
+                  <button
+                    id="api-token-toggle-btn"
+                    onclick="toggleAPITokenVisibility()"
+                    class="btn-secondary"
+                    title="Show/hide token"
+                  >
+                    👁️
+                  </button>
+                  <button onclick="copyAPIToken()" class="btn-secondary" title="Copy to clipboard">
+                    📋
+                  </button>
+                </div>
+              </div>
+              <div class="text-sm text-hint mb-15">
+                <strong>Usage:</strong> Include in API calls as:
+                <code>Authorization: Bearer &lt;token&gt;</code>
+              </div>
+              <button onclick="regenerateAPIToken()" class="save-btn" style="background: #ff9800">
+                🔄 Regenerate Token
+              </button>
+              <div id="api-token-message" class="hidden mt-10"></div>
+            </div>
+          </div>
+
+          <!-- Advanced Settings Tab -->
+          <div id="settings-advanced-tab" class="settings-sub-tab">
+            <!-- Logging Settings -->
+            <div id="logging-section" class="settings-section">
+              <h3>Logging Settings</h3>
+              <div class="settings-field">
+                <label for="logging-level">Log Level:</label>
+                <select id="logging-level">
+                  <option value="DEBUG">DEBUG</option>
+                  <option value="INFO">INFO</option>
+                  <option value="WARNING">WARNING</option>
+                  <option value="ERROR">ERROR</option>
+                </select>
+              </div>
+              <div class="settings-field">
+                <label for="logging-file">Log File:</label>
+                <input type="text" id="logging-file" placeholder="./logs/periodical_manager.log" />
+              </div>
+              <button onclick="saveLoggingSettings()" class="save-btn">
+                Save Logging Settings
+              </button>
+              <div id="logging-message" class="hidden"></div>
+            </div>
+
+            <!-- Database Management -->
+            <div id="database-section" class="settings-section">
+              <h3>Database Management</h3>
+              <p class="text-base text-muted mb-15">Manage your library database</p>
+
+              <div class="bg-warning rounded-lg p-15 mb-20">
+                <strong>⚠️ Danger Zone</strong>
+                <p class="mt-8 mb-0">These actions cannot be undone. Use with caution.</p>
+              </div>
+
+              <div class="settings-field">
+                <label>Purge Database:</label>
+                <p class="text-sm text-hint mb-10">
+                  Remove all library entries and tracking records from the database. Files on disk
+                  will remain untouched.
+                </p>
+                <button
+                  onclick="openPurgeModal()"
+                  class="save-btn btn-delete"
+                  style="background: #f44336"
+                >
+                  🗑️ Purge Database
+                </button>
+              </div>
+            </div>
+
+            <!-- Cache Management -->
+            <div id="cache-section" class="settings-section">
+              <h3>Cache Management</h3>
+              <p class="text-base text-muted mb-15">
+                Manage search cache to reduce API calls and improve performance
+              </p>
+
+              <div class="settings-field">
+                <label>
+                  <input type="checkbox" id="cache-enabled" />
+                  <span>Enable Search Cache</span>
+                </label>
+                <p class="text-sm text-hint mt-5">
+                  Cache search results locally to reduce API calls and improve search performance
+                  (95%+ reduction in provider requests)
+                </p>
+              </div>
+
+              <div class="settings-field">
+                <label for="cache-retention">Cache Retention (days):</label>
+                <p class="text-sm text-hint mb-10">
+                  How long to keep cached releases before they expire
+                </p>
+                <input
+                  type="number"
+                  id="cache-retention"
+                  min="1"
+                  max="365"
+                  placeholder="90"
+                  style="width: 150px"
+                />
+              </div>
+
+              <div class="settings-field">
+                <label for="cache-sync-interval">Sync Interval (minutes):</label>
+                <p class="text-sm text-hint mb-10">
+                  How often to sync latest releases from providers (recommended: 30-60 minutes)
+                </p>
+                <input
+                  type="number"
+                  id="cache-sync-interval"
+                  min="5"
+                  max="1440"
+                  placeholder="30"
+                  style="width: 150px"
+                />
+              </div>
+
+              <div class="settings-field">
+                <label>Cache Statistics:</label>
+                <div
+                  id="cache-stats-display"
+                  style="
+                    background: var(--card-bg);
+                    border: 1px solid var(--border-color);
+                    border-radius: 8px;
+                    padding: 15px;
+                    margin-top: 10px;
+                  "
+                >
+                  <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px">
+                    <div>
+                      <div class="text-sm text-hint">Total Releases</div>
+                      <div id="cache-total-releases" class="text-lg" style="margin-top: 5px">-</div>
+                    </div>
+                    <div>
+                      <div class="text-sm text-hint">Last Sync</div>
+                      <div id="cache-last-sync" class="text-lg" style="margin-top: 5px">-</div>
+                    </div>
+                  </div>
+                  <div style="margin-top: 15px; text-align: center">
+                    <a
+                      href="javascript:void(0)"
+                      onclick="loadCacheStats()"
+                      style="color: var(--primary-color); text-decoration: none; font-size: 14px"
+                    >
+                      🔄 Refresh Stats
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              <div style="margin-top: 30px">
+                <button
+                  onclick="saveCacheSettings()"
+                  class="save-btn"
+                  style="padding: 12px 40px; font-size: 16px; font-weight: 500; border-radius: 8px"
+                >
+                  Save Cache Settings
+                </button>
+              </div>
+
+              <hr style="margin: 30px 0; border: none; border-top: 1px solid var(--border-color)" />
+
+              <div class="bg-warning rounded-lg p-15 mb-20">
+                <strong>⚠️ Danger Zone</strong>
+                <p class="mt-8 mb-0">This action cannot be undone. Use with caution.</p>
+              </div>
+
+              <div class="settings-field">
+                <label>Purge Search Cache:</label>
+                <p class="text-sm text-hint mb-10">
+                  Clear all cached search results. Next searches will fetch fresh data from
+                  providers.
+                  <span id="cache-stats-text" class="text-hint"></span>
+                </p>
+                <button
+                  onclick="openPurgeCacheModal()"
+                  class="save-btn btn-warning"
+                  style="background: #ff9800"
+                >
+                  🗑️ Purge Cache
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- PDF Viewer Modal -->
     <div id="pdf-modal" class="modal hidden">
-        <div class="modal-content">
-            <span class="close" onclick="closePDFViewer()">&times;</span>
-            <div id="pdf-viewer"></div>
-        </div>
+      <div class="modal-content">
+        <span class="close" onclick="closePDFViewer()">&times;</span>
+        <div id="pdf-viewer"></div>
+      </div>
     </div>
 
     <!-- Add Provider Modal -->
     <div id="add-provider-modal" class="modal hidden">
-        <div class="modal-content max-w-500">
-            <span class="close" onclick="closeAddProviderModal()">&times;</span>
-            <h3>Add New Search Provider</h3>
-            <form id="add-provider-form" class="p-20">
-                <div class="settings-field">
-                    <label for="new-provider-type">Provider Type:</label>
-                    <select id="new-provider-type" required>
-                        <option value="newsnab">Newsnab</option>
-                        <option value="rss">RSS</option>
-                        <option value="torznab">Torznab</option>
-                        <option value="custom">Custom</option>
-                    </select>
-                </div>
-                <div class="settings-field">
-                    <label for="new-provider-name">Name:</label>
-                    <input type="text" id="new-provider-name" placeholder="e.g., My Newsnab" required>
-                </div>
-                <div class="settings-field">
-                    <label for="new-provider-url">API URL:</label>
-                    <input type="text" id="new-provider-url" placeholder="http://example.com/api" required>
-                </div>
-                <div class="settings-field">
-                    <label for="new-provider-key">API Key:</label>
-                    <input type="password" id="new-provider-key" placeholder="Enter API key">
-                </div>
-                <div class="settings-field">
-                    <label>
-                        <input type="checkbox" id="new-provider-enabled" checked>
-                        <span>Enabled</span>
-                    </label>
-                </div>
-                <div class="flex gap-10 mt-20">
-                    <button type="submit" class="save-btn flex-1">Add Provider</button>
-                    <button type="button" class="save-btn btn-cancel flex-1" onclick="closeAddProviderModal()">Cancel</button>
-                </div>
-            </form>
-        </div>
+      <div class="modal-content max-w-500">
+        <span class="close" onclick="closeAddProviderModal()">&times;</span>
+        <h3>Add New Search Provider</h3>
+        <form id="add-provider-form" class="p-20">
+          <div class="settings-field">
+            <label for="new-provider-type">Provider Type:</label>
+            <select id="new-provider-type" required>
+              <option value="newsnab">Newsnab</option>
+              <option value="rss">RSS</option>
+              <option value="torznab">Torznab</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+          <div class="settings-field">
+            <label for="new-provider-name">Name:</label>
+            <input type="text" id="new-provider-name" placeholder="e.g., My Newsnab" required />
+          </div>
+          <div class="settings-field">
+            <label for="new-provider-url">API URL:</label>
+            <input
+              type="text"
+              id="new-provider-url"
+              placeholder="http://example.com/api"
+              required
+            />
+          </div>
+          <div class="settings-field">
+            <label for="new-provider-key">API Key:</label>
+            <input type="password" id="new-provider-key" placeholder="Enter API key" />
+          </div>
+          <div class="settings-field">
+            <label for="new-provider-categories"
+              >Categories
+              <span style="font-size: 11px; color: var(--text-secondary)"
+                >(Newsnab only, e.g., 7000,7010,7030)</span
+              >:</label
+            >
+            <input type="text" id="new-provider-categories" placeholder="7000,7010,7020,7030" />
+          </div>
+          <div class="settings-field">
+            <label>
+              <input type="checkbox" id="new-provider-enabled" checked />
+              <span>Enabled</span>
+            </label>
+          </div>
+          <div class="flex gap-10 mt-20">
+            <button type="submit" class="save-btn flex-1">Add Provider</button>
+            <button
+              type="button"
+              class="save-btn btn-cancel flex-1"
+              onclick="closeAddProviderModal()"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
 
     <!-- Edit Tracking Details Modal -->
     <div id="edit-tracking-modal" class="modal hidden">
-        <div class="modal-content">
-            <span class="close" onclick="closeEditTrackingModal()">&times;</span>
-            <h2>Edit Tracking Details</h2>
-            
-            <div class="settings-field">
-                <label>Periodical Title:</label>
-                <input type="hidden" id="edit-tracking-id">
-                <input type="text" id="edit-tracking-title" placeholder="Enter title">
-            </div>
-            
-            <div class="settings-field">
-                <label>Publisher:</label>
-                <div class="flex gap-10">
-                    <input type="text" id="edit-tracking-publisher" placeholder="Enter publisher" class="flex-1">
-                    <button onclick="searchPublisherMetadata()" class="save-btn">Search Metadata</button>
-                </div>
-            </div>
-            
-            <div class="settings-field">
-                <label>ISSN:</label>
-                <input type="text" id="edit-tracking-issn" placeholder="Enter ISSN">
-            </div>
-            
-            <div class="settings-field">
-                <label>Tracking Mode:</label>
-                <select id="edit-tracking-mode" class="w-full">
-                    <option value="all">Track All Issues - Download all past and future issues</option>
-                    <option value="new">Track New Issues - Only download issues published after today</option>
-                    <option value="none">Track Nothing - Monitor but don't auto-download</option>
-                </select>
-            </div>
+      <div class="modal-content" style="max-width: 800px">
+        <span class="close" onclick="closeEditTrackingModal()">&times;</span>
+        <h2>Edit Tracking Details</h2>
 
-            <div class="settings-field">
-                <label for="edit-tracking-org-pattern">File Organization Pattern:</label>
-                <input type="text" id="edit-tracking-org-pattern" placeholder="Leave empty to use global default" class="w-full">
-                <p class="text-sm text-hint mt-8">Available tags: {category}, {title}, {year}, {month}, {day}. Example: data/{category}/{title}/{year}/</p>
-            </div>
-
-            <div class="flex gap-10 mt-20">
-                <button onclick="saveEditedTracking()" class="save-btn btn-save flex-1">Save Changes</button>
-                <button onclick="closeEditTrackingModal()" class="save-btn btn-cancel flex-1">Cancel</button>
-            </div>
+        <div class="settings-field">
+          <label>Periodical Title:</label>
+          <input type="hidden" id="edit-tracking-id" />
+          <input type="text" id="edit-tracking-title" placeholder="Enter title" />
         </div>
+
+        <div class="field-row">
+          <div class="settings-field">
+            <label>Category:</label>
+            <select id="edit-tracking-category" class="w-full">
+              <option value="">Auto-detect from title</option>
+              <option value="Magazines">Magazines</option>
+              <option value="Comics">Comics</option>
+              <option value="Articles">Articles</option>
+              <option value="News">News</option>
+            </select>
+          </div>
+
+          <div class="settings-field">
+            <label>Language:</label>
+            <select id="edit-tracking-language" class="w-full">
+              <option value="English">English</option>
+              <option value="German">German</option>
+              <option value="French">French</option>
+              <option value="Spanish">Spanish</option>
+              <option value="Italian">Italian</option>
+              <option value="Portuguese">Portuguese</option>
+              <option value="Dutch">Dutch</option>
+              <option value="Polish">Polish</option>
+              <option value="Russian">Russian</option>
+              <option value="Japanese">Japanese</option>
+              <option value="Chinese">Chinese</option>
+              <option value="Korean">Korean</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="settings-field">
+            <label>Country:</label>
+            <select id="edit-tracking-country" class="w-full">
+              <option value="">None (International)</option>
+            </select>
+          </div>
+
+          <div class="settings-field">
+            <label for="edit-tracking-download-category">Download Category:</label>
+            <input
+              type="text"
+              id="edit-tracking-download-category"
+              placeholder="e.g., books, magazines (optional)"
+              class="w-full"
+            />
+            <small style="color: var(--text-secondary); display: block; margin-top: 3px"
+              >For download client (SABnzbd/NZBGet)</small
+            >
+          </div>
+        </div>
+
+        <div class="settings-field">
+          <label>Tracking Mode:</label>
+          <select id="edit-tracking-mode" class="w-full">
+            <option value="all">Track All Issues - Download all past and future issues</option>
+            <option value="new">
+              Track New Issues - Only download issues published after today
+            </option>
+            <option value="none">Track Nothing - Monitor but don't auto-download</option>
+          </select>
+        </div>
+
+        <div class="settings-field">
+          <label>
+            <input type="checkbox" id="edit-delete-from-client" />
+            Keep history in download client
+          </label>
+          <p class="text-sm text-hint mt-8">
+            Keep completed/failed downloads in your download client history (unchecked =
+            automatically remove after import)
+          </p>
+        </div>
+
+        <div class="settings-field">
+          <label for="edit-tracking-pattern-select">File Organization Pattern:</label>
+          <select
+            id="edit-tracking-pattern-select"
+            onchange="handlePatternSelectChange('edit-tracking')"
+            class="w-full"
+          >
+            <option value="">Use global default</option>
+            <option value="default">{category}/{title}/{year}/ - Year-based (default)</option>
+            <option value="volume">{category}/{title}/Vol{volume}/ - Volume-based</option>
+            <option value="flat">{category}/{title}/ - Flat structure</option>
+            <option value="volume_year">{category}/{title}/Vol{volume}/{year}/ - Hybrid</option>
+            <option value="issue">{category}/{title}/Issues {issue_range}/ - Issue-based</option>
+            <option value="custom">Custom pattern...</option>
+          </select>
+          <input
+            type="text"
+            id="edit-tracking-pattern-custom"
+            placeholder="{category}/{title}/{year}/"
+            class="w-full mt-8 hidden"
+          />
+          <p class="text-sm text-hint mt-8">
+            Available tags: {category}, {title}, {year}, {month}, {day}, {volume}, {issue},
+            {language}
+          </p>
+        </div>
+
+        <div class="flex gap-10 mt-20">
+          <button onclick="saveEditedTracking()" class="save-btn btn-save flex-1">
+            Save Changes
+          </button>
+          <button onclick="closeEditTrackingModal()" class="save-btn btn-cancel flex-1">
+            Cancel
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- Search Issues Modal -->
     <div id="search-issues-modal" class="modal hidden">
-        <div class="modal-content max-w-800">
-            <span class="close" onclick="closeSearchIssuesModal()">&times;</span>
-            <div id="search-issues-content"></div>
-            <div class="mt-20">
-                <button onclick="closeSearchIssuesModal()" class="save-btn w-full">Close</button>
-            </div>
+      <div class="modal-content max-w-800">
+        <span class="close" onclick="closeSearchIssuesModal()">&times;</span>
+        <div id="search-issues-content"></div>
+        <div class="mt-20">
+          <button onclick="closeSearchIssuesModal()" class="save-btn w-full">Close</button>
         </div>
+      </div>
     </div>
 
     <!-- Import Options Modal -->
     <div id="import-options-modal" class="modal hidden">
-        <div class="modal-content max-w-600">
-            <span class="close" onclick="closeImportModal()">&times;</span>
-            <h3>Import Options</h3>
-            
-            <div class="settings-field" style="margin-top: 20px; margin-bottom: 10px;">
-                <label>
-                    <input type="checkbox" id="import-auto-track" checked>
-                    Auto-create tracking record for imported periodicals
-                </label>
-            </div>
-            
-            <div class="settings-field">
-                <label for="import-category">Category:</label>
-                <select id="import-category" class="w-full">
-                    <option value="auto">Auto-detect from title</option>
-                    <option value="Magazines">Magazines</option>
-                    <option value="Comics">Comics</option>
-                    <option value="Articles">Articles</option>
-                    <option value="News">News</option>
-                </select>
-            </div>
-            
-            <div class="settings-field">
-                <label for="import-modal-organize-pattern">File Organization Pattern:</label>
-                <input type="text" id="import-modal-organize-pattern" placeholder="Leave empty to use global default" class="w-full">
-                <p class="text-sm text-hint mt-8">Available tags: {category}, {title}, {year}, {month}, {day}. Example: data/{category}/{title}/{year}/</p>
-            </div>
-            
-            <div class="flex gap-10 mt-20">
-                <button onclick="startImportWithOptions()" class="save-btn btn-save flex-1">Import</button>
-                <button onclick="closeImportModal()" class="save-btn btn-cancel flex-1">Cancel</button>
-            </div>
+      <div class="modal-content max-w-600">
+        <span class="close" onclick="closeImportModal()">&times;</span>
+        <h3>Import Options</h3>
+
+        <div class="settings-field" style="margin-top: 20px; margin-bottom: 20px">
+          <label>
+            <input type="checkbox" id="import-auto-track" checked />
+            Create tracking record for imported periodicals
+          </label>
         </div>
+
+        <div class="settings-field">
+          <label for="import-tracking-mode">Tracking Mode:</label>
+          <select id="import-tracking-mode" class="w-full">
+            <option value="all">⬇️ Auto-download All Issues</option>
+            <option value="new">⬇️ Auto-download New Issues Only</option>
+            <option value="watch">👁️ Watch Only (no auto-download)</option>
+          </select>
+          <p class="text-sm text-hint mt-8">
+            Choose how to track this periodical for future releases
+          </p>
+        </div>
+
+        <div class="settings-field">
+          <label for="import-category">Category:</label>
+          <select id="import-category" class="w-full">
+            <option value="auto">Auto-detect from title</option>
+            <option value="Magazines">Magazines</option>
+            <option value="Comics">Comics</option>
+            <option value="Articles">Articles</option>
+            <option value="News">News</option>
+          </select>
+        </div>
+
+        <div class="flex gap-10 mt-20">
+          <button onclick="startImportWithOptions()" class="save-btn btn-save flex-1">
+            Import
+          </button>
+          <button onclick="closeImportModal()" class="save-btn btn-cancel flex-1">Cancel</button>
+        </div>
+      </div>
     </div>
 
     <!-- Track New Periodical Modal -->
     <div id="track-new-periodical-modal" class="modal hidden">
-        <div class="modal-content" style="max-width: 800px;">
-            <span class="close" onclick="closeTrackNewPeriodicalModal()">&times;</span>
-            <h2>Track New Periodical</h2>
-            <p style="color: var(--text-secondary); margin-bottom: 20px;">Search for a periodical to track</p>
+      <div class="modal-content" style="max-width: 800px">
+        <span class="close" onclick="closeTrackNewPeriodicalModal()">&times;</span>
+        <h2>Track New Periodical</h2>
+        <p style="color: var(--text-secondary); margin-bottom: 20px">
+          Search providers for periodicals to track
+        </p>
 
-            <div id="tracking-status" class="hidden"></div>
+        <div id="tracking-status" class="hidden"></div>
 
-            <!-- Step 1: Search -->
-            <div class="tracking-step">
-                <h3>Step 1: Find Periodical</h3>
-                <div class="tracking-search">
-                    <input type="text" id="tracking-search-query" placeholder="Enter periodical title..."
-                        onkeyup="event.key === 'Enter' && searchPeriodicalMetadata()">
-                    <button onclick="searchPeriodicalMetadata()">Search</button>
-                </div>
-                <div id="tracking-search-loading" class="hidden">Searching...</div>
-                <div id="tracking-search-result" class="tracking-result hidden">
-                    <div id="periodical-info-card"></div>
-                </div>
-                <div id="tracking-search-error" class="error hidden"></div>
+        <!-- Search Section -->
+        <div class="settings-field">
+          <label>Search for Periodical:</label>
+          <div style="display: flex; gap: 10px; margin-bottom: 10px">
+            <input
+              type="text"
+              id="tracking-search-query"
+              placeholder="Enter periodical title..."
+              style="flex: 1"
+              onkeypress="if (event.key === 'Enter') trackingManager.searchPeriodicalMetadata();"
+            />
+            <button onclick="trackingManager.searchPeriodicalMetadata()" class="btn-primary">
+              Search
+            </button>
+          </div>
+          <div style="display: flex; gap: 10px">
+            <div style="flex: 1">
+              <label style="font-size: 0.9em; color: var(--text-secondary)"
+                >Filter by Language:</label
+              >
+              <select id="search-filter-language" class="w-full">
+                <option value="">Any Language</option>
+                <option value="English" selected>English</option>
+              </select>
             </div>
-
-            <!-- Step 2: Configure Tracking -->
-            <div class="tracking-step hidden" id="save-step">
-                <h3>Step 2: Configure Tracking</h3>
-                <div id="save-info"></div>
-                <div class="save-controls">
-                    <div class="tracking-mode-options">
-                        <label class="radio-label">
-                            <input type="radio" name="tracking-mode" value="all" checked onchange="updateTrackingMode()">
-                            <span><strong>Track All Issues</strong> - Download all past and future issues</span>
-                        </label>
-                        <label class="radio-label">
-                            <input type="radio" name="tracking-mode" value="new" onchange="updateTrackingMode()">
-                            <span><strong>Track New Issues</strong> - Only download issues published after today</span>
-                        </label>
-                        <label class="radio-label">
-                            <input type="radio" name="tracking-mode" value="none" onchange="updateTrackingMode()">
-                            <span><strong>Track Nothing</strong> - Monitor but don't auto-download</span>
-                        </label>
-                    </div>
-                    <div class="flex gap-10 mt-20">
-                        <button class="btn-primary flex-1" onclick="saveTrackingPreferences()">Save & Start Tracking</button>
-                        <button class="btn-secondary flex-1" onclick="closeTrackNewPeriodicalModal()">Cancel</button>
-                    </div>
-                </div>
+            <div style="flex: 1">
+              <label style="font-size: 0.9em; color: var(--text-secondary)"
+                >Filter by Country:</label
+              >
+              <select id="search-filter-country" class="w-full">
+                <option value="">Any Country</option>
+                <option value="US" selected>United States (US)</option>
+              </select>
             </div>
+          </div>
+          <small style="color: var(--text-secondary); display: block; margin-top: 5px">
+            💡 Tip: Defaults to English/US. Select "Any" to see all editions including foreign
+            languages.
+          </small>
         </div>
+
+        <!-- Loading indicator -->
+        <div
+          id="tracking-search-loading"
+          class="hidden"
+          style="text-align: center; padding: 20px; color: var(--text-secondary)"
+        >
+          <div class="spinner"></div>
+          <p>Searching providers...</p>
+        </div>
+
+        <!-- Error display -->
+        <div
+          id="tracking-search-error"
+          class="hidden"
+          style="
+            padding: 15px;
+            background: var(--error-bg);
+            color: var(--error);
+            border-radius: 6px;
+            margin: 15px 0;
+          "
+        ></div>
+
+        <!-- Search results -->
+        <div id="tracking-search-result" class="hidden" style="margin: 20px 0"></div>
+
+        <!-- Manual Entry Section -->
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--border)">
+          <h3 style="margin-bottom: 5px">Tracking Details</h3>
+          <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 0.95em">
+            Review and adjust the information below, then click "Start Tracking"
+          </p>
+
+          <div class="settings-field">
+            <label>Periodical Title:</label>
+            <input type="text" id="new-tracking-title" placeholder="Enter periodical title..." />
+          </div>
+
+          <div class="field-row">
+            <div class="settings-field">
+              <label>Category:</label>
+              <select id="new-tracking-category" class="w-full">
+                <option value="">Auto-detect from title</option>
+                <option value="Magazines">Magazines</option>
+                <option value="Comics">Comics</option>
+                <option value="Articles">Articles</option>
+                <option value="News">News</option>
+              </select>
+            </div>
+
+            <div class="settings-field">
+              <label>Language:</label>
+              <select id="new-tracking-language" class="w-full"></select>
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="settings-field">
+              <label>Country:</label>
+              <select id="new-tracking-country" class="w-full">
+                <option value="">None (International)</option>
+              </select>
+            </div>
+
+            <div class="settings-field">
+              <label>Download Category:</label>
+              <input
+                type="text"
+                id="new-tracking-download-category"
+                placeholder="e.g., books, magazines (optional)"
+              />
+              <small style="color: var(--text-secondary); display: block; margin-top: 3px"
+                >For download client (SABnzbd/NZBGet)</small
+              >
+            </div>
+          </div>
+
+          <div class="settings-field">
+            <label>Tracking Mode:</label>
+            <select id="new-tracking-mode" class="w-full">
+              <option value="none">Track Nothing - Monitor but don't auto-download</option>
+              <option value="new">
+                Track New Issues - Only download issues published after today
+              </option>
+              <option value="all">Track All Issues - Download all past and future issues</option>
+            </select>
+          </div>
+
+          <div class="settings-field">
+            <label>Organization Pattern (optional):</label>
+            <select
+              id="new-tracking-pattern-select"
+              onchange="handlePatternSelectChange('new-tracking')"
+              class="w-full"
+            >
+              <option value="">Use global default</option>
+              <option value="default">{category}/{title}/{year}/ - Year-based (default)</option>
+              <option value="volume">{category}/{title}/Vol{volume}/ - Volume-based</option>
+              <option value="flat">{category}/{title}/ - Flat structure</option>
+              <option value="volume_year">{category}/{title}/Vol{volume}/{year}/ - Hybrid</option>
+              <option value="issue">{category}/{title}/Issues {issue_range}/ - Issue-based</option>
+              <option value="custom">Custom pattern...</option>
+            </select>
+            <input
+              type="text"
+              id="new-tracking-pattern-custom"
+              placeholder="{category}/{title}/{year}/"
+              class="w-full mt-8 hidden"
+            />
+            <small style="color: var(--text-secondary); display: block; margin-top: 5px">
+              Override the default pattern for this periodical. Useful for journals with volumes or
+              series without dates.
+            </small>
+          </div>
+
+          <div class="flex gap-10 mt-20">
+            <button class="btn-primary flex-1" onclick="saveNewTracking()">Start Tracking</button>
+            <button class="btn-secondary flex-1" onclick="closeTrackNewPeriodicalModal()">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Delete Periodical Modal - Outside Container -->
     <div id="delete-modal" class="modal hidden">
-        <div class="modal-content delete-modal-content">
-            <h3 class="delete-modal-title">Delete Periodical</h3>
-            <p id="delete-modal-title" class="delete-modal-subtitle"></p>
-            
-            <div class="bg-warning rounded-lg p-15 mb-20">
-                <strong>⚠️ Warning:</strong> This action cannot be undone.
-            </div>
+      <div class="modal-content delete-modal-content">
+        <h3 class="delete-modal-title">Delete Periodical</h3>
+        <p id="delete-modal-title" class="delete-modal-subtitle"></p>
 
-            <div class="bg-surface-variant rounded-lg p-15 mb-20">
-                <p class="m-0 mb-10 font-bold text-primary">What would you like to do?</p>
-                <div class="flex gap-10 flex-col">
-                    <label class="delete-option-label">
-                        <input type="radio" name="delete-option" value="db-only" checked class="radio-input">
-                        <span><strong>Remove from library only</strong><br><small>Files remain on disk</small></span>
-                    </label>
-                    <label class="delete-option-label">
-                        <input type="radio" name="delete-option" value="delete-files" class="radio-input">
-                        <span><strong>Delete from library AND disk</strong><br><small>PDF and cover files will be permanently deleted</small></span>
-                    </label>
-                </div>
-            </div>
-
-            <div class="flex gap-10 justify-end">
-                <button onclick="closeDeleteModal()" class="save-btn btn-cancel flex-0">Cancel</button>
-                <button onclick="confirmDeletePeriodical()" class="save-btn btn-delete flex-0">Delete</button>
-            </div>
+        <div class="bg-warning rounded-lg p-15 mb-20">
+          <strong>⚠️ Warning:</strong> This action cannot be undone.
         </div>
+
+        <div class="bg-surface-variant rounded-lg p-15 mb-20">
+          <p class="m-0 mb-10 font-bold text-primary">What would you like to do?</p>
+          <div class="flex gap-10 flex-col">
+            <label class="delete-option-label">
+              <input
+                type="radio"
+                name="delete-option"
+                value="db-only"
+                checked
+                class="radio-input"
+              />
+              <span
+                ><strong>Remove from library only</strong><br /><small
+                  >Files remain on disk</small
+                ></span
+              >
+            </label>
+            <label class="delete-option-label">
+              <input type="radio" name="delete-option" value="delete-files" class="radio-input" />
+              <span
+                ><strong>Delete from library AND disk</strong><br /><small
+                  >PDF and cover files will be permanently deleted</small
+                ></span
+              >
+            </label>
+          </div>
+
+          <div class="mt-15 pt-15" style="border-top: 1px solid var(--border-color)">
+            <label class="flex items-center gap-10">
+              <input type="checkbox" id="delete-remove-tracking" />
+              <span
+                ><strong>Also remove from tracking</strong><br /><small
+                  >Stop tracking this periodical for future downloads</small
+                ></span
+              >
+            </label>
+          </div>
+        </div>
+
+        <div class="flex gap-10 justify-end">
+          <button type="button" onclick="closeDeleteModal()" class="save-btn btn-cancel flex-0">
+            Cancel
+          </button>
+          <button
+            type="button"
+            onclick="confirmDeletePeriodical()"
+            class="save-btn btn-delete flex-0"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Purge Database Modal -->
+    <div id="purge-database-modal" class="modal hidden">
+      <div class="modal-content delete-modal-content" style="max-width: 600px">
+        <h3 class="delete-modal-title">⚠️ Purge Database</h3>
+        <p class="delete-modal-subtitle">Are you sure you want to purge the entire database?</p>
+
+        <div class="bg-warning rounded-lg p-15 mb-20">
+          <strong>⚠️ Warning:</strong> This action cannot be undone.
+        </div>
+
+        <div class="bg-surface-variant rounded-lg p-15 mb-20">
+          <p class="m-0 mb-10 font-bold text-primary">This will:</p>
+          <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary)">
+            <li>Remove all library entries from the database</li>
+            <li>Remove all tracking records</li>
+            <li>Clear the download queue</li>
+            <li><strong>Files on disk will NOT be deleted</strong></li>
+          </ul>
+        </div>
+
+        <div class="settings-field mb-20">
+          <label class="flex items-center gap-10">
+            <input type="checkbox" id="purge-confirm-checkbox" />
+            <span style="color: var(--text-primary)"
+              ><strong>I understand this action cannot be undone</strong></span
+            >
+          </label>
+        </div>
+
+        <div class="flex gap-10 justify-end">
+          <button type="button" onclick="closePurgeModal()" class="save-btn btn-cancel flex-0">
+            Cancel
+          </button>
+          <button
+            type="button"
+            onclick="confirmPurgeDatabase()"
+            class="save-btn btn-delete flex-0"
+            id="purge-confirm-btn"
+            disabled
+          >
+            🗑️ Purge Database
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Purge Cache Modal -->
+    <div id="purge-cache-modal" class="modal hidden">
+      <div class="modal-content delete-modal-content" style="max-width: 600px">
+        <h3 class="delete-modal-title">🗑️ Purge Search Cache</h3>
+        <p class="delete-modal-subtitle">Are you sure you want to purge the search cache?</p>
+
+        <div class="bg-warning rounded-lg p-15 mb-20">
+          <strong>ℹ️ Info:</strong> This will clear all cached search results.
+        </div>
+
+        <div class="bg-surface-variant rounded-lg p-15 mb-20">
+          <p class="m-0 mb-10 font-bold text-primary">This will:</p>
+          <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary)">
+            <li>Clear all cached search results from the database</li>
+            <li>Force fresh searches from providers on next query</li>
+            <li>Not affect your library or tracking records</li>
+          </ul>
+        </div>
+
+        <div class="flex gap-10 justify-end">
+          <button type="button" onclick="closePurgeCacheModal()" class="save-btn btn-cancel flex-0">
+            Cancel
+          </button>
+          <button
+            type="button"
+            onclick="confirmPurgeCache()"
+            class="save-btn btn-warning flex-0"
+            style="background: #ff9800"
+          >
+            🗑️ Purge Cache
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Manage Queue Modal -->
+    <div id="manage-queue-modal" class="modal hidden">
+      <div class="modal-content" style="max-width: 900px">
+        <span class="close" onclick="downloads.closeManageQueueModal()">&times;</span>
+        <div id="manage-queue-modal-content">
+          <!-- Content will be dynamically populated by JavaScript -->
+        </div>
+      </div>
+    </div>
+
+    <!-- OCR Periodical Modal -->
+    <div id="ocr-periodical-modal" class="modal hidden">
+      <div class="modal-content" style="max-width: 900px">
+        <span class="close" onclick="ocrQueue.closePeriodicModal()">&times;</span>
+        <div id="ocr-periodical-modal-content">
+          <!-- Content will be dynamically populated by JavaScript -->
+        </div>
+      </div>
+    </div>
+
+    <!-- OCR Job Details Modal -->
+    <div id="ocr-job-details-modal" class="modal hidden">
+      <div class="modal-content" style="max-width: 800px">
+        <span class="close" onclick="ocrQueue.closeJobDetailsModal()">&times;</span>
+        <div id="ocr-job-details-modal-content">
+          <!-- Content will be dynamically populated by JavaScript -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Manage Failed Downloads Modal -->
+    <div id="manage-failed-modal" class="modal hidden">
+      <div class="modal-content" style="max-width: 900px">
+        <span class="close" onclick="downloads.closeManageFailedModal()">&times;</span>
+        <div id="manage-failed-modal-content">
+          <!-- Content will be dynamically populated by JavaScript -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Cleanup Queue Modal -->
+    <div id="cleanup-queue-modal" class="modal hidden">
+      <div class="modal-content" style="max-width: 600px">
+        <span class="close" onclick="closeCleanupModal()">&times;</span>
+        <h2>🧹 Cleanup Download Queue</h2>
+        <p style="color: var(--text-secondary); margin-bottom: 20px">
+          Remove old download submissions from the queue based on status and age.
+        </p>
+
+        <div class="settings-field">
+          <label for="cleanup-status">Status Filter:</label>
+          <select id="cleanup-status" class="w-full">
+            <option value="">All Statuses</option>
+            <option value="completed">Completed</option>
+            <option value="failed">Failed</option>
+            <option value="skipped">Skipped</option>
+          </select>
+        </div>
+
+        <div class="settings-field">
+          <label for="cleanup-hours">Older than (hours):</label>
+          <input type="number" id="cleanup-hours" value="24" min="1" class="w-full" />
+        </div>
+
+        <div class="flex gap-10 mt-20">
+          <button onclick="previewCleanup()" class="btn-secondary flex-1">Preview</button>
+          <button onclick="executeCleanup()" class="save-btn flex-1">Execute Cleanup</button>
+        </div>
+
+        <div
+          id="cleanup-preview"
+          style="
+            display: none;
+            margin-top: 20px;
+            padding: 15px;
+            background: var(--surface-variant);
+            border-radius: 6px;
+          "
+        >
+          <strong>Preview:</strong>
+          <p id="cleanup-count" style="margin-top: 10px"></p>
+        </div>
+      </div>
     </div>
 
     <!-- Restart Application Modal -->
     <div id="restart-modal" class="modal hidden">
-        <div class="modal-content" style="max-width: 500px;">
-            <span class="close" onclick="closeRestartModal()">&times;</span>
-            <h2>🔄 Restart Application</h2>
-            <p style="color: var(--text-secondary); margin-bottom: 20px;">
-                Are you sure you want to restart the application? This will temporarily disconnect all users.
-            </p>
-            <div class="flex gap-10 justify-end">
-                <button onclick="closeRestartModal()" class="save-btn btn-cancel flex-0">Cancel</button>
-                <button onclick="confirmRestartApplication()" class="save-btn btn-danger flex-0">Restart</button>
-            </div>
+      <div class="modal-content" style="max-width: 500px">
+        <span class="close" onclick="closeRestartModal()">&times;</span>
+        <h2>🔄 Restart Application</h2>
+        <p style="color: var(--text-secondary); margin-bottom: 20px">
+          Are you sure you want to restart the application? This will temporarily disconnect all
+          users.
+        </p>
+        <div class="flex gap-10 justify-end">
+          <button onclick="closeRestartModal()" class="save-btn btn-cancel flex-0">Cancel</button>
+          <button onclick="confirmRestartApplication()" class="save-btn btn-danger flex-0">
+            Restart
+          </button>
         </div>
+      </div>
     </div>
-</body>
+
+    <footer
+      style="
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 6px 24px;
+        color: var(--text-secondary);
+        border-top: 1px solid var(--border);
+        text-align: center;
+      "
+    >
+      <p>
+        <svg
+          style="
+            width: 16px;
+            height: 16px;
+            vertical-align: middle;
+            display: inline-block;
+            margin-right: 4px;
+          "
+          viewBox="0 0 16 16"
+          fill="currentColor"
+        >
+          <path
+            d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"
+          />
+        </svg>
+        <a
+          href="https://github.com/chadleeshaw/curator"
+          target="_blank"
+          style="color: var(--accent); text-decoration: none; margin-right: 16px"
+          >GitHub</a
+        >
+        <svg
+          style="
+            width: 16px;
+            height: 16px;
+            vertical-align: middle;
+            display: inline-block;
+            margin-right: 4px;
+          "
+          viewBox="0 0 32 32"
+          fill="currentColor"
+        >
+          <path
+            d="M16 0c-8.823 0-16 7.177-16 16s7.177 16 16 16c8.823 0 16-7.177 16-16s-7.177-16-16-16zM16 1.527c7.995 0 14.473 6.479 14.473 14.473s-6.479 14.473-14.473 14.473c-7.995 0-14.473-6.479-14.473-14.473s6.479-14.473 14.473-14.473zM11.161 7.823c-0.188-0.005-0.375 0-0.568 0.005-1.307 0.079-2.093 0.693-2.312 1.964-0.151 0.891-0.125 1.796-0.188 2.692-0.020 0.464-0.067 0.928-0.156 1.38-0.177 0.813-0.525 1.068-1.353 1.109-0.111 0.011-0.22 0.032-0.324 0.057v1.948c1.5 0.073 1.704 0.605 1.823 2.172 0.048 0.573-0.015 1.147 0.021 1.719 0.027 0.543 0.099 1.079 0.208 1.6 0.344 1.432 1.745 1.911 3.433 1.624v-1.713c-0.272 0-0.511 0.005-0.74 0-0.579-0.016-0.792-0.161-0.844-0.713-0.079-0.713-0.057-1.437-0.099-2.156-0.089-1.339-0.235-2.651-1.541-3.5 0.672-0.495 1.161-1.084 1.312-1.865 0.109-0.547 0.177-1.099 0.219-1.651s-0.025-1.12 0.021-1.667c0.077-0.885 0.135-1.249 1.197-1.213 0.161 0 0.317-0.021 0.495-0.036v-1.745c-0.213 0-0.411-0.005-0.604-0.011zM21.287 7.839c-0.365-0.011-0.729 0.016-1.089 0.079v1.697c0.329 0 0.584 0 0.833 0.005 0.439 0.005 0.772 0.177 0.813 0.661 0.041 0.443 0.041 0.891 0.083 1.339 0.089 0.896 0.136 1.796 0.292 2.677 0.136 0.724 0.636 1.265 1.255 1.713-1.088 0.729-1.411 1.776-1.463 2.953-0.032 0.801-0.052 1.615-0.093 2.427-0.037 0.74-0.297 0.979-1.043 0.995-0.208 0.011-0.411 0.027-0.64 0.041v1.74c0.432 0 0.833 0.027 1.235 0 1.239-0.073 1.995-0.677 2.239-1.885 0.104-0.661 0.167-1.333 0.183-2.005 0.041-0.615 0.036-1.235 0.099-1.844 0.093-0.953 0.532-1.349 1.484-1.411 0.089-0.011 0.177-0.032 0.267-0.057v-1.953c-0.161-0.021-0.271-0.037-0.391-0.041-0.713-0.032-1.068-0.272-1.251-0.948-0.109-0.433-0.177-0.876-0.197-1.324-0.052-0.823-0.047-1.656-0.099-2.479-0.109-1.588-1.063-2.339-2.516-2.38zM12.099 14.875c-1.432 0-1.536 2.109-0.115 2.245h0.079c0.609 0.036 1.131-0.427 1.167-1.037v-0.061c0.011-0.62-0.484-1.136-1.104-1.147zM15.979 14.875c-0.593-0.020-1.093 0.448-1.115 1.043 0 0.036 0 0.067 0.005 0.104 0 0.672 0.459 1.099 1.147 1.099 0.677 0 1.104-0.443 1.104-1.136-0.005-0.672-0.459-1.115-1.141-1.109zM19.927 14.875c-0.624-0.011-1.145 0.485-1.167 1.115 0 0.625 0.505 1.131 1.136 1.131h0.011c0.567 0.099 1.135-0.448 1.172-1.104 0.031-0.609-0.521-1.141-1.152-1.141z"
+          />
+        </svg>
+        <a
+          href="/api/docs"
+          target="_blank"
+          style="color: var(--accent); text-decoration: none; margin-right: 16px"
+          >API Docs</a
+        >
+        <span id="app-version" style="color: var(--text-tertiary); font-size: 0.875em"
+          >Loading...</span
+        >
+      </p>
+    </footer>
+    <script>
+      // Fetch and display version
+      fetch('/api/version')
+        .then((response) => response.json())
+        .then((data) => {
+          const versionElement = document.getElementById('app-version');
+          if (versionElement) {
+            versionElement.textContent = data.version;
+            if (data.is_dev) {
+              versionElement.style.fontStyle = 'italic';
+              versionElement.title = 'Development version';
+            }
+          }
+        })
+        .catch((error) => {
+          console.error('Failed to fetch version:', error);
+          const versionElement = document.getElementById('app-version');
+          if (versionElement) {
+            versionElement.textContent = '';
+          }
+        });
+    </script>
+  </body>
 </html>

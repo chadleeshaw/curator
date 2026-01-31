@@ -2,10 +2,10 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main ]
-    tags: [ 'v*' ]
+    branches: [main]
+    tags: ['v*']
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 env:
   REGISTRY: ghcr.io
@@ -24,38 +24,67 @@ jobs:
         with:
           python-version: '3.13'
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Create virtual environment
+        run: python -m venv .venv
+
       - name: Cache Python dependencies
         uses: actions/cache@v4
         with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          path: .venv
+          key: ${{ runner.os }}-venv-${{ hashFiles('**/requirements.txt') }}
           restore-keys: |
-            ${{ runner.os }}-pip-
+            ${{ runner.os }}-venv-
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+      - name: Cache Node dependencies
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
 
-      - name: Run linting
+      - name: Install Python dependencies
         run: |
-          python -m pylint core/ models/ processor/ providers/ clients/ web/ --disable=C0114,C0115,C0116 || true
-          python -m flake8 --max-line-length=120 core/ models/ processor/ providers/ clients/ web/
-          python -m black --check core/ models/ processor/ providers/ clients/ web/ || true
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/pip install -r requirements.txt
+
+      - name: Install Node dependencies
+        run: npm install
+
+      - name: Run Python linting
+        run: |
+          .venv/bin/python -m pylint --fail-under=7.0 --recursive=y . --ignore=.venv,node_modules || true
+          find . -name '*.py' -not -path './.venv/*' -not -path './node_modules/*' -print0 | xargs -0 .venv/bin/python -m flake8
+
+      - name: Check Python formatting
+        run: |
+          find . -name '*.py' -not -path './.venv/*' -not -path './node_modules/*' -print0 | xargs -0 .venv/bin/python -m black --check --line-length=120
+
+      - name: Run JavaScript linting
+        run: npx eslint static/js/*.js
+
+      - name: Run CSS linting
+        run: npx stylelint static/css/*.css
 
       - name: Run tests
-        run: |
-          python -m pytest tests/ -v --tb=short
+        run: .venv/bin/python -m pytest tests/ -v --tb=short
 
   build-and-push:
-    name: Build and Push Docker Image
-    needs: test
+    name: Build & Push Docker Image
     runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push'
     permissions:
       contents: read
       packages: write
+
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
@@ -75,102 +104,81 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=ref,event=branch
-            type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
+            type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v5
         with:
           context: .
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/amd64,linux/arm64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: |
+            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
 
   release:
-    name: Create Release
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [test, build-and-push]
+    name: Create GitHub Release
     runs-on: ubuntu-latest
+    needs: [test, build-and-push]
+    if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
+
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Create release assets
+      - name: Get previous tag
+        id: previoustag
         run: |
-          # Create a deployment package with docker-compose and example files
-          mkdir -p release
-          cp docker-compose.yml release/
-          cp .env.example release/
-          cp README.md release/
-          
-          # Create a quick start guide
-          cat > release/QUICKSTART.md << 'EOF'
-          # Curator Quick Start
+          PREVIOUS_TAG=$(git tag --sort=-v:refname | sed -n '2p')
+          echo "tag=$PREVIOUS_TAG" >> $GITHUB_OUTPUT
 
-          ## Using Docker Compose
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          CURRENT_TAG=${GITHUB_REF#refs/tags/}
+          PREVIOUS_TAG=${{ steps.previoustag.outputs.tag }}
 
-          1. Copy `.env.example` to `.env` and customize as needed
-          2. Create required directories:
-             ```bash
-             mkdir -p local/{config,data,downloads,cache,logs}
-             ```
-          3. Copy your `config.yaml` to `local/config/config.yaml`
-          4. Start the application:
-             ```bash
-             docker-compose up -d
-             ```
-          5. Access the web UI at http://localhost:8000
+          if [ -z "$PREVIOUS_TAG" ]; then
+            CHANGES=$(git log --pretty=format:"- %s (%h)" $CURRENT_TAG)
+          else
+            CHANGES=$(git log --pretty=format:"- %s (%h)" $PREVIOUS_TAG..$CURRENT_TAG)
+          fi
 
-          ## Using Docker directly
+          cat << EOF > release_notes.md
+          ## What's Changed
 
-          ```bash
-          docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}
-          docker run -d \
-            -p 8000:8000 \
-            -v ./local/config:/app/local/config \
-            -v ./local/data:/app/local/data \
-            -v ./local/downloads:/app/local/downloads \
-            -v ./local/cache:/app/local/cache \
-            -v ./local/logs:/app/local/logs \
-            ghcr.io/${{ github.repository }}:${{ github.ref_name }}
-          ```
+          $CHANGES
 
-          ## Environment Variables
+          ## Docker Image
 
-          See `.env.example` for all available configuration options.
+          \`\`\`bash
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$CURRENT_TAG
+          \`\`\`
+
+          **Full Changelog**: https://github.com/${{ github.repository }}/compare/$PREVIOUS_TAG...$CURRENT_TAG
           EOF
-          
-          # Create archive
-          cd release
-          tar -czf ../curator-${{ github.ref_name }}.tar.gz *
-          cd ..
+
+          echo "Generated release notes:"
+          cat release_notes.md
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v1
         with:
-          files: |
-            curator-${{ github.ref_name }}.tar.gz
-          body: |
-            ## Docker Images
-
-            Pull the latest image:
-            ```bash
-            docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}
-            docker pull ghcr.io/${{ github.repository }}:latest
-            ```
-
-            ## What's Changed
-
-            See the quickstart guide in the release assets for deployment instructions.
-
-            **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ github.ref_name }}...HEAD
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
           generate_release_notes: true
-          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

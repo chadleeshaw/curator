@@ -1,0 +1,37 @@
+body {
+    font-family: Georgia, serif;
+    line-height: 1.6;
+    margin: 2em;
+    max-width: 40em;
+}
+
+h1 {
+    color: #2c3e50;
+    font-size: 2em;
+    margin-bottom: 0.5em;
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 0.3em;
+}
+
+p {
+    margin-bottom: 1em;
+    text-align: justify;
+}
+
+ul, ol {
+    margin: 1em 0;
+    padding-left: 2em;
+}
+
+li {
+    margin-bottom: 0.5em;
+}
+
+a {
+    color: #3498db;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}

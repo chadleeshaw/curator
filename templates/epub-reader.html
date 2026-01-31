@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EPUB Reader - Curator</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🪙</text></svg>"
+    />
+    <link rel="stylesheet" href="/static/css/base.css" />
+    <link rel="stylesheet" href="/static/css/themes.css" />
+    <link rel="stylesheet" href="/static/css/reader.css" />
+    <script type="module" src="/static/js/readers/epub-reader.js?v=1768776783"></script>
+  </head>
+  <body>
+    <!-- Header -->
+    <div class="reader-header">
+      <h1 class="reader-title" id="book-title">Loading...</h1>
+      <div class="header-actions">
+        <button class="nav-btn" id="header-prev-btn" onclick="epubReader.previousChapter()">
+          ←
+        </button>
+        <button class="btn" id="back-btn" onclick="epubReader.goBackToPeriodical()">
+          ← Back to Periodical
+        </button>
+        <button class="nav-btn" id="header-next-btn" onclick="epubReader.nextChapter()">→</button>
+      </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="reader-container">
+      <!-- Sidebar -->
+      <div class="sidebar epub-sidebar" id="sidebar">
+        <div class="sidebar-header">Table of Contents</div>
+        <div class="chapter-list" id="chapter-list">
+          <div class="loading">
+            <div style="text-align: center">
+              <div class="spinner"></div>
+              <div>Loading chapters...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Content Area -->
+      <div class="content-area">
+        <div class="content-header">
+          <div class="chapter-title-display" id="current-chapter-title">Select a chapter</div>
+          <div class="zoom-controls">
+            <span class="controls-label">Zoom:</span>
+            <button class="control-btn" onclick="epubReader.adjustZoom(-10)" title="Zoom out (-)">
+              −
+            </button>
+            <span id="zoom-level" style="min-width: 45px; text-align: center; font-weight: 500">
+              100%
+            </span>
+            <button class="control-btn" onclick="epubReader.adjustZoom(10)" title="Zoom in (+)">
+              +
+            </button>
+            <button class="control-btn" onclick="epubReader.resetZoom()" title="Reset zoom (0)">
+              Reset
+            </button>
+          </div>
+          <div class="view-controls">
+            <button
+              class="control-btn"
+              id="fullscreen-btn"
+              onclick="epubReader.toggleFullscreen()"
+              title="Fullscreen (F)"
+            >
+              ⛶
+            </button>
+          </div>
+          <div class="nav-buttons">
+            <button class="nav-btn" id="prev-btn" onclick="epubReader.previousChapter()">
+              ← Previous
+            </button>
+            <button class="nav-btn" id="next-btn" onclick="epubReader.nextChapter()">Next →</button>
+          </div>
+        </div>
+        <div class="chapter-content" id="chapter-content">
+          <div class="loading">
+            <div style="text-align: center">
+              <div class="spinner"></div>
+              <div>Loading content...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile Overlay -->
+    <div class="mobile-overlay" id="mobile-overlay" onclick="toggleSidebar()"></div>
+  </body>
+</html>

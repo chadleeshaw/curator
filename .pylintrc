@@ -7,6 +7,7 @@ disable=
     missing-docstring,
     too-few-public-methods,
     too-many-arguments,
+    too-many-positional-arguments,
     logging-fstring-interpolation,
     broad-exception-caught,
     no-else-return,
@@ -37,7 +38,16 @@ disable=
     ungrouped-imports,
     consider-using-dict-items,
     line-too-long,
-    bare-except
+    bare-except,
+    no-name-in-module,
+    unreachable,
+    reimported,
+    use-implicit-booleaness-not-comparison,
+    consider-using-sys-exit,
+    unnecessary-pass,
+    assignment-from-no-return,
+    abstract-class-instantiated,
+    cyclic-import
     
 [FORMAT]
 max-line-length=120

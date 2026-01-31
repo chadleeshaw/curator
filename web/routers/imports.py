@@ -3,12 +3,19 @@ File import routes
 """
 
 import logging
+import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
+from core.constants.category import DEFAULT_CATEGORY
+from core.constants.errors import ErrorMessages
+from core.utils.db import with_db_session
+from core.utils.error_handling import handle_api_errors
+from core.utils.general import find_pdf_epub_files
 from web.schemas import ImportOptionsRequest
+from web.utils.responses import status_response, success_response
 
 router = APIRouter(prefix="/api/import", tags=["imports"])
 logger = logging.getLogger(__name__)
@@ -19,7 +26,7 @@ _file_importer = None
 _storage_config = None
 
 
-def set_dependencies(session_factory, file_importer, storage_config):
+def set_dependencies(session_factory: Callable, file_importer: Any, storage_config: Dict[str, Any]) -> None:
     """Set dependencies from main app"""
     global _session_factory, _file_importer, _storage_config
     _session_factory = session_factory
@@ -28,9 +35,12 @@ def set_dependencies(session_factory, file_importer, storage_config):
 
 
 @router.post("/process")
-async def import_from_downloads(background_tasks: BackgroundTasks, options: Optional[ImportOptionsRequest] = None) -> Dict[str, Any]:
+@handle_api_errors("Import from downloads", logger)
+async def import_from_downloads(
+    background_tasks: BackgroundTasks, options: Optional[ImportOptionsRequest] = None
+) -> Dict[str, Any]:
     """
-    Process PDFs from downloads folder and import them into the library.
+    Process PDF, EPUB, CBZ, and CBR files from downloads folder and import them into the library.
     Runs asynchronously in background.
 
     Args:
@@ -39,127 +49,172 @@ async def import_from_downloads(background_tasks: BackgroundTasks, options: Opti
     Returns:
         Status of import operation
     """
-    try:
-        if not _file_importer:
-            raise HTTPException(status_code=503, detail="File importer not available")
+    if not _file_importer:
+        raise HTTPException(status_code=503, detail=ErrorMessages.FILE_IMPORTER_UNAVAILABLE)
 
-        def process_imports():
-            """Background task to process imports"""
-            try:
-                db_session = _session_factory()
-                try:
-                    # Pass organization_pattern to file importer
-                    org_pattern = options.organization_pattern if options else None
-                    results = _file_importer.process_downloads(db_session, org_pattern)
-                    logger.debug(f"Import completed: {results}")
-                finally:
-                    db_session.close()
-            except Exception as e:
-                logger.error(f"Error processing imports: {e}", exc_info=True)
+    async def process_imports():
+        """Background task to process imports"""
+        try:
 
-        background_tasks.add_task(process_imports)
+            def operation(db):
+                # Pass organization_pattern to file importer
+                org_pattern = options.organization_pattern if options else None
+                results = _file_importer.process_downloads(db, org_pattern)
+                logger.debug(f"Import completed: {results}")
+                return results
 
-        return {
-            "status": "processing",
-            "message": "Started importing PDFs from downloads folder",
-        }
+            await with_db_session(_session_factory, operation)
+        except Exception as e:
+            logger.error(f"Error processing imports: {e}", exc_info=True)
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Import request error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    background_tasks.add_task(process_imports)
+
+    return status_response("processing", "Started importing files from downloads folder")
 
 
 @router.get("/status")
+@handle_api_errors("Get import status", logger)
 async def get_import_status() -> Dict[str, Any]:
-    """Get information about available files in downloads folder"""
-    try:
-        downloads_dir = Path(_storage_config.get("download_dir", "./downloads"))
+    """Get information about available files in downloads folder (searches recursively)"""
+    downloads_dir = Path(_storage_config.get("download_dir", "./downloads"))
 
-        if not downloads_dir.exists():
-            return {"ready": False, "files": 0, "message": "Downloads directory not found"}
-
-        pdf_files = list(downloads_dir.glob("*.pdf"))
-
+    if not downloads_dir.exists():
         return {
-            "ready": len(pdf_files) > 0,
-            "files": len(pdf_files),
-            "file_list": [f.name for f in pdf_files],
-            "message": f"Found {len(pdf_files)} PDF files ready to import",
+            "ready": False,
+            "files": 0,
+            "message": "Downloads directory not found",
         }
 
-    except Exception as e:
-        logger.error(f"Get import status error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    # Search recursively for PDF, EPUB, CBZ, and CBR files (matches process_downloads behavior)
+    all_files = find_pdf_epub_files(downloads_dir, recursive=True)
+    pdf_files = [f for f in all_files if f.suffix == ".pdf"]
+    epub_files = [f for f in all_files if f.suffix == ".epub"]
+    cbz_files = [f for f in all_files if f.suffix == ".cbz"]
+    cbr_files = [f for f in all_files if f.suffix == ".cbr"]
+
+    return {
+        "ready": len(all_files) > 0,
+        "files": len(all_files),
+        "file_list": [str(f.relative_to(downloads_dir)) for f in all_files],
+        "message": f"Found {len(all_files)} files ready to import ({len(pdf_files)} PDFs, {len(epub_files)} EPUBs, {len(cbz_files)} CBZs, {len(cbr_files)} CBRs)",
+    }
 
 
-@router.post("/from-organize-dir")
-async def import_from_organize_dir(
+@router.post("/from-library-dir")
+@handle_api_errors("Import from library dir", logger)
+async def import_from_library_dir(
     background_tasks: BackgroundTasks,
-    auto_track: bool = True,
-    organization_pattern: str = None
+    options: ImportOptionsRequest,
 ) -> Dict[str, Any]:
     """
-    Import PDFs from the organized data directory back into the library.
-    Useful for syncing files that exist in the organize directory but aren't in the database.
+    Import PDF, EPUB, CBZ, and CBR files from the organized data directory back into the library.
+    Useful for syncing files that exist in the library directory but aren't in the database.
 
     Args:
-        auto_track: Whether to auto-track newly imported periodicals
-        organization_pattern: Optional organization pattern override for this import
+        options: Import options including auto_track, tracking_mode, and organization_pattern
 
     Returns:
         Status of import operation
     """
-    try:
-        if not _file_importer:
-            raise HTTPException(status_code=503, detail="File importer not available")
+    if not _file_importer:
+        raise HTTPException(status_code=503, detail=ErrorMessages.FILE_IMPORTER_UNAVAILABLE)
 
-        organize_dir = Path(_storage_config.get("organize_dir", "./local/data"))
+    library_dir = Path(_storage_config.get("library_dir", "./local/data"))
 
-        if not organize_dir.exists():
-            raise HTTPException(status_code=400, detail=f"Organize directory not found: {organize_dir}")
+    if not library_dir.exists():
+        raise HTTPException(status_code=400, detail=f"Library directory not found: {library_dir}")
 
-        # Count PDFs available
-        pdf_files = list(organize_dir.rglob("*.pdf"))
+    # Count files available for import (PDFs, EPUBs, CBZs, and CBRs)
+    all_files = find_pdf_epub_files(library_dir, recursive=True)
 
-        if not pdf_files:
-            return {
-                "success": True,
-                "imported": 0,
-                "message": f"No PDFs found in organize directory: {organize_dir}",
-            }
+    if not all_files:
+        return success_response(
+            f"No files found in library directory: {library_dir}",
+            imported=0,
+        )
 
-        def process_organize_dir_imports():
-            """Background task to process imports from organize directory"""
-            try:
-                db_session = _session_factory()
+    async def process_library_dir_imports():
+        """Background task to process imports from library directory"""
+        original_pattern = None
+        try:
+            logger.info(f"Import settings: auto_track={options.auto_track}, tracking_mode={options.tracking_mode}")
+
+            # Temporarily override organization pattern if provided
+            original_pattern = _file_importer.organization_pattern
+            if options.organization_pattern:
+                _file_importer.organization_pattern = options.organization_pattern
+
+            def operation(db):
+                results = _file_importer.process_organized_files(
+                    db,
+                    auto_track=options.auto_track,
+                    tracking_mode=options.tracking_mode,
+                )
+
+                # Extract counts from nested data structure
+                data = results.get("data", {})
+                imported = data.get("imported", 0)
+                failed = data.get("failed", 0)
+
+                logger.info(f"Library directory import results: {imported} imported, {failed} failed")
+                return results
+
+            await with_db_session(_session_factory, operation)
+
+        except Exception as e:
+            logger.error(f"Error processing library directory imports: {e}", exc_info=True)
+        finally:
+            # Restore original pattern
+            if original_pattern is not None:
                 try:
-                    # Temporarily override organization pattern if provided
-                    original_pattern = _file_importer.organization_pattern
-                    if organization_pattern:
-                        _file_importer.organization_pattern = organization_pattern
-
-                    results = _file_importer.process_organized_files(db_session, auto_track=auto_track)
-                    logger.info(f"Organize directory import results: {results['imported']} imported, {results['failed']} failed")
-
-                    # Restore original pattern
                     _file_importer.organization_pattern = original_pattern
-                finally:
-                    db_session.close()
-            except Exception as e:
-                logger.error(f"Error processing organize directory imports: {e}", exc_info=True)
+                except Exception as e:
+                    logger.error(f"Error restoring organization pattern: {e}")
 
-        background_tasks.add_task(process_organize_dir_imports)
+    background_tasks.add_task(process_library_dir_imports)
 
-        return {
-            "success": True,
-            "imported": len(pdf_files),
-            "message": f"Started importing {len(pdf_files)} PDFs from organize directory",
-        }
+    return success_response(
+        f"Started importing {len(all_files)} files from library directory",
+        imported=len(all_files),
+    )
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Import from organize dir error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/reorganize")
+@handle_api_errors("Reorganize library", logger)
+async def reorganize_library(
+    category: str = DEFAULT_CATEGORY,
+    pattern: Optional[str] = None,
+    dry_run: Optional[bool] = None,
+) -> Dict[str, Any]:
+    """
+    Reorganize files in the library to match the current organization pattern.
+
+    Scans the organized directory for files in the wrong location and moves them
+    to the correct location based on their metadata in the database.
+
+    Args:
+        category: Category to reorganize (default: DEFAULT_CATEGORY from constants)
+        pattern: Organization pattern with tags like {category}/{title}/{year}/ (uses config default if not provided)
+        dry_run: If True, only report what would be done without making changes.
+                 If None (default), checks CURATOR_DRY_RUN env var (defaults to False if not set)
+
+    Returns:
+        Reorganization results
+    """
+    # Determine dry_run value: parameter > env var > default False
+    if dry_run is None:
+        dry_run_env = os.environ.get("CURATOR_DRY_RUN", "false").lower()
+        dry_run = dry_run_env in ("true", "1", "yes")
+
+    if not _file_importer:
+        raise HTTPException(status_code=503, detail=ErrorMessages.FILE_IMPORTER_UNAVAILABLE)
+
+    def operation(db):
+        # Use the file organizer from the file importer
+        organizer = _file_importer.organizer
+
+        results = organizer.reorganize_from_database(db_session=db, category=category, pattern=pattern, dry_run=dry_run)
+
+        return results
+
+    return await with_db_session(_session_factory, operation)

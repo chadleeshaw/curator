@@ -1,9 +1,15 @@
+"""
+SABnzbd download client implementation.
+Handles NZB submissions and status tracking for SABnzbd.
+"""
+
 import logging
-from typing import Any, Dict, List
+import re
+from typing import Any, Dict, List, Optional
 
 import requests
 
-from core.bases import DownloadClient
+from core.interfaces import DownloadClient
 
 logger = logging.getLogger(__name__)
 
@@ -19,12 +25,39 @@ class SABnzbdClient(DownloadClient):
         if not self.api_key:
             raise ValueError("SABnzbd client requires api_key")
 
-    def _api_call(self, action: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
+    def _parse_wait_time(self, extra_status: str) -> Optional[int]:
+        """
+        Parse wait time from SABnzbd extra_status field.
+
+        SABnzbd returns messages like:
+        - "WAIT 3600 seconds until retry"
+        - "WAIT 13887 seconds until retry"
+
+        Args:
+            extra_status: The extra_status field from SABnzbd queue slot
+
+        Returns:
+            Wait time in seconds, or None if not a WAIT message
+        """
+        if not extra_status:
+            return None
+
+        # Pattern: "WAIT X seconds until retry"
+        match = re.search(r"WAIT\s+(\d+)\s+seconds?", extra_status, re.IGNORECASE)
+        if match:
+            return int(match.group(1))
+
+        return None
+
+    def _api_call(self, mode: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
         """Make API call to SABnzbd"""
         if params is None:
             params = {}
 
-        params["action"] = action
+        # SABnzbd API uses 'mode' parameter, not 'action'
+        # Only set mode if not already present (allows caller to override)
+        if "mode" not in params:
+            params["mode"] = mode
         params["output"] = "json"
         params["apikey"] = self.api_key
 
@@ -37,13 +70,14 @@ class SABnzbdClient(DownloadClient):
             logger.error(f"SABnzbd API error: {e}")
             return {}
 
-    def submit(self, nzb_url: str, title: str = None) -> str:
+    def submit(self, nzb_url: str, title: str = None, category: str = None) -> str:
         """
         Submit an NZB URL to SABnzbd.
 
         Args:
             nzb_url: URL to NZB file
-            title: Optional title for the job
+            title: Optional title for the job (sanitized to prevent subfolder issues)
+            category: Optional category (determines download folder)
 
         Returns:
             Job ID (NZO ID)
@@ -55,7 +89,14 @@ class SABnzbdClient(DownloadClient):
             }
 
             if title:
-                params["nzbname"] = title
+                # Sanitize title: replace path separators and limit length
+                sanitized_title = title.replace("/", "-").replace("\\", "-").strip()
+                if len(sanitized_title) > 100:
+                    sanitized_title = sanitized_title[:100].strip()
+                params["nzbname"] = sanitized_title
+
+            if category:
+                params["cat"] = category
 
             response = self._api_call("add", params)
 
@@ -84,7 +125,7 @@ class SABnzbdClient(DownloadClient):
         try:
             logger.debug(f"[SABnzbd] Checking status for job_id: {job_id}")
 
-            response = self._api_call("queue", {"mode": "queue"})
+            response = self._api_call("queue")
 
             queue = response.get("queue", {})
             slots = queue.get("slots", [])
@@ -95,7 +136,59 @@ class SABnzbdClient(DownloadClient):
 
             for slot in slots:
                 if slot.get("nzo_id") == job_id:
-                    logger.info(f"[SABnzbd] Found {job_id} in queue")
+                    logger.debug(f"[SABnzbd] Found {job_id} in queue")
+
+                    # Check for paused job due to encryption
+                    slot_status = slot.get("status", "")
+                    extra_status = slot.get("extra_status", "")
+                    msg = slot.get("msg", "")
+                    status_line = slot.get("status_line", "")
+
+                    # Check if paused due to encryption
+                    encryption_indicators = [
+                        "encrypted rar",
+                        "encrypted archive",
+                        "archive requires a password",
+                        "password protected",
+                        "all passwords were tried",
+                    ]
+
+                    is_encrypted = slot_status == "Paused" and any(
+                        indicator in text.lower()
+                        for text in [extra_status, msg, status_line]
+                        for indicator in encryption_indicators
+                    )
+
+                    if is_encrypted:
+                        logger.warning(
+                            f"[SABnzbd] Job {job_id} is paused due to encryption/password protection. "
+                            f"Status: {slot_status}, Extra: {extra_status}, Msg: {msg}"
+                        )
+                        return {
+                            "status": "failed",
+                            "progress": 0,
+                            "error": "Archive is encrypted or password protected",
+                            "encrypted": True,
+                        }
+
+                    # Check for rate limit WAIT status
+                    wait_time = self._parse_wait_time(extra_status)
+
+                    if wait_time:
+                        # Provider rate limited - SABnzbd is waiting to retry
+                        logger.warning(
+                            f"[SABnzbd] Job {job_id} is rate limited by provider. "
+                            f"Waiting {wait_time} seconds (~{wait_time / 3600:.1f} hours) before retry. "
+                            f"Extra status: {extra_status}"
+                        )
+                        return {
+                            "status": "pending",  # Keep as pending, not failed
+                            "progress": 0,
+                            "rate_limited": True,
+                            "wait_time": wait_time,
+                            "message": f"Provider rate limit: waiting {wait_time}s (~{wait_time / 3600:.1f}h)",
+                        }
+
                     status = "downloading" if slot.get("status") == "Downloading" else "pending"
                     return {
                         "status": status,
@@ -106,7 +199,7 @@ class SABnzbdClient(DownloadClient):
 
             # Check history for completed/failed downloads
             logger.debug("[SABnzbd] Job not in queue, checking history...")
-            response = self._api_call("history", {"mode": "history"})
+            response = self._api_call("history")
 
             history = response.get("history", {})
             slots = history.get("slots", [])
@@ -129,11 +222,46 @@ class SABnzbdClient(DownloadClient):
                             "file_path": slot.get("storage"),
                         }
                     elif "fail" in slot_status or "abort" in slot_status:
-                        logger.warning(f"[SABnzbd] Job {job_id} failed: {slot_status}")
+                        fail_message = slot.get("fail_message", "No details available")
+
+                        # Extract additional failure details from stage_log
+                        stage_log = slot.get("stage_log", [])
+                        failure_details = []
+                        for stage in stage_log:
+                            stage_name = stage.get("name", "")
+                            actions = stage.get("actions", [])
+                            for action in actions:
+                                if any(
+                                    keyword in action.lower()
+                                    for keyword in ["missing", "failed", "error", "incomplete"]
+                                ):
+                                    failure_details.append(f"{stage_name}: {action}")
+
+                        # Build comprehensive error message
+                        error_parts = [f"Download {slot_status}: {fail_message}"]
+                        if failure_details:
+                            error_parts.append(" | ".join(failure_details))
+                        error_message = " - ".join(error_parts)
+
+                        logger.warning(f"[SABnzbd] Job {job_id} failed: {error_message}")
+
+                        # Check if failure was due to encryption
+                        encryption_indicators = [
+                            "encrypted rar",
+                            "encrypted archive",
+                            "archive requires a password",
+                            "password protected",
+                            "unpacking failed",
+                            "all passwords were tried",
+                        ]
+
+                        is_encrypted = any(indicator in fail_message.lower() for indicator in encryption_indicators)
+
                         return {
                             "status": "failed",
                             "progress": 0,
-                            "error": f"Download {slot_status}: {slot.get('fail_message', 'No details available')}",
+                            "error": error_message,
+                            "encrypted": is_encrypted,
                         }
                     else:
                         logger.warning(f"[SABnzbd] Job {job_id} has unknown status: {slot_status}")
@@ -142,7 +270,8 @@ class SABnzbdClient(DownloadClient):
                             "progress": int(float(slot.get("percentage", 0))),
                         }
 
-            logger.warning(f"[SABnzbd] Job {job_id} not found in queue or history")
+            # Job not found - likely deleted or expired from history
+            logger.debug(f"[SABnzbd] Job {job_id} not found in queue or history (may have been deleted)")
             return {"status": "unknown", "progress": 0}
 
         except Exception as e:
@@ -178,3 +307,91 @@ class SABnzbdClient(DownloadClient):
             logger.error(f"Error getting completed downloads: {e}")
 
         return completed
+
+    def delete(self, job_id: str) -> bool:
+        """
+        Delete a job from SABnzbd (queue or history).
+
+        Args:
+            job_id: NZO ID to delete
+
+        Returns:
+            True if successfully deleted
+        """
+        try:
+            # Try deleting from history first (most common case after completion)
+            response = self._api_call("history", {"name": "delete", "value": job_id})
+
+            if response.get("status"):
+                logger.info(f"[SABnzbd] Deleted job {job_id} from history")
+                return True
+
+            # If not in history, try queue
+            response = self._api_call("queue", {"name": "delete", "value": job_id})
+
+            if response.get("status"):
+                logger.info(f"[SABnzbd] Deleted job {job_id} from queue")
+                return True
+
+            logger.warning(f"[SABnzbd] Could not delete job {job_id} - not found")
+            return False
+
+        except Exception as e:
+            logger.error(f"[SABnzbd] Error deleting job {job_id}: {e}")
+            return False
+
+    def test_connection(self) -> Dict[str, Any]:
+        """
+        Test the connection to SABnzbd.
+
+        Returns:
+            Dict with success status and message
+        """
+        try:
+            # Use the version endpoint as a lightweight test
+            response = self._api_call("version")
+
+            if not response:
+                return {
+                    "success": False,
+                    "message": "No response from SABnzbd - check your API URL and key",
+                }
+
+            # Check if we got version info
+            version = response.get("version")
+            if version:
+                return {
+                    "success": True,
+                    "message": f"Connection successful - SABnzbd v{version}",
+                    "version": version,
+                }
+
+            # Try getting queue info as fallback
+            queue_response = self._api_call("queue")
+            if queue_response and "queue" in queue_response:
+                return {
+                    "success": True,
+                    "message": "Connection successful",
+                }
+
+            return {
+                "success": False,
+                "message": "Unexpected response from SABnzbd",
+            }
+
+        except requests.exceptions.Timeout:
+            return {
+                "success": False,
+                "message": "Connection timeout - check your API URL and network",
+            }
+        except requests.exceptions.ConnectionError:
+            return {
+                "success": False,
+                "message": "Connection failed - check your API URL and network",
+            }
+        except Exception as e:
+            logger.error(f"SABnzbd connection test error: {e}", exc_info=True)
+            return {
+                "success": False,
+                "message": f"Error: {str(e)}",
+            }

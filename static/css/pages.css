@@ -5,278 +5,366 @@
    Settings Page
    ========================================================================== */
 
-.settings-container {
-    background: var(--surface);
-    padding: 30px;
-    border-radius: 10px;
-    box-shadow: var(--shadow-md);
-}
-
 .settings-section {
-    margin-bottom: 30px;
-    padding: 20px;
-    background: var(--surface-variant);
-    border-radius: 8px;
-    border-left: 4px solid var(--primary-color);
+  margin-bottom: 30px;
+  padding: 20px;
+  background: var(--surface-variant);
+  border-radius: 8px;
+  border-left: 4px solid var(--primary-color);
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .settings-section h3 {
-    color: var(--primary-color);
-    margin-bottom: 15px;
-    font-size: 18px;
+  color: var(--primary-color);
+  margin-bottom: 15px;
+  font-size: 18px;
 }
 
 .settings-provider-block {
-    margin-bottom: 20px;
-    padding: 15px;
-    background: var(--surface);
-    border-radius: 5px;
-    border: 1px solid var(--border-color);
+  margin-bottom: 20px;
+  padding: 15px;
+  background: var(--surface);
+  border-radius: 5px;
+  border: 1px solid var(--border-color);
 }
 
 .settings-provider-block:last-child {
-    margin-bottom: 0;
+  margin-bottom: 0;
 }
 
 /* ==========================================================================
    Tracking Page
    ========================================================================== */
 
-.tracking-container {
-    background: var(--surface);
-    padding: 30px;
-    border-radius: 10px;
-    box-shadow: var(--shadow-md);
-}
-
 .tracking-container > p {
-    color: var(--text-secondary);
-    margin-bottom: 20px;
-    font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 20px;
+  font-size: 14px;
 }
 
 .tracking-step {
-    margin-bottom: 30px;
-    padding: 20px;
-    background: var(--surface-variant);
-    border-left: 4px solid var(--primary-color);
-    border-radius: 5px;
-    transition: opacity 0.3s;
+  margin-bottom: 30px;
+  padding: 20px;
+  background: var(--surface-variant);
+  border-left: 4px solid var(--primary-color);
+  border-radius: 5px;
+  transition: opacity 0.3s;
 }
 
 .tracking-step.hidden {
-    opacity: 0.5;
-    pointer-events: none;
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 .tracking-step h3 {
-    color: var(--primary-color);
-    margin-bottom: 15px;
-    font-size: 18px;
+  color: var(--primary-color);
+  margin-bottom: 15px;
+  font-size: 18px;
 }
 
 .tracking-search {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 15px;
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
 }
 
 .tracking-search input {
-    flex: 1;
-    padding: 10px;
-    border: 1px solid var(--border-color);
-    border-radius: 5px;
-    font-size: 14px;
-    background: var(--surface);
-    color: var(--text-primary);
+  flex: 1;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  font-size: 14px;
+  background: var(--surface);
+  color: var(--text-primary);
 }
 
 .tracking-search button {
-    padding: 10px 20px;
-    background: var(--primary-color);
-    color: white;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 14px;
+  padding: 10px 20px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
 }
 
 .tracking-search button:hover {
-    background: var(--primary-dark);
+  background: var(--primary-dark);
 }
 
 .tracking-result {
-    margin-top: 15px;
+  margin-top: 15px;
 }
 
 .tracking-mode-options {
-    margin-bottom: 20px;
+  margin-bottom: 20px;
 }
 
 .editions-controls {
-    margin-bottom: 15px;
-    display: flex;
-    gap: 15px;
-    align-items: center;
+  margin-bottom: 15px;
+  display: flex;
+  gap: 15px;
+  align-items: center;
+}
+
+/* ==========================================================================
+   Track New Periodical Modal - Compact Layout
+   ========================================================================== */
+
+#track-new-periodical-modal .modal-content {
+  max-width: 700px;
+}
+
+#track-new-periodical-modal h2 {
+  font-size: 22px;
+  margin-bottom: 6px;
+}
+
+#track-new-periodical-modal > div > p:first-of-type,
+#track-new-periodical-modal .modal-content > p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+/* Compact settings fields in modal */
+#track-new-periodical-modal .settings-field {
+  margin-bottom: 10px;
+}
+
+#track-new-periodical-modal .settings-field label {
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#track-new-periodical-modal .settings-field input,
+#track-new-periodical-modal .settings-field select {
+  padding: 7px 10px;
+  font-size: 14px;
+}
+
+#track-new-periodical-modal .settings-field small {
+  font-size: 11px;
+  line-height: 1.3;
+  margin-top: 3px;
+}
+
+/* Tracking Details section */
+#track-new-periodical-modal h3 {
+  font-size: 18px;
+  margin-bottom: 4px;
+  color: var(--text-primary);
+}
+
+#track-new-periodical-modal h3 + p {
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+/* Two-column layout for compact fields */
+#track-new-periodical-modal .field-row,
+#edit-tracking-modal .field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+#track-new-periodical-modal .field-row .settings-field,
+#edit-tracking-modal .field-row .settings-field {
+  margin-bottom: 0;
+}
+
+/* Reduce spacing in tracking details section */
+#track-new-periodical-modal div[style*='margin-top: 30px'] {
+  margin-top: 20px !important;
+  padding-top: 15px !important;
 }
 
 .editions-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 15px;
-    margin-bottom: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 15px;
+  margin-bottom: 20px;
 }
 
 .save-controls {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    margin-top: 15px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 15px;
 }
 
 #save-info {
-    background: var(--surface);
-    padding: 10px;
-    border-radius: 5px;
-    margin-bottom: 15px;
-    color: var(--text-primary);
+  background: var(--surface);
+  padding: 10px;
+  border-radius: 5px;
+  margin-bottom: 15px;
+  color: var(--text-primary);
 }
 
 .tracked-periodicals {
-    margin-top: 0;
-    padding-top: 0;
+  margin-top: 0;
+  padding-top: 0;
+  position: relative;
 }
 
 .tracked-header {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    align-items: center;
-    gap: 20px;
-    margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-bottom: 20px;
+  position: relative;
+  z-index: 10;
 }
 
 .tracked-header h2 {
-    color: var(--primary-color);
-    font-size: 24px;
-    margin-bottom: 0;
-    grid-column: 1 / -1;
+  color: var(--primary-color);
+  font-size: 24px;
+  margin: 0;
 }
 
-.tracked-header .btn-primary {
-    grid-column: 1;
-    justify-self: start;
+.tracked-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+  flex-wrap: wrap;
+  position: relative;
+  z-index: 10;
+}
+
+.tracked-header .tracked-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  position: relative;
+  z-index: 10;
+}
+
+.tracked-header .tracked-actions button {
+  pointer-events: auto;
+  cursor: pointer;
+  position: relative;
+  z-index: 10;
 }
 
 .tracked-header .sort-controls {
-    grid-column: 2;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  position: relative;
+  z-index: 10;
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 #tracked-list {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  position: relative;
+  z-index: 1;
 }
 
 .tracked-item {
-    background: var(--surface-variant);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    padding: 15px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    transition: all 0.2s;
+  background: var(--surface-variant);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.2s;
 }
 
 .tracked-item:hover {
-    box-shadow: var(--shadow-md);
-    border-color: var(--primary-color);
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary-color);
 }
 
 .tracked-item-info {
-    flex: 1;
+  flex: 1;
 }
 
 .tracked-item-info h4 {
-    color: var(--text-primary);
-    margin: 0 0 5px 0;
-    font-size: 16px;
+  color: var(--text-primary);
+  margin: 0 0 5px 0;
+  font-size: 16px;
 }
 
 .tracked-item-info p {
-    color: var(--text-secondary);
-    margin: 3px 0;
-    font-size: 13px;
+  color: var(--text-secondary);
+  margin: 3px 0;
+  font-size: 13px;
 }
 
 .tracked-item-actions {
-    display: flex;
-    gap: 10px;
-    align-items: center;
+  display: flex;
+  gap: 10px;
+  align-items: center;
 }
 
 /* ==========================================================================
    Tasks Page
    ========================================================================== */
 
-.tasks-container {
-    background: var(--surface);
-    padding: 30px;
-    border-radius: 10px;
-    box-shadow: var(--shadow-md);
-}
-
 .task-card {
-    background: var(--surface-variant);
-    border-left: 4px solid var(--primary-color);
-    border-radius: 8px;
-    padding: 20px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    transition: all 0.2s;
+  background: var(--surface-variant);
+  border-left: 4px solid var(--primary-color);
+  border-radius: 8px;
+  padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.2s;
 }
 
 .task-card:hover {
-    box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-md);
 }
 
 .task-info {
-    flex: 1;
+  flex: 1;
 }
 
 .task-info h4 {
-    color: var(--text-primary);
-    margin: 0 0 8px 0;
-    font-size: 16px;
-    font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 600;
 }
 
 .task-info p {
-    color: var(--text-secondary);
-    margin: 3px 0;
-    font-size: 13px;
+  color: var(--text-secondary);
+  margin: 3px 0;
+  font-size: 13px;
 }
 
 .task-actions button {
-    padding: 8px 16px;
-    background: var(--primary-color);
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: background 0.2s;
+  padding: 8px 16px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
 }
 
 .task-actions button:hover {
-    background: var(--primary-dark);
+  background: var(--primary-dark);
 }
 
 .task-actions button:disabled {
-    background: var(--surface-variant);
-    color: var(--text-disabled);
-    cursor: not-allowed;
+  background: var(--surface-variant);
+  color: var(--text-disabled);
+  cursor: not-allowed;
 }
 
 /* ==========================================================================
@@ -284,150 +372,1692 @@
    ========================================================================== */
 
 .search-container {
-    background: var(--surface);
-    padding: 30px;
-    border-radius: 10px;
-    box-shadow: var(--shadow-md);
+  background: var(--surface);
+  padding: 30px;
+  border-radius: 10px;
+  box-shadow: var(--shadow-md);
 }
 
 .search-mode {
-    margin-bottom: 20px;
-    padding: 15px;
-    background: var(--surface-variant);
-    border-radius: 8px;
+  margin-bottom: 20px;
+  padding: 15px;
+  background: var(--surface-variant);
+  border-radius: 8px;
 }
 
 .search-mode label {
-    display: inline-flex;
-    align-items: center;
-    margin-right: 20px;
-    cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  margin-right: 20px;
+  cursor: pointer;
 }
 
-.search-mode input[type="radio"] {
-    margin-right: 8px;
+.search-mode input[type='radio'] {
+  margin-right: 8px;
 }
 
 #manual-providers {
-    margin-bottom: 20px;
-    padding: 15px;
-    background: var(--surface-variant);
-    border-radius: 8px;
+  margin-bottom: 20px;
+  padding: 15px;
+  background: var(--surface-variant);
+  border-radius: 8px;
 }
 
 .results-container {
-    margin-top: 30px;
-    border-top: 2px solid #e0e0e0;
-    padding-top: 20px;
+  margin-top: 30px;
+  border-top: 2px solid #e0e0e0;
+  padding-top: 20px;
 }
 
 .search-results {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 /* ==========================================================================
    Library/Periodicals Page
    ========================================================================== */
 
-.library-container {
-    background: var(--surface);
-    padding: 30px;
-    border-radius: 10px;
-    box-shadow: var(--shadow-md);
-}
-
 .status-info-item {
-    padding: 15px;
-    background: var(--surface-variant);
-    border-radius: 8px;
-    margin-bottom: 15px;
+  padding: 15px;
+  background: var(--surface-variant);
+  border-radius: 8px;
+  margin-bottom: 15px;
 }
 
 .status-info-item h3 {
-    color: var(--primary-color);
-    margin-bottom: 10px;
-    font-size: 16px;
+  color: var(--primary-color);
+  margin-bottom: 10px;
+  font-size: 16px;
 }
 
 .status-info-item ul {
-    list-style: none;
-    padding-left: 0;
+  list-style: none;
+  padding-left: 0;
 }
 
 .status-info-item li {
-    padding: 5px 0;
-    color: var(--text-secondary);
+  padding: 5px 0;
+  color: var(--text-secondary);
+}
+
+/* Library header and controls */
+.library-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.library-search-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.library-controls-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+/* Tracking header and controls - matching library styles */
+.tracking-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.tracking-search-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.tracking-controls-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.filter-row label {
+  flex-shrink: 0;
+}
+
+.filter-row select {
+  flex: 1;
+  max-width: 300px;
+}
+
+/* ==========================================================================
+   Queue Page Styles
+   ========================================================================== */
+
+/* Queue switcher buttons */
+.queue-switcher {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.queue-switch-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.queue-switch-btn:hover {
+  background: var(--surface-hover);
+  border-color: var(--primary-color);
+}
+
+.queue-switch-btn.active {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: white;
+}
+
+/* Queue header row - two column layout */
+.queue-view .queue-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 25px;
+  gap: 30px;
+}
+
+/* Left column: title, description, action buttons */
+.queue-view .queue-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.queue-view .queue-title {
+  color: var(--primary-color);
+  font-size: 24px;
+  margin: 0;
+}
+
+.queue-view .queue-description {
+  color: var(--text-secondary);
+  margin: 0;
+  font-size: 14px;
+}
+
+.queue-view .queue-actions-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.queue-view .queue-actions-row label {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.queue-clear-select {
+  padding: 6px 30px 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 14px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23888%22 stroke-width=%222%22%3e%3cpolyline points=%226 9 12 15 18 9%22%3e%3c/polyline%3e%3c/svg%3e');
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 14px;
+}
+
+/* Right column: sort and filter controls stacked vertically */
+.queue-view .queue-header-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.queue-view .queue-header-row .sort-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.queue-view .queue-header-row .sort-controls label {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.queue-view .queue-header-row .sort-controls select {
+  padding: 6px 30px 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 14px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23888%22 stroke-width=%222%22%3e%3cpolyline points=%226 9 12 15 18 9%22%3e%3c/polyline%3e%3c/svg%3e');
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 14px;
+}
+
+.queue-view .queue-header-row .filter-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.queue-view .queue-header-row .filter-row label {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.queue-view .queue-header-row .filter-row select {
+  width: 140px;
+  padding: 6px 30px 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 14px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23888%22 stroke-width=%222%22%3e%3cpolyline points=%226 9 12 15 18 9%22%3e%3c/polyline%3e%3c/svg%3e');
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 14px;
+}
+
+/* Queue Stats Grid */
+.queue-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 15px;
+}
+
+.queue-stat-item {
+  background: var(--surface);
+  padding: 15px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.queue-stat-number {
+  font-size: 1.5em;
+  font-weight: bold;
+}
+
+.queue-stat-label {
+  font-size: 0.85em;
+  color: var(--text-secondary);
+  margin-top: 5px;
+}
+
+.queue-stat-desc {
+  font-size: 0.7em;
+  color: var(--text-secondary);
+  margin-top: 2px;
+  font-style: italic;
+}
+
+/* Small buttons for queue actions */
+.btn-sm {
+  padding: 8px 14px;
+  font-size: 12px;
+  line-height: 1;
 }
 
 /* ==========================================================================
    Responsive Design
    ========================================================================== */
 
+/* Tablet/Medium screens - 3 columns */
+@media (max-width: 1200px) and (min-width: 769px) {
+  .settings-nav {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+}
+
 @media (max-width: 768px) {
-    .container {
-        padding: 10px;
-    }
+  .container {
+    padding: 10px;
+    overflow-x: hidden;
+  }
 
-    header {
-        padding: 20px;
-    }
+  header {
+    padding: 20px;
+  }
 
-    header h1 {
-        font-size: 24px;
-    }
+  header h1 {
+    font-size: 24px;
+  }
 
-    nav {
-        flex-direction: column;
-    }
+  /* Mobile nav - horizontal emoji-only buttons */
+  nav {
+    flex-direction: row;
+    justify-content: space-around;
+    padding: 6px;
+    gap: 4px;
+  }
 
-    .tab {
-        padding: 15px;
-    }
+  .nav-btn {
+    flex: 1;
+    padding: 10px 4px;
+    min-width: 0;
+    font-size: 20px;
+  }
 
-    .periodical-grid {
-        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-        gap: 15px;
-    }
+  .nav-btn .nav-text {
+    display: none;
+  }
 
-    .result-item {
-        flex-direction: column;
-        align-items: flex-start;
-    }
+  .nav-btn .nav-icon {
+    display: block;
+  }
 
-    .result-actions {
-        width: 100%;
-        margin-top: 10px;
-    }
+  .tab {
+    padding: 15px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
 
-    .result-actions button {
-        margin-left: 0;
-        margin-right: 5px;
-    }
+  .periodical-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 15px;
+  }
 
-    .tracked-item {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 15px;
-    }
+  .result-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 
-    .tracked-item-actions {
-        width: 100%;
-        justify-content: flex-start;
-    }
+  .result-actions {
+    width: 100%;
+    margin-top: 10px;
+  }
 
-    .task-card {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 15px;
-    }
+  .result-actions button {
+    margin-left: 0;
+    margin-right: 5px;
+  }
 
-    .task-actions {
-        width: 100%;
-    }
+  /* Tracking page - mobile layout */
+  .tracked-header {
+    gap: 20px;
+  }
 
-    .task-actions button {
-        width: 100%;
-    }
+  .tracked-header h2 {
+    text-align: center;
+    font-size: 20px;
+  }
+
+  .tracked-header-row {
+    flex-direction: column;
+    gap: 15px;
+    align-items: stretch;
+  }
+
+  .tracked-actions {
+    width: 100%;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .tracked-actions button {
+    width: 100%;
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+
+  .tracked-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+  }
+
+  .tracked-item-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .task-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+    padding: 16px;
+    max-width: 100%;
+    box-sizing: border-box;
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  /* Override inline styles on task cards */
+  #scheduled-tasks-list > div {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  #scheduled-tasks-list > div > div {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  #scheduled-tasks-list > div > div > div {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow-wrap: break-word;
+  }
+
+  .task-info h4 {
+    font-size: 15px;
+  }
+
+  .task-info p {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .task-actions {
+    width: 100%;
+  }
+
+  .task-actions button {
+    width: 100%;
+    padding: 10px 14px;
+  }
+
+  /* Tasks page - mobile layout */
+  .tasks-container {
+    padding: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .scheduled-tasks-section {
+    padding: 0;
+    max-width: 100%;
+  }
+
+  .scheduled-tasks-section h2 {
+    text-align: center;
+    font-size: 20px;
+  }
+
+  .scheduled-tasks-section > p {
+    text-align: center;
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 0 10px;
+  }
+
+  #scheduled-tasks-list {
+    max-width: 100%;
+    padding: 0;
+  }
+
+  /* Queue page - mobile layout */
+  .queue-switcher {
+    flex-direction: row;
+    gap: 8px;
+    margin-bottom: 15px;
+  }
+
+  .queue-switch-btn {
+    flex: 1;
+    justify-content: center;
+    padding: 12px 8px;
+    font-size: 14px;
+  }
+
+  /* Queue views - mobile layout */
+  #download-queue-view,
+  #ocr-queue-view {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header row - stack columns on mobile */
+  #download-queue-view .queue-header-row,
+  #ocr-queue-view .queue-header-row {
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 5px;
+  }
+
+  /* Left column - center on mobile */
+  #download-queue-view .queue-header-left,
+  #ocr-queue-view .queue-header-left {
+    width: 100%;
+    align-items: center;
+    text-align: center;
+  }
+
+  #download-queue-view .queue-title,
+  #ocr-queue-view .queue-title {
+    font-size: 20px;
+  }
+
+  #download-queue-view .queue-description,
+  #ocr-queue-view .queue-description {
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  /* Action buttons - center on mobile */
+  #download-queue-view .queue-actions-row,
+  #ocr-queue-view .queue-actions-row {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  #download-queue-view .queue-actions-row .btn-sm,
+  #ocr-queue-view .queue-actions-row .btn-sm {
+    flex: 1;
+    min-width: 90px;
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+
+  /* Header controls - full width on mobile */
+  #download-queue-view .queue-header-controls,
+  #ocr-queue-view .queue-header-controls {
+    width: 100%;
+    align-items: stretch;
+    margin-bottom: 0;
+  }
+
+  #download-queue-view .queue-header-row .sort-controls,
+  #ocr-queue-view .queue-header-row .sort-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  #download-queue-view .queue-header-row .sort-controls select,
+  #ocr-queue-view .queue-header-row .sort-controls select {
+    flex: 1;
+    min-width: 0;
+  }
+
+  #download-queue-view .queue-header-row .filter-row,
+  #ocr-queue-view .queue-header-row .filter-row {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  #download-queue-view .queue-header-row .filter-row select,
+  #ocr-queue-view .queue-header-row .filter-row select {
+    flex: 1;
+    width: auto !important;
+    max-width: none !important;
+  }
+
+  #download-queue-view .queue-header-row .filter-row .btn-sm,
+  #ocr-queue-view .queue-header-row .filter-row .btn-sm {
+    flex: 0 0 auto;
+    min-width: auto;
+    width: auto;
+    padding: 8px 14px;
+    font-size: 14px;
+  }
+
+  /* Stats and remaining content */
+  #download-queue-view #downloads-status,
+  #ocr-queue-view #ocr-status {
+    order: 4;
+  }
+
+  #download-queue-view #queue-stats,
+  #ocr-queue-view #ocr-queue-stats {
+    order: 5;
+  }
+
+  #download-queue-view #queue-empty,
+  #ocr-queue-view #ocr-queue-empty {
+    order: 6;
+  }
+
+  #download-queue-view #queue-table-container,
+  #ocr-queue-view #ocr-queue-table-container {
+    order: 7;
+  }
+
+  /* Queue stats grid - compact horizontal layout like nav tabs */
+  .queue-stats-grid {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 0 !important;
+    padding: 4px 0 !important;
+    background: transparent !important;
+    border-radius: 0 !important;
+    margin-bottom: 10px !important;
+  }
+
+  .queue-stat-item {
+    flex: 1 !important;
+    padding: 4px 2px !important;
+    min-width: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+
+  .queue-stat-number {
+    font-size: 1.1em !important;
+  }
+
+  .queue-stat-label {
+    font-size: 0.65em !important;
+    margin-top: 2px !important;
+  }
+
+  /* Hide description on mobile */
+  .queue-stat-desc {
+    display: none !important;
+  }
+
+  /* Reduce margin on stats containers - equal top and bottom */
+  #queue-stats,
+  #ocr-queue-stats {
+    margin-top: 5px !important;
+    margin-bottom: 5px !important;
+  }
+
+  /* Queue tables - mobile responsive */
+  .queue-table {
+    font-size: 12px;
+  }
+
+  .queue-table th,
+  .queue-table td {
+    padding: 8px 6px;
+    font-size: 12px;
+  }
+
+  /* Hide less important columns on mobile */
+  .queue-table th:nth-child(3),
+  .queue-table td:nth-child(3),
+  .queue-table th:nth-child(4),
+  .queue-table td:nth-child(4) {
+    display: none;
+  }
+
+  /* Make first column (title) wrap */
+  .queue-table td:first-child {
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Stack action buttons in queue table */
+  .queue-table td:last-child {
+    white-space: normal;
+  }
+
+  .queue-table td:last-child button {
+    font-size: 11px;
+    padding: 4px 8px;
+    margin: 2px;
+  }
+
+  /* Queue empty state */
+  #queue-empty {
+    padding: 40px 15px !important;
+  }
+
+  #queue-empty > div:first-child {
+    font-size: 3em !important;
+  }
+
+  #queue-empty p {
+    font-size: 0.95em !important;
+  }
+
+  /* Queue table container */
+  #queue-table-container,
+  #ocr-queue-table-container {
+    padding: 12px !important;
+    overflow-x: auto;
+  }
+
+  /* Modal improvements */
+  .modal-content {
+    width: 95% !important;
+    max-width: 95% !important;
+    padding: 15px !important;
+    max-height: 90vh !important;
+  }
+
+  .modal-content h2 {
+    font-size: 18px;
+    padding-right: 40px;
+    margin-top: 0;
+    line-height: 1.3;
+    overflow-wrap: break-word;
+  }
+
+  .modal-content .close {
+    right: 10px !important;
+    top: 10px !important;
+    font-size: 32px;
+    width: 32px;
+    height: 32px;
+    line-height: 32px;
+    text-align: center;
+  }
+
+  /* Modal tables */
+  .modal-content table {
+    font-size: 11px;
+    display: block;
+    overflow-x: auto;
+  }
+
+  .modal-content table thead,
+  .modal-content table tbody,
+  .modal-content table tr {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+  }
+
+  .modal-content table th,
+  .modal-content table td {
+    padding: 8px 4px;
+    font-size: 11px;
+  }
+
+  /* Adjust column widths for OCR modal */
+  .modal-content table th:nth-child(1),
+  .modal-content table td:nth-child(1) {
+    width: 35%;
+  }
+
+  .modal-content table th:nth-child(2),
+  .modal-content table td:nth-child(2) {
+    width: 25%;
+  }
+
+  .modal-content table th:nth-child(3),
+  .modal-content table td:nth-child(3) {
+    width: 20%;
+  }
+
+  .modal-content table th:nth-child(4),
+  .modal-content table td:nth-child(4) {
+    width: 20%;
+  }
+
+  /* Truncate long issue names */
+  .modal-content table td:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Status badges smaller */
+  .modal-content .status-badge {
+    font-size: 9px;
+    padding: 3px 8px;
+  }
+
+  /* Modal buttons */
+  .modal-content button {
+    font-size: 11px;
+    padding: 6px 10px;
+  }
+
+  /* Modal action buttons at bottom */
+  .modal-content > button:last-child {
+    width: 100%;
+    margin-top: 15px;
+    padding: 12px;
+    font-size: 14px;
+  }
+
+  /* Tracking cards - mobile layout */
+  .tracked-card {
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 16px !important;
+    gap: 12px !important;
+    grid-template-columns: unset !important;
+  }
+
+  .tracked-card .merge-checkbox {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    width: 24px;
+    height: 24px;
+  }
+
+  .tracked-card-main {
+    width: 100%;
+  }
+
+  .tracked-card h5 {
+    font-size: 16px !important;
+    padding-right: 0;
+  }
+
+  .tracked-card-header {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
+
+  .tracking-badge {
+    font-size: 11px !important;
+    padding: 4px 10px !important;
+  }
+
+  .tracked-card-meta {
+    font-size: 12px !important;
+    gap: 8px !important;
+    justify-content: flex-start;
+  }
+
+  .meta-item {
+    font-size: 12px !important;
+  }
+
+  .tracked-card-buttons {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    width: auto !important;
+    justify-content: center !important;
+    gap: 4px !important;
+    margin-top: 10px;
+    padding: 6px !important;
+    background: var(--surface-variant) !important;
+    border-radius: 8px !important;
+    border: 1px solid var(--border-color) !important;
+  }
+
+  .btn-icon {
+    flex: 1 !important;
+    min-width: 44px !important;
+    width: auto !important;
+    height: 44px !important;
+    font-size: 20px !important;
+    padding: 10px 4px !important;
+    border-radius: 10px !important;
+  }
+
+  /* Empty state in tracking */
+  .empty-state {
+    padding: 40px 20px !important;
+  }
+
+  .empty-state-icon {
+    font-size: 3em !important;
+  }
+
+  .empty-state h3 {
+    font-size: 18px !important;
+  }
+
+  .empty-state p {
+    font-size: 14px !important;
+  }
+
+  /* OCR Queue grouped rows - mobile */
+  #ocr-queue-table-container table tr[style*='cursor: pointer'] td > div,
+  #queue-table-container table tr[style*='cursor: pointer'] td > div {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
+
+  /* Periodical name and count */
+  #ocr-queue-table-container table tr[style*='cursor: pointer'] td > div > div:first-child,
+  #queue-table-container table tr[style*='cursor: pointer'] td > div > div:first-child {
+    width: 100%;
+  }
+
+  #ocr-queue-table-container
+    table
+    tr[style*='cursor: pointer']
+    td
+    > div
+    > div:first-child
+    span:first-child,
+  #queue-table-container
+    table
+    tr[style*='cursor: pointer']
+    td
+    > div
+    > div:first-child
+    span:first-child {
+    font-size: 14px !important;
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  #ocr-queue-table-container
+    table
+    tr[style*='cursor: pointer']
+    td
+    > div
+    > div:first-child
+    span:last-child,
+  #queue-table-container
+    table
+    tr[style*='cursor: pointer']
+    td
+    > div
+    > div:first-child
+    span:last-child {
+    font-size: 12px !important;
+    margin-left: 0 !important;
+  }
+
+  /* Status badges and arrow */
+  #ocr-queue-table-container table tr[style*='cursor: pointer'] td > div > div:last-child,
+  #queue-table-container table tr[style*='cursor: pointer'] td > div > div:last-child {
+    width: 100%;
+    justify-content: flex-start !important;
+    flex-wrap: wrap;
+  }
+
+  #ocr-queue-table-container table tr[style*='cursor: pointer'] td > div > div:last-child span,
+  #queue-table-container table tr[style*='cursor: pointer'] td > div > div:last-child span {
+    font-size: 10px !important;
+    padding: 3px 8px !important;
+    margin-right: 4px !important;
+    margin-bottom: 4px;
+  }
+
+  /* Arrow at the end */
+  #ocr-queue-table-container
+    table
+    tr[style*='cursor: pointer']
+    td
+    > div
+    > div:last-child
+    > span:last-child,
+  #queue-table-container
+    table
+    tr[style*='cursor: pointer']
+    td
+    > div
+    > div:last-child
+    > span:last-child {
+    margin-left: auto;
+    font-size: 18px !important;
+  }
+
+  /* Periodical cards - mobile optimizations */
+  .periodical-card {
+    border-radius: 10px;
+  }
+
+  .periodical-cover {
+    height: 180px !important;
+    padding: 12px !important;
+    font-size: 11px !important;
+  }
+
+  .periodical-info {
+    padding: 12px !important;
+  }
+
+  .periodical-info h4 {
+    font-size: 14px !important;
+    margin-bottom: 6px !important;
+  }
+
+  .periodical-info p {
+    font-size: 12px !important;
+    margin-bottom: 3px !important;
+  }
+
+  .periodical-info p:last-of-type {
+    margin-bottom: 10px !important;
+  }
+
+  .language-badge {
+    font-size: 10px !important;
+    padding: 3px 8px !important;
+    margin-top: 4px !important;
+    margin-bottom: 6px !important;
+  }
+
+  .periodical-actions {
+    flex-direction: row !important;
+    gap: 8px !important;
+    margin-top: 10px !important;
+  }
+
+  .periodical-actions button {
+    flex: 1 !important;
+    padding: 12px 8px !important;
+    font-size: 14px !important;
+    justify-content: center;
+    border-radius: 10px !important;
+    height: 48px !important;
+  }
+
+  .periodical-actions .btn-icon {
+    flex: 0 0 48px !important;
+    width: 48px !important;
+    height: 48px !important;
+    padding: 0 !important;
+    font-size: 20px !important;
+  }
+
+  /* Periodical detail page - mobile */
+  .back-button {
+    width: 100%;
+    text-align: center;
+    padding: 12px 20px !important;
+    font-size: 14px;
+    margin-bottom: 15px !important;
+  }
+
+  .periodical-header {
+    padding: 30px 16px !important;
+    margin-bottom: 20px !important;
+  }
+
+  .periodical-header h1 {
+    font-size: 1.8em !important;
+    line-height: 1.2;
+  }
+
+  .periodical-header p {
+    font-size: 0.95em !important;
+  }
+
+  .year-section {
+    margin-bottom: 35px !important;
+  }
+
+  .year-title {
+    font-size: 1.3em !important;
+    padding-bottom: 8px !important;
+    margin-bottom: 16px !important;
+  }
+
+  .issues-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)) !important;
+    gap: 16px !important;
+    margin-bottom: 30px !important;
+  }
+
+  .issue-card {
+    border-radius: 10px;
+  }
+
+  .issue-cover {
+    height: 150px !important;
+  }
+
+  .issue-cover-placeholder {
+    font-size: 10px !important;
+    padding: 10px !important;
+  }
+
+  .issue-info {
+    padding: 10px !important;
+  }
+
+  .issue-date {
+    font-size: 11px !important;
+    margin-bottom: 4px !important;
+  }
+
+  .issue-title {
+    font-size: 12px !important;
+    margin-bottom: 8px !important;
+  }
+
+  .issue-actions {
+    display: flex !important;
+    flex-flow: row nowrap !important;
+    gap: 4px !important;
+    margin-top: 8px !important;
+    padding: 0 !important;
+    justify-content: center !important;
+    background: transparent !important;
+    border: none !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .open-pdf-btn,
+  .metadata-btn,
+  .delete-issue-btn {
+    flex: 1 !important;
+    height: 36px !important;
+    width: auto !important;
+    padding: 0 !important;
+    font-size: 16px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 8px !important;
+    border: 2px solid var(--border-color) !important;
+    background: var(--surface) !important;
+    color: var(--text-primary) !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+  }
+
+  .open-pdf-btn {
+    background: var(--primary-color) !important;
+    border-color: var(--primary-color) !important;
+    color: white !important;
+  }
+
+  .no-issues {
+    padding: 30px 20px !important;
+    font-size: 0.95em !important;
+  }
+
+  /* Special edition section - mobile */
+  .special-edition-section {
+    padding: 16px !important;
+    margin-bottom: 40px !important;
+  }
+
+  .special-edition-title {
+    font-size: 1.3em !important;
+  }
+
+  /* Library controls - compact mobile design */
+  .library-header-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .library-header-row h2 {
+    text-align: center;
+    margin-bottom: 0;
+    font-size: 20px;
+  }
+
+  .library-controls-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px !important;
+    margin-bottom: 20px !important;
+  }
+
+  /* Import buttons - side by side */
+  .library-controls-row > div {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+
+  .library-controls-row .btn-primary,
+  .library-controls-row .import-button-group {
+    padding: 12px 8px !important;
+    font-size: 12px !important;
+    border-radius: 10px !important;
+    white-space: nowrap !important;
+  }
+
+  .sort-controls {
+    width: 100%;
+    justify-content: space-between;
+    flex-flow: row nowrap !important;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .sort-controls label {
+    font-size: 13px !important;
+    flex-shrink: 0;
+  }
+
+  .sort-controls select {
+    flex: 1;
+    min-width: 0;
+    font-size: 14px !important;
+    padding: 12px 35px 12px 12px !important;
+    border-radius: 10px !important;
+    border: 2px solid var(--border-color) !important;
+    height: 48px !important;
+  }
+
+  .sort-toggle-btn {
+    width: 48px !important;
+    height: 48px !important;
+    min-height: 48px !important;
+    min-width: 48px !important;
+    padding: 0 !important;
+    font-size: 20px !important;
+    flex-shrink: 0 !important;
+    border-radius: 10px !important;
+    border: 2px solid var(--border-color) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  /* Filter row for queue pages */
+  .filter-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .filter-row select {
+    flex: 1;
+    max-width: 100% !important;
+    padding: 12px 35px 12px 12px !important;
+    font-size: 14px !important;
+    border-radius: 10px !important;
+    height: 48px !important;
+  }
+
+  /* Library search row - compact layout */
+  .library-search-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    margin-bottom: 15px !important;
+  }
+
+  .library-search-row .search-input-wrapper {
+    max-width: 100% !important;
+    width: 100%;
+  }
+
+  .library-search-row input {
+    width: 100%;
+    padding: 14px 16px !important;
+    font-size: 16px !important;
+    border-radius: 10px !important;
+    border: 2px solid var(--border-color) !important;
+    height: 48px !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Filter controls - grid layout */
+  .library-search-row > div:last-child {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr auto !important;
+    align-items: end !important;
+    gap: 8px !important;
+  }
+
+  .library-search-row > div:last-child label {
+    display: none !important;
+  }
+
+  .library-search-row > div:last-child select {
+    padding: 12px 35px 12px 12px !important;
+    font-size: 14px !important;
+    border-radius: 10px !important;
+    border: 2px solid var(--border-color) !important;
+    height: 48px !important;
+    width: 100% !important;
+  }
+
+  .library-search-row > div:last-child .btn-secondary,
+  .clear-filters-btn {
+    width: 48px !important;
+    height: 48px !important;
+    padding: 0 !important;
+    font-size: 18px !important;
+    border-radius: 10px !important;
+    border: 2px solid var(--border-color) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  .clear-filters-btn .clear-text {
+    display: none !important;
+  }
+
+  .clear-filters-btn .clear-icon {
+    font-size: 20px !important;
+  }
+
+  /* Tracking page controls - matching library styles */
+  .tracking-header-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+  }
+
+  .tracking-header-row h2 {
+    text-align: center !important;
+    margin-bottom: 0 !important;
+    font-size: 20px !important;
+    width: 100%;
+  }
+
+  /* Sort controls within tracking-header-row */
+  .tracking-header-row .sort-controls {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .tracking-header-row .sort-controls label {
+    flex-shrink: 0;
+    font-size: 13px !important;
+  }
+
+  .tracking-header-row .sort-controls select {
+    flex: 1;
+    min-width: 0;
+    font-size: 14px !important;
+    padding: 12px 35px 12px 12px !important;
+    border-radius: 10px !important;
+    border: 2px solid var(--border-color) !important;
+    height: 48px !important;
+  }
+
+  /* Tracking search row - compact layout */
+  .tracking-search-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    margin-bottom: 15px !important;
+  }
+
+  .tracking-search-row .search-input-wrapper {
+    max-width: 100% !important;
+    width: 100%;
+  }
+
+  .tracking-search-row input {
+    width: 100%;
+    padding: 14px 16px !important;
+    font-size: 16px !important;
+    border-radius: 10px !important;
+    border: 2px solid var(--border-color) !important;
+    height: 48px !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Filter controls - grid layout */
+  .tracking-search-row > div:last-child {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr auto !important;
+    align-items: end !important;
+    gap: 8px !important;
+  }
+
+  .tracking-search-row > div:last-child label {
+    display: none !important;
+  }
+
+  .tracking-search-row > div:last-child select {
+    padding: 12px 35px 12px 12px !important;
+    font-size: 14px !important;
+    border-radius: 10px !important;
+    border: 2px solid var(--border-color) !important;
+    height: 48px !important;
+    width: 100% !important;
+  }
+
+  /* Tracking controls row - side by side buttons */
+  .tracking-controls-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px !important;
+    margin-bottom: 20px !important;
+  }
+
+  .tracking-controls-row > div {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+
+  .tracking-controls-row button,
+  .tracking-controls-row .btn-primary {
+    padding: 12px 8px !important;
+    font-size: 12px !important;
+    border-radius: 10px !important;
+    white-space: nowrap !important;
+    width: 100% !important;
+  }
+
+  /* Clear button for tracking section */
+  .tracking-search-row > div:last-child .btn-secondary,
+  .tracking-search-row > div:last-child .clear-filters-btn {
+    width: 48px !important;
+    height: 48px !important;
+    padding: 0 !important;
+    font-size: 18px !important;
+    border-radius: 10px !important;
+    border: 2px solid var(--border-color) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  .sort-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    flex: 1;
+    max-width: 350px;
+  }
+
+  .sort-btn {
+    font-size: 13px;
+    padding: 10px 12px;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .import-button-group {
+    font-size: 13px;
+    padding: 10px 14px;
+    width: 100%;
+  }
+
+  /* Settings page - mobile layout */
+  .settings-container {
+    padding: 15px !important;
+  }
+
+  .settings-container .flex.justify-between.items-center {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 12px;
+    margin-bottom: 20px !important;
+  }
+
+  .settings-container h2 {
+    font-size: 20px !important;
+    text-align: center;
+    margin-bottom: 0 !important;
+  }
+
+  .btn-danger {
+    width: 100%;
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+
+  /* Settings navigation - grid layout */
+  .settings-nav {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 12px;
+    margin-bottom: 20px !important;
+  }
+
+  .settings-nav-btn {
+    width: 100%;
+    padding: 12px 10px;
+    font-size: 13px;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Settings sections */
+  .settings-section {
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+
+  .settings-section h3 {
+    font-size: 18px;
+    margin-bottom: 10px;
+  }
+
+  .settings-section > p {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  /* Settings fields */
+  .settings-field {
+    margin-bottom: 15px;
+  }
+
+  .settings-field label {
+    font-size: 13px;
+    margin-bottom: 6px;
+  }
+
+  .settings-field input,
+  .settings-field select {
+    font-size: 14px;
+    padding: 10px 12px;
+  }
+
+  /* Settings buttons */
+  .settings-section button,
+  .save-btn {
+    width: 100%;
+    padding: 12px 16px;
+    font-size: 14px;
+    margin-top: 10px;
+  }
+
+  /* Provider blocks */
+  .settings-provider-block {
+    padding: 16px;
+    margin-bottom: 15px;
+  }
+
+  .settings-provider-block h4 {
+    font-size: 16px;
+    margin-bottom: 12px;
+  }
+
+  /* Track New Periodical Modal - mobile layout */
+  #track-new-periodical-modal .modal-content {
+    max-width: 95% !important;
+    padding: 16px !important;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  #track-new-periodical-modal h2 {
+    font-size: 18px;
+    margin-bottom: 8px;
+  }
+
+  #track-new-periodical-modal h3 {
+    font-size: 16px;
+    margin-bottom: 6px;
+  }
+
+  #track-new-periodical-modal p {
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  /* Break two-column grid to single column on mobile */
+  #track-new-periodical-modal .field-row,
+  #edit-tracking-modal .field-row {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  #track-new-periodical-modal .field-row .settings-field,
+  #edit-tracking-modal .field-row .settings-field {
+    margin-bottom: 10px !important;
+  }
+
+  /* Search section - stack vertically */
+  #track-new-periodical-modal .settings-field > div[style*='display: flex'] {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+
+  #track-new-periodical-modal .settings-field input[type='text'] {
+    width: 100% !important;
+    flex: none !important;
+  }
+
+  #track-new-periodical-modal .settings-field button {
+    width: 100%;
+    padding: 10px 14px;
+    font-size: 14px;
+  }
+
+  /* Language/Country filters - stack vertically */
+  #track-new-periodical-modal .settings-field > div[style*='display: flex'] > div {
+    flex: none !important;
+    width: 100%;
+  }
+
+  #track-new-periodical-modal .settings-field label {
+    font-size: 12px;
+    margin-bottom: 5px;
+  }
+
+  #track-new-periodical-modal .settings-field select {
+    font-size: 13px;
+    padding: 8px 10px;
+  }
+
+  #track-new-periodical-modal .settings-field small {
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  #track-new-periodical-modal .settings-field input {
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
+  /* Tracking Details section */
+  #track-new-periodical-modal > div > div[style*='margin-top: 30px'] {
+    margin-top: 20px !important;
+    padding-top: 15px !important;
+  }
+
+  /* Bottom buttons */
+  #track-new-periodical-modal .flex.gap-10 {
+    flex-direction: column !important;
+    gap: 8px !important;
+    margin-top: 16px !important;
+  }
+
+  #track-new-periodical-modal .flex.gap-10 button {
+    width: 100% !important;
+    flex: none !important;
+    padding: 11px 16px;
+    font-size: 14px;
+  }
 }

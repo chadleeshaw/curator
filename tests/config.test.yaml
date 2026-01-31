@@ -1,0 +1,37 @@
+search_providers:
+  - type: newsnab
+    name: Test Newsnab
+    api_url: http://test-newsnab.example.com/api
+    api_key: test-api-key
+    categories: '7000,7010,7020,7030'
+    enabled: true
+download_client:
+  type: sabnzbd
+  name: Test SABnzbd
+  api_url: http://localhost:8080
+  api_key: test-api-key
+storage:
+  db_path: ':memory:'
+  download_dir: ./local/downloads
+  library_dir: ./local/data
+  cache_dir: ./local/cache
+import:
+  organization_pattern: '{category}/{title}/{year}/'
+  auto_track_imports: true
+  category_keywords:
+    Magazine:
+      - magazine
+    Comic:
+      - comic
+    Document:
+      - article
+      - report
+matching:
+  fuzzy_threshold: 80
+logging:
+  level: WARNING
+  log_file: ./local/logs/test.log
+server:
+  host: 127.0.0.1
+  port: 8000
+jwt_secret: 5QBvptNFoM5n4wQLZMnWU6tTy_SKHmSNYYh45nhxzaM
