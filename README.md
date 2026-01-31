@@ -13,8 +13,6 @@ Automatically discover, download, and organize periodicals (magazines, comics, n
 
 ## 🚀 Quick Start
 
-## 🚀 Quick Start
-
 ### Prerequisites
 
 - Docker installed
@@ -70,7 +68,6 @@ docker run -d \
 Create `docker-compose.yml`:
 
 ```yaml
-version: '3.8'
 services:
   curator:
     image: chadleeshaw/curator:latest
@@ -90,7 +87,7 @@ services:
 Then start:
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 ### 3. Access the Web UI
@@ -120,8 +117,6 @@ Open **http://localhost:8000** and start managing your periodicals!
 - Cover thumbnails
 - Metadata (dates, issue numbers, special editions)
 - Quick file access and management
-
-## ⚙️ Configuration
 
 ## ⚙️ Configuration
 
@@ -228,15 +223,6 @@ make format         # Auto-format code
 
 The project includes a pre-push Git hook that runs `make ci-lint` automatically to ensure code quality.
 
-## 📋 Requirements
-
-- **Docker**: Any recent version
-- **RAM**: 4GB+ recommended (2GB+ with `DISABLE_OCR=true`)
-- **Disk**: Depends on collection size
-- **Services**: 
-  - Newsnab indexer (Prowlarr recommended)
-  - Download client (SABnzbd or NZBGet)
-
 ## 🔧 Troubleshooting
 
 ### Container Issues
@@ -284,15 +270,5 @@ MIT License - See [LICENSE](LICENSE) file for details.
 ## 💬 Support
 
 - 📚 [Documentation](https://github.com/chadleeshaw/curator/wiki)
-- 🐛 [Report Issues](https://github.com/chadleeshaw/curator/issues)
-- 💭
-
-## License
-
-MIT License - See LICENSE file for details
-
-## Support
-
-- 📝 [Documentation](https://github.com/chadleeshaw/curator/wiki)
 - 🐛 [Report Issues](https://github.com/chadleeshaw/curator/issues)
 - 💬 [Discussions](https://github.com/chadleeshaw/curator/discussions)
