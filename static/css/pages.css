@@ -1431,16 +1431,26 @@
   }
 
   .periodical-actions {
-    flex-direction: column !important;
-    gap: 6px !important;
-    margin-top: 8px !important;
+    flex-direction: row !important;
+    gap: 8px !important;
+    margin-top: 10px !important;
   }
 
   .periodical-actions button {
-    width: 100% !important;
-    padding: 10px 12px !important;
-    font-size: 13px !important;
+    flex: 1 !important;
+    padding: 12px 8px !important;
+    font-size: 14px !important;
     justify-content: center;
+    border-radius: 10px !important;
+    height: 48px !important;
+  }
+
+  .periodical-actions .btn-icon {
+    flex: 0 0 48px !important;
+    width: 48px !important;
+    height: 48px !important;
+    padding: 0 !important;
+    font-size: 20px !important;
   }
 
   /* Periodical detail page - mobile */
