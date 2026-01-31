@@ -1269,19 +1269,26 @@
   }
 
   .tracked-card-buttons {
-    width: 100%;
-    justify-content: space-between !important;
-    gap: 8px !important;
-    margin-top: 8px;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    width: auto !important;
+    justify-content: center !important;
+    gap: 4px !important;
+    margin-top: 10px;
+    padding: 6px !important;
+    background: var(--surface-variant) !important;
+    border-radius: 8px !important;
+    border: 1px solid var(--border-color) !important;
   }
 
   .btn-icon {
     flex: 1 !important;
-    min-width: 0 !important;
+    min-width: 44px !important;
     width: auto !important;
     height: 44px !important;
     font-size: 20px !important;
-    padding: 10px 8px !important;
+    padding: 10px 4px !important;
+    border-radius: 10px !important;
   }
 
   /* Empty state in tracking */
@@ -1503,25 +1510,41 @@
   }
 
   .issue-actions {
-    flex-direction: row !important;
-    gap: 6px !important;
+    display: flex !important;
+    flex-flow: row nowrap !important;
+    gap: 4px !important;
     margin-top: 8px !important;
+    padding: 0 !important;
+    justify-content: center !important;
+    background: transparent !important;
+    border: none !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .open-pdf-btn,
+  .metadata-btn,
+  .delete-issue-btn {
+    flex: 1 !important;
+    height: 36px !important;
+    width: auto !important;
+    padding: 0 !important;
+    font-size: 16px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 8px !important;
+    border: 2px solid var(--border-color) !important;
+    background: var(--surface) !important;
+    color: var(--text-primary) !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
   }
 
   .open-pdf-btn {
-    flex: 1 !important;
-    padding: 8px 6px !important;
-    font-size: 16px !important;
-    min-width: 0 !important;
-  }
-
-  .metadata-btn,
-  .delete-issue-btn {
-    width: 36px !important;
-    height: 36px !important;
-    font-size: 16px !important;
-    padding: 6px !important;
-    flex-shrink: 0 !important;
+    background: var(--primary-color) !important;
+    border-color: var(--primary-color) !important;
+    color: white !important;
   }
 
   .no-issues {
@@ -1539,7 +1562,7 @@
     font-size: 1.3em !important;
   }
 
-  /* Library controls - stack on mobile */
+  /* Library controls - compact mobile design */
   .library-header-row {
     flex-direction: column;
     align-items: stretch;
@@ -1555,6 +1578,24 @@
   .library-controls-row {
     flex-direction: column;
     align-items: stretch;
+    gap: 10px !important;
+    margin-bottom: 20px !important;
+  }
+
+  /* Import buttons - side by side */
+  .library-controls-row > div {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+
+  .library-controls-row .btn-primary,
+  .library-controls-row .import-button-group {
+    padding: 12px 8px !important;
+    font-size: 12px !important;
+    border-radius: 10px !important;
+    white-space: nowrap !important;
   }
 
   .sort-controls {
@@ -1562,7 +1603,7 @@
     justify-content: space-between;
     flex-flow: row nowrap !important;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
   }
 
   .sort-controls label {
@@ -1573,18 +1614,26 @@
   .sort-controls select {
     flex: 1;
     min-width: 0;
-    font-size: 13px !important;
-    padding: 10px 30px 10px 12px !important;
+    font-size: 14px !important;
+    padding: 12px 35px 12px 12px !important;
+    border-radius: 10px !important;
+    border: 2px solid var(--border-color) !important;
+    height: 48px !important;
   }
 
   .sort-toggle-btn {
-    width: 44px !important;
-    height: 44px !important;
-    min-height: 44px !important;
-    min-width: 44px !important;
-    padding: 10px !important;
-    font-size: 18px !important;
+    width: 48px !important;
+    height: 48px !important;
+    min-height: 48px !important;
+    min-width: 48px !important;
+    padding: 0 !important;
+    font-size: 20px !important;
     flex-shrink: 0 !important;
+    border-radius: 10px !important;
+    border: 2px solid var(--border-color) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
   }
 
   /* Filter row for queue pages */
@@ -1597,16 +1646,18 @@
   .filter-row select {
     flex: 1;
     max-width: 100% !important;
-    padding: 10px 30px 10px 12px !important;
-    font-size: 13px !important;
+    padding: 12px 35px 12px 12px !important;
+    font-size: 14px !important;
+    border-radius: 10px !important;
+    height: 48px !important;
   }
 
-  /* Library search row - stack vertically */
+  /* Library search row - compact layout */
   .library-search-row {
     flex-direction: column;
     align-items: stretch;
-    gap: 15px;
-    margin-bottom: 20px;
+    gap: 10px;
+    margin-bottom: 15px !important;
   }
 
   .library-search-row .search-input-wrapper {
@@ -1616,15 +1667,54 @@
 
   .library-search-row input {
     width: 100%;
-    padding: 12px 14px !important;
-    font-size: 14px !important;
+    padding: 14px 16px !important;
+    font-size: 16px !important;
+    border-radius: 10px !important;
+    border: 2px solid var(--border-color) !important;
+    height: 48px !important;
+    box-sizing: border-box !important;
   }
 
-  /* Filter controls - stack vertically */
+  /* Filter controls - grid layout */
   .library-search-row > div:last-child {
-    flex-direction: column !important;
-    align-items: stretch !important;
-    gap: 12px !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr auto !important;
+    align-items: end !important;
+    gap: 8px !important;
+  }
+
+  .library-search-row > div:last-child label {
+    display: none !important;
+  }
+
+  .library-search-row > div:last-child select {
+    padding: 12px 35px 12px 12px !important;
+    font-size: 14px !important;
+    border-radius: 10px !important;
+    border: 2px solid var(--border-color) !important;
+    height: 48px !important;
+    width: 100% !important;
+  }
+
+  .library-search-row > div:last-child .btn-secondary,
+  .clear-filters-btn {
+    width: 48px !important;
+    height: 48px !important;
+    padding: 0 !important;
+    font-size: 18px !important;
+    border-radius: 10px !important;
+    border: 2px solid var(--border-color) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  .clear-filters-btn .clear-text {
+    display: none !important;
+  }
+
+  .clear-filters-btn .clear-icon {
+    font-size: 20px !important;
   }
 
   /* Tracking page controls - matching library styles */
@@ -1647,7 +1737,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
   }
 
   .tracking-header-row .sort-controls label {
@@ -1658,14 +1748,19 @@
   .tracking-header-row .sort-controls select {
     flex: 1;
     min-width: 0;
-    font-size: 13px !important;
+    font-size: 14px !important;
+    padding: 12px 35px 12px 12px !important;
+    border-radius: 10px !important;
+    border: 2px solid var(--border-color) !important;
+    height: 48px !important;
   }
 
+  /* Tracking search row - compact layout */
   .tracking-search-row {
     flex-direction: column;
     align-items: stretch;
-    gap: 15px;
-    margin-bottom: 20px;
+    gap: 10px;
+    margin-bottom: 15px !important;
   }
 
   .tracking-search-row .search-input-wrapper {
@@ -1675,50 +1770,71 @@
 
   .tracking-search-row input {
     width: 100%;
-    padding: 12px 14px !important;
-    font-size: 14px !important;
+    padding: 14px 16px !important;
+    font-size: 16px !important;
+    border-radius: 10px !important;
+    border: 2px solid var(--border-color) !important;
+    height: 48px !important;
+    box-sizing: border-box !important;
   }
 
+  /* Filter controls - grid layout */
   .tracking-search-row > div:last-child {
-    flex-direction: column !important;
-    align-items: stretch !important;
-    gap: 12px !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr auto !important;
+    align-items: end !important;
+    gap: 8px !important;
   }
 
+  .tracking-search-row > div:last-child label {
+    display: none !important;
+  }
+
+  .tracking-search-row > div:last-child select {
+    padding: 12px 35px 12px 12px !important;
+    font-size: 14px !important;
+    border-radius: 10px !important;
+    border: 2px solid var(--border-color) !important;
+    height: 48px !important;
+    width: 100% !important;
+  }
+
+  /* Tracking controls row - side by side buttons */
   .tracking-controls-row {
     flex-direction: column;
     align-items: stretch;
+    gap: 10px !important;
+    margin-bottom: 20px !important;
   }
 
   .tracking-controls-row > div {
-    flex-direction: column !important;
-    width: 100%;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+    width: 100% !important;
   }
 
-  .tracking-controls-row button {
-    width: 100%;
-    font-size: 13px;
-    padding: 10px 14px;
+  .tracking-controls-row button,
+  .tracking-controls-row .btn-primary {
+    padding: 12px 8px !important;
+    font-size: 12px !important;
+    border-radius: 10px !important;
+    white-space: nowrap !important;
+    width: 100% !important;
   }
 
-  /* Category and Language filter groups */
-  .library-search-row label {
-    font-size: 13px !important;
-    margin-bottom: 4px;
-    display: block;
-  }
-
-  .library-search-row select {
-    width: 100%;
-    padding: 10px 30px 10px 12px !important;
-    font-size: 14px !important;
-  }
-
-  /* Clear button full width */
-  .library-search-row .btn-secondary {
-    width: 100%;
-    padding: 12px 16px !important;
-    font-size: 14px !important;
+  /* Clear button for tracking section */
+  .tracking-search-row > div:last-child .btn-secondary,
+  .tracking-search-row > div:last-child .clear-filters-btn {
+    width: 48px !important;
+    height: 48px !important;
+    padding: 0 !important;
+    font-size: 18px !important;
+    border-radius: 10px !important;
+    border: 2px solid var(--border-color) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
   }
 
   .sort-buttons {

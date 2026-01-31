@@ -477,47 +477,73 @@ body.dark-mode #status-message.status-error {
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
   .issues-grid {
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    padding: 0 8px;
   }
 
   .issue-cover {
-    height: 180px;
+    height: 160px;
   }
 
   .issue-info {
-    padding: 12px;
+    padding: 8px;
   }
 
   .issue-actions {
-    gap: 8px;
-    justify-content: center;
-    width: 100%;
-    padding: 0 12px;
-    box-sizing: border-box;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 4px !important;
+    padding: 0 !important;
+    width: 100% !important;
+    background: transparent !important;
+    border: none !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
   }
 
   .open-pdf-btn,
   .metadata-btn,
   .delete-issue-btn {
-    flex: 0 0 auto !important;
-    width: 38px !important;
-    height: 38px !important;
-    min-width: 38px !important;
+    flex: 1 !important;
+    height: 36px !important;
+    width: auto !important;
     padding: 0 !important;
-    font-size: 18px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    font-size: 16px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
     border-radius: 8px !important;
+    border: 2px solid var(--border-color) !important;
+    background: var(--surface) !important;
+    color: var(--text-primary) !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
   }
 
   .open-pdf-btn {
-    background: var(--primary-color);
-    color: white;
+    background: var(--primary-color) !important;
+    border-color: var(--primary-color) !important;
+    color: white !important;
   }
 
-  .open-pdf-btn:hover {
-    background: var(--primary-dark);
+  .open-pdf-btn:hover,
+  .open-pdf-btn:active {
+    background: var(--primary-dark) !important;
+    border-color: var(--primary-dark) !important;
+  }
+
+  .metadata-btn:hover,
+  .metadata-btn:active {
+    background: var(--primary-color) !important;
+    border-color: var(--primary-color) !important;
+    color: white !important;
+  }
+
+  .delete-issue-btn:hover,
+  .delete-issue-btn:active {
+    background: var(--error-color) !important;
+    border-color: var(--error-color) !important;
+    color: white !important;
   }
 }
