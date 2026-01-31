@@ -623,6 +623,11 @@ class ProviderCacheService:
             # Last sync time (most recent across all providers)
             last_sync = session.query(func.max(SyncStatus.last_successful_sync)).scalar()
 
+            # Fallback: if no sync status but we have releases, use the newest release date
+            # This handles cases where releases exist but sync tracking wasn't set up
+            if last_sync is None and newest is not None:
+                last_sync = newest
+
             return {
                 "total_releases": total_releases,
                 "providers": [{"name": name, "count": count} for name, count in providers],

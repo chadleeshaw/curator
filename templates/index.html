@@ -705,9 +705,6 @@
         <div class="settings-container">
           <div class="flex justify-between items-center mb-20">
             <h2>⚙️ Configuration Settings</h2>
-            <button onclick="restartApplication()" class="btn-danger">
-              🔄 Restart Application
-            </button>
           </div>
 
           <!-- Settings Sub-Tab Navigation -->
@@ -1688,6 +1685,26 @@
               <div id="logging-message" class="hidden"></div>
             </div>
 
+            <!-- Application Control -->
+            <div id="application-control-section" class="settings-section">
+              <h3>Application Control</h3>
+              <p class="text-base text-muted mb-15">Restart the application to apply configuration changes</p>
+
+              <div class="settings-field">
+                <label>Restart Application:</label>
+                <p class="text-sm text-hint mb-10">
+                  Restart the Curator application. This will briefly interrupt all operations.
+                </p>
+                <button
+                  onclick="restartApplication()"
+                  class="save-btn btn-delete"
+                  style="background: #f44336"
+                >
+                  🔄 Restart Application
+                </button>
+              </div>
+            </div>
+
             <!-- Database Management -->
             <div id="database-section" class="settings-section">
               <h3>Database Management</h3>
@@ -1800,7 +1817,6 @@
                 <button
                   onclick="saveCacheSettings()"
                   class="save-btn"
-                  style="padding: 12px 40px; font-size: 16px; font-weight: 500; border-radius: 8px"
                 >
                   Save Cache Settings
                 </button>

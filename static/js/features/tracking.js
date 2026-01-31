@@ -2347,8 +2347,8 @@ window.setTrackingSortField = function (field) {
  * Toggle tracking sort order
  */
 window.toggleTrackingSortOrder = function () {
-  if (tracking && tracking.sortManager) {
-    tracking.sortManager.toggleOrder();
+  if (tracking) {
+    tracking.toggleSortOrder();
   }
 };
 
