@@ -124,9 +124,22 @@ Open **http://localhost:8000** and start managing your periodicals!
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DISABLE_OCR` | `false` | Disable OCR processing (reduces memory usage) |
 | `TZ` | System | Set timezone (e.g., `America/New_York`) |
-| `CURATOR_CONFIG_PATH` | `local/config/config.yaml` | Custom config file location |
+| `DISABLE_OCR` | `false` | Disable OCR processing (reduces memory usage) |
+| `CURATOR_CONFIG_PATH` | `local/config/config.yaml` | Config file location |
+| `CURATOR_DB_PATH` | `local/data/curator.db` | Database file location |
+| `CURATOR_DOWNLOAD_DIR` | `local/downloads` | Download directory |
+| `CURATOR_LIBRARY_DIR` | `local/data` | Library directory |
+| `CURATOR_CACHE_DIR` | `local/cache` | Cache directory |
+| `CURATOR_LOG_FILE` | None | Log file path (logs to console if not set) |
+| `CURATOR_LOG_LEVEL` | `INFO` | Log level (DEBUG, INFO, WARNING, ERROR) |
+| `CURATOR_HOST` | `0.0.0.0` | Server bind address |
+| `CURATOR_PORT` | `8000` | Server port |
+| `CURATOR_DRY_RUN` | `false` | Dry run mode for file reorganization |
+
+### Advanced Configuration
+
+For advanced options (provider caching, metadata aggregation, OCR tuning, task scheduling, etc.), see the fully documented [`config.template.yaml`](config.template.yaml).
 
 ### Search Providers
 
@@ -214,11 +227,16 @@ python main.py
 **Available commands:**
 
 ```bash
+make help           # Show all available commands
+make install        # Install dependencies
+make run            # Run the application
 make test           # Run all tests
 make test-unit      # Fast unit tests only
+make test-coverage  # Run tests with coverage report
 make lint           # Check code style
 make ci-lint        # CI linters (matches GitHub Actions)
 make format         # Auto-format code
+make clean          # Clean build artifacts
 ```
 
 The project includes a pre-push Git hook that runs `make ci-lint` automatically to ensure code quality.
