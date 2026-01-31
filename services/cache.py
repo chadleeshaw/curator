@@ -78,7 +78,49 @@ class ProviderCacheService:
         # Create tables and FTS5 index
         self._initialize_database()
 
+        # Run schema migrations (drop deprecated columns)
+        self._migrate_schema()
+
         logger.info(f"Provider cache initialized: {cache_db_path}")
+
+    def _migrate_schema(self):
+        """Run schema migrations to remove deprecated columns"""
+        # Deprecated columns to remove (from old NZB file caching feature)
+        deprecated_columns = ["has_nzb_file", "nzb_file_path", "nzb_downloaded_at", "nzb_file_size"]
+
+        with self._engine.connect() as conn:
+            # Get current columns in cached_releases table
+            result = conn.execute(text("PRAGMA table_info(cached_releases)"))
+            existing_columns = {row[1] for row in result.fetchall()}
+
+            # Get all indexes on cached_releases table
+            result = conn.execute(text("PRAGMA index_list(cached_releases)"))
+            indexes = [(row[1], row[2]) for row in result.fetchall()]  # (name, unique)
+
+            for column_name in deprecated_columns:
+                if column_name in existing_columns:
+                    logger.info(f"Removing deprecated column 'cached_releases.{column_name}'")
+                    try:
+                        # First, drop any indexes that reference this column
+                        for index_name, _ in indexes:
+                            # Check if this index is for the column being dropped
+                            if column_name in index_name:
+                                try:
+                                    conn.execute(text(f"DROP INDEX IF EXISTS {index_name}"))
+                                    conn.commit()
+                                    logger.debug(f"Dropped index {index_name}")
+                                except Exception:
+                                    pass  # Index might not exist
+
+                        conn.execute(text(f"ALTER TABLE cached_releases DROP COLUMN {column_name}"))
+                        conn.commit()
+                        logger.info(f"✓ Removed column cached_releases.{column_name}")
+                    except Exception as e:
+                        # SQLite < 3.35.0 doesn't support DROP COLUMN, log warning but continue
+                        logger.warning(
+                            f"Could not remove column cached_releases.{column_name}: {e}. "
+                            f"This column is deprecated and can be safely ignored."
+                        )
 
     def _initialize_database(self):
         """Create database tables, compound indexes, and FTS5 virtual table for full-text search"""

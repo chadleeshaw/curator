@@ -179,7 +179,7 @@ class NewsnabProvider(SearchProvider):
             # Generate query variants if expansion is enabled
             if self.enable_query_expansion and len(query.strip()) > 3:
                 queries = expand_search_queries(query, max_queries=self.max_expanded_queries, min_query_length=3)
-                logger.debug(f"[{self.name}] Expanded '{query}' to {len(queries)} queries: {queries}")
+                logger.info(f"[{self.name}] Expanded '{query}' to {len(queries)} queries: {queries}")
             else:
                 queries = [query]
 
