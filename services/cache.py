@@ -779,8 +779,9 @@ class ProviderSyncService:
 
         try:
             # Fetch releases using RSS mode (empty query)
+            # Run in thread pool to avoid blocking event loop
             logger.info(f"Fetching initial {INITIAL_SYNC_LIMIT} releases from {provider.name}")
-            results = provider.search(query="", category=None)  # RSS mode
+            results = await run_in_thread(lambda: provider.search(query="", category=None))
 
             if not results:
                 logger.warning(f"No results from initial sync for {provider.name}")

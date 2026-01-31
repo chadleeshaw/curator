@@ -266,7 +266,10 @@ async def lifespan(app: FastAPI):
             - Downloads from priority queue
             """
             logger.info("Starting auto-download task")
-            try:
+
+            # Run the blocking search/download operations in a thread pool
+            # to avoid blocking the async event loop and freezing the UI
+            def _run_auto_download():
                 db_session = session_factory()
                 try:
                     if not download_manager:
@@ -390,6 +393,11 @@ async def lifespan(app: FastAPI):
 
                 finally:
                     db_session.close()
+
+            # Run in thread pool to avoid blocking event loop
+            try:
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(None, _run_auto_download)
             except Exception as e:
                 logger.error(f"Auto-download error: {e}", exc_info=True)
 
