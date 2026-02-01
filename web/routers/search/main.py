@@ -574,6 +574,23 @@ async def search_periodical_providers(
         if not query or len(query.strip()) < 2:
             raise HTTPException(status_code=400, detail="Query must be at least 2 characters")
 
+        # === STEP 0: Build search queries - always include title, plus aliases if provided ===
+        search_queries = [query.strip()]  # Always search the exact title
+        if tracking_id:
+            from models.database import PeriodicalTracking
+
+            tracking_record = db.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
+            if tracking_record and tracking_record.search_aliases:
+                # Add aliases as additional searches (in addition to the title)
+                aliases = [a.strip() for a in tracking_record.search_aliases.split(",") if a.strip()]
+                for alias in aliases:
+                    if alias not in search_queries:  # Avoid duplicates
+                        search_queries.append(alias)
+                if len(search_queries) > 1:
+                    logger.info(
+                        f"Searching with title + {len(aliases)} aliases for '{tracking_record.title}': {search_queries}"
+                    )
+
         logger.info(f"Searching for issues: '{query}' (tracking_id={tracking_id}, force_refresh={force_refresh})")
 
         # === STEP 1: Load Cached Results ===
@@ -586,73 +603,80 @@ async def search_periodical_providers(
         fresh_results = []
         provider_errors = []
 
-        # Try provider cache first if available
+        # Track seen URLs to avoid duplicates across multiple search queries
+        seen_urls = set()
+
+        # Try provider cache first if available (search each query)
         if _provider_cache_service and not force_refresh:
             try:
-                cached_releases = _provider_cache_service.search(query.strip(), limit=100)
-                if cached_releases:
-                    logger.info(f"Found {len(cached_releases)} results from provider cache")
-                    fresh_results.extend(
-                        [
-                            {
-                                "title": r.title,
-                                "url": r.download_url,  # Note: cache uses download_url not url
-                                "provider": r.provider_name,
-                                "publication_date": (
-                                    datetime.fromisoformat(r.raw_metadata.get("upload_date"))
-                                    if r.raw_metadata and r.raw_metadata.get("upload_date")
-                                    else None
-                                ),
-                                "metadata": r.raw_metadata or {},
-                                "from_cache": True,
-                            }
-                            for r in cached_releases
-                        ]
-                    )
+                for search_query in search_queries:
+                    cached_releases = _provider_cache_service.search(search_query, limit=100)
+                    if cached_releases:
+                        logger.info(f"Found {len(cached_releases)} results from provider cache for '{search_query}'")
+                        for r in cached_releases:
+                            if r.download_url not in seen_urls:
+                                seen_urls.add(r.download_url)
+                                fresh_results.append(
+                                    {
+                                        "title": r.title,
+                                        "url": r.download_url,  # Note: cache uses download_url not url
+                                        "provider": r.provider_name,
+                                        "publication_date": (
+                                            datetime.fromisoformat(r.raw_metadata.get("upload_date"))
+                                            if r.raw_metadata and r.raw_metadata.get("upload_date")
+                                            else None
+                                        ),
+                                        "metadata": r.raw_metadata or {},
+                                        "from_cache": True,
+                                    }
+                                )
             except Exception as e:
                 logger.warning(f"Provider cache search failed, falling back to direct providers: {e}")
 
         if _search_providers:
-            for provider in _search_providers:
-                try:
-                    provider_results = provider.search(query.strip(), category=category)
-                    fresh_results.extend(
-                        [
-                            {
-                                "title": r.title,
-                                "url": r.url,
-                                "provider": r.provider,
-                                "publication_date": r.publication_date,
-                                "metadata": r.raw_metadata or {},
-                            }
-                            for r in provider_results
-                        ]
-                    )
-                except Exception as e:
-                    error_msg = f"{provider.__class__.__name__}: {str(e)}"
-                    logger.warning(f"Error searching provider: {error_msg}")
-                    provider_errors.append(error_msg)
+            # Search each query against each provider (no automatic expansion)
+            for search_query in search_queries:
+                for provider in _search_providers:
+                    try:
+                        provider_results = provider.search(search_query, category=category)
+                        for r in provider_results:
+                            if r.url not in seen_urls:
+                                seen_urls.add(r.url)
+                                fresh_results.append(
+                                    {
+                                        "title": r.title,
+                                        "url": r.url,
+                                        "provider": r.provider,
+                                        "publication_date": r.publication_date,
+                                        "metadata": r.raw_metadata or {},
+                                    }
+                                )
+                    except Exception as e:
+                        error_msg = f"{provider.__class__.__name__}: {str(e)}"
+                        logger.warning(f"Error searching provider: {error_msg}")
+                        provider_errors.append(error_msg)
 
             # If category filter was used but no results found, try again without category
             if category and len(fresh_results) == 0:
                 logger.info(f"No results with category '{category}', expanding search to all categories")
-                for provider in _search_providers:
-                    try:
-                        provider_results = provider.search(query.strip(), category=None)
-                        fresh_results.extend(
-                            [
-                                {
-                                    "title": r.title,
-                                    "url": r.url,
-                                    "provider": r.provider,
-                                    "publication_date": r.publication_date,
-                                    "metadata": r.raw_metadata or {},
-                                }
-                                for r in provider_results
-                            ]
-                        )
-                    except Exception:
-                        pass  # Already logged above
+                for search_query in search_queries:
+                    for provider in _search_providers:
+                        try:
+                            provider_results = provider.search(search_query, category=None)
+                            for r in provider_results:
+                                if r.url not in seen_urls:
+                                    seen_urls.add(r.url)
+                                    fresh_results.append(
+                                        {
+                                            "title": r.title,
+                                            "url": r.url,
+                                            "provider": r.provider,
+                                            "publication_date": r.publication_date,
+                                            "metadata": r.raw_metadata or {},
+                                        }
+                                    )
+                        except Exception:
+                            pass  # Already logged above
         else:
             error_msg = ErrorMessages.SEARCH_PROVIDERS_UNAVAILABLE
             logger.warning(error_msg)

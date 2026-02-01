@@ -19,6 +19,7 @@ COLUMN_ADDITIONS = {
         ("download_category", "VARCHAR(100)"),
         ("country", "VARCHAR(50)"),
         ("organization_pattern", "VARCHAR(255)"),
+        ("search_aliases", "VARCHAR(512)"),
         # Adaptive search scheduling fields
         ("last_searched", "DATETIME"),
         ("search_count", "INTEGER DEFAULT 0"),

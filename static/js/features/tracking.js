@@ -1014,6 +1014,8 @@ export class TrackingManager {
         document.getElementById('edit-tracking-country').value = t.country || '';
         document.getElementById('edit-tracking-download-category').value =
           t.download_category || '';
+        document.getElementById('edit-tracking-search-aliases').value =
+          t.search_aliases || '';
 
         // Set tracking mode
         let mode = 'none';
@@ -1639,6 +1641,7 @@ window.saveEditedTracking = async function () {
   const country = document.getElementById('edit-tracking-country').value;
   const mode = document.getElementById('edit-tracking-mode').value;
   const keepHistory = document.getElementById('edit-delete-from-client').checked;
+  const searchAliases = document.getElementById('edit-tracking-search-aliases').value.trim();
 
   // Get organization pattern from dropdown or custom input
   const patternSelect = document.getElementById('edit-tracking-pattern-select');
@@ -1674,6 +1677,7 @@ window.saveEditedTracking = async function () {
           track_new_only: mode === 'new',
           delete_from_client_on_completion: !keepHistory, // Inverted: checked = keep, unchecked = auto-remove
           organization_pattern: organizationPattern, // Send null if empty to use global default
+          search_aliases: searchAliases || null, // Comma-separated alternative search names
         });
         return await response.json();
       },

@@ -140,6 +140,9 @@ class PeriodicalTracking(Base):
     organization_pattern = Column(
         String(255), nullable=True
     )  # Optional organization pattern override for this periodical
+    search_aliases = Column(
+        String(512), nullable=True
+    )  # Comma-separated alternative search names (instead of auto-expand)
 
     # Metadata
     periodical_metadata = Column(JSON, nullable=True)  # Full metadata from Open Library
@@ -179,6 +182,7 @@ class PeriodicalTracking(Base):
             "category": self.category,
             "download_category": self.download_category,
             "organization_pattern": self.organization_pattern,
+            "search_aliases": self.search_aliases,
             "periodical_metadata": self.periodical_metadata,
             "last_metadata_update": self.last_metadata_update.isoformat() if self.last_metadata_update else None,
             # Search scheduling fields

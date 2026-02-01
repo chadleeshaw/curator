@@ -165,14 +165,35 @@ def hash_file_in_chunks(file_path: str, algorithm=hashlib.sha256, chunk_size: in
         >>> hash_file_in_chunks('large_file.iso', chunk_size=65536)  # 64KB chunks
         'f4e3d2c1b0a9...'
     """
-    file_hash = algorithm()
     try:
+        file_hash = algorithm()
+        path = Path(file_path)
+
+        # Diagnostic checks for common failure scenarios
+        if not path.exists():
+            logger.error(f"Cannot hash file - does not exist: {file_path}")
+            return None
+
+        if not path.is_file():
+            logger.error(f"Cannot hash file - not a regular file: {file_path}")
+            return None
+
+        if not os.access(file_path, os.R_OK):
+            logger.error(f"Cannot hash file - no read permission: {file_path}")
+            return None
+
         with open(file_path, "rb") as f:
             while chunk := f.read(chunk_size):
                 file_hash.update(chunk)
         return file_hash.hexdigest()
-    except IOError as e:
-        logger.error(f"Error hashing file {file_path}: {e}")
+    except PermissionError as e:
+        logger.error(f"Permission denied hashing file {file_path}: {e}")
+        return None
+    except OSError as e:
+        logger.error(f"OS error hashing file {file_path}: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error hashing file {file_path}: {type(e).__name__}: {e}")
         return None
 
 
