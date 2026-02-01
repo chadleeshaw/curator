@@ -2,6 +2,7 @@
 Search routes for periodicals
 """
 
+import json
 import logging
 import re
 from datetime import UTC, datetime, timedelta
@@ -460,17 +461,21 @@ async def search(request: SearchRequest) -> Dict[str, Any]:
             if cached_releases:
                 logger.info(f"Found {len(cached_releases)} results from provider cache")
                 for release in cached_releases:
+                    # Note: cache.search() returns dicts, not objects
+                    raw_meta = release.get("raw_metadata") or {}
+                    # Handle raw_metadata being a JSON string (from raw SQL)
+                    if isinstance(raw_meta, str):
+                        try:
+                            raw_meta = json.loads(raw_meta)
+                        except (json.JSONDecodeError, TypeError):
+                            raw_meta = {}
                     all_results.append(
                         {
-                            "title": release.title,
-                            "url": release.download_url,
-                            "provider": release.provider_name,
-                            "publication_date": (
-                                release.raw_metadata.get("upload_date")
-                                if release.raw_metadata and release.raw_metadata.get("upload_date")
-                                else None
-                            ),
-                            "raw_metadata": release.raw_metadata or {},
+                            "title": release.get("title"),
+                            "url": release.get("download_url"),
+                            "provider": release.get("provider_name"),
+                            "publication_date": release.get("upload_date") or release.get("publication_date"),
+                            "raw_metadata": raw_meta,
                             "from_cache": True,
                         }
                     )
@@ -614,19 +619,32 @@ async def search_periodical_providers(
                     if cached_releases:
                         logger.info(f"Found {len(cached_releases)} results from provider cache for '{search_query}'")
                         for r in cached_releases:
-                            if r.download_url not in seen_urls:
-                                seen_urls.add(r.download_url)
+                            # Note: cache.search() returns dicts, not objects
+                            download_url = r.get("download_url")
+                            if download_url and download_url not in seen_urls:
+                                seen_urls.add(download_url)
+                                # Handle raw_metadata being a JSON string (from raw SQL)
+                                raw_meta = r.get("raw_metadata") or {}
+                                if isinstance(raw_meta, str):
+                                    try:
+                                        raw_meta = json.loads(raw_meta)
+                                    except (json.JSONDecodeError, TypeError):
+                                        raw_meta = {}
+                                # Get publication date from upload_date column (already datetime from SQL)
+                                pub_date = r.get("upload_date") or r.get("publication_date")
+                                # Convert to datetime if it's a string
+                                if isinstance(pub_date, str):
+                                    try:
+                                        pub_date = datetime.fromisoformat(pub_date.replace("Z", "+00:00"))
+                                    except (ValueError, TypeError):
+                                        pub_date = None
                                 fresh_results.append(
                                     {
-                                        "title": r.title,
-                                        "url": r.download_url,  # Note: cache uses download_url not url
-                                        "provider": r.provider_name,
-                                        "publication_date": (
-                                            datetime.fromisoformat(r.raw_metadata.get("upload_date"))
-                                            if r.raw_metadata and r.raw_metadata.get("upload_date")
-                                            else None
-                                        ),
-                                        "metadata": r.raw_metadata or {},
+                                        "title": r.get("title"),
+                                        "url": download_url,
+                                        "provider": r.get("provider_name"),
+                                        "publication_date": pub_date,
+                                        "metadata": raw_meta,
                                         "from_cache": True,
                                     }
                                 )
