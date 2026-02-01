@@ -41,6 +41,10 @@ PERIODICAL_PATTERNS_STATIC = [
     r"\bv\d+\s+(i|n|no\.?)\d+\b",  # "V12 N3", "V5 I2"
     # Weekly/bi-weekly date formats
     r"\b\d{4}[\.\s]\d{2}[\.\s]\d{2}\b",  # "2024.01.20" or "2024 01 20" (The Economist style)
+    # Magazine/PDF collections - often contain multiple issues
+    r"\bmagazines?\s+(collection|pack|bundle)\b",
+    r"\b(collection|pack|bundle)\s+.{0,20}\bpdf\b",
+    r"\b\d+\s+.{0,30}\bmagazines?\b.{0,20}\b(collection|pdf)\b",  # "60 ... Magazines Collection/PDF"
 ]
 """Static periodical patterns (non-date-based)"""
 
