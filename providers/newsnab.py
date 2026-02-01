@@ -61,10 +61,6 @@ class NewsnabProvider(SearchProvider):
         self.max_requests_per_hour = config.get("max_requests_per_hour", NEWSNAB_DEFAULT_MAX_REQUESTS_PER_HOUR)
         self.request_delay_seconds = config.get("request_delay_seconds", NEWSNAB_DEFAULT_REQUEST_DELAY)
 
-        # Query expansion configuration
-        self.enable_query_expansion = config.get("enable_query_expansion", True)
-        self.max_expanded_queries = config.get("max_expanded_queries", 3)
-
         # Rate limit tracking
         self._request_times: List[float] = []
         self._rate_limit_until: Optional[datetime] = None
