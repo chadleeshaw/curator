@@ -51,6 +51,38 @@ class ProviderCacheService:
     and used by download clients when needed.
     """
 
+    @staticmethod
+    def _escape_fts_query(query: str) -> str:
+        """
+        Escape a query string for safe use in SQLite FTS5 MATCH.
+
+        FTS5 interprets special characters as operators:
+        - Hyphens (-) as NOT operator
+        - AND, OR, NOT as boolean operators
+        - Quotes, parentheses as grouping
+
+        This method wraps each word in double quotes to treat them as literals.
+
+        Args:
+            query: The raw search query
+
+        Returns:
+            Escaped query safe for FTS5 MATCH
+        """
+        if not query or not query.strip():
+            return '""'
+
+        # Split on whitespace, wrap each word in quotes
+        # This handles hyphens, special chars, and reserved words
+        words = query.split()
+        escaped_words = []
+        for word in words:
+            # Escape any internal double quotes by doubling them
+            escaped_word = word.replace('"', '""')
+            escaped_words.append(f'"{escaped_word}"')
+
+        return " ".join(escaped_words)
+
     def __init__(
         self,
         cache_db_path: str,
@@ -240,6 +272,9 @@ class ProviderCacheService:
         Returns:
             List of matching releases as dictionaries
         """
+        # Escape the query for safe FTS5 MATCH usage
+        fts_query = self._escape_fts_query(query)
+
         session = self._session_factory()
         try:
             if deduplicate:
@@ -258,7 +293,7 @@ class ProviderCacheService:
                     """
                 )
 
-                params = {"fts_query": query}
+                params = {"fts_query": fts_query}
 
                 # Add filters to subquery
                 if category:
@@ -295,7 +330,7 @@ class ProviderCacheService:
                         isouter=False,
                     )
                     .filter(text("cached_releases_fts MATCH :fts_query"))
-                    .params(fts_query=query)
+                    .params(fts_query=fts_query)
                 )
 
                 # Add category filter if specified
@@ -344,6 +379,9 @@ class ProviderCacheService:
         Returns:
             Total count of matching releases
         """
+        # Escape the query for safe FTS5 MATCH usage
+        fts_query = self._escape_fts_query(query)
+
         session = self._session_factory()
         try:
             if deduplicate:
@@ -367,7 +405,7 @@ class ProviderCacheService:
                     """
                 )
 
-            params = {"fts_query": query}
+            params = {"fts_query": fts_query}
 
             # Add filters
             if category:
