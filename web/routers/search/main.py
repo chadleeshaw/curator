@@ -436,6 +436,426 @@ def _merge_search_results(
     return fresh_results + deduplicated_cached
 
 
+# =============================================================================
+# Search Provider Helpers
+# =============================================================================
+
+
+def _build_search_queries(query: str, tracking_id: Optional[int], db) -> List[str]:
+    """
+    Build search queries including aliases from tracking record.
+
+    Args:
+        query: Base search query
+        tracking_id: Optional tracking ID to get aliases from
+        db: Database session
+
+    Returns:
+        List of search queries (always includes original query)
+    """
+    search_queries = [query.strip()]
+
+    if tracking_id:
+        from models.database import PeriodicalTracking
+
+        tracking_record = db.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
+        if tracking_record and tracking_record.search_aliases:
+            aliases = [a.strip() for a in tracking_record.search_aliases.split(",") if a.strip()]
+            for alias in aliases:
+                if alias not in search_queries:
+                    search_queries.append(alias)
+            if len(search_queries) > 1:
+                logger.info(
+                    f"Searching with title + {len(aliases)} aliases for '{tracking_record.title}': {search_queries}"
+                )
+
+    return search_queries
+
+
+def _fetch_from_provider_cache(
+    search_queries: List[str],
+    seen_urls: set,
+) -> List[Dict[str, Any]]:
+    """
+    Fetch results from provider cache service.
+
+    Args:
+        search_queries: List of queries to search
+        seen_urls: Set of already seen URLs (modified in place)
+
+    Returns:
+        List of result dicts from cache
+    """
+    results = []
+
+    if not _provider_cache_service:
+        return results
+
+    try:
+        for search_query in search_queries:
+            cached_releases = _provider_cache_service.search(search_query, limit=100)
+            if not cached_releases:
+                continue
+
+            logger.info(f"Found {len(cached_releases)} results from provider cache for '{search_query}'")
+
+            for r in cached_releases:
+                download_url = r.get("download_url")
+                if not download_url or download_url in seen_urls:
+                    continue
+
+                seen_urls.add(download_url)
+
+                # Handle raw_metadata being a JSON string
+                raw_meta = r.get("raw_metadata") or {}
+                if isinstance(raw_meta, str):
+                    try:
+                        raw_meta = json.loads(raw_meta)
+                    except (json.JSONDecodeError, TypeError):
+                        raw_meta = {}
+
+                # Parse publication date
+                pub_date = r.get("upload_date") or r.get("publication_date")
+                if isinstance(pub_date, str):
+                    try:
+                        pub_date = datetime.fromisoformat(pub_date.replace("Z", "+00:00"))
+                    except (ValueError, TypeError):
+                        pub_date = None
+
+                results.append(
+                    {
+                        "title": r.get("title"),
+                        "url": download_url,
+                        "provider": r.get("provider_name"),
+                        "publication_date": pub_date,
+                        "metadata": raw_meta,
+                        "from_cache": True,
+                    }
+                )
+    except Exception as e:
+        logger.warning(f"Provider cache search failed, falling back to direct providers: {e}")
+
+    return results
+
+
+def _fetch_from_providers(
+    search_queries: List[str],
+    category: Optional[str],
+    seen_urls: set,
+) -> tuple[List[Dict[str, Any]], List[str]]:
+    """
+    Fetch results from direct search providers.
+
+    Args:
+        search_queries: List of queries to search
+        category: Optional category filter
+        seen_urls: Set of already seen URLs (modified in place)
+
+    Returns:
+        Tuple of (results list, provider errors list)
+    """
+    results = []
+    provider_errors = []
+
+    if not _search_providers:
+        error_msg = ErrorMessages.SEARCH_PROVIDERS_UNAVAILABLE
+        logger.warning(error_msg)
+        provider_errors.append(error_msg)
+        return results, provider_errors
+
+    # Search each query against each provider
+    for search_query in search_queries:
+        for provider in _search_providers:
+            try:
+                provider_results = provider.search(search_query, category=category)
+                for r in provider_results:
+                    if r.url not in seen_urls:
+                        seen_urls.add(r.url)
+                        results.append(
+                            {
+                                "title": r.title,
+                                "url": r.url,
+                                "provider": r.provider,
+                                "publication_date": r.publication_date,
+                                "metadata": r.raw_metadata or {},
+                            }
+                        )
+            except Exception as e:
+                error_msg = f"{provider.__class__.__name__}: {str(e)}"
+                logger.warning(f"Error searching provider: {error_msg}")
+                provider_errors.append(error_msg)
+
+    # Retry without category filter if no results
+    if category and len(results) == 0:
+        logger.info(f"No results with category '{category}', expanding search to all categories")
+        for search_query in search_queries:
+            for provider in _search_providers:
+                try:
+                    provider_results = provider.search(search_query, category=None)
+                    for r in provider_results:
+                        if r.url not in seen_urls:
+                            seen_urls.add(r.url)
+                            results.append(
+                                {
+                                    "title": r.title,
+                                    "url": r.url,
+                                    "provider": r.provider,
+                                    "publication_date": r.publication_date,
+                                    "metadata": r.raw_metadata or {},
+                                }
+                            )
+                except Exception:
+                    pass  # Already logged above
+
+    return results, provider_errors
+
+
+def _deduplicate_against_library(
+    results: List[Dict[str, Any]],
+    library_items: List,
+) -> List[Dict[str, Any]]:
+    """
+    Remove provider results that already exist in library.
+
+    Args:
+        results: Provider results to deduplicate
+        library_items: Library items to check against
+
+    Returns:
+        Deduplicated results with status badges added
+    """
+    deduplicated = []
+
+    for result in results:
+        is_duplicate = False
+
+        for lib_item in library_items:
+            if result.get("publication_date") and _title_matcher:
+                is_match, score = _title_matcher.matches_library_item_with_date_range(
+                    provider_title=result["title"],
+                    provider_date=result["publication_date"],
+                    library_title=lib_item.title,
+                    library_date=lib_item.issue_date,
+                    date_tolerance_days=7,
+                )
+
+                if is_match:
+                    logger.debug(
+                        f"Hiding duplicate: '{result['title']}' matches library item '{lib_item.title}' (score: {score})"
+                    )
+                    is_duplicate = True
+                    break
+
+        if not is_duplicate:
+            # Add status badge for available items
+            result["status"] = "available"
+            result["status_badge"] = "📥 Available"
+            result["library_item_id"] = None
+            result["already_downloaded"] = False
+            result["download_failed"] = False
+            result["from_provider"] = True
+
+            # Format publication date to ISO string
+            pub_date = result.get("publication_date")
+            if pub_date:
+                if isinstance(pub_date, datetime):
+                    result["publication_date"] = pub_date.isoformat()
+                elif not isinstance(pub_date, str):
+                    result["publication_date"] = str(pub_date)
+
+            deduplicated.append(result)
+
+    return deduplicated
+
+
+def _mark_failed_downloads(
+    results: List[Dict[str, Any]],
+    tracking_id: Optional[int],
+    db,
+) -> None:
+    """
+    Mark results that have previously failed to download.
+
+    Args:
+        results: Results to mark (modified in place)
+        tracking_id: Optional tracking ID to scope failures
+        db: Database session
+    """
+    failed_downloads = (
+        db.query(DownloadSubmission)
+        .filter(
+            or_(
+                DownloadSubmission.status == DownloadSubmission.StatusEnum.FAILED,
+                DownloadSubmission.attempt_count >= 2,
+            )
+        )
+        .all()
+    )
+
+    if tracking_id:
+        failed_downloads = [d for d in failed_downloads if d.tracking_id == tracking_id]
+
+    failed_fuzzy_groups = {d.fuzzy_match_group for d in failed_downloads if d.fuzzy_match_group}
+
+    for result in results:
+        fuzzy_group = _get_fuzzy_group_id(result["title"])
+        if fuzzy_group in failed_fuzzy_groups:
+            result["status"] = "failed"
+            result["status_badge"] = "⚠️ Failed Before"
+            result["download_failed"] = True
+
+
+def _get_library_matches(
+    query: str,
+    library_items: List,
+    filter_language: str,
+    filter_country: str,
+) -> List[Dict[str, Any]]:
+    """
+    Get library items that match the search query.
+
+    Args:
+        query: Search query
+        library_items: Library items to check
+        filter_language: Language filter
+        filter_country: Country filter
+
+    Returns:
+        List of library match dicts with status badges
+    """
+    matches = []
+
+    if not _title_matcher:
+        return matches
+
+    for lib_item in library_items:
+        is_match, score = _title_matcher.match(query.strip(), lib_item.title)
+
+        if is_match:
+            # Append year to title for frontend parser
+            year = lib_item.issue_date.year if lib_item.issue_date else None
+            title_with_year = f"{lib_item.title} {year}" if year else lib_item.title
+
+            matches.append(
+                {
+                    "title": title_with_year,
+                    "publication_date": lib_item.issue_date.isoformat() if lib_item.issue_date else None,
+                    "status": "in_library",
+                    "status_badge": "📚 In Library",
+                    "library_item_id": lib_item.id,
+                    "file_path": lib_item.file_path,
+                    "cover_path": lib_item.cover_path,
+                    "provider": "📚 Library",
+                    "url": "",
+                    "metadata": lib_item.extra_metadata or {},
+                    "already_downloaded": True,
+                    "download_failed": False,
+                    "from_provider": False,
+                }
+            )
+
+    # Apply language/country filter
+    return _filter_by_language_and_country(matches, filter_language, filter_country)
+
+
+def _sort_results_by_relevance(results: List[Dict[str, Any]], query: str) -> List[Dict[str, Any]]:
+    """
+    Sort results by fuzzy match score and date.
+
+    Args:
+        results: Results to sort
+        query: Original search query
+
+    Returns:
+        Sorted results list
+    """
+    if not _title_matcher:
+        return results
+
+    def _get_date_timestamp(pub_date) -> float:
+        """Safely get timestamp from publication_date."""
+        if not pub_date:
+            return 0
+        if isinstance(pub_date, datetime):
+            return pub_date.timestamp()
+        if isinstance(pub_date, str):
+            try:
+                return datetime.fromisoformat(pub_date.replace("Z", "+00:00")).timestamp()
+            except (ValueError, TypeError):
+                return 0
+        return 0
+
+    scored_results = []
+    for result in results:
+        is_match, score = _title_matcher.match(query.strip(), result["title"])
+        scored_results.append((result, score))
+
+    scored_results.sort(
+        key=lambda x: (
+            -x[1],  # Higher score first
+            -_get_date_timestamp(x[0].get("publication_date")),
+        )
+    )
+
+    return [r[0] for r in scored_results]
+
+
+def _build_search_response(
+    query: str,
+    library_matches: List[Dict[str, Any]],
+    provider_results: List[Dict[str, Any]],
+    cached_results: List,
+    provider_errors: List[str],
+) -> Dict[str, Any]:
+    """
+    Build the final search response dict.
+
+    Args:
+        query: Original search query
+        library_matches: Library match results
+        provider_results: Provider results (deduplicated)
+        cached_results: Cached results (for age calculation)
+        provider_errors: List of provider errors
+
+    Returns:
+        Response dict
+    """
+    final_results = library_matches + provider_results
+
+    if final_results:
+        sample_titles = [r.get("title", "N/A") for r in final_results[:3]]
+        logger.debug(f"Sample result titles: {sample_titles}")
+
+        return {
+            "found": True,
+            "results": final_results,
+            "library_matches": len(library_matches),
+            "available_to_download": len([r for r in provider_results if r.get("status") == "available"]),
+            "total_results": len(final_results),
+            "provider_errors": provider_errors if provider_errors else None,
+            "from_cache": len(cached_results) > 0,
+            "cache_age_days": (datetime.utcnow() - cached_results[0].created_at).days if cached_results else None,
+            "message": f"Found {len(final_results)} results for '{query}'",
+        }
+
+    error_context = ""
+    if provider_errors:
+        error_context = f" Errors: {'; '.join(provider_errors)}"
+    logger.info(f"No results found for query: {query}{error_context}")
+
+    return {
+        "found": False,
+        "message": f"No results found for '{query}' - Try a different search term{error_context}",
+        "results": [],
+        "library_matches": 0,
+        "available_to_download": 0,
+        "total_results": 0,
+        "provider_errors": provider_errors if provider_errors else None,
+        "from_cache": len(cached_results) > 0,
+        "cache_age_days": (datetime.utcnow() - cached_results[0].created_at).days if cached_results else None,
+    }
+
+
 @router.post(
     "/search",
     summary="Search for periodicals",
@@ -598,354 +1018,84 @@ async def search_periodical_providers(
         if not query or len(query.strip()) < 2:
             raise HTTPException(status_code=400, detail="Query must be at least 2 characters")
 
-        # === STEP 0: Build search queries - always include title, plus aliases if provided ===
-        search_queries = [query.strip()]  # Always search the exact title
-        if tracking_id:
-            from models.database import PeriodicalTracking
-
-            tracking_record = db.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
-            if tracking_record and tracking_record.search_aliases:
-                # Add aliases as additional searches (in addition to the title)
-                aliases = [a.strip() for a in tracking_record.search_aliases.split(",") if a.strip()]
-                for alias in aliases:
-                    if alias not in search_queries:  # Avoid duplicates
-                        search_queries.append(alias)
-                if len(search_queries) > 1:
-                    logger.info(
-                        f"Searching with title + {len(aliases)} aliases for '{tracking_record.title}': {search_queries}"
-                    )
-
         logger.info(f"Searching for issues: '{query}' (tracking_id={tracking_id}, force_refresh={force_refresh})")
 
-        # === STEP 1: Load Cached Results ===
+        # Step 1: Build search queries (with aliases)
+        search_queries = _build_search_queries(query, tracking_id, db)
+
+        # Step 2: Load cached results
         cached_results = []
         if not force_refresh:
             cached_results = _get_cached_search_results(db, query, tracking_id, cache_ttl_days)
             logger.debug(f"Found {len(cached_results)} cached results for '{query}'")
 
-        # === STEP 2: Fetch Fresh Results from Providers ===
+        # Step 3: Fetch fresh results from providers
+        seen_urls = set()
         fresh_results = []
         provider_errors = []
 
-        # Track seen URLs to avoid duplicates across multiple search queries
-        seen_urls = set()
+        if not force_refresh:
+            fresh_results = _fetch_from_provider_cache(search_queries, seen_urls)
 
-        # Try provider cache first if available (search each query)
-        if _provider_cache_service and not force_refresh:
-            try:
-                for search_query in search_queries:
-                    cached_releases = _provider_cache_service.search(search_query, limit=100)
-                    if cached_releases:
-                        logger.info(f"Found {len(cached_releases)} results from provider cache for '{search_query}'")
-                        for r in cached_releases:
-                            # Note: cache.search() returns dicts, not objects
-                            download_url = r.get("download_url")
-                            if download_url and download_url not in seen_urls:
-                                seen_urls.add(download_url)
-                                # Handle raw_metadata being a JSON string (from raw SQL)
-                                raw_meta = r.get("raw_metadata") or {}
-                                if isinstance(raw_meta, str):
-                                    try:
-                                        raw_meta = json.loads(raw_meta)
-                                    except (json.JSONDecodeError, TypeError):
-                                        raw_meta = {}
-                                # Get publication date from upload_date column (already datetime from SQL)
-                                pub_date = r.get("upload_date") or r.get("publication_date")
-                                # Convert to datetime if it's a string
-                                if isinstance(pub_date, str):
-                                    try:
-                                        pub_date = datetime.fromisoformat(pub_date.replace("Z", "+00:00"))
-                                    except (ValueError, TypeError):
-                                        pub_date = None
-                                fresh_results.append(
-                                    {
-                                        "title": r.get("title"),
-                                        "url": download_url,
-                                        "provider": r.get("provider_name"),
-                                        "publication_date": pub_date,
-                                        "metadata": raw_meta,
-                                        "from_cache": True,
-                                    }
-                                )
-            except Exception as e:
-                logger.warning(f"Provider cache search failed, falling back to direct providers: {e}")
-
-        if _search_providers:
-            # Search each query against each provider (no automatic expansion)
-            for search_query in search_queries:
-                for provider in _search_providers:
-                    try:
-                        provider_results = provider.search(search_query, category=category)
-                        for r in provider_results:
-                            if r.url not in seen_urls:
-                                seen_urls.add(r.url)
-                                fresh_results.append(
-                                    {
-                                        "title": r.title,
-                                        "url": r.url,
-                                        "provider": r.provider,
-                                        "publication_date": r.publication_date,
-                                        "metadata": r.raw_metadata or {},
-                                    }
-                                )
-                    except Exception as e:
-                        error_msg = f"{provider.__class__.__name__}: {str(e)}"
-                        logger.warning(f"Error searching provider: {error_msg}")
-                        provider_errors.append(error_msg)
-
-            # If category filter was used but no results found, try again without category
-            if category and len(fresh_results) == 0:
-                logger.info(f"No results with category '{category}', expanding search to all categories")
-                for search_query in search_queries:
-                    for provider in _search_providers:
-                        try:
-                            provider_results = provider.search(search_query, category=None)
-                            for r in provider_results:
-                                if r.url not in seen_urls:
-                                    seen_urls.add(r.url)
-                                    fresh_results.append(
-                                        {
-                                            "title": r.title,
-                                            "url": r.url,
-                                            "provider": r.provider,
-                                            "publication_date": r.publication_date,
-                                            "metadata": r.raw_metadata or {},
-                                        }
-                                    )
-                        except Exception:
-                            pass  # Already logged above
-        else:
-            error_msg = ErrorMessages.SEARCH_PROVIDERS_UNAVAILABLE
-            logger.warning(error_msg)
-            provider_errors.append(error_msg)
+        direct_results, direct_errors = _fetch_from_providers(search_queries, category, seen_urls)
+        fresh_results.extend(direct_results)
+        provider_errors.extend(direct_errors)
 
         logger.debug(f"Fetched {len(fresh_results)} fresh results from providers")
 
-        # === STEP 3: Merge Cached + Fresh (Deduplicated) ===
+        # Step 4: Merge and filter results
         all_results = _merge_search_results(cached_results, fresh_results)
-        logger.debug(f"Merged to {len(all_results)} total results")
         total_before_filtering = len(all_results)
 
-        # === STEP 4: Filter Non-Periodicals ===
-        # Remove movies, audiobooks, soundtracks, and other unsupported content
         all_results = _filter_non_periodicals(all_results)
         non_periodical_filtered = total_before_filtering - len(all_results)
-        logger.debug(f"After non-periodical filter: {len(all_results)} results")
 
-        # === STEP 5: Save Fresh Results to Cache ===
+        # Step 5: Save fresh results to cache
         if fresh_results:
             _save_search_results_to_cache(db, query, fresh_results, tracking_id)
 
-        # === STEP 6: Apply Language/Country Filters ===
+        # Step 6: Apply language/country/edition filters
         filter_language = language if language else "English"
         filter_country = country if country else "US"
+
         results_before_lang = len(all_results)
         filtered_results = _filter_by_language_and_country(all_results, filter_language, filter_country)
         language_country_filtered = results_before_lang - len(filtered_results)
-        logger.debug(
-            f"After language/country filter: {len(filtered_results)} results (language={filter_language}, country={filter_country})"
-        )
 
-        # Filter out edition variants (kids, traveller, etc.)
         results_before_edition = len(filtered_results)
-        logger.debug(f"Before edition variant filter: {results_before_edition} results")
         filtered_results = _filter_edition_variants(filtered_results, query)
         edition_filtered = results_before_edition - len(filtered_results)
-        logger.debug(f"After edition variant filter: {len(filtered_results)} results")
 
-        # === STEP 7: Load Library Items (Scoped by tracking_id) ===
+        # Step 7: Load library items (scoped by tracking_id)
         library_items = db.query(Periodical).all()
-
         if tracking_id:
             library_items = [m for m in library_items if m.tracking_id == tracking_id]
-
         logger.debug(f"Checking against {len(library_items)} library items")
 
-        # === STEP 8: Match Provider Results Against Library ===
-        # Remove provider results that already exist in library using fuzzy + date range matching
-        deduplicated_results = []
-
-        logger.debug(
-            f"Starting deduplication: {len(filtered_results)} results to check against {len(library_items)} library items"
-        )
-        for result in filtered_results:
-            # Check if this result matches any library item
-            is_duplicate = False
-
-            for lib_item in library_items:
-                if result.get("publication_date") and _title_matcher:
-                    is_match, score = _title_matcher.matches_library_item_with_date_range(
-                        provider_title=result["title"],
-                        provider_date=result["publication_date"],
-                        library_title=lib_item.title,
-                        library_date=lib_item.issue_date,
-                        date_tolerance_days=7,
-                    )
-
-                    if is_match:
-                        logger.debug(
-                            f"Hiding duplicate: '{result['title']}' matches library item '{lib_item.title}' (score: {score})"
-                        )
-                        is_duplicate = True
-                        break
-
-            if not is_duplicate:
-                # Add status badge for available items
-                result["status"] = "available"
-                result["status_badge"] = "📥 Available"
-                result["library_item_id"] = None
-                result["already_downloaded"] = False
-                result["download_failed"] = False
-                result["from_provider"] = True
-                # Format publication date to ISO string if it's a datetime
-                pub_date = result.get("publication_date")
-                if pub_date:
-                    if isinstance(pub_date, datetime):
-                        result["publication_date"] = pub_date.isoformat()
-                    elif not isinstance(pub_date, str):
-                        # Handle other types by converting to string
-                        result["publication_date"] = str(pub_date)
-                    # If already a string, leave it as-is
-                deduplicated_results.append(result)
-
+        # Step 8: Deduplicate against library
+        deduplicated_results = _deduplicate_against_library(filtered_results, library_items)
         duplicates_removed = len(filtered_results) - len(deduplicated_results)
-        logger.debug(
-            f"After library deduplication: {len(deduplicated_results)} results remain (removed {duplicates_removed} duplicates)"
-        )
 
-        # Log comprehensive filter summary
+        # Log filter summary
         logger.info(
-            f"📊 Search summary for '{query}': "
-            f"{len(deduplicated_results)} results | "
+            f"📊 Search summary for '{query}': {len(deduplicated_results)} results | "
             f"Filters: language={filter_language}, country={filter_country} | "
             f"Removed: {non_periodical_filtered} non-periodicals, "
-            f"{language_country_filtered} language/country mismatches, "
-            f"{edition_filtered} edition variants, "
+            f"{language_country_filtered} language/country, {edition_filtered} editions, "
             f"{duplicates_removed} library duplicates"
         )
 
-        # === STEP 9: Check Failed Downloads ===
-        failed_downloads = (
-            db.query(DownloadSubmission)
-            .filter(
-                or_(
-                    DownloadSubmission.status == DownloadSubmission.StatusEnum.FAILED,
-                    DownloadSubmission.attempt_count >= 2,
-                )
-            )
-            .all()
-        )
+        # Step 9: Mark failed downloads
+        _mark_failed_downloads(deduplicated_results, tracking_id, db)
 
-        if tracking_id:
-            failed_downloads = [d for d in failed_downloads if d.tracking_id == tracking_id]
+        # Step 10: Get library matches
+        library_matches = _get_library_matches(query, library_items, filter_language, filter_country)
 
-        failed_fuzzy_groups = {d.fuzzy_match_group for d in failed_downloads if d.fuzzy_match_group}
+        # Step 11: Sort results by relevance
+        final_results = _sort_results_by_relevance(library_matches + deduplicated_results, query)
 
-        # Mark failed downloads
-        for result in deduplicated_results:
-            fuzzy_group = _get_fuzzy_group_id(result["title"])
-            if fuzzy_group in failed_fuzzy_groups:
-                result["status"] = "failed"
-                result["status_badge"] = "⚠️ Failed Before"
-                result["download_failed"] = True
-
-        # === STEP 10: Add Library-Only Items ===
-        # Items in library that match the query
-        library_matches = []
-
-        if _title_matcher:
-            for lib_item in library_items:
-                is_match, score = _title_matcher.match(query.strip(), lib_item.title)
-
-                if is_match:
-                    # For library-only items, append year to title so frontend parser can extract it
-                    year = lib_item.issue_date.year if lib_item.issue_date else None
-                    title_with_year = f"{lib_item.title} {year}" if year else lib_item.title
-
-                    library_matches.append(
-                        {
-                            "title": title_with_year,
-                            "publication_date": lib_item.issue_date.isoformat() if lib_item.issue_date else None,
-                            "status": "in_library",
-                            "status_badge": "📚 In Library",
-                            "library_item_id": lib_item.id,
-                            "file_path": lib_item.file_path,
-                            "cover_path": lib_item.cover_path,
-                            "provider": "📚 Library",
-                            "url": "",
-                            "metadata": lib_item.extra_metadata or {},
-                            "already_downloaded": True,
-                            "download_failed": False,
-                            "from_provider": False,
-                        }
-                    )
-
-        # Apply same language/country filter to library items
-        library_matches = _filter_by_language_and_country(library_matches, filter_language, filter_country)
-
-        # === STEP 11: Combine and Sort Results ===
-        final_results = library_matches + deduplicated_results
-
-        def _get_date_timestamp(pub_date) -> float:
-            """Safely get timestamp from publication_date, handling various formats."""
-            if not pub_date:
-                return 0
-            if isinstance(pub_date, datetime):
-                return pub_date.timestamp()
-            if isinstance(pub_date, str):
-                try:
-                    return datetime.fromisoformat(pub_date.replace("Z", "+00:00")).timestamp()
-                except (ValueError, TypeError):
-                    return 0
-            return 0
-
-        # Sort by relevance (fuzzy match score), then date (newest first)
-        if _title_matcher:
-            scored_results = []
-            for result in final_results:
-                is_match, score = _title_matcher.match(query.strip(), result["title"])
-                scored_results.append((result, score))
-
-            scored_results.sort(
-                key=lambda x: (
-                    -x[1],  # Higher score first
-                    -_get_date_timestamp(x[0].get("publication_date")),
-                )
-            )
-            final_results = [r[0] for r in scored_results]
-
-        # === STEP 12: Return Response ===
-        if final_results:
-            # Log first 3 titles for debugging parsing issues
-            sample_titles = [r.get("title", "N/A") for r in final_results[:3]]
-            logger.debug(f"Sample result titles: {sample_titles}")
-            return {
-                "found": True,
-                "results": final_results,
-                "library_matches": len(library_matches),
-                "available_to_download": len([r for r in deduplicated_results if r.get("status") == "available"]),
-                "total_results": len(final_results),
-                "provider_errors": provider_errors if provider_errors else None,
-                "from_cache": len(cached_results) > 0,
-                "cache_age_days": ((datetime.utcnow() - cached_results[0].created_at).days if cached_results else None),
-                "message": f"Found {len(final_results)} results for '{query}'",
-            }
-        else:
-            error_context = ""
-            if provider_errors:
-                error_context = f" Errors: {'; '.join(provider_errors)}"
-            logger.info(f"No results found for query: {query}{error_context}")
-            return {
-                "found": False,
-                "message": f"No results found for '{query}' - Try a different search term{error_context}",
-                "results": [],
-                "library_matches": 0,
-                "available_to_download": 0,
-                "total_results": 0,
-                "provider_errors": provider_errors if provider_errors else None,
-                "from_cache": len(cached_results) > 0,
-                "cache_age_days": (datetime.utcnow() - cached_results[0].created_at).days if cached_results else None,
-            }
+        # Step 12: Build and return response
+        return _build_search_response(query, library_matches, deduplicated_results, cached_results, provider_errors)
 
     return await with_db_session(_session_factory, operation)
 
