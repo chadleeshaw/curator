@@ -4,6 +4,8 @@
  * special edition management, and issue organization.
  */
 
+/* global FileReader */
+
 import { APIClient, APIHelper } from './core/api.js';
 import { CSS_CLASSES } from './core/constants.js';
 
@@ -637,6 +639,64 @@ function cancelMetadataEdit() {
   document.getElementById('metadata-edit-form').classList.add(CSS_CLASSES.HIDDEN);
   document.getElementById('metadata-view-buttons').classList.remove(CSS_CLASSES.HIDDEN);
   document.getElementById('metadata-edit-buttons').classList.add(CSS_CLASSES.HIDDEN);
+  // Clear any cover upload preview
+  clearCoverUpload();
+}
+
+// eslint-disable-next-line no-unused-vars -- Called from HTML onclick handlers
+function previewCoverUpload(input) {
+  const preview = document.getElementById('cover-upload-preview');
+  const previewImg = document.getElementById('cover-preview-img');
+
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      previewImg.src = e.target.result;
+      preview.classList.remove(CSS_CLASSES.HIDDEN);
+    };
+    reader.readAsDataURL(input.files[0]);
+  } else {
+    preview.classList.add(CSS_CLASSES.HIDDEN);
+    previewImg.src = '';
+  }
+}
+
+// eslint-disable-next-line no-unused-vars -- Called from HTML onclick handlers
+function clearCoverUpload() {
+  const fileInput = document.getElementById('edit-cover-file');
+  const preview = document.getElementById('cover-upload-preview');
+  const previewImg = document.getElementById('cover-preview-img');
+
+  if (fileInput) fileInput.value = '';
+  if (preview) preview.classList.add(CSS_CLASSES.HIDDEN);
+  if (previewImg) previewImg.src = '';
+}
+
+async function uploadCoverImage(magazineId) {
+  const fileInput = document.getElementById('edit-cover-file');
+  if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+    return false; // No file to upload
+  }
+
+  const formData = new FormData();
+  formData.append('file', fileInput.files[0]);
+
+  showNotification('🖼️ Uploading cover image...', 'info');
+
+  const response = await fetch(`/api/periodicals/${magazineId}/upload-cover`, {
+    method: 'POST',
+    body: formData,
+    headers: {
+      Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to upload cover');
+  }
+
+  return true; // Successfully uploaded
 }
 
 // eslint-disable-next-line no-unused-vars -- Called from HTML onclick handlers
@@ -672,13 +732,19 @@ async function saveMetadataEdit() {
   const currentCoverPage = currentMagazineData.metadata?.cover_page || 1;
   const shouldRegenerateCover = coverPage && parseInt(coverPage) !== currentCoverPage;
 
+  // Check if a custom cover image was selected
+  const coverFileInput = document.getElementById('edit-cover-file');
+  const hasCustomCover = coverFileInput && coverFileInput.files && coverFileInput.files[0];
+
   try {
     await APIHelper.executeWithErrorHandling(async () => {
       await APIClient.put(`/api/periodicals/${currentMagazineId}`, updates);
     }, 'Periodical');
 
-    // Regenerate cover if page number changed
-    if (shouldRegenerateCover) {
+    // Handle cover: custom upload takes priority over page number regeneration
+    if (hasCustomCover) {
+      await uploadCoverImage(currentMagazineId);
+    } else if (shouldRegenerateCover) {
       showNotification('🔄 Regenerating cover from page ' + coverPage, 'info');
       await APIHelper.executeWithErrorHandling(async () => {
         await APIClient.post(`/api/periodicals/${currentMagazineId}/regenerate-cover`, {
@@ -688,6 +754,9 @@ async function saveMetadataEdit() {
     }
 
     await viewMetadata(currentMagazineId);
+
+    // Clear the file input
+    clearCoverUpload();
 
     // Show success message
     showNotification('✅ Metadata updated successfully', 'success');
@@ -992,6 +1061,8 @@ window.toggleSpecialEdition = toggleSpecialEdition;
 window.openMoveIssueModal = openMoveIssueModal;
 window.closeMoveIssueModal = closeMoveIssueModal;
 window.confirmMoveIssue = confirmMoveIssue;
+window.previewCoverUpload = previewCoverUpload;
+window.clearCoverUpload = clearCoverUpload;
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {

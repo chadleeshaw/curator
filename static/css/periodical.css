@@ -413,6 +413,62 @@ body.dark-mode #status-message.status-error {
   font-size: 0.85em;
 }
 
+/* Cover Upload */
+.cover-upload-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.form-input-file {
+  width: 100%;
+  padding: 8px;
+  border-radius: 5px;
+  border: 2px dashed var(--border-color);
+  background: var(--surface);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.form-input-file:hover {
+  border-color: var(--primary);
+  background: var(--surface-variant);
+}
+
+.cover-upload-preview {
+  position: relative;
+  display: inline-block;
+  max-width: 150px;
+}
+
+.cover-upload-preview img {
+  max-width: 100%;
+  max-height: 200px;
+  border-radius: 5px;
+  border: 2px solid var(--border-color);
+}
+
+.btn-remove-preview {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: var(--danger);
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-remove-preview:hover {
+  background: var(--danger-hover, #dc2626);
+}
+
 /* Metadata Footer */
 .metadata-footer {
   padding: 20px;

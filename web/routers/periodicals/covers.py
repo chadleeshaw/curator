@@ -3,11 +3,13 @@ Cover image operations for periodicals
 """
 
 import asyncio
+import shutil
 from pathlib import Path
 from typing import Any, Dict
 
-from fastapi import HTTPException, Query, Response
+from fastapi import HTTPException, Query, Response, UploadFile, File
 from fastapi.responses import FileResponse
+from PIL import Image
 
 from core.constants.errors import ErrorMessages
 from core.constants.files import PDF_COVER_QUALITY_HIGH
@@ -19,6 +21,9 @@ from services.ocr.service import OCRService
 from web.utils.responses import success_response
 
 from . import _shared
+
+# Allowed image extensions for cover upload
+ALLOWED_COVER_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
 router = _shared.router
 logger = _shared.logger
@@ -137,6 +142,108 @@ async def regenerate_cover(magazine_id: int, request_data: Dict[str, Any]) -> Di
 
         return success_response(
             f"Cover regenerated from page {page_number}",
+            cover_path=str(cover_path),
+        )
+
+    return await with_db_session(_shared._session_factory, operation)
+
+
+@router.post("/periodicals/{magazine_id}/upload-cover")
+@handle_api_errors("Upload cover", logger)
+async def upload_cover(magazine_id: int, file: UploadFile = File(...)) -> Dict[str, Any]:
+    """
+    Upload a custom cover image for a periodical.
+
+    Args:
+        magazine_id: ID of the periodical
+        file: Image file to upload (jpg, png, webp)
+
+    Returns:
+        Success response with new cover path
+    """
+    # Validate file extension
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided")
+
+    file_ext = Path(file.filename).suffix.lower()
+    if file_ext not in ALLOWED_COVER_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type. Allowed: {', '.join(ALLOWED_COVER_EXTENSIONS)}",
+        )
+
+    # Read file content
+    content = await file.read()
+
+    def operation(db):
+        magazine = _shared.get_periodical_or_404(db, magazine_id)
+
+        # Determine cover directory from config
+        if _shared._library_base_dir:
+            cover_dir = _shared._library_base_dir / ".covers"
+        else:
+            # Fallback: use stored file path's parent directory structure
+            if magazine.file_path:
+                pdf_path = Path(magazine.file_path)
+                cover_dir = pdf_path.parent.parent.parent / ".covers"
+            else:
+                raise HTTPException(status_code=500, detail="Unable to determine cover directory")
+
+        cover_dir.mkdir(parents=True, exist_ok=True)
+
+        # Determine output filename (use magazine's existing naming or generate from ID)
+        if magazine.file_path:
+            base_name = Path(magazine.file_path).stem
+        else:
+            base_name = f"magazine_{magazine_id}"
+
+        # Always save as JPG for consistency
+        cover_path = cover_dir / f"{base_name}.jpg"
+
+        # Save and convert to JPG if needed
+        temp_path = cover_dir / f"temp_{magazine_id}{file_ext}"
+        try:
+            with open(temp_path, "wb") as f:
+                f.write(content)
+
+            # Convert to JPG if not already
+            if file_ext in {".png", ".webp"}:
+                img = Image.open(temp_path)
+                # Convert to RGB if necessary (for transparency)
+                if img.mode in ("RGBA", "P"):
+                    img = img.convert("RGB")
+                img.save(str(cover_path), "JPEG", quality=90)
+                temp_path.unlink()
+            else:
+                # Already JPG, just move
+                shutil.move(str(temp_path), str(cover_path))
+
+        except Exception as e:
+            if temp_path.exists():
+                temp_path.unlink()
+            raise HTTPException(status_code=500, detail=f"Failed to save cover: {e}")
+
+        # Update database with new cover path
+        magazine.cover_path = str(cover_path)
+        # Mark as custom uploaded cover (not from PDF)
+        if magazine.extra_metadata is None:
+            magazine.extra_metadata = {}
+        magazine.extra_metadata["cover_uploaded"] = True
+        magazine.extra_metadata.pop("cover_page", None)  # Remove page reference
+        db.commit()
+
+        # Invalidate thumbnail cache by removing old thumbnail
+        from core.utils.thumbnail import get_thumbnail_path
+
+        thumbnail_path = get_thumbnail_path(cover_path)
+        if thumbnail_path.exists():
+            thumbnail_path.unlink()
+            logger.debug(f"Removed old thumbnail: {thumbnail_path}")
+
+        logger.info(f"Uploaded custom cover for magazine {magazine_id}")
+
+        return success_response(
+            "Cover uploaded successfully",
             cover_path=str(cover_path),
         )
 
