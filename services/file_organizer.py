@@ -20,6 +20,7 @@ from core.constants.files import (
     ORGANIZED_FILENAME_SEPARATOR,
 )
 from core.constants.language import DEFAULT_LANGUAGE
+from core.constants.title import MAX_COUNTRY_REMOVAL_PASSES
 from core.utils.files import resolve_periodical_file_path
 from core.parsers import sanitize_filename, detect_country
 from services.importer.sidecar import read_sidecar_file
@@ -130,8 +131,9 @@ class FileOrganizer:
         cleaned_title = title.strip()
 
         # Remove country codes and names from the end of the title
-        # Try multiple passes to handle cases like "Magazine USA United States"
-        for _ in range(3):  # Max 3 passes to remove multiple countries
+        # Multiple passes handle malformed titles with redundant country info
+        # (e.g., "Magazine US USA United States" requires 3 passes to fully clean)
+        for _ in range(MAX_COUNTRY_REMOVAL_PASSES):
             original = cleaned_title
 
             # Remove 2-letter country codes at end (e.g., "Magazine US")
@@ -712,6 +714,78 @@ class FileOrganizer:
             ),
         }
 
+    def _get_tracking_title(self, db_session: Any, tracking_id: Optional[int]) -> Optional[str]:
+        """
+        Get the canonical title from a tracking record.
+
+        The tracking title is the source of truth for folder organization.
+        It already includes the correct format (with country code if needed).
+
+        Args:
+            db_session: Database session
+            tracking_id: Tracking record ID, or None
+
+        Returns:
+            Tracking title if found, None otherwise
+        """
+        if not tracking_id:
+            return None
+
+        from models.database import PeriodicalTracking
+
+        tracking = db_session.query(PeriodicalTracking).filter_by(id=tracking_id).first()
+        return tracking.title if tracking else None
+
+    def _build_target_path_info(
+        self,
+        metadata: Dict[str, Any],
+        category_with_prefix: str,
+        pattern: Optional[str],
+    ) -> Tuple[Path, str, Path]:
+        """
+        Build target directory, filename, and full path for a periodical.
+
+        Centralizes path-building logic used during reorganization.
+
+        Args:
+            metadata: Dict with title, issue_date, language, issue_number, volume
+            category_with_prefix: Category name with prefix (e.g., "_Magazines")
+            pattern: Organization pattern or None for default
+
+        Returns:
+            Tuple of (target_dir, filename, expected_path)
+        """
+        safe_title = sanitize_filename(metadata["title"])
+        issue_date = metadata["issue_date"]
+        month = issue_date.strftime("%B")
+        year = issue_date.strftime("%Y")
+        day = issue_date.strftime("%d")
+
+        filename = self._build_filename(
+            safe_title,
+            metadata.get("volume"),
+            metadata.get("issue_number"),
+            month,
+            year,
+        )
+
+        if not pattern:
+            target_dir = self._build_default_directory(category_with_prefix, safe_title, metadata.get("volume"), year)
+        else:
+            target_dir = self._build_pattern_directory(
+                pattern,
+                category_with_prefix,
+                safe_title,
+                metadata.get("language") or DEFAULT_LANGUAGE,
+                year,
+                month,
+                day,
+                metadata.get("issue_number"),
+                metadata.get("volume"),
+            )
+
+        return target_dir, filename, target_dir / filename
+
     def scan_for_reorganization(
         self,
         category: str,
@@ -868,22 +942,13 @@ class FileOrganizer:
                     files_skipped += 1
                     continue
 
-                # Get country and tracking info from tracking record if available
-                tracking_title = None
-                if magazine.tracking_id:
-                    tracking = db_session.query(PeriodicalTracking).filter_by(id=magazine.tracking_id).first()
-                    if tracking:
-                        tracking_title = tracking.title
+                # Get canonical title: prefer tracking title over magazine title
+                tracking_title = self._get_tracking_title(db_session, magazine.tracking_id)
+                full_title = tracking_title or magazine.title
 
-                # CRITICAL: Use the tracking title if available, otherwise use magazine title
-                # The tracking title is the source of truth for folder organization
-                # Do NOT append country codes - the tracking title already has the correct format
                 if tracking_title:
-                    full_title = tracking_title
                     logger.debug(f"Using tracking title: {tracking_title} (magazine title was: {magazine.title})")
                 else:
-                    # No tracking record - use magazine title as-is
-                    full_title = magazine.title
                     logger.debug(f"No tracking record, using magazine title: {magazine.title}")
 
                 # Build expected path based on pattern
@@ -895,41 +960,9 @@ class FileOrganizer:
                     "volume": magazine.extra_metadata.get("volume") if magazine.extra_metadata else None,
                 }
 
-                # Build expected directory and filename
-                safe_title = sanitize_filename(metadata["title"])
-                issue_date = metadata["issue_date"]
-                month = issue_date.strftime("%B")
-                year = issue_date.strftime("%Y")
-                day = issue_date.strftime("%d")
-
-                # Build filename
-                filename = self._build_filename(
-                    safe_title,
-                    metadata.get("volume"),
-                    metadata.get("issue_number"),
-                    month,
-                    year,
+                target_dir, filename, expected_path = self._build_target_path_info(
+                    metadata, category_with_prefix, pattern
                 )
-
-                # Build target directory
-                if not pattern:
-                    target_dir = self._build_default_directory(
-                        category_with_prefix, safe_title, metadata.get("volume"), year
-                    )
-                else:
-                    target_dir = self._build_pattern_directory(
-                        pattern,
-                        category_with_prefix,
-                        safe_title,
-                        metadata.get("language") or DEFAULT_LANGUAGE,
-                        year,
-                        month,
-                        day,
-                        metadata.get("issue_number"),
-                        metadata.get("volume"),
-                    )
-
-                expected_path = target_dir / filename
 
                 # Skip if already in correct location
                 if current_path.resolve() == expected_path.resolve():
@@ -1105,7 +1138,6 @@ class FileOrganizer:
                 files_found += 1
 
                 # Extract metadata from sidecar
-                sidecar_data.get("tracking_id")
                 tracking_title = sidecar_data.get("tracking_title")
                 country = sidecar_data.get("country")
                 language = sidecar_data.get("language", DEFAULT_LANGUAGE)
@@ -1160,40 +1192,9 @@ class FileOrganizer:
                     "volume": parsed_dict.get("volume"),
                 }
 
-                # Build expected directory and filename
-                safe_title = sanitize_filename(metadata["title"])
-                month = issue_date.strftime("%B")
-                year = issue_date.strftime("%Y")
-                day = issue_date.strftime("%d")
-
-                # Build filename
-                filename = self._build_filename(
-                    safe_title,
-                    metadata.get("volume"),
-                    metadata.get("issue_number"),
-                    month,
-                    year,
+                target_dir, filename, expected_path = self._build_target_path_info(
+                    metadata, category_with_prefix, pattern
                 )
-
-                # Build target directory
-                if not pattern:
-                    target_dir = self._build_default_directory(
-                        category_with_prefix, safe_title, metadata.get("volume"), year
-                    )
-                else:
-                    target_dir = self._build_pattern_directory(
-                        pattern,
-                        category_with_prefix,
-                        safe_title,
-                        metadata.get("language") or DEFAULT_LANGUAGE,
-                        year,
-                        month,
-                        day,
-                        metadata.get("issue_number"),
-                        metadata.get("volume"),
-                    )
-
-                expected_path = target_dir / filename
 
                 # Skip if already in correct location
                 if file_path.resolve() == expected_path.resolve():

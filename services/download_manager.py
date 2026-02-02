@@ -74,6 +74,136 @@ class DownloadManager:
         self.submission_service = SubmissionService()
         self.queue_processor = QueueProcessor(download_client, max_downloads)
 
+    def _is_english_edition(self, title: str) -> bool:
+        """
+        Check if a search result title appears to be an English-language edition.
+
+        Used to prioritize English editions when downloading all issues.
+        Detection is intentionally broad - false positives (e.g., "Queen Magazine"
+        matching "en") are acceptable since this only affects sort order, not filtering.
+
+        Args:
+            title: Search result title to check
+
+        Returns:
+            True if title contains English language/region indicators
+        """
+        title_lower = title.lower()
+        english_indicators = ["english", " en ", " en-", "-en ", "usa", " uk ", " uk-", "-uk ", " us ", " us-", "-us "]
+        return any(indicator in f" {title_lower} " for indicator in english_indicators)
+
+    def _get_result_sort_key(self, result: Dict[str, Any]) -> Tuple[int, float]:
+        """
+        Generate sort key for prioritizing search results.
+
+        Sorts by: English editions first, then newest publication date.
+        Used when downloading all issues to prefer English and recent releases.
+
+        Args:
+            result: Search result dict with title and optional publication_date
+
+        Returns:
+            Tuple of (language_priority, date_sort) for sorting
+        """
+        # English editions get priority 0, others get 1
+        lang_priority = 0 if self._is_english_edition(result.get("title", "")) else 1
+
+        # Sort by publication date (newest first via negative timestamp)
+        pub_date = result.get("publication_date")
+        date_sort = -pub_date.timestamp() if pub_date else 0
+
+        return (lang_priority, date_sort)
+
+    def _has_blacklisted_extension(self, title: str) -> bool:
+        """
+        Check if title contains a blacklisted file extension.
+
+        Blacklisted extensions indicate non-periodical content (e.g., .exe, .mp3)
+        that should never be downloaded.
+
+        Args:
+            title: Search result title to check
+
+        Returns:
+            True if title contains a blacklisted extension
+        """
+        title_lower = title.lower()
+        return any(ext in title_lower for ext in BLACKLISTED_FILE_EXTENSIONS)
+
+    def _is_bad_file(self, tracking_id: int, fuzzy_group: str, session: Session) -> Optional[DownloadSubmission]:
+        """
+        Check if this file has failed too many times and should not be retried.
+
+        Uses fuzzy_match_group instead of URL because providers may return different
+        URLs for the same file (e.g., different tokens/timestamps).
+
+        Args:
+            tracking_id: Periodical tracking ID
+            fuzzy_group: Fuzzy match group identifier for the title
+            session: Database session
+
+        Returns:
+            The failed submission record if this is a bad file, None otherwise
+        """
+        return (
+            session.query(DownloadSubmission)
+            .filter(
+                DownloadSubmission.tracking_id == tracking_id,
+                DownloadSubmission.fuzzy_match_group == fuzzy_group,
+                DownloadSubmission.status == DownloadSubmission.StatusEnum.FAILED,
+                DownloadSubmission.attempt_count > MAX_DOWNLOAD_RETRIES,
+            )
+            .first()
+        )
+
+    def _get_active_download_count(self, session: Session) -> int:
+        """
+        Count currently active (pending or downloading) submissions.
+
+        Args:
+            session: Database session
+
+        Returns:
+            Number of active downloads
+        """
+        return (
+            session.query(DownloadSubmission)
+            .filter(
+                DownloadSubmission.status.in_(
+                    [
+                        DownloadSubmission.StatusEnum.PENDING,
+                        DownloadSubmission.StatusEnum.DOWNLOADING,
+                    ]
+                )
+            )
+            .count()
+        )
+
+    def _get_download_category(self, tracking_id: int, session: Session) -> Optional[str]:
+        """
+        Determine the download category for a submission.
+
+        Priority: tracking-specific category > system default.
+        This allows per-periodical organization (e.g., "Comics" vs "Magazines").
+
+        Args:
+            tracking_id: Periodical tracking ID
+            session: Database session
+
+        Returns:
+            Category name or None if no category configured
+        """
+        tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
+
+        if tracking and tracking.download_category:
+            logger.debug(f"[DownloadManager] Using tracked item download_category: {tracking.download_category}")
+            return tracking.download_category
+        elif self.default_category:
+            logger.debug(f"[DownloadManager] Using default download_category: {self.default_category}")
+            return self.default_category
+
+        return None
+
     def search_periodical_issues(self, periodical_title: str, session: Session) -> List[Dict[str, Any]]:
         """
         Search all providers for available issues of a periodical.
@@ -213,53 +343,33 @@ class DownloadManager:
         Returns:
             DownloadSubmission record if submitted, None if duplicate or error
         """
-        logger.debug(f"[DownloadManager] submit_download called for: {search_result['title']}")
+        title = search_result["title"]
+        logger.debug(f"[DownloadManager] submit_download called for: {title}")
 
-        # Check if the title contains blacklisted file extensions
-        title_lower = search_result["title"].lower()
-        for ext in BLACKLISTED_FILE_EXTENSIONS:
-            if ext in title_lower:
-                logger.warning(
-                    f"[DownloadManager] Skipping download with blacklisted extension '{ext}' in title: "
-                    f"{search_result['title']}"
-                )
-                # Record as SKIPPED to track these attempts
-                self._create_submission_record(
-                    tracking_id,
-                    search_result,
-                    DownloadSubmission.StatusEnum.SKIPPED,
-                    session,
-                    search_result_db_id=search_result_db_id,
-                )
-                return None
-
-        # Create fuzzy match group for this result
-        fuzzy_group = get_fuzzy_group_id(search_result["title"])
-
-        # Check if this title/group has failed too many times (bad file)
-        # Use fuzzy_match_group instead of URL because providers may return different URLs
-        # for the same file (e.g., different tokens/timestamps)
-        previous_failures = (
-            session.query(DownloadSubmission)
-            .filter(
-                DownloadSubmission.tracking_id == tracking_id,
-                DownloadSubmission.fuzzy_match_group == fuzzy_group,
-                DownloadSubmission.status == DownloadSubmission.StatusEnum.FAILED,
-                DownloadSubmission.attempt_count > MAX_DOWNLOAD_RETRIES,
-            )
-            .first()
-        )
-
-        if previous_failures:
-            logger.info(
-                f"[DownloadManager] Skipping bad file (failed {previous_failures.attempt_count} times): "
-                f"{search_result['title']} - Last error: {previous_failures.last_error}"
+        # Validate: skip blacklisted file types
+        if self._has_blacklisted_extension(title):
+            logger.warning(f"[DownloadManager] Skipping download with blacklisted extension: {title}")
+            self._create_submission_record(
+                tracking_id,
+                search_result,
+                DownloadSubmission.StatusEnum.SKIPPED,
+                session,
+                search_result_db_id=search_result_db_id,
             )
             return None
 
-        # Check for duplicates
-        is_dup, existing = self.check_duplicate_submission(tracking_id, search_result["title"], session)
+        # Validate: skip files that have failed too many times
+        fuzzy_group = get_fuzzy_group_id(title)
+        bad_file = self._is_bad_file(tracking_id, fuzzy_group, session)
+        if bad_file:
+            logger.info(
+                f"[DownloadManager] Skipping bad file (failed {bad_file.attempt_count} times): "
+                f"{title} - Last error: {bad_file.last_error}"
+            )
+            return None
 
+        # Validate: skip duplicates
+        is_dup, _ = self.check_duplicate_submission(tracking_id, title, session)
         if is_dup:
             logger.debug("[DownloadManager] Duplicate found, recording as SKIPPED")
             self._create_submission_record(
@@ -269,28 +379,15 @@ class DownloadManager:
                 session,
                 search_result_db_id=search_result_db_id,
             )
-            logger.info(f"Skipped duplicate download: {search_result['title']} (tracking_id: {tracking_id})")
+            logger.info(f"Skipped duplicate download: {title} (tracking_id: {tracking_id})")
             return None
 
-        # Check if we're at the concurrent download limit
-        active_count = (
-            session.query(DownloadSubmission)
-            .filter(
-                DownloadSubmission.status.in_(
-                    [
-                        DownloadSubmission.StatusEnum.PENDING,
-                        DownloadSubmission.StatusEnum.DOWNLOADING,
-                    ]
-                )
-            )
-            .count()
-        )
-
-        # If at limit, queue the download instead of submitting immediately
+        # Queue if at concurrent download limit
+        active_count = self._get_active_download_count(session)
         if active_count >= self.max_downloads:
             logger.info(
                 f"[DownloadManager] At download limit ({active_count}/{self.max_downloads}), "
-                f"queuing download: '{search_result['title']}'"
+                f"queuing download: '{title}'"
             )
             submission = self._create_submission_record(
                 tracking_id,
@@ -298,38 +395,50 @@ class DownloadManager:
                 DownloadSubmission.StatusEnum.QUEUED,
                 session,
                 search_result_db_id=search_result_db_id,
-                attempt_count=0,  # Not attempted yet
+                attempt_count=0,
             )
-            logger.info(f"Download queued: {search_result['title']} (tracking_id: {tracking_id})")
+            logger.info(f"Download queued: {title} (tracking_id: {tracking_id})")
             return submission
 
         # Submit to download client
+        return self._submit_to_client(tracking_id, search_result, session, search_result_db_id)
+
+    def _submit_to_client(
+        self,
+        tracking_id: int,
+        search_result: Dict[str, Any],
+        session: Session,
+        search_result_db_id: Optional[int] = None,
+    ) -> Optional[DownloadSubmission]:
+        """
+        Submit a download to the download client.
+
+        Handles client submission, rejection, and error recording.
+        Called after all validation checks pass.
+
+        Args:
+            tracking_id: Periodical tracking ID
+            search_result: Search result dict with title, url, provider, etc.
+            session: Database session
+            search_result_db_id: Optional ID of SearchResult DB record
+
+        Returns:
+            DownloadSubmission record if submitted successfully, None if failed
+        """
+        title = search_result["title"]
+        download_category = self._get_download_category(tracking_id, session)
+
         try:
-            # Determine download client category: tracked item download_category > config default
-            tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
-            download_category = None
-            if tracking and tracking.download_category:
-                download_category = tracking.download_category
-                logger.debug(f"[DownloadManager] Using tracked item download_category: {download_category}")
-            elif self.default_category:
-                download_category = self.default_category
-                logger.debug(f"[DownloadManager] Using default download_category: {download_category}")
+            logger.debug(f"[DownloadManager] Submitting to download client: {title} (category: {download_category})")
 
-            logger.debug(
-                f"[DownloadManager] Submitting to download client: {search_result['title']} "
-                f"(download_category: {download_category})"
-            )
-
-            # Submit NZB URL to download client
             job_id = self.download_client.submit(
                 nzb_url=search_result["url"],
-                title=search_result["title"],
+                title=title,
                 category=download_category,
             )
 
             if not job_id:
-                logger.warning(f"Download client rejected submission: {search_result['title']}")
-                logger.debug("[DownloadManager] Recording as FAILED - client rejected")
+                logger.warning(f"Download client rejected submission: {title}")
                 self._create_submission_record(
                     tracking_id,
                     search_result,
@@ -337,11 +446,10 @@ class DownloadManager:
                     session,
                     search_result_db_id=search_result_db_id,
                     error_message="Client rejected submission",
-                    attempt_count=1,  # Count this as the first failed attempt
+                    attempt_count=1,
                 )
                 return None
 
-            # Create submission record
             logger.debug(f"[DownloadManager] Client accepted, job_id: {job_id}")
             submission = self._create_submission_record(
                 tracking_id,
@@ -351,19 +459,13 @@ class DownloadManager:
                 search_result_db_id=search_result_db_id,
                 job_id=job_id,
                 client_name=self.download_client.name,
-                attempt_count=0,  # Will be incremented to 1 when status is updated
+                attempt_count=0,
             )
-            logger.debug(f"[DownloadManager] Created DownloadSubmission record ID: {submission.id}")
-
-            logger.info(f"Submitted download: {search_result['title']} (job_id: {job_id})")
+            logger.info(f"Submitted download: {title} (job_id: {job_id})")
             return submission
 
         except Exception as e:
-            logger.error(
-                f"Error submitting download for '{search_result['title']}': {e}",
-                exc_info=True,
-            )
-            logger.debug("[DownloadManager] Recording as FAILED - exception occurred")
+            logger.error(f"Error submitting download for '{title}': {e}", exc_info=True)
             self._create_submission_record(
                 tracking_id,
                 search_result,
@@ -371,7 +473,7 @@ class DownloadManager:
                 session,
                 search_result_db_id=search_result_db_id,
                 error_message=str(e),
-                attempt_count=1,  # Count this as the first failed attempt
+                attempt_count=1,
             )
             return None
 
@@ -678,23 +780,8 @@ class DownloadManager:
 
         logger.info(f"Found {len(filtered_results)} new issues (filtered from {len(search_results)} total results)")
 
-        # Prefer English editions and respect concurrent download limit
-        # Sort results: English first, then by date (newest first)
-        def sort_key(result):
-            title_lower = result.get("title", "").lower()
-            is_english = any(lang in title_lower for lang in ["english", "en", "usa", "uk", "us"])
-            # Put English first (0), others after (1)
-            lang_priority = 0 if is_english else 1
-            # Sort by publication date if available (newest first)
-            pub_date = result.get("publication_date")
-            if pub_date:
-                # Negate timestamp to sort newest first within same language priority
-                date_sort = -pub_date.timestamp()
-            else:
-                date_sort = 0
-            return (lang_priority, date_sort)
-
-        filtered_results.sort(key=sort_key)
+        # Sort results: English editions first, then by date (newest first)
+        filtered_results.sort(key=self._get_result_sort_key)
 
         # Limit to avoid overwhelming the download queue
         selected_results = filtered_results[: self.max_downloads]
