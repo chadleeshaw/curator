@@ -365,30 +365,9 @@ class DownloadMonitor:
                     ):
                         failed_count += 1
 
-                        # Check if we should delete from client after failure
-                        should_delete = True  # Default: always delete failed downloads
-                        if submission.tracking_id:
-                            tracking = (
-                                session.query(PeriodicalTracking)
-                                .filter(PeriodicalTracking.id == submission.tracking_id)
-                                .first()
-                            )
-                            # Only override default if tracking explicitly disables deletion
-                            if tracking:
-                                should_delete = tracking.delete_from_client_on_completion
-
-                        if should_delete:
-                            try:
-                                if self.download_manager.download_client.delete(submission.job_id):
-                                    logger.info(
-                                        f"[DownloadMonitor] Deleted failed job {submission.job_id} "
-                                        f"from download client"
-                                    )
-                            except Exception as e:
-                                logger.error(
-                                    f"Error deleting from client: {e}",
-                                    exc_info=True,
-                                )
+                        # Delete failed downloads from client if tracking settings allow
+                        if self._should_delete_from_client(submission.tracking_id, session):
+                            self._delete_from_client(submission.job_id, "failed")
             except Exception as e:
                 logger.error(
                     f"Error updating status for job {submission.job_id}: {e}",
@@ -396,6 +375,128 @@ class DownloadMonitor:
                 )
 
         return failed_count
+
+    def _handle_orphaned_submission(
+        self, submission: DownloadSubmission, session: Session
+    ) -> Optional[DownloadSubmission]:
+        """
+        Handle a completed submission that has no file_path.
+
+        These "orphaned" submissions occur when the download client marks a job as
+        completed but doesn't provide a storage location (e.g., SABnzbd history purged).
+
+        Args:
+            submission: The orphaned submission
+            session: Database session
+
+        Returns:
+            Updated submission if recovery succeeded, None if should skip processing
+        """
+        age_hours = (datetime.now() - submission.updated_at).total_seconds() / 3600 if submission.updated_at else 0
+
+        logger.warning(
+            f"[DownloadMonitor] Orphaned completed submission detected:\n"
+            f"  ID: {submission.id}\n"
+            f"  Title: {submission.result_title}\n"
+            f"  Job ID: {submission.job_id}\n"
+            f"  Status: {submission.status.value}\n"
+            f"  Created: {submission.created_at}\n"
+            f"  Updated: {submission.updated_at} ({age_hours:.1f} hours ago)\n"
+            f"  Attempt Count: {submission.attempt_count}\n"
+            f"  Last Error: {submission.last_error}\n"
+            f"  Reason: Download client marked job as completed but file_path is NULL.\n"
+            f"  This typically happens when SABnzbd history was purged or storage field was empty."
+        )
+
+        # Auto-recovery: Mark as SKIPPED if older than 24 hours
+        if age_hours > 24:
+            logger.info(
+                f"[DownloadMonitor] Marking submission {submission.id} as SKIPPED "
+                f"(age: {age_hours:.1f} hours > 24 hours threshold)"
+            )
+            submission.status = DownloadSubmission.StatusEnum.SKIPPED
+            submission.last_error = (
+                f"Orphaned: Completed without file_path after {age_hours:.1f} hours. "
+                "Likely SABnzbd history purged or storage field empty."
+            )
+            session.commit()
+            return None
+
+        # For recent submissions, attempt recovery from client
+        logger.info(
+            f"[DownloadMonitor] Attempting recovery for submission {submission.id} "
+            f"(age: {age_hours:.1f} hours < 24 hours threshold)"
+        )
+
+        if not submission.job_id:
+            return None
+
+        try:
+            logger.debug(f"[DownloadMonitor] Checking client for job {submission.job_id}")
+            updated_submission = self.download_manager.update_submission_status(submission.job_id, session)
+
+            if updated_submission and updated_submission.file_path:
+                logger.info(f"[DownloadMonitor] Recovery successful! Found file_path: {updated_submission.file_path}")
+                return updated_submission
+
+            logger.warning(
+                f"[DownloadMonitor] Recovery failed - client has no file_path for job {submission.job_id}. "
+                f"Marking as FAILED for manual review."
+            )
+            submission.status = DownloadSubmission.StatusEnum.FAILED
+            submission.last_error = (
+                "Orphaned: Completed without file_path. Client returned no storage location. "
+                "Job may have been deleted from client or storage was empty."
+            )
+            submission.attempt_count += 1
+            session.commit()
+            return None
+
+        except Exception as e:
+            logger.error(
+                f"[DownloadMonitor] Error during recovery attempt for submission {submission.id}: {e}",
+                exc_info=True,
+            )
+            submission.status = DownloadSubmission.StatusEnum.FAILED
+            submission.last_error = f"Recovery attempt failed: {str(e)}"
+            submission.attempt_count += 1
+            session.commit()
+            return None
+
+    def _should_delete_from_client(self, tracking_id: Optional[int], session: Session) -> bool:
+        """
+        Determine if a completed/failed download should be deleted from the client.
+
+        Args:
+            tracking_id: ID of the associated tracking record
+            session: Database session
+
+        Returns:
+            True if the download should be deleted from client
+        """
+        # Default: always delete
+        if not tracking_id:
+            return True
+
+        tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
+        if not tracking:
+            return True
+
+        return tracking.delete_from_client_on_completion
+
+    def _delete_from_client(self, job_id: str, reason: str) -> None:
+        """
+        Delete a job from the download client.
+
+        Args:
+            job_id: The download client job ID
+            reason: Reason for deletion (for logging)
+        """
+        try:
+            if self.download_manager.download_client.delete(job_id):
+                logger.info(f"[DownloadMonitor] Deleted {reason} job {job_id} from download client")
+        except Exception as e:
+            logger.error(f"Error deleting from client: {e}", exc_info=True)
 
     def _process_completed_downloads(self, session: Session) -> int:
         """
@@ -420,82 +521,10 @@ class DownloadMonitor:
             logger.debug(f"[DownloadMonitor] Processing submission {submission.id}: {submission.result_title}")
 
             if not submission.file_path:
-                # Enhanced diagnostic logging for orphaned completed submissions
-                age_hours = (
-                    (datetime.now() - submission.updated_at).total_seconds() / 3600 if submission.updated_at else 0
-                )
-                logger.warning(
-                    f"[DownloadMonitor] Orphaned completed submission detected:\n"
-                    f"  ID: {submission.id}\n"
-                    f"  Title: {submission.result_title}\n"
-                    f"  Job ID: {submission.job_id}\n"
-                    f"  Status: {submission.status.value}\n"
-                    f"  Created: {submission.created_at}\n"
-                    f"  Updated: {submission.updated_at} ({age_hours:.1f} hours ago)\n"
-                    f"  Attempt Count: {submission.attempt_count}\n"
-                    f"  Last Error: {submission.last_error}\n"
-                    f"  Reason: Download client marked job as completed but file_path is NULL.\n"
-                    f"  This typically happens when SABnzbd history was purged or storage field was empty."
-                )
-
-                # Auto-recovery: Mark as SKIPPED if older than 24 hours, otherwise retry
-                if age_hours > 24:
-                    logger.info(
-                        f"[DownloadMonitor] Marking submission {submission.id} as SKIPPED "
-                        f"(age: {age_hours:.1f} hours > 24 hours threshold)"
-                    )
-                    submission.status = DownloadSubmission.StatusEnum.SKIPPED
-                    submission.last_error = (
-                        f"Orphaned: Completed without file_path after {age_hours:.1f} hours. "
-                        "Likely SABnzbd history purged or storage field empty."
-                    )
-                    session.commit()
+                recovered = self._handle_orphaned_submission(submission, session)
+                if recovered:
+                    submission = recovered
                 else:
-                    # For recent submissions, check if job still exists in client
-                    logger.info(
-                        f"[DownloadMonitor] Attempting recovery for submission {submission.id} "
-                        f"(age: {age_hours:.1f} hours < 24 hours threshold)"
-                    )
-                    try:
-                        # Try to get fresh status from client
-                        if submission.job_id:
-                            logger.debug(f"[DownloadMonitor] Checking client for job {submission.job_id}")
-                            updated_submission = self.download_manager.update_submission_status(
-                                submission.job_id, session
-                            )
-                            if updated_submission and updated_submission.file_path:
-                                logger.info(
-                                    f"[DownloadMonitor] Recovery successful! "
-                                    f"Found file_path: {updated_submission.file_path}"
-                                )
-                                # Continue processing with updated submission
-                                submission = updated_submission
-                            else:
-                                logger.warning(
-                                    f"[DownloadMonitor] Recovery failed - client has no file_path for job {submission.job_id}. "
-                                    f"Marking as FAILED for manual review."
-                                )
-                                submission.status = DownloadSubmission.StatusEnum.FAILED
-                                submission.last_error = (
-                                    "Orphaned: Completed without file_path. Client returned no storage location. "
-                                    "Job may have been deleted from client or storage was empty."
-                                )
-                                submission.attempt_count += 1
-                                session.commit()
-                                continue
-                    except Exception as e:
-                        logger.error(
-                            f"[DownloadMonitor] Error during recovery attempt for submission {submission.id}: {e}",
-                            exc_info=True,
-                        )
-                        submission.status = DownloadSubmission.StatusEnum.FAILED
-                        submission.last_error = f"Recovery attempt failed: {str(e)}"
-                        submission.attempt_count += 1
-                        session.commit()
-                        continue
-
-                # If we still don't have a file_path after recovery attempt, skip
-                if not submission.file_path:
                     continue
 
             # Map the client path to Curator's download directory
@@ -551,27 +580,9 @@ class DownloadMonitor:
                     # Mark submission as processed
                     self.download_manager.mark_processed(submission.id, session)
 
-                    # Check if we should delete from client after successful completion
-                    should_delete = True  # Default: always delete completed downloads
-                    if submission.tracking_id:
-                        tracking = (
-                            session.query(PeriodicalTracking)
-                            .filter(PeriodicalTracking.id == submission.tracking_id)
-                            .first()
-                        )
-                        # Only override default if tracking explicitly disables deletion
-                        if tracking:
-                            should_delete = tracking.delete_from_client_on_completion
-
-                    if should_delete:
-                        try:
-                            if self.download_manager.download_client.delete(submission.job_id):
-                                logger.info(
-                                    f"[DownloadMonitor] Deleted completed job {submission.job_id} "
-                                    f"from download client"
-                                )
-                        except Exception as e:
-                            logger.error(f"Error deleting from client: {e}", exc_info=True)
+                    # Delete from client if tracking settings allow
+                    if self._should_delete_from_client(submission.tracking_id, session):
+                        self._delete_from_client(submission.job_id, "completed")
 
                     # Call optional callback (e.g., for database updates)
                     if self.import_callback:

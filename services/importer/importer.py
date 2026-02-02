@@ -149,138 +149,413 @@ class FileImporter:
         )
         logger.info("[DOWNLOADS IMPORT] Text extraction enabled, OCR queued only for image-based files")
 
-        for pdf_path in pdf_files:
-            try:
-                import_result = self.import_pdf(
-                    pdf_path,
-                    session,
-                    organization_pattern=organization_pattern,
-                    use_ocr=True,
-                )
-                if import_result:
-                    result.data["imported"] += 1
-                    logger.info(f"Successfully imported: {pdf_path.name}")
-                else:
-                    result.data["failed"] += 1
-                    result.add_error(
-                        ErrorCodes.IMPORT_FAILED,
-                        f"Failed to import {pdf_path.name}",
-                        retryable=True,
-                    )
-                    # Cleanup failed import to prevent folder clutter
-                    logger.info(f"Cleaning up failed import: {pdf_path.name}")
-                    self._cleanup_download_file(pdf_path)
-            except Exception as e:
-                result.data["failed"] += 1
-                error_msg = f"Error importing {pdf_path.name}: {str(e)}"
-                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
-                logger.error(error_msg, exc_info=True)
-                # Cleanup failed import to prevent folder clutter
-                try:
-                    self._cleanup_download_file(pdf_path)
-                except Exception as cleanup_error:
-                    logger.warning(f"Failed to cleanup {pdf_path.name}: {cleanup_error}")
-
-        # Process EPUB files
-        for epub_path in epub_files:
-            try:
-                import_result = self.import_pdf(
-                    epub_path,
-                    session,
-                    organization_pattern=organization_pattern,
-                    use_ocr=True,
-                )
-                if import_result:
-                    result.data["imported"] += 1
-                    logger.info(f"Successfully imported EPUB: {epub_path.name}")
-                else:
-                    result.data["failed"] += 1
-                    result.add_error(
-                        ErrorCodes.IMPORT_FAILED,
-                        f"Failed to import EPUB {epub_path.name}",
-                        retryable=True,
-                    )
-                    # Cleanup failed import to prevent folder clutter
-                    logger.info(f"Cleaning up failed EPUB import: {epub_path.name}")
-                    self._cleanup_download_file(epub_path)
-            except Exception as e:
-                result.data["failed"] += 1
-                error_msg = f"Error importing EPUB {epub_path.name}: {str(e)}"
-                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
-                logger.error(error_msg, exc_info=True)
-                # Cleanup failed import to prevent folder clutter
-                try:
-                    self._cleanup_download_file(epub_path)
-                except Exception as cleanup_error:
-                    logger.warning(f"Failed to cleanup {epub_path.name}: {cleanup_error}")
-
-        # Process CBZ files
-        for cbz_path in cbz_files:
-            try:
-                import_result = self.import_pdf(
-                    cbz_path,
-                    session,
-                    organization_pattern=organization_pattern,
-                    use_ocr=True,
-                )
-                if import_result:
-                    result.data["imported"] += 1
-                    logger.info(f"Successfully imported CBZ: {cbz_path.name}")
-                else:
-                    result.data["failed"] += 1
-                    result.add_error(
-                        ErrorCodes.IMPORT_FAILED,
-                        f"Failed to import CBZ {cbz_path.name}",
-                        retryable=True,
-                    )
-                    # Cleanup failed import to prevent folder clutter
-                    logger.info(f"Cleaning up failed CBZ import: {cbz_path.name}")
-                    self._cleanup_download_file(cbz_path)
-            except Exception as e:
-                result.data["failed"] += 1
-                error_msg = f"Error importing CBZ {cbz_path.name}: {str(e)}"
-                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
-                logger.error(error_msg, exc_info=True)
-                # Cleanup failed import to prevent folder clutter
-                try:
-                    self._cleanup_download_file(cbz_path)
-                except Exception as cleanup_error:
-                    logger.warning(f"Failed to cleanup {cbz_path.name}: {cleanup_error}")
-
-        # Process CBR files
-        for cbr_path in cbr_files:
-            try:
-                import_result = self.import_pdf(
-                    cbr_path,
-                    session,
-                    organization_pattern=organization_pattern,
-                    use_ocr=True,
-                )
-                if import_result:
-                    result.data["imported"] += 1
-                    logger.info(f"Successfully imported CBR: {cbr_path.name}")
-                else:
-                    result.data["failed"] += 1
-                    result.add_error(
-                        ErrorCodes.IMPORT_FAILED,
-                        f"Failed to import CBR {cbr_path.name}",
-                        retryable=True,
-                    )
-                    # Cleanup failed import to prevent folder clutter
-                    logger.info(f"Cleaning up failed CBR import: {cbr_path.name}")
-                    self._cleanup_download_file(cbr_path)
-            except Exception as e:
-                result.data["failed"] += 1
-                error_msg = f"Error importing CBR {cbr_path.name}: {str(e)}"
-                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
-                logger.error(error_msg, exc_info=True)
-                # Cleanup failed import to prevent folder clutter
-                try:
-                    self._cleanup_download_file(cbr_path)
-                except Exception as cleanup_error:
-                    logger.warning(f"Failed to cleanup {cbr_path.name}: {cleanup_error}")
+        # Process all file types using unified handler
+        self._process_file_batch(pdf_files, "PDF", session, organization_pattern, result)
+        self._process_file_batch(epub_files, "EPUB", session, organization_pattern, result)
+        self._process_file_batch(cbz_files, "CBZ", session, organization_pattern, result)
+        self._process_file_batch(cbr_files, "CBR", session, organization_pattern, result)
 
         return result.to_dict()
+
+    # =========================================================================
+    # Import Helper Methods
+    # =========================================================================
+
+    def _get_tracking_context(
+        self,
+        pdf_path: Path,
+        tracking_id: Optional[int],
+        organization_pattern: Optional[str],
+        session: Session,
+    ) -> tuple[Optional[int], Optional[str]]:
+        """
+        Get tracking context from sidecar file and tracking record.
+
+        Args:
+            pdf_path: Path to the file being imported
+            tracking_id: Explicitly provided tracking ID (or None)
+            organization_pattern: Explicitly provided organization pattern (or None)
+            session: Database session
+
+        Returns:
+            Tuple of (tracking_id, organization_pattern) with values from sidecar/tracking if available
+        """
+        # Check for sidecar metadata file first
+        sidecar_metadata = read_sidecar_file(pdf_path)
+        if sidecar_metadata and not tracking_id:
+            tracking_id = sidecar_metadata.get("tracking_id")
+            logger.debug(
+                f"Found sidecar metadata for {pdf_path.name}: tracking_id={tracking_id}, "
+                f"tracking_title='{sidecar_metadata.get('tracking_title')}'"
+            )
+
+        # Check if tracking record has a custom organization pattern
+        if tracking_id and not organization_pattern:
+            tracking_record = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
+            if tracking_record and tracking_record.organization_pattern:
+                organization_pattern = tracking_record.organization_pattern
+                logger.debug(
+                    f"Using per-periodical organization pattern for tracking_id={tracking_id}: {organization_pattern}"
+                )
+
+        return tracking_id, organization_pattern
+
+    def _check_hash_duplicate(self, content_hash: str, pdf_path: Path, skip_organize: bool, session: Session) -> bool:
+        """
+        Check if file already exists in library by content hash.
+
+        Args:
+            content_hash: SHA256 hash of file content
+            pdf_path: Path to the file being imported
+            skip_organize: Whether to skip cleanup on duplicate
+            session: Database session
+
+        Returns:
+            True if duplicate found (caller should skip import), False otherwise
+        """
+        existing_by_hash = (
+            session.query(Periodical)
+            .filter(
+                Periodical.content_hash == content_hash,
+                Periodical.content_hash.isnot(None),
+            )
+            .first()
+        )
+        if existing_by_hash:
+            logger.info(f"File already in library: '{pdf_path.name}' (matches existing file by content hash)")
+            if not skip_organize:
+                self._cleanup_download_file(pdf_path)
+            return True
+        return False
+
+    def _build_tracking_title(self, base_title: str, parsed_country: Optional[str], pdf_path: Path) -> str:
+        """
+        Build tracking title, appending country code for regional editions.
+
+        Args:
+            base_title: Base title from parser
+            parsed_country: Country code from parser (or None)
+            pdf_path: Original file path (for checking if country was in filename)
+
+        Returns:
+            Tracking title (with country code appended if applicable)
+        """
+        tracking_title = base_title
+
+        # Skip if no country or universal/worldwide codes
+        if not parsed_country or parsed_country in ["XU", "XW"]:
+            return sanitize_filename(tracking_title) if tracking_title else tracking_title
+
+        country_code = parsed_country
+        filename_lower = pdf_path.stem.lower()
+        country_name = ISO_COUNTRIES.get(parsed_country, parsed_country)
+
+        # Check if country was explicitly in the filename
+        country_name_in_filename = bool(re.search(rf"\b{re.escape(country_name.lower())}\b", filename_lower))
+        country_code_in_filename = bool(re.search(rf"\b{re.escape(parsed_country.lower())}\b", filename_lower))
+        country_in_filename = country_name_in_filename or country_code_in_filename
+
+        # Append country code if it was in filename and not already in title
+        if (
+            country_in_filename
+            and country_name.lower() not in base_title.lower()
+            and parsed_country.lower() not in base_title.lower()
+        ):
+            tracking_title = f"{base_title} {country_code}"
+
+        # Sanitize to ensure consistency between DB and filesystem
+        return sanitize_filename(tracking_title) if tracking_title else tracking_title
+
+    def _check_fuzzy_duplicate(
+        self,
+        tracking_title: str,
+        parsed_issue_date: Optional[datetime],
+        parsed_language: Optional[str],
+        pdf_path: Path,
+        skip_organize: bool,
+        session: Session,
+    ) -> bool:
+        """
+        Check for duplicate using fuzzy title matching and issue date.
+
+        Args:
+            tracking_title: Normalized tracking title
+            parsed_issue_date: Issue date from parser
+            parsed_language: Language from parser
+            pdf_path: Path to file being imported
+            skip_organize: Whether to skip cleanup on duplicate
+            session: Database session
+
+        Returns:
+            True if duplicate found (caller should skip import), False otherwise
+        """
+        existing_magazines = session.query(Periodical).all()
+
+        for existing in existing_magazines:
+            # Normalize existing title for comparison
+            existing_normalized = existing.title
+            existing_metadata = existing.extra_metadata or {}
+            existing_country = existing_metadata.get("country")
+
+            if existing_country:
+                country_name = ISO_COUNTRIES.get(existing_country, existing_country)
+                if existing.title.endswith(f" {existing_country}"):
+                    existing_normalized = existing.title[: -len(existing_country) - 1] + f" {country_name}"
+
+            is_match, score = self.title_matcher.match(tracking_title, existing_normalized)
+
+            if is_match and parsed_issue_date and existing.issue_date:
+                date_diff = abs((parsed_issue_date - existing.issue_date).days)
+                same_language = (existing.language == parsed_language) or (
+                    not existing.language and parsed_language == DEFAULT_LANGUAGE
+                )
+
+                if date_diff <= DUPLICATE_DATE_THRESHOLD_DAYS and same_language:
+                    logger.warning(
+                        f"Duplicate detected: '{tracking_title}' ({parsed_issue_date.strftime('%b %Y')}, {parsed_language}) "
+                        f"matches existing '{existing.title}' ({existing.issue_date.strftime('%b %Y')}, "
+                        f"{existing.language or DEFAULT_LANGUAGE}) (title score: {score}, date diff: {date_diff} days). "
+                        f"Skipping import."
+                    )
+                    if not skip_organize:
+                        self._cleanup_download_file(pdf_path)
+                    return True
+
+        return False
+
+    def _find_tracking_match(
+        self,
+        tracking_id: Optional[int],
+        tracking_title: str,
+        parsed_language: Optional[str],
+        parsed_country: Optional[str],
+        category: str,
+        session: Session,
+    ) -> Optional[PeriodicalTracking]:
+        """
+        Find the best matching tracking record.
+
+        Args:
+            tracking_id: Explicitly provided tracking ID (or None)
+            tracking_title: Normalized tracking title
+            parsed_language: Language from parser
+            parsed_country: Country from parser
+            category: Categorized category
+            session: Database session
+
+        Returns:
+            Matching PeriodicalTracking record or None
+        """
+        target_tracking = None
+
+        if tracking_id:
+            target_tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
+            if target_tracking:
+                logger.info(
+                    f"Using provided tracking_id={tracking_id} ('{target_tracking.title}') for '{tracking_title}'"
+                )
+            else:
+                logger.warning(f"Provided tracking_id={tracking_id} not found, will try to find best match")
+
+        if not target_tracking:
+            all_tracking = session.query(PeriodicalTracking).all()
+            if all_tracking:
+                match_result = self.tracking_matcher.find_best_match(
+                    parsed_title=tracking_title,
+                    tracking_records=all_tracking,
+                    parsed_language=parsed_language,
+                    parsed_country=parsed_country,
+                    parsed_category=category,
+                )
+
+                if match_result and match_result.is_match:
+                    target_tracking = (
+                        session.query(PeriodicalTracking)
+                        .filter(PeriodicalTracking.id == match_result.tracking_id)
+                        .first()
+                    )
+                    logger.info(
+                        f"Matched '{tracking_title}' to existing tracking '{match_result.tracking_title}' "
+                        f"(ID: {match_result.tracking_id}, score: {match_result.score})"
+                    )
+
+        return target_tracking
+
+    def _link_or_create_tracking(
+        self,
+        magazine: Periodical,
+        target_tracking: Optional[PeriodicalTracking],
+        tracking_title: str,
+        parsed_language: Optional[str],
+        parsed_country: Optional[str],
+        category: str,
+        is_special_edition: bool,
+        special_name: Optional[str],
+        auto_track: bool,
+        tracking_mode: str,
+        session: Session,
+    ) -> None:
+        """
+        Link magazine to existing tracking or create new tracking record.
+
+        Args:
+            magazine: The Periodical record to link
+            target_tracking: Existing tracking match (or None)
+            tracking_title: Normalized tracking title
+            parsed_language: Language from parser
+            parsed_country: Country from parser
+            category: Categorized category
+            is_special_edition: Whether this is a special edition
+            special_name: Name of special edition (if applicable)
+            auto_track: Whether to auto-create tracking records
+            tracking_mode: Tracking mode for new records
+            session: Database session
+        """
+        if target_tracking:
+            magazine.tracking_id = target_tracking.id
+            target_tracking.last_metadata_update = datetime.now()
+
+            # Synchronize language between tracking and periodical
+            if target_tracking.language:
+                magazine.language = target_tracking.language
+                logger.debug(
+                    f"Synchronized language to '{target_tracking.language}' from tracking for: {target_tracking.title}"
+                )
+            elif parsed_language:
+                target_tracking.language = parsed_language
+                magazine.language = parsed_language
+                logger.debug(
+                    f"Set tracking and periodical language to '{parsed_language}' for: {target_tracking.title}"
+                )
+
+            logger.debug(f"Linked magazine to tracking: {target_tracking.title} (ID: {target_tracking.id})")
+
+            # Add special edition to selected_editions if applicable
+            if is_special_edition and special_name:
+                if target_tracking.selected_editions is None:
+                    target_tracking.selected_editions = {}
+                if special_name not in target_tracking.selected_editions:
+                    target_tracking.selected_editions[special_name] = True
+                    logger.debug(f"Added special edition '{special_name}' to tracking: {target_tracking.title}")
+
+        elif auto_track:
+            olid = generate_olid(tracking_title)
+            track_all_editions = tracking_mode == "all"
+            track_new_only = tracking_mode == "new"
+
+            new_tracking = PeriodicalTracking(
+                olid=olid,
+                title=tracking_title,
+                language=parsed_language,
+                country=parsed_country,
+                category=category,
+                track_all_editions=track_all_editions,
+                track_new_only=track_new_only,
+                selected_editions={},
+                selected_years=[],
+                last_metadata_update=datetime.now(),
+            )
+            session.add(new_tracking)
+            session.flush()
+            magazine.tracking_id = new_tracking.id
+            logger.info(f"Created new tracking record: {tracking_title} (ID: {new_tracking.id}, mode: {tracking_mode})")
+
+            if is_special_edition:
+                logger.debug(f"Detected special edition '{special_name}' for: {tracking_title}")
+
+    def _run_text_scan(
+        self, magazine: Periodical, organized_path: Path, parsed_language: Optional[str], session: Session
+    ) -> None:
+        """
+        Run direct text extraction on the imported file.
+
+        Args:
+            magazine: The Periodical record
+            organized_path: Path to the organized file
+            parsed_language: Language from parser
+            session: Database session
+        """
+        if organized_path.suffix.lower() not in [".pdf", ".epub"]:
+            return
+
+        enable_text_scan = getattr(self, "_enable_text_scan", True)
+        if not enable_text_scan:
+            logger.debug("Text scanning disabled in config")
+            return
+
+        try:
+            logger.debug(f"Attempting direct text extraction for {magazine.id}")
+            scan_result = TextScanService.scan_document(str(organized_path), language=parsed_language)
+
+            # Store text scan metadata
+            if not magazine.parsed_metadata:
+                magazine.parsed_metadata = {}
+            magazine.parsed_metadata["text_scan"] = scan_result
+
+            # Rebuild derived_metadata with text scan results
+            from core.utils.metadata_builder import build_derived_metadata, sync_issue_date_from_derived
+
+            magazine.derived_metadata = build_derived_metadata(
+                file_scan=magazine.parsed_metadata.get("file_scan"),
+                text_scan=scan_result,
+                ocr_scan=magazine.parsed_metadata.get("ocr_scan"),
+            )
+
+            # Sync issue_date from derived_metadata
+            new_issue_date = sync_issue_date_from_derived(magazine.derived_metadata)
+            if new_issue_date:
+                magazine.issue_date = new_issue_date
+                logger.debug(f"Updated issue_date to {new_issue_date.strftime('%Y-%m')} from derived_metadata")
+
+            if scan_result.get("text_found"):
+                logger.info(f"Enhanced {magazine.title} with metadata from text scan")
+
+            from core.utils.db import mark_json_modified
+
+            mark_json_modified(magazine, "parsed_metadata", "derived_metadata")
+            session.commit()
+
+            if scan_result.get("text_found"):
+                has_sufficient = scan_result.get("has_sufficient_metadata", False)
+                logger.info(f"Successfully extracted text metadata for {magazine.title} (sufficient: {has_sufficient})")
+            else:
+                logger.debug(f"No text found in {organized_path.name}")
+
+        except Exception as e:
+            logger.debug(f"Direct text extraction failed for {magazine.id}: {e}")
+
+    def _queue_ocr_job(
+        self,
+        magazine: Periodical,
+        parsed_language: Optional[str],
+        skip_organize: bool,
+        session: Session,
+    ) -> None:
+        """
+        Queue OCR job for background processing.
+
+        Args:
+            magazine: The Periodical record
+            parsed_language: Language from parser
+            skip_organize: Whether this was a skip_organize import
+            session: Database session
+        """
+        try:
+            priority = OCRJob.PriorityEnum.HIGH.value if not skip_organize else OCRJob.PriorityEnum.NORMAL.value
+            ocr_job = OCRQueueService.queue_ocr_job(
+                db=session,
+                periodical_id=magazine.id,
+                priority=priority,
+                language=parsed_language,
+            )
+            if ocr_job:
+                logger.info(f"Queued OCR job {ocr_job.id} for magazine {magazine.id}")
+        except Exception as e:
+            logger.warning(f"Failed to queue OCR job for magazine {magazine.id}: {e}")
+
+    # =========================================================================
+    # Main Import Method
+    # =========================================================================
 
     def import_pdf(
         self,
@@ -311,208 +586,51 @@ class FileImporter:
             Dictionary with result information including magazine_id, or empty dict if failed
         """
         try:
-            # Check for sidecar metadata file first - this provides tracking context
-            # that may not be available from the filename alone
-            sidecar_metadata = read_sidecar_file(pdf_path)
-            if sidecar_metadata and not tracking_id:
-                # Use tracking_id from sidecar if not explicitly provided
-                tracking_id = sidecar_metadata.get("tracking_id")
-                logger.debug(
-                    f"Found sidecar metadata for {pdf_path.name}: tracking_id={tracking_id}, "
-                    f"tracking_title='{sidecar_metadata.get('tracking_title')}'"
-                )
+            # Step 1: Get tracking context from sidecar and tracking record
+            tracking_id, organization_pattern = self._get_tracking_context(
+                pdf_path, tracking_id, organization_pattern, session
+            )
 
-            # If tracking_id is available and no explicit organization_pattern was provided,
-            # check if the tracking record has a custom organization pattern
-            if tracking_id and not organization_pattern:
-                tracking_record = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
-                if tracking_record and tracking_record.organization_pattern:
-                    organization_pattern = tracking_record.organization_pattern
-                    logger.debug(
-                        f"Using per-periodical organization pattern for tracking_id={tracking_id}: {organization_pattern}"
-                    )
-
-            # Parse file using unified parser - combines filename and filepath parsing
+            # Step 2: Parse file and validate
             parsed = self.parser.parse_file(pdf_path)
-
-            # Step 1: Validate title before processing (already done in parser for search results)
             if not self.title_matcher.validate_before_parsing(parsed.title):
                 logger.warning(f"Skipping invalid release title: {parsed.title} (from {pdf_path.name})")
                 return {}
-
             logger.debug(f"Parsed metadata: '{parsed.title}' (confidence: {parsed.confidence})")
 
-            # Calculate content hash for duplicate detection
+            # Step 3: Calculate content hash and check for hash-based duplicates
             content_hash = hash_file_in_chunks(str(pdf_path))
             if not content_hash:
                 logger.error(f"Failed to hash file {pdf_path}, skipping import", exc_info=True)
                 return {}
 
-            # First check: hash-based duplicate detection (100% accurate)
-            # Only check if we have a valid hash (skip NULL hashes from older imports)
-            existing_by_hash = (
-                session.query(Periodical)
-                .filter(
-                    Periodical.content_hash == content_hash,
-                    Periodical.content_hash.isnot(None),
-                )
-                .first()
-            )
-            if existing_by_hash:
-                logger.info(f"File already in library: '{pdf_path.name}' (matches existing file by content hash)")
-                # Cleanup duplicate file from downloads if not already in library
-                if not skip_organize:
-                    self._cleanup_download_file(pdf_path)
+            if self._check_hash_duplicate(content_hash, pdf_path, skip_organize, session):
                 return {}
 
-            # Extract special edition info from parsed data
-            base_title = parsed.base_title
-            is_special_edition = parsed.is_special_edition
-            special_name = parsed.special_edition_name
+            # Step 4: Build tracking title with country code if applicable
+            tracking_title = self._build_tracking_title(parsed.base_title, parsed.country, pdf_path)
 
-            # Use base_title for tracking - language is stored separately in the language field
-            # This keeps titles clean and allows proper filtering by language
-            # However, for regional editions (different countries), include country in title
-            tracking_title = base_title
+            # Step 5: Check for fuzzy duplicates
+            if self._check_fuzzy_duplicate(
+                tracking_title, parsed.issue_date, parsed.language, pdf_path, skip_organize, session
+            ):
+                return {}
 
-            # Include country in tracking title for regional editions
-            # Regional editions should have separate tracking from the base edition
-            # Only do this if the country name/code was explicitly in the original filename
-            # to avoid false positives from spurious country detection
-            if parsed.country and parsed.country not in ["XU", "XW", None]:
-                # Use the 2-letter country code (e.g., "UK") instead of full name ("United Kingdom")
-                # This ensures consistency with title normalization (see COUNTRY_CODE_NORMALIZATIONS)
-                country_code = parsed.country
-
-                # Check if country name or code was explicitly in the filename
-                # Use word boundaries to avoid false matches (e.g., "TH" in "The")
-                filename_lower = pdf_path.stem.lower()
-
-                # Import country name mapping for full name checking
-                country_name = ISO_COUNTRIES.get(parsed.country, parsed.country)
-
-                # Check for country name (e.g., "South Africa", "United Kingdom")
-                country_name_in_filename = bool(re.search(rf"\b{re.escape(country_name.lower())}\b", filename_lower))
-
-                # Check for country code with word boundaries or as separate token
-                # (e.g., "UK", "ZA" but not "TH" in "The")
-                country_code_in_filename = bool(re.search(rf"\b{re.escape(parsed.country.lower())}\b", filename_lower))
-
-                country_in_filename = country_name_in_filename or country_code_in_filename
-
-                # Only append if:
-                # 1. Country was in filename
-                # 2. Country name not already in title
-                # 3. Country code not already in title
-                if (
-                    country_in_filename
-                    and country_name.lower() not in base_title.lower()
-                    and parsed.country.lower() not in base_title.lower()
-                ):
-                    tracking_title = f"{base_title} {country_code}"
-
-            # IMPORTANT: Sanitize tracking title to ensure consistency between:
-            # 1. Tracking record title (database)
-            # 2. Magazine title (database)
-            # 3. Folder name (filesystem)
-            # This prevents issues with special characters like : / \ that are invalid in filenames
-            if tracking_title:
-                tracking_title = sanitize_filename(tracking_title)
-
-            # Check for duplicates using fuzzy matching on tracking titles AND issue date
-            # A duplicate is defined as: same tracking title (fuzzy match) AND same issue date (within 5 days)
-            # Normalize existing titles to use full country names for consistent comparison
-            existing_magazines = session.query(Periodical).all()
-            for existing in existing_magazines:
-                # Normalize the existing title to use full country names instead of codes
-                # This ensures "Esquire US" matches "Esquire United States"
-                existing_normalized = existing.title
-                existing_metadata = existing.extra_metadata or {}
-                existing_country = existing_metadata.get("country")
-
-                if existing_country:
-                    country_name = ISO_COUNTRIES.get(existing_country, existing_country)
-                    # Replace country code with country name if it appears at the end of the title
-                    if existing.title.endswith(f" {existing_country}"):
-                        existing_normalized = existing.title[: -len(existing_country) - 1] + f" {country_name}"
-
-                is_match, score = self.title_matcher.match(tracking_title, existing_normalized)
-                if is_match and parsed.issue_date and existing.issue_date:
-                    date_diff = abs((parsed.issue_date - existing.issue_date).days)
-                    # Also check language match for duplicates
-                    same_language = (existing.language == parsed.language) or (
-                        not existing.language and parsed.language == DEFAULT_LANGUAGE
-                    )
-                    if date_diff <= DUPLICATE_DATE_THRESHOLD_DAYS and same_language:
-                        logger.warning(
-                            f"Duplicate detected: '{tracking_title}' ({parsed.issue_date.strftime('%b %Y')}, {parsed.language}) matches existing "
-                            f"'{existing.title}' ({existing.issue_date.strftime('%b %Y')}, {existing.language or DEFAULT_LANGUAGE}) "
-                            f"(title score: {score}, date diff: {date_diff} days). Skipping import."
-                        )
-                        # Cleanup duplicate file from downloads if not already in library
-                        if not skip_organize:
-                            self._cleanup_download_file(pdf_path)
-                        return {}
-
-            # Determine category early so we can use it for tracking match
+            # Step 6: Determine category and find tracking match
             category = self.categorizer.categorize(parsed.title)
+            target_tracking = self._find_tracking_match(
+                tracking_id, tracking_title, parsed.language, parsed.country, category, session
+            )
 
-            # IMPORTANT: Find tracking match BEFORE organizing files
-            # This ensures we use the canonical tracking title for organization
-            # instead of the parsed title, preventing folder fragmentation
-            # (e.g., "Playboy US", "Playboy USA", "Playboy - USA" all go to "Playboy USA" folder)
-
-            target_tracking = None
-
-            if tracking_id:
-                # Tracking ID provided from download submission - validate and use it
-                target_tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
-                if target_tracking:
-                    logger.info(
-                        f"Using provided tracking_id={tracking_id} ('{target_tracking.title}') for '{tracking_title}'"
-                    )
-                else:
-                    logger.warning(f"Provided tracking_id={tracking_id} not found, will try to find best match")
-
-            if not target_tracking:
-                # Try to find best match using the tracking matcher
-                all_tracking = session.query(PeriodicalTracking).all()
-                if all_tracking:
-                    match_result = self.tracking_matcher.find_best_match(
-                        parsed_title=tracking_title,
-                        tracking_records=all_tracking,
-                        parsed_language=parsed.language,
-                        parsed_country=parsed.country,
-                        parsed_category=category,
-                    )
-
-                    if match_result and match_result.is_match:
-                        target_tracking = (
-                            session.query(PeriodicalTracking)
-                            .filter(PeriodicalTracking.id == match_result.tracking_id)
-                            .first()
-                        )
-                        logger.info(
-                            f"Matched '{tracking_title}' to existing tracking '{match_result.tracking_title}' "
-                            f"(ID: {match_result.tracking_id}, score: {match_result.score})"
-                        )
-
-            # Use tracking title for organization if we have a match
-            # This ensures all files for the same periodical go to the same folder
+            # Step 7: Organize file (use tracking title for folder consistency)
             organization_title = target_tracking.title if target_tracking else tracking_title
-
             cover_path = self._extract_cover(pdf_path)
-
-            # OCR will be queued for background processing instead of running inline
-            # This improves import speed and allows concurrent OCR processing
             should_queue_ocr = use_ocr and (cover_path or pdf_path) and OCRService.is_available()
 
             if skip_organize:
                 organized_path = pdf_path
                 logger.info(f"Using file in place (already in library): {pdf_path}")
             else:
-                # Convert parsed data to metadata dict for organizer
-                # Use organization_title (tracking title if matched, otherwise parsed title)
                 metadata = {
                     "title": organization_title,
                     "issue_date": parsed.issue_date,
@@ -521,11 +639,10 @@ class FileImporter:
                     "language": parsed.language,
                 }
                 organized_path = self.organizer.organize(pdf_path, metadata, category, organization_pattern)
-
                 if not organized_path:
                     return {}
 
-            # Build new metadata structure
+            # Step 8: Build metadata and create database record
             from core.utils.metadata_builder import (
                 build_file_scan,
                 build_parsed_metadata,
@@ -533,194 +650,55 @@ class FileImporter:
                 build_extra_metadata,
             )
 
-            # Build file_scan from parsed results
             file_scan = build_file_scan(parsed)
-
-            # Add special edition info if applicable
-            if is_special_edition:
-                file_scan["special_edition_name"] = special_name
+            if parsed.is_special_edition:
+                file_scan["special_edition_name"] = parsed.special_edition_name
                 file_scan["is_special_edition"] = True
 
-            # Build parsed_metadata with file_scan
-            parsed_metadata = build_parsed_metadata(file_scan=file_scan)
-
-            # Build derived_metadata from file_scan (best available at import time)
-            derived_metadata = build_derived_metadata(file_scan=file_scan)
-
-            # Build extra_metadata with import/provenance info only
-            extra_metadata = build_extra_metadata(
-                imported_from=pdf_path.name,
-                import_date=datetime.now().isoformat(),
-                category=category,
-                import_method="auto",
-            )
-
             magazine = Periodical(
-                title=organization_title,  # Use organization_title (tracking title if matched)
+                title=organization_title,
                 issue_date=parsed.issue_date or datetime.now(),
-                language=parsed.language or DEFAULT_LANGUAGE,  # Set language from parsed metadata
+                language=parsed.language or DEFAULT_LANGUAGE,
                 file_path=str(organized_path),
                 cover_path=str(cover_path) if cover_path else None,
                 content_hash=content_hash,
-                parsed_metadata=parsed_metadata,
-                derived_metadata=derived_metadata,
-                extra_metadata=extra_metadata,
+                parsed_metadata=build_parsed_metadata(file_scan=file_scan),
+                derived_metadata=build_derived_metadata(file_scan=file_scan),
+                extra_metadata=build_extra_metadata(
+                    imported_from=pdf_path.name,
+                    import_date=datetime.now().isoformat(),
+                    category=category,
+                    import_method="auto",
+                ),
             )
-
             session.add(magazine)
 
-            # Link to tracking if we found a match
-            # The tracking match was already found above, so we just need to link and update metadata
-
-            if target_tracking:
-                # Link to existing tracking
-                magazine.tracking_id = target_tracking.id
-                target_tracking.last_metadata_update = datetime.now()
-
-                # Synchronize language between tracking and periodical
-                # Tracking language is the source of truth - periodical should match it
-                if target_tracking.language:
-                    magazine.language = target_tracking.language
-                    logger.debug(
-                        f"Synchronized language to '{target_tracking.language}' "
-                        f"from tracking for: {target_tracking.title}"
-                    )
-                elif parsed.language:
-                    # If tracking has no language set, update it from parsed metadata
-                    target_tracking.language = parsed.language
-                    magazine.language = parsed.language
-                    logger.debug(
-                        f"Set tracking and periodical language to '{parsed.language}' for: {target_tracking.title}"
-                    )
-
-                # Magazine title and folder already match tracking title from organization step above
-                # No need to reorganize since we used the tracking title from the start
-                logger.debug(f"Linked magazine to tracking: {target_tracking.title} (ID: {target_tracking.id})")
-
-                # IMPORTANT: DO NOT update tracking mode for existing tracking records
-                # The tracking mode is a user preference that should persist
-                # Only update it if explicitly provided via tracking_id from a download submission
-                # This prevents imports from inadvertently changing "track all" back to "watch"
-                #
-                # Note: tracking_mode parameter exists for creating NEW tracking records,
-                # not for updating existing ones
-
-                # If this is a special edition, ensure it's in the selected_editions
-                if is_special_edition and special_name:
-                    if target_tracking.selected_editions is None:
-                        target_tracking.selected_editions = {}
-                    if special_name not in target_tracking.selected_editions:
-                        target_tracking.selected_editions[special_name] = True
-                        logger.debug(f"Added special edition '{special_name}' to tracking: {target_tracking.title}")
-
-            elif auto_track:
-                # No match found, create new tracking record
-                olid = generate_olid(tracking_title)
-                track_all_editions = tracking_mode == "all"
-                track_new_only = tracking_mode == "new"
-
-                new_tracking = PeriodicalTracking(
-                    olid=olid,
-                    title=tracking_title,
-                    language=parsed.language,
-                    country=parsed.country,
-                    category=category,
-                    track_all_editions=track_all_editions,
-                    track_new_only=track_new_only,
-                    selected_editions={},
-                    selected_years=[],
-                    last_metadata_update=datetime.now(),
-                )
-                session.add(new_tracking)
-                session.flush()
-                magazine.tracking_id = new_tracking.id
-                logger.info(
-                    f"Created new tracking record: {tracking_title} (ID: {new_tracking.id}, mode: {tracking_mode})"
-                )
-
-                # If this is a special edition, add it to the selected_editions
-                if is_special_edition:
-                    logger.debug(f"Detected special edition '{special_name}' for: {tracking_title}")
+            # Step 9: Link to existing tracking or create new one
+            self._link_or_create_tracking(
+                magazine=magazine,
+                target_tracking=target_tracking,
+                tracking_title=tracking_title,
+                parsed_language=parsed.language,
+                parsed_country=parsed.country,
+                category=category,
+                is_special_edition=parsed.is_special_edition,
+                special_name=parsed.special_edition_name,
+                auto_track=auto_track,
+                tracking_mode=tracking_mode,
+                session=session,
+            )
 
             session.commit()
             logger.info(f"Added to database: {parsed.title} ({category})")
 
-            # Run direct text scanning on PDF/EPUB files (fast, synchronous)
-            if organized_path.suffix.lower() in [".pdf", ".epub"]:
-                try:
-                    # Check if text scanning is enabled
-                    enable_text_scan = getattr(self, "_enable_text_scan", True)
-                    if enable_text_scan:
-                        logger.debug(f"Attempting direct text extraction for {magazine.id}")
+            # Step 10: Run text scan for additional metadata
+            self._run_text_scan(magazine, organized_path, parsed.language, session)
 
-                        # Use TextScanService for direct text extraction
-                        scan_result = TextScanService.scan_document(str(organized_path), language=parsed.language)
-
-                        # Always store text scan metadata (even if no text found)
-                        if not magazine.parsed_metadata:
-                            magazine.parsed_metadata = {}
-                        magazine.parsed_metadata["text_scan"] = scan_result
-
-                        # Rebuild derived_metadata with text scan results
-                        from core.utils.metadata_builder import (
-                            build_derived_metadata,
-                            sync_issue_date_from_derived,
-                        )
-
-                        magazine.derived_metadata = build_derived_metadata(
-                            file_scan=magazine.parsed_metadata.get("file_scan"),
-                            text_scan=scan_result,
-                            ocr_scan=magazine.parsed_metadata.get("ocr_scan"),
-                        )
-
-                        # Sync issue_date from derived_metadata (keeps column in sync with best data)
-                        new_issue_date = sync_issue_date_from_derived(magazine.derived_metadata)
-                        if new_issue_date:
-                            magazine.issue_date = new_issue_date
-                            logger.debug(
-                                f"Updated issue_date to {new_issue_date.strftime('%Y-%m')} from derived_metadata"
-                            )
-
-                        if scan_result.get("text_found"):
-                            logger.info(f"Enhanced {magazine.title} with metadata from text scan")
-
-                        from core.utils.db import mark_json_modified
-
-                        mark_json_modified(magazine, "parsed_metadata", "derived_metadata")
-                        session.commit()
-
-                        if scan_result.get("text_found"):
-                            has_sufficient = scan_result.get("has_sufficient_metadata", False)
-                            logger.info(
-                                f"Successfully extracted text metadata for {magazine.title} "
-                                f"(sufficient: {has_sufficient})"
-                            )
-                        else:
-                            logger.debug(f"No text found in {organized_path.name}")
-                    else:
-                        logger.debug("Text scanning disabled in config")
-
-                except Exception as e:
-                    logger.debug(f"Direct text extraction failed for {magazine.id}: {e}")
-
-            # Queue OCR job if OCR is enabled and available
-            # OCR is the highest priority metadata source (see metadata.source_priority config)
-            # It should be queued regardless of whether text extraction succeeded, so that
-            # OCR results can override text_scan results during metadata aggregation
+            # Step 11: Queue OCR job for background processing
             if should_queue_ocr:
-                try:
-                    priority = OCRJob.PriorityEnum.HIGH.value if not skip_organize else OCRJob.PriorityEnum.NORMAL.value
-                    ocr_job = OCRQueueService.queue_ocr_job(
-                        db=session,
-                        periodical_id=magazine.id,
-                        priority=priority,
-                        language=parsed.language,
-                    )
-                    if ocr_job:
-                        logger.info(f"Queued OCR job {ocr_job.id} for magazine {magazine.id}")
-                except Exception as e:
-                    logger.warning(f"Failed to queue OCR job for magazine {magazine.id}: {e}")
+                self._queue_ocr_job(magazine, parsed.language, skip_organize, session)
 
+            # Step 12: Cleanup download file
             if not skip_organize:
                 self._cleanup_download_file(pdf_path)
 
@@ -730,6 +708,54 @@ class FileImporter:
             session.rollback()
             logger.error(f"Error importing PDF {pdf_path}: {e}", exc_info=True)
             return {}
+
+    def _process_file_batch(
+        self,
+        files: list,
+        file_type: str,
+        session: Session,
+        organization_pattern: Optional[str],
+        result: OperationResult,
+    ) -> None:
+        """
+        Process a batch of files of the same type.
+
+        Args:
+            files: List of Path objects to process
+            file_type: File type label for logging (e.g., "PDF", "EPUB", "CBZ", "CBR")
+            session: Database session
+            organization_pattern: Optional organization pattern
+            result: OperationResult to update with counts and errors
+        """
+        for file_path in files:
+            try:
+                import_result = self.import_pdf(
+                    file_path,
+                    session,
+                    organization_pattern=organization_pattern,
+                    use_ocr=True,
+                )
+                if import_result:
+                    result.data["imported"] += 1
+                    logger.info(f"Successfully imported {file_type}: {file_path.name}")
+                else:
+                    result.data["failed"] += 1
+                    result.add_error(
+                        ErrorCodes.IMPORT_FAILED,
+                        f"Failed to import {file_type} {file_path.name}",
+                        retryable=True,
+                    )
+                    logger.info(f"Cleaning up failed {file_type} import: {file_path.name}")
+                    self._cleanup_download_file(file_path)
+            except Exception as e:
+                result.data["failed"] += 1
+                error_msg = f"Error importing {file_type} {file_path.name}: {str(e)}"
+                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
+                logger.error(error_msg, exc_info=True)
+                try:
+                    self._cleanup_download_file(file_path)
+                except Exception as cleanup_error:
+                    logger.warning(f"Failed to cleanup {file_path.name}: {cleanup_error}")
 
     def _cleanup_download_file(self, pdf_path: Path) -> None:
         """

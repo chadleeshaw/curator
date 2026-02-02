@@ -146,3 +146,15 @@ SPECIAL_EDITION_KEYWORDS = [
     "best of",
 ]
 """Keywords that indicate a special edition release"""
+
+
+# ==============================================================================
+# Title Cleaning
+# ==============================================================================
+
+MAX_COUNTRY_REMOVAL_PASSES = 3
+"""Maximum passes to remove country codes from titles.
+
+Titles occasionally have multiple country identifiers (e.g., "Magazine US USA United States").
+Three passes handles the observed maximum while preventing infinite loops on malformed data.
+"""

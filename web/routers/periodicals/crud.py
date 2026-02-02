@@ -3,9 +3,10 @@ CRUD operations for periodicals
 """
 
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from sqlalchemy import cast, case, func, String
+from sqlalchemy.orm import Session
 
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
@@ -20,99 +21,294 @@ router = _shared.router
 logger = _shared.logger
 
 
-# Helper functions for list_periodicals query building
-
-
-def _build_group_key_expression():
+class PeriodicalQueryBuilder:
     """
-    Build the group key expression used for grouping periodicals.
+    Builder class for constructing complex periodical list queries.
 
-    Groups by tracking_id when present, otherwise uses periodical.id.
-    This allows tracked items to be grouped together while keeping
-    untracked items separate.
-
-    Returns:
-        SQLAlchemy case expression for grouping
+    Encapsulates the logic for grouping periodicals by tracking_id,
+    finding the latest issue per group, applying sorting, and
+    calculating issue counts.
     """
-    return case(
-        (Periodical.tracking_id.isnot(None), Periodical.tracking_id),
-        else_=Periodical.id,
-    )
 
+    def __init__(self, db: Session):
+        """Initialize builder with database session."""
+        self.db = db
+        self._date_subquery = None
+        self._id_subquery = None
+        self._count_subquery = None
 
-def _build_date_subquery(db):
-    """
-    Build subquery to find the most recent issue date for each group.
+    def _build_group_key_expression(self):
+        """
+        Build case expression for grouping by tracking_id or periodical.id.
 
-    Args:
-        db: Database session
-
-    Returns:
-        SQLAlchemy subquery with group_key, language, and max_date columns
-    """
-    return (
-        db.query(
-            _build_group_key_expression().label("group_key"),
-            Periodical.language,
-            func.max(Periodical.issue_date).label("max_date"),
+        Groups tracked items together while keeping untracked items separate.
+        """
+        return case(
+            (Periodical.tracking_id.isnot(None), Periodical.tracking_id),
+            else_=Periodical.id,
         )
-        .group_by("group_key", Periodical.language)
-        .subquery()
-    )
 
+    def _build_date_subquery(self):
+        """Build subquery to find the most recent issue date for each group."""
+        if self._date_subquery is None:
+            self._date_subquery = (
+                self.db.query(
+                    self._build_group_key_expression().label("group_key"),
+                    Periodical.language,
+                    func.max(Periodical.issue_date).label("max_date"),
+                )
+                .group_by("group_key", Periodical.language)
+                .subquery()
+            )
+        return self._date_subquery
 
-def _build_id_subquery(db, date_subquery):
-    """
-    Build subquery to find the highest ID among records with max_date.
+    def _build_id_subquery(self):
+        """Build subquery to find highest ID among records with max_date (tiebreaker)."""
+        if self._id_subquery is None:
+            date_subquery = self._build_date_subquery()
+            group_key_expr = self._build_group_key_expression()
+            self._id_subquery = (
+                self.db.query(
+                    group_key_expr.label("group_key"),
+                    Periodical.language,
+                    func.max(Periodical.id).label("max_id"),
+                )
+                .join(
+                    date_subquery,
+                    (group_key_expr == date_subquery.c.group_key)
+                    & (Periodical.language == date_subquery.c.language)
+                    & (Periodical.issue_date == date_subquery.c.max_date),
+                )
+                .group_by("group_key", Periodical.language)
+                .subquery()
+            )
+        return self._id_subquery
 
-    This acts as a tiebreaker when multiple issues have the same date.
+    def _build_count_subquery(self):
+        """Build subquery to count total issues per group."""
+        if self._count_subquery is None:
+            self._count_subquery = (
+                self.db.query(
+                    self._build_group_key_expression().label("group_key"),
+                    Periodical.language,
+                    func.count(Periodical.id).label("issue_count"),  # pylint: disable=not-callable
+                )
+                .group_by("group_key", Periodical.language)
+                .subquery()
+            )
+        return self._count_subquery
 
-    Args:
-        db: Database session
-        date_subquery: Subquery from _build_date_subquery
+    def build_base_query(self):
+        """
+        Build the base query that selects the latest issue per group.
 
-    Returns:
-        SQLAlchemy subquery with group_key, language, and max_id columns
-    """
-    group_key_expr = _build_group_key_expression()
-    return (
-        db.query(
-            group_key_expr.label("group_key"),
-            Periodical.language,
-            func.max(Periodical.id).label("max_id"),
+        Returns:
+            SQLAlchemy query joined with tracking for display titles
+        """
+        id_subquery = self._build_id_subquery()
+        group_key_expr = self._build_group_key_expression()
+
+        query = self.db.query(Periodical).join(
+            id_subquery,
+            (group_key_expr == id_subquery.c.group_key)
+            & (Periodical.language == id_subquery.c.language)
+            & (Periodical.id == id_subquery.c.max_id),
         )
-        .join(
-            date_subquery,
-            (group_key_expr == date_subquery.c.group_key)
-            & (Periodical.language == date_subquery.c.language)
-            & (Periodical.issue_date == date_subquery.c.max_date),
+
+        # Left join with tracking to get the primary title for display
+        return query.outerjoin(PeriodicalTracking, Periodical.tracking_id == PeriodicalTracking.id)
+
+    def apply_sorting(self, query, sort_by: str, is_descending: bool):
+        """
+        Apply sorting to the query based on sort field and direction.
+
+        Args:
+            query: Base SQLAlchemy query
+            sort_by: Field to sort by (title, category, issue_date, created_at, issue_count)
+            is_descending: True for DESC, False for ASC
+
+        Returns:
+            Query with ORDER BY applied
+        """
+        if sort_by == "issue_count":
+            return self._apply_issue_count_sort(query, is_descending)
+        elif sort_by == "category":
+            return self._apply_category_sort(query, is_descending)
+        elif sort_by == "issue_date":
+            return self._apply_simple_sort(query, Periodical.issue_date, is_descending)
+        elif sort_by == "created_at":
+            return self._apply_simple_sort(query, Periodical.created_at, is_descending)
+        else:  # Default to title
+            return self._apply_title_sort(query, is_descending)
+
+    def _apply_issue_count_sort(self, query, is_descending: bool):
+        """Apply sorting by issue count with title as secondary sort."""
+        count_subquery = self._build_count_subquery()
+        group_key_expr = self._build_group_key_expression()
+
+        query = query.outerjoin(
+            count_subquery,
+            (group_key_expr == count_subquery.c.group_key) & (Periodical.language == count_subquery.c.language),
         )
-        .group_by("group_key", Periodical.language)
-        .subquery()
-    )
 
-
-def _build_count_subquery(db):
-    """
-    Build subquery to count total issues per group.
-
-    Used when sorting by issue_count.
-
-    Args:
-        db: Database session
-
-    Returns:
-        SQLAlchemy subquery with group_key, language, and issue_count columns
-    """
-    return (
-        db.query(
-            _build_group_key_expression().label("group_key"),
-            Periodical.language,
-            func.count(Periodical.id).label("issue_count"),  # pylint: disable=not-callable
+        sort_expr = count_subquery.c.issue_count.desc() if is_descending else count_subquery.c.issue_count.asc()
+        return query.order_by(
+            sort_expr,
+            func.coalesce(PeriodicalTracking.title, Periodical.title).asc(),
         )
-        .group_by("group_key", Periodical.language)
-        .subquery()
-    )
+
+    def _apply_category_sort(self, query, is_descending: bool):
+        """Apply sorting by category with title as secondary sort."""
+        category_expr = func.coalesce(
+            PeriodicalTracking.category,
+            cast(Periodical.extra_metadata["category"], String),
+        )
+        sort_expr = category_expr.desc() if is_descending else category_expr.asc()
+        return query.order_by(
+            sort_expr,
+            func.coalesce(PeriodicalTracking.title, Periodical.title).asc(),
+        )
+
+    def _apply_title_sort(self, query, is_descending: bool):
+        """Apply sorting by title (tracking title preferred over periodical title)."""
+        title_expr = func.coalesce(PeriodicalTracking.title, Periodical.title)
+        sort_expr = title_expr.desc() if is_descending else title_expr.asc()
+        return query.order_by(sort_expr)
+
+    def _apply_simple_sort(self, query, column, is_descending: bool):
+        """Apply simple single-column sorting."""
+        sort_expr = column.desc() if is_descending else column.asc()
+        return query.order_by(sort_expr)
+
+    def get_total_count(self) -> int:
+        """Get total count of unique groups (for pagination)."""
+        group_key_expr = self._build_group_key_expression()
+        return self.db.query(
+            func.count(  # pylint: disable=not-callable
+                func.distinct(  # pylint: disable=not-callable
+                    group_key_expr.concat("_").concat(func.coalesce(Periodical.language, "English"))
+                )
+            )
+        ).scalar()
+
+    def get_issue_counts(self, magazines: List[Periodical]) -> Dict:
+        """
+        Get issue counts for each magazine in the list.
+
+        For tracked items, counts all issues with same tracking_id + language.
+        For untracked items, counts by title + language.
+
+        Args:
+            magazines: List of Periodical objects
+
+        Returns:
+            Dictionary mapping (tracking_id, language) or (title, language, None) to count
+        """
+        issue_counts = {}
+        for mag in magazines:
+            if mag.tracking_id:
+                key = (mag.tracking_id, mag.language or "English")
+                if key not in issue_counts:
+                    issue_counts[key] = (
+                        self.db.query(Periodical)
+                        .filter(
+                            Periodical.tracking_id == mag.tracking_id,
+                            Periodical.language == mag.language,
+                        )
+                        .count()
+                    )
+            else:
+                key = (mag.title, mag.language or "English", None)
+                if key not in issue_counts:
+                    issue_counts[key] = (
+                        self.db.query(Periodical)
+                        .filter(
+                            Periodical.title == mag.title,
+                            Periodical.language == mag.language,
+                            Periodical.tracking_id.is_(None),
+                        )
+                        .count()
+                    )
+        return issue_counts
+
+    def get_tracking_titles(self, magazines: List[Periodical]) -> Dict[int, str]:
+        """
+        Fetch tracking titles for magazines with tracking_id.
+
+        Args:
+            magazines: List of Periodical objects
+
+        Returns:
+            Dictionary mapping tracking_id to title
+        """
+        tracking_titles = {}
+        for mag in magazines:
+            if mag.tracking_id and mag.tracking_id not in tracking_titles:
+                tracking = self.db.query(PeriodicalTracking).filter(PeriodicalTracking.id == mag.tracking_id).first()
+                if tracking:
+                    tracking_titles[mag.tracking_id] = tracking.title
+        return tracking_titles
+
+    def get_best_title(self, mag: Periodical, tracking_titles: Dict[int, str]) -> str:
+        """
+        Get the best display title for a magazine.
+
+        Priority: tracking title > derived_metadata title > database column
+
+        Args:
+            mag: Periodical object
+            tracking_titles: Dictionary of tracking_id to title
+
+        Returns:
+            Best available title string
+        """
+        # Priority 1: Tracking title (if linked to tracking)
+        if mag.tracking_id and mag.tracking_id in tracking_titles:
+            return tracking_titles[mag.tracking_id]
+
+        # Priority 2: Title from derived_metadata (from best scan source)
+        if mag.derived_metadata and mag.derived_metadata.get("title"):
+            title_data = mag.derived_metadata["title"]
+            if isinstance(title_data, dict) and title_data.get("value"):
+                return title_data["value"]
+
+        # Priority 3: Database column (fallback)
+        return mag.title
+
+    def build_periodical_dict(
+        self, mag: Periodical, issue_counts: Dict, tracking_titles: Dict[int, str]
+    ) -> Dict[str, Any]:
+        """
+        Build dictionary representation of a periodical for API response.
+
+        Args:
+            mag: Periodical object
+            issue_counts: Issue count dictionary from get_issue_counts()
+            tracking_titles: Tracking titles from get_tracking_titles()
+
+        Returns:
+            Dictionary with periodical data
+        """
+        count_key = (
+            (mag.tracking_id, mag.language or "English")
+            if mag.tracking_id
+            else (mag.title, mag.language or "English", None)
+        )
+        return {
+            "id": mag.id,
+            "title": self.get_best_title(mag, tracking_titles),
+            "language": mag.language or "English",
+            "issue_date": (mag.issue_date.date().isoformat() if mag.issue_date else None),
+            "file_path": mag.file_path,
+            "cover_path": mag.cover_path,
+            "content_hash": mag.content_hash,
+            "tracking_id": mag.tracking_id,
+            "created_at": (mag.created_at.isoformat() if mag.created_at else None),
+            "updated_at": (mag.updated_at.isoformat() if mag.updated_at else None),
+            "metadata": mag.extra_metadata,
+            "derived_metadata": mag.derived_metadata,
+            "issue_count": issue_counts.get(count_key, 1),
+        }
 
 
 @router.get("/periodicals")
@@ -135,169 +331,22 @@ async def list_periodicals(
     """
 
     def operation(db):
-        # Validate sort_order
+        builder = PeriodicalQueryBuilder(db)
         is_descending = sort_order.lower() == "desc"
 
-        # Build subqueries for grouping and finding latest issue per group
-        date_subquery = _build_date_subquery(db)
-        id_subquery = _build_id_subquery(db, date_subquery)
-        group_key_expr = _build_group_key_expression()
-
-        # Join to get full magazine record for each group's latest issue
-        query = db.query(Periodical).join(
-            id_subquery,
-            (group_key_expr == id_subquery.c.group_key)
-            & (Periodical.language == id_subquery.c.language)
-            & (Periodical.id == id_subquery.c.max_id),
-        )
-
-        # Left join with tracking to get the primary title for display
-        query = query.outerjoin(PeriodicalTracking, Periodical.tracking_id == PeriodicalTracking.id)
-
-        # Calculate issue counts for sorting (if needed)
-        if sort_by == "issue_count":
-            count_subquery = _build_count_subquery(db)
-
-            # Join the count subquery
-            query = query.outerjoin(
-                count_subquery,
-                (group_key_expr == count_subquery.c.group_key) & (Periodical.language == count_subquery.c.language),
-            )
-
-            # Sort by issue count
-            sort_expr = count_subquery.c.issue_count.desc() if is_descending else count_subquery.c.issue_count.asc()
-            query = query.order_by(
-                sort_expr,
-                func.coalesce(PeriodicalTracking.title, Periodical.title).asc(),
-            )
-        # Apply sorting - use tracking title when available
-        elif sort_by == "category":
-            # Sort by category from tracking if available, otherwise fall back to magazine category
-            sort_expr = (
-                func.coalesce(
-                    PeriodicalTracking.category,
-                    cast(Periodical.extra_metadata["category"], String),
-                ).desc()
-                if is_descending
-                else func.coalesce(
-                    PeriodicalTracking.category,
-                    cast(Periodical.extra_metadata["category"], String),
-                ).asc()
-            )
-            query = query.order_by(
-                sort_expr,
-                func.coalesce(PeriodicalTracking.title, Periodical.title).asc(),
-            )
-        elif sort_by == "issue_date":
-            sort_expr = Periodical.issue_date.desc() if is_descending else Periodical.issue_date.asc()
-            query = query.order_by(sort_expr)
-        elif sort_by == "created_at":
-            sort_expr = Periodical.created_at.desc() if is_descending else Periodical.created_at.asc()
-            query = query.order_by(sort_expr)
-        else:  # Default to title
-            sort_expr = (
-                func.coalesce(PeriodicalTracking.title, Periodical.title).desc()
-                if is_descending
-                else func.coalesce(PeriodicalTracking.title, Periodical.title).asc()
-            )
-            query = query.order_by(sort_expr)
-
+        # Build and execute query
+        query = builder.build_base_query()
+        query = builder.apply_sorting(query, sort_by, is_descending)
         magazines = query.offset(skip).limit(limit).all()
 
-        # Get total count of unique groups using helper
-        group_key_expr = _build_group_key_expression()
-        total_query = db.query(
-            func.count(  # pylint: disable=not-callable
-                func.distinct(  # pylint: disable=not-callable
-                    group_key_expr.concat("_").concat(func.coalesce(Periodical.language, "English"))
-                )
-            )
-        )
-        total_titles = total_query.scalar()
-
-        # Get issue counts for each group
-        # For tracked items, count all issues with same tracking_id + language
-        # For untracked items, count by title + language
-        issue_counts = {}
-        for mag in magazines:
-            if mag.tracking_id:
-                # Count all magazines with same tracking_id and language
-                key = (mag.tracking_id, mag.language or "English")
-                if key not in issue_counts:
-                    count = (
-                        db.query(Periodical)
-                        .filter(
-                            Periodical.tracking_id == mag.tracking_id,
-                            Periodical.language == mag.language,
-                        )
-                        .count()
-                    )
-                    issue_counts[key] = count
-            else:
-                # Count by title and language for untracked items
-                key = (mag.title, mag.language or "English", None)
-                if key not in issue_counts:
-                    count = (
-                        db.query(Periodical)
-                        .filter(
-                            Periodical.title == mag.title,
-                            Periodical.language == mag.language,
-                            Periodical.tracking_id.is_(None),
-                        )
-                        .count()
-                    )
-                    issue_counts[key] = count
-
-        # Fetch tracking record for each magazine to get display title
-        tracking_titles = {}
-        for mag in magazines:
-            if mag.tracking_id and mag.tracking_id not in tracking_titles:
-                tracking = db.query(PeriodicalTracking).filter(PeriodicalTracking.id == mag.tracking_id).first()
-                if tracking:
-                    tracking_titles[mag.tracking_id] = tracking.title
-
-        # Helper function to get best title (tracking > derived_metadata > database column)
-        def get_best_title(mag):
-            # Priority 1: Tracking title (if linked to tracking)
-            if mag.tracking_id and mag.tracking_id in tracking_titles:
-                return tracking_titles[mag.tracking_id]
-
-            # Priority 2: Title from derived_metadata (from best scan source)
-            if mag.derived_metadata and mag.derived_metadata.get("title"):
-                title_data = mag.derived_metadata["title"]
-                if isinstance(title_data, dict) and title_data.get("value"):
-                    return title_data["value"]
-
-            # Priority 3: Database column (fallback)
-            return mag.title
+        # Gather metadata for response
+        total = builder.get_total_count()
+        issue_counts = builder.get_issue_counts(magazines)
+        tracking_titles = builder.get_tracking_titles(magazines)
 
         return success_response(
-            periodicals=[
-                {
-                    "id": m.id,
-                    "title": get_best_title(m),
-                    "language": m.language or "English",
-                    "issue_date": (m.issue_date.date().isoformat() if m.issue_date else None),
-                    "file_path": m.file_path,
-                    "cover_path": m.cover_path,
-                    "content_hash": m.content_hash,
-                    "tracking_id": m.tracking_id,
-                    "created_at": (m.created_at.isoformat() if m.created_at else None),
-                    "updated_at": (m.updated_at.isoformat() if m.updated_at else None),
-                    "metadata": m.extra_metadata,
-                    "derived_metadata": m.derived_metadata,
-                    "issue_count": issue_counts.get(
-                        (
-                            (m.tracking_id, m.language or "English")
-                            if m.tracking_id
-                            else (m.title, m.language or "English", None)
-                        ),
-                        1,
-                    ),
-                }
-                for m in magazines
-            ],
-            total=total_titles,
+            periodicals=[builder.build_periodical_dict(m, issue_counts, tracking_titles) for m in magazines],
+            total=total,
             skip=skip,
             limit=limit,
         )
