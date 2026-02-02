@@ -130,6 +130,65 @@ class DownloadManager:
         title_lower = title.lower()
         return any(ext in title_lower for ext in BLACKLISTED_FILE_EXTENSIONS)
 
+    def _collect_submission_result(
+        self,
+        submission: Optional[DownloadSubmission],
+        search_result: Dict[str, Any],
+        results: Dict[str, Any],
+    ) -> None:
+        """
+        Update result counts based on submission status.
+
+        Args:
+            submission: DownloadSubmission or None if skipped
+            search_result: Original search result dict (for error messages)
+            results: Results dict to update with counts and errors
+        """
+        if not submission:
+            results["skipped"] += 1
+            return
+
+        if submission.status == DownloadSubmission.StatusEnum.PENDING:
+            results["submitted"] += 1
+        elif submission.status == DownloadSubmission.StatusEnum.SKIPPED:
+            results["skipped"] += 1
+        elif submission.status == DownloadSubmission.StatusEnum.FAILED:
+            results["failed"] += 1
+            results["errors"].append(f"Failed: {search_result['title']} - {submission.last_error}")
+
+    def _create_search_result_record(
+        self,
+        search_result: Dict[str, Any],
+        query: str,
+        session: Session,
+    ) -> Optional[int]:
+        """
+        Create a database SearchResult record for tracking.
+
+        Args:
+            search_result: Search result dict
+            query: Original search query
+            session: Database session
+
+        Returns:
+            Database record ID or None if creation failed
+        """
+        try:
+            db_result = DBSearchResult(
+                provider=search_result.get("provider", "unknown"),
+                query=query,
+                title=search_result["title"],
+                url=search_result["url"],
+                publication_date=search_result.get("publication_date"),
+                raw_metadata=search_result.get("raw_metadata", {}),
+            )
+            session.add(db_result)
+            session.flush()
+            return db_result.id
+        except Exception as e:
+            logger.warning(f"Could not create DB search result: {e}", exc_info=True)
+            return None
+
     def _is_bad_file(self, tracking_id: int, fuzzy_group: str, session: Session) -> Optional[DownloadSubmission]:
         """
         Check if this file has failed too many times and should not be retried.
@@ -724,18 +783,10 @@ class DownloadManager:
 
             # Submit download
             submission = self.submit_download(tracking_id, search_result, session, search_result_db_id)
+            self._collect_submission_result(submission, search_result, results)
 
-            if submission:
-                if submission.status == DownloadSubmission.StatusEnum.PENDING:
-                    results["submitted"] += 1
-                    logger.info(f"Submitted selected edition {matched_edition}: {search_result['title']}")
-                elif submission.status == DownloadSubmission.StatusEnum.SKIPPED:
-                    results["skipped"] += 1
-                elif submission.status == DownloadSubmission.StatusEnum.FAILED:
-                    results["failed"] += 1
-                    results["errors"].append(f"Failed: {search_result['title']} - {submission.last_error}")
-            else:
-                results["skipped"] += 1
+            if submission and submission.status == DownloadSubmission.StatusEnum.PENDING:
+                logger.info(f"Submitted selected edition {matched_edition}: {search_result['title']}")
 
         logger.info(
             f"Selected editions download completed: submitted={results['submitted']}, "
@@ -798,37 +849,9 @@ class DownloadManager:
 
         # Submit each selected result
         for search_result in selected_results:
-            # Try to find or create SearchResult DB record
-            search_result_db_id = None
-            try:
-                # Create DB search result record
-                db_result = DBSearchResult(
-                    provider=search_result.get("provider", "unknown"),
-                    query=tracking.title,
-                    title=search_result["title"],
-                    url=search_result["url"],
-                    publication_date=search_result.get("publication_date"),
-                    raw_metadata=search_result.get("raw_metadata", {}),
-                )
-                session.add(db_result)
-                session.flush()
-                search_result_db_id = db_result.id
-            except Exception as e:
-                logger.warning(f"Could not create DB search result: {e}", exc_info=True)
-
-            # Submit download
+            search_result_db_id = self._create_search_result_record(search_result, tracking.title, session)
             submission = self.submit_download(tracking_id, search_result, session, search_result_db_id)
-
-            if submission:
-                if submission.status == DownloadSubmission.StatusEnum.PENDING:
-                    results["submitted"] += 1
-                elif submission.status == DownloadSubmission.StatusEnum.SKIPPED:
-                    results["skipped"] += 1
-                elif submission.status == DownloadSubmission.StatusEnum.FAILED:
-                    results["failed"] += 1
-                    results["errors"].append(f"Failed: {search_result['title']} - {submission.last_error}")
-            else:
-                results["skipped"] += 1
+            self._collect_submission_result(submission, search_result, results)
 
         logger.info(
             f"Download search completed: submitted={results['submitted']}, "

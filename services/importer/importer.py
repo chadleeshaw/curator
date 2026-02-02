@@ -149,136 +149,11 @@ class FileImporter:
         )
         logger.info("[DOWNLOADS IMPORT] Text extraction enabled, OCR queued only for image-based files")
 
-        for pdf_path in pdf_files:
-            try:
-                import_result = self.import_pdf(
-                    pdf_path,
-                    session,
-                    organization_pattern=organization_pattern,
-                    use_ocr=True,
-                )
-                if import_result:
-                    result.data["imported"] += 1
-                    logger.info(f"Successfully imported: {pdf_path.name}")
-                else:
-                    result.data["failed"] += 1
-                    result.add_error(
-                        ErrorCodes.IMPORT_FAILED,
-                        f"Failed to import {pdf_path.name}",
-                        retryable=True,
-                    )
-                    # Cleanup failed import to prevent folder clutter
-                    logger.info(f"Cleaning up failed import: {pdf_path.name}")
-                    self._cleanup_download_file(pdf_path)
-            except Exception as e:
-                result.data["failed"] += 1
-                error_msg = f"Error importing {pdf_path.name}: {str(e)}"
-                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
-                logger.error(error_msg, exc_info=True)
-                # Cleanup failed import to prevent folder clutter
-                try:
-                    self._cleanup_download_file(pdf_path)
-                except Exception as cleanup_error:
-                    logger.warning(f"Failed to cleanup {pdf_path.name}: {cleanup_error}")
-
-        # Process EPUB files
-        for epub_path in epub_files:
-            try:
-                import_result = self.import_pdf(
-                    epub_path,
-                    session,
-                    organization_pattern=organization_pattern,
-                    use_ocr=True,
-                )
-                if import_result:
-                    result.data["imported"] += 1
-                    logger.info(f"Successfully imported EPUB: {epub_path.name}")
-                else:
-                    result.data["failed"] += 1
-                    result.add_error(
-                        ErrorCodes.IMPORT_FAILED,
-                        f"Failed to import EPUB {epub_path.name}",
-                        retryable=True,
-                    )
-                    # Cleanup failed import to prevent folder clutter
-                    logger.info(f"Cleaning up failed EPUB import: {epub_path.name}")
-                    self._cleanup_download_file(epub_path)
-            except Exception as e:
-                result.data["failed"] += 1
-                error_msg = f"Error importing EPUB {epub_path.name}: {str(e)}"
-                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
-                logger.error(error_msg, exc_info=True)
-                # Cleanup failed import to prevent folder clutter
-                try:
-                    self._cleanup_download_file(epub_path)
-                except Exception as cleanup_error:
-                    logger.warning(f"Failed to cleanup {epub_path.name}: {cleanup_error}")
-
-        # Process CBZ files
-        for cbz_path in cbz_files:
-            try:
-                import_result = self.import_pdf(
-                    cbz_path,
-                    session,
-                    organization_pattern=organization_pattern,
-                    use_ocr=True,
-                )
-                if import_result:
-                    result.data["imported"] += 1
-                    logger.info(f"Successfully imported CBZ: {cbz_path.name}")
-                else:
-                    result.data["failed"] += 1
-                    result.add_error(
-                        ErrorCodes.IMPORT_FAILED,
-                        f"Failed to import CBZ {cbz_path.name}",
-                        retryable=True,
-                    )
-                    # Cleanup failed import to prevent folder clutter
-                    logger.info(f"Cleaning up failed CBZ import: {cbz_path.name}")
-                    self._cleanup_download_file(cbz_path)
-            except Exception as e:
-                result.data["failed"] += 1
-                error_msg = f"Error importing CBZ {cbz_path.name}: {str(e)}"
-                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
-                logger.error(error_msg, exc_info=True)
-                # Cleanup failed import to prevent folder clutter
-                try:
-                    self._cleanup_download_file(cbz_path)
-                except Exception as cleanup_error:
-                    logger.warning(f"Failed to cleanup {cbz_path.name}: {cleanup_error}")
-
-        # Process CBR files
-        for cbr_path in cbr_files:
-            try:
-                import_result = self.import_pdf(
-                    cbr_path,
-                    session,
-                    organization_pattern=organization_pattern,
-                    use_ocr=True,
-                )
-                if import_result:
-                    result.data["imported"] += 1
-                    logger.info(f"Successfully imported CBR: {cbr_path.name}")
-                else:
-                    result.data["failed"] += 1
-                    result.add_error(
-                        ErrorCodes.IMPORT_FAILED,
-                        f"Failed to import CBR {cbr_path.name}",
-                        retryable=True,
-                    )
-                    # Cleanup failed import to prevent folder clutter
-                    logger.info(f"Cleaning up failed CBR import: {cbr_path.name}")
-                    self._cleanup_download_file(cbr_path)
-            except Exception as e:
-                result.data["failed"] += 1
-                error_msg = f"Error importing CBR {cbr_path.name}: {str(e)}"
-                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
-                logger.error(error_msg, exc_info=True)
-                # Cleanup failed import to prevent folder clutter
-                try:
-                    self._cleanup_download_file(cbr_path)
-                except Exception as cleanup_error:
-                    logger.warning(f"Failed to cleanup {cbr_path.name}: {cleanup_error}")
+        # Process all file types using unified handler
+        self._process_file_batch(pdf_files, "PDF", session, organization_pattern, result)
+        self._process_file_batch(epub_files, "EPUB", session, organization_pattern, result)
+        self._process_file_batch(cbz_files, "CBZ", session, organization_pattern, result)
+        self._process_file_batch(cbr_files, "CBR", session, organization_pattern, result)
 
         return result.to_dict()
 
@@ -730,6 +605,54 @@ class FileImporter:
             session.rollback()
             logger.error(f"Error importing PDF {pdf_path}: {e}", exc_info=True)
             return {}
+
+    def _process_file_batch(
+        self,
+        files: list,
+        file_type: str,
+        session: Session,
+        organization_pattern: Optional[str],
+        result: OperationResult,
+    ) -> None:
+        """
+        Process a batch of files of the same type.
+
+        Args:
+            files: List of Path objects to process
+            file_type: File type label for logging (e.g., "PDF", "EPUB", "CBZ", "CBR")
+            session: Database session
+            organization_pattern: Optional organization pattern
+            result: OperationResult to update with counts and errors
+        """
+        for file_path in files:
+            try:
+                import_result = self.import_pdf(
+                    file_path,
+                    session,
+                    organization_pattern=organization_pattern,
+                    use_ocr=True,
+                )
+                if import_result:
+                    result.data["imported"] += 1
+                    logger.info(f"Successfully imported {file_type}: {file_path.name}")
+                else:
+                    result.data["failed"] += 1
+                    result.add_error(
+                        ErrorCodes.IMPORT_FAILED,
+                        f"Failed to import {file_type} {file_path.name}",
+                        retryable=True,
+                    )
+                    logger.info(f"Cleaning up failed {file_type} import: {file_path.name}")
+                    self._cleanup_download_file(file_path)
+            except Exception as e:
+                result.data["failed"] += 1
+                error_msg = f"Error importing {file_type} {file_path.name}: {str(e)}"
+                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
+                logger.error(error_msg, exc_info=True)
+                try:
+                    self._cleanup_download_file(file_path)
+                except Exception as cleanup_error:
+                    logger.warning(f"Failed to cleanup {file_path.name}: {cleanup_error}")
 
     def _cleanup_download_file(self, pdf_path: Path) -> None:
         """
