@@ -778,9 +778,15 @@ async def search_periodical_providers(
                 result["already_downloaded"] = False
                 result["download_failed"] = False
                 result["from_provider"] = True
-                # Format publication date
-                if result.get("publication_date"):
-                    result["publication_date"] = result["publication_date"].isoformat()
+                # Format publication date to ISO string if it's a datetime
+                pub_date = result.get("publication_date")
+                if pub_date:
+                    if isinstance(pub_date, datetime):
+                        result["publication_date"] = pub_date.isoformat()
+                    elif not isinstance(pub_date, str):
+                        # Handle other types by converting to string
+                        result["publication_date"] = str(pub_date)
+                    # If already a string, leave it as-is
                 deduplicated_results.append(result)
 
         duplicates_removed = len(filtered_results) - len(deduplicated_results)
@@ -861,6 +867,19 @@ async def search_periodical_providers(
         # === STEP 11: Combine and Sort Results ===
         final_results = library_matches + deduplicated_results
 
+        def _get_date_timestamp(pub_date) -> float:
+            """Safely get timestamp from publication_date, handling various formats."""
+            if not pub_date:
+                return 0
+            if isinstance(pub_date, datetime):
+                return pub_date.timestamp()
+            if isinstance(pub_date, str):
+                try:
+                    return datetime.fromisoformat(pub_date.replace("Z", "+00:00")).timestamp()
+                except (ValueError, TypeError):
+                    return 0
+            return 0
+
         # Sort by relevance (fuzzy match score), then date (newest first)
         if _title_matcher:
             scored_results = []
@@ -871,11 +890,7 @@ async def search_periodical_providers(
             scored_results.sort(
                 key=lambda x: (
                     -x[1],  # Higher score first
-                    -(
-                        datetime.fromisoformat(x[0]["publication_date"]).timestamp()
-                        if x[0].get("publication_date")
-                        else 0
-                    ),
+                    -_get_date_timestamp(x[0].get("publication_date")),
                 )
             )
             final_results = [r[0] for r in scored_results]
