@@ -9,6 +9,9 @@ from core.version import get_version, get_version_info
 
 def test_get_version_from_git():
     """Test getting version from git tags"""
+    # Clear cache first
+    get_version.cache_clear()
+
     # Mock successful git command
     with patch("subprocess.run") as mock_run:
         mock_run.return_value.returncode = 0

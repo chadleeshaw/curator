@@ -1,3 +1,8 @@
+"""
+Main FastAPI application module.
+"""
+
+# pylint: disable=too-many-lines
 import asyncio
 import logging
 from contextlib import asynccontextmanager
@@ -113,6 +118,7 @@ class TaskState:
     folder_cleanup: Optional[FolderCleanup] = None
 
 
+# pylint: disable=too-many-instance-attributes,too-many-public-methods
 class AppState:
     """
     Centralized application state container.
