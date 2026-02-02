@@ -1,6 +1,8 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -53,6 +55,64 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class ConfigState:
+    """Configuration state loaded from config file."""
+
+    loader: ConfigLoader
+    storage: Dict[str, Any] = field(default_factory=dict)
+    cache: Dict[str, Any] = field(default_factory=dict)
+    matching: Dict[str, Any] = field(default_factory=dict)
+    pdf: Dict[str, Any] = field(default_factory=dict)
+    downloads: Dict[str, Any] = field(default_factory=dict)
+    tasks: Dict[str, Any] = field(default_factory=dict)
+    import_: Dict[str, Any] = field(default_factory=dict)  # 'import' is reserved
+
+
+@dataclass
+class DatabaseState:
+    """Database connection state."""
+
+    url: str
+    manager: DatabaseManager
+    session_factory: Any  # sessionmaker
+
+
+@dataclass
+class ProviderState:
+    """Search and metadata provider instances."""
+
+    search: List[Any] = field(default_factory=list)
+    metadata: List[Any] = field(default_factory=list)
+
+
+@dataclass
+class ServiceState:
+    """Application service instances (initialized during lifespan)."""
+
+    download_client: Optional[Any] = None
+    download_manager: Optional[DownloadManager] = None
+    title_matcher: Optional[TitleMatcher] = None
+    file_processor: Optional[FileOrganizer] = None
+    file_importer: Optional[FileImporter] = None
+    provider_cache_service: Optional[Any] = None
+    provider_sync_service: Optional[Any] = None
+    issue_discovery_service: Optional[IssueDiscoveryService] = None
+    search_scheduler: Optional[SearchScheduler] = None
+
+
+@dataclass
+class TaskState:
+    """Background task state (initialized during lifespan)."""
+
+    scheduler: Optional[TaskScheduler] = None
+    scheduler_task: Optional[Any] = None  # asyncio.Task
+    download_monitor: Optional[DownloadMonitor] = None
+    cover_cleanup: Optional[CoverCleanup] = None
+    ocr_processor: Optional[OCRProcessor] = None
+    folder_cleanup: Optional[FolderCleanup] = None
+
+
 class AppState:
     """
     Centralized application state container.
@@ -63,68 +123,285 @@ class AppState:
     - Clarity: All state is in one place with clear initialization
     - Safety: Easier to track what's initialized and when
 
-    Attributes are grouped by initialization phase:
-    - Config: Loaded at module import
-    - Database: Initialized at module import
-    - Services: Initialized during app lifespan startup
-    - Tasks: Background tasks created during lifespan startup
+    State is organized into nested dataclasses by category:
+    - config: Configuration loaded from file
+    - db: Database connection and session factory
+    - providers: Search and metadata providers
+    - services: Application services (file processing, downloads, etc.)
+    - tasks: Background task handlers and scheduler
     """
 
     def __init__(self):
         # === Config (loaded immediately) ===
-        self.config_loader = ConfigLoader()
-        self.storage_config = self.config_loader.get_storage()
-        self.cache_config = self.config_loader.get_cache()
-        self.matching_config = self.config_loader.get_matching()
-        self.pdf_config = self.config_loader.get_pdf()
-        self.downloads_config = self.config_loader.get_downloads()
-        self.tasks_config = self.config_loader.get_tasks()
-        self.import_config = self.config_loader.get_import()
+        loader = ConfigLoader()
+        self.config = ConfigState(
+            loader=loader,
+            storage=loader.get_storage(),
+            cache=loader.get_cache(),
+            matching=loader.get_matching(),
+            pdf=loader.get_pdf(),
+            downloads=loader.get_downloads(),
+            tasks=loader.get_tasks(),
+            import_=loader.get_import(),
+        )
 
         # === Database (initialized immediately) ===
-        db_path = self.storage_config.get("db_path", "./data/periodicals.db")
-        self.db_url = f"sqlite:///{db_path}"
-        self.db_manager = DatabaseManager(self.db_url)
-        self.db_manager.create_tables()
-        self.db_manager.run_migrations()
-        self.session_factory = self.db_manager.session_factory
+        db_path = self.config.storage.get("db_path", "./data/periodicals.db")
+        db_url = f"sqlite:///{db_path}"
+        db_manager = DatabaseManager(db_url)
+        db_manager.create_tables()
+        db_manager.run_migrations()
+        self.db = DatabaseState(
+            url=db_url,
+            manager=db_manager,
+            session_factory=db_manager.session_factory,
+        )
 
         # === Auth (initialized immediately) ===
-        jwt_secret = self.config_loader.get_jwt_secret()
-        self.auth_manager = AuthManager(self.session_factory, jwt_secret)
+        jwt_secret = self.config.loader.get_jwt_secret()
+        self.auth_manager = AuthManager(self.db.session_factory, jwt_secret)
 
         # === Providers (populated during lifespan) ===
-        self.search_providers: list = []
-        self.metadata_providers: list = []
+        self.providers = ProviderState()
 
-        # === Services (initialized during lifespan, None until then) ===
-        self.download_client = None
-        self.download_manager = None
-        self.title_matcher = None
-        self.file_processor = None
-        self.file_importer = None
-        self.provider_cache_service = None
-        self.provider_sync_service = None
-        self.issue_discovery_service = None
-        self.search_scheduler = None
+        # === Services (initialized during lifespan) ===
+        self.services = ServiceState()
 
         # === Background tasks (created during lifespan) ===
-        self.task_scheduler = None
-        self.scheduler_task = None
-        self.download_monitor_task = None
-        self.cover_cleanup_task = None
-        self.ocr_processor_task = None
-        self.folder_cleanup_task = None
+        self.tasks = TaskState()
+
+    # -------------------------------------------------------------------------
+    # Backward compatibility properties - map old flat attributes to nested ones
+    # -------------------------------------------------------------------------
+
+    @property
+    def config_loader(self) -> ConfigLoader:
+        """Backward compatibility: access config.loader as config_loader."""
+        return self.config.loader
+
+    @property
+    def storage_config(self) -> Dict[str, Any]:
+        """Backward compatibility: access config.storage as storage_config."""
+        return self.config.storage
+
+    @property
+    def cache_config(self) -> Dict[str, Any]:
+        """Backward compatibility: access config.cache as cache_config."""
+        return self.config.cache
+
+    @property
+    def matching_config(self) -> Dict[str, Any]:
+        """Backward compatibility: access config.matching as matching_config."""
+        return self.config.matching
+
+    @property
+    def pdf_config(self) -> Dict[str, Any]:
+        """Backward compatibility: access config.pdf as pdf_config."""
+        return self.config.pdf
+
+    @property
+    def downloads_config(self) -> Dict[str, Any]:
+        """Backward compatibility: access config.downloads as downloads_config."""
+        return self.config.downloads
+
+    @property
+    def tasks_config(self) -> Dict[str, Any]:
+        """Backward compatibility: access config.tasks as tasks_config."""
+        return self.config.tasks
+
+    @property
+    def import_config(self) -> Dict[str, Any]:
+        """Backward compatibility: access config.import_ as import_config."""
+        return self.config.import_
+
+    @property
+    def db_url(self) -> str:
+        """Backward compatibility: access db.url as db_url."""
+        return self.db.url
+
+    @property
+    def db_manager(self) -> DatabaseManager:
+        """Backward compatibility: access db.manager as db_manager."""
+        return self.db.manager
+
+    @property
+    def session_factory(self) -> Any:
+        """Backward compatibility: access db.session_factory as session_factory."""
+        return self.db.session_factory
+
+    @property
+    def search_providers(self) -> List[Any]:
+        """Backward compatibility: access providers.search as search_providers."""
+        return self.providers.search
+
+    @property
+    def metadata_providers(self) -> List[Any]:
+        """Backward compatibility: access providers.metadata as metadata_providers."""
+        return self.providers.metadata
+
+    @property
+    def download_client(self) -> Optional[Any]:
+        """Backward compatibility: access services.download_client."""
+        return self.services.download_client
+
+    @download_client.setter
+    def download_client(self, value: Any) -> None:
+        """Backward compatibility: set services.download_client."""
+        self.services.download_client = value
+
+    @property
+    def download_manager(self) -> Optional[DownloadManager]:
+        """Backward compatibility: access services.download_manager."""
+        return self.services.download_manager
+
+    @download_manager.setter
+    def download_manager(self, value: DownloadManager) -> None:
+        """Backward compatibility: set services.download_manager."""
+        self.services.download_manager = value
+
+    @property
+    def title_matcher(self) -> Optional[TitleMatcher]:
+        """Backward compatibility: access services.title_matcher."""
+        return self.services.title_matcher
+
+    @title_matcher.setter
+    def title_matcher(self, value: TitleMatcher) -> None:
+        """Backward compatibility: set services.title_matcher."""
+        self.services.title_matcher = value
+
+    @property
+    def file_processor(self) -> Optional[FileOrganizer]:
+        """Backward compatibility: access services.file_processor."""
+        return self.services.file_processor
+
+    @file_processor.setter
+    def file_processor(self, value: FileOrganizer) -> None:
+        """Backward compatibility: set services.file_processor."""
+        self.services.file_processor = value
+
+    @property
+    def file_importer(self) -> Optional[FileImporter]:
+        """Backward compatibility: access services.file_importer."""
+        return self.services.file_importer
+
+    @file_importer.setter
+    def file_importer(self, value: FileImporter) -> None:
+        """Backward compatibility: set services.file_importer."""
+        self.services.file_importer = value
+
+    @property
+    def provider_cache_service(self) -> Optional[Any]:
+        """Backward compatibility: access services.provider_cache_service."""
+        return self.services.provider_cache_service
+
+    @provider_cache_service.setter
+    def provider_cache_service(self, value: Any) -> None:
+        """Backward compatibility: set services.provider_cache_service."""
+        self.services.provider_cache_service = value
+
+    @property
+    def provider_sync_service(self) -> Optional[Any]:
+        """Backward compatibility: access services.provider_sync_service."""
+        return self.services.provider_sync_service
+
+    @provider_sync_service.setter
+    def provider_sync_service(self, value: Any) -> None:
+        """Backward compatibility: set services.provider_sync_service."""
+        self.services.provider_sync_service = value
+
+    @property
+    def issue_discovery_service(self) -> Optional[IssueDiscoveryService]:
+        """Backward compatibility: access services.issue_discovery_service."""
+        return self.services.issue_discovery_service
+
+    @issue_discovery_service.setter
+    def issue_discovery_service(self, value: IssueDiscoveryService) -> None:
+        """Backward compatibility: set services.issue_discovery_service."""
+        self.services.issue_discovery_service = value
+
+    @property
+    def search_scheduler(self) -> Optional[SearchScheduler]:
+        """Backward compatibility: access services.search_scheduler."""
+        return self.services.search_scheduler
+
+    @search_scheduler.setter
+    def search_scheduler(self, value: SearchScheduler) -> None:
+        """Backward compatibility: set services.search_scheduler."""
+        self.services.search_scheduler = value
+
+    @property
+    def task_scheduler(self) -> Optional[TaskScheduler]:
+        """Backward compatibility: access tasks.scheduler."""
+        return self.tasks.scheduler
+
+    @task_scheduler.setter
+    def task_scheduler(self, value: TaskScheduler) -> None:
+        """Backward compatibility: set tasks.scheduler."""
+        self.tasks.scheduler = value
+
+    @property
+    def scheduler_task(self) -> Optional[Any]:
+        """Backward compatibility: access tasks.scheduler_task."""
+        return self.tasks.scheduler_task
+
+    @scheduler_task.setter
+    def scheduler_task(self, value: Any) -> None:
+        """Backward compatibility: set tasks.scheduler_task."""
+        self.tasks.scheduler_task = value
+
+    @property
+    def download_monitor_task(self) -> Optional[DownloadMonitor]:
+        """Backward compatibility: access tasks.download_monitor."""
+        return self.tasks.download_monitor
+
+    @download_monitor_task.setter
+    def download_monitor_task(self, value: DownloadMonitor) -> None:
+        """Backward compatibility: set tasks.download_monitor."""
+        self.tasks.download_monitor = value
+
+    @property
+    def cover_cleanup_task(self) -> Optional[CoverCleanup]:
+        """Backward compatibility: access tasks.cover_cleanup."""
+        return self.tasks.cover_cleanup
+
+    @cover_cleanup_task.setter
+    def cover_cleanup_task(self, value: CoverCleanup) -> None:
+        """Backward compatibility: set tasks.cover_cleanup."""
+        self.tasks.cover_cleanup = value
+
+    @property
+    def ocr_processor_task(self) -> Optional[OCRProcessor]:
+        """Backward compatibility: access tasks.ocr_processor."""
+        return self.tasks.ocr_processor
+
+    @ocr_processor_task.setter
+    def ocr_processor_task(self, value: OCRProcessor) -> None:
+        """Backward compatibility: set tasks.ocr_processor."""
+        self.tasks.ocr_processor = value
+
+    @property
+    def folder_cleanup_task(self) -> Optional[FolderCleanup]:
+        """Backward compatibility: access tasks.folder_cleanup."""
+        return self.tasks.folder_cleanup
+
+    @folder_cleanup_task.setter
+    def folder_cleanup_task(self, value: FolderCleanup) -> None:
+        """Backward compatibility: set tasks.folder_cleanup."""
+        self.tasks.folder_cleanup = value
+
+    # -------------------------------------------------------------------------
+    # Derived properties
+    # -------------------------------------------------------------------------
 
     @property
     def category_prefix(self) -> str:
         """Get the category prefix from import config."""
-        return self.import_config.get("category_prefix", "_")
+        return self.config.import_.get("category_prefix", "_")
 
     @property
     def fuzzy_threshold(self) -> int:
         """Get the fuzzy matching threshold from config."""
-        return self.matching_config.get("fuzzy_threshold", 80)
+        return self.config.matching.get("fuzzy_threshold", 80)
 
 
 # Initialize application state (config and database loaded immediately)
