@@ -196,6 +196,25 @@
                 >📄 Specify which PDF page to use as cover (default: 1)</small
               >
             </div>
+            <div class="form-field">
+              <label class="form-label">Upload Custom Cover</label>
+              <div class="cover-upload-container">
+                <input
+                  type="file"
+                  id="edit-cover-file"
+                  accept="image/jpeg,image/png,image/webp"
+                  class="form-input-file"
+                  onchange="previewCoverUpload(this)"
+                />
+                <div id="cover-upload-preview" class="cover-upload-preview hidden">
+                  <img id="cover-preview-img" alt="Cover preview" />
+                  <button type="button" onclick="clearCoverUpload()" class="btn-remove-preview">✕</button>
+                </div>
+              </div>
+              <small class="form-hint"
+                >🖼️ Optional: Upload a custom cover image (JPG, PNG, WebP)</small
+              >
+            </div>
           </div>
         </div>
         <div class="metadata-footer">
