@@ -177,8 +177,7 @@ class IssueDiscoveryService:
                             # New result is newer, prefer it
                             should_update_url = True
                             logger.debug(
-                                f"Preferring newer NZB for {fuzzy_group}: "
-                                f"{new_pubdate} > {existing.latest_pubdate}"
+                                f"Preferring newer NZB for {fuzzy_group}: " f"{new_pubdate} > {existing.latest_pubdate}"
                             )
                     elif existing.latest_pubdate is None:
                         # Neither has pubdate, just update (backwards compatible)
