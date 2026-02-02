@@ -1639,6 +1639,33 @@
   font-size: 16px;
   margin-bottom: 6px;
   color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.variant-number {
+  font-weight: 700;
+  color: var(--primary-color);
+}
+
+.variant-age {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--surface-hover);
+  color: var(--text-secondary);
+}
+
+.variant-provider {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(var(--primary-rgb), 0.1);
+  color: var(--primary-color);
 }
 
 .variant-title {

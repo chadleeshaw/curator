@@ -1742,6 +1742,36 @@ window.saveEditedTracking = async function () {
   }
 };
 
+/**
+ * Format a date as relative age (e.g., "2 days", "3 weeks", "1 month")
+ * @param {string|Date} date - The date to format
+ * @returns {string} Relative age string or empty if invalid
+ */
+function formatRelativeAge(date) {
+  if (!date) return '';
+  try {
+    const uploadDate = new Date(date);
+    if (isNaN(uploadDate.getTime())) return '';
+
+    const now = new Date();
+    const diffMs = now - uploadDate;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) return 'future';
+    if (diffDays === 0) return 'today';
+    if (diffDays === 1) return '1 day';
+    if (diffDays < 7) return `${diffDays} days`;
+    if (diffDays < 14) return '1 week';
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks`;
+    if (diffDays < 60) return '1 month';
+    if (diffDays < 365) return `${Math.floor(diffDays / 30)} months`;
+    if (diffDays < 730) return '1 year';
+    return `${Math.floor(diffDays / 365)} years`;
+  } catch {
+    return '';
+  }
+}
+
 // Select and download issue with language variant selection
 window.selectIssueWithVariants = function (issueKey, alreadyDownloaded, hasFailed) {
   const variants = window.issueVariants[issueKey];
@@ -1764,11 +1794,18 @@ window.selectIssueWithVariants = function (issueKey, alreadyDownloaded, hasFaile
     return;
   }
 
+  // Sort variants by publication_date (newest first) for better Usenet availability
+  const sortedVariants = [...variants].sort((a, b) => {
+    const dateA = a.publication_date ? new Date(a.publication_date) : new Date(0);
+    const dateB = b.publication_date ? new Date(b.publication_date) : new Date(0);
+    return dateB - dateA; // Newest first
+  });
+
   // Multiple variants - show selection modal
-  const hasLibraryItem = alreadyDownloaded || variants.some((v) => v.already_downloaded);
+  const hasLibraryItem = alreadyDownloaded || sortedVariants.some((v) => v.already_downloaded);
   const modalDescription = hasLibraryItem
     ? 'Your downloaded variant is marked below. You can re-download from a different NZB source if needed:'
-    : 'Multiple NZB variants available for this issue:';
+    : 'Multiple NZB variants available for this issue (sorted by age, newest first):';
 
   const modalHTML = `
     <div id="language-variant-modal" class="modal" style="display: flex;">
@@ -1784,17 +1821,24 @@ window.selectIssueWithVariants = function (issueKey, alreadyDownloaded, hasFaile
   document.body.insertAdjacentHTML('beforeend', modalHTML);
 
   const optionsDiv = document.getElementById('variant-options');
-  variants.forEach((variant, index) => {
-    // Simple variant numbering since these are different NZB sources for the same file
-    const displayLabel = `Variant ${index + 1}`;
-
+  sortedVariants.forEach((variant, index) => {
     const isDownloaded = variant.already_downloaded || alreadyDownloaded;
     const downloadFailed = variant.download_failed || hasFailed || false;
-    const statusBadge = isDownloaded
-      ? ' <span class="variant-in-library">✓ In Library</span>'
-      : downloadFailed
-        ? ' <span class="variant-failed">✗ Failed</span>'
-        : '';
+
+    // Build status badges
+    let statusBadges = '';
+    if (isDownloaded) {
+      statusBadges += ' <span class="variant-in-library">✓ In Library</span>';
+    } else if (downloadFailed) {
+      statusBadges += ' <span class="variant-failed">✗ Failed</span>';
+    }
+
+    // Add age badge if we have publication_date
+    const age = formatRelativeAge(variant.publication_date);
+    const ageBadge = age ? `<span class="variant-age">${age} old</span>` : '';
+
+    // Provider info
+    const providerInfo = variant.provider ? `<span class="variant-provider">${variant.provider}</span>` : '';
 
     const btn = document.createElement('button');
     // Different styling for re-download vs new download vs failed
@@ -1806,7 +1850,12 @@ window.selectIssueWithVariants = function (issueKey, alreadyDownloaded, hasFaile
       btn.className = 'btn-variant btn-variant-new';
     }
     btn.innerHTML = `
-      <div class="variant-label">${displayLabel}${statusBadge}</div>
+      <div class="variant-label">
+        <span class="variant-number">#${index + 1}</span>
+        ${ageBadge}
+        ${providerInfo}
+        ${statusBadges}
+      </div>
       <div class="variant-title">${variant.title}</div>
     `;
     btn.onclick = () => {
