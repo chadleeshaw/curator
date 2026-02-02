@@ -164,9 +164,30 @@ class IssueDiscoveryService:
                     existing.last_seen = now
                     existing.times_seen += 1
 
-                    # Update with latest metadata (may be from different provider)
-                    existing.latest_url = result.get("url")
-                    existing.latest_provider = parsed.provider
+                    # Prefer newer NZBs for better Usenet retention
+                    # Only update URL/provider if new result is newer (or existing has no pubdate)
+                    new_pubdate = pubdate
+                    should_update_url = False
+
+                    if new_pubdate:
+                        if existing.latest_pubdate is None:
+                            # No existing pubdate, always use the new one
+                            should_update_url = True
+                        elif new_pubdate > existing.latest_pubdate:
+                            # New result is newer, prefer it
+                            should_update_url = True
+                            logger.debug(
+                                f"Preferring newer NZB for {fuzzy_group}: "
+                                f"{new_pubdate} > {existing.latest_pubdate}"
+                            )
+                    elif existing.latest_pubdate is None:
+                        # Neither has pubdate, just update (backwards compatible)
+                        should_update_url = True
+
+                    if should_update_url:
+                        existing.latest_url = result.get("url")
+                        existing.latest_provider = parsed.provider
+                        existing.latest_pubdate = new_pubdate
 
                     # Add search result ID if available
                     if "search_result_id" in result and result["search_result_id"]:
@@ -195,6 +216,7 @@ class IssueDiscoveryService:
                         download_priority=50,  # Default middle priority
                         latest_url=result.get("url"),
                         latest_provider=parsed.provider,
+                        latest_pubdate=pubdate,  # Store NZB post date for retention preference
                         search_result_ids=(
                             [result["search_result_id"]]
                             if "search_result_id" in result and result["search_result_id"]

@@ -45,6 +45,7 @@ COLUMN_ADDITIONS = {
     ],
     "discovered_issues": [
         ("country", "VARCHAR(50)"),
+        ("latest_pubdate", "DATETIME"),  # When NZB was posted (for retention preference)
     ],
 }
 

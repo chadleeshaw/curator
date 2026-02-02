@@ -333,13 +333,32 @@ def _save_search_results_to_cache(
         # Check if already cached
         pub_date = result.get("publication_date")
         if pub_date:
-            existing = (
-                db_session.query(SearchResult)
-                .filter(SearchResult.fuzzy_match_group_id == fuzzy_group_id)
-                .filter(SearchResult.query == query)
-                .filter(func.date_trunc("month", SearchResult.publication_date) == func.date_trunc("month", pub_date))
-                .first()
-            )
+            # SQLite-compatible month comparison using strftime
+            # Format: YYYY-MM for month-level comparison
+            if isinstance(pub_date, str):
+                try:
+                    pub_date_obj = datetime.fromisoformat(pub_date.rstrip("Z"))
+                    pub_month = pub_date_obj.strftime("%Y-%m")
+                except (ValueError, AttributeError):
+                    pub_month = None
+            else:
+                pub_month = pub_date.strftime("%Y-%m") if pub_date else None
+
+            if pub_month:
+                existing = (
+                    db_session.query(SearchResult)
+                    .filter(SearchResult.fuzzy_match_group_id == fuzzy_group_id)
+                    .filter(SearchResult.query == query)
+                    .filter(func.strftime("%Y-%m", SearchResult.publication_date) == pub_month)
+                    .first()
+                )
+            else:
+                existing = (
+                    db_session.query(SearchResult)
+                    .filter(SearchResult.fuzzy_match_group_id == fuzzy_group_id)
+                    .filter(SearchResult.query == query)
+                    .first()
+                )
         else:
             # No date, just check by fuzzy group and query
             existing = (

@@ -308,6 +308,7 @@ class NewsnabProvider(SearchProvider):
                         title=title_elem.text,
                         url=nzb_url,
                         provider=self.type,
+                        publication_date=upload_date,  # Set the NZB post date
                         raw_metadata=raw_metadata,
                     )
                     results.append(result)
@@ -476,6 +477,7 @@ class NewsnabProvider(SearchProvider):
                         title=title_elem.text,
                         url=nzb_url,
                         provider=self.type,
+                        publication_date=upload_date,  # Set the NZB post date
                         raw_metadata=raw_metadata,
                     )
                     results.append(result)

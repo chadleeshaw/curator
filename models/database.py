@@ -416,6 +416,7 @@ class DiscoveredIssue(Base):
     # Search result tracking (we may see same issue from multiple providers)
     latest_url = Column(String(512), nullable=True)  # Most recent NZB/download URL
     latest_provider = Column(String(100), nullable=True)  # Most recent provider
+    latest_pubdate = Column(DateTime, nullable=True, index=True)  # When NZB was posted (for retention)
     search_result_ids = Column(JSON, default=list)  # List of SearchResult.id we've seen
 
     # Download tracking
@@ -456,6 +457,7 @@ class DiscoveredIssue(Base):
             "download_priority": self.download_priority,
             "latest_url": self.latest_url,
             "latest_provider": self.latest_provider,
+            "latest_pubdate": self.latest_pubdate.isoformat() if self.latest_pubdate else None,
             "search_result_ids": self.search_result_ids,
             "current_submission_id": self.current_submission_id,
             "submission_ids": self.submission_ids,

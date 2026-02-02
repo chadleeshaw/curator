@@ -697,6 +697,12 @@ class TitleMatcher:
             logger.debug(f"No date or volume/issue for '{provider_title}', using title-only match")
             return (True, title_score)
 
+        # Normalize both dates to naive (remove timezone info) for comparison
+        if provider_date.tzinfo is not None:
+            provider_date = provider_date.replace(tzinfo=None)
+        if library_date.tzinfo is not None:
+            library_date = library_date.replace(tzinfo=None)
+
         # Check if dates are within same month ± tolerance
         date_diff_days = abs((provider_date - library_date).days)
 
