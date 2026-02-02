@@ -11,7 +11,7 @@ import re
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from core.constants.country import ISO_COUNTRIES
 from core.constants.files import (
@@ -786,6 +786,215 @@ class FileOrganizer:
 
         return target_dir, filename, target_dir / filename
 
+    def _process_single_magazine_reorganization(
+        self,
+        magazine: Any,
+        db_session: Any,
+        category_with_prefix: str,
+        pattern: Optional[str],
+        dry_run: bool,
+        old_directories: set,
+    ) -> Dict[str, Any]:
+        """
+        Process a single magazine for reorganization.
+
+        Args:
+            magazine: Periodical database record
+            db_session: SQLAlchemy database session
+            category_with_prefix: Category name with prefix (e.g., "_Magazines")
+            pattern: Organization pattern or None for default
+            dry_run: If True, only report what would be done
+            old_directories: Set to track directories we moved files from
+
+        Returns:
+            Dictionary with status: 'reorganized', 'skipped', or 'error'
+        """
+        from models.database import Periodical
+
+        # Try to resolve the file path
+        try:
+            current_path = resolve_periodical_file_path(
+                stored_path=magazine.file_path,
+                library_base_dir=self.library_dir,
+                category_prefix=self.category_prefix,
+            )
+        except FileNotFoundError:
+            logger.debug(f"File not found, skipping: {magazine.file_path}")
+            return {"status": "skipped", "reason": "file_not_found"}
+
+        # Get canonical title: prefer tracking title over magazine title
+        tracking_title = self._get_tracking_title(db_session, magazine.tracking_id)
+        full_title = tracking_title or magazine.title
+
+        if tracking_title:
+            logger.debug(f"Using tracking title: {tracking_title} (magazine title was: {magazine.title})")
+        else:
+            logger.debug(f"No tracking record, using magazine title: {magazine.title}")
+
+        # Build expected path based on pattern
+        metadata = {
+            "title": full_title,
+            "issue_date": magazine.issue_date,
+            "language": magazine.language or DEFAULT_LANGUAGE,
+            "issue_number": magazine.extra_metadata.get("issue_number") if magazine.extra_metadata else None,
+            "volume": magazine.extra_metadata.get("volume") if magazine.extra_metadata else None,
+        }
+
+        target_dir, filename, expected_path = self._build_target_path_info(metadata, category_with_prefix, pattern)
+
+        # Skip if already in correct location
+        if current_path.resolve() == expected_path.resolve():
+            logger.debug(f"File already in correct location: {current_path}")
+            return {"status": "skipped", "reason": "already_correct"}
+
+        # Build change info for preview
+        change_info = {
+            "old_path": str(current_path),
+            "new_path": str(expected_path),
+            "old_title": magazine.title,
+            "new_title": full_title,
+            "title_changed": magazine.title != full_title,
+            "old_folder": current_path.parent.name,
+            "new_folder": target_dir.name,
+        }
+
+        if dry_run:
+            return {"status": "reorganized", "change": change_info}
+
+        # Perform the actual move
+        logger.info(f"Reorganizing: {current_path} -> {expected_path}")
+        move_result = self._move_magazine_and_update_db(
+            magazine=magazine,
+            db_session=db_session,
+            current_path=current_path,
+            target_dir=target_dir,
+            filename=filename,
+            full_title=full_title,
+            old_directories=old_directories,
+        )
+
+        if move_result["success"]:
+            return {"status": "reorganized", "change": change_info}
+        else:
+            return {"status": "skipped", "reason": move_result["reason"]}
+
+    def _move_magazine_and_update_db(
+        self,
+        magazine: Any,
+        db_session: Any,
+        current_path: Path,
+        target_dir: Path,
+        filename: str,
+        full_title: str,
+        old_directories: set,
+    ) -> Dict[str, Any]:
+        """
+        Move a magazine file and update database records.
+
+        Handles directory creation, unique path generation, conflict detection,
+        file movement, and cover file handling.
+
+        Args:
+            magazine: Periodical database record
+            db_session: SQLAlchemy database session
+            current_path: Current file path
+            target_dir: Target directory path
+            filename: Target filename
+            full_title: Title to use for the magazine
+            old_directories: Set to track directories we moved files from
+
+        Returns:
+            Dictionary with success status and optional reason for failure
+        """
+        from models.database import Periodical
+
+        # Create target directory
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        # Get unique target path if file exists
+        final_path = self._get_unique_target_path(target_dir, filename)
+
+        # Check if target path already exists in database
+        existing_record = db_session.query(Periodical).filter_by(file_path=str(final_path)).first()
+        if existing_record and existing_record.id != magazine.id:
+            logger.warning(
+                f"Target path already exists in database for different record: {final_path}. "
+                f"Skipping reorganization of {current_path}"
+            )
+            return {"success": False, "reason": "path_conflict"}
+
+        # Track old directory for cleanup
+        old_directories.add(current_path.parent)
+
+        # Move file
+        shutil.move(str(current_path), str(final_path))
+
+        # Update database with new path and title
+        magazine.file_path = str(final_path)
+        magazine.title = full_title
+        db_session.commit()
+
+        # Also move cover if it exists
+        current_cover = current_path.with_suffix(".jpg")
+        if current_cover.exists():
+            new_cover = final_path.with_suffix(".jpg")
+            shutil.move(str(current_cover), str(new_cover))
+            magazine.cover_path = str(new_cover)
+            db_session.commit()
+            logger.info(f"Moved cover: {current_cover} -> {new_cover}")
+
+        logger.info(f"Reorganized: {final_path}")
+        return {"success": True}
+
+    def _build_reorganization_result(
+        self,
+        category: str,
+        category_dir: Path,
+        pattern: Optional[str],
+        files_found: int,
+        files_reorganized: int,
+        files_skipped: int,
+        errors: List[str],
+        changes: List[Dict],
+        dry_run: bool,
+        tracking_fixes: Optional[Dict] = None,
+    ) -> Dict[str, Any]:
+        """
+        Build the result dictionary for reorganization operations.
+
+        Args:
+            category: Category name
+            category_dir: Category directory path
+            pattern: Organization pattern used
+            files_found: Number of files processed
+            files_reorganized: Number of files successfully reorganized
+            files_skipped: Number of files skipped
+            errors: List of error messages
+            changes: List of change details
+            dry_run: Whether this was a dry run
+            tracking_fixes: Optional tracking fix results
+
+        Returns:
+            Dictionary with reorganization results
+        """
+        result = {
+            "success": True,
+            "category": category,
+            "category_dir": str(category_dir),
+            "pattern": pattern or "{category}/{title}/{year}/",
+            "files_found": files_found,
+            "files_reorganized": files_reorganized,
+            "files_skipped": files_skipped,
+            "errors": errors,
+            "changes": changes,
+            "dry_run": dry_run,
+        }
+
+        if tracking_fixes:
+            result["tracking_fixes"] = tracking_fixes
+
+        return result
+
     def scan_for_reorganization(
         self,
         category: str,
@@ -872,27 +1081,12 @@ class FileOrganizer:
         Returns:
             Dictionary with reorganization results including tracking_fixes if auto_fix_tracking=True
         """
-        from models.database import (
-            Periodical,
-            PeriodicalTracking,
-        )  # Import here to avoid circular dependency
+        from models.database import Periodical
 
         # Step 1: Auto-fix tracking IDs if enabled
-        tracking_fixes = None
-        if auto_fix_tracking:
-            logger.info("Auto-fixing tracking_id values before reorganization...")
-            tracking_fixes = self.auto_fix_tracking_ids(
-                db_session=db_session,
-                category=category,
-                dry_run=dry_run,
-            )
-            if not dry_run:
-                logger.info(f"Fixed {tracking_fixes['fixed']} tracking_id(s), " f"skipped {tracking_fixes['skipped']}")
-            else:
-                logger.info(
-                    f"Would fix {tracking_fixes['fixed']} tracking_id(s), " f"skipped {tracking_fixes['skipped']}"
-                )
+        tracking_fixes = self._run_tracking_auto_fix(db_session, category, dry_run, auto_fix_tracking)
 
+        # Step 2: Validate category directory
         category_with_prefix = f"{self.category_prefix}{category}"
         category_dir = self.library_dir / category_with_prefix
 
@@ -905,180 +1099,103 @@ class FileOrganizer:
                 "files_reorganized": 0,
             }
 
-        # Only log for actual operations, not dry run
         if not dry_run:
             logger.info(f"Reorganizing files in: {category_dir}")
 
-        files_found = 0
-        files_reorganized = 0
-        files_skipped = 0
-        errors = []
-        changes = []  # Track detailed changes for preview
-        old_directories = set()  # Track directories we moved files from
+        # Step 3: Process all magazines from database
+        files_found, files_reorganized, files_skipped = 0, 0, 0
+        errors, changes = [], []
+        old_directories = set()
 
-        # Query all magazines in this category from database
         magazines = db_session.query(Periodical).filter(Periodical.file_path.like(f"%{category_with_prefix}%")).all()
 
-        # Only log for actual operations, not dry run
         if not dry_run:
             logger.info(f"Found {len(magazines)} magazine records in database for category {category}")
 
         for magazine in magazines:
-            # Store original path for error messages (before any DB operations)
-            original_file_path = magazine.file_path
-            try:
-                files_found += 1
+            files_found += 1
+            result = self._process_magazine_with_error_handling(
+                magazine, db_session, category_with_prefix, pattern, dry_run, old_directories, errors
+            )
 
-                # Try to resolve the file path (handles environment differences like Docker paths)
-                try:
-                    current_path = resolve_periodical_file_path(
-                        stored_path=magazine.file_path,
-                        library_base_dir=self.library_dir,
-                        category_prefix=self.category_prefix,
-                    )
-                except FileNotFoundError:
-                    # Path could not be resolved - skip this file
-                    logger.debug(f"File not found, skipping: {magazine.file_path}")
-                    files_skipped += 1
-                    continue
-
-                # Get canonical title: prefer tracking title over magazine title
-                tracking_title = self._get_tracking_title(db_session, magazine.tracking_id)
-                full_title = tracking_title or magazine.title
-
-                if tracking_title:
-                    logger.debug(f"Using tracking title: {tracking_title} (magazine title was: {magazine.title})")
-                else:
-                    logger.debug(f"No tracking record, using magazine title: {magazine.title}")
-
-                # Build expected path based on pattern
-                metadata = {
-                    "title": full_title,
-                    "issue_date": magazine.issue_date,
-                    "language": magazine.language or DEFAULT_LANGUAGE,
-                    "issue_number": magazine.extra_metadata.get("issue_number") if magazine.extra_metadata else None,
-                    "volume": magazine.extra_metadata.get("volume") if magazine.extra_metadata else None,
-                }
-
-                target_dir, filename, expected_path = self._build_target_path_info(
-                    metadata, category_with_prefix, pattern
-                )
-
-                # Skip if already in correct location
-                if current_path.resolve() == expected_path.resolve():
-                    logger.debug(f"File already in correct location: {current_path}")
-                    files_skipped += 1
-                    continue
-
-                # Only log for actual operations, not dry run
-                if not dry_run:
-                    logger.info(f"Reorganizing: {current_path} -> {expected_path}")
-
-                # Track this change for preview display
-                change_info = {
-                    "old_path": str(current_path),
-                    "new_path": str(expected_path),
-                    "old_title": magazine.title,
-                    "new_title": full_title,
-                    "title_changed": magazine.title != full_title,
-                    "old_folder": current_path.parent.name,
-                    "new_folder": target_dir.name,
-                }
-                changes.append(change_info)
-
-                if not dry_run:
-                    # Create target directory
-                    target_dir.mkdir(parents=True, exist_ok=True)
-
-                    # Get unique target path if file exists
-                    final_path = self._get_unique_target_path(target_dir, filename)
-
-                    # Check if target path already exists in database (to avoid UNIQUE constraint error)
-                    existing_record = db_session.query(Periodical).filter_by(file_path=str(final_path)).first()
-                    if existing_record and existing_record.id != magazine.id:
-                        logger.warning(
-                            f"Target path already exists in database for different record: {final_path}. "
-                            f"Skipping reorganization of {current_path}"
-                        )
-                        files_skipped += 1
-                        continue
-
-                    # Track old directory for cleanup
-                    old_dir = current_path.parent
-                    old_directories.add(old_dir)
-
-                    # Move file
-                    shutil.move(str(current_path), str(final_path))
-
-                    # Update database with new path and title (use tracking title if available)
-                    magazine.file_path = str(final_path)
-                    magazine.title = full_title  # Sync to tracking title
-                    db_session.commit()
-
-                    # Also move cover if it exists
-                    current_cover = current_path.with_suffix(".jpg")
-                    if current_cover.exists():
-                        new_cover = final_path.with_suffix(".jpg")
-                        shutil.move(str(current_cover), str(new_cover))
-                        magazine.cover_path = str(new_cover)
-                        db_session.commit()
-                        logger.info(f"Moved cover: {current_cover} -> {new_cover}")
-
-                    logger.info(f"Reorganized: {final_path}")
-
+            if result["status"] == "reorganized":
                 files_reorganized += 1
+                if "change" in result:
+                    changes.append(result["change"])
+            else:
+                files_skipped += 1
 
-            except Exception as e:
-                # Rollback the session to clear any pending changes
-                db_session.rollback()
-                error_msg = f"Error reorganizing {original_file_path}: {e}"
-                logger.error(error_msg, exc_info=True)
-                errors.append(error_msg)
-
-        # Remove old directories (even if not empty)
+        # Step 4: Cleanup old directories
         if not dry_run:
             self._cleanup_old_directories(old_directories, category_dir)
 
-        # Also process files with sidecar metadata that aren't in the database
+        # Step 5: Process sidecar files
         sidecar_results = self._reorganize_from_sidecars(
-            db_session,
-            category_dir,
-            category_with_prefix,
-            pattern,
-            dry_run,
-            old_directories,
+            db_session, category_dir, category_with_prefix, pattern, dry_run, old_directories
         )
 
         files_found += sidecar_results["files_found"]
         files_reorganized += sidecar_results["files_reorganized"]
         files_skipped += sidecar_results["files_skipped"]
         errors.extend(sidecar_results["errors"])
-        # Merge sidecar changes into main changes list
         if "changes" in sidecar_results:
             changes.extend(sidecar_results["changes"])
 
-        # Final cleanup after processing sidecar files
+        # Final cleanup after sidecar processing
         if not dry_run and sidecar_results["files_reorganized"] > 0:
             self._cleanup_old_directories(old_directories, category_dir)
 
-        result = {
-            "success": True,
-            "category": category,
-            "category_dir": str(category_dir),
-            "pattern": pattern or "{category}/{title}/{year}/",
-            "files_found": files_found,
-            "files_reorganized": files_reorganized,
-            "files_skipped": files_skipped,
-            "errors": errors,
-            "changes": changes,  # Add detailed changes list
-            "dry_run": dry_run,
-        }
+        # Step 6: Build and return result
+        return self._build_reorganization_result(
+            category,
+            category_dir,
+            pattern,
+            files_found,
+            files_reorganized,
+            files_skipped,
+            errors,
+            changes,
+            dry_run,
+            tracking_fixes,
+        )
 
-        # Add tracking fixes if auto-fix was enabled
-        if tracking_fixes:
-            result["tracking_fixes"] = tracking_fixes
+    def _run_tracking_auto_fix(
+        self, db_session: Any, category: str, dry_run: bool, auto_fix_tracking: bool
+    ) -> Optional[Dict]:
+        """Run tracking ID auto-fix if enabled and log results."""
+        if not auto_fix_tracking:
+            return None
 
-        return result
+        logger.info("Auto-fixing tracking_id values before reorganization...")
+        tracking_fixes = self.auto_fix_tracking_ids(db_session=db_session, category=category, dry_run=dry_run)
+
+        action = "Would fix" if dry_run else "Fixed"
+        logger.info(f"{action} {tracking_fixes['fixed']} tracking_id(s), skipped {tracking_fixes['skipped']}")
+
+        return tracking_fixes
+
+    def _process_magazine_with_error_handling(
+        self,
+        magazine: Any,
+        db_session: Any,
+        category_with_prefix: str,
+        pattern: Optional[str],
+        dry_run: bool,
+        old_directories: set,
+        errors: List[str],
+    ) -> Dict[str, Any]:
+        """Process a single magazine with error handling and rollback."""
+        original_file_path = magazine.file_path
+        try:
+            return self._process_single_magazine_reorganization(
+                magazine, db_session, category_with_prefix, pattern, dry_run, old_directories
+            )
+        except Exception as e:
+            db_session.rollback()
+            error_msg = f"Error reorganizing {original_file_path}: {e}"
+            logger.error(error_msg, exc_info=True)
+            errors.append(error_msg)
+            return {"status": "error"}
 
     def _reorganize_from_sidecars(
         self,
