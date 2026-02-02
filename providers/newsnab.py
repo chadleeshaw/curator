@@ -149,6 +149,163 @@ class NewsnabProvider(SearchProvider):
 
         return None
 
+    def _handle_http_429(self, response: requests.Response) -> bool:
+        """
+        Handle HTTP 429 Too Many Requests response.
+
+        Sets rate limit state and logs appropriate warning.
+
+        Args:
+            response: HTTP response with 429 status
+
+        Returns:
+            True if rate limited (caller should return empty results)
+        """
+        wait_time = None
+        retry_after = response.headers.get("Retry-After")
+        if retry_after:
+            try:
+                wait_time = int(retry_after)
+            except ValueError:
+                pass
+
+        if not wait_time:
+            wait_time = NEWSNAB_DEFAULT_RATE_LIMIT_WAIT
+
+        self._rate_limit_until = datetime.now() + timedelta(seconds=wait_time)
+        self._rate_limit_reason = "HTTP 429 Too Many Requests"
+        logger.error(
+            f"[{self.name}] Rate limited by provider (HTTP 429). "
+            f"Will wait {wait_time} seconds (~{wait_time / 3600:.1f} hours)"
+        )
+        return True
+
+    def _check_xml_error(self, root: ET.Element) -> Optional[str]:
+        """
+        Check XML response for error element and handle rate limits.
+
+        Args:
+            root: Parsed XML root element
+
+        Returns:
+            Error code if error found (caller should handle), None if no error
+        """
+        error_elem = root.find(".//error")
+        if error_elem is None:
+            return None
+
+        error_code = error_elem.get("code", "")
+        error_desc = error_elem.get("description", error_elem.text or "")
+
+        # Check if it's a rate limit error
+        wait_time = self._parse_rate_limit_from_error(error_desc)
+        if wait_time:
+            self._rate_limit_until = datetime.now() + timedelta(seconds=wait_time)
+            self._rate_limit_reason = f"Provider error: {error_desc}"
+            logger.error(
+                f"[{self.name}] Rate limited by provider: {error_desc}. "
+                f"Will wait {wait_time} seconds (~{wait_time / 3600:.1f} hours)"
+            )
+            return error_code
+
+        logger.warning(f"[{self.name}] API error: {error_desc} (code: {error_code})")
+        return error_code
+
+    def _parse_xml_items(self, root: ET.Element, include_guid: bool = False) -> List[SearchResult]:
+        """
+        Parse RSS/XML items into SearchResult objects.
+
+        Args:
+            root: Parsed XML root element
+            include_guid: Whether to include GUID in raw_metadata (for RSS mode deduplication)
+
+        Returns:
+            List of SearchResult objects
+        """
+        results = []
+
+        for item in root.findall(".//item"):
+            title_elem = item.find("title")
+            link_elem = item.find("link")
+            enclosure_elem = item.find("enclosure")
+            pubdate_elem = item.find("pubDate")
+
+            if title_elem is None or not title_elem.text:
+                continue
+
+            # Get NZB URL from enclosure or link
+            nzb_url = ""
+            if enclosure_elem is not None:
+                nzb_url = enclosure_elem.get("url", "")
+            elif link_elem is not None:
+                nzb_url = link_elem.text or ""
+
+            # Parse upload_date from pubDate element
+            upload_date = None
+            if pubdate_elem is not None and pubdate_elem.text:
+                upload_date = self._parse_upload_date(pubdate_elem.text)
+
+            # Extract category from newznab:attr elements
+            category_id = None
+            for attr in item.findall(".//{http://www.newznab.com/DTD/2010/feeds/attributes/}attr"):
+                if attr.get("name") == "category":
+                    category_id = attr.get("value")
+                    break
+
+            raw_metadata = {
+                "indexer": item.findtext("indexer", ""),
+            }
+            if upload_date:
+                raw_metadata["upload_date"] = upload_date.isoformat()
+            if category_id:
+                raw_metadata["category"] = category_id
+
+            # Include GUID for deduplication (RSS mode)
+            if include_guid:
+                guid_elem = item.find("guid")
+                if guid_elem is not None and guid_elem.text:
+                    raw_metadata["guid"] = guid_elem.text
+
+            result = SearchResult(
+                title=title_elem.text,
+                url=nzb_url,
+                provider=self.type,
+                publication_date=upload_date,
+                raw_metadata=raw_metadata,
+            )
+            results.append(result)
+
+        return results
+
+    def _handle_http_error_rate_limit(self, http_error: requests.exceptions.HTTPError) -> bool:
+        """
+        Check if HTTP error contains rate limit info and set state accordingly.
+
+        Args:
+            http_error: HTTPError exception
+
+        Returns:
+            True if rate limited (caller should return empty results)
+        """
+        if http_error.response is None:
+            return False
+
+        try:
+            error_text = http_error.response.text
+            wait_time = self._parse_rate_limit_from_error(error_text)
+            if wait_time:
+                self._rate_limit_until = datetime.now() + timedelta(seconds=wait_time)
+                self._rate_limit_reason = f"HTTP {http_error.response.status_code}: Rate limit"
+                logger.error(
+                    f"[{self.name}] Rate limited by provider (HTTP {http_error.response.status_code}). "
+                    f"Will wait {wait_time} seconds (~{wait_time / 3600:.1f} hours)"
+                )
+                return True
+        except Exception:
+            pass
+
+        return False
+
     def search(self, query: str = "", category: str = None) -> List[SearchResult]:
         """
         Search Newsnab-compatible service for NZBs.
@@ -199,14 +356,11 @@ class NewsnabProvider(SearchProvider):
 
     def _search_xml_api(self, query: str, category: str = None) -> List[SearchResult]:
         """Search using the legacy /api XML endpoint"""
-        results = []
-
         try:
             # Determine which categories to search
             cat_ids = self.categories  # Default: all configured categories
 
             if category and category in self.category_map:
-                # If specific category requested, use its ID
                 cat_ids = self.category_map[category]
                 logger.debug(f"Using category filter: {category} -> {cat_ids}")
 
@@ -222,118 +376,27 @@ class NewsnabProvider(SearchProvider):
 
             response = requests.get(url, params=params, timeout=NEWSNAB_REQUEST_TIMEOUT)
 
-            # Check for rate limit errors (HTTP 429 or specific status codes)
-            if response.status_code == 429:  # Too Many Requests
-                wait_time = None
-                # Check Retry-After header
-                retry_after = response.headers.get("Retry-After")
-                if retry_after:
-                    try:
-                        wait_time = int(retry_after)
-                    except ValueError:
-                        pass
-
-                if not wait_time:
-                    wait_time = NEWSNAB_DEFAULT_RATE_LIMIT_WAIT
-
-                self._rate_limit_until = datetime.now() + timedelta(seconds=wait_time)
-                self._rate_limit_reason = "HTTP 429 Too Many Requests"
-                logger.error(
-                    f"[{self.name}] Rate limited by provider (HTTP 429). "
-                    f"Will wait {wait_time} seconds (~{wait_time / 3600:.1f} hours)"
-                )
+            if response.status_code == 429:
+                self._handle_http_429(response)
                 return []
 
             response.raise_for_status()
 
-            # Check for error messages in XML response
             root = ET.fromstring(response.content)
 
-            # Check for error element in response
-            error_elem = root.find(".//error")
-            if error_elem is not None:
-                error_code = error_elem.get("code", "")
-                error_desc = error_elem.get("description", error_elem.text or "")
+            if self._check_xml_error(root) is not None:
+                return []
 
-                # Check if it's a rate limit error
-                wait_time = self._parse_rate_limit_from_error(error_desc)
-                if wait_time:
-                    self._rate_limit_until = datetime.now() + timedelta(seconds=wait_time)
-                    self._rate_limit_reason = f"Provider error: {error_desc}"
-                    logger.error(
-                        f"[{self.name}] Rate limited by provider: {error_desc}. "
-                        f"Will wait {wait_time} seconds (~{wait_time / 3600:.1f} hours)"
-                    )
-                    return []
-                else:
-                    logger.warning(f"[{self.name}] API error: {error_desc} (code: {error_code})")
-                    return []
-
-            # Parse RSS/XML response
-            for item in root.findall(".//item"):
-                title_elem = item.find("title")
-                link_elem = item.find("link")
-                enclosure_elem = item.find("enclosure")
-                pubdate_elem = item.find("pubDate")
-
-                if title_elem is not None and title_elem.text:
-                    # Get NZB URL from enclosure or link
-                    nzb_url = ""
-                    if enclosure_elem is not None:
-                        nzb_url = enclosure_elem.get("url", "")
-                    elif link_elem is not None:
-                        nzb_url = link_elem.text or ""
-
-                    # Parse upload_date from pubDate element
-                    upload_date = None
-                    if pubdate_elem is not None and pubdate_elem.text:
-                        upload_date = self._parse_upload_date(pubdate_elem.text)
-
-                    # Extract category from newznab:attr elements
-                    category_id = None
-                    for attr in item.findall(".//{http://www.newznab.com/DTD/2010/feeds/attributes/}attr"):
-                        if attr.get("name") == "category":
-                            category_id = attr.get("value")
-                            break
-
-                    raw_metadata = {
-                        "indexer": item.findtext("indexer", ""),
-                    }
-                    if upload_date:
-                        raw_metadata["upload_date"] = upload_date.isoformat()
-                    if category_id:
-                        raw_metadata["category"] = category_id
-
-                    result = SearchResult(
-                        title=title_elem.text,
-                        url=nzb_url,
-                        provider=self.type,
-                        publication_date=upload_date,  # Set the NZB post date
-                        raw_metadata=raw_metadata,
-                    )
-                    results.append(result)
+            results = self._parse_xml_items(root, include_guid=False)
 
             logger.debug(
                 f"Newsnab (XML API) found {len(results)} results for '{query}' in categories {self.categories}"
             )
+            return results
 
         except requests.exceptions.HTTPError as e:
-            # Check if it's a rate limit error in the response text
-            if e.response is not None:
-                try:
-                    error_text = e.response.text
-                    wait_time = self._parse_rate_limit_from_error(error_text)
-                    if wait_time:
-                        self._rate_limit_until = datetime.now() + timedelta(seconds=wait_time)
-                        self._rate_limit_reason = f"HTTP {e.response.status_code}: Rate limit"
-                        logger.error(
-                            f"[{self.name}] Rate limited by provider (HTTP {e.response.status_code}). "
-                            f"Will wait {wait_time} seconds (~{wait_time / 3600:.1f} hours)"
-                        )
-                        return []
-                except Exception:
-                    pass
-
+            if self._handle_http_error_rate_limit(e):
+                return []
             logger.error(f"Newsnab XML API HTTP error: {e}")
 
         except requests.exceptions.RequestException as e:
@@ -341,7 +404,7 @@ class NewsnabProvider(SearchProvider):
         except ET.ParseError as e:
             logger.debug(f"Newsnab XML parse error: {e}")
 
-        return results
+        return []
 
     def _search_xml_api_rss(self, category: str = None) -> List[SearchResult]:
         """
@@ -356,14 +419,11 @@ class NewsnabProvider(SearchProvider):
         Returns:
             List of SearchResult objects
         """
-        results = []
-
         try:
             # Determine which categories to search
             cat_ids = self.categories  # Default: all configured categories
 
             if category and category in self.category_map:
-                # If specific category requested, use its ID
                 cat_ids = self.category_map[category]
                 logger.debug(f"Using category filter: {category} -> {cat_ids}")
 
@@ -379,137 +439,46 @@ class NewsnabProvider(SearchProvider):
 
             response = requests.get(url, params=params, timeout=NEWSNAB_REQUEST_TIMEOUT)
 
-            # Check for rate limit errors (HTTP 429 or specific status codes)
-            if response.status_code == 429:  # Too Many Requests
-                wait_time = None
-                # Check Retry-After header
-                retry_after = response.headers.get("Retry-After")
-                if retry_after:
-                    try:
-                        wait_time = int(retry_after)
-                    except ValueError:
-                        pass
-
-                if not wait_time:
-                    wait_time = NEWSNAB_DEFAULT_RATE_LIMIT_WAIT
-
-                self._rate_limit_until = datetime.now() + timedelta(seconds=wait_time)
-                self._rate_limit_reason = "HTTP 429 Too Many Requests"
-                logger.error(
-                    f"[{self.name}] Rate limited by provider (HTTP 429). "
-                    f"Will wait {wait_time} seconds (~{wait_time / 3600:.1f} hours)"
-                )
+            if response.status_code == 429:
+                self._handle_http_429(response)
                 return []
 
             response.raise_for_status()
 
-            # Check for error messages in XML response
             root = ET.fromstring(response.content)
 
-            # Check for error element in response
+            # Check for errors, with special handling for RSS-not-supported (code 202)
             error_elem = root.find(".//error")
             if error_elem is not None:
                 error_code = error_elem.get("code", "")
-                error_desc = error_elem.get("description", error_elem.text or "")
-
-                # Check if RSS mode is not supported (common with Prowlarr aggregators)
                 if error_code == "202":
                     logger.info(f"[{self.name}] RSS mode not supported (error 202), falling back to broad search")
-                    # Fall back to broad search query for periodicals
                     return self._search_xml_api_rss_fallback(category)
 
-                # Check if it's a rate limit error
-                wait_time = self._parse_rate_limit_from_error(error_desc)
-                if wait_time:
-                    self._rate_limit_until = datetime.now() + timedelta(seconds=wait_time)
-                    self._rate_limit_reason = f"Provider error: {error_desc}"
-                    logger.error(
-                        f"[{self.name}] Rate limited by provider: {error_desc}. "
-                        f"Will wait {wait_time} seconds (~{wait_time / 3600:.1f} hours)"
-                    )
-                    return []
-                else:
-                    logger.warning(f"[{self.name}] API error: {error_desc} (code: {error_code})")
+                # Use standard error handling for other errors
+                if self._check_xml_error(root) is not None:
                     return []
 
-            # Parse RSS/XML response
-            for item in root.findall(".//item"):
-                title_elem = item.find("title")
-                link_elem = item.find("link")
-                enclosure_elem = item.find("enclosure")
-                pubdate_elem = item.find("pubDate")
-                guid_elem = item.find("guid")
-
-                if title_elem is not None and title_elem.text:
-                    # Get NZB URL from enclosure or link
-                    nzb_url = ""
-                    if enclosure_elem is not None:
-                        nzb_url = enclosure_elem.get("url", "")
-                    elif link_elem is not None:
-                        nzb_url = link_elem.text or ""
-
-                    # Parse upload_date from pubDate element (CRITICAL for cache ranking)
-                    upload_date = None
-                    if pubdate_elem is not None and pubdate_elem.text:
-                        upload_date = self._parse_upload_date(pubdate_elem.text)
-
-                    # Extract category from newznab:attr elements
-                    category_id = None
-                    for attr in item.findall(".//{http://www.newznab.com/DTD/2010/feeds/attributes/}attr"):
-                        if attr.get("name") == "category":
-                            category_id = attr.get("value")
-                            break
-
-                    # Build raw_metadata
-                    raw_metadata = {
-                        "indexer": item.findtext("indexer", ""),
-                    }
-                    if upload_date:
-                        raw_metadata["upload_date"] = upload_date.isoformat()
-                    if category_id:
-                        raw_metadata["category"] = category_id
-
-                    # Include GUID for deduplication (if available)
-                    if guid_elem is not None and guid_elem.text:
-                        raw_metadata["guid"] = guid_elem.text
-
-                    result = SearchResult(
-                        title=title_elem.text,
-                        url=nzb_url,
-                        provider=self.type,
-                        publication_date=upload_date,  # Set the NZB post date
-                        raw_metadata=raw_metadata,
-                    )
-                    results.append(result)
+            results = self._parse_xml_items(root, include_guid=True)
 
             logger.debug(f"Newsnab (RSS mode) found {len(results)} results in categories {cat_ids}")
+            return results
 
         except requests.exceptions.HTTPError as e:
-            # Check if it's a rate limit error in the response text
-            if e.response is not None:
+            # Check if RSS mode is not supported (HTTP 400 with error code 202)
+            if e.response is not None and e.response.status_code == 400:
                 try:
-                    error_text = e.response.text
-
-                    # Check if RSS mode is not supported (HTTP 400 with error code 202)
-                    if e.response.status_code == 400 and 'code="202"' in error_text:
+                    if 'code="202"' in e.response.text:
                         logger.info(
                             f"[{self.name}] RSS mode not supported (HTTP 400, code 202), "
                             f"falling back to broad search"
                         )
                         return self._search_xml_api_rss_fallback(category)
-
-                    wait_time = self._parse_rate_limit_from_error(error_text)
-                    if wait_time:
-                        self._rate_limit_until = datetime.now() + timedelta(seconds=wait_time)
-                        self._rate_limit_reason = f"HTTP {e.response.status_code}: Rate limit"
-                        logger.error(
-                            f"[{self.name}] Rate limited by provider (HTTP {e.response.status_code}). "
-                            f"Will wait {wait_time} seconds (~{wait_time / 3600:.1f} hours)"
-                        )
-                        return []
                 except Exception:
                     pass
 
+            if self._handle_http_error_rate_limit(e):
+                return []
             logger.error(f"Newsnab RSS API HTTP error: {e}")
 
         except requests.exceptions.RequestException as e:
@@ -517,7 +486,7 @@ class NewsnabProvider(SearchProvider):
         except ET.ParseError as e:
             logger.debug(f"Newsnab RSS parse error: {e}")
 
-        return results
+        return []
 
     def _search_xml_api_rss_fallback(self, category: str = None) -> List[SearchResult]:
         """

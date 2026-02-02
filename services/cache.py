@@ -167,52 +167,36 @@ class ProviderCacheService:
             )
             if not result.fetchone():
                 # Create FTS5 virtual table
-                conn.execute(
-                    text(
-                        f"""
+                conn.execute(text(f"""
                         CREATE VIRTUAL TABLE cached_releases_fts USING fts5(
                             title,
                             content='cached_releases',
                             content_rowid='id',
                             tokenize='{FTS5_TOKENIZER}'
                         )
-                        """
-                    )
-                )
+                        """))
 
                 # Create triggers to keep FTS5 in sync
-                conn.execute(
-                    text(
-                        """
+                conn.execute(text("""
                         CREATE TRIGGER cached_releases_fts_insert AFTER INSERT ON cached_releases BEGIN
                             INSERT INTO cached_releases_fts(rowid, title) VALUES (new.id, new.title);
                         END;
-                        """
-                    )
-                )
+                        """))
 
-                conn.execute(
-                    text(
-                        """
+                conn.execute(text("""
                         CREATE TRIGGER cached_releases_fts_delete AFTER DELETE ON cached_releases BEGIN
                             INSERT INTO cached_releases_fts(cached_releases_fts, rowid, title)
                             VALUES('delete', old.id, old.title);
                         END;
-                        """
-                    )
-                )
+                        """))
 
-                conn.execute(
-                    text(
-                        """
+                conn.execute(text("""
                         CREATE TRIGGER cached_releases_fts_update AFTER UPDATE ON cached_releases BEGIN
                             INSERT INTO cached_releases_fts(cached_releases_fts, rowid, title)
                             VALUES('delete', old.id, old.title);
                             INSERT INTO cached_releases_fts(rowid, title) VALUES (new.id, new.title);
                         END;
-                        """
-                    )
-                )
+                        """))
 
                 conn.commit()
                 logger.info("Created FTS5 virtual table for full-text search")
@@ -220,30 +204,18 @@ class ProviderCacheService:
             # Create compound indexes for common filter combinations (if they don't exist)
             # These dramatically speed up filtered searches
             try:
-                conn.execute(
-                    text(
-                        """
+                conn.execute(text("""
                         CREATE INDEX IF NOT EXISTS idx_category_language_date
                         ON cached_releases(category, language, upload_date DESC)
-                        """
-                    )
-                )
-                conn.execute(
-                    text(
-                        """
+                        """))
+                conn.execute(text("""
                         CREATE INDEX IF NOT EXISTS idx_fuzzy_group_date
                         ON cached_releases(fuzzy_match_group, upload_date DESC)
-                        """
-                    )
-                )
-                conn.execute(
-                    text(
-                        """
+                        """))
+                conn.execute(text("""
                         CREATE INDEX IF NOT EXISTS idx_normalized_title_date
                         ON cached_releases(normalized_title, upload_date DESC)
-                        """
-                    )
-                )
+                        """))
                 conn.commit()
                 logger.info("Created compound indexes for optimized filtering")
             except Exception as e:
@@ -280,8 +252,7 @@ class ProviderCacheService:
             if deduplicate:
                 # Use SQL window function for efficient deduplication at database level
                 # This selects the best (most recent) release per fuzzy_match_group
-                subquery = text(
-                    """
+                subquery = text("""
                     SELECT cr.*,
                            ROW_NUMBER() OVER (
                                PARTITION BY cr.fuzzy_match_group
@@ -290,8 +261,7 @@ class ProviderCacheService:
                     FROM cached_releases cr
                     INNER JOIN cached_releases_fts fts ON cr.id = fts.rowid
                     WHERE cached_releases_fts MATCH :fts_query
-                    """
-                )
+                    """)
 
                 params = {"fts_query": fts_query}
 
@@ -305,14 +275,12 @@ class ProviderCacheService:
                     params["language"] = language
 
                 # Wrap in outer query to filter by row number and apply pagination
-                final_query = text(
-                    f"""
+                final_query = text(f"""
                     SELECT * FROM ({subquery})
                     WHERE rn = 1
                     ORDER BY upload_date DESC, last_seen DESC
                     LIMIT :limit OFFSET :offset
-                    """
-                )
+                    """)
                 params["limit"] = limit
                 params["offset"] = offset
 
@@ -386,24 +354,20 @@ class ProviderCacheService:
         try:
             if deduplicate:
                 # Count distinct fuzzy_match_groups
-                sql_query = text(
-                    """
+                sql_query = text("""
                     SELECT COUNT(DISTINCT cr.fuzzy_match_group)
                     FROM cached_releases cr
                     INNER JOIN cached_releases_fts fts ON cr.id = fts.rowid
                     WHERE cached_releases_fts MATCH :fts_query
-                    """
-                )
+                    """)
             else:
                 # Count all matching releases
-                sql_query = text(
-                    """
+                sql_query = text("""
                     SELECT COUNT(*)
                     FROM cached_releases cr
                     INNER JOIN cached_releases_fts fts ON cr.id = fts.rowid
                     WHERE cached_releases_fts MATCH :fts_query
-                    """
-                )
+                    """)
 
             params = {"fts_query": fts_query}
 
@@ -598,44 +562,6 @@ class ProviderCacheService:
             fuzzy_match_group=release_data.get("fuzzy_match_group"),
             raw_metadata=release_data.get("raw_metadata", {}),
         )
-
-    async def _create_release_from_dict(self, release_data: Dict[str, Any]) -> CachedRelease:
-        """
-        Create CachedRelease model from dictionary.
-
-        Args:
-            release_data: Release data from provider
-
-        Returns:
-            CachedRelease model instance
-        """
-        # Normalize title for better matching
-        title = release_data.get("title", "")
-        title_matcher = TitleMatcher()
-        normalized_title = title_matcher.clean_release_title(title).lower()
-
-        # Get download URL and resolve any redirects (e.g., Prowlarr proxy URLs)
-        download_url = release_data.get("download_url", release_data.get("url", ""))
-        resolved_url, was_redirected = await self.resolve_redirect_url(download_url)
-
-        release = CachedRelease(  # pylint: disable=inconsistent-return-statements
-            guid=release_data.get("guid"),
-            title=title,
-            normalized_title=normalized_title,
-            provider_name=release_data.get("provider_name"),
-            provider_type=release_data.get("provider_type"),
-            download_url=resolved_url,  # Store resolved URL, not proxy
-            size_bytes=release_data.get("size_bytes"),
-            publication_date=release_data.get("publication_date"),
-            upload_date=release_data.get("upload_date"),
-            category=release_data.get("category"),
-            language=release_data.get("language"),
-            country=release_data.get("country"),
-            fuzzy_match_group=release_data.get("fuzzy_match_group"),
-            raw_metadata=release_data.get("raw_metadata", {}),
-        )
-
-        return (release, was_redirected)
 
     def cleanup_stale_releases(self, days: int = CACHE_RETENTION_DAYS) -> Dict[str, int]:
         """
