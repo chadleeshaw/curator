@@ -124,6 +124,12 @@ jobs:
           build-args: |
             BUILDKIT_INLINE_CACHE=1
 
+      - name: Trigger Portainer Webhook
+        if: github.ref == 'refs/heads/main'
+        run: |
+          curl -X POST ${{ secrets.PORTAINER_WEBHOOK_URL }}
+        continue-on-error: true
+
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
