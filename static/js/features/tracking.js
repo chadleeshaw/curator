@@ -1453,6 +1453,35 @@ export class TrackingManager {
         const isLibraryItem = status === 'in_library';
         const hasFailed = status === 'failed';
 
+        // Calculate age of newest NZB for availability indication
+        let newestAge = '';
+        let ageColorClass = '';
+        if (!isLibraryItem && issue.variants && issue.variants.length > 0) {
+          // Find the newest publication_date among variants
+          const variantsWithDates = issue.variants.filter((v) => v.publication_date);
+          if (variantsWithDates.length > 0) {
+            const newestVariant = variantsWithDates.reduce((newest, v) => {
+              const vDate = new Date(v.publication_date);
+              const nDate = new Date(newest.publication_date);
+              return vDate > nDate ? v : newest;
+            });
+            newestAge = formatRelativeAge(newestVariant.publication_date);
+
+            // Color code by age: green < 7 days, yellow 7-30 days, orange 30-90 days, red > 90 days
+            const ageDate = new Date(newestVariant.publication_date);
+            const ageDays = Math.floor((new Date() - ageDate) / (1000 * 60 * 60 * 24));
+            if (ageDays <= 7) {
+              ageColorClass = 'age-fresh'; // Green - excellent retention
+            } else if (ageDays <= 30) {
+              ageColorClass = 'age-good'; // Yellow-green - good retention
+            } else if (ageDays <= 90) {
+              ageColorClass = 'age-moderate'; // Orange - moderate retention
+            } else {
+              ageColorClass = 'age-old'; // Red - may have retention issues
+            }
+          }
+        }
+
         // Status-based styling with color-coded left borders
         let backgroundColor, borderColor, opacity, textColor, statusIcon, statusText;
 
@@ -1489,6 +1518,12 @@ export class TrackingManager {
           ? `<div style="font-size: 10px; margin-top: 6px; color: var(--primary-color); font-weight: 600;">🌍 ${issue.variants.length} variants</div>`
           : issue.language
             ? `<div style="font-size: 10px; margin-top: 6px; color: var(--text-secondary);">${issue.language}</div>`
+            : '';
+
+        // Age badge for available/failed issues (not library items)
+        const ageBadge =
+          newestAge && !isLibraryItem
+            ? `<div class="issue-age-badge ${ageColorClass}" title="NZB posted ${newestAge} ago - newer is better for Usenet retention">⏱️ ${newestAge}</div>`
             : '';
 
         let cardHtml = `<div style="
@@ -1534,6 +1569,7 @@ export class TrackingManager {
             background: rgba(255,255,255,0.7);
           ">${statusIcon} ${statusText}</div>
           <div style="font-weight: 600; font-size: 14px;">${displayLabel}</div>
+          ${ageBadge}
           ${providerDisplay}
           ${variantsBadge}
         </div>`;

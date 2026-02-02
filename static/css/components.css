@@ -1668,6 +1668,43 @@
   color: var(--primary-color);
 }
 
+/* ==========================================================================
+   Issue Age Badges (NZB Retention Indicator)
+   ========================================================================== */
+
+.issue-age-badge {
+  font-size: 10px;
+  font-weight: 600;
+  margin-top: 4px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  display: inline-block;
+}
+
+/* Fresh: < 7 days - excellent retention */
+.age-fresh {
+  background: rgba(40, 167, 69, 0.2);
+  color: #155724;
+}
+
+/* Good: 7-30 days - good retention */
+.age-good {
+  background: rgba(156, 204, 101, 0.3);
+  color: #3d6b1f;
+}
+
+/* Moderate: 30-90 days - may have some missing articles */
+.age-moderate {
+  background: rgba(255, 193, 7, 0.3);
+  color: #856404;
+}
+
+/* Old: > 90 days - higher risk of incomplete download */
+.age-old {
+  background: rgba(220, 53, 69, 0.2);
+  color: #721c24;
+}
+
 .variant-title {
   font-size: 11px;
   margin-top: 6px;
