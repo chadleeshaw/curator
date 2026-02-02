@@ -167,36 +167,52 @@ class ProviderCacheService:
             )
             if not result.fetchone():
                 # Create FTS5 virtual table
-                conn.execute(text(f"""
+                conn.execute(
+                    text(
+                        f"""
                         CREATE VIRTUAL TABLE cached_releases_fts USING fts5(
                             title,
                             content='cached_releases',
                             content_rowid='id',
                             tokenize='{FTS5_TOKENIZER}'
                         )
-                        """))
+                        """
+                    )
+                )
 
                 # Create triggers to keep FTS5 in sync
-                conn.execute(text("""
+                conn.execute(
+                    text(
+                        """
                         CREATE TRIGGER cached_releases_fts_insert AFTER INSERT ON cached_releases BEGIN
                             INSERT INTO cached_releases_fts(rowid, title) VALUES (new.id, new.title);
                         END;
-                        """))
+                        """
+                    )
+                )
 
-                conn.execute(text("""
+                conn.execute(
+                    text(
+                        """
                         CREATE TRIGGER cached_releases_fts_delete AFTER DELETE ON cached_releases BEGIN
                             INSERT INTO cached_releases_fts(cached_releases_fts, rowid, title)
                             VALUES('delete', old.id, old.title);
                         END;
-                        """))
+                        """
+                    )
+                )
 
-                conn.execute(text("""
+                conn.execute(
+                    text(
+                        """
                         CREATE TRIGGER cached_releases_fts_update AFTER UPDATE ON cached_releases BEGIN
                             INSERT INTO cached_releases_fts(cached_releases_fts, rowid, title)
                             VALUES('delete', old.id, old.title);
                             INSERT INTO cached_releases_fts(rowid, title) VALUES (new.id, new.title);
                         END;
-                        """))
+                        """
+                    )
+                )
 
                 conn.commit()
                 logger.info("Created FTS5 virtual table for full-text search")
@@ -204,18 +220,30 @@ class ProviderCacheService:
             # Create compound indexes for common filter combinations (if they don't exist)
             # These dramatically speed up filtered searches
             try:
-                conn.execute(text("""
+                conn.execute(
+                    text(
+                        """
                         CREATE INDEX IF NOT EXISTS idx_category_language_date
                         ON cached_releases(category, language, upload_date DESC)
-                        """))
-                conn.execute(text("""
+                        """
+                    )
+                )
+                conn.execute(
+                    text(
+                        """
                         CREATE INDEX IF NOT EXISTS idx_fuzzy_group_date
                         ON cached_releases(fuzzy_match_group, upload_date DESC)
-                        """))
-                conn.execute(text("""
+                        """
+                    )
+                )
+                conn.execute(
+                    text(
+                        """
                         CREATE INDEX IF NOT EXISTS idx_normalized_title_date
                         ON cached_releases(normalized_title, upload_date DESC)
-                        """))
+                        """
+                    )
+                )
                 conn.commit()
                 logger.info("Created compound indexes for optimized filtering")
             except Exception as e:
@@ -252,7 +280,8 @@ class ProviderCacheService:
             if deduplicate:
                 # Use SQL window function for efficient deduplication at database level
                 # This selects the best (most recent) release per fuzzy_match_group
-                subquery = text("""
+                subquery = text(
+                    """
                     SELECT cr.*,
                            ROW_NUMBER() OVER (
                                PARTITION BY cr.fuzzy_match_group
@@ -261,7 +290,8 @@ class ProviderCacheService:
                     FROM cached_releases cr
                     INNER JOIN cached_releases_fts fts ON cr.id = fts.rowid
                     WHERE cached_releases_fts MATCH :fts_query
-                    """)
+                    """
+                )
 
                 params = {"fts_query": fts_query}
 
@@ -275,12 +305,14 @@ class ProviderCacheService:
                     params["language"] = language
 
                 # Wrap in outer query to filter by row number and apply pagination
-                final_query = text(f"""
+                final_query = text(
+                    f"""
                     SELECT * FROM ({subquery})
                     WHERE rn = 1
                     ORDER BY upload_date DESC, last_seen DESC
                     LIMIT :limit OFFSET :offset
-                    """)
+                    """
+                )
                 params["limit"] = limit
                 params["offset"] = offset
 
@@ -354,20 +386,24 @@ class ProviderCacheService:
         try:
             if deduplicate:
                 # Count distinct fuzzy_match_groups
-                sql_query = text("""
+                sql_query = text(
+                    """
                     SELECT COUNT(DISTINCT cr.fuzzy_match_group)
                     FROM cached_releases cr
                     INNER JOIN cached_releases_fts fts ON cr.id = fts.rowid
                     WHERE cached_releases_fts MATCH :fts_query
-                    """)
+                    """
+                )
             else:
                 # Count all matching releases
-                sql_query = text("""
+                sql_query = text(
+                    """
                     SELECT COUNT(*)
                     FROM cached_releases cr
                     INNER JOIN cached_releases_fts fts ON cr.id = fts.rowid
                     WHERE cached_releases_fts MATCH :fts_query
-                    """)
+                    """
+                )
 
             params = {"fts_query": fts_query}
 
