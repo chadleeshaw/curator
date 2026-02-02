@@ -1327,6 +1327,16 @@ export class TrackingManager {
       return { year, issue: issue || 0, month: month || 0, season: season || null };
     }
 
+    // Fallback: Handle "Set", "Collection", "Pack", "Vol", or "Part" releases without year
+    if (!year) {
+      const setMatch = title.match(/(?:Set|Collection|Pack|Vol|Volume|Part)[\s._-]*(\d+)/i);
+      if (setMatch) {
+        const setNumber = parseInt(setMatch[1]);
+        // Use set number as issue, group under "Collections" year (0)
+        return { year: 0, issue: setNumber, month: 0, season: null, isCollection: true };
+      }
+    }
+
     return null;
   }
 
@@ -1403,16 +1413,22 @@ export class TrackingManager {
 
     years.forEach((year) => {
       const issues = groupedByYear[year];
+      // Display "Collections" for year 0, otherwise show the year
+      const yearLabel = year === '0' ? '📦 Collections' : `📅 ${year}`;
       html += `<div style="margin-bottom: 20px;">
-        <h4 style="color: var(--primary-color); margin-bottom: 10px;">📅 ${year}</h4>
+        <h4 style="color: var(--primary-color); margin-bottom: 10px;">${yearLabel}</h4>
         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px;">`;
 
       issues.forEach((issue) => {
         // Create display label based on available information
         let displayLabel;
 
+        // Priority 0: Collection/Set (if isCollection flag is set)
+        if (issue.isCollection && issue.issue > 0) {
+          displayLabel = `Set #${issue.issue}`;
+        }
         // Priority 1: Season (if present)
-        if (issue.season) {
+        else if (issue.season) {
           displayLabel = issue.season;
         }
         // Priority 2: Month and Issue
