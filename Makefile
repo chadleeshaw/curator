@@ -1,4 +1,4 @@
-.PHONY: help lint format lint-python lint-js lint-css format-python format-js format-css test test-unit test-integration test-e2e test-routers test-coverage test-quick install install-hooks run clean ci-lint
+.PHONY: help lint format lint-python lint-js lint-css format-python format-js format-css test test-unit test-integration test-e2e test-routers test-coverage test-quick test-perf test-perf-api test-perf-load install install-hooks run clean ci-lint
 
 PYTHON_FILES := $(shell find . -name '*.py' -not -path './.venv/*' -not -path './node_modules/*' -not -path './.node_modules/*')
 JS_FILES := static/js/*.js
@@ -35,6 +35,11 @@ help:
 	@echo "  make test-routers     Run router/API tests only"
 	@echo "  make test-coverage    Run tests with coverage report"
 	@echo "  make test-quick       Quick syntax check of test files"
+	@echo ""
+	@echo "Performance Testing:"
+	@echo "  make test-perf        Run all performance tests"
+	@echo "  make test-perf-api    Benchmark API endpoints"
+	@echo "  make test-perf-load   Run Locust load tests"
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  make clean            Remove cache, build, and temp files"
@@ -142,6 +147,29 @@ test-coverage:
 test-quick:
 	@echo "🧪 Quick test (syntax check only)..."
 	@find tests/ -name "test_*.py" -exec .venv/bin/python -m py_compile {} + && echo "✅ All test files compile"
+
+# Performance testing
+test-perf: test-perf-api
+	@echo "✅ Performance testing complete!"
+
+test-perf-api:
+	@echo "🚀 Running API performance benchmarks..."
+	@.venv/bin/python -m pytest tests/performance/test_api_benchmarks.py --benchmark-only -v \
+		--benchmark-columns=min,max,mean,stddev,ops \
+		--benchmark-sort=mean
+	@echo "✅ API benchmarks completed!"
+
+test-perf-load:
+	@echo "🔥 Running Locust load tests..."
+	@echo "⚠️  Make sure the app is running on http://localhost:8000"
+	@echo "Starting 20 concurrent users, 2/sec spawn rate, 60 second duration..."
+	@locust -f tests/performance/locustfile.py --headless -u 20 -r 2 -t 60s --host http://localhost:8000
+	@echo "✅ Load tests completed!"
+
+test-perf-load-ui:
+	@echo "🔥 Starting Locust web UI..."
+	@echo "Open http://localhost:8089 in your browser"
+	@locust -f tests/performance/locustfile.py --host http://localhost:8000
 
 # Cleanup
 clean:
