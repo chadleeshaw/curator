@@ -1,14 +1,19 @@
 """
 Internet Archive download client implementation.
 Handles direct downloads from archive.org without external download managers.
+Supports both individual files (PDF, EPUB) and collection archives (ZIP, TAR.GZ).
 """
 
+import gzip
 import hashlib
 import logging
 import os
+import shutil
+import tarfile
 import threading
 import time
 import uuid
+import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -18,6 +23,8 @@ from internetarchive import get_item
 
 from core.constants.internet_archive import (
     IA_PREFERRED_FORMATS,
+    IA_COLLECTION_FORMATS,
+    IA_EXTRACTABLE_EXTENSIONS,
     IA_DOWNLOAD_TIMEOUT,
     IA_DOWNLOAD_CHUNK_SIZE,
     IA_DOWNLOAD_RETRY_ATTEMPTS,
@@ -37,14 +44,15 @@ logger = logging.getLogger(__name__)
 class DownloadJob:
     """Represents a single download job"""
 
-    def __init__(self, job_id: str, identifier: str, title: str, dest_path: str):
+    def __init__(self, job_id: str, identifier: str, title: str, dest_path: str, prefer_collection: bool = False):
         self.job_id = job_id
         self.identifier = identifier
         self.title = title
         self.dest_path = dest_path
+        self.prefer_collection = prefer_collection  # Prefer ZIP/TAR collection formats
         self.status = IA_STATUS_PENDING
         self.progress = 0
-        self.file_path: Optional[str] = None
+        self.file_path: Optional[str] = None  # Single file or comma-separated list for collections
         self.error: Optional[str] = None
         self.expected_size = 0
         self.downloaded_size = 0
@@ -52,6 +60,7 @@ class DownloadJob:
         self.created_at = time.time()
         self.started_at: Optional[float] = None
         self.completed_at: Optional[float] = None
+        self.extracted_count: int = 0  # Number of files extracted from collection
 
 
 class InternetArchiveClient(DownloadClient):
@@ -88,12 +97,15 @@ class InternetArchiveClient(DownloadClient):
         unique_str = f"{identifier}-{time.time()}-{uuid.uuid4().hex[:8]}"
         return hashlib.md5(unique_str.encode()).hexdigest()[:16]
 
-    def _get_best_file(self, item_metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _get_best_file(
+        self, item_metadata: Dict[str, Any], prefer_collection: bool = False
+    ) -> Optional[Dict[str, Any]]:
         """
         Find the best downloadable file from item metadata.
 
         Args:
             item_metadata: Item metadata from IA API
+            prefer_collection: If True, prefer collection archive formats (ZIP, etc.)
 
         Returns:
             Dict with file info or None
@@ -118,8 +130,15 @@ class InternetArchiveClient(DownloadClient):
                         "name": name,
                         "format": fmt,
                         "size": size,
+                        "is_collection": fmt in IA_COLLECTION_FORMATS,
                     }
                 )
+
+        # If preferring collection, try collection formats first
+        if prefer_collection:
+            for collection_fmt in IA_COLLECTION_FORMATS:
+                if collection_fmt in format_files:
+                    return format_files[collection_fmt][0]
 
         # Find best format in order of preference
         for preferred_fmt in self.preferred_formats:
@@ -131,11 +150,159 @@ class InternetArchiveClient(DownloadClient):
             if "pdf" in fmt.lower():
                 return files_list[0]
 
+        # Last resort: try collection formats
+        for collection_fmt in IA_COLLECTION_FORMATS:
+            if collection_fmt in format_files:
+                return format_files[collection_fmt][0]
+
         return None
+
+    def _is_extractable(self, file_path: Path) -> bool:
+        """
+        Check if a file is an extractable archive.
+
+        Args:
+            file_path: Path to the downloaded file
+
+        Returns:
+            True if the file can be extracted
+        """
+        suffix = file_path.suffix.lower()
+        # Handle double extensions like .tar.gz
+        if file_path.stem.lower().endswith(".tar"):
+            suffix = ".tar.gz"
+        return suffix in IA_EXTRACTABLE_EXTENSIONS
+
+    def _extract_archive(self, archive_path: Path, dest_dir: Path) -> List[Path]:
+        """
+        Extract an archive file to the destination directory.
+
+        Args:
+            archive_path: Path to the archive file
+            dest_dir: Directory to extract files to
+
+        Returns:
+            List of extracted file paths
+        """
+        extracted_files = []
+        suffix = archive_path.suffix.lower()
+
+        # Handle double extensions like .tar.gz
+        if archive_path.stem.lower().endswith(".tar"):
+            suffix = ".tar.gz"
+
+        try:
+            if suffix == ".zip":
+                extracted_files = self._extract_zip(archive_path, dest_dir)
+            elif suffix in (".tar.gz", ".tgz"):
+                extracted_files = self._extract_tar_gz(archive_path, dest_dir)
+            elif suffix == ".tar":
+                extracted_files = self._extract_tar(archive_path, dest_dir)
+            elif suffix == ".gz":
+                extracted_files = self._extract_gzip(archive_path, dest_dir)
+            else:
+                logger.warning(f"[{self.name}] Unknown archive format: {suffix}")
+                return [archive_path]  # Return original if can't extract
+
+            logger.info(f"[{self.name}] Extracted {len(extracted_files)} files from {archive_path.name}")
+
+            # Remove the archive file after successful extraction
+            if extracted_files:
+                archive_path.unlink()
+                logger.debug(f"[{self.name}] Removed archive file: {archive_path}")
+
+            return extracted_files
+
+        except Exception as e:
+            logger.error(f"[{self.name}] Failed to extract {archive_path}: {e}")
+            return [archive_path]  # Return original on failure
+
+    def _extract_zip(self, archive_path: Path, dest_dir: Path) -> List[Path]:
+        """Extract a ZIP archive."""
+        extracted = []
+        with zipfile.ZipFile(archive_path, "r") as zf:
+            for member in zf.namelist():
+                # Skip directories and hidden files
+                if member.endswith("/") or member.startswith("__") or member.startswith("."):
+                    continue
+                # Extract only supported file types
+                member_ext = Path(member).suffix.lower()
+                if member_ext in (".pdf", ".epub", ".mobi", ".djvu", ".cbz", ".cbr"):
+                    # Extract to flat directory (no subdirs)
+                    member_name = Path(member).name
+                    dest_path = dest_dir / member_name
+                    # Handle duplicates
+                    counter = 1
+                    while dest_path.exists():
+                        stem = Path(member).stem
+                        dest_path = dest_dir / f"{stem}_{counter}{member_ext}"
+                        counter += 1
+                    with zf.open(member) as src, open(dest_path, "wb") as dst:
+                        shutil.copyfileobj(src, dst)
+                    extracted.append(dest_path)
+        return extracted
+
+    def _extract_tar_gz(self, archive_path: Path, dest_dir: Path) -> List[Path]:
+        """Extract a TAR.GZ archive."""
+        extracted = []
+        with tarfile.open(archive_path, "r:gz") as tf:
+            for member in tf.getmembers():
+                if not member.isfile():
+                    continue
+                member_name = Path(member.name).name
+                if member_name.startswith(".") or member_name.startswith("__"):
+                    continue
+                member_ext = Path(member_name).suffix.lower()
+                if member_ext in (".pdf", ".epub", ".mobi", ".djvu", ".cbz", ".cbr"):
+                    dest_path = dest_dir / member_name
+                    counter = 1
+                    while dest_path.exists():
+                        stem = Path(member_name).stem
+                        dest_path = dest_dir / f"{stem}_{counter}{member_ext}"
+                        counter += 1
+                    with tf.extractfile(member) as src, open(dest_path, "wb") as dst:
+                        shutil.copyfileobj(src, dst)
+                    extracted.append(dest_path)
+        return extracted
+
+    def _extract_tar(self, archive_path: Path, dest_dir: Path) -> List[Path]:
+        """Extract a TAR archive."""
+        extracted = []
+        with tarfile.open(archive_path, "r") as tf:
+            for member in tf.getmembers():
+                if not member.isfile():
+                    continue
+                member_name = Path(member.name).name
+                if member_name.startswith(".") or member_name.startswith("__"):
+                    continue
+                member_ext = Path(member_name).suffix.lower()
+                if member_ext in (".pdf", ".epub", ".mobi", ".djvu", ".cbz", ".cbr"):
+                    dest_path = dest_dir / member_name
+                    counter = 1
+                    while dest_path.exists():
+                        stem = Path(member_name).stem
+                        dest_path = dest_dir / f"{stem}_{counter}{member_ext}"
+                        counter += 1
+                    with tf.extractfile(member) as src, open(dest_path, "wb") as dst:
+                        shutil.copyfileobj(src, dst)
+                    extracted.append(dest_path)
+        return extracted
+
+    def _extract_gzip(self, archive_path: Path, dest_dir: Path) -> List[Path]:
+        """Extract a GZIP file (single file compression)."""
+        # GZIP typically wraps a single file, remove .gz extension
+        out_name = archive_path.stem
+        if not Path(out_name).suffix:
+            out_name = out_name + ".pdf"  # Default to PDF if no extension
+        dest_path = dest_dir / out_name
+        with gzip.open(archive_path, "rb") as src, open(dest_path, "wb") as dst:
+            shutil.copyfileobj(src, dst)
+        return [dest_path]
 
     def _download_file(self, job: DownloadJob):
         """
         Execute the actual file download in a background thread.
+        Handles both single files and collection archives (ZIP, TAR.GZ).
 
         Args:
             job: DownloadJob instance to process
@@ -150,7 +317,11 @@ class InternetArchiveClient(DownloadClient):
             item = get_item(job.identifier)
             metadata = item.item_metadata
 
-            best_file = self._get_best_file(metadata)
+            # Check if this item should prefer collection format
+            # (based on title keywords like "full collection")
+            prefer_collection = job.prefer_collection if hasattr(job, "prefer_collection") else False
+
+            best_file = self._get_best_file(metadata, prefer_collection=prefer_collection)
             if not best_file:
                 job.status = IA_STATUS_FAILED
                 job.error = f"No suitable file format found for {job.identifier}"
@@ -158,6 +329,7 @@ class InternetArchiveClient(DownloadClient):
                 return
 
             file_name = best_file["name"]
+            is_collection = best_file.get("is_collection", False)
             job.expected_size = best_file.get("size", 0)
             job.download_url = f"{IA_DOWNLOAD_BASE_URL}/{job.identifier}/{file_name}"
 
@@ -172,7 +344,10 @@ class InternetArchiveClient(DownloadClient):
                 dest_file = self.downloads_dir / f"{safe_title}_{counter}{ext}"
                 counter += 1
 
-            logger.info(f"[{self.name}] Downloading {job.download_url} -> {dest_file}")
+            logger.info(
+                f"[{self.name}] Downloading {job.download_url} -> {dest_file}"
+                f"{' (collection archive)' if is_collection else ''}"
+            )
 
             # Download with retry logic
             for attempt in range(IA_DOWNLOAD_RETRY_ATTEMPTS):
@@ -203,14 +378,30 @@ class InternetArchiveClient(DownloadClient):
 
                     # Verify download
                     if dest_file.exists() and dest_file.stat().st_size > 0:
-                        job.status = IA_STATUS_COMPLETED
-                        job.file_path = str(dest_file)
-                        job.progress = 100
-                        job.completed_at = time.time()
                         logger.info(
                             f"[{self.name}] Download completed: {job.identifier} -> {dest_file} "
                             f"({job.downloaded_size / 1024 / 1024:.1f} MB)"
                         )
+
+                        # Check if this is an archive that needs extraction
+                        if self._is_extractable(dest_file):
+                            logger.info(f"[{self.name}] Extracting archive: {dest_file}")
+                            extracted_files = self._extract_archive(dest_file, self.downloads_dir)
+
+                            if extracted_files:
+                                # Store list of extracted files (comma-separated for compatibility)
+                                job.file_path = ",".join(str(f) for f in extracted_files)
+                                job.extracted_count = len(extracted_files)
+                                logger.info(f"[{self.name}] Extracted {len(extracted_files)} files from collection")
+                            else:
+                                # Extraction failed, keep original archive
+                                job.file_path = str(dest_file)
+                        else:
+                            job.file_path = str(dest_file)
+
+                        job.status = IA_STATUS_COMPLETED
+                        job.progress = 100
+                        job.completed_at = time.time()
                         return
                     else:
                         raise Exception("Downloaded file is empty or missing")
@@ -308,6 +499,7 @@ class InternetArchiveClient(DownloadClient):
     def get_completed_downloads(self) -> List[Dict[str, Any]]:
         """
         Get list of completed downloads not yet processed.
+        For collection archives, returns individual entries for each extracted file.
 
         Returns:
             List of completed download info
@@ -317,13 +509,30 @@ class InternetArchiveClient(DownloadClient):
         with self._jobs_lock:
             for job_id, job in self._jobs.items():
                 if job.status == IA_STATUS_COMPLETED and job.file_path:
-                    completed.append(
-                        {
-                            "job_id": job_id,
-                            "file_path": job.file_path,
-                            "title": job.title,
-                        }
-                    )
+                    # Check if this was a collection with multiple extracted files
+                    if job.extracted_count > 0 and "," in job.file_path:
+                        # Return each extracted file as a separate completed download
+                        file_paths = job.file_path.split(",")
+                        for i, file_path in enumerate(file_paths):
+                            completed.append(
+                                {
+                                    "job_id": f"{job_id}_{i}",
+                                    "file_path": file_path.strip(),
+                                    "title": job.title,
+                                    "is_collection_item": True,
+                                    "collection_job_id": job_id,
+                                }
+                            )
+                    else:
+                        # Single file download
+                        completed.append(
+                            {
+                                "job_id": job_id,
+                                "file_path": job.file_path,
+                                "title": job.title,
+                                "is_collection_item": False,
+                            }
+                        )
 
         return completed
 

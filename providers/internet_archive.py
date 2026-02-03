@@ -16,6 +16,8 @@ from core.constants.internet_archive import (
     IA_DEFAULT_SORT,
     IA_PERIODICAL_COLLECTIONS,
     IA_PREFERRED_FORMATS,
+    IA_COLLECTION_FORMATS,
+    IA_COLLECTION_KEYWORDS,
     IA_DEFAULT_REQUEST_DELAY,
     IA_DEFAULT_MAX_REQUESTS_PER_MINUTE,
     IA_SEARCH_TIMEOUT,
@@ -129,53 +131,124 @@ class InternetArchiveProvider(SearchProvider):
 
         # Try various date formats used by IA
         formats = [
-            "%Y-%m-%d",
             "%Y-%m-%dT%H:%M:%SZ",
             "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%d",
             "%Y%m%d",
             "%Y",
         ]
 
         for fmt in formats:
             try:
-                return datetime.strptime(date_str[: len(fmt.replace("%", ""))], fmt)
+                return datetime.strptime(date_str, fmt)
             except (ValueError, TypeError):
                 continue
 
+        # Try year-only as fallback if string starts with 4 digits
+        if len(date_str) >= 4 and date_str[:4].isdigit():
+            try:
+                return datetime.strptime(date_str[:4], "%Y")
+            except (ValueError, TypeError):
+                pass
+
         return None
 
-    def _get_best_file_format(self, item_metadata: Dict[str, Any]) -> Optional[Dict[str, str]]:
+    def _is_collection_title(self, title: str) -> bool:
         """
-        Find the best downloadable file from item metadata.
+        Check if the title indicates this is a collection archive.
+
+        Args:
+            title: Item title
+
+        Returns:
+            True if title suggests this is a collection
+        """
+        if not title:
+            return False
+        title_lower = title.lower()
+        return any(keyword in title_lower for keyword in IA_COLLECTION_KEYWORDS)
+
+    def _get_available_formats(self, item_metadata: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Build a dictionary of available files grouped by format.
 
         Args:
             item_metadata: Item metadata from IA API
 
         Returns:
-            Dict with 'name' and 'format' of best file, or None
+            Dict mapping format name to list of file info dicts
         """
         files = item_metadata.get("files", [])
-        if not files:
-            return None
-
-        # Build list of available files by format
         format_files = {}
         for f in files:
             fmt = f.get("format", "")
             name = f.get("name", "")
             if fmt and name:
-                format_files.setdefault(fmt, []).append({"name": name, "format": fmt, "size": f.get("size", 0)})
+                size_str = f.get("size", "0")
+                try:
+                    size = int(size_str) if size_str else 0
+                except (ValueError, TypeError):
+                    size = 0
+                format_files.setdefault(fmt, []).append({"name": name, "format": fmt, "size": size})
+        return format_files
 
-        # Find best format in order of preference
+    def _has_collection_format(self, format_files: Dict[str, List[Dict[str, Any]]]) -> bool:
+        """
+        Check if the item has collection archive formats (ZIP, TAR, etc.)
+
+        Args:
+            format_files: Dict of available formats from _get_available_formats
+
+        Returns:
+            True if collection formats are available
+        """
+        return any(fmt in format_files for fmt in IA_COLLECTION_FORMATS)
+
+    def _get_best_file_format(
+        self, item_metadata: Dict[str, Any], prefer_collection: bool = False
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Find the best downloadable file from item metadata.
+
+        Args:
+            item_metadata: Item metadata from IA API
+            prefer_collection: If True, prefer collection archive formats (ZIP, etc.)
+
+        Returns:
+            Dict with 'name', 'format', 'size', and 'is_collection' of best file, or None
+        """
+        format_files = self._get_available_formats(item_metadata)
+        if not format_files:
+            return None
+
+        # If preferring collection, try collection formats first
+        if prefer_collection:
+            for collection_fmt in IA_COLLECTION_FORMATS:
+                if collection_fmt in format_files:
+                    file_info = format_files[collection_fmt][0]
+                    file_info["is_collection"] = True
+                    return file_info
+
+        # Find best format in order of preference (individual files)
         for preferred_fmt in self.preferred_formats:
             if preferred_fmt in format_files:
-                # Return the first (usually only) file of this format
-                return format_files[preferred_fmt][0]
+                file_info = format_files[preferred_fmt][0]
+                file_info["is_collection"] = False
+                return file_info
 
         # Fallback: return any PDF-like format
         for fmt, files_list in format_files.items():
             if "pdf" in fmt.lower():
-                return files_list[0]
+                file_info = files_list[0].copy()
+                file_info["is_collection"] = False
+                return file_info
+
+        # Last resort: try collection formats even if not preferred
+        for collection_fmt in IA_COLLECTION_FORMATS:
+            if collection_fmt in format_files:
+                file_info = format_files[collection_fmt][0]
+                file_info["is_collection"] = True
+                return file_info
 
         return None
 
@@ -230,6 +303,9 @@ class InternetArchiveProvider(SearchProvider):
                         date_str = date_str[0] if date_str else None
                     publication_date = self._parse_date(date_str)
 
+                    # Detect if this is a collection based on title
+                    is_collection = self._is_collection_title(title)
+
                     # Build metadata
                     raw_metadata = {
                         "identifier": identifier,
@@ -237,6 +313,7 @@ class InternetArchiveProvider(SearchProvider):
                         "description": item.get("description", ""),
                         "collection": item.get("collection", []),
                         "mediatype": item.get("mediatype", ""),
+                        "is_collection": is_collection,
                     }
 
                     # The URL is the item identifier - the client will resolve the actual file

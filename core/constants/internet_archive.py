@@ -22,6 +22,31 @@ IA_PERIODICAL_COLLECTIONS = [
 # Preferred file formats for download (in order of preference)
 IA_PREFERRED_FORMATS = ["PDF", "EPUB", "MOBI", "DJVU"]
 
+# Collection/archive formats (contain multiple files)
+IA_COLLECTION_FORMATS = ["ZIP", "TAR", "GZIP", "RAR"]
+
+# Formats that need extraction after download
+IA_EXTRACTABLE_EXTENSIONS = {
+    ".zip": "zip",
+    ".gz": "gzip",
+    ".tar": "tar",
+    ".tar.gz": "tar.gz",
+    ".tgz": "tar.gz",
+    ".rar": "rar",
+}
+
+# Keywords that indicate a collection archive (case-insensitive)
+IA_COLLECTION_KEYWORDS = [
+    "full collection",
+    "complete collection",
+    "complete run",
+    "full run",
+    "entire collection",
+    "all issues",
+    "complete set",
+    "full archive",
+]
+
 # File format extensions mapping
 IA_FORMAT_EXTENSIONS = {
     "PDF": ".pdf",
@@ -30,6 +55,9 @@ IA_FORMAT_EXTENSIONS = {
     "DJVU": ".djvu",
     "Text PDF": ".pdf",
     "Image Container PDF": ".pdf",
+    "ZIP": ".zip",
+    "TAR": ".tar",
+    "GZIP": ".gz",
 }
 
 # Rate limiting
