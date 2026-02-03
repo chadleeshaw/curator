@@ -260,7 +260,7 @@ class FileImporter:
         if existing_by_hash:
             logger.info(f"File already in library: '{pdf_path.name}' (matches existing file by content hash)")
             if not skip_organize:
-                self._cleanup_download_file(pdf_path)
+                self._cleanup_download_file(pdf_path, defer_folder_deletion=True)
             return True
         return False
 
@@ -354,7 +354,7 @@ class FileImporter:
                         f"Skipping import."
                     )
                     if not skip_organize:
-                        self._cleanup_download_file(pdf_path)
+                        self._cleanup_download_file(pdf_path, defer_folder_deletion=True)
                     return True
 
         return False
@@ -734,9 +734,9 @@ class FileImporter:
             if should_queue_ocr:
                 self._queue_ocr_job(magazine, parsed.language, skip_organize, session)
 
-            # Step 12: Cleanup download file
+            # Step 12: Cleanup download file (defer folder deletion to batch processing)
             if not skip_organize:
-                self._cleanup_download_file(pdf_path)
+                self._cleanup_download_file(pdf_path, defer_folder_deletion=True)
 
             return {"periodical_id": magazine.id}
 
@@ -791,6 +791,10 @@ class FileImporter:
                 if import_result:
                     result.data["imported"] += 1
                     logger.info(f"Successfully imported {file_type}: {file_path.name}")
+                    # Track parent folder for cleanup after batch completes
+                    parent_dir = file_path.parent
+                    if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
+                        folders_to_cleanup.add(parent_dir)
                 else:
                     result.data["failed"] += 1
                     result.add_error(
