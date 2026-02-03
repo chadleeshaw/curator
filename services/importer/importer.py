@@ -727,6 +727,9 @@ class FileImporter:
             organization_pattern: Optional organization pattern
             result: OperationResult to update with counts and errors
         """
+        # Track folders to cleanup after processing all files
+        folders_to_cleanup = set()
+
         for file_path in files:
             try:
                 import_result = self.import_pdf(
@@ -746,27 +749,43 @@ class FileImporter:
                         retryable=True,
                     )
                     logger.info(f"Cleaning up failed {file_type} import: {file_path.name}")
-                    self._cleanup_download_file(file_path)
+                    self._cleanup_download_file(file_path, defer_folder_deletion=True)
+                    # Track parent folder for cleanup after batch completes
+                    parent_dir = file_path.parent
+                    if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
+                        folders_to_cleanup.add(parent_dir)
             except Exception as e:
                 result.data["failed"] += 1
                 error_msg = f"Error importing {file_type} {file_path.name}: {str(e)}"
                 result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
                 logger.error(error_msg, exc_info=True)
                 try:
-                    self._cleanup_download_file(file_path)
+                    self._cleanup_download_file(file_path, defer_folder_deletion=True)
+                    # Track parent folder for cleanup after batch completes
+                    parent_dir = file_path.parent
+                    if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
+                        folders_to_cleanup.add(parent_dir)
                 except Exception as cleanup_error:
                     logger.warning(f"Failed to cleanup {file_path.name}: {cleanup_error}")
 
-    def _cleanup_download_file(self, pdf_path: Path) -> None:
-        """
-        Clean up a file from downloads folder and its parent directory.
-        Also removes sidecar metadata file if present.
+        # Clean up folders after all files are processed
+        for folder in folders_to_cleanup:
+            try:
+                if folder.exists():
+                    shutil.rmtree(folder)
+                    logger.info(f"Deleted download folder and contents: {folder.name}")
+            except Exception as e:
+                logger.warning(f"Failed to delete folder {folder.name}: {e}")
 
-        This removes the entire download directory (e.g., the SABnzbd/NZBGet folder)
-        including any leftover files like .nzb, .par2, .nfo, etc.
+    def _cleanup_download_file(self, pdf_path: Path, defer_folder_deletion: bool = False) -> None:
+        """
+        Clean up a file from downloads folder and optionally its parent directory.
+        Also removes sidecar metadata file if present.
 
         Args:
             pdf_path: Path to PDF file in downloads folder
+            defer_folder_deletion: If True, only delete the file, not the parent folder.
+                                   Used when processing multiple files from the same folder.
         """
         try:
             # Delete sidecar metadata file if it exists
@@ -776,13 +795,14 @@ class FileImporter:
                 pdf_path.unlink()
                 logger.info(f"Deleted file from downloads: {pdf_path.name}")
 
-            # Cleanup parent directory (including any leftover files) if within downloads
-            parent_dir = pdf_path.parent
-            if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
-                if parent_dir.exists():
-                    # Remove directory and all its contents (e.g., .nzb, .par2, .nfo files)
-                    shutil.rmtree(parent_dir)
-                    logger.info(f"Deleted download folder and contents: {parent_dir.name}")
+            # Cleanup parent directory only if not deferred
+            if not defer_folder_deletion:
+                parent_dir = pdf_path.parent
+                if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
+                    if parent_dir.exists():
+                        # Remove directory and all its contents (e.g., .nzb, .par2, .nfo files)
+                        shutil.rmtree(parent_dir)
+                        logger.info(f"Deleted download folder and contents: {parent_dir.name}")
         except Exception as e:
             logger.warning(f"Failed to cleanup download file: {e}")
 
