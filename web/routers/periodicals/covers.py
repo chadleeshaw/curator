@@ -223,6 +223,9 @@ async def upload_cover(magazine_id: int, file: UploadFile = File(...)) -> Dict[s
                 temp_path.unlink()
             raise HTTPException(status_code=500, detail=f"Failed to save cover: {e}")
 
+        # Store old cover path before updating (for thumbnail cleanup)
+        old_cover_path = Path(magazine.cover_path) if magazine.cover_path else None
+
         # Update database with new cover path
         magazine.cover_path = str(cover_path)
         # Mark as custom uploaded cover (not from PDF)
@@ -233,12 +236,12 @@ async def upload_cover(magazine_id: int, file: UploadFile = File(...)) -> Dict[s
         db.commit()
 
         # Invalidate thumbnail cache by removing old thumbnail
-        from core.utils.thumbnail import get_thumbnail_path
-
-        thumbnail_path = get_thumbnail_path(cover_path)
-        if thumbnail_path.exists():
-            thumbnail_path.unlink()
-            logger.debug(f"Removed old thumbnail: {thumbnail_path}")
+        if old_cover_path and old_cover_path.exists():
+            # Thumbnails have _thumb suffix before extension
+            old_thumbnail_path = old_cover_path.parent / f"{old_cover_path.stem}_thumb.jpg"
+            if old_thumbnail_path.exists():
+                old_thumbnail_path.unlink()
+                logger.debug(f"Removed old thumbnail: {old_thumbnail_path}")
 
         logger.info(f"Uploaded custom cover for magazine {magazine_id}")
 
