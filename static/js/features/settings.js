@@ -320,15 +320,27 @@ export class SettingsManager {
     const nameInput = document.getElementById('download-client-name');
     const urlInput = document.getElementById('download-client-url');
     const apiKeyInput = document.getElementById('download-client-apikey');
+    const downloadsDirInput = document.getElementById('download-client-downloads-dir');
+    const maxConcurrentInput = document.getElementById('download-client-max-concurrent');
 
-    if (typeSelect) typeSelect.value = clientConfig.type || 'sabnzbd';
+    const clientType = clientConfig.type || 'sabnzbd';
+    if (typeSelect) typeSelect.value = clientType;
     if (nameInput) nameInput.value = clientConfig.name || '';
+
+    // NZB client fields (SABnzbd/NZBGet)
     if (urlInput) urlInput.value = clientConfig.api_url || '';
     if (apiKeyInput) {
       apiKeyInput.value = '';
       apiKeyInput.setAttribute('data-original-key', clientConfig.api_key || '');
       apiKeyInput.placeholder = clientConfig.api_key ? '••••••••••••••••' : 'Enter API key';
     }
+
+    // Internet Archive fields
+    if (downloadsDirInput) downloadsDirInput.value = clientConfig.downloads_dir || '';
+    if (maxConcurrentInput) maxConcurrentInput.value = clientConfig.max_concurrent || 3;
+
+    // Trigger field visibility based on type
+    this.onDownloadClientTypeChange(clientType);
   }
 
   /**
@@ -601,21 +613,35 @@ export class SettingsManager {
    */
   async saveDownloadClientSettings() {
     const type = document.getElementById('download-client-type')?.value;
-    const url = document.getElementById('download-client-url')?.value;
-    const apiKeyInput = document.getElementById('download-client-apikey');
-    const apiKey = apiKeyInput?.value; // Only use the actual input value
+    const name = document.getElementById('download-client-name')?.value;
 
     const downloadClientConfig = {
       type,
-      api_url: url,
+      name,
     };
 
-    // Only include api_key if user entered a new one
-    if (apiKey) {
-      downloadClientConfig.api_key = apiKey;
-    } else if (this.currentConfig?.config?.download_client?.api_key) {
-      // Preserve existing key from cached config
-      downloadClientConfig.api_key = this.currentConfig.config.download_client.api_key;
+    if (type === 'internet_archive') {
+      // Internet Archive specific fields
+      const downloadsDir = document.getElementById('download-client-downloads-dir')?.value;
+      const maxConcurrent = document.getElementById('download-client-max-concurrent')?.value;
+
+      if (downloadsDir) downloadClientConfig.downloads_dir = downloadsDir;
+      if (maxConcurrent) downloadClientConfig.max_concurrent = parseInt(maxConcurrent, 10);
+    } else {
+      // NZB client fields (SABnzbd/NZBGet)
+      const url = document.getElementById('download-client-url')?.value;
+      const apiKeyInput = document.getElementById('download-client-apikey');
+      const apiKey = apiKeyInput?.value;
+
+      downloadClientConfig.api_url = url;
+
+      // Only include api_key if user entered a new one
+      if (apiKey) {
+        downloadClientConfig.api_key = apiKey;
+      } else if (this.currentConfig?.config?.download_client?.api_key) {
+        // Preserve existing key from cached config
+        downloadClientConfig.api_key = this.currentConfig.config.download_client.api_key;
+      }
     }
 
     try {
@@ -648,29 +674,35 @@ export class SettingsManager {
   async testDownloadClientConnection() {
     try {
       const type = document.getElementById('download-client-type')?.value;
-      const url = document.getElementById('download-client-url')?.value;
-      const apiKeyInput = document.getElementById('download-client-apikey');
-      const apiKey = apiKeyInput?.value || apiKeyInput?.dataset.originalKey;
+      let testPayload = { type };
 
-      if (!url) {
-        UIUtils.showStatus('settings-status', 'Please enter an API URL', 'error');
-        return;
-      }
+      if (type === 'internet_archive') {
+        // Internet Archive just needs to verify downloads directory
+        const downloadsDir = document.getElementById('download-client-downloads-dir')?.value;
+        testPayload.downloads_dir = downloadsDir || './local/downloads';
+      } else {
+        // NZB clients need URL and API key
+        const url = document.getElementById('download-client-url')?.value;
+        const apiKeyInput = document.getElementById('download-client-apikey');
+        const apiKey = apiKeyInput?.value || apiKeyInput?.dataset.originalKey;
 
-      if (!apiKey) {
-        UIUtils.showStatus('settings-status', 'Please enter an API key', 'error');
-        return;
+        if (!url) {
+          UIUtils.showStatus('settings-status', 'Please enter an API URL', 'error');
+          return;
+        }
+
+        if (!apiKey) {
+          UIUtils.showStatus('settings-status', 'Please enter an API key', 'error');
+          return;
+        }
+
+        testPayload.api_url = url;
+        testPayload.api_key = apiKey;
       }
 
       // Show testing status
-      UIUtils.showStatus('settings-status', `Testing connection to ${type}...`, 'info');
-
-      // Build the test payload
-      const testPayload = {
-        type,
-        api_url: url,
-        api_key: apiKey,
-      };
+      const typeName = type === 'internet_archive' ? 'Internet Archive' : type;
+      UIUtils.showStatus('settings-status', `Testing connection to ${typeName}...`, 'info');
 
       const data = await APIHelper.executeWithErrorHandling(
         async () => {
@@ -909,22 +941,48 @@ export class SettingsManager {
     try {
       const type = document.getElementById('new-provider-type').value;
       const name = document.getElementById('new-provider-name').value;
-      const apiUrl = document.getElementById('new-provider-url').value;
-      const apiKey = document.getElementById('new-provider-key').value;
-      const categories = document.getElementById('new-provider-categories').value;
       const enabled = document.getElementById('new-provider-enabled').checked;
 
       const newProvider = {
         type,
         name,
-        api_url: apiUrl,
-        api_key: apiKey,
         enabled,
       };
 
-      // Add categories if provided (optional field)
-      if (categories) {
-        newProvider.categories = categories;
+      if (type === 'internet_archive') {
+        // Internet Archive specific fields
+        const collections = document.getElementById('new-provider-collections').value;
+        const formats = document.getElementById('new-provider-formats').value;
+        const priority = document.getElementById('new-provider-priority').value;
+
+        if (collections) {
+          newProvider.collections = collections
+            .split(',')
+            .map((c) => c.trim())
+            .filter((c) => c);
+        }
+        if (formats) {
+          newProvider.file_formats = formats
+            .split(',')
+            .map((f) => f.trim())
+            .filter((f) => f);
+        }
+        if (priority) {
+          newProvider.priority = parseInt(priority, 10);
+        }
+      } else {
+        // Standard provider fields
+        const apiUrl = document.getElementById('new-provider-url').value;
+        const apiKey = document.getElementById('new-provider-key').value;
+        const categories = document.getElementById('new-provider-categories').value;
+
+        newProvider.api_url = apiUrl;
+        newProvider.api_key = apiKey;
+
+        // Add categories if provided (optional field)
+        if (categories) {
+          newProvider.categories = categories;
+        }
       }
 
       // Clone current providers array and add new provider
@@ -1149,7 +1207,9 @@ export class SettingsManager {
       const patternCustom = document.getElementById('import-organization-pattern-custom');
       const enableTextScan = document.getElementById('import-enable-text-scan')?.checked;
       const enableOcr = document.getElementById('import-enable-ocr')?.checked;
-      const autoCleanupDownloads = document.getElementById('import-auto-cleanup-downloads')?.checked;
+      const autoCleanupDownloads = document.getElementById(
+        'import-auto-cleanup-downloads'
+      )?.checked;
       const autoCleanupLibrary = document.getElementById('import-auto-cleanup-library')?.checked;
 
       // Map pattern keys to their templates
@@ -2015,6 +2075,49 @@ export class SettingsManager {
       customInput.classList.add('hidden');
     }
   }
+
+  /**
+   * Handle download client type selection change
+   * Shows/hides appropriate fields based on client type
+   */
+  onDownloadClientTypeChange(type) {
+    const nzbFields = document.getElementById('download-client-nzb-fields');
+    const iaFields = document.getElementById('download-client-ia-fields');
+
+    if (!nzbFields || !iaFields) return;
+
+    if (type === 'internet_archive') {
+      nzbFields.classList.add('hidden');
+      iaFields.classList.remove('hidden');
+    } else {
+      nzbFields.classList.remove('hidden');
+      iaFields.classList.add('hidden');
+    }
+  }
+
+  /**
+   * Handle provider type selection change
+   * Shows/hides appropriate fields based on provider type
+   */
+  onProviderTypeChange(type) {
+    const standardFields = document.getElementById('provider-standard-fields');
+    const iaFields = document.getElementById('provider-ia-fields');
+    const urlInput = document.getElementById('new-provider-url');
+
+    if (!standardFields || !iaFields) return;
+
+    if (type === 'internet_archive') {
+      standardFields.classList.add('hidden');
+      iaFields.classList.remove('hidden');
+      // Remove required from URL field for IA
+      if (urlInput) urlInput.removeAttribute('required');
+    } else {
+      standardFields.classList.remove('hidden');
+      iaFields.classList.add('hidden');
+      // Restore required on URL field for other providers
+      if (urlInput) urlInput.setAttribute('required', 'required');
+    }
+  }
 }
 
 // Create singleton instance
@@ -2058,3 +2161,5 @@ window.saveImportSettings = () => settings.saveImportSettings();
 window.handlePatternSelectChange = (context) => settings.handlePatternSelectChange(context);
 window.saveCacheSettings = () => settings.saveCacheSettings();
 window.loadCacheStats = () => settings.loadCacheStats();
+window.onDownloadClientTypeChange = (type) => settings.onDownloadClientTypeChange(type);
+window.onProviderTypeChange = (type) => settings.onProviderTypeChange(type);
