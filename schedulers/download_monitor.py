@@ -385,7 +385,7 @@ class DownloadMonitor:
 
                         # Delete failed downloads from client if tracking settings allow
                         if self._should_delete_from_client(submission.tracking_id, session):
-                            self._delete_from_client(submission.job_id, "failed")
+                            self._delete_from_client(submission.job_id, "failed", submission.client_name)
             except Exception as e:
                 logger.error(
                     f"Error updating status for job {submission.job_id}: {e}",
@@ -502,17 +502,20 @@ class DownloadMonitor:
 
         return tracking.delete_from_client_on_completion
 
-    def _delete_from_client(self, job_id: str, reason: str) -> None:
+    def _delete_from_client(self, job_id: str, reason: str, client_name: Optional[str] = None) -> None:
         """
         Delete a job from the download client.
 
         Args:
             job_id: The download client job ID
             reason: Reason for deletion (for logging)
+            client_name: Name of the client that handled the download (uses correct client)
         """
         try:
-            if self.download_manager.download_client.delete(job_id):
-                logger.info(f"[DownloadMonitor] Deleted {reason} job {job_id} from download client")
+            # Use the correct client based on client_name, not just the default
+            client = self.download_manager._get_client_by_name(client_name)
+            if client.delete(job_id):
+                logger.info(f"[DownloadMonitor] Deleted {reason} job {job_id} from {client.name}")
         except Exception as e:
             logger.error(f"Error deleting from client: {e}", exc_info=True)
 
@@ -600,7 +603,7 @@ class DownloadMonitor:
 
                     # Delete from client if tracking settings allow
                     if self._should_delete_from_client(submission.tracking_id, session):
-                        self._delete_from_client(submission.job_id, "completed")
+                        self._delete_from_client(submission.job_id, "completed", submission.client_name)
 
                     # Call optional callback (e.g., for database updates)
                     if self.import_callback:

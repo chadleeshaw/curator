@@ -11,16 +11,24 @@ IA_DEFAULT_ROWS = 100
 IA_DEFAULT_SORT = "date desc"
 
 # Collections commonly containing periodicals
+# These are searched by default when no collections are specified
 IA_PERIODICAL_COLLECTIONS = [
     "magazines",
     "periodicals",
-    "newspaper",
+    "americana",  # Historical American periodicals
     "comics",
     "pulpmagazinearchive",
+    "newspaper",
 ]
 
 # Preferred file formats for download (in order of preference)
-IA_PREFERRED_FORMATS = ["PDF", "EPUB", "MOBI", "DJVU"]
+# PDF is most common for magazines; EPUB for modern digital publications
+# ZIP/GZIP for collection archives containing multiple files
+IA_PREFERRED_FORMATS = ["PDF", "EPUB", "ZIP", "GZIP"]
+
+# Text PDF variants - these have embedded OCR text, preferred for text scanning
+# Order matters: most preferred first
+IA_TEXT_PDF_FORMATS = ["Text PDF", "Searchable PDF"]
 
 # Collection/archive formats (contain multiple files)
 IA_COLLECTION_FORMATS = ["ZIP", "TAR", "GZIP", "RAR"]
@@ -78,6 +86,7 @@ IA_PROVIDER_NAME = "Internet Archive"
 
 # Base URLs
 IA_DOWNLOAD_BASE_URL = "https://archive.org/download"
+IA_COMPRESS_BASE_URL = "https://archive.org/compress"
 IA_DETAILS_BASE_URL = "https://archive.org/details"
 IA_METADATA_BASE_URL = "https://archive.org/metadata"
 
@@ -90,6 +99,7 @@ IA_SEARCH_FIELDS = [
     "description",
     "mediatype",
     "collection",
+    "format",
 ]
 
 # Status values for tracking downloads

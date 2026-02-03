@@ -6,6 +6,8 @@ Tests cover:
 - Job submission and tracking
 - Download status management
 - Completed downloads retrieval
+- Download strategy selection (direct vs compress URL)
+- Text PDF format prioritization
 """
 
 import tempfile
@@ -17,6 +19,11 @@ import pytest
 # Path setup handled by conftest.py
 
 from clients.internet_archive import InternetArchiveClient, DownloadJob
+from core.constants.internet_archive import (
+    IA_TEXT_PDF_FORMATS,
+    IA_COMPRESS_BASE_URL,
+    IA_DOWNLOAD_BASE_URL,
+)
 
 
 class TestInternetArchiveClientInitialization:
@@ -273,3 +280,168 @@ class TestDownloadJob:
         assert job.progress == 0
         assert job.file_path is None
         assert job.error is None
+
+
+class TestDownloadStrategy:
+    """Test download strategy selection (direct vs compress URL)"""
+
+    def _create_client(self, tmpdir):
+        """Helper to create a client for testing."""
+        config = {
+            "name": "IA Client",
+            "downloads_dir": tmpdir,
+        }
+        return InternetArchiveClient(config)
+
+    def _create_metadata(self, identifier: str, files: list) -> dict:
+        """Helper to create mock item metadata."""
+        return {
+            "metadata": {"identifier": identifier},
+            "files": files,
+        }
+
+    def test_single_text_pdf_uses_direct_download(self):
+        """Test single Text PDF uses direct download strategy."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            metadata = self._create_metadata(
+                "test_mag",
+                [
+                    {"name": "magazine.pdf", "format": "Text PDF", "size": "1000000"},
+                ],
+            )
+
+            strategy = client._get_download_strategy(metadata)
+
+            assert strategy["strategy"] == "direct"
+            assert strategy["format"] == "Text PDF"
+            assert strategy["file_count"] == 1
+            assert "test_mag/magazine.pdf" in strategy["url"]
+            assert strategy["is_collection"] is False
+
+    def test_multiple_text_pdfs_uses_compress_url(self):
+        """Test 3+ Text PDFs uses compress URL strategy."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            metadata = self._create_metadata(
+                "collection_mag",
+                [
+                    {"name": "issue1.pdf", "format": "Text PDF", "size": "1000000"},
+                    {"name": "issue2.pdf", "format": "Text PDF", "size": "1000000"},
+                    {"name": "issue3.pdf", "format": "Text PDF", "size": "1000000"},
+                    {"name": "issue4.pdf", "format": "Text PDF", "size": "1000000"},
+                ],
+            )
+
+            strategy = client._get_download_strategy(metadata)
+
+            assert strategy["strategy"] == "compress"
+            assert strategy["format"] == "Text PDF"
+            assert strategy["file_count"] == 4
+            assert IA_COMPRESS_BASE_URL in strategy["url"]
+            assert "TEXT%20PDF" in strategy["url"]
+            assert strategy["is_collection"] is True
+
+    def test_two_text_pdfs_uses_direct_download(self):
+        """Test 2 Text PDFs uses direct download (below threshold)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            metadata = self._create_metadata(
+                "two_issue_mag",
+                [
+                    {"name": "issue1.pdf", "format": "Text PDF", "size": "1000000"},
+                    {"name": "issue2.pdf", "format": "Text PDF", "size": "1000000"},
+                ],
+            )
+
+            strategy = client._get_download_strategy(metadata)
+
+            # With 2 files, should use direct (first file)
+            assert strategy["strategy"] == "direct"
+            assert strategy["file_count"] == 2
+
+    def test_text_pdf_prioritized_over_regular_pdf(self):
+        """Test Text PDF is preferred over Image Container PDF."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            metadata = self._create_metadata(
+                "mixed_mag",
+                [
+                    {"name": "image.pdf", "format": "Image Container PDF", "size": "5000000"},
+                    {"name": "text.pdf", "format": "Text PDF", "size": "1000000"},
+                ],
+            )
+
+            strategy = client._get_download_strategy(metadata)
+
+            assert strategy["format"] == "Text PDF"
+            assert "text.pdf" in strategy["url"]
+
+    def test_fallback_to_regular_pdf_when_no_text_pdf(self):
+        """Test falls back to regular PDF when Text PDF not available."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            metadata = self._create_metadata(
+                "image_only_mag",
+                [
+                    {"name": "scan.pdf", "format": "Image Container PDF", "size": "5000000"},
+                ],
+            )
+
+            strategy = client._get_download_strategy(metadata)
+
+            assert strategy["strategy"] == "direct"
+            assert "pdf" in strategy["format"].lower()
+
+    def test_no_suitable_format_returns_none_strategy(self):
+        """Test returns 'none' strategy when no suitable formats available."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            metadata = self._create_metadata(
+                "no_pdf_item",
+                [
+                    {"name": "metadata.xml", "format": "Metadata", "size": "1000"},
+                    {"name": "thumb.jpg", "format": "JPEG Thumb", "size": "5000"},
+                ],
+            )
+
+            strategy = client._get_download_strategy(metadata)
+
+            assert strategy["strategy"] == "none"
+
+    def test_compress_threshold_configurable(self):
+        """Test compress threshold is used correctly."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            # Default threshold is 3
+            assert client.compress_threshold == 3
+
+            # Exactly 3 files should trigger compress
+            metadata = self._create_metadata(
+                "three_issue",
+                [
+                    {"name": "issue1.pdf", "format": "Text PDF", "size": "1000000"},
+                    {"name": "issue2.pdf", "format": "Text PDF", "size": "1000000"},
+                    {"name": "issue3.pdf", "format": "Text PDF", "size": "1000000"},
+                ],
+            )
+
+            strategy = client._get_download_strategy(metadata)
+            assert strategy["strategy"] == "compress"
+
+
+class TestTextPDFConstants:
+    """Test Internet Archive constants for Text PDF handling"""
+
+    def test_text_pdf_formats_defined(self):
+        """Test IA_TEXT_PDF_FORMATS constant exists and has expected values."""
+        assert "Text PDF" in IA_TEXT_PDF_FORMATS
+        assert len(IA_TEXT_PDF_FORMATS) >= 1
+
+    def test_compress_url_defined(self):
+        """Test IA_COMPRESS_BASE_URL constant is properly defined."""
+        assert IA_COMPRESS_BASE_URL == "https://archive.org/compress"
+
+    def test_download_url_defined(self):
+        """Test IA_DOWNLOAD_BASE_URL constant is properly defined."""
+        assert IA_DOWNLOAD_BASE_URL == "https://archive.org/download"

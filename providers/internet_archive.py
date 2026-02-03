@@ -8,7 +8,7 @@ import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from internetarchive import search_items, get_item
+from internetarchive import search_items, get_item, configure as ia_configure
 
 from core.constants.internet_archive import (
     IA_DEFAULT_MEDIATYPE,
@@ -51,10 +51,29 @@ class InternetArchiveProvider(SearchProvider):
         # Priority for provider preference (lower = higher priority)
         self.priority = config.get("priority", 10)
 
+        # Optional authentication for accessing restricted items
+        self.username = config.get("username", "")
+        self.password = config.get("password", "")
+        self._configure_auth()
+
         logger.info(
             f"[{self.name}] Initialized with collections={self.collections}, "
-            f"formats={self.preferred_formats}, priority={self.priority}"
+            f"formats={self.preferred_formats}, priority={self.priority}, "
+            f"authenticated={bool(self.username)}"
         )
+
+    def _configure_auth(self):
+        """
+        Configure Internet Archive authentication if credentials provided.
+        This enables access to restricted items that require login.
+        """
+        if self.username and self.password:
+            try:
+                config_path = ia_configure(self.username, self.password)
+                logger.info(f"[{self.name}] Configured IA authentication for {self.username}")
+                logger.debug(f"[{self.name}] IA config written to: {config_path}")
+            except Exception as e:
+                logger.error(f"[{self.name}] Failed to configure IA authentication: {e}")
 
     def _check_rate_limit(self) -> bool:
         """
@@ -275,22 +294,45 @@ class InternetArchiveProvider(SearchProvider):
 
             # Build search query
             ia_query = self._build_search_query(query, category)
-            logger.debug(f"[{self.name}] Searching: {ia_query}")
+            logger.debug(f"[{self.name}] Searching IA with query: {ia_query}")
 
             # Execute search
+            # Note: rows is passed via params dict in newer internetarchive versions
             search_results = search_items(
                 ia_query,
                 fields=IA_SEARCH_FIELDS,
                 sorts=[self.sort],
-                rows=self.max_results,
-                timeout=IA_SEARCH_TIMEOUT,
+                params={"rows": self.max_results},
             )
 
             # Process results
+            result_count = 0
+            skipped_no_format = 0
             for item in search_results:
+                if result_count >= self.max_results:
+                    break
                 try:
                     identifier = item.get("identifier")
                     if not identifier:
+                        continue
+
+                    # Check if item has any preferred file formats
+                    available_formats = item.get("format", [])
+                    if isinstance(available_formats, str):
+                        available_formats = [available_formats]
+
+                    has_preferred_format = False
+                    for preferred in self.preferred_formats:
+                        preferred_lower = preferred.lower()
+                        for fmt in available_formats:
+                            if preferred_lower in fmt.lower():
+                                has_preferred_format = True
+                                break
+                        if has_preferred_format:
+                            break
+
+                    if not has_preferred_format:
+                        skipped_no_format += 1
                         continue
 
                     title = item.get("title", identifier)
@@ -325,12 +367,19 @@ class InternetArchiveProvider(SearchProvider):
                         raw_metadata=raw_metadata,
                     )
                     results.append(result)
+                    result_count += 1
 
                 except Exception as e:
                     logger.warning(f"[{self.name}] Error parsing search result: {e}")
                     continue
 
-            logger.info(f"[{self.name}] Found {len(results)} results for '{query}'")
+            if skipped_no_format > 0:
+                logger.info(
+                    f"[{self.name}] Found {len(results)} results for '{query}' "
+                    f"(skipped {skipped_no_format} items without preferred formats)"
+                )
+            else:
+                logger.info(f"[{self.name}] Found {len(results)} results for '{query}'")
 
         except Exception as e:
             logger.error(f"[{self.name}] Search error for '{query}': {e}", exc_info=True)
@@ -388,8 +437,7 @@ class InternetArchiveProvider(SearchProvider):
             # Try a simple search to verify connectivity
             test_results = search_items(
                 "mediatype:texts",
-                rows=1,
-                timeout=10,
+                params={"rows": 1},
             )
 
             # Consume one result to verify the search works

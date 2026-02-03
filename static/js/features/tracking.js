@@ -1507,30 +1507,40 @@ export class TrackingManager {
         const hasFailed = status === 'failed';
 
         // Calculate age of newest NZB for availability indication
+        // Skip age badge for Internet Archive items (they're permanently archived, age doesn't affect availability)
         let newestAge = '';
         let ageColorClass = '';
         if (!isLibraryItem && issue.variants && issue.variants.length > 0) {
-          // Find the newest publication_date among variants
-          const variantsWithDates = issue.variants.filter((v) => v.publication_date);
-          if (variantsWithDates.length > 0) {
-            const newestVariant = variantsWithDates.reduce((newest, v) => {
-              const vDate = new Date(v.publication_date);
-              const nDate = new Date(newest.publication_date);
-              return vDate > nDate ? v : newest;
-            });
-            newestAge = formatRelativeAge(newestVariant.publication_date);
+          // Check if all variants are from Internet Archive - skip age badge if so
+          const allFromInternetArchive = issue.variants.every(
+            (v) => v.provider && v.provider.toLowerCase() === 'internet_archive'
+          );
 
-            // Color code by age: green < 7 days, yellow 7-30 days, orange 30-90 days, red > 90 days
-            const ageDate = new Date(newestVariant.publication_date);
-            const ageDays = Math.floor((new Date() - ageDate) / (1000 * 60 * 60 * 24));
-            if (ageDays <= 7) {
-              ageColorClass = 'age-fresh'; // Green - excellent retention
-            } else if (ageDays <= 30) {
-              ageColorClass = 'age-good'; // Yellow-green - good retention
-            } else if (ageDays <= 90) {
-              ageColorClass = 'age-moderate'; // Orange - moderate retention
-            } else {
-              ageColorClass = 'age-old'; // Red - may have retention issues
+          if (!allFromInternetArchive) {
+            // Find the newest publication_date among non-IA variants
+            const variantsWithDates = issue.variants.filter(
+              (v) => v.publication_date && v.provider?.toLowerCase() !== 'internet_archive'
+            );
+            if (variantsWithDates.length > 0) {
+              const newestVariant = variantsWithDates.reduce((newest, v) => {
+                const vDate = new Date(v.publication_date);
+                const nDate = new Date(newest.publication_date);
+                return vDate > nDate ? v : newest;
+              });
+              newestAge = formatRelativeAge(newestVariant.publication_date);
+
+              // Color code by age: green < 7 days, yellow 7-30 days, orange 30-90 days, red > 90 days
+              const ageDate = new Date(newestVariant.publication_date);
+              const ageDays = Math.floor((new Date() - ageDate) / (1000 * 60 * 60 * 24));
+              if (ageDays <= 7) {
+                ageColorClass = 'age-fresh'; // Green - excellent retention
+              } else if (ageDays <= 30) {
+                ageColorClass = 'age-good'; // Yellow-green - good retention
+              } else if (ageDays <= 90) {
+                ageColorClass = 'age-moderate'; // Orange - moderate retention
+              } else {
+                ageColorClass = 'age-old'; // Red - may have retention issues
+              }
             }
           }
         }
@@ -2298,11 +2308,11 @@ window.downloadIssue = async function (title, url, provider) {
     // Handle different submission statuses
     let message;
     if (data.status === 'queued') {
-      message = '✓ Download queued (will be submitted when slot available)';
+      message = 'Download queued (will be submitted when slot available)';
     } else if (data.job_id) {
-      message = `✓ Download submitted! Job ID: ${data.job_id}`;
+      message = `Download submitted! Job ID: ${data.job_id}`;
     } else {
-      message = `✓ Download ${data.status}`;
+      message = `Download ${data.status}`;
     }
 
     UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, message, 'success');

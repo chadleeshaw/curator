@@ -177,6 +177,9 @@ class AppState:
         # === Background tasks (created during lifespan) ===
         self.tasks = TaskState()
 
+        # === Additional download clients (populated during lifespan) ===
+        self.download_clients: Dict[str, Any] = {}
+
     # -------------------------------------------------------------------------
     # Backward compatibility properties - map old flat attributes to nested ones
     # -------------------------------------------------------------------------

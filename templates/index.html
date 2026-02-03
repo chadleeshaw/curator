@@ -1956,7 +1956,7 @@
                   >(comma-separated)</span
                 >:</label
               >
-              <input type="text" id="new-provider-collections" placeholder="magazines,periodicals,comics" />
+              <input type="text" id="new-provider-collections" placeholder="magazines, periodicals, americana, comics" />
             </div>
             <div class="settings-field">
               <label for="new-provider-formats"
@@ -1965,7 +1965,7 @@
                   >(in order of preference)</span
                 >:</label
               >
-              <input type="text" id="new-provider-formats" placeholder="PDF,EPUB,MOBI,DJVU" />
+              <input type="text" id="new-provider-formats" placeholder="PDF, EPUB, ZIP, GZIP" />
             </div>
             <div class="settings-field">
               <label for="new-provider-priority"
@@ -1975,6 +1975,17 @@
                 >:</label
               >
               <input type="number" id="new-provider-priority" placeholder="10" min="1" max="100" value="10" />
+            </div>
+            <div class="settings-field" style="padding: 10px; background: var(--bg-secondary); border-radius: 6px; border: 1px solid var(--border-color); margin-top: 10px;">
+              <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">🔐 Optional Authentication (for restricted items)</div>
+              <div style="margin-bottom: 8px;">
+                <label for="new-provider-ia-username">Username (email):</label>
+                <input type="text" id="new-provider-ia-username" placeholder="user@example.com" />
+              </div>
+              <div>
+                <label for="new-provider-ia-password">Password:</label>
+                <input type="password" id="new-provider-ia-password" placeholder="Enter password" />
+              </div>
             </div>
           </div>
           <div class="settings-field">

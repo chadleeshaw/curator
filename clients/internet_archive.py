@@ -23,6 +23,7 @@ from internetarchive import get_item
 
 from core.constants.internet_archive import (
     IA_PREFERRED_FORMATS,
+    IA_TEXT_PDF_FORMATS,
     IA_COLLECTION_FORMATS,
     IA_EXTRACTABLE_EXTENSIONS,
     IA_DOWNLOAD_TIMEOUT,
@@ -35,13 +36,14 @@ from core.constants.internet_archive import (
     IA_STATUS_COMPLETED,
     IA_STATUS_FAILED,
     IA_DOWNLOAD_BASE_URL,
+    IA_COMPRESS_BASE_URL,
 )
 from core.interfaces import DownloadClient
 
 logger = logging.getLogger(__name__)
 
 
-class DownloadJob:
+class DownloadJob:  # pylint: disable=too-many-instance-attributes
     """Represents a single download job"""
 
     def __init__(self, job_id: str, identifier: str, title: str, dest_path: str, prefer_collection: bool = False):
@@ -87,6 +89,9 @@ class InternetArchiveClient(DownloadClient):
         # Thread pool for background downloads
         self._executor = ThreadPoolExecutor(max_workers=self.max_concurrent, thread_name_prefix="ia_download")
 
+        # Threshold for using compress URL (for multi-file items)
+        self.compress_threshold = 3  # Use compress URL if 3+ files of desired format
+
         logger.info(
             f"[{self.name}] Initialized with downloads_dir={self.downloads_dir}, "
             f"max_concurrent={self.max_concurrent}"
@@ -96,6 +101,92 @@ class InternetArchiveClient(DownloadClient):
         """Generate a unique job ID"""
         unique_str = f"{identifier}-{time.time()}-{uuid.uuid4().hex[:8]}"
         return hashlib.md5(unique_str.encode()).hexdigest()[:16]
+
+    def _get_download_strategy(self, item_metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Determine the best download strategy for an item.
+
+        For items with multiple files of the desired format, use the /compress/
+        endpoint to download them all in a single ZIP. For single files, download directly.
+
+        Args:
+            item_metadata: Item metadata from IA API
+
+        Returns:
+            Dict with:
+                - strategy: "direct" or "compress"
+                - format: The format to download (e.g., "Text PDF")
+                - files: List of matching files
+                - url: Download URL
+                - is_collection: Whether result will be a collection archive
+        """
+        files = item_metadata.get("files", [])
+        identifier = item_metadata.get("metadata", {}).get("identifier", "")
+
+        # Count files by format, prioritizing Text PDF
+        format_counts: Dict[str, List[Dict]] = {}
+        for f in files:
+            fmt = f.get("format", "")
+            if fmt:
+                format_counts.setdefault(fmt, []).append(f)
+
+        # Check for Text PDF first (best for text scanning)
+        for text_pdf_fmt in IA_TEXT_PDF_FORMATS:
+            if text_pdf_fmt in format_counts:
+                matching_files = format_counts[text_pdf_fmt]
+                if len(matching_files) >= self.compress_threshold:
+                    # Use compress URL for multiple files
+                    # URL encode the format name
+                    encoded_format = text_pdf_fmt.upper().replace(" ", "%20")
+                    return {
+                        "strategy": "compress",
+                        "format": text_pdf_fmt,
+                        "files": matching_files,
+                        "url": f"{IA_COMPRESS_BASE_URL}/{identifier}/formats={encoded_format}",
+                        "is_collection": True,
+                        "file_count": len(matching_files),
+                    }
+                elif len(matching_files) == 1:
+                    # Direct download for single file
+                    file_info = matching_files[0]
+                    return {
+                        "strategy": "direct",
+                        "format": text_pdf_fmt,
+                        "files": matching_files,
+                        "url": f"{IA_DOWNLOAD_BASE_URL}/{identifier}/{file_info['name']}",
+                        "is_collection": False,
+                        "file_count": 1,
+                        "file_info": file_info,
+                    }
+
+        # Check other preferred formats
+        for preferred_fmt in self.preferred_formats:
+            # Look for exact match or substring match
+            for fmt, fmt_files in format_counts.items():
+                if preferred_fmt.lower() in fmt.lower():
+                    if len(fmt_files) >= self.compress_threshold:
+                        encoded_format = fmt.upper().replace(" ", "%20")
+                        return {
+                            "strategy": "compress",
+                            "format": fmt,
+                            "files": fmt_files,
+                            "url": f"{IA_COMPRESS_BASE_URL}/{identifier}/formats={encoded_format}",
+                            "is_collection": True,
+                            "file_count": len(fmt_files),
+                        }
+                    elif len(fmt_files) >= 1:
+                        file_info = fmt_files[0]
+                        return {
+                            "strategy": "direct",
+                            "format": fmt,
+                            "files": fmt_files,
+                            "url": f"{IA_DOWNLOAD_BASE_URL}/{identifier}/{file_info['name']}",
+                            "is_collection": False,
+                            "file_count": len(fmt_files),
+                            "file_info": file_info,
+                        }
+
+        return {"strategy": "none", "format": None, "files": [], "url": None, "is_collection": False}
 
     def _get_best_file(
         self, item_metadata: Dict[str, Any], prefer_collection: bool = False
@@ -140,10 +231,23 @@ class InternetArchiveClient(DownloadClient):
                 if collection_fmt in format_files:
                     return format_files[collection_fmt][0]
 
-        # Find best format in order of preference
+        # PRIORITY 1: Text PDF formats (have embedded OCR text - best for text scanning)
+        for text_pdf_fmt in IA_TEXT_PDF_FORMATS:
+            if text_pdf_fmt in format_files:
+                logger.debug(f"Found preferred text format: {text_pdf_fmt}")
+                return format_files[text_pdf_fmt][0]
+
+        # PRIORITY 2: Find best format in order of preference
+        # Use case-insensitive matching to handle variants like "Text PDF"
         for preferred_fmt in self.preferred_formats:
+            preferred_lower = preferred_fmt.lower()
+            # First try exact match
             if preferred_fmt in format_files:
                 return format_files[preferred_fmt][0]
+            # Then try case-insensitive substring match (e.g., "PDF" matches "Text PDF")
+            for fmt, files_list in format_files.items():
+                if preferred_lower in fmt.lower():
+                    return files_list[0]
 
         # Fallback: return any PDF-like format
         for fmt, files_list in format_files.items():
@@ -303,6 +407,7 @@ class InternetArchiveClient(DownloadClient):
         """
         Execute the actual file download in a background thread.
         Handles both single files and collection archives (ZIP, TAR.GZ).
+        Uses /compress/ endpoint for items with multiple files of desired format.
 
         Args:
             job: DownloadJob instance to process
@@ -313,29 +418,42 @@ class InternetArchiveClient(DownloadClient):
 
             logger.info(f"[{self.name}] Starting download for {job.identifier}")
 
-            # Get item metadata to find best file
+            # Get item metadata to determine download strategy
             item = get_item(job.identifier)
             metadata = item.item_metadata
 
-            # Check if this item should prefer collection format
-            # (based on title keywords like "full collection")
-            prefer_collection = job.prefer_collection if hasattr(job, "prefer_collection") else False
+            # Determine best download strategy (direct file vs compress URL)
+            strategy = self._get_download_strategy(metadata)
 
-            best_file = self._get_best_file(metadata, prefer_collection=prefer_collection)
-            if not best_file:
+            if strategy["strategy"] == "none":
                 job.status = IA_STATUS_FAILED
                 job.error = f"No suitable file format found for {job.identifier}"
                 logger.error(f"[{self.name}] {job.error}")
                 return
 
-            file_name = best_file["name"]
-            is_collection = best_file.get("is_collection", False)
-            job.expected_size = best_file.get("size", 0)
-            job.download_url = f"{IA_DOWNLOAD_BASE_URL}/{job.identifier}/{file_name}"
+            download_url = strategy["url"]
+            is_collection = strategy["is_collection"]
+            file_count = strategy.get("file_count", 1)
+            format_name = strategy["format"]
 
-            # Determine destination path
+            # For direct downloads, get file size from metadata
+            if strategy["strategy"] == "direct" and "file_info" in strategy:
+                job.expected_size = int(strategy["file_info"].get("size", 0))
+
+            job.download_url = download_url
+
+            # Determine destination path and extension
             safe_title = "".join(c if c.isalnum() or c in " .-_" else "_" for c in job.title)[:100]
-            ext = Path(file_name).suffix or ".pdf"
+
+            if strategy["strategy"] == "compress":
+                # Compress endpoint returns a ZIP
+                ext = ".zip"
+                logger.info(f"[{self.name}] Using compress URL for {file_count} {format_name} files")
+            else:
+                # Direct download - use original file extension
+                file_info = strategy.get("file_info", {})
+                ext = Path(file_info.get("name", ".pdf")).suffix or ".pdf"
+
             dest_file = self.downloads_dir / f"{safe_title}{ext}"
 
             # Handle duplicate filenames
@@ -345,8 +463,8 @@ class InternetArchiveClient(DownloadClient):
                 counter += 1
 
             logger.info(
-                f"[{self.name}] Downloading {job.download_url} -> {dest_file}"
-                f"{' (collection archive)' if is_collection else ''}"
+                f"[{self.name}] Downloading {download_url} -> {dest_file}"
+                f"{f' ({file_count} files via compress)' if is_collection else ''}"
             )
 
             # Download with retry logic
@@ -404,7 +522,7 @@ class InternetArchiveClient(DownloadClient):
                         job.completed_at = time.time()
                         return
                     else:
-                        raise Exception("Downloaded file is empty or missing")
+                        raise IOError("Downloaded file is empty or missing")
 
                 except requests.exceptions.RequestException as e:
                     logger.warning(

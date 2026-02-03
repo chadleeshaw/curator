@@ -18,19 +18,24 @@ search_providers:
   - type: internet_archive
     name: Internet Archive
     enabled: true
-    priority: 10 # Lower = higher priority (searched first, preferred in dedup)
+    priority: 1 # Lower = higher priority (searched first, preferred in dedup)
 
     # Collections to search (defaults to common periodical collections)
-    # Available collections: magazines, periodicals, newspaper, comics, pulpmagazinearchive
+    # Available collections: magazines, periodicals, americana, newspaper, comics, pulpmagazinearchive
     collections:
       - magazines
       - periodicals
+      - americana
       - comics
 
     # Preferred file formats for download (in order of preference)
+    # PDF is most common for scanned magazines; EPUB for modern digital publications
+    # ZIP/GZIP for collection archives containing multiple files
     file_formats:
       - PDF
       - EPUB
+      - ZIP
+      - GZIP
 
     # Max results per search
     max_results: 100
@@ -38,6 +43,12 @@ search_providers:
     # Rate limiting (archive.org is generally permissive)
     request_delay: 1.0 # Seconds between requests
     max_requests_per_minute: 15
+
+    # Optional authentication for restricted items (uncomment to enable)
+    # Some items on archive.org require login to download.
+    # Create a free account at https://archive.org/account/signup
+    # username: your-email@example.com
+    # password: your-archive-org-password
 
   # ==============================================================================
   # Newsnab Provider (e.g., NZBHydra2, NZBGeek, etc.)
