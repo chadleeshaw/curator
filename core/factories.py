@@ -12,6 +12,7 @@ class ProviderFactory:
     PROVIDERS = {
         "newsnab": "providers.newsnab:NewsnabProvider",
         "rss": "providers.rss:RSSProvider",
+        "internet_archive": "providers.internet_archive:InternetArchiveProvider",
     }
 
     @staticmethod
@@ -34,6 +35,8 @@ class ClientFactory:
 
     CLIENTS = {
         "sabnzbd": "clients.sabnzbd:SABnzbdClient",
+        "nzbget": "clients.nzbget:NZBGetClient",
+        "internet_archive": "clients.internet_archive:InternetArchiveClient",
     }
 
     @staticmethod

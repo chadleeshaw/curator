@@ -35,6 +35,13 @@ logger = logging.getLogger(__name__)
 class DownloadManager:
     """Manage downloads for tracked periodicals"""
 
+    # Default provider to client routing
+    DEFAULT_PROVIDER_CLIENT_MAP = {
+        "internet_archive": "internet_archive",
+        "newsnab": "default",
+        "rss": "default",
+    }
+
     def __init__(
         self,
         search_providers: List[SearchProvider],
@@ -42,19 +49,32 @@ class DownloadManager:
         fuzzy_threshold: int = DEFAULT_FUZZY_THRESHOLD,
         max_downloads: int = 10,
         provider_cache_service: Optional[Any] = None,
+        download_clients: Optional[Dict[str, DownloadClient]] = None,
+        provider_client_map: Optional[Dict[str, str]] = None,
     ):
         """
         Initialize download manager.
 
         Args:
             search_providers: List of search providers to use
-            download_client: Download client to submit jobs to
+            download_client: Default download client to submit jobs to
             fuzzy_threshold: Fuzzy matching threshold for deduplication
             max_downloads: Maximum number of concurrent downloads allowed
             provider_cache_service: Optional provider cache service for NZB file caching
+            download_clients: Optional dict of additional download clients keyed by type
+            provider_client_map: Optional mapping of provider types to client types
         """
         self.search_providers = search_providers
         self.download_client = download_client
+
+        # Multi-client support: build dict of all available clients
+        self.download_clients: Dict[str, DownloadClient] = {"default": download_client}
+        if download_clients:
+            self.download_clients.update(download_clients)
+
+        # Provider to client routing
+        self.provider_client_map = provider_client_map or self.DEFAULT_PROVIDER_CLIENT_MAP.copy()
+
         # Get default category from client config (handles mocks gracefully)
         client_config = getattr(download_client, "config", {})
         self.default_category = (
@@ -73,6 +93,53 @@ class DownloadManager:
         self.deduplication_service = DeduplicationService()
         self.submission_service = SubmissionService()
         self.queue_processor = QueueProcessor(download_client, max_downloads)
+
+        # Log available clients
+        client_names = list(self.download_clients.keys())
+        logger.info(f"DownloadManager initialized with clients: {client_names}")
+
+    def _get_client_for_provider(self, provider: str) -> DownloadClient:
+        """
+        Get the appropriate download client for a provider.
+
+        Args:
+            provider: Provider type (e.g., 'internet_archive', 'newsnab')
+
+        Returns:
+            DownloadClient instance for this provider
+        """
+        # Look up which client type to use for this provider
+        client_type = self.provider_client_map.get(provider, "default")
+
+        # Get the client, falling back to default if not available
+        client = self.download_clients.get(client_type)
+        if not client:
+            logger.debug(f"Client '{client_type}' not found for provider '{provider}', using default")
+            client = self.download_clients["default"]
+
+        return client
+
+    def _get_client_by_name(self, client_name: Optional[str]) -> DownloadClient:
+        """
+        Get a download client by its name.
+
+        Args:
+            client_name: Name of the client (from submission.client_name)
+
+        Returns:
+            DownloadClient instance, or default client if not found
+        """
+        if not client_name:
+            return self.download_clients["default"]
+
+        # Search through clients by name
+        for client in self.download_clients.values():
+            if client.name == client_name:
+                return client
+
+        # Fallback to default
+        logger.debug(f"Client '{client_name}' not found by name, using default")
+        return self.download_clients["default"]
 
     def _is_english_edition(self, title: str) -> bool:
         """
@@ -470,9 +537,9 @@ class DownloadManager:
         search_result_db_id: Optional[int] = None,
     ) -> Optional[DownloadSubmission]:
         """
-        Submit a download to the download client.
+        Submit a download to the appropriate download client based on provider.
 
-        Handles client submission, rejection, and error recording.
+        Handles client selection, submission, rejection, and error recording.
         Called after all validation checks pass.
 
         Args:
@@ -485,31 +552,38 @@ class DownloadManager:
             DownloadSubmission record if submitted successfully, None if failed
         """
         title = search_result["title"]
+        provider = search_result.get("provider", "unknown")
         download_category = self._get_download_category(tracking_id, session)
 
-        try:
-            logger.debug(f"[DownloadManager] Submitting to download client: {title} (category: {download_category})")
+        # Get the appropriate client for this provider
+        client = self._get_client_for_provider(provider)
 
-            job_id = self.download_client.submit(
+        try:
+            logger.debug(
+                f"[DownloadManager] Submitting to {client.name} (provider: {provider}): "
+                f"{title} (category: {download_category})"
+            )
+
+            job_id = client.submit(
                 nzb_url=search_result["url"],
                 title=title,
                 category=download_category,
             )
 
             if not job_id:
-                logger.warning(f"Download client rejected submission: {title}")
+                logger.warning(f"Download client {client.name} rejected submission: {title}")
                 self._create_submission_record(
                     tracking_id,
                     search_result,
                     DownloadSubmission.StatusEnum.FAILED,
                     session,
                     search_result_db_id=search_result_db_id,
-                    error_message="Client rejected submission",
+                    error_message=f"Client {client.name} rejected submission",
                     attempt_count=1,
                 )
                 return None
 
-            logger.debug(f"[DownloadManager] Client accepted, job_id: {job_id}")
+            logger.debug(f"[DownloadManager] Client {client.name} accepted, job_id: {job_id}")
             submission = self._create_submission_record(
                 tracking_id,
                 search_result,
@@ -517,10 +591,10 @@ class DownloadManager:
                 session,
                 search_result_db_id=search_result_db_id,
                 job_id=job_id,
-                client_name=self.download_client.name,
+                client_name=client.name,
                 attempt_count=0,
             )
-            logger.info(f"Submitted download: {title} (job_id: {job_id})")
+            logger.info(f"Submitted download: {title} (job_id: {job_id}, client: {client.name})")
             return submission
 
         except Exception as e:
@@ -622,22 +696,26 @@ class DownloadManager:
             elif self.default_category:
                 download_category = self.default_category
 
+            # Get the appropriate client for this provider
+            provider = issue.latest_provider or "unknown"
+            client = self._get_client_for_provider(provider)
+
             logger.info(
-                f"Submitting discovered issue to download client: {issue.title} "
-                f"(priority: {issue.download_priority}, category: {download_category})"
+                f"Submitting discovered issue to {client.name}: {issue.title} "
+                f"(priority: {issue.download_priority}, category: {download_category}, provider: {provider})"
             )
 
-            job_id = self.download_client.submit(
+            job_id = client.submit(
                 nzb_url=issue.latest_url,
                 title=issue.title,
                 category=download_category,
             )
 
             if not job_id:
-                logger.warning(f"Download client rejected submission: {issue.title}")
+                logger.warning(f"Download client {client.name} rejected submission: {issue.title}")
                 # Mark as failed
                 issue.download_status = "failed"
-                issue.last_error = "Client rejected submission"
+                issue.last_error = f"Client {client.name} rejected submission"
                 issue.attempt_count += 1
                 issue.last_attempt = utc_now()
                 session.commit()
@@ -650,7 +728,7 @@ class DownloadManager:
                 DownloadSubmission.StatusEnum.PENDING,
                 session,
                 job_id=job_id,
-                client_name=self.download_client.name,
+                client_name=client.name,
                 attempt_count=1,
             )
 
@@ -968,10 +1046,13 @@ class DownloadManager:
             logger.warning(f"Submission not found for job_id: {job_id}")
             return None
 
+        # Get the client that was used for this submission
+        client = self._get_client_by_name(submission.client_name)
+
         # Get status from client
         try:
-            client_status = self.download_client.get_status(job_id)
-            logger.debug(f"[DownloadManager] Client status for {job_id}: {client_status}")
+            client_status = client.get_status(job_id)
+            logger.debug(f"[DownloadManager] Client {client.name} status for {job_id}: {client_status}")
 
             # Check if download client is waiting due to provider rate limit
             if client_status.get("rate_limited"):
@@ -1120,8 +1201,11 @@ class DownloadManager:
             }
 
         try:
+            # Get the client that was used for this submission (or fallback to default)
+            client = self._get_client_by_name(submission.client_name)
+
             # Resubmit to download client
-            logger.info(f"Retrying submission {submission_id}: {submission.result_title}")
+            logger.info(f"Retrying submission {submission_id} with {client.name}: {submission.result_title}")
             # Determine download client category: tracked item download_category > config default
             tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == submission.tracking_id).first()
             download_category = None
@@ -1130,17 +1214,17 @@ class DownloadManager:
             elif self.default_category:
                 download_category = self.default_category
 
-            job_id = self.download_client.submit(
+            job_id = client.submit(
                 nzb_url=submission.source_url,
                 title=submission.result_title,
                 category=download_category,
             )
 
             if not job_id:
-                logger.warning(f"Download client rejected retry submission: {submission.result_title}")
+                logger.warning(f"Download client {client.name} rejected retry submission: {submission.result_title}")
                 return {
                     "success": False,
-                    "message": "Download client rejected submission",
+                    "message": f"Download client {client.name} rejected submission",
                 }
 
             # Update submission record

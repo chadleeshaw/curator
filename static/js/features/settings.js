@@ -264,18 +264,85 @@ export class SettingsManager {
     const list = document.getElementById('search-providers-list');
     if (!list) return;
 
+    // Map provider types to display names
+    const typeDisplayNames = {
+      newsnab: 'Newsnab',
+      rss: 'RSS',
+      internet_archive: 'Internet Archive',
+    };
+
     list.innerHTML = '';
     providers.forEach((provider, index) => {
       const div = document.createElement('div');
       div.className = 'provider-block';
+      const isInternetArchive = provider.type === 'internet_archive';
+      const typeDisplayName = typeDisplayNames[provider.type] || provider.type || 'Provider';
 
-      div.innerHTML = `
-        <h4>${this.escapeHtml(provider.name || 'Provider ' + (index + 1))}</h4>
+      // Common header and name field
+      let html = `
+        <h4>${this.escapeHtml(typeDisplayName)}</h4>
+        <input type="hidden" id="search-provider-type-${index}" value="${this.escapeHtml(provider.type || 'newsnab')}">
         <div style="margin: 10px 0;">
           <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">Name:</label>
           <input type="text" id="search-provider-name-${index}" value="${this.escapeHtml(provider.name || '')}"
                 style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
         </div>
+      `;
+
+      if (isInternetArchive) {
+        // Internet Archive specific fields
+        const collections = Array.isArray(provider.collections)
+          ? provider.collections.join(', ')
+          : provider.collections || '';
+        const formats = Array.isArray(provider.file_formats)
+          ? provider.file_formats.join(', ')
+          : provider.file_formats || '';
+        html += `
+        <div style="margin: 10px 0;">
+          <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">
+            Collections <span style="font-weight: 400; color: var(--text-secondary); font-size: 12px;">(comma-separated)</span>:
+          </label>
+          <input type="text" id="search-provider-collections-${index}" value="${this.escapeHtml(collections)}"
+                placeholder="magazines, periodicals, americana, comics"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
+        </div>
+        <div style="margin: 10px 0;">
+          <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">
+            File Formats <span style="font-weight: 400; color: var(--text-secondary); font-size: 12px;">(comma-separated, in order of preference)</span>:
+          </label>
+          <input type="text" id="search-provider-formats-${index}" value="${this.escapeHtml(formats)}"
+                placeholder="PDF, EPUB, ZIP, GZIP"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
+        </div>
+        <div style="margin: 10px 0;">
+          <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">
+            Priority <span style="font-weight: 400; color: var(--text-secondary); font-size: 12px;">(lower = higher priority)</span>:
+          </label>
+          <input type="number" id="search-provider-priority-${index}" value="${provider.priority || 10}"
+                placeholder="10"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
+        </div>
+        <div style="margin: 10px 0; padding: 10px; background: var(--bg-secondary); border-radius: 6px; border: 1px solid var(--border-color);">
+          <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">🔐 Optional Authentication (for restricted items)</div>
+          <div style="margin-bottom: 8px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">Username (email):</label>
+            <input type="text" id="search-provider-ia-username-${index}" 
+                  placeholder="${provider.username ? 'Configured' : 'user@example.com'}"
+                  data-original-username="${this.escapeHtml(provider.username || '')}"
+                  style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
+          </div>
+          <div>
+            <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">Password:</label>
+            <input type="password" id="search-provider-ia-password-${index}" 
+                  placeholder="${provider.password ? '••••••••••••••••' : 'Enter password'}"
+                  data-original-password="${this.escapeHtml(provider.password || '')}"
+                  style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
+          </div>
+        </div>
+        `;
+      } else {
+        // Newsnab/RSS specific fields
+        html += `
         <div style="margin: 10px 0;">
           <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">API URL:</label>
           <input type="text" id="search-provider-url-${index}" value="${this.escapeHtml(provider.api_url || '')}"
@@ -295,6 +362,11 @@ export class SettingsManager {
                 placeholder="7000,7010,7020,7030"
                 style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
         </div>
+        `;
+      }
+
+      // Common footer (enabled checkbox and buttons)
+      html += `
         <div style="margin: 10px 0;">
           <label style="display: flex; align-items: center; gap: 8px;">
             <input type="checkbox" id="search-provider-enabled-${index}" ${provider.enabled ? 'checked' : ''}>
@@ -308,6 +380,7 @@ export class SettingsManager {
         </div>
       `;
 
+      div.innerHTML = html;
       list.appendChild(div);
     });
   }
@@ -320,15 +393,27 @@ export class SettingsManager {
     const nameInput = document.getElementById('download-client-name');
     const urlInput = document.getElementById('download-client-url');
     const apiKeyInput = document.getElementById('download-client-apikey');
+    const downloadsDirInput = document.getElementById('download-client-downloads-dir');
+    const maxConcurrentInput = document.getElementById('download-client-max-concurrent');
 
-    if (typeSelect) typeSelect.value = clientConfig.type || 'sabnzbd';
+    const clientType = clientConfig.type || 'sabnzbd';
+    if (typeSelect) typeSelect.value = clientType;
     if (nameInput) nameInput.value = clientConfig.name || '';
+
+    // NZB client fields (SABnzbd/NZBGet)
     if (urlInput) urlInput.value = clientConfig.api_url || '';
     if (apiKeyInput) {
       apiKeyInput.value = '';
       apiKeyInput.setAttribute('data-original-key', clientConfig.api_key || '');
       apiKeyInput.placeholder = clientConfig.api_key ? '••••••••••••••••' : 'Enter API key';
     }
+
+    // Internet Archive fields
+    if (downloadsDirInput) downloadsDirInput.value = clientConfig.downloads_dir || '';
+    if (maxConcurrentInput) maxConcurrentInput.value = clientConfig.max_concurrent || 3;
+
+    // Trigger field visibility based on type
+    this.onDownloadClientTypeChange(clientType);
   }
 
   /**
@@ -601,21 +686,35 @@ export class SettingsManager {
    */
   async saveDownloadClientSettings() {
     const type = document.getElementById('download-client-type')?.value;
-    const url = document.getElementById('download-client-url')?.value;
-    const apiKeyInput = document.getElementById('download-client-apikey');
-    const apiKey = apiKeyInput?.value; // Only use the actual input value
+    const name = document.getElementById('download-client-name')?.value;
 
     const downloadClientConfig = {
       type,
-      api_url: url,
+      name,
     };
 
-    // Only include api_key if user entered a new one
-    if (apiKey) {
-      downloadClientConfig.api_key = apiKey;
-    } else if (this.currentConfig?.config?.download_client?.api_key) {
-      // Preserve existing key from cached config
-      downloadClientConfig.api_key = this.currentConfig.config.download_client.api_key;
+    if (type === 'internet_archive') {
+      // Internet Archive specific fields
+      const downloadsDir = document.getElementById('download-client-downloads-dir')?.value;
+      const maxConcurrent = document.getElementById('download-client-max-concurrent')?.value;
+
+      if (downloadsDir) downloadClientConfig.downloads_dir = downloadsDir;
+      if (maxConcurrent) downloadClientConfig.max_concurrent = parseInt(maxConcurrent, 10);
+    } else {
+      // NZB client fields (SABnzbd/NZBGet)
+      const url = document.getElementById('download-client-url')?.value;
+      const apiKeyInput = document.getElementById('download-client-apikey');
+      const apiKey = apiKeyInput?.value;
+
+      downloadClientConfig.api_url = url;
+
+      // Only include api_key if user entered a new one
+      if (apiKey) {
+        downloadClientConfig.api_key = apiKey;
+      } else if (this.currentConfig?.config?.download_client?.api_key) {
+        // Preserve existing key from cached config
+        downloadClientConfig.api_key = this.currentConfig.config.download_client.api_key;
+      }
     }
 
     try {
@@ -648,29 +747,35 @@ export class SettingsManager {
   async testDownloadClientConnection() {
     try {
       const type = document.getElementById('download-client-type')?.value;
-      const url = document.getElementById('download-client-url')?.value;
-      const apiKeyInput = document.getElementById('download-client-apikey');
-      const apiKey = apiKeyInput?.value || apiKeyInput?.dataset.originalKey;
+      let testPayload = { type };
 
-      if (!url) {
-        UIUtils.showStatus('settings-status', 'Please enter an API URL', 'error');
-        return;
-      }
+      if (type === 'internet_archive') {
+        // Internet Archive just needs to verify downloads directory
+        const downloadsDir = document.getElementById('download-client-downloads-dir')?.value;
+        testPayload.downloads_dir = downloadsDir || './local/downloads';
+      } else {
+        // NZB clients need URL and API key
+        const url = document.getElementById('download-client-url')?.value;
+        const apiKeyInput = document.getElementById('download-client-apikey');
+        const apiKey = apiKeyInput?.value || apiKeyInput?.dataset.originalKey;
 
-      if (!apiKey) {
-        UIUtils.showStatus('settings-status', 'Please enter an API key', 'error');
-        return;
+        if (!url) {
+          UIUtils.showStatus('settings-status', 'Please enter an API URL', 'error');
+          return;
+        }
+
+        if (!apiKey) {
+          UIUtils.showStatus('settings-status', 'Please enter an API key', 'error');
+          return;
+        }
+
+        testPayload.api_url = url;
+        testPayload.api_key = apiKey;
       }
 
       // Show testing status
-      UIUtils.showStatus('settings-status', `Testing connection to ${type}...`, 'info');
-
-      // Build the test payload
-      const testPayload = {
-        type,
-        api_url: url,
-        api_key: apiKey,
-      };
+      const typeName = type === 'internet_archive' ? 'Internet Archive' : type;
+      UIUtils.showStatus('settings-status', `Testing connection to ${typeName}...`, 'info');
 
       const data = await APIHelper.executeWithErrorHandling(
         async () => {
@@ -700,19 +805,8 @@ export class SettingsManager {
   async testProviderConnection(index) {
     try {
       const name = document.getElementById(`search-provider-name-${index}`).value;
-      const url = document.getElementById(`search-provider-url-${index}`).value;
-      const keyInput = document.getElementById(`search-provider-key-${index}`);
-      const key = keyInput.value || keyInput.dataset.originalKey;
-
-      if (!url) {
-        UIUtils.showStatus('settings-status', 'Please enter an API URL', 'error');
-        return;
-      }
-
-      if (!key) {
-        UIUtils.showStatus('settings-status', 'Please enter an API key', 'error');
-        return;
-      }
+      const typeInput = document.getElementById(`search-provider-type-${index}`);
+      const providerType = typeInput ? typeInput.value : 'newsnab';
 
       // Show testing status
       UIUtils.showStatus(
@@ -721,12 +815,36 @@ export class SettingsManager {
         'info'
       );
 
-      // Build the test payload
-      const testPayload = {
-        type: 'newsnab', // Currently only newsnab is supported
-        api_url: url,
-        api_key: key,
-      };
+      let testPayload;
+
+      if (providerType === 'internet_archive') {
+        // Internet Archive provider - no URL/key needed
+        testPayload = {
+          type: 'internet_archive',
+          name: name,
+        };
+      } else {
+        // Newsnab/RSS provider - requires URL and key
+        const url = document.getElementById(`search-provider-url-${index}`).value;
+        const keyInput = document.getElementById(`search-provider-key-${index}`);
+        const key = keyInput ? keyInput.value || keyInput.dataset.originalKey : '';
+
+        if (!url) {
+          UIUtils.showStatus('settings-status', 'Please enter an API URL', 'error');
+          return;
+        }
+
+        if (!key && providerType === 'newsnab') {
+          UIUtils.showStatus('settings-status', 'Please enter an API key', 'error');
+          return;
+        }
+
+        testPayload = {
+          type: providerType,
+          api_url: url,
+          api_key: key,
+        };
+      }
 
       const data = await APIHelper.executeWithErrorHandling(
         async () => {
@@ -755,36 +873,94 @@ export class SettingsManager {
   async editSearchProvider(index) {
     try {
       const name = document.getElementById(`search-provider-name-${index}`).value;
-      const url = document.getElementById(`search-provider-url-${index}`).value;
-      const keyInput = document.getElementById(`search-provider-key-${index}`);
-      const key = keyInput.value; // Only use the actual input value, not data-original-key
-      const categories = document.getElementById(`search-provider-categories-${index}`).value;
+      const type =
+        document.getElementById(`search-provider-type-${index}`)?.value ||
+        this.currentConfig.config.search_providers[index].type;
       const enabled = document.getElementById(`search-provider-enabled-${index}`).checked;
 
-      if (!name || !url) {
-        UIUtils.showStatus('settings-status', 'Please fill in provider name and URL', 'error');
+      if (!name) {
+        UIUtils.showStatus('settings-status', 'Please fill in provider name', 'error');
         return;
       }
 
-      // Build the provider update - only include api_key if it was actually entered
+      const isInternetArchive = type === 'internet_archive';
+
+      // Build the provider update based on type
       const providerUpdate = {
-        type: this.currentConfig.config.search_providers[index].type,
+        type: type,
         name: name,
-        api_url: url,
         enabled: enabled,
       };
 
-      // Add categories if provided (optional field)
-      if (categories) {
-        providerUpdate.categories = categories;
-      }
+      if (isInternetArchive) {
+        // Internet Archive specific fields
+        const collectionsInput = document.getElementById(`search-provider-collections-${index}`);
+        const formatsInput = document.getElementById(`search-provider-formats-${index}`);
+        const priorityInput = document.getElementById(`search-provider-priority-${index}`);
+        const usernameInput = document.getElementById(`search-provider-ia-username-${index}`);
+        const passwordInput = document.getElementById(`search-provider-ia-password-${index}`);
 
-      // Only include api_key if user entered a new one
-      if (key) {
-        providerUpdate.api_key = key;
+        if (collectionsInput && collectionsInput.value) {
+          providerUpdate.collections = collectionsInput.value
+            .split(',')
+            .map((c) => c.trim())
+            .filter((c) => c);
+        }
+        if (formatsInput && formatsInput.value) {
+          providerUpdate.file_formats = formatsInput.value
+            .split(',')
+            .map((f) => f.trim())
+            .filter((f) => f);
+        }
+        if (priorityInput && priorityInput.value) {
+          providerUpdate.priority = parseInt(priorityInput.value, 10);
+        }
+        // Handle username - only update if changed
+        if (usernameInput && usernameInput.value) {
+          providerUpdate.username = usernameInput.value;
+        } else if (usernameInput) {
+          // Keep original if not changed
+          const originalUsername = usernameInput.dataset.originalUsername;
+          if (originalUsername) {
+            providerUpdate.username = originalUsername;
+          }
+        }
+        // Handle password - only update if changed
+        if (passwordInput && passwordInput.value) {
+          providerUpdate.password = passwordInput.value;
+        } else if (passwordInput) {
+          // Keep original if not changed
+          const originalPassword = passwordInput.dataset.originalPassword;
+          if (originalPassword) {
+            providerUpdate.password = originalPassword;
+          }
+        }
       } else {
-        // If no new key entered, preserve the existing one from our cached config
-        providerUpdate.api_key = this.currentConfig.config.search_providers[index].api_key;
+        // Newsnab/RSS specific fields
+        const url = document.getElementById(`search-provider-url-${index}`).value;
+        const keyInput = document.getElementById(`search-provider-key-${index}`);
+        const key = keyInput ? keyInput.value : '';
+        const categories = document.getElementById(`search-provider-categories-${index}`).value;
+
+        if (!url) {
+          UIUtils.showStatus('settings-status', 'Please fill in provider URL', 'error');
+          return;
+        }
+
+        providerUpdate.api_url = url;
+
+        // Add categories if provided (optional field)
+        if (categories) {
+          providerUpdate.categories = categories;
+        }
+
+        // Only include api_key if user entered a new one
+        if (key) {
+          providerUpdate.api_key = key;
+        } else {
+          // If no new key entered, preserve the existing one from our cached config
+          providerUpdate.api_key = this.currentConfig.config.search_providers[index].api_key;
+        }
       }
 
       // Clone the current providers array and update the specific provider
@@ -909,22 +1085,56 @@ export class SettingsManager {
     try {
       const type = document.getElementById('new-provider-type').value;
       const name = document.getElementById('new-provider-name').value;
-      const apiUrl = document.getElementById('new-provider-url').value;
-      const apiKey = document.getElementById('new-provider-key').value;
-      const categories = document.getElementById('new-provider-categories').value;
       const enabled = document.getElementById('new-provider-enabled').checked;
 
       const newProvider = {
         type,
         name,
-        api_url: apiUrl,
-        api_key: apiKey,
         enabled,
       };
 
-      // Add categories if provided (optional field)
-      if (categories) {
-        newProvider.categories = categories;
+      if (type === 'internet_archive') {
+        // Internet Archive specific fields
+        const collections = document.getElementById('new-provider-collections').value;
+        const formats = document.getElementById('new-provider-formats').value;
+        const priority = document.getElementById('new-provider-priority').value;
+        const username = document.getElementById('new-provider-ia-username').value;
+        const password = document.getElementById('new-provider-ia-password').value;
+
+        if (collections) {
+          newProvider.collections = collections
+            .split(',')
+            .map((c) => c.trim())
+            .filter((c) => c);
+        }
+        if (formats) {
+          newProvider.file_formats = formats
+            .split(',')
+            .map((f) => f.trim())
+            .filter((f) => f);
+        }
+        if (priority) {
+          newProvider.priority = parseInt(priority, 10);
+        }
+        if (username) {
+          newProvider.username = username;
+        }
+        if (password) {
+          newProvider.password = password;
+        }
+      } else {
+        // Standard provider fields
+        const apiUrl = document.getElementById('new-provider-url').value;
+        const apiKey = document.getElementById('new-provider-key').value;
+        const categories = document.getElementById('new-provider-categories').value;
+
+        newProvider.api_url = apiUrl;
+        newProvider.api_key = apiKey;
+
+        // Add categories if provided (optional field)
+        if (categories) {
+          newProvider.categories = categories;
+        }
       }
 
       // Clone current providers array and add new provider
@@ -1149,7 +1359,9 @@ export class SettingsManager {
       const patternCustom = document.getElementById('import-organization-pattern-custom');
       const enableTextScan = document.getElementById('import-enable-text-scan')?.checked;
       const enableOcr = document.getElementById('import-enable-ocr')?.checked;
-      const autoCleanupDownloads = document.getElementById('import-auto-cleanup-downloads')?.checked;
+      const autoCleanupDownloads = document.getElementById(
+        'import-auto-cleanup-downloads'
+      )?.checked;
       const autoCleanupLibrary = document.getElementById('import-auto-cleanup-library')?.checked;
 
       // Map pattern keys to their templates
@@ -2015,6 +2227,49 @@ export class SettingsManager {
       customInput.classList.add('hidden');
     }
   }
+
+  /**
+   * Handle download client type selection change
+   * Shows/hides appropriate fields based on client type
+   */
+  onDownloadClientTypeChange(type) {
+    const nzbFields = document.getElementById('download-client-nzb-fields');
+    const iaFields = document.getElementById('download-client-ia-fields');
+
+    if (!nzbFields || !iaFields) return;
+
+    if (type === 'internet_archive') {
+      nzbFields.classList.add('hidden');
+      iaFields.classList.remove('hidden');
+    } else {
+      nzbFields.classList.remove('hidden');
+      iaFields.classList.add('hidden');
+    }
+  }
+
+  /**
+   * Handle provider type selection change
+   * Shows/hides appropriate fields based on provider type
+   */
+  onProviderTypeChange(type) {
+    const standardFields = document.getElementById('provider-standard-fields');
+    const iaFields = document.getElementById('provider-ia-fields');
+    const urlInput = document.getElementById('new-provider-url');
+
+    if (!standardFields || !iaFields) return;
+
+    if (type === 'internet_archive') {
+      standardFields.classList.add('hidden');
+      iaFields.classList.remove('hidden');
+      // Remove required from URL field for IA
+      if (urlInput) urlInput.removeAttribute('required');
+    } else {
+      standardFields.classList.remove('hidden');
+      iaFields.classList.add('hidden');
+      // Restore required on URL field for other providers
+      if (urlInput) urlInput.setAttribute('required', 'required');
+    }
+  }
 }
 
 // Create singleton instance
@@ -2058,3 +2313,5 @@ window.saveImportSettings = () => settings.saveImportSettings();
 window.handlePatternSelectChange = (context) => settings.handlePatternSelectChange(context);
 window.saveCacheSettings = () => settings.saveCacheSettings();
 window.loadCacheStats = () => settings.loadCacheStats();
+window.onDownloadClientTypeChange = (type) => settings.onDownloadClientTypeChange(type);
+window.onProviderTypeChange = (type) => settings.onProviderTypeChange(type);

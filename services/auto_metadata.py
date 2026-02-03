@@ -281,6 +281,13 @@ class AutoMetadataService:
         if periodical.parsed_metadata and periodical.parsed_metadata.get("ocr_scan"):
             return False
 
+        # Skip if text scan already found sufficient metadata
+        # Text-based PDFs (True PDF, Text PDF) already have extractable text, no need for OCR
+        if periodical.parsed_metadata:
+            text_scan = periodical.parsed_metadata.get("text_scan", {})
+            if text_scan.get("has_sufficient_metadata", False):
+                return False
+
         # Skip if no cover path
         if not periodical.cover_path:
             return False

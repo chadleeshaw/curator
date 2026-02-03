@@ -730,9 +730,15 @@ class FileImporter:
             # Step 10: Run text scan for additional metadata
             self._run_text_scan(magazine, organized_path, parsed.language, session)
 
-            # Step 11: Queue OCR job for background processing
-            if should_queue_ocr:
+            # Step 11: Queue OCR job only if text scan didn't find sufficient metadata
+            # Text-based PDFs (True PDF, Text PDF) already have extractable text, no need for OCR
+            text_scan_result = magazine.parsed_metadata.get("text_scan", {}) if magazine.parsed_metadata else {}
+            text_scan_sufficient = text_scan_result.get("has_sufficient_metadata", False)
+
+            if should_queue_ocr and not text_scan_sufficient:
                 self._queue_ocr_job(magazine, parsed.language, skip_organize, session)
+            elif text_scan_sufficient:
+                logger.info(f"Skipping OCR for '{parsed.title}' - text scan found sufficient metadata")
 
             # Step 12: Cleanup download file (defer folder deletion to batch processing)
             if not skip_organize:

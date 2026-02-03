@@ -755,30 +755,55 @@
               <h3>Download Client</h3>
               <div class="settings-field">
                 <label for="download-client-type">Type:</label>
-                <select id="download-client-type">
+                <select id="download-client-type" onchange="onDownloadClientTypeChange(this.value)">
                   <option value="sabnzbd">SABnzbd</option>
                   <option value="nzbget">NZBGet</option>
+                  <option value="internet_archive">Internet Archive</option>
                 </select>
               </div>
               <div class="settings-field">
                 <label for="download-client-name">Name:</label>
                 <input type="text" id="download-client-name" placeholder="e.g., SABnzbd" />
               </div>
-              <div class="settings-field">
-                <label for="download-client-url">API URL:</label>
-                <input
-                  type="text"
-                  id="download-client-url"
-                  placeholder="http://192.168.1.112:9080"
-                />
+              <!-- NZB Client Fields (SABnzbd/NZBGet) -->
+              <div id="download-client-nzb-fields">
+                <div class="settings-field">
+                  <label for="download-client-url">API URL:</label>
+                  <input
+                    type="text"
+                    id="download-client-url"
+                    placeholder="http://192.168.1.112:9080"
+                  />
+                </div>
+                <div class="settings-field">
+                  <label for="download-client-apikey">API Key:</label>
+                  <input
+                    type="password"
+                    id="download-client-apikey"
+                    placeholder="Enter your API key"
+                  />
+                </div>
               </div>
-              <div class="settings-field">
-                <label for="download-client-apikey">API Key:</label>
-                <input
-                  type="password"
-                  id="download-client-apikey"
-                  placeholder="Enter your API key"
-                />
+              <!-- Internet Archive Fields -->
+              <div id="download-client-ia-fields" class="hidden">
+                <div class="settings-field">
+                  <label for="download-client-downloads-dir">Downloads Directory:</label>
+                  <input
+                    type="text"
+                    id="download-client-downloads-dir"
+                    placeholder="./local/downloads"
+                  />
+                </div>
+                <div class="settings-field">
+                  <label for="download-client-max-concurrent">Max Concurrent Downloads:</label>
+                  <input
+                    type="number"
+                    id="download-client-max-concurrent"
+                    placeholder="3"
+                    min="1"
+                    max="10"
+                  />
+                </div>
               </div>
               <div style="display: flex; gap: 10px">
                 <button onclick="testDownloadClientConnection()" class="save-btn btn-secondary">
@@ -1886,10 +1911,11 @@
         <form id="add-provider-form" class="p-20">
           <div class="settings-field">
             <label for="new-provider-type">Provider Type:</label>
-            <select id="new-provider-type" required>
+            <select id="new-provider-type" required onchange="onProviderTypeChange(this.value)">
               <option value="newsnab">Newsnab</option>
               <option value="rss">RSS</option>
               <option value="torznab">Torznab</option>
+              <option value="internet_archive">Internet Archive</option>
               <option value="custom">Custom</option>
             </select>
           </div>
@@ -1897,27 +1923,70 @@
             <label for="new-provider-name">Name:</label>
             <input type="text" id="new-provider-name" placeholder="e.g., My Newsnab" required />
           </div>
-          <div class="settings-field">
-            <label for="new-provider-url">API URL:</label>
-            <input
-              type="text"
-              id="new-provider-url"
-              placeholder="http://example.com/api"
-              required
-            />
+          <!-- Standard Provider Fields (Newsnab/RSS/Torznab/Custom) -->
+          <div id="provider-standard-fields">
+            <div class="settings-field">
+              <label for="new-provider-url">API URL:</label>
+              <input
+                type="text"
+                id="new-provider-url"
+                placeholder="http://example.com/api"
+              />
+            </div>
+            <div class="settings-field">
+              <label for="new-provider-key">API Key:</label>
+              <input type="password" id="new-provider-key" placeholder="Enter API key" />
+            </div>
+            <div class="settings-field">
+              <label for="new-provider-categories"
+                >Categories
+                <span style="font-size: 11px; color: var(--text-secondary)"
+                  >(Newsnab only, e.g., 7000,7010,7030)</span
+                >:</label
+              >
+              <input type="text" id="new-provider-categories" placeholder="7000,7010,7020,7030" />
+            </div>
           </div>
-          <div class="settings-field">
-            <label for="new-provider-key">API Key:</label>
-            <input type="password" id="new-provider-key" placeholder="Enter API key" />
-          </div>
-          <div class="settings-field">
-            <label for="new-provider-categories"
-              >Categories
-              <span style="font-size: 11px; color: var(--text-secondary)"
-                >(Newsnab only, e.g., 7000,7010,7030)</span
-              >:</label
-            >
-            <input type="text" id="new-provider-categories" placeholder="7000,7010,7020,7030" />
+          <!-- Internet Archive Provider Fields -->
+          <div id="provider-ia-fields" class="hidden">
+            <div class="settings-field">
+              <label for="new-provider-collections"
+                >Collections
+                <span style="font-size: 11px; color: var(--text-secondary)"
+                  >(comma-separated)</span
+                >:</label
+              >
+              <input type="text" id="new-provider-collections" placeholder="magazines, periodicals, americana, comics" />
+            </div>
+            <div class="settings-field">
+              <label for="new-provider-formats"
+                >Preferred Formats
+                <span style="font-size: 11px; color: var(--text-secondary)"
+                  >(in order of preference)</span
+                >:</label
+              >
+              <input type="text" id="new-provider-formats" placeholder="PDF, EPUB, ZIP, GZIP" />
+            </div>
+            <div class="settings-field">
+              <label for="new-provider-priority"
+                >Priority
+                <span style="font-size: 11px; color: var(--text-secondary)"
+                  >(lower = searched first)</span
+                >:</label
+              >
+              <input type="number" id="new-provider-priority" placeholder="10" min="1" max="100" value="10" />
+            </div>
+            <div class="settings-field" style="padding: 10px; background: var(--bg-secondary); border-radius: 6px; border: 1px solid var(--border-color); margin-top: 10px;">
+              <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">🔐 Optional Authentication (for restricted items)</div>
+              <div style="margin-bottom: 8px;">
+                <label for="new-provider-ia-username">Username (email):</label>
+                <input type="text" id="new-provider-ia-username" placeholder="user@example.com" />
+              </div>
+              <div>
+                <label for="new-provider-ia-password">Password:</label>
+                <input type="password" id="new-provider-ia-password" placeholder="Enter password" />
+              </div>
+            </div>
           </div>
           <div class="settings-field">
             <label>

@@ -134,7 +134,7 @@ export class TrackingManager {
       option.textContent = category;
       dropdown.appendChild(option);
     });
-    
+
     // Restore saved filter value
     if (this.filterManager.categoryFilter) {
       dropdown.value = this.filterManager.categoryFilter;
@@ -150,7 +150,7 @@ export class TrackingManager {
     try {
       // FilterManager handles loading from localStorage
       this.filterManager.loadState();
-      
+
       // Update UI elements
       this.filterManager.updateUI(
         'tracking-category-filter',
@@ -185,7 +185,7 @@ export class TrackingManager {
     try {
       // FilterManager handles saving to localStorage
       this.filterManager.saveState();
-      
+
       // Also save sort settings
       const filters = {
         category: this.filterManager.categoryFilter,
@@ -666,9 +666,11 @@ export class TrackingManager {
           <div class="empty-state-icon">📚</div>
           <h3>No Tracked Periodicals Found</h3>
           <p>No periodicals found${filterDesc}.</p>
-          ${!this.filterManager.hasActiveFilters() ? 
-            '<button onclick="openTrackNewPeriodicalModal()" class="btn-primary" style="margin-top: 16px;">📌 Track Your First Periodical</button>' : 
-            '<button onclick="clearTrackingFilters()" class="btn-secondary" style="margin-top: 16px;">✕ Clear Filters</button>'}
+          ${
+            !this.filterManager.hasActiveFilters()
+              ? '<button onclick="openTrackNewPeriodicalModal()" class="btn-primary" style="margin-top: 16px;">📌 Track Your First Periodical</button>'
+              : '<button onclick="clearTrackingFilters()" class="btn-secondary" style="margin-top: 16px;">✕ Clear Filters</button>'
+          }
         </div>
       `;
       return;
@@ -678,7 +680,9 @@ export class TrackingManager {
       container.appendChild(this.createTrackedCard(trackingItem));
     });
 
-    console.log(`[Tracking] Rendered ${filtered.length} of ${this.allTracked.length} tracked periodicals`);
+    console.log(
+      `[Tracking] Rendered ${filtered.length} of ${this.allTracked.length} tracked periodicals`
+    );
   }
 
   /**
@@ -1014,8 +1018,7 @@ export class TrackingManager {
         document.getElementById('edit-tracking-country').value = t.country || '';
         document.getElementById('edit-tracking-download-category').value =
           t.download_category || '';
-        document.getElementById('edit-tracking-search-aliases').value =
-          t.search_aliases || '';
+        document.getElementById('edit-tracking-search-aliases').value = t.search_aliases || '';
 
         // Set tracking mode
         let mode = 'none';
@@ -1109,14 +1112,14 @@ export class TrackingManager {
       if (data.found && data.results.length > 0) {
         // Parse and curate results first to get deduplicated issues
         const curatedIssues = this.parseAndCurateIssues(data.results);
-        
+
         // Calculate accurate counts from deduplicated issues
         let libraryCount = 0;
         let availableCount = 0;
         let totalCount = 0;
-        
-        Object.values(curatedIssues).forEach(yearGroup => {
-          yearGroup.forEach(issue => {
+
+        Object.values(curatedIssues).forEach((yearGroup) => {
+          yearGroup.forEach((issue) => {
             totalCount++;
             if (issue.status === 'in_library') {
               libraryCount++;
@@ -1125,7 +1128,7 @@ export class TrackingManager {
             }
           });
         });
-        
+
         // Store summary stats for display
         this.libraryCount = libraryCount;
         this.availableCount = availableCount;
@@ -1239,6 +1242,56 @@ export class TrackingManager {
     });
 
     return grouped;
+  }
+
+  /**
+   * Format provider name as a styled badge
+   * @param {string} provider - Provider type/name
+   * @returns {string} HTML for provider badge
+   */
+  formatProviderBadge(provider) {
+    if (!provider) return '';
+
+    const providerLower = provider.toLowerCase();
+
+    // Provider-specific styling
+    const providerStyles = {
+      internet_archive: {
+        icon: '🏛️',
+        label: 'Internet Archive',
+        color: '#428bca',
+        bgColor: '#e8f4fc',
+      },
+      newsnab: {
+        icon: '📰',
+        label: 'Newsnab',
+        color: '#5cb85c',
+        bgColor: '#e8f5e9',
+      },
+      rss: {
+        icon: '📡',
+        label: 'RSS',
+        color: '#f0ad4e',
+        bgColor: '#fff8e1',
+      },
+    };
+
+    const style = providerStyles[providerLower] || {
+      icon: '🔗',
+      label: provider,
+      color: '#6c757d',
+      bgColor: '#f5f5f5',
+    };
+
+    return `<span style="
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: ${style.bgColor};
+      color: ${style.color};
+      font-weight: 500;
+      font-size: 9px;
+    ">${style.icon} ${style.label}</span>`;
   }
 
   /**
@@ -1454,30 +1507,40 @@ export class TrackingManager {
         const hasFailed = status === 'failed';
 
         // Calculate age of newest NZB for availability indication
+        // Skip age badge for Internet Archive items (they're permanently archived, age doesn't affect availability)
         let newestAge = '';
         let ageColorClass = '';
         if (!isLibraryItem && issue.variants && issue.variants.length > 0) {
-          // Find the newest publication_date among variants
-          const variantsWithDates = issue.variants.filter((v) => v.publication_date);
-          if (variantsWithDates.length > 0) {
-            const newestVariant = variantsWithDates.reduce((newest, v) => {
-              const vDate = new Date(v.publication_date);
-              const nDate = new Date(newest.publication_date);
-              return vDate > nDate ? v : newest;
-            });
-            newestAge = formatRelativeAge(newestVariant.publication_date);
+          // Check if all variants are from Internet Archive - skip age badge if so
+          const allFromInternetArchive = issue.variants.every(
+            (v) => v.provider && v.provider.toLowerCase() === 'internet_archive'
+          );
 
-            // Color code by age: green < 7 days, yellow 7-30 days, orange 30-90 days, red > 90 days
-            const ageDate = new Date(newestVariant.publication_date);
-            const ageDays = Math.floor((new Date() - ageDate) / (1000 * 60 * 60 * 24));
-            if (ageDays <= 7) {
-              ageColorClass = 'age-fresh'; // Green - excellent retention
-            } else if (ageDays <= 30) {
-              ageColorClass = 'age-good'; // Yellow-green - good retention
-            } else if (ageDays <= 90) {
-              ageColorClass = 'age-moderate'; // Orange - moderate retention
-            } else {
-              ageColorClass = 'age-old'; // Red - may have retention issues
+          if (!allFromInternetArchive) {
+            // Find the newest publication_date among non-IA variants
+            const variantsWithDates = issue.variants.filter(
+              (v) => v.publication_date && v.provider?.toLowerCase() !== 'internet_archive'
+            );
+            if (variantsWithDates.length > 0) {
+              const newestVariant = variantsWithDates.reduce((newest, v) => {
+                const vDate = new Date(v.publication_date);
+                const nDate = new Date(newest.publication_date);
+                return vDate > nDate ? v : newest;
+              });
+              newestAge = formatRelativeAge(newestVariant.publication_date);
+
+              // Color code by age: green < 7 days, yellow 7-30 days, orange 30-90 days, red > 90 days
+              const ageDate = new Date(newestVariant.publication_date);
+              const ageDays = Math.floor((new Date() - ageDate) / (1000 * 60 * 60 * 24));
+              if (ageDays <= 7) {
+                ageColorClass = 'age-fresh'; // Green - excellent retention
+              } else if (ageDays <= 30) {
+                ageColorClass = 'age-good'; // Yellow-green - good retention
+              } else if (ageDays <= 90) {
+                ageColorClass = 'age-moderate'; // Orange - moderate retention
+              } else {
+                ageColorClass = 'age-old'; // Red - may have retention issues
+              }
             }
           }
         }
@@ -1509,7 +1572,7 @@ export class TrackingManager {
         }
 
         const providerDisplay = !isLibraryItem
-          ? `<div style="font-size: 10px; color: var(--text-secondary); margin-top: 6px;">${issue.provider || ''}</div>`
+          ? `<div style="font-size: 10px; margin-top: 6px;">${this.formatProviderBadge(issue.provider)}</div>`
           : '';
 
         // Show language variants badge if multiple variants exist
@@ -1545,15 +1608,16 @@ export class TrackingManager {
           window.issueVariants = window.issueVariants || {};
           window.issueVariants[issueKey] = issue.variants;
           cardHtml += ` onclick='selectIssueWithVariants("${issueKey}", ${issue.already_downloaded || false}, ${issue.download_failed || false})'`;
-          
+
           // Store available issues for bulk download
           // Find first variant that hasn't failed
           if (status === 'available' && issue.variants.length > 0) {
-            const firstNonFailedVariant = issue.variants.find(v => !v.download_failed) || issue.variants[0];
+            const firstNonFailedVariant =
+              issue.variants.find((v) => !v.download_failed) || issue.variants[0];
             this.availableIssues.push({
               title: firstNonFailedVariant.title,
               url: firstNonFailedVariant.url,
-              provider: firstNonFailedVariant.provider
+              provider: firstNonFailedVariant.provider,
             });
           }
         }
@@ -1874,7 +1938,9 @@ window.selectIssueWithVariants = function (issueKey, alreadyDownloaded, hasFaile
     const ageBadge = age ? `<span class="variant-age">${age} old</span>` : '';
 
     // Provider info
-    const providerInfo = variant.provider ? `<span class="variant-provider">${variant.provider}</span>` : '';
+    const providerInfo = variant.provider
+      ? `<span class="variant-provider">${variant.provider}</span>`
+      : '';
 
     const btn = document.createElement('button');
     // Different styling for re-download vs new download vs failed
@@ -2191,7 +2257,7 @@ window.downloadAllAvailable = async function () {
           provider: issue.provider,
         });
         const data = await response.json();
-        
+
         if (data.status === 'queued' || data.job_id) {
           successCount++;
         } else {
@@ -2204,7 +2270,11 @@ window.downloadAllAvailable = async function () {
     }
 
     const message = `Submitted ${successCount} downloads${errorCount > 0 ? `, ${errorCount} failed` : ''}`;
-    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, message, errorCount > 0 ? 'warning' : 'success');
+    UIUtils.showStatus(
+      ELEMENT_IDS.TRACKING_STATUS,
+      message,
+      errorCount > 0 ? 'warning' : 'success'
+    );
     setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), TIMEOUTS.AUTO_HIDE_LONG);
   } catch (err) {
     console.error('Bulk download error:', err);
@@ -2238,11 +2308,11 @@ window.downloadIssue = async function (title, url, provider) {
     // Handle different submission statuses
     let message;
     if (data.status === 'queued') {
-      message = '✓ Download queued (will be submitted when slot available)';
+      message = 'Download queued (will be submitted when slot available)';
     } else if (data.job_id) {
-      message = `✓ Download submitted! Job ID: ${data.job_id}`;
+      message = `Download submitted! Job ID: ${data.job_id}`;
     } else {
-      message = `✓ Download ${data.status}`;
+      message = `Download ${data.status}`;
     }
 
     UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, message, 'success');
@@ -2421,7 +2491,7 @@ async function reorganizeTrackingFiles(trackingId, _title) {
 window.setTrackingFilter = function (type, value) {
   if (tracking && tracking.filterManager) {
     tracking.filterManager.setFilter(type, value);
-    
+
     // Update dropdown UI
     if (type === 'category') {
       const dropdown = document.getElementById('tracking-category-filter');
@@ -2430,7 +2500,7 @@ window.setTrackingFilter = function (type, value) {
       const dropdown = document.getElementById('tracking-language-filter');
       if (dropdown) dropdown.value = value;
     }
-    
+
     // If periodicals haven't been loaded yet, load them now
     if (!tracking.periodicalsLoaded) {
       tracking.loadTrackedPeriodicals();
