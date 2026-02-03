@@ -39,7 +39,10 @@ async def get_download_queue_all(status: Optional[str] = None) -> Dict[str, Any]
             trackings = db.query(PeriodicalTracking).filter(PeriodicalTracking.id.in_(tracking_ids)).all()
             tracking_map = {t.id: t.title for t in trackings}
 
-        # Count by status
+        # Get download manager for real-time progress
+        download_manager = _shared._download_manager
+
+        # Count by status and build queue items with progress
         status_counts = {
             "queued": 0,
             "pending": 0,
@@ -48,27 +51,45 @@ async def get_download_queue_all(status: Optional[str] = None) -> Dict[str, Any]
             "failed": 0,
             "skipped": 0,
         }
+        queue_items = []
         for s in submissions:
             status_counts[s.status.value] = status_counts.get(s.status.value, 0) + 1
 
+            # Get real-time progress for active downloads
+            progress = None
+            time_left = None
+            size = None
+            if s.status.value in ["downloading", "pending"] and s.job_id and download_manager:
+                try:
+                    client = download_manager._get_client_by_name(s.client_name)
+                    if client:
+                        client_status = client.get_status(s.job_id)
+                        progress = client_status.get("progress")
+                        time_left = client_status.get("time_left")
+                        size = client_status.get("size")
+                except Exception as e:
+                    _shared.logger.debug(f"Could not get progress for job {s.job_id}: {e}")
+
+            queue_items.append({
+                "submission_id": s.id,
+                "tracking_id": s.tracking_id,
+                "title": s.result_title,
+                "magazine": tracking_map.get(s.tracking_id, "Unknown"),
+                "url": s.source_url or "",
+                "status": s.status.value,
+                "job_id": s.job_id,
+                "error": s.last_error,
+                "extra_status": s.extra_status,
+                "attempts": s.attempt_count,
+                "progress": progress,
+                "time_left": time_left,
+                "size": size,
+                "created_at": (s.created_at.isoformat() if s.created_at else None),
+                "updated_at": (s.updated_at.isoformat() if s.updated_at else None),
+            })
+
         return success_response(
-            queue=[
-                {
-                    "submission_id": s.id,
-                    "tracking_id": s.tracking_id,
-                    "title": s.result_title,
-                    "magazine": tracking_map.get(s.tracking_id, "Unknown"),
-                    "url": s.source_url or "",
-                    "status": s.status.value,
-                    "job_id": s.job_id,
-                    "error": s.last_error,
-                    "extra_status": s.extra_status,
-                    "attempts": s.attempt_count,
-                    "created_at": (s.created_at.isoformat() if s.created_at else None),
-                    "updated_at": (s.updated_at.isoformat() if s.updated_at else None),
-                }
-                for s in submissions
-            ],
+            queue=queue_items,
             count=len(submissions),
             status_counts=status_counts,
         )

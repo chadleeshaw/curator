@@ -162,7 +162,9 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
                     # Update database paths if reorganization succeeded
                     if new_pdf_path:
                         # Check if target path already exists in database (UNIQUE constraint check)
-                        existing_record = db.query(Periodical).filter_by(file_path=new_pdf_path).first()
+                        # Use no_autoflush to prevent premature flush of pending changes
+                        with db.no_autoflush:
+                            existing_record = db.query(Periodical).filter_by(file_path=new_pdf_path).first()
                         if existing_record and existing_record.id != periodical.id:
                             logger.error(
                                 f"Cannot update periodical {periodical.id}: Target path {new_pdf_path} "

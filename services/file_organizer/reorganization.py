@@ -204,7 +204,9 @@ class ReorganizationMixin:
         final_path = self._get_unique_target_path(target_dir, filename)
 
         # Check if target path already exists in database
-        existing_record = db_session.query(Periodical).filter_by(file_path=str(final_path)).first()
+        # Use no_autoflush to prevent premature flush of pending changes
+        with db_session.no_autoflush:
+            existing_record = db_session.query(Periodical).filter_by(file_path=str(final_path)).first()
         if existing_record and existing_record.id != magazine.id:
             logger.warning(
                 f"Target path already exists in database for different record: {final_path}. "

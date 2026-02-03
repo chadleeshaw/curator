@@ -482,8 +482,11 @@ class InternetArchiveClient(DownloadClient):
                     if content_length:
                         job.expected_size = int(content_length)
 
-                    # Stream download
+                    # Stream download with progress logging
                     job.downloaded_size = 0
+                    last_logged_progress = -1
+                    last_logged_mb = -1
+
                     with open(dest_file, "wb") as f:
                         for chunk in response.iter_content(chunk_size=IA_DOWNLOAD_CHUNK_SIZE):
                             if chunk:
@@ -493,6 +496,17 @@ class InternetArchiveClient(DownloadClient):
                                 # Update progress
                                 if job.expected_size > 0:
                                     job.progress = int((job.downloaded_size / job.expected_size) * 100)
+
+                                    # Log progress every 10% or every 10MB
+                                    current_mb = job.downloaded_size // (10 * 1024 * 1024)  # Every 10MB
+                                    if (job.progress >= last_logged_progress + 10) or (current_mb > last_logged_mb):
+                                        logger.info(
+                                            f"[{self.name}] Download progress for {job.identifier}: "
+                                            f"{job.progress}% ({job.downloaded_size / 1024 / 1024:.1f} MB / "
+                                            f"{job.expected_size / 1024 / 1024:.1f} MB)"
+                                        )
+                                        last_logged_progress = job.progress
+                                        last_logged_mb = current_mb
 
                     # Verify download
                     if dest_file.exists() and dest_file.stat().st_size > 0:

@@ -507,6 +507,21 @@ export class DownloadsManager {
         })
         .join('');
 
+      // Get aggregate progress for downloading items
+      const downloadingItems = items.filter(item => item.status === 'downloading' && item.progress != null);
+      const progressInfo = downloadingItems.length > 0
+        ? (() => {
+            const avgProgress = Math.round(downloadingItems.reduce((sum, item) => sum + item.progress, 0) / downloadingItems.length);
+            return `<div style="margin-top: 6px; width: 200px;">
+                <div style="background: var(--surface); border-radius: 8px; height: 18px; overflow: hidden; border: 1px solid var(--border-color);">
+                  <div style="background: linear-gradient(90deg, var(--status-downloading), var(--accent-color)); height: 100%; width: ${avgProgress}%; transition: width 0.3s ease; display: flex; align-items: center; padding-left: 5px;">
+                    <span style="color: white; font-size: 0.65em; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">${downloadingItems.length} downloading • ${avgProgress}% avg</span>
+                  </div>
+                </div>
+              </div>`;
+          })()
+        : '';
+
       // Check for rate limiting and get longest wait time
       const waitInfo = this.getLongestWaitTime(items);
       const waitTimeNote = waitInfo
@@ -529,6 +544,7 @@ export class DownloadsManager {
                 ${statusBadges}
                 <span style="font-size: 1.2em; color: var(--text-secondary);">\u2192</span>
               </div>
+              ${progressInfo}
               ${waitTimeNote}
             </div>
           </div>
@@ -759,8 +775,23 @@ export class DownloadsManager {
           // Build status info with error or extra_status
           let statusInfo = `<span style="background: ${statusColor}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.85em;">${status}</span>`;
 
+          // Show progress bar for active downloads
+          if (status === 'downloading' && item.progress != null) {
+            const progress = Math.min(100, Math.max(0, item.progress));
+            const timeLeft = item.time_left || '';
+            const size = item.size || '';
+            statusInfo += `
+              <div style="margin-top: 6px;">
+                <div style="background: var(--surface-variant); border-radius: 8px; height: 20px; overflow: hidden; border: 1px solid var(--border-color);">
+                  <div style="background: linear-gradient(90deg, var(--status-downloading), var(--accent-color)); height: 100%; width: ${progress}%; transition: width 0.3s ease; display: flex; align-items: center; justify-content: center;">
+                    <span style="color: white; font-size: 0.7em; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">${progress}%</span>
+                  </div>
+                </div>
+                ${timeLeft || size ? `<div style="font-size: 0.7em; color: var(--text-secondary); margin-top: 2px;">${size ? size + ' ' : ''}${timeLeft ? '• ' + timeLeft : ''}</div>` : ''}
+              </div>`;
+          }
           // Show error message for failed items
-          if (status === 'failed' && error) {
+          else if (status === 'failed' && error) {
             statusInfo += `<div style="font-size: 0.75em; color: var(--status-failed); margin-top: 4px; font-style: italic;">❌ ${error}</div>`;
           }
           // Show extra_status for rate limiting or other info
