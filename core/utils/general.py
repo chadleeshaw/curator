@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from core.constants.files import BLACKLISTED_FILE_EXTENSIONS
+from core.constants.files import BLACKLISTED_FILE_EXTENSIONS, INCOMPLETE_DOWNLOAD_PATTERNS
 from core.constants.title import SPECIAL_EDITION_KEYWORDS
 
 logger = logging.getLogger(__name__)
@@ -227,7 +227,13 @@ def is_special_edition(title: str) -> bool:
 
 def find_pdf_epub_files(directory: Path, recursive: bool = True) -> list[Path]:
     """
-    Search for PDF, EPUB, CBZ, and CBR files in a directory, filtering out blacklisted extensions.
+    Search for PDF, EPUB, CBZ, and CBR files in a directory, filtering out blacklisted extensions
+    and incomplete/temporary downloads.
+
+    Skips files that are:
+    - In blacklisted extensions
+    - In folders with incomplete download patterns (_unpack_, _UNPACK_, etc.)
+    - Have incomplete download extensions (.part, .crdownload, .tmp, etc.)
 
     Args:
         directory: Directory to search
@@ -251,12 +257,22 @@ def find_pdf_epub_files(directory: Path, recursive: bool = True) -> list[Path]:
 
     all_files = pdf_files + epub_files + cbz_files + cbr_files
 
-    # Filter out any files with blacklisted extensions and log them
+    # Filter out blacklisted extensions and incomplete downloads
     filtered_files = []
     for file in all_files:
+        # Skip blacklisted extensions
         if file.suffix.lower() in BLACKLISTED_FILE_EXTENSIONS:
             logger.warning(f"Skipping blacklisted file extension '{file.suffix}': {file.name}")
-        else:
-            filtered_files.append(file)
+            continue
+
+        # Skip files in incomplete download folders or with incomplete extensions
+        file_path_str = str(file).lower()
+        is_incomplete = any(pattern.lower() in file_path_str for pattern in INCOMPLETE_DOWNLOAD_PATTERNS)
+
+        if is_incomplete:
+            logger.debug(f"Skipping incomplete/temporary download: {file.name}")
+            continue
+
+        filtered_files.append(file)
 
     return filtered_files

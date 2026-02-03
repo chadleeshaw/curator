@@ -12,6 +12,7 @@ from typing import Callable, Optional
 from sqlalchemy.orm import Session, sessionmaker
 
 from core.constants.app import DOWNLOAD_FILE_SEARCH_DEPTH
+from core.constants.files import INCOMPLETE_DOWNLOAD_PATTERNS
 from services.importer.sidecar import create_sidecar_file
 from models.database import DownloadSubmission, PeriodicalTracking, DiscoveredIssue
 from services import DownloadManager
@@ -154,20 +155,37 @@ class DownloadMonitor:
 
     def _find_pdf_epub_files(self, directory: Path) -> list[Path]:
         """
-        Find all PDF and EPUB files in a directory recursively.
+        Find all PDF and EPUB files in a directory recursively, excluding incomplete downloads.
+
+        Skips files in folders with incomplete download patterns (_unpack_, _UNPACK_, etc.)
+        or with incomplete download extensions (.part, .crdownload, .tmp, etc.)
 
         Args:
             directory: Directory to search
 
         Returns:
-            List of Path objects for PDF/EPUB/CBZ/CBR files found
+            List of Path objects for PDF/EPUB/CBZ/CBR files found (excluding incomplete downloads)
         """
         files = []
         if directory.exists() and directory.is_dir():
-            files.extend(directory.glob("**/*.pdf"))
-            files.extend(directory.glob("**/*.epub"))
-            files.extend(directory.glob("**/*.cbz"))
-            files.extend(directory.glob("**/*.cbr"))
+            # Find all files
+            all_files = []
+            all_files.extend(directory.glob("**/*.pdf"))
+            all_files.extend(directory.glob("**/*.epub"))
+            all_files.extend(directory.glob("**/*.cbz"))
+            all_files.extend(directory.glob("**/*.cbr"))
+
+            # Filter out incomplete downloads
+            for file in all_files:
+                file_path_str = str(file).lower()
+                is_incomplete = any(pattern.lower() in file_path_str for pattern in INCOMPLETE_DOWNLOAD_PATTERNS)
+
+                if is_incomplete:
+                    logger.debug(f"Skipping incomplete/temporary download: {file.name}")
+                    continue
+
+                files.append(file)
+
         return files
 
     def _find_file_in_downloads(self, file_path: str, max_depth: int = DOWNLOAD_FILE_SEARCH_DEPTH) -> Optional[Path]:

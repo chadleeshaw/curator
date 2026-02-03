@@ -109,6 +109,21 @@ BLACKLISTED_FILE_EXTENSIONS = {
 
 
 # ==============================================================================
+# Temporary/Incomplete Download Patterns
+# ==============================================================================
+
+INCOMPLETE_DOWNLOAD_PATTERNS = {
+    "_unpack_",  # SABnzbd unpacking prefix
+    "_UNPACK_",  # SABnzbd unpacking prefix (uppercase)
+    ".!qb",  # qBittorrent incomplete extension
+    ".part",  # Firefox/Chrome partial downloads
+    ".crdownload",  # Chrome download in progress
+    ".tmp",  # Generic temporary files
+}
+"""Set of patterns indicating incomplete/temporary downloads that should be skipped during import"""
+
+
+# ==============================================================================
 # File Hashing
 # ==============================================================================
 
