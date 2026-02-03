@@ -120,8 +120,9 @@ class FolderCleanup:
 
         A folder is safe to delete if:
         1. NOT a protected folder (.covers, .cache, etc.)
-        2. It's completely empty (no files or subdirectories), OR
-        3. It contains ONLY non-supported files (no .pdf, .epub, .cbz, .cbr)
+        2. NOT the root downloads or library directory
+        3. It's completely empty (no files or subdirectories), OR
+        4. It contains ONLY non-supported files (no .pdf, .epub, .cbz, .cbr)
 
         Args:
             folder: Path to check
@@ -134,6 +135,12 @@ class FolderCleanup:
         """
         if not folder.exists() or not folder.is_dir():
             return False, "Not a directory or doesn't exist", {}
+
+        # CRITICAL: Never delete the root downloads or library directories themselves
+        if folder.resolve() == self.downloads_dir.resolve():
+            return False, "Root downloads directory - NEVER DELETE", {}
+        if folder.resolve() == self.library_dir.resolve():
+            return False, "Root library directory - NEVER DELETE", {}
 
         # Check for active import marker - indicates files are being imported
         import_marker = folder / IMPORT_MARKER_FILE
