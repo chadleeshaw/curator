@@ -643,8 +643,25 @@ class FileImporter:
             if self._check_hash_duplicate(content_hash, pdf_path, skip_organize, session):
                 return {}
 
-            # Step 4: Build tracking title with country code if applicable
-            tracking_title = self._build_tracking_title(parsed.base_title, parsed.country, pdf_path)
+            # Step 4: If we have a tracking_id from sidecar (download), use that tracking's title
+            # This prevents creating duplicate tracking records when filenames are ambiguous
+            if tracking_id:
+                target_tracking_temp = (
+                    session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
+                )
+                if target_tracking_temp:
+                    tracking_title = target_tracking_temp.title
+                    logger.debug(
+                        f"Using tracking title from sidecar: '{tracking_title}' (ID: {tracking_id}) "
+                        f"instead of parsed title: '{parsed.base_title}'"
+                    )
+                else:
+                    # Sidecar had invalid tracking_id, fall back to parsed title
+                    logger.warning(f"Sidecar tracking_id={tracking_id} not found, using parsed title")
+                    tracking_title = self._build_tracking_title(parsed.base_title, parsed.country, pdf_path)
+            else:
+                # No sidecar tracking_id, build from parsed filename
+                tracking_title = self._build_tracking_title(parsed.base_title, parsed.country, pdf_path)
 
             # Step 5: Check for fuzzy duplicates
             if self._check_fuzzy_duplicate(

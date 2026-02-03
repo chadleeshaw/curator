@@ -2046,9 +2046,12 @@ export class SettingsManager {
    */
   async loadCacheStats() {
     try {
-      // Load old-style search result cache stats
+      // Load old-style search result cache stats - this is what the "Cache Statistics" section displays
       const response = await APIClient.authenticatedFetch('/api/cache/stats');
       const stats = await response.json();
+
+      // Display the cache statistics at the top of the page
+      this.displayCacheStats(stats);
 
       const statsText = document.getElementById('cache-stats-text');
       if (statsText && stats.total_entries) {
@@ -2056,15 +2059,10 @@ export class SettingsManager {
         const queryText = stats.unique_queries === 1 ? 'query' : 'queries';
         statsText.textContent = `Currently ${stats.total_entries} ${entryText} from ${stats.unique_queries} ${queryText}.`;
       }
-
-      // Load provider cache stats for display
-      const providerCacheResponse = await APIClient.authenticatedFetch('/api/indexer-cache/status');
-      const providerStats = await providerCacheResponse.json();
-
-      // Update cache stats display
-      this.displayCacheStats(providerStats);
     } catch (error) {
-      console.warn('Error loading cache stats:', error);
+      console.error('Error loading cache stats:', error);
+      // Display empty stats on error
+      this.displayCacheStats({ total_entries: 0, last_sync: null });
     }
   }
 
@@ -2079,8 +2077,10 @@ export class SettingsManager {
       totalReleases.textContent = stats.total_entries?.toLocaleString() || '0';
     }
     if (lastSync) {
-      if (stats.last_sync) {
-        const date = new Date(stats.last_sync);
+      // Try newest_entry first (from /api/cache/stats), then last_sync (from /api/indexer-cache/status)
+      const syncDate = stats.newest_entry || stats.last_sync;
+      if (syncDate) {
+        const date = new Date(syncDate);
         lastSync.textContent = date.toLocaleString();
       } else {
         lastSync.textContent = 'Never';
