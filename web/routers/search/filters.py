@@ -103,13 +103,15 @@ def filter_non_periodicals(results: List[Dict[str, Any]]) -> List[Dict[str, Any]
     filtered = []
 
     for result in results:
+        metadata = result.get("metadata", {})
+
         # Convert result dict to format expected by validator
         search_result = {
             "title": result.get("title", ""),
             "url": result.get("url", ""),
             "provider": result.get("provider", ""),
-            "category": result.get("metadata", {}).get("category", ""),
-            "size": result.get("metadata", {}).get("size", 0),
+            "category": metadata.get("category", ""),
+            "size": metadata.get("size", 0),
         }
 
         # Validate using IssueDiscoveryService validation

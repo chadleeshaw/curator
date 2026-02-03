@@ -107,29 +107,32 @@ class InternetArchiveProvider(SearchProvider):
                 logger.debug(f"[{self.name}] Delaying {delay:.1f}s before request")
                 time.sleep(delay)
 
-    def _build_search_query(self, query: str, category: Optional[str] = None) -> str:
+    def _build_search_query(self, query: str, category: Optional[str] = None, include_collections: bool = True) -> str:
         """
         Build Internet Archive search query string.
 
         Args:
             query: User search query (periodical title)
             category: Optional category filter
+            include_collections: Whether to filter by configured collections
 
         Returns:
             Formatted IA search query string
         """
         parts = []
 
-        # Add title search
+        # Add title search - sanitize special characters for better matching
         if query:
+            # Replace & with AND for better search compatibility
+            sanitized_query = query.replace("&", " ")
             # Search in title field
-            parts.append(f'title:("{query}")')
+            parts.append(f'title:("{sanitized_query}")')
 
         # Add mediatype filter
         parts.append(f"mediatype:{self.mediatype}")
 
-        # Add collection filter if collections specified
-        if self.collections:
+        # Add collection filter if collections specified and requested
+        if include_collections and self.collections:
             collection_query = " OR ".join([f"collection:{c}" for c in self.collections])
             parts.append(f"({collection_query})")
 
@@ -292,8 +295,8 @@ class InternetArchiveProvider(SearchProvider):
             self._apply_request_delay()
             self._track_request()
 
-            # Build search query
-            ia_query = self._build_search_query(query, category)
+            # Build search query with collection filter
+            ia_query = self._build_search_query(query, category, include_collections=True)
             logger.debug(f"[{self.name}] Searching IA with query: {ia_query}")
 
             # Execute search
@@ -306,83 +309,122 @@ class InternetArchiveProvider(SearchProvider):
             )
 
             # Process results
-            result_count = 0
-            skipped_no_format = 0
-            for item in search_results:
-                if result_count >= self.max_results:
-                    break
-                try:
-                    identifier = item.get("identifier")
-                    if not identifier:
-                        continue
+            results = self._process_search_results(search_results, query)
 
-                    # Check if item has any preferred file formats
-                    available_formats = item.get("format", [])
-                    if isinstance(available_formats, str):
-                        available_formats = [available_formats]
-
-                    has_preferred_format = False
-                    for preferred in self.preferred_formats:
-                        preferred_lower = preferred.lower()
-                        for fmt in available_formats:
-                            if preferred_lower in fmt.lower():
-                                has_preferred_format = True
-                                break
-                        if has_preferred_format:
-                            break
-
-                    if not has_preferred_format:
-                        skipped_no_format += 1
-                        continue
-
-                    title = item.get("title", identifier)
-                    if isinstance(title, list):
-                        title = title[0] if title else identifier
-
-                    # Parse date
-                    date_str = item.get("date")
-                    if isinstance(date_str, list):
-                        date_str = date_str[0] if date_str else None
-                    publication_date = self._parse_date(date_str)
-
-                    # Detect if this is a collection based on title
-                    is_collection = self._is_collection_title(title)
-
-                    # Build metadata
-                    raw_metadata = {
-                        "identifier": identifier,
-                        "creator": item.get("creator", ""),
-                        "description": item.get("description", ""),
-                        "collection": item.get("collection", []),
-                        "mediatype": item.get("mediatype", ""),
-                        "is_collection": is_collection,
-                    }
-
-                    # The URL is the item identifier - the client will resolve the actual file
-                    result = SearchResult(
-                        title=title,
-                        url=identifier,  # Store identifier as URL, client will resolve
-                        provider=self.type,
-                        publication_date=publication_date,
-                        raw_metadata=raw_metadata,
-                    )
-                    results.append(result)
-                    result_count += 1
-
-                except Exception as e:
-                    logger.warning(f"[{self.name}] Error parsing search result: {e}")
-                    continue
-
-            if skipped_no_format > 0:
+            # If no results found and we have collection filters, try broader search
+            if not results and self.collections:
                 logger.info(
-                    f"[{self.name}] Found {len(results)} results for '{query}' "
-                    f"(skipped {skipped_no_format} items without preferred formats)"
+                    f"[{self.name}] No results in configured collections for '{query}', " f"trying broader search..."
                 )
-            else:
-                logger.info(f"[{self.name}] Found {len(results)} results for '{query}'")
+                self._apply_request_delay()
+                self._track_request()
+
+                ia_query_broad = self._build_search_query(query, category, include_collections=False)
+                logger.debug(f"[{self.name}] Broad search query: {ia_query_broad}")
+
+                search_results_broad = search_items(
+                    ia_query_broad,
+                    fields=IA_SEARCH_FIELDS,
+                    sorts=[self.sort],
+                    params={"rows": self.max_results},
+                )
+                results = self._process_search_results(search_results_broad, query)
+
+                if results:
+                    logger.info(f"[{self.name}] Found {len(results)} results in broader search for '{query}'")
 
         except Exception as e:
             logger.error(f"[{self.name}] Search error for '{query}': {e}", exc_info=True)
+
+        return results
+
+    def _process_search_results(self, search_results, query: str) -> List[SearchResult]:
+        """
+        Process search results from Internet Archive.
+
+        Args:
+            search_results: Iterator of search results from IA API
+            query: Original search query (for logging)
+
+        Returns:
+            List of SearchResult objects
+        """
+        results = []
+        result_count = 0
+        skipped_no_format = 0
+
+        for item in search_results:
+            if result_count >= self.max_results:
+                break
+            try:
+                identifier = item.get("identifier")
+                if not identifier:
+                    continue
+
+                # Check if item has any preferred file formats
+                available_formats = item.get("format", [])
+                if isinstance(available_formats, str):
+                    available_formats = [available_formats]
+
+                has_preferred_format = False
+                for preferred in self.preferred_formats:
+                    preferred_lower = preferred.lower()
+                    for fmt in available_formats:
+                        if preferred_lower in fmt.lower():
+                            has_preferred_format = True
+                            break
+                    if has_preferred_format:
+                        break
+
+                if not has_preferred_format:
+                    skipped_no_format += 1
+                    continue
+
+                title = item.get("title", identifier)
+                if isinstance(title, list):
+                    title = title[0] if title else identifier
+
+                # Parse date
+                date_str = item.get("date")
+                if isinstance(date_str, list):
+                    date_str = date_str[0] if date_str else None
+                publication_date = self._parse_date(date_str)
+
+                # Detect if this is a collection based on title
+                is_collection = self._is_collection_title(title)
+
+                # Build metadata
+                raw_metadata = {
+                    "identifier": identifier,
+                    "creator": item.get("creator", ""),
+                    "description": item.get("description", ""),
+                    "collection": item.get("collection", []),
+                    "mediatype": item.get("mediatype", ""),
+                    "is_collection": is_collection,
+                }
+
+                # The URL is the item identifier - the client will resolve the actual file
+                result = SearchResult(
+                    title=title,
+                    url=identifier,  # Store identifier as URL, client will resolve
+                    provider=self.type,
+                    publication_date=publication_date,
+                    raw_metadata=raw_metadata,
+                )
+                results.append(result)
+                result_count += 1
+
+            except Exception as e:
+                logger.warning(f"[{self.name}] Error parsing search result: {e}")
+                continue
+
+        if skipped_no_format > 0:
+            logger.info(
+                f"[{self.name}] Found {len(results)} results for '{query}' "
+                f"(skipped {skipped_no_format} items without preferred formats)"
+            )
+        else:
+            logger.info(f"[{self.name}] Found {len(results)} results for '{query}'")
 
         return results
 

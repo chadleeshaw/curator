@@ -81,10 +81,10 @@ class TestPeriodicalValidation:
     # Test Anti-Periodical Patterns (should REJECT)
     # ===================================================================
 
-    def test_rejects_complete_collection(self, service):
-        """Test: 'Amazing Spider-Man Complete Collection'"""
+    def test_accepts_complete_collection(self, service):
+        """Test: 'Amazing Spider-Man Complete Collection' - Now accepted as magazine collection"""
         result = {"title": "Amazing Spider-Man Complete Collection"}
-        assert service._validate_is_periodical(result) is False
+        assert service._validate_is_periodical(result) is True
 
     def test_rejects_full_series(self, service):
         """Test: 'Batman Full Series 1940-2020' - Updated: no longer rejected (not video content)"""
@@ -206,7 +206,8 @@ class TestPeriodicalValidation:
     def test_has_periodical_patterns_returns_false(self, service):
         """Test _has_periodical_patterns returns False for generic titles"""
         assert service._has_periodical_patterns("Random Book Title") is False
-        assert service._has_periodical_patterns("Complete Collection") is False
+        # 'Complete Collection' is now a positive indicator for magazine collections
+        assert service._has_periodical_patterns("Complete Collection") is True
 
     def test_has_anti_periodical_patterns(self, service):
         """Test _has_anti_periodical_patterns detects video/movie/TV indicators"""

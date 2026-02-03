@@ -116,7 +116,6 @@ CATEGORY_KEYWORDS = {
     CATEGORY_GRAPHIC_NOVEL: [
         "graphic novel",
         "omnibus",
-        "complete collection",
         "anthology",
         "compendium",
     ],
@@ -168,7 +167,6 @@ CATEGORY_PATTERNS_STATIC = {
         # Collection/complete story indicators
         r"\bgraphic novel\b",
         r"\bomnibus\b",
-        r"\bcomplete collection\b",
         r"\banthology\b",
         r"\bcompendium\b",
         r"\bcollected edition\b",
