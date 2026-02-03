@@ -177,6 +177,6 @@ export const imports = new ImportsManager();
 
 // Expose functions globally for onclick handlers
 window.importFromLibraryDir = () => imports.importFromLibraryDir();
-window.saveImportSettings = () => imports.saveImportSettings();
+// Note: saveImportSettings is now only in settings.js to avoid naming conflict
 window.startImportWithOptions = () => imports.startImportWithOptions();
 window.checkAndImportDownloads = () => imports.checkAndImportDownloads();
