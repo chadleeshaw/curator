@@ -17,6 +17,7 @@ from core.constants.app import DEFAULT_FUZZY_THRESHOLD
 from core.constants.category import CATEGORY_KEYWORDS
 from core.constants.date import DUPLICATE_DATE_THRESHOLD_DAYS
 from core.constants.errors import ErrorCodes
+from core.constants.files import IMPORT_MARKER_FILE
 from core.constants.language import DEFAULT_LANGUAGE
 from core.parsers.country import ISO_COUNTRIES
 from core.utils.general import generate_olid
@@ -88,6 +89,41 @@ class FileImporter:
         """Cleanup thread pool executor on deletion"""
         if hasattr(self, "_ocr_executor"):
             self._ocr_executor.shutdown(wait=False)
+
+    def _create_import_marker(self, folder: Path) -> bool:
+        """
+        Create a marker file to indicate import is in progress.
+        This prevents folder cleanup from deleting folders while files are being processed.
+
+        Args:
+            folder: Folder to mark as being imported
+
+        Returns:
+            True if marker was created successfully
+        """
+        try:
+            marker_path = folder / IMPORT_MARKER_FILE
+            marker_path.touch()
+            logger.debug(f"Created import marker: {marker_path}")
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to create import marker for {folder}: {e}")
+            return False
+
+    def _remove_import_marker(self, folder: Path) -> None:
+        """
+        Remove import marker file after processing completes.
+
+        Args:
+            folder: Folder to remove marker from
+        """
+        try:
+            marker_path = folder / IMPORT_MARKER_FILE
+            if marker_path.exists():
+                marker_path.unlink()
+                logger.debug(f"Removed import marker: {marker_path}")
+        except Exception as e:
+            logger.warning(f"Failed to remove import marker for {folder}: {e}")
 
     def process_downloads(self, session: Session, organization_pattern: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -729,6 +765,20 @@ class FileImporter:
         """
         # Track folders to cleanup after processing all files
         folders_to_cleanup = set()
+        # Track folders with active import markers
+        folders_with_markers = set()
+
+        # Identify unique parent folders and create import markers
+        unique_folders = set()
+        for file_path in files:
+            parent_dir = file_path.parent
+            if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
+                unique_folders.add(parent_dir)
+
+        # Create markers for all folders being processed
+        for folder in unique_folders:
+            if self._create_import_marker(folder):
+                folders_with_markers.add(folder)
 
         for file_path in files:
             try:
@@ -776,6 +826,10 @@ class FileImporter:
                     logger.info(f"Deleted download folder and contents: {folder.name}")
             except Exception as e:
                 logger.warning(f"Failed to delete folder {folder.name}: {e}")
+
+        # Remove import markers from all processed folders
+        for folder in folders_with_markers:
+            self._remove_import_marker(folder)
 
     def _cleanup_download_file(self, pdf_path: Path, defer_folder_deletion: bool = False) -> None:
         """

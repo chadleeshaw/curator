@@ -7,8 +7,10 @@ Tests folder cleanup logic including:
 - Protection of system folders (.covers, .cache, etc.)
 - Empty folder cleanup
 - Exhaustive scanning
+- Import marker protection
 """
 
+from core.constants.files import IMPORT_MARKER_FILE
 from schedulers.folder_cleanup import FolderCleanup
 
 
@@ -528,3 +530,95 @@ class TestEnableFlags:
         assert stats["organized"]["deleted"] == 0
         assert (downloads_dir / "bad1").exists()  # Both folders still exist
         assert (library_dir / "bad2").exists()
+
+
+class TestImportMarkerProtection:
+    """Test that folders with active import markers are protected from deletion"""
+
+    def test_protects_folder_with_import_marker(self, tmp_path):
+        """Folder with .importing marker should be protected"""
+        folder = tmp_path / "downloading"
+        folder.mkdir()
+        # Only non-supported files
+        (folder / "info.nfo").touch()
+        (folder / "sample.txt").touch()
+        # Create import marker
+        (folder / IMPORT_MARKER_FILE).touch()
+
+        cleanup = FolderCleanup(str(tmp_path), str(tmp_path), dry_run=False)
+        is_safe, reason, metadata = cleanup._is_safe_to_delete(folder)
+
+        assert not is_safe
+        assert "import in progress" in reason.lower()
+        assert ".importing" in reason
+        assert folder.exists()
+
+    def test_deletes_folder_without_import_marker(self, tmp_path):
+        """Folder without .importing marker should be deletable if it has no supported files"""
+        folder = tmp_path / "completed"
+        folder.mkdir()
+        # Only non-supported files, no marker
+        (folder / "info.nfo").touch()
+
+        cleanup = FolderCleanup(str(tmp_path), str(tmp_path), dry_run=False)
+        is_safe, reason, metadata = cleanup._is_safe_to_delete(folder)
+
+        assert is_safe
+        assert "non-importable" in reason.lower()
+
+    def test_cleanup_run_skips_folders_with_markers(self, tmp_path):
+        """Full cleanup should skip folders with import markers"""
+        downloads_dir = tmp_path / "downloads"
+        downloads_dir.mkdir()
+
+        # Folder 1: Has marker, should be protected
+        folder1 = downloads_dir / "importing"
+        folder1.mkdir()
+        (folder1 / "junk.txt").touch()
+        (folder1 / IMPORT_MARKER_FILE).touch()
+
+        # Folder 2: No marker, should be deleted
+        folder2 = downloads_dir / "completed"
+        folder2.mkdir()
+        (folder2 / "trash.nfo").touch()
+
+        cleanup = FolderCleanup(str(downloads_dir), str(tmp_path / "library"), dry_run=False)
+        stats = cleanup.run()
+
+        # Only folder2 should be deleted
+        assert stats["downloads"]["deleted"] == 1
+        assert stats["downloads"]["protected"] >= 1
+        assert folder1.exists()
+        assert not folder2.exists()
+
+    def test_marker_in_subfolder_protects_parent(self, tmp_path):
+        """Import marker in subfolder should protect entire tree"""
+        parent = tmp_path / "parent"
+        subfolder = parent / "subfolder"
+        subfolder.mkdir(parents=True)
+
+        # Non-supported files in both
+        (parent / "readme.txt").touch()
+        (subfolder / "data.nfo").touch()
+        # Marker in subfolder
+        (subfolder / IMPORT_MARKER_FILE).touch()
+
+        cleanup = FolderCleanup(str(tmp_path), str(tmp_path), dry_run=False)
+
+        # Check subfolder first (it has the marker)
+        is_safe_sub, reason_sub, _ = cleanup._is_safe_to_delete(subfolder)
+        assert not is_safe_sub
+        assert "import in progress" in reason_sub.lower()
+
+    def test_dry_run_respects_import_marker(self, tmp_path):
+        """Dry run should also respect import markers"""
+        folder = tmp_path / "importing"
+        folder.mkdir()
+        (folder / "junk.txt").touch()
+        (folder / IMPORT_MARKER_FILE).touch()
+
+        cleanup = FolderCleanup(str(tmp_path), str(tmp_path), dry_run=True)
+        is_safe, reason, _ = cleanup._is_safe_to_delete(folder)
+
+        assert not is_safe
+        assert "import in progress" in reason.lower()

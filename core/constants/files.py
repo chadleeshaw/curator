@@ -55,6 +55,9 @@ ISSUE_PREFIX = "No"
 ORGANIZED_FILENAME_SEPARATOR = " - "
 """Separator used in organized filenames between components"""
 
+IMPORT_MARKER_FILE = ".importing"
+"""Marker file name used to indicate import is in progress for a folder"""
+
 
 # ==============================================================================
 # File Extensions and Types

@@ -16,6 +16,7 @@ from typing import Dict, List, Set, Tuple
 
 from core.constants import SUPPORTED_FILE_EXTENSIONS
 from core.constants.category import CATEGORIES
+from core.constants.files import IMPORT_MARKER_FILE
 from core.utils import cleanup_empty_directories
 
 logger = logging.getLogger(__name__)
@@ -133,6 +134,11 @@ class FolderCleanup:
         """
         if not folder.exists() or not folder.is_dir():
             return False, "Not a directory or doesn't exist", {}
+
+        # Check for active import marker - indicates files are being imported
+        import_marker = folder / IMPORT_MARKER_FILE
+        if import_marker.exists():
+            return False, "Import in progress (.importing marker present)", {}
 
         # Check if folder is protected (e.g., .covers, .cache, .git, _Magazines, _Comics)
         folder_name = folder.name
