@@ -25,6 +25,35 @@ router = _shared.router
 logger = _shared.logger
 
 
+def _get_unique_filename(base_path: str, db) -> str:
+    """
+    Generate a unique filename by appending (2), (3), etc. if the path already exists.
+
+    Args:
+        base_path: The original file path that has a conflict
+        db: Database session to check for existing paths
+
+    Returns:
+        A unique file path that doesn't exist in the database
+    """
+    from models.database import Periodical
+
+    path = Path(base_path)
+    stem = path.stem  # filename without extension
+    suffix = path.suffix  # .pdf, .cbz, etc.
+    parent = path.parent
+
+    counter = 2
+    with db.no_autoflush:
+        while True:
+            # Check if this path exists in the database
+            test_path = str(parent / f"{stem} ({counter}){suffix}")
+            existing = db.query(Periodical).filter_by(file_path=test_path).first()
+            if not existing:
+                return test_path
+            counter += 1
+
+
 def _reorganize_periodical_files(
     periodical, new_title: str, library_base_dir: Path, category_prefix: str = "_"
 ) -> Tuple[Optional[str], Optional[str]]:
@@ -164,24 +193,47 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
                         # Check if target path already exists in database (UNIQUE constraint check)
                         # Use no_autoflush to prevent premature flush of pending changes
                         with db.no_autoflush:
-                            existing_record = db.query(Periodical).filter_by(file_path=new_pdf_path).first()
-                        if existing_record and existing_record.id != periodical.id:
-                            logger.error(
-                                f"Cannot update periodical {periodical.id}: Target path {new_pdf_path} "
-                                f"already exists in database for periodical {existing_record.id}. "
-                                f"This is a data integrity issue that needs manual resolution."
+                            existing_record = (
+                                db.query(Periodical)
+                                .filter_by(file_path=new_pdf_path)
+                                .filter(Periodical.id != periodical.id)
+                                .first()
                             )
-                            # Roll back the file move since we can't update the database
+
+                        if existing_record:
+                            # Path conflict detected - rename to make it unique
+                            unique_pdf_path = _get_unique_filename(new_pdf_path, db)
+                            logger.warning(
+                                f"Path conflict for periodical {periodical.id}: {new_pdf_path} "
+                                f"already exists (periodical {existing_record.id}). "
+                                f"Renaming to: {unique_pdf_path}"
+                            )
+
+                            # Rename the physical file
                             try:
-                                old_pdf_path = Path(periodical.file_path)
-                                if Path(new_pdf_path).exists() and not old_pdf_path.exists():
-                                    shutil.move(new_pdf_path, str(old_pdf_path))
-                                    logger.info(f"Rolled back file move: {new_pdf_path} -> {old_pdf_path}")
-                            except Exception as rollback_error:
-                                logger.error(
-                                    f"Failed to rollback file move for periodical {periodical.id}: {rollback_error}"
-                                )
-                        else:
+                                if Path(new_pdf_path).exists():
+                                    shutil.move(new_pdf_path, unique_pdf_path)
+                                    logger.info(f"Renamed file: {new_pdf_path} -> {unique_pdf_path}")
+
+                                    # Also rename cover if it exists
+                                    if new_cover_path and Path(new_cover_path).exists():
+                                        cover_path = Path(new_cover_path)
+                                        unique_cover_path = str(
+                                            cover_path.parent / f"{Path(unique_pdf_path).stem}{cover_path.suffix}"
+                                        )
+                                        shutil.move(new_cover_path, unique_cover_path)
+                                        logger.info(f"Renamed cover: {new_cover_path} -> {unique_cover_path}")
+                                        new_cover_path = unique_cover_path
+
+                                    # Update to use the unique path
+                                    new_pdf_path = unique_pdf_path
+                            except Exception as rename_error:
+                                logger.error(f"Failed to rename conflicting files: {rename_error}")
+                                # If rename fails, keep original paths
+                                new_pdf_path = None
+
+                        if new_pdf_path:
+                            # Update the paths
                             periodical.file_path = new_pdf_path
                             if new_cover_path:
                                 periodical.cover_path = new_cover_path
@@ -189,13 +241,22 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
                             logger.info(
                                 f"Reorganized files for: {periodical.title} ({periodical.issue_date.strftime('%b %Y')})"
                             )
+
+                            # Update title after file operations
+                            periodical.title = target.title
+
+                            # Flush to commit this periodical's changes before processing next one
+                            # This ensures the path is in the database for duplicate checking
+                            db.flush()
                     else:
                         logger.warning(
                             f"Failed to reorganize files for periodical ID {periodical.id}, keeping original paths"
                         )
-
-                    # Update title after file operations
-                    periodical.title = target.title
+                        # Still update title even if file reorganization failed
+                        periodical.title = target.title
+                else:
+                    # For special editions, only update tracking_id, keep original title
+                    logger.info(f"Skipping title normalization for special edition: {periodical.title}")
 
                 periodicals_moved += 1
 

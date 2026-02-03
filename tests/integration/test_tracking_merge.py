@@ -444,6 +444,128 @@ class TestTrackingMergeIntegration:
 
             session.close()
 
+    def test_merge_handles_duplicate_filenames(self, test_db):
+        """
+        Test that merging handles duplicate filenames by renaming with (2), (3), etc.
+        This prevents UNIQUE constraint errors on file_path.
+        """
+        engine, session_factory = test_db
+        session = session_factory()
+
+        # Use default configuration (not a temp directory)
+        set_dependencies(session_factory, None, None)
+
+        # Create tracking records
+        tracking_a = PeriodicalTracking(
+            olid="OL123A",
+            title="Magazine",
+            category=CATEGORY_MAGAZINE,
+            language="en",
+            country="us",
+            track_all_editions=True,
+            last_metadata_update=datetime.now(UTC),
+        )
+        tracking_b = PeriodicalTracking(
+            olid="OL456B",
+            title="Magazine B",
+            category=CATEGORY_MAGAZINE,
+            language="en",
+            country="us",
+            track_all_editions=True,
+            last_metadata_update=datetime.now(UTC),
+        )
+        session.add_all([tracking_a, tracking_b])
+        session.commit()
+
+        # Create multiple periodicals with tracking_b that will all organize to same filename
+        # when merged into tracking_a
+        issue_date = datetime(2024, 2, 1, tzinfo=UTC)
+
+        # Create directory structure and files in the real library
+        library_base_dir = Path("local/data")
+        mag_dir_b = library_base_dir / "_Magazines" / "Magazine B" / "2024"
+        mag_dir_b.mkdir(parents=True, exist_ok=True)
+
+        created_files = []
+        periodicals = []
+        for i in range(1, 4):  # Create 3 duplicates
+            pdf_path = mag_dir_b / f"Magazine B - February2024 ({i}).pdf"
+            jpg_path = mag_dir_b / f"Magazine B - February2024 ({i}).jpg"
+
+            # Create dummy files
+            pdf_path.write_text(f"PDF content {i}")
+            jpg_path.write_text(f"JPG content {i}")
+            created_files.extend([pdf_path, jpg_path])
+
+            mag = Periodical(
+                title="Magazine B",
+                file_path=str(pdf_path),
+                cover_path=str(jpg_path),
+                issue_date=issue_date,
+                tracking_id=tracking_b.id,
+                category=CATEGORY_MAGAZINE,
+                language="en",
+            )
+            periodicals.append(mag)
+            session.add(mag)
+
+        session.commit()
+
+        try:
+            # Merge tracking_b into tracking_a
+            import asyncio
+
+            result = asyncio.run(merge_tracking(target_id=tracking_a.id, source_ids={"source_ids": [tracking_b.id]}))
+
+            # Verify merge succeeded (no UNIQUE constraint error!)
+            assert result["success"] is True
+            assert result["periodicals_moved"] == 3
+            assert result["files_reorganized"] == 3
+
+            # Verify all periodicals still exist in database
+            remaining = session.query(Periodical).filter(Periodical.tracking_id == tracking_a.id).all()
+            assert len(remaining) == 3
+
+            # Verify they all have unique file paths (this is the critical test)
+            file_paths = [p.file_path for p in remaining]
+            assert len(file_paths) == len(set(file_paths)), "All file paths should be unique"
+
+            # Verify at least one file has been renamed with (2) or (3) suffix
+            renamed_count = sum(1 for path in file_paths if " (2)" in path or " (3)" in path)
+            assert renamed_count >= 1, f"Expected at least 1 renamed file, got {renamed_count}"
+
+            # Verify titles were normalized
+            for periodical in remaining:
+                assert periodical.title == "Magazine"
+
+        finally:
+            # Clean up test files
+            session.close()
+            for file_path in created_files:
+                if file_path.exists():
+                    file_path.unlink()
+            # Clean up directories - use try/except for each since some may have been moved/deleted
+            try:
+                if mag_dir_b.exists():
+                    mag_dir_b.rmdir()
+            except (FileNotFoundError, OSError):
+                pass
+            try:
+                mag_dir_b.parent.rmdir()  # 2024
+            except (FileNotFoundError, OSError):
+                pass
+            try:
+                if mag_dir_b.parent.parent.exists() and not list(mag_dir_b.parent.parent.iterdir()):
+                    mag_dir_b.parent.parent.rmdir()  # Magazine B
+            except (FileNotFoundError, OSError):
+                pass
+            # Also clean up the Magazine directory if it exists
+            mag_dir_a = library_base_dir / "_Magazines" / "Magazine"
+            if mag_dir_a.exists():
+                import shutil
+
+                shutil.rmtree(mag_dir_a)
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])
