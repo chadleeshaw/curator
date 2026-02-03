@@ -4,7 +4,7 @@ Tests for version management
 
 from unittest.mock import patch
 
-from core.version import get_version, get_version_info
+from core.version import get_build_hash, get_version, get_version_info
 
 
 def test_get_version_from_git():
@@ -60,8 +60,37 @@ def test_get_version_info():
 
     assert "version" in info
     assert "is_dev" in info
+    assert "build_hash" in info
     assert isinstance(info["version"], str)
     assert isinstance(info["is_dev"], bool)
+    assert isinstance(info["build_hash"], str)
+
+
+def test_get_build_hash():
+    """Test getting git commit hash"""
+    # Clear cache first
+    get_build_hash.cache_clear()
+
+    # Mock successful git command
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value.returncode = 0
+        mock_run.return_value.stdout = "a9f1a15\n"
+
+        build_hash = get_build_hash()
+        assert build_hash == "a9f1a15"
+
+
+def test_get_build_hash_fallback():
+    """Test build hash fallback when git is not available"""
+    # Clear cache first
+    get_build_hash.cache_clear()
+
+    with patch("subprocess.run") as mock_run:
+        # Simulate git not available
+        mock_run.side_effect = FileNotFoundError()
+
+        build_hash = get_build_hash()
+        assert build_hash == "unknown"
 
 
 def test_version_cache():

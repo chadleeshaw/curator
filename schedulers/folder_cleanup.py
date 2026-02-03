@@ -41,7 +41,9 @@ class FolderCleanup:
         library_dir: str,
         dry_run: bool = False,
         category_prefix: str = "_",
-    ):
+        enable_downloads_cleanup: bool = True,
+        enable_library_cleanup: bool = True,
+    ):  # pylint: disable=too-many-positional-arguments
         """
         Initialize folder cleanup.
 
@@ -50,11 +52,15 @@ class FolderCleanup:
             library_dir: Path to library directory
             dry_run: If True, only report what would be deleted without actually deleting
             category_prefix: Prefix for category folders (e.g., "_" for "_Magazines")
+            enable_downloads_cleanup: If True, enable auto-cleanup of downloads folder
+            enable_library_cleanup: If True, enable auto-cleanup of library folder
         """
         self.downloads_dir = Path(downloads_dir)
         self.library_dir = Path(library_dir)
         self.dry_run = dry_run
         self.category_prefix = category_prefix
+        self.enable_downloads_cleanup = enable_downloads_cleanup
+        self.enable_library_cleanup = enable_library_cleanup
 
         # Build complete protected folders set including category folders
         self.protected_folders: Set[str] = self._build_protected_folders()
@@ -297,11 +303,31 @@ class FolderCleanup:
         mode = "DRY RUN" if self.dry_run else "LIVE"
         logger.info(f"Starting folder cleanup task ({mode})")
 
-        # Clean downloads directory
-        downloads_stats = self.cleanup_directory(self.downloads_dir, "downloads")
+        # Clean downloads directory (if enabled)
+        if self.enable_downloads_cleanup:
+            downloads_stats = self.cleanup_directory(self.downloads_dir, "downloads")
+        else:
+            logger.info("Downloads cleanup is disabled - skipping")
+            downloads_stats = {
+                "scanned": 0,
+                "deleted": 0,
+                "protected": 0,
+                "errors": 0,
+                "total_size_freed": 0,
+            }
 
-        # Clean organized directory
-        organized_stats = self.cleanup_directory(self.library_dir, "organized")
+        # Clean organized directory (if enabled)
+        if self.enable_library_cleanup:
+            organized_stats = self.cleanup_directory(self.library_dir, "organized")
+        else:
+            logger.info("Library cleanup is disabled - skipping")
+            organized_stats = {
+                "scanned": 0,
+                "deleted": 0,
+                "protected": 0,
+                "errors": 0,
+                "total_size_freed": 0,
+            }
 
         # Combine statistics
         total_stats = {

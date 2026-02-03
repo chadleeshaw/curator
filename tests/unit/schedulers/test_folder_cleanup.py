@@ -431,3 +431,100 @@ class TestFullCleanupRun:
         assert stats["total_deleted"] == 2
         assert stats["downloads"]["deleted"] == 1
         assert stats["organized"]["deleted"] == 1
+
+
+class TestEnableFlags:
+    """Test the enable_downloads_cleanup and enable_library_cleanup flags"""
+
+    def test_disables_downloads_cleanup(self, tmp_path):
+        """Should skip downloads cleanup when disabled"""
+        downloads_dir = tmp_path / "downloads"
+        library_dir = tmp_path / "organized"
+        downloads_dir.mkdir()
+        library_dir.mkdir()
+
+        # Bad folder in downloads
+        (downloads_dir / "bad1").mkdir()
+        (downloads_dir / "bad1" / "junk.txt").touch()
+
+        # Bad folder in library
+        (library_dir / "bad2").mkdir()
+        (library_dir / "bad2" / "trash.nfo").touch()
+
+        cleanup = FolderCleanup(
+            str(downloads_dir),
+            str(library_dir),
+            dry_run=False,
+            enable_downloads_cleanup=False,
+            enable_library_cleanup=True,
+        )
+        stats = cleanup.run()
+
+        # Downloads should not be deleted, library should be
+        assert stats["total_deleted"] == 1
+        assert stats["downloads"]["deleted"] == 0
+        assert stats["organized"]["deleted"] == 1
+        assert (downloads_dir / "bad1").exists()  # Downloads folder still exists
+        assert not (library_dir / "bad2").exists()  # Library folder deleted
+
+    def test_disables_library_cleanup(self, tmp_path):
+        """Should skip library cleanup when disabled"""
+        downloads_dir = tmp_path / "downloads"
+        library_dir = tmp_path / "organized"
+        downloads_dir.mkdir()
+        library_dir.mkdir()
+
+        # Bad folder in downloads
+        (downloads_dir / "bad1").mkdir()
+        (downloads_dir / "bad1" / "junk.txt").touch()
+
+        # Bad folder in library
+        (library_dir / "bad2").mkdir()
+        (library_dir / "bad2" / "trash.nfo").touch()
+
+        cleanup = FolderCleanup(
+            str(downloads_dir),
+            str(library_dir),
+            dry_run=False,
+            enable_downloads_cleanup=True,
+            enable_library_cleanup=False,
+        )
+        stats = cleanup.run()
+
+        # Downloads should be deleted, library should not be
+        assert stats["total_deleted"] == 1
+        assert stats["downloads"]["deleted"] == 1
+        assert stats["organized"]["deleted"] == 0
+        assert not (downloads_dir / "bad1").exists()  # Downloads folder deleted
+        assert (library_dir / "bad2").exists()  # Library folder still exists
+
+    def test_disables_both_cleanups(self, tmp_path):
+        """Should skip all cleanup when both are disabled"""
+        downloads_dir = tmp_path / "downloads"
+        library_dir = tmp_path / "organized"
+        downloads_dir.mkdir()
+        library_dir.mkdir()
+
+        # Bad folder in downloads
+        (downloads_dir / "bad1").mkdir()
+        (downloads_dir / "bad1" / "junk.txt").touch()
+
+        # Bad folder in library
+        (library_dir / "bad2").mkdir()
+        (library_dir / "bad2" / "trash.nfo").touch()
+
+        cleanup = FolderCleanup(
+            str(downloads_dir),
+            str(library_dir),
+            dry_run=False,
+            enable_downloads_cleanup=False,
+            enable_library_cleanup=False,
+        )
+        stats = cleanup.run()
+
+        # Nothing should be deleted
+        assert stats["total_deleted"] == 0
+        assert stats["downloads"]["deleted"] == 0
+        assert stats["organized"]["deleted"] == 0
+        assert (downloads_dir / "bad1").exists()  # Both folders still exist
+        assert (library_dir / "bad2").exists()

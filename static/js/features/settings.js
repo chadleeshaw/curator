@@ -451,6 +451,8 @@ export class SettingsManager {
     const patternCustom = document.getElementById('import-organization-pattern-custom');
     const enableTextScan = document.getElementById('import-enable-text-scan');
     const enableOcr = document.getElementById('import-enable-ocr');
+    const autoCleanupDownloads = document.getElementById('import-auto-cleanup-downloads');
+    const autoCleanupLibrary = document.getElementById('import-auto-cleanup-library');
 
     // Map of pattern templates to their keys
     const patternMap = {
@@ -482,6 +484,15 @@ export class SettingsManager {
 
     if (enableTextScan) enableTextScan.checked = importConfig.enable_text_scan ?? true;
     if (enableOcr) enableOcr.checked = importConfig.enable_ocr ?? true;
+
+    // Auto-cleanup settings
+    const autoCleanupConfig = importConfig.auto_cleanup || {};
+    if (autoCleanupDownloads) {
+      autoCleanupDownloads.checked = autoCleanupConfig.enable_downloads ?? true;
+    }
+    if (autoCleanupLibrary) {
+      autoCleanupLibrary.checked = autoCleanupConfig.enable_library ?? true;
+    }
   }
 
   /**
@@ -1129,7 +1140,7 @@ export class SettingsManager {
   }
 
   /**
-   * Save import settings (enable_text_scan, enable_ocr)
+   * Save import settings (enable_text_scan, enable_ocr, auto_cleanup)
    */
   async saveImportSettings() {
     try {
@@ -1138,6 +1149,8 @@ export class SettingsManager {
       const patternCustom = document.getElementById('import-organization-pattern-custom');
       const enableTextScan = document.getElementById('import-enable-text-scan')?.checked;
       const enableOcr = document.getElementById('import-enable-ocr')?.checked;
+      const autoCleanupDownloads = document.getElementById('import-auto-cleanup-downloads')?.checked;
+      const autoCleanupLibrary = document.getElementById('import-auto-cleanup-library')?.checked;
 
       // Map pattern keys to their templates
       const patternTemplates = {
@@ -1161,6 +1174,10 @@ export class SettingsManager {
         organization_pattern: pattern,
         enable_text_scan: enableTextScan ?? true,
         enable_ocr: enableOcr ?? true,
+        auto_cleanup: {
+          enable_downloads: autoCleanupDownloads ?? true,
+          enable_library: autoCleanupLibrary ?? true,
+        },
       };
 
       const data = await APIHelper.executeWithErrorHandling(

@@ -14,6 +14,33 @@ logger = logging.getLogger(__name__)
 
 
 @lru_cache(maxsize=1)
+def get_build_hash() -> str:
+    """
+    Get the current git commit hash.
+
+    Returns:
+        Short commit hash (7 characters) or "unknown" if not in a git repo
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short=7", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            cwd=Path(__file__).parent.parent,
+            check=False,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            build_hash = result.stdout.strip()
+            logger.debug("Build hash from git: %s", build_hash)
+            return build_hash
+    except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
+        logger.debug("Could not get build hash from git: %s", e)
+
+    return "unknown"
+
+
+@lru_cache(maxsize=1)
 def get_version() -> str:
     """
     Get the current version of Curator.
@@ -75,11 +102,14 @@ def get_version_info() -> dict:
         Dictionary with version details:
         - version: The version string
         - is_dev: Whether this is a development version (has commits after tag)
+        - build_hash: The git commit hash
     """
     version = get_version()
+    build_hash = get_build_hash()
     is_dev = "-" in version and version != "unknown"
 
     return {
         "version": version,
         "is_dev": is_dev,
+        "build_hash": build_hash,
     }

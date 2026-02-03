@@ -588,11 +588,14 @@ def _initialize_background_tasks() -> None:
     logger.info("OCR processor task initialized")
 
     # Folder cleanup
+    auto_cleanup_config = app_state.import_config.get("auto_cleanup", {})
     app_state.folder_cleanup_task = FolderCleanup(
         downloads_dir=app_state.storage_config.get("download_dir", "./local/downloads"),
         library_dir=app_state.storage_config.get("library_dir", "./_Magazines"),
         dry_run=False,
         category_prefix=app_state.category_prefix,
+        enable_downloads_cleanup=auto_cleanup_config.get("enable_downloads", True),
+        enable_library_cleanup=auto_cleanup_config.get("enable_library", True),
     )
     logger.info("Folder cleanup task initialized")
 

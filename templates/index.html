@@ -884,6 +884,26 @@
                   Use OCR on cover images for text extraction (slower, runs in background queue).
                 </p>
               </div>
+              <div class="settings-field">
+                <label>
+                  <input type="checkbox" id="import-auto-cleanup-downloads" />
+                  Auto-Cleanup Downloads Folder
+                </label>
+                <p class="text-sm text-hint mt-8">
+                  Automatically remove folders without importable files from downloads folder. Disable
+                  if downloads are being removed before processing.
+                </p>
+              </div>
+              <div class="settings-field">
+                <label>
+                  <input type="checkbox" id="import-auto-cleanup-library" />
+                  Auto-Cleanup Library Folder
+                </label>
+                <p class="text-sm text-hint mt-8">
+                  Automatically remove empty folders from library after file reorganization. Generally
+                  safe to keep enabled.
+                </p>
+              </div>
               <p class="text-base text-muted mt-10">
                 Nested folder scanning in Downloads is always enabled.
               </p>
@@ -2603,10 +2623,16 @@
         .then((data) => {
           const versionElement = document.getElementById('app-version');
           if (versionElement) {
-            versionElement.textContent = data.version;
+            let versionText = data.version;
+            if (data.build_hash && data.build_hash !== 'unknown') {
+              versionText += ` (${data.build_hash})`;
+            }
+            versionElement.textContent = versionText;
             if (data.is_dev) {
               versionElement.style.fontStyle = 'italic';
-              versionElement.title = 'Development version';
+              versionElement.title = `Development version - Build: ${data.build_hash || 'unknown'}`;
+            } else if (data.build_hash) {
+              versionElement.title = `Build: ${data.build_hash}`;
             }
           }
         })

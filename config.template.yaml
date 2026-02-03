@@ -118,6 +118,20 @@ import:
   enable_ocr: true # Enable OCR for image-based text extraction (slower, queued)
   category_prefix: _
 
+  # Auto-cleanup settings
+  # Controls automatic removal of empty folders and folders without importable files
+  # WARNING: If disabled, folders may accumulate over time. Manual cleanup may be required.
+  auto_cleanup:
+    # Enable auto-cleanup of downloads folder
+    # When enabled, automatically removes folders without supported files (.pdf, .epub, .cbz, .cbr)
+    # Disable this if downloads are being removed before they are processed/imported
+    enable_downloads: false
+
+    # Enable auto-cleanup of library folder
+    # When enabled, automatically removes empty folders after file reorganization
+    # Generally safe to keep enabled as it only removes truly empty folders
+    enable_library: true
+
 metadata:
   # Metadata aggregation settings - controls how metadata from different sources is combined
   # When multiple sources provide conflicting metadata (e.g. OCR says 2024, filename says 2023),
@@ -247,6 +261,10 @@ tasks:
   # OCR worker settings
   ocr_max_workers: 1 # Number of parallel OCR processes
   ocr_batch_size: 5 # Max jobs to process per batch
+
+  # Folder cleanup: Remove empty folders and folders without importable files
+  # See import.auto_cleanup section for enable/disable settings
+  folder_cleanup_interval: 86400 # 24 hours
 
   # ==============================================================================
   # Issue Discovery & Tracking System
