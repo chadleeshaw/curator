@@ -8,12 +8,46 @@
 # You can configure multiple providers (Newsnab indexers, RSS feeds)
 
 search_providers:
+  # ==============================================================================
+  # Internet Archive Provider (FREE - No API key required!)
+  # ==============================================================================
+  # Archive.org has millions of free magazines, periodicals, newspapers, and comics.
+  # Results from Internet Archive are prioritized when available (priority: 10).
+  # Downloads are direct (no NZB client needed).
+
+  - type: internet_archive
+    name: Internet Archive
+    enabled: true
+    priority: 10 # Lower = higher priority (searched first, preferred in dedup)
+
+    # Collections to search (defaults to common periodical collections)
+    # Available collections: magazines, periodicals, newspaper, comics, pulpmagazinearchive
+    collections:
+      - magazines
+      - periodicals
+      - comics
+
+    # Preferred file formats for download (in order of preference)
+    file_formats:
+      - PDF
+      - EPUB
+
+    # Max results per search
+    max_results: 100
+
+    # Rate limiting (archive.org is generally permissive)
+    request_delay: 1.0 # Seconds between requests
+    max_requests_per_minute: 15
+
+  # ==============================================================================
   # Newsnab Provider (e.g., NZBHydra2, NZBGeek, etc.)
+  # ==============================================================================
   - type: newsnab
     name: Newsnab Provider
     api_url: https://your-newsnab-server.com/api
     api_key: your-api-key-here
     enabled: true
+    priority: 50 # Searched after Internet Archive
 
     # Newsnab categories to search
     # 7000 = Other Misc, 7010 = Magazines, 7020 = Ebooks, 7030 = Comics
@@ -34,10 +68,17 @@ search_providers:
   #   name: RSS Feed Provider
   #   feed_url: https://your-indexer.com/rss
   #   enabled: true
+  #   priority: 50
   #
   #   # RSS caching settings (dramatically speeds up searches)
   #   cache_ttl: 3600 # Cache TTL in seconds (1 hour)
   #   enable_cache: true # Enable/disable caching
+
+# ==============================================================================
+# Download Clients
+# ==============================================================================
+# Primary download client for NZB downloads.
+# Internet Archive downloads use their own built-in client automatically.
 
 download_client:
   type: sabnzbd
@@ -45,6 +86,22 @@ download_client:
   api_url: http://localhost:8080
   api_key: your-sabnzbd-api-key
   default_category: books
+
+# Additional download clients (optional)
+# The system automatically routes downloads to the appropriate client:
+# - internet_archive provider results → Internet Archive client (built-in)
+# - newsnab/rss provider results → SABnzbd/NZBGet (configured above)
+#
+# To use Internet Archive downloads, add the IA client:
+download_clients:
+  internet_archive:
+    type: internet_archive
+    name: Internet Archive Downloader
+    downloads_dir: ./local/downloads # Files download here before import
+    max_concurrent: 3 # Max simultaneous downloads from archive.org
+    file_formats: # Preferred formats (in order)
+      - PDF
+      - EPUB
 
 storage:
   db_path: ./local/config/periodicals.db

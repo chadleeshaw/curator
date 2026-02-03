@@ -138,7 +138,7 @@ class InternetArchiveProvider(SearchProvider):
 
         for fmt in formats:
             try:
-                return datetime.strptime(date_str[:len(fmt.replace("%", ""))], fmt)
+                return datetime.strptime(date_str[: len(fmt.replace("%", ""))], fmt)
             except (ValueError, TypeError):
                 continue
 

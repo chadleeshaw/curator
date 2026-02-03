@@ -6,19 +6,23 @@ Handles provider search with timeout, parsing, and filtering.
 import logging
 import re
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
 from core.interfaces import SearchProvider
 from core.constants.app import PROVIDER_SEARCH_TIMEOUT
 from core.parsers import Parser, TitleMatcher, LANGUAGE_INDICATORS
+from core.utils.fuzzy_matching import get_fuzzy_group_id
 
 logger = logging.getLogger(__name__)
 
 
 class SearchService:
     """Service for searching periodical issues across providers"""
+
+    # Default priority for providers without explicit priority
+    DEFAULT_PROVIDER_PRIORITY = 50
 
     def __init__(self, search_providers: List[SearchProvider], fuzzy_threshold: int = 80):
         """
@@ -28,9 +32,18 @@ class SearchService:
             search_providers: List of search providers to use
             fuzzy_threshold: Fuzzy matching threshold for title matching
         """
-        self.search_providers = search_providers
+        # Sort providers by priority (lower = higher priority, searched first)
+        self.search_providers = sorted(
+            search_providers, key=lambda p: getattr(p, "priority", self.DEFAULT_PROVIDER_PRIORITY)
+        )
         self.parser = Parser(fuzzy_threshold=fuzzy_threshold)
         self.title_matcher = TitleMatcher(threshold=fuzzy_threshold)
+
+        # Log provider order
+        provider_info = [
+            (p.name, getattr(p, "priority", self.DEFAULT_PROVIDER_PRIORITY)) for p in self.search_providers
+        ]
+        logger.info(f"SearchService initialized with providers (by priority): {provider_info}")
 
     def search_periodical_issues(self, periodical_title: str, session: Session) -> List[Dict[str, Any]]:
         """
@@ -129,7 +142,61 @@ class SearchService:
                 except Exception as e:
                     logger.error(f"Error searching {provider.name} for '{periodical_title}': {e}")
 
+        # Deduplicate results, preferring higher priority providers
+        deduplicated = self._deduplicate_with_provider_preference(all_results)
+
         logger.debug(
-            f"Found {len(all_results)} results for '{periodical_title}' across {len(self.search_providers)} providers"
+            f"Found {len(all_results)} results for '{periodical_title}' across {len(self.search_providers)} providers "
+            f"({len(deduplicated)} after deduplication)"
         )
-        return all_results
+        return deduplicated
+
+    def _deduplicate_with_provider_preference(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Deduplicate search results, keeping results from preferred providers.
+
+        When multiple providers return the same item (based on fuzzy title matching),
+        keep the result from the higher priority provider (lower priority number).
+
+        Args:
+            results: List of search result dicts
+
+        Returns:
+            Deduplicated list with preferred provider results
+        """
+        if not results:
+            return []
+
+        # Get provider priorities for sorting
+        provider_priorities = {
+            p.type: getattr(p, "priority", self.DEFAULT_PROVIDER_PRIORITY) for p in self.search_providers
+        }
+
+        # Group results by fuzzy match
+        groups: Dict[str, List[Dict[str, Any]]] = {}
+        for result in results:
+            group_id = get_fuzzy_group_id(result["title"])
+            groups.setdefault(group_id, []).append(result)
+
+        # For each group, keep the result from highest priority provider
+        deduplicated = []
+        for group_id, group_results in groups.items():
+            if len(group_results) == 1:
+                deduplicated.append(group_results[0])
+            else:
+                # Sort by provider priority (lower = better)
+                group_results.sort(
+                    key=lambda r: provider_priorities.get(r.get("provider"), self.DEFAULT_PROVIDER_PRIORITY)
+                )
+                best_result = group_results[0]
+                deduplicated.append(best_result)
+
+                # Log when we prefer one provider over another
+                if len(group_results) > 1:
+                    other_providers = [r.get("provider") for r in group_results[1:]]
+                    logger.debug(
+                        f"Dedup: keeping '{best_result['title']}' from {best_result.get('provider')} "
+                        f"over {other_providers}"
+                    )
+
+        return deduplicated

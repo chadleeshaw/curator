@@ -96,6 +96,7 @@ class ServiceState:
     """Application service instances (initialized during lifespan)."""
 
     download_client: Optional[Any] = None
+    download_clients: Dict[str, Any] = field(default_factory=dict)  # Additional clients by type
     download_manager: Optional[DownloadManager] = None
     title_matcher: Optional[TitleMatcher] = None
     file_processor: Optional[FileOrganizer] = None
@@ -457,7 +458,8 @@ def _initialize_search_providers() -> None:
 
 
 def _initialize_download_client() -> None:
-    """Initialize download client (optional - can fail gracefully)."""
+    """Initialize download clients (primary and additional)."""
+    # Initialize primary download client (optional - can fail gracefully)
     try:
         client_config = app_state.config_loader.get_download_client()
         if not client_config.get("api_key"):
@@ -469,6 +471,22 @@ def _initialize_download_client() -> None:
     except Exception as e:
         logger.warning(f"Download client not available (configure in Settings): {e}")
         app_state.download_client = None
+
+    # Initialize additional download clients (e.g., Internet Archive)
+    app_state.download_clients = {}
+    try:
+        additional_clients = app_state.config_loader.get_download_clients()
+        for client_type, client_config in additional_clients.items():
+            try:
+                # Ensure type is set in config
+                client_config["type"] = client_config.get("type", client_type)
+                client = ClientFactory.create(client_config)
+                app_state.download_clients[client_type] = client
+                logger.info(f"Loaded additional download client: {client.name} (type: {client_type})")
+            except Exception as e:
+                logger.warning(f"Failed to load download client '{client_type}': {e}")
+    except Exception as e:
+        logger.debug(f"No additional download clients configured: {e}")
 
 
 def _initialize_cache_services() -> None:
@@ -538,8 +556,9 @@ def _initialize_core_services() -> None:
             fuzzy_threshold=app_state.fuzzy_threshold,
             max_downloads=app_state.downloads_config.get("max_concurrent", 10),
             provider_cache_service=app_state.provider_cache_service,
+            download_clients=app_state.download_clients or None,  # Additional clients for routing
         )
-        logger.info("Download manager initialized")
+        logger.info(f"Download manager initialized with {len(app_state.download_clients or {})} additional client(s)")
     else:
         logger.warning("Download manager not initialized: missing download client or search providers")
 

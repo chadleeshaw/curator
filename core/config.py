@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 CONFIG_KEY_SEARCH_PROVIDERS = "search_providers"
 CONFIG_KEY_METADATA_PROVIDERS = "metadata_providers"
 CONFIG_KEY_DOWNLOAD_CLIENT = "download_client"
+CONFIG_KEY_DOWNLOAD_CLIENTS = "download_clients"
 CONFIG_KEY_STORAGE = "storage"
 CONFIG_KEY_CACHE = "cache"
 CONFIG_KEY_MATCHING = "matching"
@@ -290,6 +291,15 @@ class ConfigLoader:
         if not client:
             raise ValueError("No download client configured")
         return client
+
+    def get_download_clients(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Get additional download clients configuration.
+
+        Returns dict mapping client type to its configuration.
+        Used for multi-client support (e.g., Internet Archive + SABnzbd).
+        """
+        return self.config.get(CONFIG_KEY_DOWNLOAD_CLIENTS, {})
 
     def get_storage(self) -> Dict[str, Any]:
         """

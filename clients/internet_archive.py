@@ -113,11 +113,13 @@ class InternetArchiveClient(DownloadClient):
                     size = int(size_str) if size_str else 0
                 except (ValueError, TypeError):
                     size = 0
-                format_files.setdefault(fmt, []).append({
-                    "name": name,
-                    "format": fmt,
-                    "size": size,
-                })
+                format_files.setdefault(fmt, []).append(
+                    {
+                        "name": name,
+                        "format": fmt,
+                        "size": size,
+                    }
+                )
 
         # Find best format in order of preference
         for preferred_fmt in self.preferred_formats:
@@ -315,11 +317,13 @@ class InternetArchiveClient(DownloadClient):
         with self._jobs_lock:
             for job_id, job in self._jobs.items():
                 if job.status == IA_STATUS_COMPLETED and job.file_path:
-                    completed.append({
-                        "job_id": job_id,
-                        "file_path": job.file_path,
-                        "title": job.title,
-                    })
+                    completed.append(
+                        {
+                            "job_id": job_id,
+                            "file_path": job.file_path,
+                            "title": job.title,
+                        }
+                    )
 
         return completed
 
@@ -392,7 +396,8 @@ class InternetArchiveClient(DownloadClient):
 
         with self._jobs_lock:
             to_remove = [
-                job_id for job_id, job in self._jobs.items()
+                job_id
+                for job_id, job in self._jobs.items()
                 if job.status in (IA_STATUS_COMPLETED, IA_STATUS_FAILED) and job.created_at < cutoff
             ]
 
