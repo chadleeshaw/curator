@@ -87,10 +87,11 @@ async def get_import_status() -> Dict[str, Any]:
 
     # Search recursively for PDF, EPUB, CBZ, and CBR files (matches process_downloads behavior)
     all_files = find_supported_files(downloads_dir, recursive=True)
-    pdf_files = [f for f in all_files if f.suffix == ".pdf"]
-    epub_files = [f for f in all_files if f.suffix == ".epub"]
-    cbz_files = [f for f in all_files if f.suffix == ".cbz"]
-    cbr_files = [f for f in all_files if f.suffix == ".cbr"]
+    # Strip trailing quotes from suffix (for files like 'Magazine.pdf')
+    pdf_files = [f for f in all_files if f.suffix.lower().rstrip("'") == ".pdf"]
+    epub_files = [f for f in all_files if f.suffix.lower().rstrip("'") == ".epub"]
+    cbz_files = [f for f in all_files if f.suffix.lower().rstrip("'") == ".cbz"]
+    cbr_files = [f for f in all_files if f.suffix.lower().rstrip("'") == ".cbr"]
 
     return {
         "ready": len(all_files) > 0,

@@ -261,10 +261,11 @@ class DownloadMonitor:
 
             # Check for PDFs, EPUBs, CBZs, and CBRs recursively
             all_files = find_supported_files(self.downloads_dir, recursive=True)
-            pdf_files = [f for f in all_files if f.suffix.lower() == ".pdf"]
-            epub_files = [f for f in all_files if f.suffix.lower() == ".epub"]
-            cbz_files = [f for f in all_files if f.suffix.lower() == ".cbz"]
-            cbr_files = [f for f in all_files if f.suffix.lower() == ".cbr"]
+            # Strip trailing quotes from suffix (for files like 'Magazine.pdf')
+            pdf_files = [f for f in all_files if f.suffix.lower().rstrip("'") == ".pdf"]
+            epub_files = [f for f in all_files if f.suffix.lower().rstrip("'") == ".epub"]
+            cbz_files = [f for f in all_files if f.suffix.lower().rstrip("'") == ".cbz"]
+            cbr_files = [f for f in all_files if f.suffix.lower().rstrip("'") == ".cbr"]
             file_count = len(all_files)
 
             if file_count > 0:

@@ -216,7 +216,8 @@ class FileOrganizer(ReorganizationMixin, CleanupMixin):
         filename_base = f"{safe_title}{ORGANIZED_FILENAME_SEPARATOR}{month}{year}"
 
         # Preserve file extension (PDF, EPUB, CBZ, or CBR)
-        extension = source.suffix.lower()
+        # Strip trailing quotes from extension (for files like 'Magazine.pdf')
+        extension = source.suffix.lower().rstrip("'")
         file_path = self.library_dir / f"{filename_base}{extension}"
         jpg_path = self.library_dir / f"{filename_base}.jpg"
 
@@ -464,7 +465,8 @@ class FileOrganizer(ReorganizationMixin, CleanupMixin):
                     )
 
             # Preserve file extension (PDF, EPUB, CBZ, or CBR)
-            extension = pdf_path.suffix.lower()
+            # Strip trailing quotes from extension (for files like 'Magazine.pdf')
+            extension = pdf_path.suffix.lower().rstrip("'")
 
             # Build filename with preserved extension
             filename = self._build_filename(safe_title, volume, issue_number, month, year, extension)

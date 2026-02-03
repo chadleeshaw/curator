@@ -151,10 +151,11 @@ class FileImporter:
             return result.to_dict()
 
         all_files = find_supported_files(self.downloads_dir, recursive=True)
-        pdf_files = [f for f in all_files if f.suffix == ".pdf"]
-        epub_files = [f for f in all_files if f.suffix == ".epub"]
-        cbz_files = [f for f in all_files if f.suffix == ".cbz"]
-        cbr_files = [f for f in all_files if f.suffix == ".cbr"]
+        # Strip trailing quotes from suffix (for files like 'Magazine.pdf')
+        pdf_files = [f for f in all_files if f.suffix.lower().rstrip("'") == ".pdf"]
+        epub_files = [f for f in all_files if f.suffix.lower().rstrip("'") == ".epub"]
+        cbz_files = [f for f in all_files if f.suffix.lower().rstrip("'") == ".cbz"]
+        cbr_files = [f for f in all_files if f.suffix.lower().rstrip("'") == ".cbr"]
 
         # Filter out files that are within the library_dir to prevent overlap
         # This prevents scanning the same files if library_dir is somehow nested in downloads_dir

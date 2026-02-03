@@ -327,7 +327,8 @@ class ReorganizationMixin:
             if not file_path.is_file():
                 continue
 
-            if file_path.suffix.lower() not in [".pdf", ".epub", ".cbz", ".cbr"]:
+            # Strip trailing quotes from extension (for files like 'Magazine.pdf')
+            if file_path.suffix.lower().rstrip("'") not in [".pdf", ".epub", ".cbz", ".cbr"]:
                 continue
 
             files_found.append(str(file_path))
@@ -525,7 +526,8 @@ class ReorganizationMixin:
             if not file_path.is_file():
                 continue
 
-            if file_path.suffix.lower() not in [".pdf", ".epub", ".cbz", ".cbr"]:
+            # Strip trailing quotes from extension (for files like 'Magazine.pdf')
+            if file_path.suffix.lower().rstrip("'") not in [".pdf", ".epub", ".cbz", ".cbr"]:
                 continue
 
             # Skip if file is already in database

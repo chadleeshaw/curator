@@ -249,20 +249,27 @@ def find_supported_files(directory: Path, recursive: bool = True) -> list[Path]:
     if not directory.exists():
         return []
 
-    pattern = "**/*" if recursive else "*"
-
     # Find files with both lowercase and uppercase extensions (case-insensitive)
     # Also handle files with single quotes surrounding the filename (e.g., 'Magazine.pdf')
     all_files = []
     for ext in SUPPORTED_FILE_EXTENSIONS:
         ext_lower = ext.lower()
         ext_upper = ext.upper()
-        # Normal files: *.pdf
-        all_files.extend(directory.glob(f"{pattern}{ext_lower}"))
-        all_files.extend(directory.glob(f"{pattern}{ext_upper}"))
-        # Files with surrounding quotes: '*.pdf'
-        all_files.extend(directory.glob(f"'{pattern}{ext_lower}'"))
-        all_files.extend(directory.glob(f"'{pattern}{ext_upper}'"))
+
+        if recursive:
+            # Normal files: **/*.pdf
+            all_files.extend(directory.glob(f"**/*{ext_lower}"))
+            all_files.extend(directory.glob(f"**/*{ext_upper}"))
+            # Files with quotes at any depth: **/'*.pdf'
+            all_files.extend(directory.glob(f"**/'*{ext_lower}'"))
+            all_files.extend(directory.glob(f"**/'*{ext_upper}'"))
+        else:
+            # Normal files: *.pdf
+            all_files.extend(directory.glob(f"*{ext_lower}"))
+            all_files.extend(directory.glob(f"*{ext_upper}"))
+            # Files with quotes: '*.pdf'
+            all_files.extend(directory.glob(f"'*{ext_lower}'"))
+            all_files.extend(directory.glob(f"'*{ext_upper}'"))
 
     # Filter out blacklisted extensions and incomplete downloads
     filtered_files = []
