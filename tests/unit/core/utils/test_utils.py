@@ -198,7 +198,7 @@ class TestIsSpecialEdition:
         assert not is_special_edition("Especially Good Magazine")  # 'special' not space-bounded
         assert not is_special_edition("Cheri Magazine 13 Holiday")  # 'holiday' part of title
         assert not is_special_edition("Anniversary Street Magazine")  # 'anniversary' part of street name
-        
+
         # These genuinely don't contain any special edition keywords
         assert not is_special_edition("Magazine Monthly Issue")
         assert not is_special_edition("Tech News Weekly")
