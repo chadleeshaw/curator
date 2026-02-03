@@ -170,7 +170,7 @@ class TestInternetArchiveProviderSearch:
     @patch("providers.internet_archive.search_items")
     def test_search_returns_results(self, mock_search):
         """Test search returns properly formatted results."""
-        # Mock search results
+        # Mock search results - must include 'format' field for items to pass filter
         mock_search.return_value = iter(
             [
                 {
@@ -181,6 +181,7 @@ class TestInternetArchiveProviderSearch:
                     "description": "Technology magazine",
                     "collection": ["magazines"],
                     "mediatype": "texts",
+                    "format": ["Text PDF", "JPEG Thumb"],  # Required for format filtering
                 }
             ]
         )

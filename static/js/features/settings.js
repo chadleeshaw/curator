@@ -264,15 +264,23 @@ export class SettingsManager {
     const list = document.getElementById('search-providers-list');
     if (!list) return;
 
+    // Map provider types to display names
+    const typeDisplayNames = {
+      newsnab: 'Newsnab',
+      rss: 'RSS',
+      internet_archive: 'Internet Archive',
+    };
+
     list.innerHTML = '';
     providers.forEach((provider, index) => {
       const div = document.createElement('div');
       div.className = 'provider-block';
       const isInternetArchive = provider.type === 'internet_archive';
+      const typeDisplayName = typeDisplayNames[provider.type] || provider.type || 'Provider';
 
       // Common header and name field
       let html = `
-        <h4>${this.escapeHtml(provider.name || 'Provider ' + (index + 1))}</h4>
+        <h4>${this.escapeHtml(typeDisplayName)}</h4>
         <input type="hidden" id="search-provider-type-${index}" value="${this.escapeHtml(provider.type || 'newsnab')}">
         <div style="margin: 10px 0;">
           <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">Name:</label>
@@ -366,7 +374,7 @@ export class SettingsManager {
           </label>
         </div>
         <div style="margin-top: 15px; display: flex; gap: 10px;">
-          ${!isInternetArchive ? `<button onclick="testProviderConnection(${index})" class="btn-secondary">Test Connection</button>` : ''}
+          <button onclick="testProviderConnection(${index})" class="btn-secondary">Test Connection</button>
           <button onclick="editSearchProvider(${index})" class="btn-primary">Save</button>
           <button onclick="removeSearchProvider(${index})" class="btn-danger">Remove</button>
         </div>
@@ -797,19 +805,8 @@ export class SettingsManager {
   async testProviderConnection(index) {
     try {
       const name = document.getElementById(`search-provider-name-${index}`).value;
-      const url = document.getElementById(`search-provider-url-${index}`).value;
-      const keyInput = document.getElementById(`search-provider-key-${index}`);
-      const key = keyInput.value || keyInput.dataset.originalKey;
-
-      if (!url) {
-        UIUtils.showStatus('settings-status', 'Please enter an API URL', 'error');
-        return;
-      }
-
-      if (!key) {
-        UIUtils.showStatus('settings-status', 'Please enter an API key', 'error');
-        return;
-      }
+      const typeInput = document.getElementById(`search-provider-type-${index}`);
+      const providerType = typeInput ? typeInput.value : 'newsnab';
 
       // Show testing status
       UIUtils.showStatus(
@@ -818,12 +815,36 @@ export class SettingsManager {
         'info'
       );
 
-      // Build the test payload
-      const testPayload = {
-        type: 'newsnab', // Currently only newsnab is supported
-        api_url: url,
-        api_key: key,
-      };
+      let testPayload;
+
+      if (providerType === 'internet_archive') {
+        // Internet Archive provider - no URL/key needed
+        testPayload = {
+          type: 'internet_archive',
+          name: name,
+        };
+      } else {
+        // Newsnab/RSS provider - requires URL and key
+        const url = document.getElementById(`search-provider-url-${index}`).value;
+        const keyInput = document.getElementById(`search-provider-key-${index}`);
+        const key = keyInput ? keyInput.value || keyInput.dataset.originalKey : '';
+
+        if (!url) {
+          UIUtils.showStatus('settings-status', 'Please enter an API URL', 'error');
+          return;
+        }
+
+        if (!key && providerType === 'newsnab') {
+          UIUtils.showStatus('settings-status', 'Please enter an API key', 'error');
+          return;
+        }
+
+        testPayload = {
+          type: providerType,
+          api_url: url,
+          api_key: key,
+        };
+      }
 
       const data = await APIHelper.executeWithErrorHandling(
         async () => {

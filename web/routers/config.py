@@ -222,6 +222,11 @@ async def test_provider_connection(provider_config: Dict[str, Any]):
 
             provider = NewsnabProvider(provider_config)
             result = provider.test_connection()
+        elif provider_type == "internet_archive":
+            from providers.internet_archive import InternetArchiveProvider
+
+            provider = InternetArchiveProvider(provider_config)
+            result = provider.test_connection()
         elif provider_type == "rss":
             return success_response("RSS providers don't require authentication")
         else:
@@ -264,6 +269,11 @@ async def test_download_client_connection(client_config: Dict[str, Any]):
             from clients.nzbget import NZBGetClient
 
             client = NZBGetClient(client_config)
+            result = client.test_connection()
+        elif client_type == "internet_archive":
+            from clients.internet_archive import InternetArchiveClient
+
+            client = InternetArchiveClient(client_config)
             result = client.test_connection()
         else:
             raise HTTPException(status_code=400, detail=f"Unknown download client type: {client_type}")
