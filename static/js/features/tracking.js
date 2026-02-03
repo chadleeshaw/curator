@@ -1382,11 +1382,19 @@ export class TrackingManager {
 
     // Fallback: Handle "Set", "Collection", "Pack", "Vol", or "Part" releases without year
     if (!year) {
+      // Try to extract number from set/collection/pack
       const setMatch = title.match(/(?:Set|Collection|Pack|Vol|Volume|Part)[\s._-]*(\d+)/i);
       if (setMatch) {
         const setNumber = parseInt(setMatch[1]);
         // Use set number as issue, group under "Collections" year (0)
         return { year: 0, issue: setNumber, month: 0, season: null, isCollection: true };
+      }
+
+      // Handle collections without numbers (e.g., "Full Collection", "Complete Collection")
+      const collectionMatch = title.match(/\b(Full|Complete|Entire)\s+(Collection|Archive|Run)\b/i);
+      if (collectionMatch) {
+        // Group under "Collections" year (0), issue 0
+        return { year: 0, issue: 0, month: 0, season: null, isCollection: true };
       }
     }
 
