@@ -53,20 +53,20 @@ function getSpecialEditionValue(data) {
 
 /**
  * Helper function to check if an issue is marked as a special edition.
- * Checks the boolean is_special_edition flag.
+ * Only checks the explicit is_special_edition flag in derived_metadata.
  *
  * @param {Object} data - The periodical data object
- * @returns {boolean} True if this is a special edition
+ * @returns {boolean} True if this is explicitly marked as a special edition
  */
 function isSpecialEdition(data) {
-  // Check derived_metadata.is_special_edition (boolean flag)
+  // Only check derived_metadata.is_special_edition (boolean flag)
+  // Do NOT fallback to title-based keyword matching
   if (data.derived_metadata?.is_special_edition?.value !== undefined) {
     return Boolean(data.derived_metadata.is_special_edition.value);
   }
 
-  // Fallback: if there's a special edition name/value, it's special
-  const specialValue = getSpecialEditionValue(data);
-  return Boolean(specialValue);
+  // Default to false - only explicitly marked issues are special editions
+  return false;
 }
 
 // Delete modal functions

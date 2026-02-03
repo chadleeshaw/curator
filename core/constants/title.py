@@ -129,23 +129,41 @@ KNOWN_PERIODICAL_TITLES = {
 # ==============================================================================
 
 SPECIAL_EDITION_KEYWORDS = [
-    "special",
-    "annual",
-    "collector",
-    "collectors",
-    "holiday",
-    "christmas",
+    "special edition",
+    "annual edition",
+    "annual report",
+    " annual ",  # Space-bounded to catch "Time Annual 2024" but not "The Annual Review"
+    "collector edition",
+    "collectors edition",
+    "collector's edition",
+    "collectors issue",
+    "holiday special",
+    "holiday edition",
+    "holiday issue",
+    "christmas special",
+    "christmas edition",
     "summer special",
     "winter special",
     "spring special",
     "fall special",
-    "collector's edition",
-    "commemorative",
-    "anniversary",
+    "commemorative edition",
+    "commemorative issue",
+    "anniversary edition",
+    "anniversary issue",
+    "anniversary special",
+    "swimsuit annual",  # SI Swimsuit Annual
     "yearbook",
     "best of",
+    " special ",  # Space-bounded to avoid matching titles with "special" in the name
 ]
-"""Keywords that indicate a special edition release"""
+"""Keywords/phrases that indicate a special edition release.
+
+Note: Multi-word phrases are preferred over single words to reduce false positives.
+Space-bounded single words (e.g., ' special ', ' annual ') help avoid matching when
+the word is part of the magazine's actual title rather than a special edition indicator.
+The space-bounded ' annual ' will match "Time Annual 2024" but not "The Annual Review"
+or "biannual".
+"""
 
 
 # ==============================================================================
