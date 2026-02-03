@@ -132,17 +132,17 @@ class TestIsSpecialEdition:
         """Test detection of 'annual' keyword."""
         assert is_special_edition("National Geographic Annual Edition")
         assert is_special_edition("Forbes Annual Report 2024")
-        assert is_special_edition("The Annual Issue")
+        assert is_special_edition("Time Annual 2024")  # Space-bounded ' annual '
 
     def test_detects_collector_keywords(self):
         """Test detection of collector edition keywords."""
         assert is_special_edition("Marvel Collector's Edition")
-        assert is_special_edition("Collectors Issue #1")
-        assert is_special_edition("Collector Edition - Rare")
+        assert is_special_edition("Star Wars Collectors Edition")
+        assert is_special_edition("Rare Collectors Issue #1")
 
     def test_detects_holiday_keywords(self):
         """Test detection of holiday-related keywords."""
-        assert is_special_edition("Magazine - Holiday Issue")
+        assert is_special_edition("Vogue Holiday Special")
         assert is_special_edition("Christmas Special 2024")
         assert is_special_edition("Summer Special Edition")
         assert is_special_edition("Winter Special")
@@ -151,8 +151,8 @@ class TestIsSpecialEdition:
 
     def test_detects_anniversary_keyword(self):
         """Test detection of 'anniversary' keyword."""
-        assert is_special_edition("Wired 25th Anniversary Issue")
-        assert is_special_edition("Anniversary Edition")
+        assert is_special_edition("Wired 25th Anniversary Edition")
+        assert is_special_edition("50th Anniversary Issue")
 
     def test_detects_yearbook_keyword(self):
         """Test detection of 'yearbook' keyword."""
@@ -166,8 +166,8 @@ class TestIsSpecialEdition:
 
     def test_detects_commemorative_keyword(self):
         """Test detection of 'commemorative' keyword."""
-        assert is_special_edition("Commemorative Issue")
-        assert is_special_edition("Commemorative Edition")
+        assert is_special_edition("Time Commemorative Issue")
+        assert is_special_edition("Magazine Commemorative Edition")
 
     def test_case_insensitive_detection(self):
         """Test that detection is case-insensitive."""
@@ -194,10 +194,11 @@ class TestIsSpecialEdition:
 
     def test_partial_match_not_detected(self):
         """Test that partial keyword matches don't trigger false positives."""
-        # "Especially" contains "special" so it will match - this is expected behavior
-        # The function does substring matching, not whole word matching
-        assert is_special_edition("Especially Good Magazine")  # Contains "special"
-
+        # Space-bounded keywords prevent false matches
+        assert not is_special_edition("Especially Good Magazine")  # 'special' not space-bounded
+        assert not is_special_edition("Cheri Magazine 13 Holiday")  # 'holiday' part of title
+        assert not is_special_edition("Anniversary Street Magazine")  # 'anniversary' part of street name
+        
         # These genuinely don't contain any special edition keywords
         assert not is_special_edition("Magazine Monthly Issue")
         assert not is_special_edition("Tech News Weekly")
