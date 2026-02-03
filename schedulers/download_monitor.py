@@ -12,7 +12,7 @@ from typing import Callable, Optional
 from sqlalchemy.orm import Session, sessionmaker
 
 from core.constants.app import DOWNLOAD_FILE_SEARCH_DEPTH
-from core.constants.files import INCOMPLETE_DOWNLOAD_PATTERNS
+from core.constants.files import INCOMPLETE_DOWNLOAD_PATTERNS, SUPPORTED_FILE_EXTENSIONS
 from services.importer.sidecar import create_sidecar_file
 from models.database import DownloadSubmission, PeriodicalTracking, DiscoveredIssue
 from services import DownloadManager
@@ -153,9 +153,9 @@ class DownloadMonitor:
         finally:
             session.close()
 
-    def _find_pdf_epub_files(self, directory: Path) -> list[Path]:
+    def find_supported_files(self, directory: Path) -> list[Path]:
         """
-        Find all PDF and EPUB files in a directory recursively, excluding incomplete downloads.
+        Find all supported periodical files in a directory recursively, excluding incomplete downloads.
 
         Skips files in folders with incomplete download patterns (_unpack_, _UNPACK_, etc.)
         or with incomplete download extensions (.part, .crdownload, .tmp, etc.)
@@ -168,12 +168,19 @@ class DownloadMonitor:
         """
         files = []
         if directory.exists() and directory.is_dir():
-            # Find all files
+            # Find all files - include both root directory and subdirectories
             all_files = []
-            all_files.extend(directory.glob("**/*.pdf"))
-            all_files.extend(directory.glob("**/*.epub"))
-            all_files.extend(directory.glob("**/*.cbz"))
-            all_files.extend(directory.glob("**/*.cbr"))
+            # Loop through supported file extensions dynamically (case-insensitive)
+            for ext in SUPPORTED_FILE_EXTENSIONS:
+                # Normalize to lowercase for consistent matching
+                ext_lower = ext.lower()
+                ext_upper = ext.upper()
+                # Root directory files (not in subdirectories)
+                all_files.extend(directory.glob(f"*{ext_lower}"))
+                all_files.extend(directory.glob(f"*{ext_upper}"))
+                # Subdirectory files
+                all_files.extend(directory.glob(f"**/*{ext_lower}"))
+                all_files.extend(directory.glob(f"**/*{ext_upper}"))
 
             # Filter out incomplete downloads
             for file in all_files:
@@ -212,7 +219,7 @@ class DownloadMonitor:
                 return file_path_obj
             # If it's a directory, search for PDF/EPUB files inside it
             if file_path_obj.is_dir():
-                found_files = self._find_pdf_epub_files(file_path_obj)
+                found_files = self.find_supported_files(file_path_obj)
                 if found_files:
                     return found_files[0]
 
@@ -227,7 +234,7 @@ class DownloadMonitor:
                         return candidate
                     # If it's a directory, search for PDF/EPUB files inside it
                     if candidate.is_dir():
-                        found_files = self._find_pdf_epub_files(candidate)
+                        found_files = self.find_supported_files(candidate)
                         if found_files:
                             return found_files[0]
             else:
@@ -239,7 +246,7 @@ class DownloadMonitor:
                             return candidate
                         # If it's a directory, search for PDF/EPUB files inside it
                         if candidate.is_dir():
-                            found_files = self._find_pdf_epub_files(candidate)
+                            found_files = self.find_supported_files(candidate)
                             if found_files:
                                 return found_files[0]
 
@@ -294,7 +301,7 @@ class DownloadMonitor:
                 return 0
 
             # Check for PDFs, EPUBs, CBZs, and CBRs recursively
-            all_files = self._find_pdf_epub_files(self.downloads_dir)
+            all_files = self.find_supported_files(self.downloads_dir)
             pdf_files = [f for f in all_files if f.suffix.lower() == ".pdf"]
             epub_files = [f for f in all_files if f.suffix.lower() == ".epub"]
             cbz_files = [f for f in all_files if f.suffix.lower() == ".cbz"]
