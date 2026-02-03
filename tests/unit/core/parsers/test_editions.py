@@ -263,6 +263,7 @@ class TestEditionMatching:
         # Create provider that returns different field names
         provider = Mock(spec=SearchProvider)
         provider.name = "TestProvider"
+        provider.type = "newsnab"
         provider.search.return_value = [
             SearchResult(
                 title="Test - Issue 1",
@@ -302,6 +303,7 @@ class TestEditionMatching:
         # Create provider without OLIDs but similar title
         provider = Mock(spec=SearchProvider)
         provider.name = "TestProvider"
+        provider.type = "newsnab"
         provider.search.return_value = [
             SearchResult(
                 title="Test Magazine Issue 42",
@@ -344,6 +346,7 @@ class TestEditionMatching:
 
         provider = Mock(spec=SearchProvider)
         provider.name = "TestProvider"
+        provider.type = "newsnab"
         provider.search.return_value = [
             SearchResult(
                 title="Different Magazine",

@@ -318,11 +318,11 @@ class TestEditionVariantFiltering:
         session.close()
 
     def test_format_indicators_not_treated_as_variants(self, test_db, mock_download_client):
-        """Digital/Print format indicators should not be treated as edition variants"""
+        """Digital/Print format indicators are stripped and same-date issues are deduplicated"""
         engine, session_factory = test_db
         session = session_factory()
 
-        # Mock provider returns both regular and digital versions
+        # Mock provider returns both regular and digital versions of the SAME issue
         mock_results = [
             SearchResult(
                 title="Wired - January 2024",
@@ -347,11 +347,10 @@ class TestEditionVariantFiltering:
 
         results = manager.search_periodical_issues("Wired", session)
 
-        # Should return BOTH - "Digital" is not a variant, it's format metadata
-        assert len(results) == 2
-        titles = [r["title"] for r in results]
-        # Both should contain "Wired" - the parser may or may not preserve "Digital"
-        assert all("Wired" in t for t in titles)
+        # Should return ONE - "Digital" is stripped by parser, and same-date issues are deduplicated
+        # This is correct: we don't want to download the same issue twice in different formats
+        assert len(results) == 1
+        assert "Wired" in results[0]["title"]
 
         session.close()
 

@@ -172,10 +172,10 @@ class SearchService:
             p.type: getattr(p, "priority", self.DEFAULT_PROVIDER_PRIORITY) for p in self.search_providers
         }
 
-        # Group results by fuzzy match
+        # Group results by fuzzy match (including publication date for uniqueness)
         groups: Dict[str, List[Dict[str, Any]]] = {}
         for result in results:
-            group_id = get_fuzzy_group_id(result["title"])
+            group_id = get_fuzzy_group_id(result["title"], result.get("publication_date"))
             groups.setdefault(group_id, []).append(result)
 
         # For each group, keep the result from highest priority provider
