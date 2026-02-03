@@ -13,7 +13,7 @@ from core.constants.category import DEFAULT_CATEGORY
 from core.constants.errors import ErrorMessages
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
-from core.utils.general import find_pdf_epub_files
+from core.utils.general import find_supported_files
 from web.schemas import ImportOptionsRequest
 from web.utils.responses import status_response, success_response
 
@@ -86,7 +86,7 @@ async def get_import_status() -> Dict[str, Any]:
         }
 
     # Search recursively for PDF, EPUB, CBZ, and CBR files (matches process_downloads behavior)
-    all_files = find_pdf_epub_files(downloads_dir, recursive=True)
+    all_files = find_supported_files(downloads_dir, recursive=True)
     pdf_files = [f for f in all_files if f.suffix == ".pdf"]
     epub_files = [f for f in all_files if f.suffix == ".epub"]
     cbz_files = [f for f in all_files if f.suffix == ".cbz"]
@@ -125,7 +125,7 @@ async def import_from_library_dir(
         raise HTTPException(status_code=400, detail=f"Library directory not found: {library_dir}")
 
     # Count files available for import (PDFs, EPUBs, CBZs, and CBRs)
-    all_files = find_pdf_epub_files(library_dir, recursive=True)
+    all_files = find_supported_files(library_dir, recursive=True)
 
     if not all_files:
         return success_response(

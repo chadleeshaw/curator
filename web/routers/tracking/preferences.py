@@ -10,7 +10,7 @@ from fastapi import HTTPException
 
 from core.constants.category import DEFAULT_CATEGORY
 from core.constants.errors import ErrorMessages
-from core.utils.db import with_db_session
+from core.utils.db import check_file_path_conflict, with_db_session
 from core.utils.error_handling import handle_api_errors
 from core.utils.files import get_library_dir, get_category_prefix
 from core.utils.general import (
@@ -167,13 +167,10 @@ async def reorganize_tracking_files(tracking_id: int) -> Dict[str, Any]:
 
                     if new_pdf_path:
                         # Check for UNIQUE constraint conflicts
-                        # Use no_autoflush to prevent premature flush of pending changes
-                        with db.no_autoflush:
-                            existing_record = db.query(Periodical).filter_by(file_path=str(new_pdf_path)).first()
-                        if existing_record and existing_record.id != magazine.id:
+                        if check_file_path_conflict(db, str(new_pdf_path), magazine.id):
                             logger.error(
                                 f"Cannot update magazine {magazine.id}: Target path {new_pdf_path} "
-                                f"already exists in database for magazine {existing_record.id}."
+                                f"already exists in database for different periodical."
                             )
                             files_failed += 1
                             # Roll back the file move
@@ -308,13 +305,10 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
                     # Update database paths if reorganization succeeded
                     if new_pdf_path:
                         # Check if target path already exists in database (UNIQUE constraint check)
-                        # Use no_autoflush to prevent premature flush of pending changes
-                        with db.no_autoflush:
-                            existing_record = db.query(Periodical).filter_by(file_path=new_pdf_path).first()
-                        if existing_record and existing_record.id != magazine.id:
+                        if check_file_path_conflict(db, new_pdf_path, magazine.id):
                             logger.error(
                                 f"Cannot update magazine {magazine.id}: Target path {new_pdf_path} "
-                                f"already exists in database for magazine {existing_record.id}. "
+                                f"already exists in database for different periodical. "
                                 f"This is a data integrity issue that needs manual resolution."
                             )
                             # Roll back the file move since we can't update the database

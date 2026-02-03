@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from core.constants.files import BLACKLISTED_FILE_EXTENSIONS, INCOMPLETE_DOWNLOAD_PATTERNS
+from core.constants.files import BLACKLISTED_FILE_EXTENSIONS, INCOMPLETE_DOWNLOAD_PATTERNS, SUPPORTED_FILE_EXTENSIONS
 from core.constants.title import SPECIAL_EDITION_KEYWORDS
 
 logger = logging.getLogger(__name__)
@@ -225,10 +225,10 @@ def is_special_edition(title: str) -> bool:
     return any(keyword in title_lower for keyword in SPECIAL_EDITION_KEYWORDS)
 
 
-def find_pdf_epub_files(directory: Path, recursive: bool = True) -> list[Path]:
+def find_supported_files(directory: Path, recursive: bool = True) -> list[Path]:
     """
-    Search for PDF, EPUB, CBZ, and CBR files in a directory, filtering out blacklisted extensions
-    and incomplete/temporary downloads.
+    Search for all supported periodical files (PDF, EPUB, CBZ, CBR) in a directory, filtering out
+    blacklisted extensions and incomplete/temporary downloads.
 
     Skips files that are:
     - In blacklisted extensions
@@ -240,22 +240,29 @@ def find_pdf_epub_files(directory: Path, recursive: bool = True) -> list[Path]:
         recursive: If True, search recursively with glob("**/*.ext"), else use glob("*.ext")
 
     Returns:
-        List of Path objects for all PDF, EPUB, CBZ, and CBR files found (excluding blacklisted files)
+        List of Path objects for all supported files found (excluding blacklisted/incomplete files)
 
     Examples:
-        >>> files = find_pdf_epub_files(Path("/downloads"))
+        >>> files = find_supported_files(Path("/downloads"))
         >>> pdf_only = [f for f in files if f.suffix == '.pdf']
     """
     if not directory.exists():
         return []
 
     pattern = "**/*" if recursive else "*"
-    pdf_files = list(directory.glob(f"{pattern}.pdf"))
-    epub_files = list(directory.glob(f"{pattern}.epub"))
-    cbz_files = list(directory.glob(f"{pattern}.cbz"))
-    cbr_files = list(directory.glob(f"{pattern}.cbr"))
 
-    all_files = pdf_files + epub_files + cbz_files + cbr_files
+    # Find files with both lowercase and uppercase extensions (case-insensitive)
+    # Also handle files with single quotes surrounding the filename (e.g., 'Magazine.pdf')
+    all_files = []
+    for ext in SUPPORTED_FILE_EXTENSIONS:
+        ext_lower = ext.lower()
+        ext_upper = ext.upper()
+        # Normal files: *.pdf
+        all_files.extend(directory.glob(f"{pattern}{ext_lower}"))
+        all_files.extend(directory.glob(f"{pattern}{ext_upper}"))
+        # Files with surrounding quotes: '*.pdf'
+        all_files.extend(directory.glob(f"'{pattern}{ext_lower}'"))
+        all_files.extend(directory.glob(f"'{pattern}{ext_upper}'"))
 
     # Filter out blacklisted extensions and incomplete downloads
     filtered_files = []

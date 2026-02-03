@@ -24,7 +24,7 @@ from .epub import extract_cover_from_epub, extract_text_from_epub
 # General utilities
 from .general import (
     cleanup_empty_directories,
-    find_pdf_epub_files,
+    find_supported_files,
     generate_olid,
     hash_file_in_chunks,
     is_special_edition,
@@ -62,7 +62,7 @@ __all__ = [
     "extract_text_from_epub",
     # General utilities
     "cleanup_empty_directories",
-    "find_pdf_epub_files",
+    "find_supported_files",
     "generate_olid",
     "hash_file_in_chunks",
     "is_special_edition",

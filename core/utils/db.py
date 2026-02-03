@@ -103,3 +103,32 @@ def mark_json_modified(obj, *field_names: str) -> None:
     """
     for field_name in field_names:
         flag_modified(obj, field_name)
+
+
+def check_file_path_conflict(db_session: Session, file_path: str, current_periodical_id: int) -> bool:
+    """
+    Check if a file path conflicts with an existing periodical in the database.
+
+    This utility prevents UNIQUE constraint violations when moving or reorganizing files.
+    Uses no_autoflush to avoid premature flush of pending changes.
+
+    Usage:
+        if check_file_path_conflict(db, str(new_path), magazine.id):
+            logger.error(f"Path conflict: {new_path}")
+            return False
+        # Safe to update magazine.file_path
+
+    Args:
+        db_session: Database session
+        file_path: Target file path to check
+        current_periodical_id: ID of the periodical being moved (to exclude from check)
+
+    Returns:
+        True if conflict exists (path already used by different periodical), False otherwise
+    """
+    from models.database import Periodical
+
+    with db_session.no_autoflush:
+        existing_record = db_session.query(Periodical).filter_by(file_path=file_path).first()
+
+    return existing_record is not None and existing_record.id != current_periodical_id

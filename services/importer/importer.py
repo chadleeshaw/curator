@@ -28,7 +28,7 @@ from services.importer.sidecar import read_sidecar_file, delete_sidecar_file
 from core.utils.pdf import extract_cover_from_pdf
 from core.utils.epub import extract_cover_from_epub
 from core.utils.cbz import extract_cover_from_cbz, extract_cover_from_cbr
-from core.utils.general import find_pdf_epub_files, hash_file_in_chunks
+from core.utils.general import find_supported_files, hash_file_in_chunks
 from services.response_models import OperationResult
 from models.database import Periodical, PeriodicalTracking, OCRJob
 from services.file_organizer import FileOrganizer
@@ -150,7 +150,7 @@ class FileImporter:
             )
             return result.to_dict()
 
-        all_files = find_pdf_epub_files(self.downloads_dir, recursive=True)
+        all_files = find_supported_files(self.downloads_dir, recursive=True)
         pdf_files = [f for f in all_files if f.suffix == ".pdf"]
         epub_files = [f for f in all_files if f.suffix == ".epub"]
         cbz_files = [f for f in all_files if f.suffix == ".cbz"]
@@ -953,7 +953,7 @@ class FileImporter:
             )
             return result.to_dict()
 
-        all_files = find_pdf_epub_files(self.library_base_dir, recursive=True)
+        all_files = find_supported_files(self.library_base_dir, recursive=True)
 
         if not all_files:
             logger.info(f"No periodical files found in library folders: {self.library_base_dir}")

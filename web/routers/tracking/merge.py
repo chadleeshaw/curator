@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional, Tuple
 from fastapi import HTTPException
 
 from core.constants.errors import ErrorMessages
-from core.utils.db import with_db_session
+from core.utils.db import check_file_path_conflict, with_db_session
 from core.utils.error_handling import handle_api_errors
 from core.utils.files import get_library_dir, get_category_prefix
 from core.utils.general import cleanup_empty_directories, is_special_edition
@@ -191,22 +191,12 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
                     # Update database paths if reorganization succeeded
                     if new_pdf_path:
                         # Check if target path already exists in database (UNIQUE constraint check)
-                        # Use no_autoflush to prevent premature flush of pending changes
-                        with db.no_autoflush:
-                            existing_record = (
-                                db.query(Periodical)
-                                .filter_by(file_path=new_pdf_path)
-                                .filter(Periodical.id != periodical.id)
-                                .first()
-                            )
-
-                        if existing_record:
+                        if check_file_path_conflict(db, new_pdf_path, periodical.id):
                             # Path conflict detected - rename to make it unique
                             unique_pdf_path = _get_unique_filename(new_pdf_path, db)
                             logger.warning(
                                 f"Path conflict for periodical {periodical.id}: {new_pdf_path} "
-                                f"already exists (periodical {existing_record.id}). "
-                                f"Renaming to: {unique_pdf_path}"
+                                f"already exists. Renaming to: {unique_pdf_path}"
                             )
 
                             # Rename the physical file

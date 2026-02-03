@@ -4,15 +4,12 @@ Task management routes
 
 import logging
 import os
-from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
 from fastapi import APIRouter
 
 from core.utils.error_handling import handle_api_errors
-from models.database import Periodical
 from core.utils import run_in_thread
-from core.utils.db import with_db_session
 from web.utils.responses import success_response, error_response
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
@@ -348,76 +345,19 @@ async def run_task_manually(task_id: str):
             return error_response("Task scheduler not available")
 
     elif task_id == "cleanup_orphaned_covers":
-        # Manually trigger cover cleanup and generation (run in thread to avoid blocking)
-        logger.info("Starting cover cleanup task (manual trigger)")
-
-        def operation(db):
-            # Get all periodicals
-            all_periodicals = db.query(Periodical).all()
-            periodicals_with_covers = [m for m in all_periodicals if m.cover_path and Path(m.cover_path).exists()]
-            periodicals_without_covers = [
-                m for m in all_periodicals if m.file_path and (not m.cover_path or not Path(m.cover_path).exists())
-            ]
-
-            db_cover_paths = {str(Path(m.cover_path).resolve()) for m in periodicals_with_covers}
-
-            # Find all cover files on disk
-            covers_dir = Path(_storage_config.get("library_base_dir", "./local/data")) / ".covers"
-            covers_dir.mkdir(parents=True, exist_ok=True)
-
-            # Part 1: Delete orphaned covers
-            deleted_count = 0
-            if covers_dir.exists():
-                # Get absolute paths of all cover files on disk
-                cover_files = set(str(f.resolve()) for f in covers_dir.glob("*.jpg"))
-                orphaned_covers = cover_files - db_cover_paths
-
-                for orphan_path in orphaned_covers:
-                    try:
-                        Path(orphan_path).unlink()
-                        deleted_count += 1
-                    except Exception as e:
-                        logger.error(f"Error deleting orphaned cover {orphan_path}: {e}")
-
-            # Part 2: Generate missing covers
-            generated_count = 0
-            for magazine in periodicals_without_covers:
-                pdf_path = Path(magazine.file_path)
-                if not pdf_path.exists():
-                    continue
-
-                # Extract cover from PDF
-                cover_path = _file_importer._extract_cover(pdf_path)
-                if cover_path:
-                    magazine.cover_path = str(cover_path)
-                    generated_count += 1
-
-            if generated_count > 0:
-                db.commit()
-
-            # Build result message
-            messages = []
-            if deleted_count > 0:
-                messages.append(f"Deleted {deleted_count} orphaned cover file{'s' if deleted_count != 1 else ''}")
-            if generated_count > 0:
-                messages.append(f"Generated {generated_count} missing cover{'s' if generated_count != 1 else ''}")
-
-            if messages:
-                message = "Cleanup executed. " + ", ".join(messages) + "."
-            else:
-                message = "No orphaned covers found and all periodicals have covers."
-
-            return {
-                "deleted": deleted_count,
-                "generated": generated_count,
-                "message": message,
-            }
-
-        result = await with_db_session(_session_factory, operation)
-        return success_response(
-            result["message"],
-            task_name="Auto-Thumbnail",
-        )
+        # Manually trigger cover cleanup via scheduler
+        if _task_scheduler:
+            try:
+                await _task_scheduler.run_task_now("cleanup_orphaned_covers")
+                return success_response(
+                    "Cover cleanup executed successfully",
+                    task_name="Auto-Thumbnail",
+                )
+            except Exception as e:
+                logger.error(f"Error running cover cleanup: {e}", exc_info=True)
+                return error_response(f"Failed to run cover cleanup: {str(e)}")
+        else:
+            return error_response("Task scheduler not available")
 
     else:
         return error_response(f"Unknown task: {task_id}")

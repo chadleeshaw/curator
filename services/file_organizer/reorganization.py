@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from core.constants.country import ISO_COUNTRIES
 from core.constants.language import DEFAULT_LANGUAGE
 from core.parsers import sanitize_filename
+from core.utils.db import check_file_path_conflict
 from core.utils.files import resolve_periodical_file_path
 from services.importer.sidecar import read_sidecar_file
 
@@ -204,10 +205,7 @@ class ReorganizationMixin:
         final_path = self._get_unique_target_path(target_dir, filename)
 
         # Check if target path already exists in database
-        # Use no_autoflush to prevent premature flush of pending changes
-        with db_session.no_autoflush:
-            existing_record = db_session.query(Periodical).filter_by(file_path=str(final_path)).first()
-        if existing_record and existing_record.id != magazine.id:
+        if check_file_path_conflict(db_session, str(final_path), magazine.id):
             logger.warning(
                 f"Target path already exists in database for different record: {final_path}. "
                 f"Skipping reorganization of {current_path}"

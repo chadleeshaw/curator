@@ -12,7 +12,8 @@ from typing import Callable, Optional
 from sqlalchemy.orm import Session, sessionmaker
 
 from core.constants.app import DOWNLOAD_FILE_SEARCH_DEPTH
-from core.constants.files import INCOMPLETE_DOWNLOAD_PATTERNS, SUPPORTED_FILE_EXTENSIONS
+from core.constants.files import INCOMPLETE_DOWNLOAD_PATTERNS
+from core.utils import find_supported_files
 from services.importer.sidecar import create_sidecar_file
 from models.database import DownloadSubmission, PeriodicalTracking, DiscoveredIssue
 from services import DownloadManager
@@ -153,48 +154,6 @@ class DownloadMonitor:
         finally:
             session.close()
 
-    def find_supported_files(self, directory: Path) -> list[Path]:
-        """
-        Find all supported periodical files in a directory recursively, excluding incomplete downloads.
-
-        Skips files in folders with incomplete download patterns (_unpack_, _UNPACK_, etc.)
-        or with incomplete download extensions (.part, .crdownload, .tmp, etc.)
-
-        Args:
-            directory: Directory to search
-
-        Returns:
-            List of Path objects for PDF/EPUB/CBZ/CBR files found (excluding incomplete downloads)
-        """
-        files = []
-        if directory.exists() and directory.is_dir():
-            # Find all files - include both root directory and subdirectories
-            all_files = []
-            # Loop through supported file extensions dynamically (case-insensitive)
-            for ext in SUPPORTED_FILE_EXTENSIONS:
-                # Normalize to lowercase for consistent matching
-                ext_lower = ext.lower()
-                ext_upper = ext.upper()
-                # Root directory files (not in subdirectories)
-                all_files.extend(directory.glob(f"*{ext_lower}"))
-                all_files.extend(directory.glob(f"*{ext_upper}"))
-                # Subdirectory files
-                all_files.extend(directory.glob(f"**/*{ext_lower}"))
-                all_files.extend(directory.glob(f"**/*{ext_upper}"))
-
-            # Filter out incomplete downloads
-            for file in all_files:
-                file_path_str = str(file).lower()
-                is_incomplete = any(pattern.lower() in file_path_str for pattern in INCOMPLETE_DOWNLOAD_PATTERNS)
-
-                if is_incomplete:
-                    logger.debug(f"Skipping incomplete/temporary download: {file.name}")
-                    continue
-
-                files.append(file)
-
-        return files
-
     def _find_file_in_downloads(self, file_path: str, max_depth: int = DOWNLOAD_FILE_SEARCH_DEPTH) -> Optional[Path]:
         """
         Find a file in the downloads folder, checking multiple possible locations.
@@ -219,7 +178,7 @@ class DownloadMonitor:
                 return file_path_obj
             # If it's a directory, search for PDF/EPUB files inside it
             if file_path_obj.is_dir():
-                found_files = self.find_supported_files(file_path_obj)
+                found_files = find_supported_files(file_path_obj, recursive=True)
                 if found_files:
                     return found_files[0]
 
@@ -234,7 +193,7 @@ class DownloadMonitor:
                         return candidate
                     # If it's a directory, search for PDF/EPUB files inside it
                     if candidate.is_dir():
-                        found_files = self.find_supported_files(candidate)
+                        found_files = find_supported_files(candidate, recursive=True)
                         if found_files:
                             return found_files[0]
             else:
@@ -246,7 +205,7 @@ class DownloadMonitor:
                             return candidate
                         # If it's a directory, search for PDF/EPUB files inside it
                         if candidate.is_dir():
-                            found_files = self.find_supported_files(candidate)
+                            found_files = find_supported_files(candidate, recursive=True)
                             if found_files:
                                 return found_files[0]
 
@@ -301,7 +260,7 @@ class DownloadMonitor:
                 return 0
 
             # Check for PDFs, EPUBs, CBZs, and CBRs recursively
-            all_files = self.find_supported_files(self.downloads_dir)
+            all_files = find_supported_files(self.downloads_dir, recursive=True)
             pdf_files = [f for f in all_files if f.suffix.lower() == ".pdf"]
             epub_files = [f for f in all_files if f.suffix.lower() == ".epub"]
             cbz_files = [f for f in all_files if f.suffix.lower() == ".cbz"]

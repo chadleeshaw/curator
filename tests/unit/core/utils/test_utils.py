@@ -16,7 +16,7 @@ from unittest.mock import patch
 from core.utils.general import (
     hash_file_in_chunks,
     is_special_edition,
-    find_pdf_epub_files,
+    find_supported_files,
     cleanup_empty_directories,
 )
 
@@ -214,7 +214,7 @@ class TestFindPdfEpubFiles:
         (tmp_path / "file2.pdf").touch()
         (tmp_path / "other.txt").touch()
 
-        files = find_pdf_epub_files(tmp_path, recursive=False)
+        files = find_supported_files(tmp_path, recursive=False)
 
         assert len(files) == 2
         assert all(f.suffix == ".pdf" for f in files)
@@ -225,7 +225,7 @@ class TestFindPdfEpubFiles:
         (tmp_path / "book2.epub").touch()
         (tmp_path / "other.txt").touch()
 
-        files = find_pdf_epub_files(tmp_path, recursive=False)
+        files = find_supported_files(tmp_path, recursive=False)
 
         assert len(files) == 2
         assert all(f.suffix == ".epub" for f in files)
@@ -236,7 +236,7 @@ class TestFindPdfEpubFiles:
         (tmp_path / "book.epub").touch()
         (tmp_path / "readme.txt").touch()
 
-        files = find_pdf_epub_files(tmp_path, recursive=False)
+        files = find_supported_files(tmp_path, recursive=False)
 
         assert len(files) == 2
         pdf_files = [f for f in files if f.suffix == ".pdf"]
@@ -260,7 +260,7 @@ class TestFindPdfEpubFiles:
         nested.mkdir()
         (nested / "nested.pdf").touch()
 
-        files = find_pdf_epub_files(tmp_path, recursive=True)
+        files = find_supported_files(tmp_path, recursive=True)
 
         assert len(files) == 4
         assert any(f.name == "root.pdf" for f in files)
@@ -276,21 +276,21 @@ class TestFindPdfEpubFiles:
         subdir.mkdir()
         (subdir / "sub.pdf").touch()
 
-        files = find_pdf_epub_files(tmp_path, recursive=False)
+        files = find_supported_files(tmp_path, recursive=False)
 
         assert len(files) == 1
         assert files[0].name == "root.pdf"
 
     def test_empty_directory(self, tmp_path):
         """Test searching an empty directory."""
-        files = find_pdf_epub_files(tmp_path)
+        files = find_supported_files(tmp_path)
 
         assert files == []
 
     def test_nonexistent_directory(self):
         """Test searching a directory that doesn't exist."""
         non_existent = Path("/nonexistent/path")
-        files = find_pdf_epub_files(non_existent)
+        files = find_supported_files(non_existent)
 
         assert files == []
 
@@ -300,7 +300,7 @@ class TestFindPdfEpubFiles:
         (tmp_path / "image.jpg").touch()
         (tmp_path / "document.docx").touch()
 
-        files = find_pdf_epub_files(tmp_path)
+        files = find_supported_files(tmp_path)
 
         assert files == []
 
@@ -312,7 +312,7 @@ class TestFindPdfEpubFiles:
         (tmp_path / "lowercase.pdf").touch()
         (tmp_path / "epub_upper.EPUB").touch()
 
-        files = find_pdf_epub_files(tmp_path, recursive=False)
+        files = find_supported_files(tmp_path, recursive=False)
 
         # Glob patterns are case-sensitive in the pattern, but filesystem may not be
         # On case-insensitive filesystems (macOS), this won't find any files
@@ -325,7 +325,7 @@ class TestFindPdfEpubFiles:
         """Test that returned files are Path objects."""
         (tmp_path / "test.pdf").touch()
 
-        files = find_pdf_epub_files(tmp_path)
+        files = find_supported_files(tmp_path)
 
         assert len(files) == 1
         assert isinstance(files[0], Path)
@@ -338,7 +338,7 @@ class TestFindPdfEpubFiles:
         (tmp_path / "movie.avi").touch()
         (tmp_path / "book.epub").touch()
 
-        files = find_pdf_epub_files(tmp_path, recursive=False)
+        files = find_supported_files(tmp_path, recursive=False)
 
         # Should only find PDF and EPUB, not video files
         assert len(files) == 2
@@ -351,7 +351,7 @@ class TestFindPdfEpubFiles:
         (tmp_path / "music.mp3").touch()
         (tmp_path / "audio.flac").touch()
 
-        files = find_pdf_epub_files(tmp_path, recursive=False)
+        files = find_supported_files(tmp_path, recursive=False)
 
         assert len(files) == 1
         assert files[0].suffix == ".pdf"
@@ -362,7 +362,7 @@ class TestFindPdfEpubFiles:
         (tmp_path / "manga.cbr").touch()
         (tmp_path / "magazine.pdf").touch()
 
-        files = find_pdf_epub_files(tmp_path, recursive=False)
+        files = find_supported_files(tmp_path, recursive=False)
 
         # All three should be found (CBZ/CBR are supported formats)
         assert len(files) == 3
@@ -383,7 +383,7 @@ class TestUtilsIntegration:
         file2.write_bytes(b"PDF content 2")
 
         # Find files
-        found_files = find_pdf_epub_files(tmp_path)
+        found_files = find_supported_files(tmp_path)
         assert len(found_files) == 2
 
         # Hash files
@@ -404,7 +404,7 @@ class TestUtilsIntegration:
         for filename in files:
             (tmp_path / filename).touch()
 
-        found_files = find_pdf_epub_files(tmp_path)
+        found_files = find_supported_files(tmp_path)
         special_editions = [f for f in found_files if is_special_edition(f.stem)]
 
         assert len(special_editions) == 2
