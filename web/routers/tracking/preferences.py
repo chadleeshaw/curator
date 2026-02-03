@@ -374,6 +374,8 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
             "track_all_editions": tracking.track_all_editions,
             "track_new_only": tracking.track_new_only,
             "delete_from_client_on_completion": tracking.delete_from_client_on_completion,
+            "search_aliases": tracking.search_aliases,
+            "organization_pattern": tracking.organization_pattern,
         }
 
         return {

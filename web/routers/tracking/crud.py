@@ -272,6 +272,8 @@ async def get_tracking_details(tracking_id: int) -> Dict[str, Any]:
                 "delete_from_client_on_completion": tracking.delete_from_client_on_completion,
                 "selected_editions": tracking.selected_editions,
                 "selected_years": tracking.selected_years,
+                "organization_pattern": tracking.organization_pattern,
+                "search_aliases": tracking.search_aliases,
                 "metadata": tracking.periodical_metadata,
                 "last_metadata_update": (
                     tracking.last_metadata_update.isoformat() if tracking.last_metadata_update else None
