@@ -70,23 +70,25 @@ async def get_download_queue_all(status: Optional[str] = None) -> Dict[str, Any]
                 except Exception as e:
                     _shared.logger.debug(f"Could not get progress for job {s.job_id}: {e}")
 
-            queue_items.append({
-                "submission_id": s.id,
-                "tracking_id": s.tracking_id,
-                "title": s.result_title,
-                "magazine": tracking_map.get(s.tracking_id, "Unknown"),
-                "url": s.source_url or "",
-                "status": s.status.value,
-                "job_id": s.job_id,
-                "error": s.last_error,
-                "extra_status": s.extra_status,
-                "attempts": s.attempt_count,
-                "progress": progress,
-                "time_left": time_left,
-                "size": size,
-                "created_at": (s.created_at.isoformat() if s.created_at else None),
-                "updated_at": (s.updated_at.isoformat() if s.updated_at else None),
-            })
+            queue_items.append(
+                {
+                    "submission_id": s.id,
+                    "tracking_id": s.tracking_id,
+                    "title": s.result_title,
+                    "magazine": tracking_map.get(s.tracking_id, "Unknown"),
+                    "url": s.source_url or "",
+                    "status": s.status.value,
+                    "job_id": s.job_id,
+                    "error": s.last_error,
+                    "extra_status": s.extra_status,
+                    "attempts": s.attempt_count,
+                    "progress": progress,
+                    "time_left": time_left,
+                    "size": size,
+                    "created_at": (s.created_at.isoformat() if s.created_at else None),
+                    "updated_at": (s.updated_at.isoformat() if s.updated_at else None),
+                }
+            )
 
         return success_response(
             queue=queue_items,
