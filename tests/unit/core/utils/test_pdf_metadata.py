@@ -156,7 +156,7 @@ class TestTextScanWithEmbeddedMetadata:
         assert result["scanned"] is True
         assert result["text_found"] is True
         assert result["year"] == 2024
-        assert result["month"] == 6  # June
+        assert result["month"] == "June"  # TextScanService returns month as string
         assert result["has_sufficient_metadata"] is True
 
     @pytest.mark.skipif(not PYPDF_AVAILABLE, reason="pypdf not available")
