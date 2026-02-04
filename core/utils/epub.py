@@ -80,9 +80,12 @@ def extract_cover_from_epub(epub_path: Path, output_dir: Path, quality: int = EP
     """
     try:
         from ebooklib import epub
+        from core.utils.files import strip_duplicate_suffixes
 
         output_dir.mkdir(parents=True, exist_ok=True)
-        cover_path = output_dir / f"{epub_path.stem}.jpg"
+        # Strip timestamp/counter suffixes to prevent accumulation
+        clean_filename = strip_duplicate_suffixes(f"{epub_path.stem}.jpg")
+        cover_path = output_dir / clean_filename
 
         # Read the EPUB file
         book = epub.read_epub(str(epub_path))

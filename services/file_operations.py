@@ -67,6 +67,8 @@ def reorganize_periodical_files(
             print(f"Moved to: {result.new_pdf_path}")
     """
     try:
+        from core.utils.files import strip_duplicate_suffixes
+
         old_pdf_path = Path(periodical.file_path)
         old_cover_path = Path(periodical.cover_path) if periodical.cover_path else None
 
@@ -79,7 +81,9 @@ def reorganize_periodical_files(
         issue_date = periodical.issue_date
 
         # Build new path structure
-        safe_title = sanitize_filename(new_title)
+        # Strip any accumulated timestamp/counter suffixes before sanitizing
+        clean_title = strip_duplicate_suffixes(new_title)
+        safe_title = sanitize_filename(clean_title)
         month = issue_date.strftime("%B")
         year = issue_date.strftime("%Y")
         filename_base = f"{safe_title} - {month}{year}"

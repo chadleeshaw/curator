@@ -205,3 +205,47 @@ def verify_periodical_files_exist(periodical, library_base_dir: Optional[Path] =
             pass
 
     return file_exists, cover_exists
+
+
+def strip_duplicate_suffixes(filename: str) -> str:
+    """
+    Strip timestamp and counter suffixes from filename stem to prevent accumulation.
+
+    Removes patterns like:
+    - (20260203_151457) - timestamp format
+    - (2), (3), (10) - counter format
+    - Combinations: (20260203_151457) (3)
+
+    Args:
+        filename: Filename (with or without extension)
+
+    Returns:
+        Filename with suffixes stripped
+
+    Examples:
+        >>> strip_duplicate_suffixes("Magazine (20260203_151457).jpg")
+        'Magazine.jpg'
+        >>> strip_duplicate_suffixes("Magazine (20260203_151457) (3).jpg")
+        'Magazine.jpg'
+        >>> strip_duplicate_suffixes("Magazine (Special Edition).jpg")
+        'Magazine (Special Edition).jpg'
+    """
+    import re
+
+    # Split extension
+    if "." in filename:
+        stem, ext = filename.rsplit(".", 1)
+    else:
+        stem, ext = filename, ""
+
+    # Pattern matches:
+    # - Timestamp: (YYYYMMDD_HHMMSS)
+    # - Counter: (N) where N is 1-4 digits
+    # Multiple times, with optional spaces between
+    pattern = r"(\s*\(\d{8}_\d{6}\)|\s*\(\d{1,4}\))+$"
+
+    # Strip all matching suffixes from the end
+    cleaned_stem = re.sub(pattern, "", stem).strip()
+
+    # Reconstruct filename
+    return f"{cleaned_stem}.{ext}" if ext else cleaned_stem

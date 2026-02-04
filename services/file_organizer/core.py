@@ -430,6 +430,8 @@ class FileOrganizer(ReorganizationMixin, CleanupMixin):
             Path to organized file, or None if failed
         """
         try:
+            from core.utils.files import strip_duplicate_suffixes
+
             # Extract metadata
             title = metadata.get("title", pdf_path.stem)
             issue_date = metadata.get("issue_date")
@@ -441,7 +443,9 @@ class FileOrganizer(ReorganizationMixin, CleanupMixin):
             has_date = issue_date is not None and metadata.get("year") is not None
 
             # Format date components (use None if no reliable date)
-            safe_title = sanitize_filename(title)
+            # Strip any accumulated timestamp/counter suffixes before sanitizing
+            clean_title = strip_duplicate_suffixes(title)
+            safe_title = sanitize_filename(clean_title)
             if has_date:
                 month = issue_date.strftime("%B")
                 year = issue_date.strftime("%Y")

@@ -124,8 +124,12 @@ def extract_cover_from_cbz(cbz_path: Path, output_dir: Path, quality: int = EPUB
             logger.error(f"Invalid or corrupted CBZ file: {cbz_path}")
             return None
 
+        from core.utils.files import strip_duplicate_suffixes
+
         output_dir.mkdir(parents=True, exist_ok=True)
-        cover_path = output_dir / f"{cbz_path.stem}.jpg"
+        # Strip timestamp/counter suffixes to prevent accumulation
+        clean_filename = strip_duplicate_suffixes(f"{cbz_path.stem}.jpg")
+        cover_path = output_dir / clean_filename
 
         with zipfile.ZipFile(cbz_path, "r") as zip_file:
             image_files = _get_sorted_image_files(zip_file, ".cbz")
@@ -177,8 +181,12 @@ def extract_cover_from_cbr(cbr_path: Path, output_dir: Path, quality: int = EPUB
             logger.error(f"Invalid or corrupted CBR file: {cbr_path}")
             return None
 
+        from core.utils.files import strip_duplicate_suffixes
+
         output_dir.mkdir(parents=True, exist_ok=True)
-        cover_path = output_dir / f"{cbr_path.stem}.jpg"
+        # Strip timestamp/counter suffixes to prevent accumulation
+        clean_filename = strip_duplicate_suffixes(f"{cbr_path.stem}.jpg")
+        cover_path = output_dir / clean_filename
 
         with rarfile.RarFile(cbr_path, "r") as rar_file:
             image_files = _get_sorted_image_files(rar_file, ".cbr")
