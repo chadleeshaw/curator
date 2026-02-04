@@ -141,6 +141,15 @@ class FileImporter:
         result.add_count("failed", 0)
         result.add_count("skipped", 0)
 
+        # Track detailed skip/fail reasons
+        skip_reasons = {
+            "duplicate_hash": 0,
+            "duplicate_fuzzy": 0,
+            "invalid_title": 0,
+            "parse_error": 0,
+            "organization_failed": 0,
+        }
+
         if not self.downloads_dir.exists():
             logger.warning(f"Downloads directory not found: {self.downloads_dir}")
             result.add_error(
@@ -187,12 +196,52 @@ class FileImporter:
         logger.info("[DOWNLOADS IMPORT] Text extraction enabled, OCR queued only for image-based files")
 
         # Process all file types using unified handler
-        self._process_file_batch(pdf_files, "PDF", session, organization_pattern, result)
-        self._process_file_batch(epub_files, "EPUB", session, organization_pattern, result)
-        self._process_file_batch(cbz_files, "CBZ", session, organization_pattern, result)
-        self._process_file_batch(cbr_files, "CBR", session, organization_pattern, result)
+        self._process_file_batch(pdf_files, "PDF", session, organization_pattern, result, skip_reasons)
+        self._process_file_batch(epub_files, "EPUB", session, organization_pattern, result, skip_reasons)
+        self._process_file_batch(cbz_files, "CBZ", session, organization_pattern, result, skip_reasons)
+        self._process_file_batch(cbr_files, "CBR", session, organization_pattern, result, skip_reasons)
+
+        # Log summary
+        self._log_import_summary(result, skip_reasons)
 
         return result.to_dict()
+
+    def _log_import_summary(self, result: OperationResult, skip_reasons: Dict[str, int]) -> None:
+        """
+        Log a summary of import results.
+
+        Args:
+            result: OperationResult with counts
+            skip_reasons: Dictionary of skip reasons and their counts
+        """
+        total = result.data.get("imported", 0) + result.data.get("skipped", 0) + result.data.get("failed", 0)
+        if total == 0:
+            return
+
+        logger.info("=" * 80)
+        logger.info("IMPORT SUMMARY")
+        logger.info("=" * 80)
+        logger.info(f"Total files processed: {total}")
+        logger.info(f"  ✓ Successfully imported: {result.data.get('imported', 0)}")
+        logger.info(f"  ⊘ Skipped: {result.data.get('skipped', 0)}")
+        logger.info(f"  ✗ Failed: {result.data.get('failed', 0)}")
+
+        # Show skip reasons if any
+        if result.data.get("skipped", 0) > 0 or any(skip_reasons.values()):
+            logger.info("")
+            logger.info("Skip/Failure reasons:")
+            for reason, count in sorted(skip_reasons.items(), key=lambda x: x[1], reverse=True):
+                if count > 0:
+                    reason_label = {
+                        "duplicate_hash": "Duplicate (content hash)",
+                        "duplicate_fuzzy": "Duplicate (title/date)",
+                        "invalid_title": "Invalid title",
+                        "parse_error": "Parse error",
+                        "organization_failed": "File organization failed",
+                    }.get(reason, reason)
+                    logger.info(f"  - {reason_label}: {count}")
+
+        logger.info("=" * 80)
 
     # =========================================================================
     # Import Helper Methods
@@ -634,7 +683,7 @@ class FileImporter:
             parsed = self.parser.parse_file(file_path)
             if not self.title_matcher.validate_before_parsing(parsed.title):
                 logger.warning(f"Skipping invalid release title: {parsed.title} (from {file_path.name})")
-                return {}
+                return {"skip_reason": "invalid_title"}
             logger.debug(
                 f"Parsed metadata: '{parsed.title}' - Date: {parsed.issue_date.strftime('%b %Y') if parsed.issue_date else 'None'} "
                 f"(confidence: {parsed.confidence}, pattern: {parsed.matched_pattern})"
@@ -644,10 +693,10 @@ class FileImporter:
             content_hash = hash_file_in_chunks(str(file_path))
             if not content_hash:
                 logger.error(f"Failed to hash file {file_path}, skipping import", exc_info=True)
-                return {}
+                return {"skip_reason": "parse_error"}
 
             if self._check_hash_duplicate(content_hash, file_path, skip_organize, session):
-                return {}
+                return {"skip_reason": "duplicate_hash"}
 
             # Step 4: If we have a tracking_id from sidecar (download), use that tracking's title
             # This prevents creating duplicate tracking records when filenames are ambiguous
@@ -673,7 +722,7 @@ class FileImporter:
             if self._check_fuzzy_duplicate(
                 tracking_title, parsed.issue_date, parsed.language, file_path, skip_organize, session
             ):
-                return {}
+                return {"skip_reason": "duplicate_fuzzy"}
 
             # Step 6: Determine category and find tracking match
             category = self.categorizer.categorize(parsed.title)
@@ -701,7 +750,7 @@ class FileImporter:
                 }
                 organized_path = self.organizer.organize(file_path, metadata, category, organization_pattern)
                 if not organized_path:
-                    return {}
+                    return {"skip_reason": "organization_failed"}
 
             # Step 8: Build metadata and create database record
             from core.utils.metadata_builder import (
@@ -775,7 +824,7 @@ class FileImporter:
         except Exception as e:
             session.rollback()
             logger.error(f"Error importing file {file_path}: {e}", exc_info=True)
-            return {}
+            return {"skip_reason": "parse_error"}
 
     def _process_file_batch(
         self,
@@ -784,6 +833,7 @@ class FileImporter:
         session: Session,
         organization_pattern: Optional[str],
         result: OperationResult,
+        skip_reasons: Dict[str, int],
     ) -> None:
         """
         Process a batch of files of the same type.
@@ -794,6 +844,7 @@ class FileImporter:
             session: Database session
             organization_pattern: Optional organization pattern
             result: OperationResult to update with counts and errors
+            skip_reasons: Dictionary to track skip/failure reasons
         """
         # Track folders to cleanup after processing all files
         folders_to_cleanup = set()
@@ -820,7 +871,7 @@ class FileImporter:
                     organization_pattern=organization_pattern,
                     use_ocr=True,
                 )
-                if import_result:
+                if import_result and import_result.get("periodical_id"):
                     result.data["imported"] += 1
                     logger.info(f"Successfully imported {file_type}: {file_path.name}")
                     # Track parent folder for cleanup after batch completes
@@ -828,13 +879,19 @@ class FileImporter:
                     if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
                         folders_to_cleanup.add(parent_dir)
                 else:
-                    result.data["failed"] += 1
-                    result.add_error(
-                        ErrorCodes.IMPORT_FAILED,
-                        f"Failed to import {file_type} {file_path.name}",
-                        retryable=True,
-                    )
-                    logger.info(f"Cleaning up failed {file_type} import: {file_path.name}")
+                    # Track skip reason
+                    skip_reason = import_result.get("skip_reason", "organization_failed")
+                    if skip_reason in skip_reasons:
+                        skip_reasons[skip_reason] += 1
+                        result.data["skipped"] += 1
+                    else:
+                        result.data["failed"] += 1
+                        result.add_error(
+                            ErrorCodes.IMPORT_FAILED,
+                            f"Failed to import {file_type} {file_path.name}",
+                            retryable=True,
+                        )
+                    logger.debug(f"Skipped {file_type} import ({skip_reason}): {file_path.name}")
                     self._cleanup_download_file(file_path, defer_folder_deletion=True)
                     # Track parent folder for cleanup after batch completes
                     parent_dir = file_path.parent
@@ -842,6 +899,7 @@ class FileImporter:
                         folders_to_cleanup.add(parent_dir)
             except Exception as e:
                 result.data["failed"] += 1
+                skip_reasons["parse_error"] += 1
                 error_msg = f"Error importing {file_type} {file_path.name}: {str(e)}"
                 result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
                 logger.error(error_msg, exc_info=True)
