@@ -333,19 +333,21 @@ def resolve_duplicates(
                 # Check if filename already has good metadata
                 if parsed.issue_date and parsed.confidence != "low":
                     logger.info(f"    Already has date: {parsed.issue_date.strftime('%Y-%m')}")
-                    file_metadata.append({
-                        "path": file_path,
-                        "base_title": base_title,
-                        "scan_result": {
-                            "year": parsed.year,
-                            "month": parsed.issue_date.month if parsed.issue_date else None,
-                            "volume": parsed.volume,
-                            "issue_number": parsed.edition_number,
-                            "issue_date": parsed.issue_date,
-                            "source": "filename",
-                        },
-                        "needs_rename": False,
-                    })
+                    file_metadata.append(
+                        {
+                            "path": file_path,
+                            "base_title": base_title,
+                            "scan_result": {
+                                "year": parsed.year,
+                                "month": parsed.issue_date.month if parsed.issue_date else None,
+                                "volume": parsed.volume,
+                                "issue_number": parsed.edition_number,
+                                "issue_date": parsed.issue_date,
+                                "source": "filename",
+                            },
+                            "needs_rename": False,
+                        }
+                    )
                     continue
             except Exception:
                 base_title = file_path.stem
@@ -369,12 +371,14 @@ def resolve_duplicates(
             else:
                 logger.info("    No metadata found from scanning")
 
-            file_metadata.append({
-                "path": file_path,
-                "base_title": base_title,
-                "scan_result": scan_result,
-                "needs_rename": scan_result["source"] is not None,
-            })
+            file_metadata.append(
+                {
+                    "path": file_path,
+                    "base_title": base_title,
+                    "scan_result": scan_result,
+                    "needs_rename": scan_result["source"] is not None,
+                }
+            )
 
         # Check if we can resolve this group
         unique_dates = set()
@@ -391,9 +395,7 @@ def resolve_duplicates(
                 unique_issues.add(sr["issue_number"])
 
         can_resolve = (
-            len(unique_dates) >= len(files)
-            or len(unique_volumes) >= len(files)
-            or len(unique_issues) >= len(files)
+            len(unique_dates) >= len(files) or len(unique_volumes) >= len(files) or len(unique_issues) >= len(files)
         )
 
         if can_resolve:
@@ -462,7 +464,8 @@ def main():
         help="Skip OCR scanning (only do text scan, faster)",
     )
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Enable verbose output",
     )
