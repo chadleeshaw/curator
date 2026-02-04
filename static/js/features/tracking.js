@@ -17,6 +17,7 @@ import {
   MONTH_NAMES_LOWER,
   MONTH_ABBR_LOWER,
 } from '../core/constants.js';
+import { escapeHtml } from '../readers/reader-utils.js';
 
 /** @type {string[]} Supported languages loaded from backend */
 let SUPPORTED_LANGUAGES = [];
@@ -828,7 +829,7 @@ export class TrackingManager {
       ${checkboxHtml}
       <div class="tracked-card-main">
         <div class="tracked-card-header">
-          <h5>${title}</h5>
+          <h5>${escapeHtml(title)}</h5>
           ${trackingBadge}
         </div>
         <div class="tracked-card-meta">

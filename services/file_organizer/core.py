@@ -281,12 +281,10 @@ class FileOrganizer(ReorganizationMixin, CleanupMixin):
         if month and year:
             filename_parts.append(f"{month}{year}")
         elif volume or issue_number:
-            # If we have volume/issue but no date, that's okay
+            # If we have volume/issue but no date, that's okay - no need to add anything
             pass
-        else:
-            # No volume, issue, or date - use "Unknown" as fallback
-            filename_parts.append("Unknown")
-            logger.warning(f"No date, volume, or issue number for {safe_title} - using 'Unknown'")
+        # If we have no date, volume, or issue - just use the title without a suffix
+        # Don't add "Unknown" - it looks unprofessional and confuses the parser
 
         return f"{ORGANIZED_FILENAME_SEPARATOR.join(filename_parts)}{extension}"
 

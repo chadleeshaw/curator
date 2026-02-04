@@ -522,6 +522,11 @@ class FilenameParser:
         """
         # Strip leading and trailing quotes from filename (for files like 'Magazine.pdf')
         filename = pdf_path.stem.strip("'")
+        
+        # Strip old "Unknown" placeholder that was used when date/volume/issue was missing
+        # This handles existing files like "Title - Unknown.pdf"
+        filename = re.sub(r'\s*-\s*Unknown\s*$', '', filename, flags=re.IGNORECASE)
+        
         magazine_name = self.get_title_from_path(pdf_path)
 
         # Default metadata
