@@ -323,6 +323,29 @@ class OCRQueueService:
                 stats["failed"] += 1
                 continue
 
+            # Check if text_scan already has sufficient data (may have been run after job was queued)
+            if magazine.parsed_metadata:
+                # Skip if OCR was already done
+                if magazine.parsed_metadata.get("ocr_scan"):
+                    logger.info(f"Skipping OCR for {magazine.title} - already has ocr_scan")
+                    job.status = OCRJob.StatusEnum.COMPLETED
+                    job.completed_at = datetime.now(UTC)
+                    job.last_error = "Skipped - already has ocr_scan"
+                    stats["skipped"] += 1
+                    continue
+
+                text_scan = magazine.parsed_metadata.get("text_scan", {})
+                if text_scan.get("has_sufficient_metadata", False):
+                    # Check needs_date_scan flag - if set and text_scan didn't find year, still need OCR
+                    needs_date_scan = magazine.extra_metadata and magazine.extra_metadata.get("needs_date_scan", False)
+                    if not needs_date_scan or text_scan.get("year"):
+                        logger.info(f"Skipping OCR for {magazine.title} - text_scan already has sufficient metadata")
+                        job.status = OCRJob.StatusEnum.COMPLETED
+                        job.completed_at = datetime.now(UTC)
+                        job.last_error = "Skipped - text_scan has sufficient metadata"
+                        stats["skipped"] += 1
+                        continue
+
             # Generate OCR PNG if it doesn't exist
             cover_path = None
             png_generated = False
@@ -495,6 +518,19 @@ class OCRQueueService:
                         magazine.extra_metadata["needs_reorganization"] = True
                         magazine.extra_metadata["reorganization_reason"] = "metadata_discovered_by_ocr_queue"
                         logger.info(f"Flagged {magazine.title} for reorganization (metadata discovered by OCR)")
+
+                    # Embed metadata into PDF file so it can be read on reimport without OCR
+                    if magazine.file_path and Path(magazine.file_path).suffix.lower() == ".pdf":
+                        try:
+                            from core.utils.pdf_metadata import embed_metadata_in_pdf
+
+                            embed_metadata_in_pdf(
+                                pdf_path=magazine.file_path,
+                                metadata=metadata,
+                                title=magazine.title,
+                            )
+                        except Exception as embed_error:
+                            logger.warning(f"Failed to embed metadata in PDF for {magazine.title}: {embed_error}")
 
                     # Flag the JSON fields as modified so SQLAlchemy persists them
                     from core.utils.db import mark_json_modified

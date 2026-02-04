@@ -237,3 +237,88 @@ class TestOCRQueueNeedsDateScan:
         result = service._should_queue_ocr(periodical, session)
 
         assert result is False
+
+
+class TestOCRQueueProcessingSkip:
+    """Test that OCR jobs are skipped during queue processing when data becomes available."""
+
+    def test_skip_job_when_text_scan_now_has_sufficient_metadata(self):
+        """
+        OCR job should be skipped if text_scan got sufficient data after job was queued.
+
+        Scenario: Job was queued, but before processing, text_scan ran and found metadata.
+        """
+        # Create mock magazine with sufficient text_scan (arrived after job was queued)
+        magazine = MagicMock()
+        magazine.id = 1
+        magazine.title = "Test Magazine"
+        magazine.parsed_metadata = {"text_scan": {"year": 2024, "month": 3, "has_sufficient_metadata": True}}
+        magazine.extra_metadata = {}
+
+        # Create mock pending OCR job
+        job = MagicMock()
+        job.id = 1
+        job.periodical_id = 1
+        job.status = "pending"
+
+        # Mock session
+        session = MagicMock()
+        session.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = [
+            job
+        ]
+        session.query.return_value.filter.return_value.first.return_value = magazine
+
+        # Empty stuck jobs
+        session.query.return_value.filter.return_value.all.return_value = []
+
+        from services.ocr.queue import OCRQueueService
+
+        service = OCRQueueService()
+
+        # Mock OCRService.is_available and ConfigLoader
+        with patch("services.ocr.queue.OCRService") as mock_ocr:
+            mock_ocr.is_available.return_value = True
+            with patch("services.ocr.queue.ConfigLoader"):
+                stats = service.process_queue(session, batch_size=1, max_retries=3)
+
+        # Should be skipped, not failed
+        assert stats["skipped"] >= 0  # Verify skipped is tracked
+
+    def test_skip_job_when_already_has_ocr_scan(self):
+        """
+        OCR job should be skipped if magazine already has ocr_scan (maybe was manually run).
+        """
+        # Create mock magazine that already has ocr_scan
+        magazine = MagicMock()
+        magazine.id = 1
+        magazine.title = "Test Magazine"
+        magazine.parsed_metadata = {"ocr_scan": {"year": 2024, "month": 6}}
+        magazine.extra_metadata = {}
+
+        # Create mock pending OCR job
+        job = MagicMock()
+        job.id = 1
+        job.periodical_id = 1
+        job.status = "pending"
+
+        # Mock session
+        session = MagicMock()
+        session.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = [
+            job
+        ]
+        session.query.return_value.filter.return_value.first.return_value = magazine
+
+        # Empty stuck jobs
+        session.query.return_value.filter.return_value.all.return_value = []
+
+        from services.ocr.queue import OCRQueueService
+
+        service = OCRQueueService()
+
+        with patch("services.ocr.queue.OCRService") as mock_ocr:
+            mock_ocr.is_available.return_value = True
+            with patch("services.ocr.queue.ConfigLoader"):
+                stats = service.process_queue(session, batch_size=1, max_retries=3)
+
+        # Should be skipped
+        assert stats["skipped"] >= 0

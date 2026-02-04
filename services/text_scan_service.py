@@ -58,6 +58,9 @@ class TextScanService:
         Extract text directly from PDF (for PDFs with embedded text).
         Much faster than OCR for text-based PDFs.
 
+        Also extracts text from PDF metadata fields (Subject, Keywords) which may
+        contain metadata embedded by previous OCR processing.
+
         Args:
             pdf_path: Path to the PDF file
             max_pages: Maximum number of pages to extract (default: first 3 pages)
@@ -74,6 +77,15 @@ class TextScanService:
             with timeout_handler(timeout_seconds):
                 reader = PdfReader(pdf_path)
                 text_parts = []
+
+                # Extract text from PDF metadata fields first
+                # This picks up embedded metadata from previous OCR processing
+                if reader.metadata:
+                    # Subject and Keywords often contain date/issue info
+                    for field in ("/Subject", "/Keywords"):
+                        value = reader.metadata.get(field)
+                        if value and isinstance(value, str):
+                            text_parts.append(value)
 
                 # Extract text from first few pages
                 for i, page in enumerate(reader.pages[:max_pages]):
@@ -165,6 +177,9 @@ class TextScanService:
         Scan a PDF or EPUB document and extract text-based metadata.
         This does NOT use OCR - only direct text extraction.
 
+        For PDFs, first checks for Curator-embedded metadata (from previous OCR),
+        then falls back to text extraction.
+
         Args:
             file_path: Path to the PDF or EPUB file
             language: Language hint (reserved for future use, not used in text extraction)
@@ -189,7 +204,7 @@ class TextScanService:
                 "reason": f"{extension.upper()} files contain images, use OCR service instead",
             }
 
-        # Try direct PDF text extraction
+        # Try direct PDF text extraction (also reads metadata fields for embedded OCR data)
         if extension == ".pdf" and PDF_TEXT_AVAILABLE:
             logger.debug("Attempting direct PDF text extraction")
             text = TextScanService.extract_text_from_pdf(file_path, max_pages=1)
