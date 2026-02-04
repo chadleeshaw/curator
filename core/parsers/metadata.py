@@ -41,10 +41,13 @@ from core.constants.patterns import (
     TITLE_PATTERN_DOT_SEPARATED,
     TITLE_PATTERN_ISO_DATE,
     TITLE_PATTERN_ISSUE_NUMBER,
+    TITLE_PATTERN_ISSUE_ONLY,
+    TITLE_PATTERN_LEADING_ISSUE,
     TITLE_PATTERN_SEASONAL,
     TITLE_PATTERN_SPACE_MONTH_ONLY,
     TITLE_PATTERN_SPACE_MONTH_YEAR,
     TITLE_PATTERN_VOLUME_ISSUE,
+    TITLE_PATTERN_VOLUME_ONLY,
 )
 from core.parsers.date import parse_month, parse_multi_month, parse_numeric_month_range
 from core.utils.text import clean_title
@@ -561,6 +564,8 @@ class FilenameParser:
                 logger.debug("NZB parsing failed or low confidence, falling back to standard patterns")
 
         # Try each pattern in order of specificity
+        # First try patterns that include dates (preferred)
+        # Then try volume/issue patterns without dates (will trigger needs_date_scan)
         result = (
             self._try_multi_month_pattern(filename, metadata)
             or self._try_dash_month_year_pattern(filename, metadata)
@@ -572,6 +577,10 @@ class FilenameParser:
             or self._try_seasonal_pattern(filename, metadata)
             or self._try_date_only_pattern(filename, metadata, magazine_name)
             or self._try_year_only_pattern(filename, metadata, magazine_name)
+            # Patterns without dates - volume/issue only (will need date scan)
+            or self._try_leading_issue_pattern(filename, metadata)
+            or self._try_volume_only_pattern(filename, metadata)
+            or self._try_issue_only_pattern(filename, metadata)
         )
 
         if result:
@@ -880,6 +889,100 @@ class FilenameParser:
         metadata["pattern"] = "seasonal"
 
         logger.debug("Pattern match - Seasonal format")
+        return metadata
+
+    def _try_volume_only_pattern(self, filename: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Pattern: "Title Vol.XXX" without year (e.g., "Magazine Vol.260").
+
+        For magazines that use volume numbering without dates.
+        Returns metadata with volume but NO issue_date (caller should handle missing date).
+        """
+        match = re.search(TITLE_PATTERN_VOLUME_ONLY, filename, re.IGNORECASE)
+
+        if not match:
+            return None
+
+        title_part = match.group(1).strip()
+        volume_num = match.group(2)
+        suffix = match.group(3) or ""
+
+        # Clean up title - remove leading numbers if they match the volume
+        title_clean = re.sub(r"^\d+\s*-\s*", "", title_part)
+        title_clean = clean_title(title_clean)
+
+        # Build suffix into title if it's meaningful (not just a name/descriptor)
+        if suffix and not re.match(r"^[A-Z][a-z]+\s+[A-Z]", suffix):  # Skip "Bridgette B" style
+            title_clean = f"{title_clean} {clean_title(suffix)}"
+
+        metadata["title"] = title_clean
+        metadata["volume"] = int(volume_num)
+        metadata["issue_date"] = None  # No date - should trigger needs_date_scan
+        metadata["pattern"] = "volume_only"
+
+        logger.debug(f"Pattern match - Volume only format: {title_clean} Vol.{volume_num} (no date)")
+        return metadata
+
+    def _try_issue_only_pattern(self, filename: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Pattern: "Title No.XXX" or "Title Issue XXX" without year.
+
+        For magazines that use issue numbering without dates.
+        Returns metadata with issue number but NO issue_date (caller should handle missing date).
+        """
+        match = re.search(TITLE_PATTERN_ISSUE_ONLY, filename, re.IGNORECASE)
+
+        if not match:
+            return None
+
+        title_part = match.group(1).strip()
+        issue_num = match.group(2)
+        suffix = match.group(3) or ""
+
+        # Clean up title
+        title_clean = clean_title(title_part)
+
+        metadata["title"] = title_clean
+        metadata["edition_number"] = int(issue_num)
+        metadata["issue_date"] = None  # No date - should trigger needs_date_scan
+        metadata["pattern"] = "issue_only"
+
+        logger.debug(f"Pattern match - Issue only format: {title_clean} #{issue_num} (no date)")
+        return metadata
+
+    def _try_leading_issue_pattern(self, filename: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Pattern: "XXX - Title - Vol.XXX - Suffix" (leading issue number).
+
+        For files like "260 - Magazine - Vol.260 - Cover Model".
+        Returns metadata with volume/issue but NO issue_date (caller should handle missing date).
+        """
+        match = re.search(TITLE_PATTERN_LEADING_ISSUE, filename, re.IGNORECASE)
+
+        if not match:
+            return None
+
+        issue_num = match.group(1)
+        title_part = match.group(2).strip()
+        volume_str = match.group(3)  # Now captured directly from pattern
+        suffix = match.group(4) or ""
+
+        # Extract volume number if present
+        volume_num = int(volume_str) if volume_str else None
+
+        title_clean = clean_title(title_part.strip())
+
+        metadata["title"] = title_clean
+        metadata["edition_number"] = int(issue_num)
+        if volume_num:
+            metadata["volume"] = volume_num
+        metadata["issue_date"] = None  # No date - should trigger needs_date_scan
+        metadata["pattern"] = "leading_issue"
+
+        logger.debug(
+            f"Pattern match - Leading issue format: #{issue_num} {title_clean}"
+            f"{f' Vol.{volume_num}' if volume_num else ''} (no date)"
+        )
         return metadata
 
     def _try_date_only_pattern(

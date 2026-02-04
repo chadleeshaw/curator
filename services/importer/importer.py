@@ -6,12 +6,14 @@ Extracts cover art, categorizes files, and adds them to the database.
 import logging
 import re
 import shutil
-from concurrent.futures import ThreadPoolExecutor
+import threading
+from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from core.constants.app import DEFAULT_FUZZY_THRESHOLD
 from core.constants.category import CATEGORY_KEYWORDS
@@ -51,6 +53,8 @@ class FileImporter:
         organization_pattern: Optional[str] = None,
         category_prefix: str = "_",
         enable_text_scan: bool = True,
+        session_factory: Optional[sessionmaker] = None,
+        parallel_workers: int = 2,
     ):
         """
         Initialize file importer.
@@ -62,12 +66,16 @@ class FileImporter:
             organization_pattern: Pattern for organizing files (e.g., "_{category}/{title}/{year}/")
             category_prefix: Prefix for category folders (e.g., "_" for "_Magazines")
             enable_text_scan: Enable direct text extraction from PDF/EPUB during import
+            session_factory: SQLAlchemy session factory for parallel processing
+            parallel_workers: Number of parallel workers for file processing (default: 2)
         """
         self.downloads_dir = Path(downloads_dir)
         self.library_base_dir = Path(library_base_dir)
         self.organization_pattern = organization_pattern
         self.category_prefix = category_prefix
         self._enable_text_scan = enable_text_scan
+        self._session_factory = session_factory
+        self._parallel_workers = max(1, parallel_workers)
         self.title_matcher = TitleMatcher(threshold=fuzzy_threshold)
         self.tracking_matcher = TrackingMatcher()
 
@@ -78,6 +86,10 @@ class FileImporter:
 
         # Thread pool for CPU-intensive OCR tasks
         self._ocr_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ocr")
+
+        # Thread-safe folder marker reference counting
+        self._folder_marker_lock = threading.Lock()
+        self._folder_marker_refs: Dict[Path, int] = defaultdict(int)
 
         self.library_base_dir.mkdir(parents=True, exist_ok=True)
 
@@ -124,6 +136,42 @@ class FileImporter:
                 logger.debug(f"Removed import marker: {marker_path}")
         except Exception as e:
             logger.warning(f"Failed to remove import marker for {folder}: {e}")
+
+    def _acquire_folder_marker(self, folder: Path) -> bool:
+        """
+        Acquire a reference to a folder's import marker (thread-safe).
+        Creates the marker file if this is the first reference.
+
+        Args:
+            folder: Folder to mark as being imported
+
+        Returns:
+            True if marker was acquired successfully
+        """
+        with self._folder_marker_lock:
+            was_zero = self._folder_marker_refs[folder] == 0
+            self._folder_marker_refs[folder] += 1
+
+            if was_zero:
+                # First reference - create the marker file
+                return self._create_import_marker(folder)
+            return True
+
+    def _release_folder_marker(self, folder: Path) -> None:
+        """
+        Release a reference to a folder's import marker (thread-safe).
+        Removes the marker file when the last reference is released.
+
+        Args:
+            folder: Folder to release marker for
+        """
+        with self._folder_marker_lock:
+            if folder in self._folder_marker_refs:
+                self._folder_marker_refs[folder] -= 1
+                if self._folder_marker_refs[folder] <= 0:
+                    # Last reference - remove the marker file
+                    del self._folder_marker_refs[folder]
+                    self._remove_import_marker(folder)
 
     def process_downloads(self, session: Session, organization_pattern: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -588,17 +636,37 @@ class FileImporter:
             )
 
             # Sync issue_date from derived_metadata
+            metadata_discovered = False
             new_issue_date = sync_issue_date_from_derived(magazine.derived_metadata)
             if new_issue_date:
                 magazine.issue_date = new_issue_date
+                metadata_discovered = True
                 logger.debug(f"Updated issue_date to {new_issue_date.strftime('%Y-%m')} from derived_metadata")
+
+            # Check if text scan found volume/issue
+            if scan_result.get("volume") or scan_result.get("issue_number"):
+                metadata_discovered = True
+                if not magazine.extra_metadata:
+                    magazine.extra_metadata = {}
+                if scan_result.get("volume"):
+                    magazine.extra_metadata["volume"] = scan_result["volume"]
+                if scan_result.get("issue_number"):
+                    magazine.extra_metadata["issue_number"] = scan_result["issue_number"]
+
+            # Flag for reorganization if we discovered new metadata
+            if metadata_discovered:
+                if not magazine.extra_metadata:
+                    magazine.extra_metadata = {}
+                magazine.extra_metadata["needs_reorganization"] = True
+                magazine.extra_metadata["reorganization_reason"] = "metadata_discovered_by_text_scan"
+                logger.info(f"Flagged {magazine.title} for reorganization (metadata discovered by text scan)")
 
             if scan_result.get("text_found"):
                 logger.info(f"Enhanced {magazine.title} with metadata from text scan")
 
             from core.utils.db import mark_json_modified
 
-            mark_json_modified(magazine, "parsed_metadata", "derived_metadata")
+            mark_json_modified(magazine, "parsed_metadata", "derived_metadata", "extra_metadata")
             session.commit()
 
             if scan_result.get("text_found"):
@@ -638,6 +706,214 @@ class FileImporter:
                 logger.info(f"Queued OCR job {ocr_job.id} for magazine {magazine.id}")
         except Exception as e:
             logger.warning(f"Failed to queue OCR job for magazine {magazine.id}: {e}")
+
+    def _scan_for_missing_date(
+        self,
+        file_path: Path,
+        parsed_language: Optional[str],
+    ) -> Dict[str, Any]:
+        """
+        Scan file for date/volume metadata BEFORE organization.
+
+        This is used for files that have tracking context but no parseable date,
+        allowing us to discover the date before organizing the file to its final location.
+
+        Args:
+            file_path: Path to the original file (not yet organized)
+            parsed_language: Language from parser
+
+        Returns:
+            Dict with discovered metadata: {issue_date, year, month, volume, issue_number, source,
+                                            text_scan_result, ocr_scan_result}
+        """
+        result = {
+            "issue_date": None,
+            "year": None,
+            "month": None,
+            "month_name": None,
+            "volume": None,
+            "issue_number": None,
+            "source": None,
+            "text_scan_result": None,  # Full text scan result for storing in DB
+            "ocr_scan_result": None,  # Full OCR scan result for storing in DB
+        }
+
+        # Try text scan first (faster than OCR)
+        if file_path.suffix.lower() in [".pdf", ".epub"]:
+            try:
+                logger.info(f"Running pre-organization text scan for {file_path.name}")
+                scan_result = TextScanService.scan_document(str(file_path), language=parsed_language)
+                result["text_scan_result"] = scan_result  # Store for DB
+
+                if scan_result.get("year"):
+                    from core.utils.metadata_builder import sync_issue_date_from_derived, build_derived_metadata
+
+                    # Build derived metadata to get issue_date
+                    derived = build_derived_metadata(text_scan=scan_result)
+                    issue_date = sync_issue_date_from_derived(derived)
+
+                    if issue_date:
+                        result["issue_date"] = issue_date
+                        result["year"] = scan_result.get("year")
+                        result["month"] = scan_result.get("month")
+                        # Convert month number to name for organization
+                        if result["month"]:
+                            from core.constants.date import MONTH_TO_NAME
+
+                            result["month_name"] = MONTH_TO_NAME.get(result["month"])
+                        result["source"] = "text_scan"
+                        logger.info(
+                            f"Pre-organization text scan found date: {issue_date.strftime('%Y-%m')} for {file_path.name}"
+                        )
+
+                if scan_result.get("volume"):
+                    result["volume"] = scan_result["volume"]
+                if scan_result.get("issue_number"):
+                    result["issue_number"] = scan_result["issue_number"]
+
+                # If we found a date, return early (no need for OCR)
+                if result["issue_date"]:
+                    return result
+
+            except Exception as e:
+                logger.debug(f"Pre-organization text scan failed for {file_path.name}: {e}")
+
+        # Try OCR if text scan didn't find a date and file is PDF
+        if file_path.suffix.lower() == ".pdf" and OCRService.is_available():
+            try:
+                logger.info(f"Running pre-organization OCR scan for {file_path.name}")
+                ocr_result = OCRService.analyze_cover(str(file_path), language=parsed_language)
+                result["ocr_scan_result"] = ocr_result  # Store for DB
+
+                if ocr_result and ocr_result.get("year"):
+                    from core.utils.metadata_builder import sync_issue_date_from_derived, build_derived_metadata
+
+                    # Build derived metadata to get issue_date
+                    derived = build_derived_metadata(ocr_scan=ocr_result)
+                    issue_date = sync_issue_date_from_derived(derived)
+
+                    if issue_date:
+                        result["issue_date"] = issue_date
+                        result["year"] = ocr_result.get("year")
+                        result["month"] = ocr_result.get("month")
+                        if result["month"]:
+                            from core.constants.date import MONTH_TO_NAME
+
+                            result["month_name"] = MONTH_TO_NAME.get(result["month"])
+                        result["source"] = "ocr_scan"
+                        logger.info(
+                            f"Pre-organization OCR scan found date: {issue_date.strftime('%Y-%m')} for {file_path.name}"
+                        )
+
+                if ocr_result:
+                    if ocr_result.get("volume") and not result["volume"]:
+                        result["volume"] = ocr_result["volume"]
+                    if ocr_result.get("issue_number") and not result["issue_number"]:
+                        result["issue_number"] = ocr_result["issue_number"]
+
+            except Exception as e:
+                logger.debug(f"Pre-organization OCR scan failed for {file_path.name}: {e}")
+
+        return result
+
+    def _run_ocr_scan(
+        self,
+        magazine: Periodical,
+        organized_path: Path,
+        parsed_language: Optional[str],
+        session: Session,
+    ) -> bool:
+        """
+        Run OCR scan synchronously to extract date/volume metadata.
+
+        This is used for files that need immediate date extraction (needs_date_scan)
+        to avoid duplicate detection issues with fallback dates.
+
+        Args:
+            magazine: The Periodical record
+            organized_path: Path to the organized file
+            parsed_language: Language from parser
+            session: Database session
+
+        Returns:
+            True if OCR found a date, False otherwise
+        """
+        if organized_path.suffix.lower() != ".pdf":
+            logger.debug(f"Skipping OCR for non-PDF file: {organized_path}")
+            return False
+
+        if not OCRService.is_available():
+            logger.warning("OCR service not available, cannot run immediate OCR scan")
+            return False
+
+        try:
+            logger.info(f"Running immediate OCR scan for {magazine.title} to find date")
+
+            # Run OCR directly on the PDF
+            ocr_result = OCRService.analyze_cover(str(organized_path), language=parsed_language)
+
+            if not ocr_result or not ocr_result.get("text_found"):
+                logger.debug(f"OCR found no text in {organized_path.name}")
+                return False
+
+            # Store OCR scan results in parsed_metadata
+            if not magazine.parsed_metadata:
+                magazine.parsed_metadata = {}
+            magazine.parsed_metadata["ocr_scan"] = ocr_result
+
+            # Rebuild derived_metadata with OCR results
+            from core.utils.metadata_builder import build_derived_metadata, sync_issue_date_from_derived
+
+            magazine.derived_metadata = build_derived_metadata(
+                file_scan=magazine.parsed_metadata.get("file_scan"),
+                text_scan=magazine.parsed_metadata.get("text_scan"),
+                ocr_scan=ocr_result,
+            )
+
+            # Sync issue_date from derived_metadata
+            new_issue_date = sync_issue_date_from_derived(magazine.derived_metadata)
+            found_date = False
+            metadata_discovered = False
+
+            if new_issue_date:
+                magazine.issue_date = new_issue_date
+                found_date = True
+                metadata_discovered = True
+                logger.info(f"OCR scan found date {new_issue_date.strftime('%Y-%m')} for {magazine.title}")
+
+            # Check if OCR found volume/issue that we didn't have
+            if ocr_result.get("volume") or ocr_result.get("issue_number"):
+                metadata_discovered = True
+                if not magazine.extra_metadata:
+                    magazine.extra_metadata = {}
+                if ocr_result.get("volume"):
+                    magazine.extra_metadata["volume"] = ocr_result["volume"]
+                if ocr_result.get("issue_number"):
+                    magazine.extra_metadata["issue_number"] = ocr_result["issue_number"]
+
+            # Flag for reorganization if we discovered new metadata
+            # This allows the file to be renamed/moved later with correct metadata
+            if metadata_discovered:
+                if not magazine.extra_metadata:
+                    magazine.extra_metadata = {}
+                magazine.extra_metadata["needs_reorganization"] = True
+                magazine.extra_metadata["reorganization_reason"] = "metadata_discovered_by_ocr"
+                logger.info(f"Flagged {magazine.title} for reorganization (metadata discovered by OCR)")
+
+            from core.utils.db import mark_json_modified
+
+            mark_json_modified(magazine, "parsed_metadata", "derived_metadata", "extra_metadata")
+            session.commit()
+
+            if ocr_result.get("year"):
+                logger.info(f"Enhanced {magazine.title} with metadata from immediate OCR scan")
+                return found_date
+
+            return False
+
+        except Exception as e:
+            logger.warning(f"Immediate OCR scan failed for {magazine.id}: {e}")
+            return False
 
     # =========================================================================
     # Main Import Method
@@ -700,6 +976,7 @@ class FileImporter:
 
             # Step 4: If we have a tracking_id from sidecar (download), use that tracking's title
             # This prevents creating duplicate tracking records when filenames are ambiguous
+            needs_date_scan = False
             if tracking_id:
                 target_tracking_temp = (
                     session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
@@ -710,6 +987,21 @@ class FileImporter:
                         f"Using tracking title from sidecar: '{tracking_title}' (ID: {tracking_id}) "
                         f"instead of parsed title: '{parsed.base_title}'"
                     )
+                    # Check if we need to force text/OCR scan to find date
+                    # When we have a tracking title but couldn't parse a date from filename,
+                    # we should scan the document content to try to extract date/volume info
+                    date_missing = (
+                        parsed.issue_date is None
+                        or parsed.confidence == "low"
+                        or parsed.matched_pattern == "no_match_fallback"
+                    )
+                    if date_missing:
+                        needs_date_scan = True
+                        logger.info(
+                            f"File '{file_path.name}' has tracking title '{tracking_title}' but no valid date "
+                            f"(confidence: {parsed.confidence}, pattern: {parsed.matched_pattern}). "
+                            f"Will force text/OCR scan to extract date."
+                        )
                 else:
                     # Sidecar had invalid tracking_id, fall back to parsed title
                     logger.warning(f"Sidecar tracking_id={tracking_id} not found, using parsed title")
@@ -730,7 +1022,23 @@ class FileImporter:
                 tracking_id, tracking_title, parsed.language, parsed.country, category, session
             )
 
-            # Step 7: Organize file (use tracking title for folder consistency)
+            # Step 7: For files needing date scan, run text/OCR BEFORE organization
+            # This allows us to use discovered metadata for the correct file path
+            pre_scan_result = None
+            if needs_date_scan and not skip_organize:
+                pre_scan_result = self._scan_for_missing_date(file_path, parsed.language)
+                if pre_scan_result.get("issue_date"):
+                    # Update parsed metadata with discovered date for organization
+                    parsed.issue_date = pre_scan_result["issue_date"]
+                    parsed.year = pre_scan_result.get("year")
+                    parsed.month_name = pre_scan_result.get("month_name")
+                    parsed.confidence = "medium"  # Upgrade confidence since we found a date
+                    logger.info(
+                        f"Updated metadata from {pre_scan_result['source']}: "
+                        f"date={parsed.issue_date.strftime('%Y-%m')}, year={parsed.year}"
+                    )
+
+            # Step 8: Organize file (use tracking title for folder consistency)
             organization_title = target_tracking.title if target_tracking else tracking_title
 
             # Extract cover unless skip_enhancement is enabled (for bulk imports)
@@ -752,7 +1060,7 @@ class FileImporter:
                 if not organized_path:
                     return {"skip_reason": "organization_failed"}
 
-            # Step 8: Build metadata and create database record
+            # Step 9: Build metadata and create database record
             from core.utils.metadata_builder import (
                 build_file_scan,
                 build_parsed_metadata,
@@ -765,6 +1073,22 @@ class FileImporter:
                 file_scan["special_edition_name"] = parsed.special_edition_name
                 file_scan["is_special_edition"] = True
 
+            # Build extra metadata, flagging if date scan is needed
+            extra_meta = build_extra_metadata(
+                imported_from=file_path.name,
+                import_date=datetime.now().isoformat(),
+                category=category,
+                import_method="auto",
+            )
+            if needs_date_scan and not (pre_scan_result and pre_scan_result.get("issue_date")):
+                # Only flag for future date scan if pre-scan didn't find a date
+                extra_meta["needs_date_scan"] = True
+                extra_meta["date_scan_reason"] = "tracking_title_without_parsed_date"
+
+            # Include pre-scan results in parsed_metadata if available
+            text_scan = pre_scan_result.get("text_scan_result") if pre_scan_result else None
+            ocr_scan = pre_scan_result.get("ocr_scan_result") if pre_scan_result else None
+
             magazine = Periodical(
                 title=organization_title,
                 issue_date=parsed.issue_date or datetime.now(),
@@ -772,18 +1096,13 @@ class FileImporter:
                 file_path=str(organized_path),
                 cover_path=str(cover_path) if cover_path else None,
                 content_hash=content_hash,
-                parsed_metadata=build_parsed_metadata(file_scan=file_scan),
-                derived_metadata=build_derived_metadata(file_scan=file_scan),
-                extra_metadata=build_extra_metadata(
-                    imported_from=file_path.name,
-                    import_date=datetime.now().isoformat(),
-                    category=category,
-                    import_method="auto",
-                ),
+                parsed_metadata=build_parsed_metadata(file_scan=file_scan, text_scan=text_scan, ocr_scan=ocr_scan),
+                derived_metadata=build_derived_metadata(file_scan=file_scan, text_scan=text_scan, ocr_scan=ocr_scan),
+                extra_metadata=extra_meta,
             )
             session.add(magazine)
 
-            # Step 9: Link to existing tracking or create new one
+            # Step 10: Link to existing tracking or create new one
             self._link_or_create_tracking(
                 magazine=magazine,
                 target_tracking=target_tracking,
@@ -801,21 +1120,45 @@ class FileImporter:
             session.commit()
             logger.info(f"Added to database: {parsed.title} ({category})")
 
-            # Step 10: Run text scan for additional metadata (skip during bulk imports for speed)
-            if not skip_enhancement:
+            # Step 11: Run text scan for additional metadata (skip if pre-scan already ran)
+            # Force text scan if needs_date_scan (even during bulk imports) to try to find date/volume
+            # Otherwise skip during bulk imports for speed
+            pre_scan_did_text = pre_scan_result and pre_scan_result.get("text_scan_result") is not None
+            pre_scan_did_ocr = pre_scan_result and pre_scan_result.get("ocr_scan_result") is not None
+            pre_scan_found_date = pre_scan_result and pre_scan_result.get("issue_date") is not None
+
+            if not pre_scan_did_text and (not skip_enhancement or needs_date_scan):
+                if needs_date_scan:
+                    logger.info(f"Forcing text scan for '{organization_title}' to find missing date/volume")
                 self._run_text_scan(magazine, organized_path, parsed.language, session)
 
-            # Step 11: Queue OCR job only if text scan didn't find sufficient metadata
-            # Text-based PDFs (True PDF, Text PDF) already have extractable text, no need for OCR
+            # Step 12: Run OCR if needed (skip if pre-scan already ran OCR)
+            # For needs_date_scan files: run OCR synchronously to get date before next file
+            # (avoids duplicate detection issues when multiple files have same fallback date)
+            # For other files: queue OCR for background processing
             text_scan_result = magazine.parsed_metadata.get("text_scan", {}) if magazine.parsed_metadata else {}
             text_scan_sufficient = text_scan_result.get("has_sufficient_metadata", False)
+            text_scan_found_date = text_scan_result.get("year") is not None
 
-            if should_queue_ocr and not text_scan_sufficient:
+            # For files needing date scan, run OCR synchronously to get date immediately
+            # But skip if pre-scan already did OCR or found a date
+            if needs_date_scan and not text_scan_found_date and not pre_scan_found_date and not pre_scan_did_ocr:
+                # Text scan didn't find date - run OCR immediately (not queued)
+                # This is critical to avoid duplicate detection issues
+                logger.info(f"Text scan didn't find date for '{organization_title}' - running immediate OCR scan")
+                ocr_found_date = self._run_ocr_scan(magazine, organized_path, parsed.language, session)
+                if not ocr_found_date:
+                    logger.warning(
+                        f"Could not determine date for '{organization_title}' from filename, text, or OCR. "
+                        f"Using fallback date. Manual review recommended."
+                    )
+            elif not pre_scan_did_ocr and should_queue_ocr and not text_scan_sufficient:
+                # Normal case: queue OCR for background processing
                 self._queue_ocr_job(magazine, parsed.language, skip_organize, session)
-            elif text_scan_sufficient:
-                logger.info(f"Skipping OCR for '{parsed.title}' - text scan found sufficient metadata")
+            elif text_scan_sufficient or pre_scan_found_date:
+                logger.info(f"Skipping OCR for '{parsed.title}' - sufficient metadata already found")
 
-            # Step 12: Cleanup download file (defer folder deletion to batch processing)
+            # Step 13: Cleanup download file (defer folder deletion to batch processing)
             if not skip_organize:
                 self._cleanup_download_file(file_path, defer_folder_deletion=True)
 
@@ -826,6 +1169,87 @@ class FileImporter:
             logger.error(f"Error importing file {file_path}: {e}", exc_info=True)
             return {"skip_reason": "parse_error"}
 
+    def _import_file_worker(
+        self,
+        file_path: Path,
+        file_type: str,
+        organization_pattern: Optional[str],
+        *,
+        auto_track: bool = True,
+        skip_organize: bool = False,
+        tracking_mode: str = "watch",
+        use_ocr: bool = True,
+        skip_enhancement: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Worker method for parallel file import.
+        Creates its own database session and manages folder markers.
+
+        Args:
+            file_path: Path to file to import
+            file_type: File type label for logging
+            organization_pattern: Optional organization pattern
+            auto_track: Whether to auto-create tracking records
+            skip_organize: If True, skip file organization (for library imports)
+            tracking_mode: Tracking mode for new records
+            use_ocr: Whether to use OCR for metadata extraction
+            skip_enhancement: If True, skip cover extraction and text scanning
+
+        Returns:
+            Dict with import result and metadata for aggregation
+        """
+        parent_dir = file_path.parent
+        is_subfolder = parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir)
+
+        # Acquire folder marker before processing (only for downloads, not library)
+        if is_subfolder and not skip_organize:
+            self._acquire_folder_marker(parent_dir)
+
+        try:
+            # Create a new session for this worker
+            if self._session_factory:
+                with self._session_factory() as worker_session:
+                    import_result = self.import_supported_files(
+                        file_path,
+                        worker_session,
+                        organization_pattern=organization_pattern,
+                        auto_track=auto_track,
+                        skip_organize=skip_organize,
+                        tracking_mode=tracking_mode,
+                        use_ocr=use_ocr,
+                        skip_enhancement=skip_enhancement,
+                    )
+            else:
+                # No session factory - this shouldn't happen in parallel mode
+                logger.warning(f"No session factory for worker processing {file_path.name}")
+                return {
+                    "file_path": file_path,
+                    "file_type": file_type,
+                    "result": {"skip_reason": "no_session"},
+                    "parent_dir": parent_dir if is_subfolder and not skip_organize else None,
+                }
+
+            return {
+                "file_path": file_path,
+                "file_type": file_type,
+                "result": import_result,
+                "parent_dir": parent_dir if is_subfolder and not skip_organize else None,
+            }
+
+        except Exception as e:
+            logger.error(f"Error in worker importing {file_path.name}: {e}", exc_info=True)
+            return {
+                "file_path": file_path,
+                "file_type": file_type,
+                "result": {"skip_reason": "parse_error", "error": str(e)},
+                "parent_dir": parent_dir if is_subfolder and not skip_organize else None,
+            }
+
+        finally:
+            # Release folder marker after processing (only for downloads, not library)
+            if is_subfolder and not skip_organize:
+                self._release_folder_marker(parent_dir)
+
     def _process_file_batch(
         self,
         files: list,
@@ -834,83 +1258,69 @@ class FileImporter:
         organization_pattern: Optional[str],
         result: OperationResult,
         skip_reasons: Dict[str, int],
+        *,
+        auto_track: bool = True,
+        skip_organize: bool = False,
+        tracking_mode: str = "watch",
+        use_ocr: bool = True,
+        skip_enhancement: bool = False,
     ) -> None:
         """
         Process a batch of files of the same type.
+        Uses parallel processing when session_factory is available and multiple files exist.
 
         Args:
             files: List of Path objects to process
             file_type: File type label for logging (e.g., "PDF", "EPUB", "CBZ", "CBR")
-            session: Database session
+            session: Database session (used for sequential processing)
             organization_pattern: Optional organization pattern
             result: OperationResult to update with counts and errors
             skip_reasons: Dictionary to track skip/failure reasons
+            auto_track: Whether to auto-create tracking records
+            skip_organize: If True, skip file organization (for library imports)
+            tracking_mode: Tracking mode for new records
+            use_ocr: Whether to use OCR for metadata extraction
+            skip_enhancement: If True, skip cover extraction and text scanning
         """
         # Track folders to cleanup after processing all files
         folders_to_cleanup = set()
-        # Track folders with active import markers
-        folders_with_markers = set()
 
-        # Identify unique parent folders and create import markers
-        unique_folders = set()
-        for file_path in files:
-            parent_dir = file_path.parent
-            if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
-                unique_folders.add(parent_dir)
+        # Determine if we can use parallel processing
+        use_parallel = self._session_factory is not None and len(files) > 1 and self._parallel_workers > 1
 
-        # Create markers for all folders being processed
-        for folder in unique_folders:
-            if self._create_import_marker(folder):
-                folders_with_markers.add(folder)
-
-        for file_path in files:
-            try:
-                import_result = self.import_supported_files(
-                    file_path,
-                    session,
-                    organization_pattern=organization_pattern,
-                    use_ocr=True,
-                )
-                if import_result and import_result.get("periodical_id"):
-                    result.data["imported"] += 1
-                    logger.info(f"Successfully imported {file_type}: {file_path.name}")
-                    # Track parent folder for cleanup after batch completes
-                    parent_dir = file_path.parent
-                    if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
-                        folders_to_cleanup.add(parent_dir)
-                else:
-                    # Track skip reason
-                    skip_reason = import_result.get("skip_reason", "organization_failed")
-                    if skip_reason in skip_reasons:
-                        skip_reasons[skip_reason] += 1
-                        result.data["skipped"] += 1
-                    else:
-                        result.data["failed"] += 1
-                        result.add_error(
-                            ErrorCodes.IMPORT_FAILED,
-                            f"Failed to import {file_type} {file_path.name}",
-                            retryable=True,
-                        )
-                    logger.debug(f"Skipped {file_type} import ({skip_reason}): {file_path.name}")
-                    self._cleanup_download_file(file_path, defer_folder_deletion=True)
-                    # Track parent folder for cleanup after batch completes
-                    parent_dir = file_path.parent
-                    if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
-                        folders_to_cleanup.add(parent_dir)
-            except Exception as e:
-                result.data["failed"] += 1
-                skip_reasons["parse_error"] += 1
-                error_msg = f"Error importing {file_type} {file_path.name}: {str(e)}"
-                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
-                logger.error(error_msg, exc_info=True)
-                try:
-                    self._cleanup_download_file(file_path, defer_folder_deletion=True)
-                    # Track parent folder for cleanup after batch completes
-                    parent_dir = file_path.parent
-                    if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
-                        folders_to_cleanup.add(parent_dir)
-                except Exception as cleanup_error:
-                    logger.warning(f"Failed to cleanup {file_path.name}: {cleanup_error}")
+        if use_parallel:
+            logger.info(
+                f"Processing {len(files)} {file_type} files in parallel " f"with {self._parallel_workers} workers"
+            )
+            self._process_files_parallel(
+                files,
+                file_type,
+                organization_pattern,
+                result,
+                skip_reasons,
+                folders_to_cleanup,
+                auto_track=auto_track,
+                skip_organize=skip_organize,
+                tracking_mode=tracking_mode,
+                use_ocr=use_ocr,
+                skip_enhancement=skip_enhancement,
+            )
+        else:
+            # Sequential processing (original behavior)
+            self._process_files_sequential(
+                files,
+                file_type,
+                session,
+                organization_pattern,
+                result,
+                skip_reasons,
+                folders_to_cleanup,
+                auto_track=auto_track,
+                skip_organize=skip_organize,
+                tracking_mode=tracking_mode,
+                use_ocr=use_ocr,
+                skip_enhancement=skip_enhancement,
+            )
 
         # Clean up folders after all files are processed
         for folder in folders_to_cleanup:
@@ -921,9 +1331,211 @@ class FileImporter:
             except Exception as e:
                 logger.warning(f"Failed to delete folder {folder.name}: {e}")
 
+    def _process_files_parallel(
+        self,
+        files: list,
+        file_type: str,
+        organization_pattern: Optional[str],
+        result: OperationResult,
+        skip_reasons: Dict[str, int],
+        folders_to_cleanup: set,
+        *,
+        auto_track: bool = True,
+        skip_organize: bool = False,
+        tracking_mode: str = "watch",
+        use_ocr: bool = True,
+        skip_enhancement: bool = False,
+    ) -> None:
+        """
+        Process files in parallel using ThreadPoolExecutor.
+
+        Args:
+            files: List of Path objects to process
+            file_type: File type label for logging
+            organization_pattern: Optional organization pattern
+            result: OperationResult to update with counts and errors
+            skip_reasons: Dictionary to track skip/failure reasons
+            folders_to_cleanup: Set to track folders needing cleanup
+            auto_track: Whether to auto-create tracking records
+            skip_organize: If True, skip file organization (for library imports)
+            tracking_mode: Tracking mode for new records
+            use_ocr: Whether to use OCR for metadata extraction
+            skip_enhancement: If True, skip cover extraction and text scanning
+        """
+        with ThreadPoolExecutor(max_workers=self._parallel_workers, thread_name_prefix="import") as executor:
+            # Submit all files for processing
+            futures = {
+                executor.submit(
+                    self._import_file_worker,
+                    file_path,
+                    file_type,
+                    organization_pattern,
+                    auto_track=auto_track,
+                    skip_organize=skip_organize,
+                    tracking_mode=tracking_mode,
+                    use_ocr=use_ocr,
+                    skip_enhancement=skip_enhancement,
+                ): file_path
+                for file_path in files
+            }
+
+            # Collect results as they complete
+            for future in as_completed(futures):
+                file_path = futures[future]
+                try:
+                    worker_result = future.result()
+                    self._handle_import_result(worker_result, file_type, result, skip_reasons, folders_to_cleanup)
+                except Exception as e:
+                    result.data["failed"] += 1
+                    skip_reasons["parse_error"] += 1
+                    error_msg = f"Error importing {file_type} {file_path.name}: {str(e)}"
+                    result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
+                    logger.error(error_msg, exc_info=True)
+                    # Clean up the failed file and track folder for cleanup
+                    try:
+                        self._cleanup_download_file(file_path, defer_folder_deletion=True)
+                        parent_dir = file_path.parent
+                        if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
+                            folders_to_cleanup.add(parent_dir)
+                    except Exception as cleanup_error:
+                        logger.warning(f"Failed to cleanup {file_path.name}: {cleanup_error}")
+
+    def _process_files_sequential(
+        self,
+        files: list,
+        file_type: str,
+        session: Session,
+        organization_pattern: Optional[str],
+        result: OperationResult,
+        skip_reasons: Dict[str, int],
+        folders_to_cleanup: set,
+        *,
+        auto_track: bool = True,
+        skip_organize: bool = False,
+        tracking_mode: str = "watch",
+        use_ocr: bool = True,
+        skip_enhancement: bool = False,
+    ) -> None:
+        """
+        Process files sequentially (original behavior).
+
+        Args:
+            files: List of Path objects to process
+            file_type: File type label for logging
+            session: Database session
+            organization_pattern: Optional organization pattern
+            result: OperationResult to update with counts and errors
+            skip_reasons: Dictionary to track skip/failure reasons
+            folders_to_cleanup: Set to track folders needing cleanup
+            auto_track: Whether to auto-create tracking records
+            skip_organize: If True, skip file organization (for library imports)
+            tracking_mode: Tracking mode for new records
+            use_ocr: Whether to use OCR for metadata extraction
+            skip_enhancement: If True, skip cover extraction and text scanning
+        """
+        # Track folders with active import markers (only for downloads, not library)
+        folders_with_markers = set()
+
+        # Identify unique parent folders and create import markers (only for downloads)
+        if not skip_organize:
+            unique_folders = set()
+            for file_path in files:
+                parent_dir = file_path.parent
+                if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
+                    unique_folders.add(parent_dir)
+
+            # Create markers for all folders being processed
+            for folder in unique_folders:
+                if self._create_import_marker(folder):
+                    folders_with_markers.add(folder)
+
+        for file_path in files:
+            try:
+                import_result = self.import_supported_files(
+                    file_path,
+                    session,
+                    organization_pattern=organization_pattern,
+                    auto_track=auto_track,
+                    skip_organize=skip_organize,
+                    tracking_mode=tracking_mode,
+                    use_ocr=use_ocr,
+                    skip_enhancement=skip_enhancement,
+                )
+                worker_result = {
+                    "file_path": file_path,
+                    "file_type": file_type,
+                    "result": import_result,
+                    "parent_dir": (
+                        file_path.parent
+                        if not skip_organize
+                        and file_path.parent != self.downloads_dir
+                        and file_path.parent.is_relative_to(self.downloads_dir)
+                        else None
+                    ),
+                }
+                self._handle_import_result(worker_result, file_type, result, skip_reasons, folders_to_cleanup)
+            except Exception as e:
+                result.data["failed"] += 1
+                skip_reasons["parse_error"] += 1
+                error_msg = f"Error importing {file_type} {file_path.name}: {str(e)}"
+                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
+                logger.error(error_msg, exc_info=True)
+                try:
+                    self._cleanup_download_file(file_path, defer_folder_deletion=True)
+                    parent_dir = file_path.parent
+                    if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
+                        folders_to_cleanup.add(parent_dir)
+                except Exception as cleanup_error:
+                    logger.warning(f"Failed to cleanup {file_path.name}: {cleanup_error}")
+
         # Remove import markers from all processed folders
         for folder in folders_with_markers:
             self._remove_import_marker(folder)
+
+    def _handle_import_result(
+        self,
+        worker_result: Dict[str, Any],
+        file_type: str,
+        result: OperationResult,
+        skip_reasons: Dict[str, int],
+        folders_to_cleanup: set,
+    ) -> None:
+        """
+        Handle the result from a file import (used by both parallel and sequential processing).
+
+        Args:
+            worker_result: Result dict from worker with file_path, result, parent_dir
+            file_type: File type label for logging
+            result: OperationResult to update with counts and errors
+            skip_reasons: Dictionary to track skip/failure reasons
+            folders_to_cleanup: Set to track folders needing cleanup
+        """
+        file_path = worker_result["file_path"]
+        import_result = worker_result["result"]
+        parent_dir = worker_result.get("parent_dir")
+
+        if import_result and import_result.get("periodical_id"):
+            result.data["imported"] += 1
+            logger.info(f"Successfully imported {file_type}: {file_path.name}")
+            if parent_dir:
+                folders_to_cleanup.add(parent_dir)
+        else:
+            # Track skip reason
+            skip_reason = import_result.get("skip_reason", "organization_failed") if import_result else "parse_error"
+            if skip_reason in skip_reasons:
+                skip_reasons[skip_reason] += 1
+                result.data["skipped"] += 1
+            else:
+                result.data["failed"] += 1
+                result.add_error(
+                    ErrorCodes.IMPORT_FAILED,
+                    f"Failed to import {file_type} {file_path.name}",
+                    retryable=True,
+                )
+            logger.debug(f"Skipped {file_type} import ({skip_reason}): {file_path.name}")
+            self._cleanup_download_file(file_path, defer_folder_deletion=True)
+            if parent_dir:
+                folders_to_cleanup.add(parent_dir)
 
     def _cleanup_download_file(self, pdf_path: Path, defer_folder_deletion: bool = False) -> None:
         """
@@ -1058,43 +1670,59 @@ class FileImporter:
         )
         logger.info("[DATA IMPORT] OCR disabled for library imports - will run during next scheduled OCR task")
 
-        for pdf_path in all_files:
-            try:
-                import_result = self.import_supported_files(
-                    pdf_path,
-                    session,
-                    organization_pattern=None,
-                    auto_track=auto_track,
-                    skip_organize=True,
-                    tracking_mode=tracking_mode,
-                    use_ocr=False,  # Don't queue OCR during library imports
-                    skip_enhancement=is_bulk_import,  # Skip cover/text scan for bulk imports (100+ files)
-                )
-                if import_result and import_result.get("periodical_id"):
-                    result.data["imported"] += 1
-                    logger.info(f"Successfully imported library file: {pdf_path.name}")
-                else:
-                    # Track skip reason
-                    skip_reason = (
-                        import_result.get("skip_reason", "organization_failed") if import_result else "parse_error"
-                    )
-                    if skip_reason in skip_reasons:
-                        skip_reasons[skip_reason] += 1
-                        result.data["skipped"] += 1
-                    else:
-                        result.data["failed"] += 1
-                        result.add_error(
-                            ErrorCodes.IMPORT_FAILED,
-                            f"Failed to import {pdf_path.name}",
-                            retryable=True,
-                        )
-                    logger.debug(f"Skipped library import ({skip_reason}): {pdf_path.name}")
-            except Exception as e:
-                result.data["failed"] += 1
-                skip_reasons["parse_error"] += 1
-                error_msg = f"Error importing library file {pdf_path.name}: {str(e)}"
-                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
-                logger.error(error_msg, exc_info=True)
+        # Process all file types using unified batch handler (supports parallel processing)
+        self._process_file_batch(
+            pdf_files,
+            "PDF",
+            session,
+            None,
+            result,
+            skip_reasons,
+            auto_track=auto_track,
+            skip_organize=True,
+            tracking_mode=tracking_mode,
+            use_ocr=False,
+            skip_enhancement=is_bulk_import,
+        )
+        self._process_file_batch(
+            epub_files,
+            "EPUB",
+            session,
+            None,
+            result,
+            skip_reasons,
+            auto_track=auto_track,
+            skip_organize=True,
+            tracking_mode=tracking_mode,
+            use_ocr=False,
+            skip_enhancement=is_bulk_import,
+        )
+        self._process_file_batch(
+            cbz_files,
+            "CBZ",
+            session,
+            None,
+            result,
+            skip_reasons,
+            auto_track=auto_track,
+            skip_organize=True,
+            tracking_mode=tracking_mode,
+            use_ocr=False,
+            skip_enhancement=is_bulk_import,
+        )
+        self._process_file_batch(
+            cbr_files,
+            "CBR",
+            session,
+            None,
+            result,
+            skip_reasons,
+            auto_track=auto_track,
+            skip_organize=True,
+            tracking_mode=tracking_mode,
+            use_ocr=False,
+            skip_enhancement=is_bulk_import,
+        )
 
         # Log summary
         self._log_import_summary(result, skip_reasons)

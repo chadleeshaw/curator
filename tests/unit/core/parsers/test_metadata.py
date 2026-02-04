@@ -313,3 +313,88 @@ class TestMetadataExtractorMultiMonth:
         # Normalized to slash format
         assert result["month_name"] == "Autumn/Winter"
         assert result["issue_date"].month == 9  # Uses Autumn (same as Fall)
+
+
+# ==============================================================================
+# Test volume/issue only patterns (no date)
+# ==============================================================================
+
+
+class TestVolumeIssueOnlyPatterns:
+    """Test volume/issue patterns without dates."""
+
+    def test_volume_only_pattern(self):
+        """Test parsing files with only volume number (no date)."""
+        extractor = FilenameParser()
+
+        test_cases = [
+            ("Magazine Vol.260.pdf", "Magazine", 260, None),
+            ("Magazine - Vol.260.pdf", "Magazine", 260, None),
+            ("Magazine Vol 260.pdf", "Magazine", 260, None),
+            ("Tech Review Vol.42.pdf", "Tech Review", 42, None),
+        ]
+
+        for filename, expected_title, expected_vol, expected_date in test_cases:
+            result = extractor.extract_from_filename(Path(filename))
+            assert result["title"] == expected_title, f"Failed for {filename}"
+            assert result["volume"] == expected_vol, f"Failed for {filename}"
+            assert result["issue_date"] is expected_date, f"Failed for {filename}: got {result['issue_date']}"
+            assert result["pattern"] == "volume_only", f"Failed for {filename}"
+
+    def test_issue_only_pattern(self):
+        """Test parsing files with only issue number (no date)."""
+        extractor = FilenameParser()
+
+        test_cases = [
+            ("PC Gamer Issue 405.pdf", "PC Gamer", 405),
+            ("Magazine No.123.pdf", "Magazine", 123),
+            ("Magazine #99.pdf", "Magazine", 99),
+            ("Comics Issue 1.pdf", "Comics", 1),
+        ]
+
+        for filename, expected_title, expected_issue in test_cases:
+            result = extractor.extract_from_filename(Path(filename))
+            assert result["title"] == expected_title, f"Failed for {filename}"
+            assert result["edition_number"] == expected_issue, f"Failed for {filename}"
+            assert result["issue_date"] is None, f"Failed for {filename}: got {result['issue_date']}"
+            assert result["pattern"] == "issue_only", f"Failed for {filename}"
+
+    def test_leading_issue_pattern(self):
+        """Test parsing files with leading issue number."""
+        extractor = FilenameParser()
+
+        # Case 1: Issue number, title, volume, and suffix
+        result = extractor.extract_from_filename(Path("260 - Magazine - Vol.260 - Cover Model.pdf"))
+        assert result["title"] == "Magazine"
+        assert result["edition_number"] == 260
+        assert result.get("volume") == 260
+        assert result["issue_date"] is None
+        assert result["pattern"] == "leading_issue"
+
+        # Case 2: Just issue number and title
+        result = extractor.extract_from_filename(Path("123 - Some Title.pdf"))
+        assert result["title"] == "Some Title"
+        assert result["edition_number"] == 123
+        assert result.get("volume") is None
+        assert result["issue_date"] is None
+
+        # Case 3: Issue number, title, and different volume
+        result = extractor.extract_from_filename(Path("001 - Title - Vol.5 - Extra Info.pdf"))
+        assert result["title"] == "Title"
+        assert result["edition_number"] == 1
+        assert result.get("volume") == 5
+
+    def test_patterns_with_dates_not_matched_by_volume_only(self):
+        """Test that files with dates are matched by date patterns, not volume-only."""
+        extractor = FilenameParser()
+
+        # These should be matched by date patterns
+        result = extractor.extract_from_filename(Path("Magazine Jan2024.pdf"))
+        assert result["pattern"] != "volume_only"
+        assert result["issue_date"] is not None
+        assert result["issue_date"].year == 2024
+
+        result = extractor.extract_from_filename(Path("Magazine - January 2024.pdf"))
+        assert result["pattern"] != "volume_only"
+        assert result["issue_date"] is not None
+        assert result["issue_date"].month == 1

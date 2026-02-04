@@ -471,15 +471,35 @@ class OCRQueueService:
                     logger.info(f"Enhanced {magazine.title} with metadata from OCR scan")
 
                     # Sync issue_date from derived_metadata (keeps column in sync with best data)
+                    metadata_discovered = False
                     new_issue_date = sync_issue_date_from_derived(magazine.derived_metadata)
                     if new_issue_date:
                         magazine.issue_date = new_issue_date
+                        metadata_discovered = True
                         logger.debug(f"Updated issue_date to {new_issue_date.strftime('%Y-%m')} from derived_metadata")
+
+                    # Check if OCR found volume/issue
+                    if metadata.get("volume") or metadata.get("issue_number"):
+                        metadata_discovered = True
+                        if not magazine.extra_metadata:
+                            magazine.extra_metadata = {}
+                        if metadata.get("volume"):
+                            magazine.extra_metadata["volume"] = metadata["volume"]
+                        if metadata.get("issue_number"):
+                            magazine.extra_metadata["issue_number"] = metadata["issue_number"]
+
+                    # Flag for reorganization if we discovered new metadata
+                    if metadata_discovered:
+                        if not magazine.extra_metadata:
+                            magazine.extra_metadata = {}
+                        magazine.extra_metadata["needs_reorganization"] = True
+                        magazine.extra_metadata["reorganization_reason"] = "metadata_discovered_by_ocr_queue"
+                        logger.info(f"Flagged {magazine.title} for reorganization (metadata discovered by OCR)")
 
                     # Flag the JSON fields as modified so SQLAlchemy persists them
                     from core.utils.db import mark_json_modified
 
-                    mark_json_modified(magazine, "parsed_metadata", "derived_metadata")
+                    mark_json_modified(magazine, "parsed_metadata", "derived_metadata", "extra_metadata")
 
                     # Clean up OCR PNG file immediately after successful processing
                     try:

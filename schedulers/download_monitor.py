@@ -515,6 +515,56 @@ class DownloadMonitor:
                 else:
                     continue
 
+            # Check for comma-separated file paths (Internet Archive collection items)
+            # IA collections store multiple extracted file paths as comma-separated string
+            if "," in submission.file_path:
+                file_paths_str = submission.file_path.split(",")
+                logger.info(
+                    f"[DownloadMonitor] Processing IA collection with {len(file_paths_str)} files "
+                    f"for submission {submission.id}"
+                )
+                collection_success_count = 0
+
+                for file_path_str in file_paths_str:
+                    file_path_str = file_path_str.strip()
+                    if not file_path_str:
+                        continue
+
+                    file_path = self._find_file_in_downloads(file_path_str)
+                    if not file_path:
+                        logger.warning(
+                            f"[DownloadMonitor] Collection file not found: {file_path_str} "
+                            f"(searched in: {self.downloads_dir})"
+                        )
+                        continue
+
+                    # Process each collection file with tracking context
+                    if self._process_single_file(file_path, submission, session):
+                        collection_success_count += 1
+
+                if collection_success_count > 0:
+                    logger.info(
+                        f"[DownloadMonitor] Successfully imported {collection_success_count}/{len(file_paths_str)} "
+                        f"files from IA collection for submission {submission.id}"
+                    )
+                    processed_count += collection_success_count
+
+                    # Sync status and mark processed after all collection files are done
+                    self._sync_discovered_issue_status(submission, "completed", None, session)
+                    self.download_manager.mark_processed(submission.id, session)
+
+                    if self._should_delete_from_client(submission.tracking_id, session):
+                        self._delete_from_client(submission.job_id, "completed", submission.client_name)
+                else:
+                    logger.warning(f"[DownloadMonitor] All collection files failed for submission {submission.id}")
+                    submission.status = DownloadSubmission.StatusEnum.FAILED
+                    submission.last_error = "All collection files failed to import"
+                    session.commit()
+                    self._sync_discovered_issue_status(submission, "failed", None, session)
+
+                continue
+
+            # Single file processing (non-collection)
             # Map the client path to Curator's download directory
             # The client returns a path like "/downloads/Books/Magazine.Name" which is the client's view
             # We need to look for it in our configured downloads_dir
@@ -533,75 +583,99 @@ class DownloadMonitor:
 
             logger.debug(f"[DownloadMonitor] Found file at: {file_path}")
 
-            # Create sidecar metadata file if we have tracking info
-            # This preserves the tracking association even if the filename is ambiguous
-            if submission.tracking_id:
-                try:
-                    tracking = session.query(PeriodicalTracking).filter_by(id=submission.tracking_id).first()
-                    if tracking:
-                        create_sidecar_file(
-                            file_path,
-                            tracking_id=tracking.id,
-                            tracking_title=tracking.title,
-                            submission_id=submission.id,
-                            category=tracking.category,
-                            language=tracking.language,
-                            country=tracking.country,
-                        )
-                except Exception as e:
-                    logger.warning(f"Failed to create sidecar file for {file_path.name}: {e}")
+            if self._process_single_file(file_path, submission, session):
+                processed_count += 1
 
-            try:
-                logger.debug(f"[DownloadMonitor] Importing file from client download: {file_path}")
+                # Sync DiscoveredIssue status (NEW: Issue Discovery & Tracking)
+                self._sync_discovered_issue_status(submission, "completed", None, session)
 
-                # Use file importer to process the file, passing the tracking_id from the submission
-                # This ensures the file is linked to the tracking that requested it
-                result = self.file_importer.import_supported_files(
-                    file_path, session, tracking_id=submission.tracking_id
-                )
+                # Mark submission as processed
+                self.download_manager.mark_processed(submission.id, session)
 
-                if result:
-                    logger.info(f"[DownloadMonitor] Successfully imported from client: {file_path.name}")
-                    processed_count += 1
-
-                    # Sync DiscoveredIssue status (NEW: Issue Discovery & Tracking)
-                    self._sync_discovered_issue_status(submission, "completed", result.get("periodical_id"), session)
-
-                    # Mark submission as processed
-                    self.download_manager.mark_processed(submission.id, session)
-
-                    # Delete from client if tracking settings allow
-                    if self._should_delete_from_client(submission.tracking_id, session):
-                        self._delete_from_client(submission.job_id, "completed", submission.client_name)
-
-                    # Call optional callback (e.g., for database updates)
-                    if self.import_callback:
-                        try:
-                            self.import_callback(file_path, result, submission, session)
-                        except Exception as e:
-                            logger.error(f"Error in import callback: {e}", exc_info=True)
-                else:
-                    logger.warning(f"Import failed for: {file_path}")
-                    submission.status = DownloadSubmission.StatusEnum.FAILED
-                    submission.last_error = "Import/processing failed"
-                    session.commit()
-
-                    # Sync DiscoveredIssue status (NEW: Issue Discovery & Tracking)
-                    self._sync_discovered_issue_status(submission, "failed", None, session)
-
-            except Exception as e:
-                logger.error(
-                    f"Error processing completed download {submission.id}: {e}",
-                    exc_info=True,
-                )
+                # Delete from client if tracking settings allow
+                if self._should_delete_from_client(submission.tracking_id, session):
+                    self._delete_from_client(submission.job_id, "completed", submission.client_name)
+            else:
                 submission.status = DownloadSubmission.StatusEnum.FAILED
-                submission.last_error = str(e)
+                submission.last_error = "Import/processing failed"
                 session.commit()
 
                 # Sync DiscoveredIssue status (NEW: Issue Discovery & Tracking)
                 self._sync_discovered_issue_status(submission, "failed", None, session)
 
         return processed_count
+
+    def _process_single_file(
+        self,
+        file_path: Path,
+        submission: DownloadSubmission,
+        session: Session,
+    ) -> bool:
+        """
+        Process a single file: create sidecar and import.
+
+        This handles both regular downloads and individual files from IA collections.
+        Creates a sidecar file to preserve the tracking association, then imports the file.
+
+        Args:
+            file_path: Path to the file to process
+            submission: The download submission record
+            session: Database session
+
+        Returns:
+            True if import succeeded, False otherwise
+        """
+        # Create sidecar metadata file if we have tracking info
+        # This preserves the tracking association even if the filename is ambiguous
+        # Critical for IA collection items where filenames may not contain the periodical title
+        if submission.tracking_id:
+            try:
+                tracking = session.query(PeriodicalTracking).filter_by(id=submission.tracking_id).first()
+                if tracking:
+                    create_sidecar_file(
+                        file_path,
+                        tracking_id=tracking.id,
+                        tracking_title=tracking.title,
+                        submission_id=submission.id,
+                        category=tracking.category,
+                        language=tracking.language,
+                        country=tracking.country,
+                    )
+                    logger.debug(
+                        f"[DownloadMonitor] Created sidecar for {file_path.name} -> "
+                        f"tracking '{tracking.title}' (ID: {tracking.id})"
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to create sidecar file for {file_path.name}: {e}")
+
+        try:
+            logger.debug(f"[DownloadMonitor] Importing file from client download: {file_path}")
+
+            # Use file importer to process the file, passing the tracking_id from the submission
+            # This ensures the file is linked to the tracking that requested it
+            result = self.file_importer.import_supported_files(file_path, session, tracking_id=submission.tracking_id)
+
+            if result and result.get("periodical_id"):
+                logger.info(f"[DownloadMonitor] Successfully imported from client: {file_path.name}")
+
+                # Call optional callback (e.g., for database updates)
+                if self.import_callback:
+                    try:
+                        self.import_callback(file_path, result, submission, session)
+                    except Exception as e:
+                        logger.error(f"Error in import callback: {e}", exc_info=True)
+
+                return True
+            else:
+                logger.warning(f"Import failed for: {file_path}")
+                return False
+
+        except Exception as e:
+            logger.error(
+                f"Error processing file {file_path}: {e}",
+                exc_info=True,
+            )
+            return False
 
     def _sync_discovered_issue_status(
         self,
