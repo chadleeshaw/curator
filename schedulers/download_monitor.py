@@ -556,7 +556,9 @@ class DownloadMonitor:
 
                 # Use file importer to process the file, passing the tracking_id from the submission
                 # This ensures the file is linked to the tracking that requested it
-                result = self.file_importer.import_pdf(file_path, session, tracking_id=submission.tracking_id)
+                result = self.file_importer.import_supported_files(
+                    file_path, session, tracking_id=submission.tracking_id
+                )
 
                 if result:
                     logger.info(f"[DownloadMonitor] Successfully imported from client: {file_path.name}")

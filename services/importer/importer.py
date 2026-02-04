@@ -594,9 +594,9 @@ class FileImporter:
     # Main Import Method
     # =========================================================================
 
-    def import_pdf(
+    def import_supported_files(
         self,
-        pdf_path: Path,
+        file_path: Path,
         session: Session,
         *,
         organization_pattern: Optional[str] = None,
@@ -605,12 +605,13 @@ class FileImporter:
         tracking_mode: str = "watch",
         use_ocr: bool = True,
         tracking_id: Optional[int] = None,
+        skip_enhancement: bool = False,
     ) -> Dict[str, Any]:
         """
-        Import a single PDF file.
+        Import a single periodical file (PDF, EPUB, CBZ, or CBR).
 
         Args:
-            pdf_path: Path to PDF file
+            file_path: Path to periodical file
             session: Database session
             organization_pattern: Optional custom organization pattern with tags like {category}, {title}, {year}
             auto_track: Whether to auto-create tracking records for imported periodicals
@@ -618,6 +619,7 @@ class FileImporter:
             tracking_mode: Tracking mode - "all" (track all editions), "new" (track new only), "watch" (watch only), "none" (no tracking)
             use_ocr: Whether to use OCR for metadata extraction (default: True, set False for faster batch imports)
             tracking_id: Optional tracking ID to associate this file with (from DownloadSubmission)
+            skip_enhancement: If True, skip cover extraction and text scanning for faster bulk imports (default: False)
 
         Returns:
             Dictionary with result information including magazine_id, or empty dict if failed
@@ -625,23 +627,23 @@ class FileImporter:
         try:
             # Step 1: Get tracking context from sidecar and tracking record
             tracking_id, organization_pattern = self._get_tracking_context(
-                pdf_path, tracking_id, organization_pattern, session
+                file_path, tracking_id, organization_pattern, session
             )
 
             # Step 2: Parse file and validate
-            parsed = self.parser.parse_file(pdf_path)
+            parsed = self.parser.parse_file(file_path)
             if not self.title_matcher.validate_before_parsing(parsed.title):
-                logger.warning(f"Skipping invalid release title: {parsed.title} (from {pdf_path.name})")
+                logger.warning(f"Skipping invalid release title: {parsed.title} (from {file_path.name})")
                 return {}
             logger.debug(f"Parsed metadata: '{parsed.title}' (confidence: {parsed.confidence})")
 
             # Step 3: Calculate content hash and check for hash-based duplicates
-            content_hash = hash_file_in_chunks(str(pdf_path))
+            content_hash = hash_file_in_chunks(str(file_path))
             if not content_hash:
-                logger.error(f"Failed to hash file {pdf_path}, skipping import", exc_info=True)
+                logger.error(f"Failed to hash file {file_path}, skipping import", exc_info=True)
                 return {}
 
-            if self._check_hash_duplicate(content_hash, pdf_path, skip_organize, session):
+            if self._check_hash_duplicate(content_hash, file_path, skip_organize, session):
                 return {}
 
             # Step 4: If we have a tracking_id from sidecar (download), use that tracking's title
@@ -659,14 +661,14 @@ class FileImporter:
                 else:
                     # Sidecar had invalid tracking_id, fall back to parsed title
                     logger.warning(f"Sidecar tracking_id={tracking_id} not found, using parsed title")
-                    tracking_title = self._build_tracking_title(parsed.base_title, parsed.country, pdf_path)
+                    tracking_title = self._build_tracking_title(parsed.base_title, parsed.country, file_path)
             else:
                 # No sidecar tracking_id, build from parsed filename
-                tracking_title = self._build_tracking_title(parsed.base_title, parsed.country, pdf_path)
+                tracking_title = self._build_tracking_title(parsed.base_title, parsed.country, file_path)
 
             # Step 5: Check for fuzzy duplicates
             if self._check_fuzzy_duplicate(
-                tracking_title, parsed.issue_date, parsed.language, pdf_path, skip_organize, session
+                tracking_title, parsed.issue_date, parsed.language, file_path, skip_organize, session
             ):
                 return {}
 
@@ -678,12 +680,12 @@ class FileImporter:
 
             # Step 7: Organize file (use tracking title for folder consistency)
             organization_title = target_tracking.title if target_tracking else tracking_title
-            cover_path = self._extract_cover(pdf_path)
-            should_queue_ocr = use_ocr and (cover_path or pdf_path) and OCRService.is_available()
+            cover_path = self._extract_cover(file_path)
+            should_queue_ocr = use_ocr and (cover_path or file_path) and OCRService.is_available()
 
             if skip_organize:
-                organized_path = pdf_path
-                logger.info(f"Using file in place (already in library): {pdf_path}")
+                organized_path = file_path
+                logger.info(f"Using file in place (already in library): {file_path}")
             else:
                 metadata = {
                     "title": organization_title,
@@ -692,7 +694,7 @@ class FileImporter:
                     "month_name": parsed.month_name,
                     "language": parsed.language,
                 }
-                organized_path = self.organizer.organize(pdf_path, metadata, category, organization_pattern)
+                organized_path = self.organizer.organize(file_path, metadata, category, organization_pattern)
                 if not organized_path:
                     return {}
 
@@ -719,7 +721,7 @@ class FileImporter:
                 parsed_metadata=build_parsed_metadata(file_scan=file_scan),
                 derived_metadata=build_derived_metadata(file_scan=file_scan),
                 extra_metadata=build_extra_metadata(
-                    imported_from=pdf_path.name,
+                    imported_from=file_path.name,
                     import_date=datetime.now().isoformat(),
                     category=category,
                     import_method="auto",
@@ -745,8 +747,9 @@ class FileImporter:
             session.commit()
             logger.info(f"Added to database: {parsed.title} ({category})")
 
-            # Step 10: Run text scan for additional metadata
-            self._run_text_scan(magazine, organized_path, parsed.language, session)
+            # Step 10: Run text scan for additional metadata (skip during bulk imports for speed)
+            if not skip_enhancement:
+                self._run_text_scan(magazine, organized_path, parsed.language, session)
 
             # Step 11: Queue OCR job only if text scan didn't find sufficient metadata
             # Text-based PDFs (True PDF, Text PDF) already have extractable text, no need for OCR
@@ -760,13 +763,13 @@ class FileImporter:
 
             # Step 12: Cleanup download file (defer folder deletion to batch processing)
             if not skip_organize:
-                self._cleanup_download_file(pdf_path, defer_folder_deletion=True)
+                self._cleanup_download_file(file_path, defer_folder_deletion=True)
 
             return {"periodical_id": magazine.id}
 
         except Exception as e:
             session.rollback()
-            logger.error(f"Error importing PDF {pdf_path}: {e}", exc_info=True)
+            logger.error(f"Error importing file {file_path}: {e}", exc_info=True)
             return {}
 
     def _process_file_batch(
@@ -806,7 +809,7 @@ class FileImporter:
 
         for file_path in files:
             try:
-                import_result = self.import_pdf(
+                import_result = self.import_supported_files(
                     file_path,
                     session,
                     organization_pattern=organization_pattern,
@@ -965,6 +968,17 @@ class FileImporter:
         cbz_files = [f for f in all_files if f.suffix.lower() == ".cbz"]
         cbr_files = [f for f in all_files if f.suffix.lower() == ".cbr"]
 
+        # Enable fast mode for bulk imports (skip cover extraction and text scanning)
+        is_bulk_import = len(all_files) >= 100
+        if is_bulk_import:
+            logger.info(
+                f"[DATA IMPORT] Bulk import mode enabled for {len(all_files)} files - "
+                f"cover extraction and text scanning will be skipped for speed. "
+                f"Both will be processed automatically by scheduled tasks: "
+                f"covers via cover_cleanup scheduler, text scanning via auto_metadata scheduler. "
+                f"Note: Schedulers may start processing files while import is still running - this is normal and efficient."
+            )
+
         logger.info(
             f"[DATA IMPORT] Found {len(all_files)} files in library folders to process "
             f"from {self.library_base_dir} ({len(pdf_files)} PDFs, {len(epub_files)} EPUBs, "
@@ -974,7 +988,7 @@ class FileImporter:
 
         for pdf_path in all_files:
             try:
-                import_result = self.import_pdf(
+                import_result = self.import_supported_files(
                     pdf_path,
                     session,
                     organization_pattern=None,
@@ -982,6 +996,7 @@ class FileImporter:
                     skip_organize=True,
                     tracking_mode=tracking_mode,
                     use_ocr=False,  # Don't queue OCR during library imports
+                    skip_enhancement=is_bulk_import,  # Skip cover/text scan for bulk imports (100+ files)
                 )
                 if import_result:
                     result.data["imported"] += 1

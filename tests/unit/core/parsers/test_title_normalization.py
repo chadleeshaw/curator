@@ -82,7 +82,7 @@ class TestTitleNormalization:
             test_file.write_text(f"test content {i}")
 
             # Import the file
-            success = importer.import_pdf(
+            success = importer.import_supported_files(
                 test_file,
                 session,
                 auto_track=True,
@@ -144,7 +144,7 @@ class TestTitleNormalization:
             # Create unique content for each file to avoid hash collisions
             test_file.write_text(f"test content for issue {idx + 1}")
 
-            importer.import_pdf(test_file, session, auto_track=True)
+            importer.import_supported_files(test_file, session, auto_track=True)
 
         session.commit()
 
@@ -192,7 +192,7 @@ class TestTitleNormalization:
         test_file = temp_dirs["download_dir"] / "Unpack Wired No 11 2024 UK Hybrid Magazine.pdf"
         test_file.write_text("test content")
 
-        success = importer.import_pdf(test_file, session, auto_track=True)
+        success = importer.import_supported_files(test_file, session, auto_track=True)
         assert success, "Import should succeed"
 
         session.commit()
@@ -237,7 +237,7 @@ class TestTitleNormalization:
         test_file = temp_dirs["download_dir"] / "Wired No 5 2024 UK Hybrid Magazine.pdf"
         test_file.write_text("test content")
 
-        success = importer.import_pdf(test_file, session, auto_track=True, tracking_mode="all")
+        success = importer.import_supported_files(test_file, session, auto_track=True, tracking_mode="all")
         assert success, "Import should succeed"
 
         session.commit()
@@ -281,7 +281,7 @@ class TestTitleNormalization:
         for idx, filename in enumerate(test_files):
             test_file = temp_dirs["download_dir"] / filename
             test_file.write_text(f"test content {idx}")
-            importer.import_pdf(test_file, session, auto_track=True)
+            importer.import_supported_files(test_file, session, auto_track=True)
 
         session.commit()
 
