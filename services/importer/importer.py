@@ -680,7 +680,9 @@ class FileImporter:
 
             # Step 7: Organize file (use tracking title for folder consistency)
             organization_title = target_tracking.title if target_tracking else tracking_title
-            cover_path = self._extract_cover(file_path)
+
+            # Extract cover unless skip_enhancement is enabled (for bulk imports)
+            cover_path = None if skip_enhancement else self._extract_cover(file_path)
             should_queue_ocr = use_ocr and (cover_path or file_path) and OCRService.is_available()
 
             if skip_organize:
