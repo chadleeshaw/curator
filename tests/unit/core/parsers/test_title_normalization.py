@@ -347,6 +347,33 @@ class TestTitleNormalization:
             assert "Hybrid" not in cleaned
             assert "Digital" not in cleaned
 
+    def test_ampersand_titles_not_truncated(self):
+        """Test that titles with ampersands are not incorrectly split as special editions"""
+        matcher = TitleMatcher()
+
+        # Test cases with ampersands and conjunctions
+        test_cases = [
+            # (input_title, expected_base_title)
+            ("Guns & Ammo", "Guns & Ammo"),
+            ("Food & Wine Special Edition", "Food & Wine"),  # This IS a special edition
+            ("Cars And Driver Review", "Cars And Driver Review"),
+            ("Home & Garden Ideas", "Home & Garden Ideas"),
+            ("Tech & Gadgets Monthly", "Tech & Gadgets Monthly"),
+        ]
+
+        for input_title, expected_base_title in test_cases:
+            cleaned = matcher.clean_release_title(input_title)
+            base_title, is_special, special_name = matcher.extract_base_title(cleaned)
+
+            assert (
+                base_title == expected_base_title
+            ), f"Expected base_title '{expected_base_title}', got '{base_title}' for input '{input_title}'"
+
+            # Special check for "Food & Wine Special Edition"
+            if "Special Edition" in input_title:
+                assert is_special, f"'{input_title}' should be detected as special edition"
+                assert special_name == "Special Edition"
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

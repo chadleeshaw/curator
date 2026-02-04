@@ -86,6 +86,18 @@ COMMON_PERIODICAL_WORDS = {
     "international",
     "world",
     "today",
+    # Conjunctions and prepositions that indicate title continuation (not special edition splits)
+    "&",
+    "and",
+    "or",
+    "the",
+    "of",
+    "for",
+    "in",
+    "on",
+    "at",
+    "to",
+    "with",
 }
 """Words commonly found in periodical titles that are part of the base name, not special edition identifiers"""
 
