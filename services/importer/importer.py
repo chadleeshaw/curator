@@ -1340,6 +1340,14 @@ class FileImporter:
                     error_msg = f"Error importing {file_type} {file_path.name}: {str(e)}"
                     result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
                     logger.error(error_msg, exc_info=True)
+                    # Clean up the failed file and track folder for cleanup
+                    try:
+                        self._cleanup_download_file(file_path, defer_folder_deletion=True)
+                        parent_dir = file_path.parent
+                        if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
+                            folders_to_cleanup.add(parent_dir)
+                    except Exception as cleanup_error:
+                        logger.warning(f"Failed to cleanup {file_path.name}: {cleanup_error}")
 
     def _process_files_sequential(
         self,
