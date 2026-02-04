@@ -349,7 +349,7 @@ class FileImporter:
 
                 if date_diff <= DUPLICATE_DATE_THRESHOLD_DAYS and same_language:
                     logger.warning(
-                        f"Duplicate detected: '{tracking_title}' ({parsed_issue_date.strftime('%b %Y')}, {parsed_language}) "
+                        f"Duplicate detected for '{pdf_path.name}': '{tracking_title}' ({parsed_issue_date.strftime('%b %Y')}, {parsed_language}) "
                         f"matches existing '{existing.title}' ({existing.issue_date.strftime('%b %Y')}, "
                         f"{existing.language or DEFAULT_LANGUAGE}) (title score: {score}, date diff: {date_diff} days). "
                         f"Skipping import."
@@ -635,7 +635,10 @@ class FileImporter:
             if not self.title_matcher.validate_before_parsing(parsed.title):
                 logger.warning(f"Skipping invalid release title: {parsed.title} (from {file_path.name})")
                 return {}
-            logger.debug(f"Parsed metadata: '{parsed.title}' (confidence: {parsed.confidence})")
+            logger.debug(
+                f"Parsed metadata: '{parsed.title}' - Date: {parsed.issue_date.strftime('%b %Y') if parsed.issue_date else 'None'} "
+                f"(confidence: {parsed.confidence}, pattern: {parsed.matched_pattern})"
+            )
 
             # Step 3: Calculate content hash and check for hash-based duplicates
             content_hash = hash_file_in_chunks(str(file_path))
