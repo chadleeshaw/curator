@@ -283,10 +283,7 @@ class AutoMetadataService:
 
         # Check if this periodical needs a date scan (flagged during import)
         # These get priority - we need to try harder to find their date/volume
-        needs_date_scan = (
-            periodical.extra_metadata
-            and periodical.extra_metadata.get("needs_date_scan", False)
-        )
+        needs_date_scan = periodical.extra_metadata and periodical.extra_metadata.get("needs_date_scan", False)
 
         # Skip if text scan already found sufficient metadata
         # Text-based PDFs (True PDF, Text PDF) already have extractable text, no need for OCR

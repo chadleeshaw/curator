@@ -735,7 +735,7 @@ class FileImporter:
             "issue_number": None,
             "source": None,
             "text_scan_result": None,  # Full text scan result for storing in DB
-            "ocr_scan_result": None,   # Full OCR scan result for storing in DB
+            "ocr_scan_result": None,  # Full OCR scan result for storing in DB
         }
 
         # Try text scan first (faster than OCR)
@@ -759,6 +759,7 @@ class FileImporter:
                         # Convert month number to name for organization
                         if result["month"]:
                             from core.constants.date import MONTH_TO_NAME
+
                             result["month_name"] = MONTH_TO_NAME.get(result["month"])
                         result["source"] = "text_scan"
                         logger.info(
@@ -797,6 +798,7 @@ class FileImporter:
                         result["month"] = ocr_result.get("month")
                         if result["month"]:
                             from core.constants.date import MONTH_TO_NAME
+
                             result["month_name"] = MONTH_TO_NAME.get(result["month"])
                         result["source"] = "ocr_scan"
                         logger.info(
@@ -877,9 +879,7 @@ class FileImporter:
                 magazine.issue_date = new_issue_date
                 found_date = True
                 metadata_discovered = True
-                logger.info(
-                    f"OCR scan found date {new_issue_date.strftime('%Y-%m')} for {magazine.title}"
-                )
+                logger.info(f"OCR scan found date {new_issue_date.strftime('%Y-%m')} for {magazine.title}")
 
             # Check if OCR found volume/issue that we didn't have
             if ocr_result.get("volume") or ocr_result.get("issue_number"):
@@ -1145,9 +1145,7 @@ class FileImporter:
             if needs_date_scan and not text_scan_found_date and not pre_scan_found_date and not pre_scan_did_ocr:
                 # Text scan didn't find date - run OCR immediately (not queued)
                 # This is critical to avoid duplicate detection issues
-                logger.info(
-                    f"Text scan didn't find date for '{organization_title}' - running immediate OCR scan"
-                )
+                logger.info(f"Text scan didn't find date for '{organization_title}' - running immediate OCR scan")
                 ocr_found_date = self._run_ocr_scan(magazine, organized_path, parsed.language, session)
                 if not ocr_found_date:
                     logger.warning(
@@ -1288,19 +1286,19 @@ class FileImporter:
         folders_to_cleanup = set()
 
         # Determine if we can use parallel processing
-        use_parallel = (
-            self._session_factory is not None
-            and len(files) > 1
-            and self._parallel_workers > 1
-        )
+        use_parallel = self._session_factory is not None and len(files) > 1 and self._parallel_workers > 1
 
         if use_parallel:
             logger.info(
-                f"Processing {len(files)} {file_type} files in parallel "
-                f"with {self._parallel_workers} workers"
+                f"Processing {len(files)} {file_type} files in parallel " f"with {self._parallel_workers} workers"
             )
             self._process_files_parallel(
-                files, file_type, organization_pattern, result, skip_reasons, folders_to_cleanup,
+                files,
+                file_type,
+                organization_pattern,
+                result,
+                skip_reasons,
+                folders_to_cleanup,
                 auto_track=auto_track,
                 skip_organize=skip_organize,
                 tracking_mode=tracking_mode,
@@ -1310,7 +1308,13 @@ class FileImporter:
         else:
             # Sequential processing (original behavior)
             self._process_files_sequential(
-                files, file_type, session, organization_pattern, result, skip_reasons, folders_to_cleanup,
+                files,
+                file_type,
+                session,
+                organization_pattern,
+                result,
+                skip_reasons,
+                folders_to_cleanup,
                 auto_track=auto_track,
                 skip_organize=skip_organize,
                 tracking_mode=tracking_mode,
@@ -1358,10 +1362,7 @@ class FileImporter:
             use_ocr: Whether to use OCR for metadata extraction
             skip_enhancement: If True, skip cover extraction and text scanning
         """
-        with ThreadPoolExecutor(
-            max_workers=self._parallel_workers,
-            thread_name_prefix="import"
-        ) as executor:
+        with ThreadPoolExecutor(max_workers=self._parallel_workers, thread_name_prefix="import") as executor:
             # Submit all files for processing
             futures = {
                 executor.submit(
@@ -1383,9 +1384,7 @@ class FileImporter:
                 file_path = futures[future]
                 try:
                     worker_result = future.result()
-                    self._handle_import_result(
-                        worker_result, file_type, result, skip_reasons, folders_to_cleanup
-                    )
+                    self._handle_import_result(worker_result, file_type, result, skip_reasons, folders_to_cleanup)
                 except Exception as e:
                     result.data["failed"] += 1
                     skip_reasons["parse_error"] += 1
@@ -1466,15 +1465,15 @@ class FileImporter:
                     "file_path": file_path,
                     "file_type": file_type,
                     "result": import_result,
-                    "parent_dir": file_path.parent
-                    if not skip_organize
-                    and file_path.parent != self.downloads_dir
-                    and file_path.parent.is_relative_to(self.downloads_dir)
-                    else None,
+                    "parent_dir": (
+                        file_path.parent
+                        if not skip_organize
+                        and file_path.parent != self.downloads_dir
+                        and file_path.parent.is_relative_to(self.downloads_dir)
+                        else None
+                    ),
                 }
-                self._handle_import_result(
-                    worker_result, file_type, result, skip_reasons, folders_to_cleanup
-                )
+                self._handle_import_result(worker_result, file_type, result, skip_reasons, folders_to_cleanup)
             except Exception as e:
                 result.data["failed"] += 1
                 skip_reasons["parse_error"] += 1
@@ -1673,7 +1672,12 @@ class FileImporter:
 
         # Process all file types using unified batch handler (supports parallel processing)
         self._process_file_batch(
-            pdf_files, "PDF", session, None, result, skip_reasons,
+            pdf_files,
+            "PDF",
+            session,
+            None,
+            result,
+            skip_reasons,
             auto_track=auto_track,
             skip_organize=True,
             tracking_mode=tracking_mode,
@@ -1681,7 +1685,12 @@ class FileImporter:
             skip_enhancement=is_bulk_import,
         )
         self._process_file_batch(
-            epub_files, "EPUB", session, None, result, skip_reasons,
+            epub_files,
+            "EPUB",
+            session,
+            None,
+            result,
+            skip_reasons,
             auto_track=auto_track,
             skip_organize=True,
             tracking_mode=tracking_mode,
@@ -1689,7 +1698,12 @@ class FileImporter:
             skip_enhancement=is_bulk_import,
         )
         self._process_file_batch(
-            cbz_files, "CBZ", session, None, result, skip_reasons,
+            cbz_files,
+            "CBZ",
+            session,
+            None,
+            result,
+            skip_reasons,
             auto_track=auto_track,
             skip_organize=True,
             tracking_mode=tracking_mode,
@@ -1697,7 +1711,12 @@ class FileImporter:
             skip_enhancement=is_bulk_import,
         )
         self._process_file_batch(
-            cbr_files, "CBR", session, None, result, skip_reasons,
+            cbr_files,
+            "CBR",
+            session,
+            None,
+            result,
+            skip_reasons,
             auto_track=auto_track,
             skip_organize=True,
             tracking_mode=tracking_mode,

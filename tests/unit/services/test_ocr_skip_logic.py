@@ -17,11 +17,12 @@ from services.auto_metadata import AutoMetadataService
 class TestOCRSkipWhenTextScanSufficient:
     """Test that OCR is skipped when text scan finds sufficient metadata"""
 
-    def _create_mock_periodical(self, parsed_metadata=None):
+    def _create_mock_periodical(self, parsed_metadata=None, extra_metadata=None):
         """Create a mock periodical with specified metadata."""
         periodical = MagicMock()
         periodical.id = 1
         periodical.parsed_metadata = parsed_metadata
+        periodical.extra_metadata = extra_metadata
         periodical.cover_path = "/path/to/cover.png"
         periodical.file_path = "/path/to/file.pdf"
         return periodical
