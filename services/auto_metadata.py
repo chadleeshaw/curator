@@ -281,15 +281,29 @@ class AutoMetadataService:
         if periodical.parsed_metadata and periodical.parsed_metadata.get("ocr_scan"):
             return False
 
+        # Check if this periodical needs a date scan (flagged during import)
+        # These get priority - we need to try harder to find their date/volume
+        needs_date_scan = (
+            periodical.extra_metadata
+            and periodical.extra_metadata.get("needs_date_scan", False)
+        )
+
         # Skip if text scan already found sufficient metadata
         # Text-based PDFs (True PDF, Text PDF) already have extractable text, no need for OCR
+        # UNLESS we still need a date scan and text scan didn't find the date
         if periodical.parsed_metadata:
             text_scan = periodical.parsed_metadata.get("text_scan", {})
             if text_scan.get("has_sufficient_metadata", False):
-                return False
+                # If needs_date_scan, check if text scan actually found a date
+                if needs_date_scan and not text_scan.get("year"):
+                    logger.debug(
+                        f"Periodical {periodical.id} needs date scan and text scan didn't find year - will queue OCR"
+                    )
+                else:
+                    return False
 
-        # Skip if no cover path
-        if not periodical.cover_path:
+        # Skip if no cover path (unless needs_date_scan - try anyway with file path)
+        if not periodical.cover_path and not needs_date_scan:
             return False
 
         # Only queue PDFs for OCR (EPUBs and comics don't need OCR)

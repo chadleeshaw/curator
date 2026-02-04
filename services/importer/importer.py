@@ -700,6 +700,7 @@ class FileImporter:
 
             # Step 4: If we have a tracking_id from sidecar (download), use that tracking's title
             # This prevents creating duplicate tracking records when filenames are ambiguous
+            needs_date_scan = False
             if tracking_id:
                 target_tracking_temp = (
                     session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
@@ -710,6 +711,21 @@ class FileImporter:
                         f"Using tracking title from sidecar: '{tracking_title}' (ID: {tracking_id}) "
                         f"instead of parsed title: '{parsed.base_title}'"
                     )
+                    # Check if we need to force text/OCR scan to find date
+                    # When we have a tracking title but couldn't parse a date from filename,
+                    # we should scan the document content to try to extract date/volume info
+                    date_missing = (
+                        parsed.issue_date is None
+                        or parsed.confidence == "low"
+                        or parsed.matched_pattern == "no_match_fallback"
+                    )
+                    if date_missing:
+                        needs_date_scan = True
+                        logger.info(
+                            f"File '{file_path.name}' has tracking title '{tracking_title}' but no valid date "
+                            f"(confidence: {parsed.confidence}, pattern: {parsed.matched_pattern}). "
+                            f"Will force text/OCR scan to extract date."
+                        )
                 else:
                     # Sidecar had invalid tracking_id, fall back to parsed title
                     logger.warning(f"Sidecar tracking_id={tracking_id} not found, using parsed title")
@@ -765,6 +781,17 @@ class FileImporter:
                 file_scan["special_edition_name"] = parsed.special_edition_name
                 file_scan["is_special_edition"] = True
 
+            # Build extra metadata, flagging if date scan is needed
+            extra_meta = build_extra_metadata(
+                imported_from=file_path.name,
+                import_date=datetime.now().isoformat(),
+                category=category,
+                import_method="auto",
+            )
+            if needs_date_scan:
+                extra_meta["needs_date_scan"] = True
+                extra_meta["date_scan_reason"] = "tracking_title_without_parsed_date"
+
             magazine = Periodical(
                 title=organization_title,
                 issue_date=parsed.issue_date or datetime.now(),
@@ -774,12 +801,7 @@ class FileImporter:
                 content_hash=content_hash,
                 parsed_metadata=build_parsed_metadata(file_scan=file_scan),
                 derived_metadata=build_derived_metadata(file_scan=file_scan),
-                extra_metadata=build_extra_metadata(
-                    imported_from=file_path.name,
-                    import_date=datetime.now().isoformat(),
-                    category=category,
-                    import_method="auto",
-                ),
+                extra_metadata=extra_meta,
             )
             session.add(magazine)
 
@@ -801,16 +823,30 @@ class FileImporter:
             session.commit()
             logger.info(f"Added to database: {parsed.title} ({category})")
 
-            # Step 10: Run text scan for additional metadata (skip during bulk imports for speed)
-            if not skip_enhancement:
+            # Step 10: Run text scan for additional metadata
+            # Force text scan if needs_date_scan (even during bulk imports) to try to find date/volume
+            # Otherwise skip during bulk imports for speed
+            if not skip_enhancement or needs_date_scan:
+                if needs_date_scan:
+                    logger.info(f"Forcing text scan for '{organization_title}' to find missing date/volume")
                 self._run_text_scan(magazine, organized_path, parsed.language, session)
 
-            # Step 11: Queue OCR job only if text scan didn't find sufficient metadata
-            # Text-based PDFs (True PDF, Text PDF) already have extractable text, no need for OCR
+            # Step 11: Queue OCR job if needed
+            # Queue OCR if:
+            # - Text scan didn't find sufficient metadata, OR
+            # - needs_date_scan is True and text scan didn't find the date
             text_scan_result = magazine.parsed_metadata.get("text_scan", {}) if magazine.parsed_metadata else {}
             text_scan_sufficient = text_scan_result.get("has_sufficient_metadata", False)
+            text_scan_found_date = text_scan_result.get("year") is not None
 
-            if should_queue_ocr and not text_scan_sufficient:
+            # For files needing date scan, also check if we found a date
+            if needs_date_scan and not text_scan_found_date:
+                # Text scan didn't find date - queue OCR regardless of other conditions
+                logger.info(
+                    f"Text scan didn't find date for '{organization_title}' - queueing OCR scan"
+                )
+                self._queue_ocr_job(magazine, parsed.language, skip_organize, session)
+            elif should_queue_ocr and not text_scan_sufficient:
                 self._queue_ocr_job(magazine, parsed.language, skip_organize, session)
             elif text_scan_sufficient:
                 logger.info(f"Skipping OCR for '{parsed.title}' - text scan found sufficient metadata")
