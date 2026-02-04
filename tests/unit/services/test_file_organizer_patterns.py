@@ -158,11 +158,11 @@ class TestVolumeBasedOrganization:
         result_path = Path(result)
         assert result_path.exists()
 
-        # Should use flat structure with "Unknown" fallback
-        # Expected: _Magazines/Unknown Periodical/Unknown Periodical - Unknown.pdf
+        # Should use flat structure without "Unknown" suffix
+        # Expected: _Magazines/Unknown Periodical/Unknown Periodical.pdf
         assert "_Magazines" in str(result_path)
         assert "Unknown Periodical" in str(result_path)
-        assert result_path.name == "Unknown Periodical - Unknown.pdf"
+        assert result_path.name == "Unknown Periodical.pdf"
 
 
 class TestFilenameBuilding:
@@ -199,9 +199,9 @@ class TestFilenameBuilding:
         assert filename == "Journal - Vol42 - March2023.epub"
 
     def test_build_filename_no_metadata(self, organizer):
-        """Test filename with no metadata uses 'Unknown' fallback"""
+        """Test filename with no metadata - just uses title"""
         filename = organizer._build_filename("Unknown", None, None, None, None, ".pdf")
-        assert filename == "Unknown - Unknown.pdf"
+        assert filename == "Unknown.pdf"
 
 
 class TestHybridPatterns:
