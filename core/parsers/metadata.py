@@ -154,9 +154,35 @@ class FilenameParser:
                 }
                 logger.debug(f"Pre-detected numeric multi-month: {display_string} {year} from '{title_part}'")
 
+        # Pre-check: Extract ISO date formats from ORIGINAL text (before dot normalization destroys them)
+        # This handles "2023.09" which becomes "2023 09" after normalization
+        iso_date_data = None
+        # Try ISO month format first (2023.09 or 2023-09)
+        iso_month_match = re.search(DATE_PATTERN_ISO_MONTH, nzb_title)
+        if iso_month_match:
+            year, month = int(iso_month_match.group(1)), int(iso_month_match.group(2))
+            if MIN_VALID_YEAR <= year <= MAX_VALID_YEAR and 1 <= month <= 12:
+                iso_date_data = {
+                    "year": year,
+                    "month": month,
+                    "month_name": NUMBER_TO_MONTH.get(month),
+                    "issue_date": datetime(year, month, 1),
+                    "match_text": iso_month_match.group(),
+                }
+                logger.debug(f"Pre-detected ISO month: {NUMBER_TO_MONTH.get(month)} {year}")
+
         # Normalize delimiters: dots, underscores → spaces (but keep dashes)
         normalized = nzb_title.replace(".", " ").replace("_", " ")
         remaining_text = normalized
+
+        # If we pre-detected an ISO date, remove it from remaining_text now
+        if iso_date_data:
+            # The pattern "2023.09" becomes "2023 09" after normalization
+            # Remove the year and month from remaining text
+            pattern_to_remove = f"{iso_date_data['year']} {iso_date_data['month']:02d}"
+            remaining_text = remaining_text.replace(pattern_to_remove, "", 1)
+            remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
+            logger.debug(f"Removed ISO date from remaining text, left with: '{remaining_text}'")
 
         # Step 1: Extract release group (from end)
         for pattern in NZB_RELEASE_GROUP_PATTERNS:
@@ -349,6 +375,16 @@ class FilenameParser:
                     date_extracted = True
 
         # Format 4: ISO month format (2024-01 or 2024.01)
+        # Use pre-detected ISO date if available (extracted before normalization)
+        if not date_extracted and iso_date_data:
+            metadata["year"] = iso_date_data["year"]
+            metadata["month"] = iso_date_data["month"]
+            metadata["month_name"] = iso_date_data["month_name"]
+            metadata["issue_date"] = iso_date_data["issue_date"]
+            date_extracted = True
+            logger.debug(f"Used pre-detected ISO date: {iso_date_data['month_name']} {iso_date_data['year']}")
+
+        # If no pre-detected ISO date, try matching on remaining_text
         if not date_extracted:
             match = re.search(DATE_PATTERN_ISO_MONTH, remaining_text)
             if match:
@@ -484,7 +520,8 @@ class FilenameParser:
         Returns:
             Dict with extracted metadata (title, issue_date, etc.)
         """
-        filename = pdf_path.stem
+        # Strip leading and trailing quotes from filename (for files like 'Magazine.pdf')
+        filename = pdf_path.stem.strip("'")
         magazine_name = self.get_title_from_path(pdf_path)
 
         # Default metadata
