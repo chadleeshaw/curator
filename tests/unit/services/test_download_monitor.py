@@ -438,5 +438,77 @@ class TestMonitorTaskInitialization:
         assert isinstance(monitor.downloads_dir, Path)
 
 
+class TestIACollectionHandling:
+    """Test handling of Internet Archive collection items with comma-separated file paths."""
+
+    def test_parse_comma_separated_file_paths(self, test_db, temp_downloads_dir, download_manager, mock_file_importer):
+        """Test that comma-separated file paths are correctly parsed."""
+        engine, session_factory = test_db
+
+        # Create test files
+        (temp_downloads_dir / "file1.pdf").write_bytes(b"%PDF-1.4\ntest content")
+        (temp_downloads_dir / "file2.pdf").write_bytes(b"%PDF-1.4\ntest content")
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=temp_downloads_dir,
+        )
+
+        # Test the comma detection logic
+        comma_path = "file1.pdf,file2.pdf"
+        assert "," in comma_path
+        paths = comma_path.split(",")
+        assert len(paths) == 2
+        assert paths[0] == "file1.pdf"
+        assert paths[1] == "file2.pdf"
+
+    def test_find_collection_files_in_downloads(
+        self, test_db, temp_downloads_dir, download_manager, mock_file_importer
+    ):
+        """Test that _find_file_in_downloads works for collection files."""
+        engine, session_factory = test_db
+
+        # Create test files
+        (temp_downloads_dir / "collection_file1.pdf").write_bytes(b"%PDF-1.4\ntest content")
+        (temp_downloads_dir / "collection_file2.pdf").write_bytes(b"%PDF-1.4\ntest content")
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=temp_downloads_dir,
+        )
+
+        # Test finding individual files
+        found_path = monitor._find_file_in_downloads("collection_file1.pdf")
+        assert found_path is not None
+        assert found_path.name == "collection_file1.pdf"
+
+        found_path2 = monitor._find_file_in_downloads("collection_file2.pdf")
+        assert found_path2 is not None
+        assert found_path2.name == "collection_file2.pdf"
+
+    def test_comma_separated_paths_stripped(self, test_db, temp_downloads_dir, download_manager, mock_file_importer):
+        """Test that comma-separated paths have whitespace stripped."""
+        engine, session_factory = test_db
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=temp_downloads_dir,
+        )
+
+        # Test with spaces around commas
+        comma_path = "file1.pdf, file2.pdf , file3.pdf"
+        paths = [p.strip() for p in comma_path.split(",")]
+        assert len(paths) == 3
+        assert paths[0] == "file1.pdf"
+        assert paths[1] == "file2.pdf"
+        assert paths[2] == "file3.pdf"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

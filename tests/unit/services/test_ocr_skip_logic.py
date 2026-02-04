@@ -150,3 +150,90 @@ class TestOCRSkipWhenTextScanSufficient:
         result = service._should_queue_ocr(periodical, session)
 
         assert result is False
+
+
+class TestOCRQueueNeedsDateScan:
+    """Test OCR queueing behavior for periodicals flagged with needs_date_scan."""
+
+    def _create_mock_periodical(self, parsed_metadata=None, extra_metadata=None):
+        """Create a mock periodical with specified metadata."""
+        periodical = MagicMock()
+        periodical.id = 1
+        periodical.parsed_metadata = parsed_metadata
+        periodical.extra_metadata = extra_metadata
+        periodical.cover_path = "/path/to/cover.png"
+        periodical.file_path = "/path/to/file.pdf"
+        return periodical
+
+    def _create_mock_session(self, has_existing_job=False):
+        """Create a mock database session."""
+        session = MagicMock()
+        query_mock = MagicMock()
+        filter_mock = MagicMock()
+
+        if has_existing_job:
+            filter_mock.first.return_value = MagicMock()
+        else:
+            filter_mock.first.return_value = None
+
+        query_mock.filter.return_value = filter_mock
+        session.query.return_value = query_mock
+        return session
+
+    def test_queue_ocr_when_needs_date_scan_and_text_scan_has_no_year(self):
+        """OCR should be queued when needs_date_scan is True and text scan didn't find year."""
+        service = AutoMetadataService.__new__(AutoMetadataService)
+
+        periodical = self._create_mock_periodical(
+            parsed_metadata={"text_scan": {"scanned": True, "has_sufficient_metadata": True}},  # No year
+            extra_metadata={"needs_date_scan": True},
+        )
+        session = self._create_mock_session(has_existing_job=False)
+
+        result = service._should_queue_ocr(periodical, session)
+
+        assert result is True
+
+    def test_skip_ocr_when_needs_date_scan_but_text_scan_has_year(self):
+        """OCR should be skipped when needs_date_scan but text scan already found year."""
+        service = AutoMetadataService.__new__(AutoMetadataService)
+
+        periodical = self._create_mock_periodical(
+            parsed_metadata={"text_scan": {"year": 2024, "has_sufficient_metadata": True}},
+            extra_metadata={"needs_date_scan": True},
+        )
+        session = self._create_mock_session()
+
+        result = service._should_queue_ocr(periodical, session)
+
+        assert result is False
+
+    def test_queue_ocr_when_needs_date_scan_and_no_cover_path(self):
+        """OCR should still be queued for needs_date_scan even without cover path."""
+        service = AutoMetadataService.__new__(AutoMetadataService)
+
+        periodical = self._create_mock_periodical(
+            parsed_metadata={},
+            extra_metadata={"needs_date_scan": True},
+        )
+        periodical.cover_path = None  # No cover, but needs_date_scan is True
+        session = self._create_mock_session(has_existing_job=False)
+
+        result = service._should_queue_ocr(periodical, session)
+
+        assert result is True
+
+    def test_skip_ocr_when_no_needs_date_scan_and_no_cover_path(self):
+        """OCR should be skipped when no cover path and no needs_date_scan flag."""
+        service = AutoMetadataService.__new__(AutoMetadataService)
+
+        periodical = self._create_mock_periodical(
+            parsed_metadata={},
+            extra_metadata={"needs_date_scan": False},
+        )
+        periodical.cover_path = None
+        session = self._create_mock_session()
+
+        result = service._should_queue_ocr(periodical, session)
+
+        assert result is False

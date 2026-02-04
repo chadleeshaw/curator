@@ -964,14 +964,11 @@ class FilenameParser:
 
         issue_num = match.group(1)
         title_part = match.group(2).strip()
-        suffix = match.group(3) or ""
+        volume_str = match.group(3)  # Now captured directly from pattern
+        suffix = match.group(4) or ""
 
-        # Clean up title - might have "Vol.XXX" embedded which we should extract
-        vol_match = re.search(r"vol\.?\s*(\d+)", title_part, re.IGNORECASE)
-        volume_num = None
-        if vol_match:
-            volume_num = int(vol_match.group(1))
-            title_part = re.sub(r"\s*-?\s*vol\.?\s*\d+\s*-?\s*", " ", title_part, flags=re.IGNORECASE)
+        # Extract volume number if present
+        volume_num = int(volume_str) if volume_str else None
 
         title_clean = clean_title(title_part.strip())
 

@@ -46,8 +46,9 @@ TITLE_PATTERN_VOLUME_ONLY = r"^(.+?)[\.\s\-]+vol\.?[\.\s]*(\d{1,4})(?:[\.\s\-]+(
 TITLE_PATTERN_ISSUE_ONLY = r"^(.+?)[\.\s\-]+(?:no\.?|number|issue|#)[\.\s]*(\d{1,4})(?:[\.\s\-]+(.+))?$"
 """Pattern for Title No.XXX (no year): PC Gamer Issue 405"""
 
-TITLE_PATTERN_LEADING_ISSUE = r"^(\d{1,4})\s*-\s*(.+?)(?:\s*-\s*vol\.?[\.\s]*\d{1,4})?(?:\s*-\s*(.+))?$"
-"""Pattern for XXX - Title (leading issue number): 260 - Magazine - Vol.260"""
+TITLE_PATTERN_LEADING_ISSUE = r"^(\d{1,4})\s*-\s*(.+?)(?:\s*-\s*vol\.?[\.\s]*(\d{1,4}))?(?:\s*-\s*(.+))?$"
+"""Pattern for XXX - Title (leading issue number): 260 - Magazine - Vol.260 - Cover Model
+Groups: (1) issue number, (2) title, (3) volume if present, (4) suffix if present"""
 
 TITLE_PATTERN_DATE_ONLY_COMPACT = r"^([A-Za-z]+)(\d{4})$"
 """Pattern for date-only filename (compact): Apr2001"""
