@@ -549,6 +549,8 @@ def _initialize_core_services() -> None:
         organization_pattern=app_state.import_config.get("organization_pattern"),
         category_prefix=app_state.category_prefix,
         enable_text_scan=app_state.import_config.get("enable_text_scan", True),
+        session_factory=app_state.session_factory,
+        parallel_workers=app_state.import_config.get("parallel_workers", 2),
     )
 
     # Download manager (requires download client and search providers)

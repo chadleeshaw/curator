@@ -6,12 +6,14 @@ Extracts cover art, categorizes files, and adds them to the database.
 import logging
 import re
 import shutil
-from concurrent.futures import ThreadPoolExecutor
+import threading
+from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from core.constants.app import DEFAULT_FUZZY_THRESHOLD
 from core.constants.category import CATEGORY_KEYWORDS
@@ -51,6 +53,8 @@ class FileImporter:
         organization_pattern: Optional[str] = None,
         category_prefix: str = "_",
         enable_text_scan: bool = True,
+        session_factory: Optional[sessionmaker] = None,
+        parallel_workers: int = 2,
     ):
         """
         Initialize file importer.
@@ -62,12 +66,16 @@ class FileImporter:
             organization_pattern: Pattern for organizing files (e.g., "_{category}/{title}/{year}/")
             category_prefix: Prefix for category folders (e.g., "_" for "_Magazines")
             enable_text_scan: Enable direct text extraction from PDF/EPUB during import
+            session_factory: SQLAlchemy session factory for parallel processing
+            parallel_workers: Number of parallel workers for file processing (default: 2)
         """
         self.downloads_dir = Path(downloads_dir)
         self.library_base_dir = Path(library_base_dir)
         self.organization_pattern = organization_pattern
         self.category_prefix = category_prefix
         self._enable_text_scan = enable_text_scan
+        self._session_factory = session_factory
+        self._parallel_workers = max(1, parallel_workers)
         self.title_matcher = TitleMatcher(threshold=fuzzy_threshold)
         self.tracking_matcher = TrackingMatcher()
 
@@ -78,6 +86,10 @@ class FileImporter:
 
         # Thread pool for CPU-intensive OCR tasks
         self._ocr_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ocr")
+
+        # Thread-safe folder marker reference counting
+        self._folder_marker_lock = threading.Lock()
+        self._folder_marker_refs: Dict[Path, int] = defaultdict(int)
 
         self.library_base_dir.mkdir(parents=True, exist_ok=True)
 
@@ -124,6 +136,42 @@ class FileImporter:
                 logger.debug(f"Removed import marker: {marker_path}")
         except Exception as e:
             logger.warning(f"Failed to remove import marker for {folder}: {e}")
+
+    def _acquire_folder_marker(self, folder: Path) -> bool:
+        """
+        Acquire a reference to a folder's import marker (thread-safe).
+        Creates the marker file if this is the first reference.
+
+        Args:
+            folder: Folder to mark as being imported
+
+        Returns:
+            True if marker was acquired successfully
+        """
+        with self._folder_marker_lock:
+            was_zero = self._folder_marker_refs[folder] == 0
+            self._folder_marker_refs[folder] += 1
+
+            if was_zero:
+                # First reference - create the marker file
+                return self._create_import_marker(folder)
+            return True
+
+    def _release_folder_marker(self, folder: Path) -> None:
+        """
+        Release a reference to a folder's import marker (thread-safe).
+        Removes the marker file when the last reference is released.
+
+        Args:
+            folder: Folder to release marker for
+        """
+        with self._folder_marker_lock:
+            if folder in self._folder_marker_refs:
+                self._folder_marker_refs[folder] -= 1
+                if self._folder_marker_refs[folder] <= 0:
+                    # Last reference - remove the marker file
+                    del self._folder_marker_refs[folder]
+                    self._remove_import_marker(folder)
 
     def process_downloads(self, session: Session, organization_pattern: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -1123,6 +1171,72 @@ class FileImporter:
             logger.error(f"Error importing file {file_path}: {e}", exc_info=True)
             return {"skip_reason": "parse_error"}
 
+    def _import_file_worker(
+        self,
+        file_path: Path,
+        file_type: str,
+        organization_pattern: Optional[str],
+    ) -> Dict[str, Any]:
+        """
+        Worker method for parallel file import.
+        Creates its own database session and manages folder markers.
+
+        Args:
+            file_path: Path to file to import
+            file_type: File type label for logging
+            organization_pattern: Optional organization pattern
+
+        Returns:
+            Dict with import result and metadata for aggregation
+        """
+        parent_dir = file_path.parent
+        is_subfolder = parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir)
+
+        # Acquire folder marker before processing
+        if is_subfolder:
+            self._acquire_folder_marker(parent_dir)
+
+        try:
+            # Create a new session for this worker
+            if self._session_factory:
+                with self._session_factory() as worker_session:
+                    import_result = self.import_supported_files(
+                        file_path,
+                        worker_session,
+                        organization_pattern=organization_pattern,
+                        use_ocr=True,
+                    )
+            else:
+                # No session factory - this shouldn't happen in parallel mode
+                logger.warning(f"No session factory for worker processing {file_path.name}")
+                return {
+                    "file_path": file_path,
+                    "file_type": file_type,
+                    "result": {"skip_reason": "no_session"},
+                    "parent_dir": parent_dir if is_subfolder else None,
+                }
+
+            return {
+                "file_path": file_path,
+                "file_type": file_type,
+                "result": import_result,
+                "parent_dir": parent_dir if is_subfolder else None,
+            }
+
+        except Exception as e:
+            logger.error(f"Error in worker importing {file_path.name}: {e}", exc_info=True)
+            return {
+                "file_path": file_path,
+                "file_type": file_type,
+                "result": {"skip_reason": "parse_error", "error": str(e)},
+                "parent_dir": parent_dir if is_subfolder else None,
+            }
+
+        finally:
+            # Release folder marker after processing
+            if is_subfolder:
+                self._release_folder_marker(parent_dir)
+
     def _process_file_batch(
         self,
         files: list,
@@ -1134,17 +1248,121 @@ class FileImporter:
     ) -> None:
         """
         Process a batch of files of the same type.
+        Uses parallel processing when session_factory is available and multiple files exist.
 
         Args:
             files: List of Path objects to process
             file_type: File type label for logging (e.g., "PDF", "EPUB", "CBZ", "CBR")
-            session: Database session
+            session: Database session (used for sequential processing)
             organization_pattern: Optional organization pattern
             result: OperationResult to update with counts and errors
             skip_reasons: Dictionary to track skip/failure reasons
         """
         # Track folders to cleanup after processing all files
         folders_to_cleanup = set()
+
+        # Determine if we can use parallel processing
+        use_parallel = (
+            self._session_factory is not None
+            and len(files) > 1
+            and self._parallel_workers > 1
+        )
+
+        if use_parallel:
+            logger.info(
+                f"Processing {len(files)} {file_type} files in parallel "
+                f"with {self._parallel_workers} workers"
+            )
+            self._process_files_parallel(
+                files, file_type, organization_pattern, result, skip_reasons, folders_to_cleanup
+            )
+        else:
+            # Sequential processing (original behavior)
+            self._process_files_sequential(
+                files, file_type, session, organization_pattern, result, skip_reasons, folders_to_cleanup
+            )
+
+        # Clean up folders after all files are processed
+        for folder in folders_to_cleanup:
+            try:
+                if folder.exists():
+                    shutil.rmtree(folder)
+                    logger.info(f"Deleted download folder and contents: {folder.name}")
+            except Exception as e:
+                logger.warning(f"Failed to delete folder {folder.name}: {e}")
+
+    def _process_files_parallel(
+        self,
+        files: list,
+        file_type: str,
+        organization_pattern: Optional[str],
+        result: OperationResult,
+        skip_reasons: Dict[str, int],
+        folders_to_cleanup: set,
+    ) -> None:
+        """
+        Process files in parallel using ThreadPoolExecutor.
+
+        Args:
+            files: List of Path objects to process
+            file_type: File type label for logging
+            organization_pattern: Optional organization pattern
+            result: OperationResult to update with counts and errors
+            skip_reasons: Dictionary to track skip/failure reasons
+            folders_to_cleanup: Set to track folders needing cleanup
+        """
+        with ThreadPoolExecutor(
+            max_workers=self._parallel_workers,
+            thread_name_prefix="import"
+        ) as executor:
+            # Submit all files for processing
+            futures = {
+                executor.submit(
+                    self._import_file_worker,
+                    file_path,
+                    file_type,
+                    organization_pattern,
+                ): file_path
+                for file_path in files
+            }
+
+            # Collect results as they complete
+            for future in as_completed(futures):
+                file_path = futures[future]
+                try:
+                    worker_result = future.result()
+                    self._handle_import_result(
+                        worker_result, file_type, result, skip_reasons, folders_to_cleanup
+                    )
+                except Exception as e:
+                    result.data["failed"] += 1
+                    skip_reasons["parse_error"] += 1
+                    error_msg = f"Error importing {file_type} {file_path.name}: {str(e)}"
+                    result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
+                    logger.error(error_msg, exc_info=True)
+
+    def _process_files_sequential(
+        self,
+        files: list,
+        file_type: str,
+        session: Session,
+        organization_pattern: Optional[str],
+        result: OperationResult,
+        skip_reasons: Dict[str, int],
+        folders_to_cleanup: set,
+    ) -> None:
+        """
+        Process files sequentially (original behavior).
+
+        Args:
+            files: List of Path objects to process
+            file_type: File type label for logging
+            session: Database session
+            organization_pattern: Optional organization pattern
+            result: OperationResult to update with counts and errors
+            skip_reasons: Dictionary to track skip/failure reasons
+            folders_to_cleanup: Set to track folders needing cleanup
+        """
         # Track folders with active import markers
         folders_with_markers = set()
 
@@ -1168,32 +1386,18 @@ class FileImporter:
                     organization_pattern=organization_pattern,
                     use_ocr=True,
                 )
-                if import_result and import_result.get("periodical_id"):
-                    result.data["imported"] += 1
-                    logger.info(f"Successfully imported {file_type}: {file_path.name}")
-                    # Track parent folder for cleanup after batch completes
-                    parent_dir = file_path.parent
-                    if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
-                        folders_to_cleanup.add(parent_dir)
-                else:
-                    # Track skip reason
-                    skip_reason = import_result.get("skip_reason", "organization_failed")
-                    if skip_reason in skip_reasons:
-                        skip_reasons[skip_reason] += 1
-                        result.data["skipped"] += 1
-                    else:
-                        result.data["failed"] += 1
-                        result.add_error(
-                            ErrorCodes.IMPORT_FAILED,
-                            f"Failed to import {file_type} {file_path.name}",
-                            retryable=True,
-                        )
-                    logger.debug(f"Skipped {file_type} import ({skip_reason}): {file_path.name}")
-                    self._cleanup_download_file(file_path, defer_folder_deletion=True)
-                    # Track parent folder for cleanup after batch completes
-                    parent_dir = file_path.parent
-                    if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
-                        folders_to_cleanup.add(parent_dir)
+                worker_result = {
+                    "file_path": file_path,
+                    "file_type": file_type,
+                    "result": import_result,
+                    "parent_dir": file_path.parent
+                    if file_path.parent != self.downloads_dir
+                    and file_path.parent.is_relative_to(self.downloads_dir)
+                    else None,
+                }
+                self._handle_import_result(
+                    worker_result, file_type, result, skip_reasons, folders_to_cleanup
+                )
             except Exception as e:
                 result.data["failed"] += 1
                 skip_reasons["parse_error"] += 1
@@ -1202,25 +1406,60 @@ class FileImporter:
                 logger.error(error_msg, exc_info=True)
                 try:
                     self._cleanup_download_file(file_path, defer_folder_deletion=True)
-                    # Track parent folder for cleanup after batch completes
                     parent_dir = file_path.parent
                     if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
                         folders_to_cleanup.add(parent_dir)
                 except Exception as cleanup_error:
                     logger.warning(f"Failed to cleanup {file_path.name}: {cleanup_error}")
 
-        # Clean up folders after all files are processed
-        for folder in folders_to_cleanup:
-            try:
-                if folder.exists():
-                    shutil.rmtree(folder)
-                    logger.info(f"Deleted download folder and contents: {folder.name}")
-            except Exception as e:
-                logger.warning(f"Failed to delete folder {folder.name}: {e}")
-
         # Remove import markers from all processed folders
         for folder in folders_with_markers:
             self._remove_import_marker(folder)
+
+    def _handle_import_result(
+        self,
+        worker_result: Dict[str, Any],
+        file_type: str,
+        result: OperationResult,
+        skip_reasons: Dict[str, int],
+        folders_to_cleanup: set,
+    ) -> None:
+        """
+        Handle the result from a file import (used by both parallel and sequential processing).
+
+        Args:
+            worker_result: Result dict from worker with file_path, result, parent_dir
+            file_type: File type label for logging
+            result: OperationResult to update with counts and errors
+            skip_reasons: Dictionary to track skip/failure reasons
+            folders_to_cleanup: Set to track folders needing cleanup
+        """
+        file_path = worker_result["file_path"]
+        import_result = worker_result["result"]
+        parent_dir = worker_result.get("parent_dir")
+
+        if import_result and import_result.get("periodical_id"):
+            result.data["imported"] += 1
+            logger.info(f"Successfully imported {file_type}: {file_path.name}")
+            if parent_dir:
+                folders_to_cleanup.add(parent_dir)
+        else:
+            # Track skip reason
+            skip_reason = import_result.get("skip_reason", "organization_failed") if import_result else "parse_error"
+            if skip_reason in skip_reasons:
+                skip_reasons[skip_reason] += 1
+                result.data["skipped"] += 1
+            else:
+                result.data["failed"] += 1
+                result.add_error(
+                    ErrorCodes.IMPORT_FAILED,
+                    f"Failed to import {file_type} {file_path.name}",
+                    retryable=True,
+                )
+            logger.debug(f"Skipped {file_type} import ({skip_reason}): {file_path.name}")
+            self._cleanup_download_file(file_path, defer_folder_deletion=True)
+            if parent_dir:
+                folders_to_cleanup.add(parent_dir)
 
     def _cleanup_download_file(self, pdf_path: Path, defer_folder_deletion: bool = False) -> None:
         """
