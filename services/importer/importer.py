@@ -639,6 +639,85 @@ class FileImporter:
         except Exception as e:
             logger.warning(f"Failed to queue OCR job for magazine {magazine.id}: {e}")
 
+    def _run_ocr_scan(
+        self,
+        magazine: Periodical,
+        organized_path: Path,
+        parsed_language: Optional[str],
+        session: Session,
+    ) -> bool:
+        """
+        Run OCR scan synchronously to extract date/volume metadata.
+
+        This is used for files that need immediate date extraction (needs_date_scan)
+        to avoid duplicate detection issues with fallback dates.
+
+        Args:
+            magazine: The Periodical record
+            organized_path: Path to the organized file
+            parsed_language: Language from parser
+            session: Database session
+
+        Returns:
+            True if OCR found a date, False otherwise
+        """
+        if organized_path.suffix.lower() != ".pdf":
+            logger.debug(f"Skipping OCR for non-PDF file: {organized_path}")
+            return False
+
+        if not OCRService.is_available():
+            logger.warning("OCR service not available, cannot run immediate OCR scan")
+            return False
+
+        try:
+            logger.info(f"Running immediate OCR scan for {magazine.title} to find date")
+
+            # Run OCR directly on the PDF
+            ocr_result = OCRService.analyze_cover(str(organized_path), language=parsed_language)
+
+            if not ocr_result or not ocr_result.get("text_found"):
+                logger.debug(f"OCR found no text in {organized_path.name}")
+                return False
+
+            # Store OCR scan results in parsed_metadata
+            if not magazine.parsed_metadata:
+                magazine.parsed_metadata = {}
+            magazine.parsed_metadata["ocr_scan"] = ocr_result
+
+            # Rebuild derived_metadata with OCR results
+            from core.utils.metadata_builder import build_derived_metadata, sync_issue_date_from_derived
+
+            magazine.derived_metadata = build_derived_metadata(
+                file_scan=magazine.parsed_metadata.get("file_scan"),
+                text_scan=magazine.parsed_metadata.get("text_scan"),
+                ocr_scan=ocr_result,
+            )
+
+            # Sync issue_date from derived_metadata
+            new_issue_date = sync_issue_date_from_derived(magazine.derived_metadata)
+            found_date = False
+            if new_issue_date:
+                magazine.issue_date = new_issue_date
+                found_date = True
+                logger.info(
+                    f"OCR scan found date {new_issue_date.strftime('%Y-%m')} for {magazine.title}"
+                )
+
+            from core.utils.db import mark_json_modified
+
+            mark_json_modified(magazine, "parsed_metadata", "derived_metadata")
+            session.commit()
+
+            if ocr_result.get("year"):
+                logger.info(f"Enhanced {magazine.title} with metadata from immediate OCR scan")
+                return found_date
+
+            return False
+
+        except Exception as e:
+            logger.warning(f"Immediate OCR scan failed for {magazine.id}: {e}")
+            return False
+
     # =========================================================================
     # Main Import Method
     # =========================================================================
@@ -831,22 +910,29 @@ class FileImporter:
                     logger.info(f"Forcing text scan for '{organization_title}' to find missing date/volume")
                 self._run_text_scan(magazine, organized_path, parsed.language, session)
 
-            # Step 11: Queue OCR job if needed
-            # Queue OCR if:
-            # - Text scan didn't find sufficient metadata, OR
-            # - needs_date_scan is True and text scan didn't find the date
+            # Step 11: Run OCR if needed
+            # For needs_date_scan files: run OCR synchronously to get date before next file
+            # (avoids duplicate detection issues when multiple files have same fallback date)
+            # For other files: queue OCR for background processing
             text_scan_result = magazine.parsed_metadata.get("text_scan", {}) if magazine.parsed_metadata else {}
             text_scan_sufficient = text_scan_result.get("has_sufficient_metadata", False)
             text_scan_found_date = text_scan_result.get("year") is not None
 
-            # For files needing date scan, also check if we found a date
+            # For files needing date scan, run OCR synchronously to get date immediately
             if needs_date_scan and not text_scan_found_date:
-                # Text scan didn't find date - queue OCR regardless of other conditions
+                # Text scan didn't find date - run OCR immediately (not queued)
+                # This is critical to avoid duplicate detection issues
                 logger.info(
-                    f"Text scan didn't find date for '{organization_title}' - queueing OCR scan"
+                    f"Text scan didn't find date for '{organization_title}' - running immediate OCR scan"
                 )
-                self._queue_ocr_job(magazine, parsed.language, skip_organize, session)
+                ocr_found_date = self._run_ocr_scan(magazine, organized_path, parsed.language, session)
+                if not ocr_found_date:
+                    logger.warning(
+                        f"Could not determine date for '{organization_title}' from filename, text, or OCR. "
+                        f"Using fallback date. Manual review recommended."
+                    )
             elif should_queue_ocr and not text_scan_sufficient:
+                # Normal case: queue OCR for background processing
                 self._queue_ocr_job(magazine, parsed.language, skip_organize, session)
             elif text_scan_sufficient:
                 logger.info(f"Skipping OCR for '{parsed.title}' - text scan found sufficient metadata")
