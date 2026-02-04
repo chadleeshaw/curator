@@ -31,7 +31,7 @@ def fix_incorrect_dates(dry_run: bool = True):
     storage_config = config_loader.get_storage()
     db_path = storage_config.get("db_path", "./local/data/periodicals.db")
     db_url = f"sqlite:///{db_path}"
-    
+
     db_manager = DatabaseManager(db_url)
     session = db_manager.session_factory()
     parser = Parser()
