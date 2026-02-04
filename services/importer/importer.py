@@ -1011,6 +1011,15 @@ class FileImporter:
         result.add_count("failed", 0)
         result.add_count("skipped", 0)
 
+        # Track detailed skip/fail reasons
+        skip_reasons = {
+            "duplicate_hash": 0,
+            "duplicate_fuzzy": 0,
+            "invalid_title": 0,
+            "parse_error": 0,
+            "organization_failed": 0,
+        }
+
         if not self.library_base_dir.exists():
             logger.warning(f"Library directory not found: {self.library_base_dir}")
             result.add_error(
@@ -1061,21 +1070,34 @@ class FileImporter:
                     use_ocr=False,  # Don't queue OCR during library imports
                     skip_enhancement=is_bulk_import,  # Skip cover/text scan for bulk imports (100+ files)
                 )
-                if import_result:
+                if import_result and import_result.get("periodical_id"):
                     result.data["imported"] += 1
                     logger.info(f"Successfully imported library file: {pdf_path.name}")
                 else:
-                    result.data["failed"] += 1
-                    result.add_error(
-                        ErrorCodes.IMPORT_FAILED,
-                        f"Failed to import {pdf_path.name}",
-                        retryable=True,
+                    # Track skip reason
+                    skip_reason = (
+                        import_result.get("skip_reason", "organization_failed") if import_result else "parse_error"
                     )
+                    if skip_reason in skip_reasons:
+                        skip_reasons[skip_reason] += 1
+                        result.data["skipped"] += 1
+                    else:
+                        result.data["failed"] += 1
+                        result.add_error(
+                            ErrorCodes.IMPORT_FAILED,
+                            f"Failed to import {pdf_path.name}",
+                            retryable=True,
+                        )
+                    logger.debug(f"Skipped library import ({skip_reason}): {pdf_path.name}")
             except Exception as e:
                 result.data["failed"] += 1
+                skip_reasons["parse_error"] += 1
                 error_msg = f"Error importing library file {pdf_path.name}: {str(e)}"
                 result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
                 logger.error(error_msg, exc_info=True)
+
+        # Log summary
+        self._log_import_summary(result, skip_reasons)
 
         return result.to_dict()
 
