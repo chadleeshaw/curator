@@ -659,6 +659,113 @@ class FileImporter:
         except Exception as e:
             logger.warning(f"Failed to queue OCR job for magazine {magazine.id}: {e}")
 
+    def _scan_for_missing_date(
+        self,
+        file_path: Path,
+        parsed_language: Optional[str],
+    ) -> Dict[str, Any]:
+        """
+        Scan file for date/volume metadata BEFORE organization.
+
+        This is used for files that have tracking context but no parseable date,
+        allowing us to discover the date before organizing the file to its final location.
+
+        Args:
+            file_path: Path to the original file (not yet organized)
+            parsed_language: Language from parser
+
+        Returns:
+            Dict with discovered metadata: {issue_date, year, month, volume, issue_number, source,
+                                            text_scan_result, ocr_scan_result}
+        """
+        result = {
+            "issue_date": None,
+            "year": None,
+            "month": None,
+            "month_name": None,
+            "volume": None,
+            "issue_number": None,
+            "source": None,
+            "text_scan_result": None,  # Full text scan result for storing in DB
+            "ocr_scan_result": None,   # Full OCR scan result for storing in DB
+        }
+
+        # Try text scan first (faster than OCR)
+        if file_path.suffix.lower() in [".pdf", ".epub"]:
+            try:
+                logger.info(f"Running pre-organization text scan for {file_path.name}")
+                scan_result = TextScanService.scan_document(str(file_path), language=parsed_language)
+                result["text_scan_result"] = scan_result  # Store for DB
+
+                if scan_result.get("year"):
+                    from core.utils.metadata_builder import sync_issue_date_from_derived, build_derived_metadata
+
+                    # Build derived metadata to get issue_date
+                    derived = build_derived_metadata(text_scan=scan_result)
+                    issue_date = sync_issue_date_from_derived(derived)
+
+                    if issue_date:
+                        result["issue_date"] = issue_date
+                        result["year"] = scan_result.get("year")
+                        result["month"] = scan_result.get("month")
+                        # Convert month number to name for organization
+                        if result["month"]:
+                            from core.constants.date import MONTH_TO_NAME
+                            result["month_name"] = MONTH_TO_NAME.get(result["month"])
+                        result["source"] = "text_scan"
+                        logger.info(
+                            f"Pre-organization text scan found date: {issue_date.strftime('%Y-%m')} for {file_path.name}"
+                        )
+
+                if scan_result.get("volume"):
+                    result["volume"] = scan_result["volume"]
+                if scan_result.get("issue_number"):
+                    result["issue_number"] = scan_result["issue_number"]
+
+                # If we found a date, return early (no need for OCR)
+                if result["issue_date"]:
+                    return result
+
+            except Exception as e:
+                logger.debug(f"Pre-organization text scan failed for {file_path.name}: {e}")
+
+        # Try OCR if text scan didn't find a date and file is PDF
+        if file_path.suffix.lower() == ".pdf" and OCRService.is_available():
+            try:
+                logger.info(f"Running pre-organization OCR scan for {file_path.name}")
+                ocr_result = OCRService.analyze_cover(str(file_path), language=parsed_language)
+                result["ocr_scan_result"] = ocr_result  # Store for DB
+
+                if ocr_result and ocr_result.get("year"):
+                    from core.utils.metadata_builder import sync_issue_date_from_derived, build_derived_metadata
+
+                    # Build derived metadata to get issue_date
+                    derived = build_derived_metadata(ocr_scan=ocr_result)
+                    issue_date = sync_issue_date_from_derived(derived)
+
+                    if issue_date:
+                        result["issue_date"] = issue_date
+                        result["year"] = ocr_result.get("year")
+                        result["month"] = ocr_result.get("month")
+                        if result["month"]:
+                            from core.constants.date import MONTH_TO_NAME
+                            result["month_name"] = MONTH_TO_NAME.get(result["month"])
+                        result["source"] = "ocr_scan"
+                        logger.info(
+                            f"Pre-organization OCR scan found date: {issue_date.strftime('%Y-%m')} for {file_path.name}"
+                        )
+
+                if ocr_result:
+                    if ocr_result.get("volume") and not result["volume"]:
+                        result["volume"] = ocr_result["volume"]
+                    if ocr_result.get("issue_number") and not result["issue_number"]:
+                        result["issue_number"] = ocr_result["issue_number"]
+
+            except Exception as e:
+                logger.debug(f"Pre-organization OCR scan failed for {file_path.name}: {e}")
+
+        return result
+
     def _run_ocr_scan(
         self,
         magazine: Periodical,
@@ -867,7 +974,23 @@ class FileImporter:
                 tracking_id, tracking_title, parsed.language, parsed.country, category, session
             )
 
-            # Step 7: Organize file (use tracking title for folder consistency)
+            # Step 7: For files needing date scan, run text/OCR BEFORE organization
+            # This allows us to use discovered metadata for the correct file path
+            pre_scan_result = None
+            if needs_date_scan and not skip_organize:
+                pre_scan_result = self._scan_for_missing_date(file_path, parsed.language)
+                if pre_scan_result.get("issue_date"):
+                    # Update parsed metadata with discovered date for organization
+                    parsed.issue_date = pre_scan_result["issue_date"]
+                    parsed.year = pre_scan_result.get("year")
+                    parsed.month_name = pre_scan_result.get("month_name")
+                    parsed.confidence = "medium"  # Upgrade confidence since we found a date
+                    logger.info(
+                        f"Updated metadata from {pre_scan_result['source']}: "
+                        f"date={parsed.issue_date.strftime('%Y-%m')}, year={parsed.year}"
+                    )
+
+            # Step 8: Organize file (use tracking title for folder consistency)
             organization_title = target_tracking.title if target_tracking else tracking_title
 
             # Extract cover unless skip_enhancement is enabled (for bulk imports)
@@ -889,7 +1012,7 @@ class FileImporter:
                 if not organized_path:
                     return {"skip_reason": "organization_failed"}
 
-            # Step 8: Build metadata and create database record
+            # Step 9: Build metadata and create database record
             from core.utils.metadata_builder import (
                 build_file_scan,
                 build_parsed_metadata,
@@ -909,9 +1032,14 @@ class FileImporter:
                 category=category,
                 import_method="auto",
             )
-            if needs_date_scan:
+            if needs_date_scan and not (pre_scan_result and pre_scan_result.get("issue_date")):
+                # Only flag for future date scan if pre-scan didn't find a date
                 extra_meta["needs_date_scan"] = True
                 extra_meta["date_scan_reason"] = "tracking_title_without_parsed_date"
+
+            # Include pre-scan results in parsed_metadata if available
+            text_scan = pre_scan_result.get("text_scan_result") if pre_scan_result else None
+            ocr_scan = pre_scan_result.get("ocr_scan_result") if pre_scan_result else None
 
             magazine = Periodical(
                 title=organization_title,
@@ -920,13 +1048,13 @@ class FileImporter:
                 file_path=str(organized_path),
                 cover_path=str(cover_path) if cover_path else None,
                 content_hash=content_hash,
-                parsed_metadata=build_parsed_metadata(file_scan=file_scan),
-                derived_metadata=build_derived_metadata(file_scan=file_scan),
+                parsed_metadata=build_parsed_metadata(file_scan=file_scan, text_scan=text_scan, ocr_scan=ocr_scan),
+                derived_metadata=build_derived_metadata(file_scan=file_scan, text_scan=text_scan, ocr_scan=ocr_scan),
                 extra_metadata=extra_meta,
             )
             session.add(magazine)
 
-            # Step 9: Link to existing tracking or create new one
+            # Step 10: Link to existing tracking or create new one
             self._link_or_create_tracking(
                 magazine=magazine,
                 target_tracking=target_tracking,
@@ -944,15 +1072,19 @@ class FileImporter:
             session.commit()
             logger.info(f"Added to database: {parsed.title} ({category})")
 
-            # Step 10: Run text scan for additional metadata
+            # Step 11: Run text scan for additional metadata (skip if pre-scan already ran)
             # Force text scan if needs_date_scan (even during bulk imports) to try to find date/volume
             # Otherwise skip during bulk imports for speed
-            if not skip_enhancement or needs_date_scan:
+            pre_scan_did_text = pre_scan_result and pre_scan_result.get("text_scan_result") is not None
+            pre_scan_did_ocr = pre_scan_result and pre_scan_result.get("ocr_scan_result") is not None
+            pre_scan_found_date = pre_scan_result and pre_scan_result.get("issue_date") is not None
+
+            if not pre_scan_did_text and (not skip_enhancement or needs_date_scan):
                 if needs_date_scan:
                     logger.info(f"Forcing text scan for '{organization_title}' to find missing date/volume")
                 self._run_text_scan(magazine, organized_path, parsed.language, session)
 
-            # Step 11: Run OCR if needed
+            # Step 12: Run OCR if needed (skip if pre-scan already ran OCR)
             # For needs_date_scan files: run OCR synchronously to get date before next file
             # (avoids duplicate detection issues when multiple files have same fallback date)
             # For other files: queue OCR for background processing
@@ -961,7 +1093,8 @@ class FileImporter:
             text_scan_found_date = text_scan_result.get("year") is not None
 
             # For files needing date scan, run OCR synchronously to get date immediately
-            if needs_date_scan and not text_scan_found_date:
+            # But skip if pre-scan already did OCR or found a date
+            if needs_date_scan and not text_scan_found_date and not pre_scan_found_date and not pre_scan_did_ocr:
                 # Text scan didn't find date - run OCR immediately (not queued)
                 # This is critical to avoid duplicate detection issues
                 logger.info(
@@ -973,13 +1106,13 @@ class FileImporter:
                         f"Could not determine date for '{organization_title}' from filename, text, or OCR. "
                         f"Using fallback date. Manual review recommended."
                     )
-            elif should_queue_ocr and not text_scan_sufficient:
+            elif not pre_scan_did_ocr and should_queue_ocr and not text_scan_sufficient:
                 # Normal case: queue OCR for background processing
                 self._queue_ocr_job(magazine, parsed.language, skip_organize, session)
-            elif text_scan_sufficient:
-                logger.info(f"Skipping OCR for '{parsed.title}' - text scan found sufficient metadata")
+            elif text_scan_sufficient or pre_scan_found_date:
+                logger.info(f"Skipping OCR for '{parsed.title}' - sufficient metadata already found")
 
-            # Step 12: Cleanup download file (defer folder deletion to batch processing)
+            # Step 13: Cleanup download file (defer folder deletion to batch processing)
             if not skip_organize:
                 self._cleanup_download_file(file_path, defer_folder_deletion=True)
 
