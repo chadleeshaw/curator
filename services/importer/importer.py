@@ -588,17 +588,37 @@ class FileImporter:
             )
 
             # Sync issue_date from derived_metadata
+            metadata_discovered = False
             new_issue_date = sync_issue_date_from_derived(magazine.derived_metadata)
             if new_issue_date:
                 magazine.issue_date = new_issue_date
+                metadata_discovered = True
                 logger.debug(f"Updated issue_date to {new_issue_date.strftime('%Y-%m')} from derived_metadata")
+
+            # Check if text scan found volume/issue
+            if scan_result.get("volume") or scan_result.get("issue_number"):
+                metadata_discovered = True
+                if not magazine.extra_metadata:
+                    magazine.extra_metadata = {}
+                if scan_result.get("volume"):
+                    magazine.extra_metadata["volume"] = scan_result["volume"]
+                if scan_result.get("issue_number"):
+                    magazine.extra_metadata["issue_number"] = scan_result["issue_number"]
+
+            # Flag for reorganization if we discovered new metadata
+            if metadata_discovered:
+                if not magazine.extra_metadata:
+                    magazine.extra_metadata = {}
+                magazine.extra_metadata["needs_reorganization"] = True
+                magazine.extra_metadata["reorganization_reason"] = "metadata_discovered_by_text_scan"
+                logger.info(f"Flagged {magazine.title} for reorganization (metadata discovered by text scan)")
 
             if scan_result.get("text_found"):
                 logger.info(f"Enhanced {magazine.title} with metadata from text scan")
 
             from core.utils.db import mark_json_modified
 
-            mark_json_modified(magazine, "parsed_metadata", "derived_metadata")
+            mark_json_modified(magazine, "parsed_metadata", "derived_metadata", "extra_metadata")
             session.commit()
 
             if scan_result.get("text_found"):
@@ -696,16 +716,38 @@ class FileImporter:
             # Sync issue_date from derived_metadata
             new_issue_date = sync_issue_date_from_derived(magazine.derived_metadata)
             found_date = False
+            metadata_discovered = False
+
             if new_issue_date:
                 magazine.issue_date = new_issue_date
                 found_date = True
+                metadata_discovered = True
                 logger.info(
                     f"OCR scan found date {new_issue_date.strftime('%Y-%m')} for {magazine.title}"
                 )
 
+            # Check if OCR found volume/issue that we didn't have
+            if ocr_result.get("volume") or ocr_result.get("issue_number"):
+                metadata_discovered = True
+                if not magazine.extra_metadata:
+                    magazine.extra_metadata = {}
+                if ocr_result.get("volume"):
+                    magazine.extra_metadata["volume"] = ocr_result["volume"]
+                if ocr_result.get("issue_number"):
+                    magazine.extra_metadata["issue_number"] = ocr_result["issue_number"]
+
+            # Flag for reorganization if we discovered new metadata
+            # This allows the file to be renamed/moved later with correct metadata
+            if metadata_discovered:
+                if not magazine.extra_metadata:
+                    magazine.extra_metadata = {}
+                magazine.extra_metadata["needs_reorganization"] = True
+                magazine.extra_metadata["reorganization_reason"] = "metadata_discovered_by_ocr"
+                logger.info(f"Flagged {magazine.title} for reorganization (metadata discovered by OCR)")
+
             from core.utils.db import mark_json_modified
 
-            mark_json_modified(magazine, "parsed_metadata", "derived_metadata")
+            mark_json_modified(magazine, "parsed_metadata", "derived_metadata", "extra_metadata")
             session.commit()
 
             if ocr_result.get("year"):
