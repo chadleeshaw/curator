@@ -39,6 +39,16 @@ TITLE_PATTERN_VOLUME_ISSUE = (
 TITLE_PATTERN_SEASONAL = r"^(.+?)[\.\s]+(spring|summer|fall|autumn|winter)[\.\s]+(\d{4})(?:[\.\s]+(.+))?$"
 """Pattern for Title Season YYYY: 2600 Winter 2024"""
 
+# Patterns for volume/issue WITHOUT year (for magazines that use volume numbering)
+TITLE_PATTERN_VOLUME_ONLY = r"^(.+?)[\.\s\-]+vol\.?[\.\s]*(\d{1,4})(?:[\.\s\-]+(.+))?$"
+"""Pattern for Title Vol.XXX (no year): Magazine Vol.260"""
+
+TITLE_PATTERN_ISSUE_ONLY = r"^(.+?)[\.\s\-]+(?:no\.?|number|issue|#)[\.\s]*(\d{1,4})(?:[\.\s\-]+(.+))?$"
+"""Pattern for Title No.XXX (no year): PC Gamer Issue 405"""
+
+TITLE_PATTERN_LEADING_ISSUE = r"^(\d{1,4})\s*-\s*(.+?)(?:\s*-\s*vol\.?[\.\s]*\d{1,4})?(?:\s*-\s*(.+))?$"
+"""Pattern for XXX - Title (leading issue number): 260 - Magazine - Vol.260"""
+
 TITLE_PATTERN_DATE_ONLY_COMPACT = r"^([A-Za-z]+)(\d{4})$"
 """Pattern for date-only filename (compact): Apr2001"""
 
