@@ -21,6 +21,12 @@ OCR_SHARPEN_KERNEL = [[0, -1, 0], [-1, 5, -1], [0, -1, 0]]
 OCR_DISABLE_ENV_VALUES = ("true", "1", "yes")
 """Environment variable values that disable OCR"""
 
+OCR_TESSERACT_PSM = 11
+"""Tesseract Page Segmentation Mode (PSM) - 11 = sparse text with no OSD (good for scattered cover elements)"""
+
+OCR_TESSERACT_OEM = 1
+"""Tesseract OCR Engine Mode (OEM) - 1 = LSTM neural network only (modern, more accurate)"""
+
 OCR_TEXT_DETECTION_THRESHOLD = 0.5
 """PaddleOCR text detection threshold (lower = faster detection)"""
 

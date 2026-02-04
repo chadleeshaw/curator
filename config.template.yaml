@@ -298,6 +298,24 @@ ocr:
   # Common values: 3, 5, 7. Default: 5
   sharpen_kernel: 5
 
+  # Tesseract Page Segmentation Mode (PSM)
+  # Controls how Tesseract segments text on the page
+  # Common values:
+  #   6 = Uniform block of text (good for organized layouts)
+  #   11 = Sparse text with no OSD (best for scattered magazine cover elements)
+  # Default: 11 (sparse text mode)
+  tesseract_psm: 11
+
+  # Tesseract OCR Engine Mode (OEM)
+  # Controls which OCR engine to use
+  # Values:
+  #   0 = Legacy engine only
+  #   1 = LSTM neural network only (recommended - faster and more accurate)
+  #   2 = Legacy + LSTM
+  #   3 = Default (uses whichever is available)
+  # Default: 1 (LSTM only)
+  tesseract_oem: 1
+
 tasks:
   # Task interval settings (in seconds)
   # How often each background task runs

@@ -43,6 +43,8 @@ from core.constants.ocr import (
     OCR_YEAR_PATTERN,
     OCR_VOLUME_PATTERNS,
     OCR_SPECIAL_EDITION_INDICATORS,
+    OCR_TESSERACT_PSM,
+    OCR_TESSERACT_OEM,
     PDF_COVER_DPI_OCR,
 )
 
@@ -449,8 +451,13 @@ class OCRService:
                 pix = page.get_pixmap(dpi=dpi)
                 img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
 
+                # Build Tesseract config with defaults (no access to config file in static method)
+                tesseract_config = f"--psm {OCR_TESSERACT_PSM} --oem {OCR_TESSERACT_OEM}"
+
                 # Get structured OCR data as a dict
-                data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT, lang=lang_code)
+                data = pytesseract.image_to_data(
+                    img, output_type=pytesseract.Output.DICT, lang=lang_code, config=tesseract_config
+                )
 
                 # Filter out low-confidence or empty detections
                 words = []
@@ -532,8 +539,13 @@ class OCRService:
             # Open image
             img = Image.open(image_path)
 
+            # Build Tesseract config with defaults (no access to ocr_config here)
+            tesseract_config = f"--psm {OCR_TESSERACT_PSM} --oem {OCR_TESSERACT_OEM}"
+
             # Get structured OCR data
-            data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT, lang=lang_code)
+            data = pytesseract.image_to_data(
+                img, output_type=pytesseract.Output.DICT, lang=lang_code, config=tesseract_config
+            )
 
             # Filter and extract text
             text_parts = []
@@ -585,8 +597,13 @@ class OCRService:
             # Open image
             img = Image.open(image_path)
 
+            # Build Tesseract config with defaults (no access to ocr_config here)
+            tesseract_config = f"--psm {OCR_TESSERACT_PSM} --oem {OCR_TESSERACT_OEM}"
+
             # Get structured OCR data
-            data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT, lang=lang_code)
+            data = pytesseract.image_to_data(
+                img, output_type=pytesseract.Output.DICT, lang=lang_code, config=tesseract_config
+            )
 
             # Filter and extract text + words
             text_parts = []
