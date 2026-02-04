@@ -1176,6 +1176,12 @@ class FileImporter:
         file_path: Path,
         file_type: str,
         organization_pattern: Optional[str],
+        *,
+        auto_track: bool = True,
+        skip_organize: bool = False,
+        tracking_mode: str = "watch",
+        use_ocr: bool = True,
+        skip_enhancement: bool = False,
     ) -> Dict[str, Any]:
         """
         Worker method for parallel file import.
@@ -1185,6 +1191,11 @@ class FileImporter:
             file_path: Path to file to import
             file_type: File type label for logging
             organization_pattern: Optional organization pattern
+            auto_track: Whether to auto-create tracking records
+            skip_organize: If True, skip file organization (for library imports)
+            tracking_mode: Tracking mode for new records
+            use_ocr: Whether to use OCR for metadata extraction
+            skip_enhancement: If True, skip cover extraction and text scanning
 
         Returns:
             Dict with import result and metadata for aggregation
@@ -1192,8 +1203,8 @@ class FileImporter:
         parent_dir = file_path.parent
         is_subfolder = parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir)
 
-        # Acquire folder marker before processing
-        if is_subfolder:
+        # Acquire folder marker before processing (only for downloads, not library)
+        if is_subfolder and not skip_organize:
             self._acquire_folder_marker(parent_dir)
 
         try:
@@ -1204,7 +1215,11 @@ class FileImporter:
                         file_path,
                         worker_session,
                         organization_pattern=organization_pattern,
-                        use_ocr=True,
+                        auto_track=auto_track,
+                        skip_organize=skip_organize,
+                        tracking_mode=tracking_mode,
+                        use_ocr=use_ocr,
+                        skip_enhancement=skip_enhancement,
                     )
             else:
                 # No session factory - this shouldn't happen in parallel mode
@@ -1213,14 +1228,14 @@ class FileImporter:
                     "file_path": file_path,
                     "file_type": file_type,
                     "result": {"skip_reason": "no_session"},
-                    "parent_dir": parent_dir if is_subfolder else None,
+                    "parent_dir": parent_dir if is_subfolder and not skip_organize else None,
                 }
 
             return {
                 "file_path": file_path,
                 "file_type": file_type,
                 "result": import_result,
-                "parent_dir": parent_dir if is_subfolder else None,
+                "parent_dir": parent_dir if is_subfolder and not skip_organize else None,
             }
 
         except Exception as e:
@@ -1229,12 +1244,12 @@ class FileImporter:
                 "file_path": file_path,
                 "file_type": file_type,
                 "result": {"skip_reason": "parse_error", "error": str(e)},
-                "parent_dir": parent_dir if is_subfolder else None,
+                "parent_dir": parent_dir if is_subfolder and not skip_organize else None,
             }
 
         finally:
-            # Release folder marker after processing
-            if is_subfolder:
+            # Release folder marker after processing (only for downloads, not library)
+            if is_subfolder and not skip_organize:
                 self._release_folder_marker(parent_dir)
 
     def _process_file_batch(
@@ -1245,6 +1260,12 @@ class FileImporter:
         organization_pattern: Optional[str],
         result: OperationResult,
         skip_reasons: Dict[str, int],
+        *,
+        auto_track: bool = True,
+        skip_organize: bool = False,
+        tracking_mode: str = "watch",
+        use_ocr: bool = True,
+        skip_enhancement: bool = False,
     ) -> None:
         """
         Process a batch of files of the same type.
@@ -1257,6 +1278,11 @@ class FileImporter:
             organization_pattern: Optional organization pattern
             result: OperationResult to update with counts and errors
             skip_reasons: Dictionary to track skip/failure reasons
+            auto_track: Whether to auto-create tracking records
+            skip_organize: If True, skip file organization (for library imports)
+            tracking_mode: Tracking mode for new records
+            use_ocr: Whether to use OCR for metadata extraction
+            skip_enhancement: If True, skip cover extraction and text scanning
         """
         # Track folders to cleanup after processing all files
         folders_to_cleanup = set()
@@ -1274,12 +1300,22 @@ class FileImporter:
                 f"with {self._parallel_workers} workers"
             )
             self._process_files_parallel(
-                files, file_type, organization_pattern, result, skip_reasons, folders_to_cleanup
+                files, file_type, organization_pattern, result, skip_reasons, folders_to_cleanup,
+                auto_track=auto_track,
+                skip_organize=skip_organize,
+                tracking_mode=tracking_mode,
+                use_ocr=use_ocr,
+                skip_enhancement=skip_enhancement,
             )
         else:
             # Sequential processing (original behavior)
             self._process_files_sequential(
-                files, file_type, session, organization_pattern, result, skip_reasons, folders_to_cleanup
+                files, file_type, session, organization_pattern, result, skip_reasons, folders_to_cleanup,
+                auto_track=auto_track,
+                skip_organize=skip_organize,
+                tracking_mode=tracking_mode,
+                use_ocr=use_ocr,
+                skip_enhancement=skip_enhancement,
             )
 
         # Clean up folders after all files are processed
@@ -1299,6 +1335,12 @@ class FileImporter:
         result: OperationResult,
         skip_reasons: Dict[str, int],
         folders_to_cleanup: set,
+        *,
+        auto_track: bool = True,
+        skip_organize: bool = False,
+        tracking_mode: str = "watch",
+        use_ocr: bool = True,
+        skip_enhancement: bool = False,
     ) -> None:
         """
         Process files in parallel using ThreadPoolExecutor.
@@ -1310,6 +1352,11 @@ class FileImporter:
             result: OperationResult to update with counts and errors
             skip_reasons: Dictionary to track skip/failure reasons
             folders_to_cleanup: Set to track folders needing cleanup
+            auto_track: Whether to auto-create tracking records
+            skip_organize: If True, skip file organization (for library imports)
+            tracking_mode: Tracking mode for new records
+            use_ocr: Whether to use OCR for metadata extraction
+            skip_enhancement: If True, skip cover extraction and text scanning
         """
         with ThreadPoolExecutor(
             max_workers=self._parallel_workers,
@@ -1322,6 +1369,11 @@ class FileImporter:
                     file_path,
                     file_type,
                     organization_pattern,
+                    auto_track=auto_track,
+                    skip_organize=skip_organize,
+                    tracking_mode=tracking_mode,
+                    use_ocr=use_ocr,
+                    skip_enhancement=skip_enhancement,
                 ): file_path
                 for file_path in files
             }
@@ -1358,6 +1410,12 @@ class FileImporter:
         result: OperationResult,
         skip_reasons: Dict[str, int],
         folders_to_cleanup: set,
+        *,
+        auto_track: bool = True,
+        skip_organize: bool = False,
+        tracking_mode: str = "watch",
+        use_ocr: bool = True,
+        skip_enhancement: bool = False,
     ) -> None:
         """
         Process files sequentially (original behavior).
@@ -1370,21 +1428,27 @@ class FileImporter:
             result: OperationResult to update with counts and errors
             skip_reasons: Dictionary to track skip/failure reasons
             folders_to_cleanup: Set to track folders needing cleanup
+            auto_track: Whether to auto-create tracking records
+            skip_organize: If True, skip file organization (for library imports)
+            tracking_mode: Tracking mode for new records
+            use_ocr: Whether to use OCR for metadata extraction
+            skip_enhancement: If True, skip cover extraction and text scanning
         """
-        # Track folders with active import markers
+        # Track folders with active import markers (only for downloads, not library)
         folders_with_markers = set()
 
-        # Identify unique parent folders and create import markers
-        unique_folders = set()
-        for file_path in files:
-            parent_dir = file_path.parent
-            if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
-                unique_folders.add(parent_dir)
+        # Identify unique parent folders and create import markers (only for downloads)
+        if not skip_organize:
+            unique_folders = set()
+            for file_path in files:
+                parent_dir = file_path.parent
+                if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
+                    unique_folders.add(parent_dir)
 
-        # Create markers for all folders being processed
-        for folder in unique_folders:
-            if self._create_import_marker(folder):
-                folders_with_markers.add(folder)
+            # Create markers for all folders being processed
+            for folder in unique_folders:
+                if self._create_import_marker(folder):
+                    folders_with_markers.add(folder)
 
         for file_path in files:
             try:
@@ -1392,14 +1456,19 @@ class FileImporter:
                     file_path,
                     session,
                     organization_pattern=organization_pattern,
-                    use_ocr=True,
+                    auto_track=auto_track,
+                    skip_organize=skip_organize,
+                    tracking_mode=tracking_mode,
+                    use_ocr=use_ocr,
+                    skip_enhancement=skip_enhancement,
                 )
                 worker_result = {
                     "file_path": file_path,
                     "file_type": file_type,
                     "result": import_result,
                     "parent_dir": file_path.parent
-                    if file_path.parent != self.downloads_dir
+                    if not skip_organize
+                    and file_path.parent != self.downloads_dir
                     and file_path.parent.is_relative_to(self.downloads_dir)
                     else None,
                 }
@@ -1602,43 +1671,39 @@ class FileImporter:
         )
         logger.info("[DATA IMPORT] OCR disabled for library imports - will run during next scheduled OCR task")
 
-        for pdf_path in all_files:
-            try:
-                import_result = self.import_supported_files(
-                    pdf_path,
-                    session,
-                    organization_pattern=None,
-                    auto_track=auto_track,
-                    skip_organize=True,
-                    tracking_mode=tracking_mode,
-                    use_ocr=False,  # Don't queue OCR during library imports
-                    skip_enhancement=is_bulk_import,  # Skip cover/text scan for bulk imports (100+ files)
-                )
-                if import_result and import_result.get("periodical_id"):
-                    result.data["imported"] += 1
-                    logger.info(f"Successfully imported library file: {pdf_path.name}")
-                else:
-                    # Track skip reason
-                    skip_reason = (
-                        import_result.get("skip_reason", "organization_failed") if import_result else "parse_error"
-                    )
-                    if skip_reason in skip_reasons:
-                        skip_reasons[skip_reason] += 1
-                        result.data["skipped"] += 1
-                    else:
-                        result.data["failed"] += 1
-                        result.add_error(
-                            ErrorCodes.IMPORT_FAILED,
-                            f"Failed to import {pdf_path.name}",
-                            retryable=True,
-                        )
-                    logger.debug(f"Skipped library import ({skip_reason}): {pdf_path.name}")
-            except Exception as e:
-                result.data["failed"] += 1
-                skip_reasons["parse_error"] += 1
-                error_msg = f"Error importing library file {pdf_path.name}: {str(e)}"
-                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
-                logger.error(error_msg, exc_info=True)
+        # Process all file types using unified batch handler (supports parallel processing)
+        self._process_file_batch(
+            pdf_files, "PDF", session, None, result, skip_reasons,
+            auto_track=auto_track,
+            skip_organize=True,
+            tracking_mode=tracking_mode,
+            use_ocr=False,
+            skip_enhancement=is_bulk_import,
+        )
+        self._process_file_batch(
+            epub_files, "EPUB", session, None, result, skip_reasons,
+            auto_track=auto_track,
+            skip_organize=True,
+            tracking_mode=tracking_mode,
+            use_ocr=False,
+            skip_enhancement=is_bulk_import,
+        )
+        self._process_file_batch(
+            cbz_files, "CBZ", session, None, result, skip_reasons,
+            auto_track=auto_track,
+            skip_organize=True,
+            tracking_mode=tracking_mode,
+            use_ocr=False,
+            skip_enhancement=is_bulk_import,
+        )
+        self._process_file_batch(
+            cbr_files, "CBR", session, None, result, skip_reasons,
+            auto_track=auto_track,
+            skip_organize=True,
+            tracking_mode=tracking_mode,
+            use_ocr=False,
+            skip_enhancement=is_bulk_import,
+        )
 
         # Log summary
         self._log_import_summary(result, skip_reasons)
