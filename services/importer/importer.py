@@ -1323,8 +1323,19 @@ class FileImporter:
             )
 
         # Clean up folders after all files are processed
+        # CRITICAL: Only cleanup folders that are in the downloads directory
         for folder in folders_to_cleanup:
             try:
+                # Safety check: only delete folders in downloads directory
+                try:
+                    is_in_downloads = folder.is_relative_to(self.downloads_dir)
+                except ValueError:
+                    is_in_downloads = False
+
+                if not is_in_downloads:
+                    logger.debug(f"Skipping folder cleanup - not in downloads directory: {folder}")
+                    continue
+
                 if folder.exists():
                     shutil.rmtree(folder)
                     logger.info(f"Deleted download folder and contents: {folder.name}")
@@ -1384,7 +1395,11 @@ class FileImporter:
                 file_path = futures[future]
                 try:
                     worker_result = future.result()
-                    self._handle_import_result(worker_result, file_type, result, skip_reasons, folders_to_cleanup)
+                    # skip_cleanup=True for library imports (skip_organize=True) - never delete library files
+                    self._handle_import_result(
+                        worker_result, file_type, result, skip_reasons, folders_to_cleanup,
+                        skip_cleanup=skip_organize
+                    )
                 except Exception as e:
                     result.data["failed"] += 1
                     skip_reasons["parse_error"] += 1
@@ -1392,13 +1407,15 @@ class FileImporter:
                     result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
                     logger.error(error_msg, exc_info=True)
                     # Clean up the failed file and track folder for cleanup
-                    try:
-                        self._cleanup_download_file(file_path, defer_folder_deletion=True)
-                        parent_dir = file_path.parent
-                        if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
-                            folders_to_cleanup.add(parent_dir)
-                    except Exception as cleanup_error:
-                        logger.warning(f"Failed to cleanup {file_path.name}: {cleanup_error}")
+                    # Only cleanup for downloads (skip_organize=False), never for library imports
+                    if not skip_organize:
+                        try:
+                            self._cleanup_download_file(file_path, defer_folder_deletion=True)
+                            parent_dir = file_path.parent
+                            if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
+                                folders_to_cleanup.add(parent_dir)
+                        except Exception as cleanup_error:
+                            logger.warning(f"Failed to cleanup {file_path.name}: {cleanup_error}")
 
     def _process_files_sequential(
         self,
@@ -1473,20 +1490,26 @@ class FileImporter:
                         else None
                     ),
                 }
-                self._handle_import_result(worker_result, file_type, result, skip_reasons, folders_to_cleanup)
+                # skip_cleanup=True for library imports (skip_organize=True) - never delete library files
+                self._handle_import_result(
+                    worker_result, file_type, result, skip_reasons, folders_to_cleanup,
+                    skip_cleanup=skip_organize
+                )
             except Exception as e:
                 result.data["failed"] += 1
                 skip_reasons["parse_error"] += 1
                 error_msg = f"Error importing {file_type} {file_path.name}: {str(e)}"
                 result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
                 logger.error(error_msg, exc_info=True)
-                try:
-                    self._cleanup_download_file(file_path, defer_folder_deletion=True)
-                    parent_dir = file_path.parent
-                    if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
-                        folders_to_cleanup.add(parent_dir)
-                except Exception as cleanup_error:
-                    logger.warning(f"Failed to cleanup {file_path.name}: {cleanup_error}")
+                # Only cleanup for downloads (skip_organize=False), never for library imports
+                if not skip_organize:
+                    try:
+                        self._cleanup_download_file(file_path, defer_folder_deletion=True)
+                        parent_dir = file_path.parent
+                        if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
+                            folders_to_cleanup.add(parent_dir)
+                    except Exception as cleanup_error:
+                        logger.warning(f"Failed to cleanup {file_path.name}: {cleanup_error}")
 
         # Remove import markers from all processed folders
         for folder in folders_with_markers:
@@ -1499,6 +1522,8 @@ class FileImporter:
         result: OperationResult,
         skip_reasons: Dict[str, int],
         folders_to_cleanup: set,
+        *,
+        skip_cleanup: bool = False,
     ) -> None:
         """
         Handle the result from a file import (used by both parallel and sequential processing).
@@ -1509,6 +1534,7 @@ class FileImporter:
             result: OperationResult to update with counts and errors
             skip_reasons: Dictionary to track skip/failure reasons
             folders_to_cleanup: Set to track folders needing cleanup
+            skip_cleanup: If True, skip file cleanup (for library imports where we never delete files)
         """
         file_path = worker_result["file_path"]
         import_result = worker_result["result"]
@@ -1533,14 +1559,19 @@ class FileImporter:
                     retryable=True,
                 )
             logger.debug(f"Skipped {file_type} import ({skip_reason}): {file_path.name}")
-            self._cleanup_download_file(file_path, defer_folder_deletion=True)
-            if parent_dir:
-                folders_to_cleanup.add(parent_dir)
+            # Only cleanup files from downloads folder, never from library
+            if not skip_cleanup:
+                self._cleanup_download_file(file_path, defer_folder_deletion=True)
+                if parent_dir:
+                    folders_to_cleanup.add(parent_dir)
 
     def _cleanup_download_file(self, pdf_path: Path, defer_folder_deletion: bool = False) -> None:
         """
         Clean up a file from downloads folder and optionally its parent directory.
         Also removes sidecar metadata file if present.
+
+        CRITICAL: Only deletes files that are actually in the downloads directory.
+        Files in the library directory are NEVER deleted by this method.
 
         Args:
             pdf_path: Path to PDF file in downloads folder
@@ -1548,7 +1579,18 @@ class FileImporter:
                                    Used when processing multiple files from the same folder.
         """
         try:
-            # Delete sidecar metadata file if it exists
+            # CRITICAL SAFETY CHECK: Only delete files that are in the downloads directory
+            # Never delete files from the library directory
+            try:
+                is_in_downloads = pdf_path.is_relative_to(self.downloads_dir)
+            except ValueError:
+                is_in_downloads = False
+
+            if not is_in_downloads:
+                logger.debug(f"Skipping cleanup - file not in downloads directory: {pdf_path}")
+                return
+
+            # Delete sidecar metadata file if it exists (only for downloads)
             delete_sidecar_file(pdf_path)
 
             if pdf_path.exists() and pdf_path.is_file():

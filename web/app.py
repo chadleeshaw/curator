@@ -461,21 +461,14 @@ def _initialize_search_providers() -> None:
 
 
 def _initialize_download_client() -> None:
-    """Initialize download clients (primary and additional)."""
-    # Initialize primary download client (optional - can fail gracefully)
-    try:
-        client_config = app_state.config_loader.get_download_client()
-        if not client_config.get("api_key"):
-            logger.warning("Download client not available: API key not configured (configure in Settings)")
-            app_state.download_client = None
-        else:
-            app_state.download_client = ClientFactory.create(client_config)
-            logger.info(f"Loaded download client: {app_state.download_client.name}")
-    except Exception as e:
-        logger.warning(f"Download client not available (configure in Settings): {e}")
-        app_state.download_client = None
+    """Initialize download clients (primary and additional).
 
-    # Initialize additional download clients (e.g., Internet Archive)
+    The primary download client is determined by which providers are enabled:
+    - If NZB providers (newsnab/rss) are enabled: use SABnzbd/NZBGet
+    - If only Internet Archive is enabled: use Internet Archive client as primary
+    """
+    # Initialize additional download clients first (e.g., Internet Archive)
+    # We need to know what's available to determine the primary client
     app_state.download_clients = {}
     try:
         additional_clients = app_state.config_loader.get_download_clients()
@@ -491,11 +484,54 @@ def _initialize_download_client() -> None:
     except Exception as e:
         logger.debug(f"No additional download clients configured: {e}")
 
+    # Check what types of search providers are enabled
+    nzb_providers = [p for p in app_state.search_providers if p.type in ("newsnab", "rss")]
+    ia_providers = [p for p in app_state.search_providers if p.type == "internet_archive"]
+    has_only_ia = ia_providers and not nzb_providers
+
+    # Initialize primary download client based on provider types
+    if has_only_ia:
+        # Only Internet Archive providers - use IA client as primary
+        if "internet_archive" in app_state.download_clients:
+            app_state.download_client = app_state.download_clients["internet_archive"]
+            logger.info(
+                f"Using Internet Archive as primary download client (only IA providers enabled): "
+                f"{app_state.download_client.name}"
+            )
+        else:
+            logger.warning(
+                "Only Internet Archive search providers enabled but no IA download client configured"
+            )
+            app_state.download_client = None
+    else:
+        # NZB providers present - use SABnzbd/NZBGet as primary
+        try:
+            client_config = app_state.config_loader.get_download_client()
+            if not client_config.get("api_key"):
+                logger.warning("Download client not available: API key not configured (configure in Settings)")
+                app_state.download_client = None
+            else:
+                app_state.download_client = ClientFactory.create(client_config)
+                logger.info(f"Loaded download client: {app_state.download_client.name}")
+        except Exception as e:
+            logger.warning(f"Download client not available (configure in Settings): {e}")
+            app_state.download_client = None
+
 
 def _initialize_cache_services() -> None:
-    """Initialize provider cache services (if enabled in config)."""
+    """Initialize provider cache services (if enabled in config and NZB providers exist).
+
+    Cache is only needed for Newsnab and RSS providers that return NZB files.
+    Internet Archive uses direct downloads and doesn't need caching.
+    """
     if not app_state.cache_config.get("enabled", True):
         logger.info("Provider cache disabled in configuration")
+        return
+
+    # Check if there are any NZB providers (newsnab or rss) - Internet Archive doesn't need cache
+    nzb_providers = [p for p in app_state.search_providers if p.type in ("newsnab", "rss")]
+    if not nzb_providers:
+        logger.info("Provider cache not initialized: no NZB providers (newsnab/rss) enabled")
         return
 
     try:
@@ -515,14 +551,11 @@ def _initialize_cache_services() -> None:
             f"(retention: {app_state.cache_config.get('retention_days', 90)} days)"
         )
 
-        if app_state.search_providers:
-            app_state.provider_sync_service = ProviderSyncService(
-                cache_service=app_state.provider_cache_service,
-                search_providers=app_state.search_providers,
-            )
-            logger.info("Provider sync service initialized")
-        else:
-            logger.warning("Provider sync service not initialized: no search providers")
+        app_state.provider_sync_service = ProviderSyncService(
+            cache_service=app_state.provider_cache_service,
+            search_providers=nzb_providers,  # Only sync NZB providers
+        )
+        logger.info(f"Provider sync service initialized for {len(nzb_providers)} NZB provider(s)")
 
     except Exception as e:
         logger.warning(f"Provider cache not available: {e}", exc_info=True)

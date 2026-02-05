@@ -204,16 +204,8 @@ async def get_tasks_status():
         )
     tasks.append(auto_metadata_info)
 
-    # Auto-cache task (provider cache sync)
-    auto_cache_info = {
-        "id": "provider_cache_sync",
-        "name": "Auto-Cache",
-        "description": "Automatically syncs the provider cache with latest releases from search providers",
-        "interval": 1800,  # 30 minutes default
-        "last_run": None,
-        "next_run": None,
-        "last_status": None,
-    }
+    # Auto-cache task (provider cache sync) - only show if actually scheduled
+    # This task is only scheduled when there are enabled search providers
     if scheduler_status and "provider_cache_sync" in scheduler_status.get("tasks", {}):
         task_data = scheduler_status["tasks"]["provider_cache_sync"]
         last_run = task_data.get("last_run")
@@ -222,15 +214,16 @@ async def get_tasks_status():
         status = None
         if last_run:
             status = "failed" if failure_count > 0 else "success"
-        auto_cache_info.update(
-            {
-                "interval": task_data.get("interval", 1800),
-                "last_run": last_run,
-                "next_run": task_data.get("next_run"),
-                "last_status": status,
-            }
-        )
-    tasks.append(auto_cache_info)
+        auto_cache_info = {
+            "id": "provider_cache_sync",
+            "name": "Auto-Cache",
+            "description": "Automatically syncs the provider cache with latest releases from search providers",
+            "interval": task_data.get("interval", 1800),
+            "last_run": last_run,
+            "next_run": task_data.get("next_run"),
+            "last_status": status,
+        }
+        tasks.append(auto_cache_info)
 
     logger.debug(f"Tasks Status - Returning {len(tasks)} tasks to client")
 
