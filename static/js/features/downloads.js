@@ -512,13 +512,7 @@ export class DownloadsManager {
       const progressInfo = downloadingItems.length > 0
         ? (() => {
             const avgProgress = Math.round(downloadingItems.reduce((sum, item) => sum + item.progress, 0) / downloadingItems.length);
-            return `<div style="margin-top: 6px; width: 200px;">
-                <div style="background: var(--surface); border-radius: 8px; height: 18px; overflow: hidden; border: 1px solid var(--border-color);">
-                  <div style="background: linear-gradient(90deg, var(--status-downloading), var(--accent-color)); height: 100%; width: ${avgProgress}%; transition: width 0.3s ease; display: flex; align-items: center; padding-left: 5px;">
-                    <span style="color: white; font-size: 0.65em; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">${downloadingItems.length} downloading • ${avgProgress}% avg</span>
-                  </div>
-                </div>
-              </div>`;
+            return `<span style="background: linear-gradient(90deg, var(--status-downloading), var(--accent-color)); color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.85em; margin-right: 5px; white-space: nowrap;">${downloadingItems.length > 1 ? downloadingItems.length + ' ' : ''}⏳ ${avgProgress}%</span>`;
           })()
         : '';
 
@@ -534,20 +528,18 @@ export class DownloadsManager {
 
       headerRow.innerHTML = `
         <td colspan="2" style="padding: 12px; font-weight: bold;">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
             <div>
               <span style="font-size: 1.1em;">\uD83D\uDCF0 ${periodical}</span>
               <span style="margin-left: 15px; font-size: 0.9em; color: var(--text-secondary);">${items.length} issues</span>
             </div>
-            <div style="display: flex; flex-direction: column; gap: 5px; align-items: flex-end;">
-              <div style="display: flex; gap: 10px; align-items: center;">
-                ${statusBadges}
-                <span style="font-size: 1.2em; color: var(--text-secondary);">\u2192</span>
-              </div>
+            <div style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;">
               ${progressInfo}
-              ${waitTimeNote}
+              ${statusBadges}
+              <span style="font-size: 1.2em; color: var(--text-secondary);">\u2192</span>
             </div>
           </div>
+          ${waitTimeNote}
         </td>
       `;
       tbody.appendChild(headerRow);

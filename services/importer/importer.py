@@ -974,19 +974,32 @@ class FileImporter:
             if self._check_hash_duplicate(content_hash, file_path, skip_organize, session):
                 return {"skip_reason": "duplicate_hash"}
 
-            # Step 4: If we have a tracking_id from sidecar (download), use that tracking's title
-            # This prevents creating duplicate tracking records when filenames are ambiguous
+            # Step 4: Determine title - use parsed title if confidence is high, otherwise fall back to tracking
+            # High confidence means filename parsing succeeded well - the file might be a different
+            # periodical than what was tracked (e.g., IA collection with multiple periodicals)
+            # Low/medium confidence means filename is ambiguous - trust the tracking association
             needs_date_scan = False
             if tracking_id:
                 target_tracking_temp = (
                     session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
                 )
                 if target_tracking_temp:
-                    tracking_title = target_tracking_temp.title
-                    logger.debug(
-                        f"Using tracking title from sidecar: '{tracking_title}' (ID: {tracking_id}) "
-                        f"instead of parsed title: '{parsed.base_title}'"
-                    )
+                    # Check if parsed title has high confidence
+                    if parsed.confidence == "high" and parsed.issue_date is not None:
+                        # High confidence parse - use the parsed title (might differ from tracking)
+                        tracking_title = self._build_tracking_title(parsed.base_title, parsed.country, file_path)
+                        logger.info(
+                            f"High confidence parse for '{file_path.name}': using parsed title '{tracking_title}' "
+                            f"(tracking was '{target_tracking_temp.title}')"
+                        )
+                    else:
+                        # Low/medium confidence - fall back to tracking title
+                        tracking_title = target_tracking_temp.title
+                        logger.debug(
+                            f"Using tracking title from sidecar: '{tracking_title}' (ID: {tracking_id}) "
+                            f"for low/medium confidence parse (parsed: '{parsed.base_title}', "
+                            f"confidence: {parsed.confidence})"
+                        )
                     # Check if we need to force text/OCR scan to find date
                     # When we have a tracking title but couldn't parse a date from filename,
                     # we should scan the document content to try to extract date/volume info
@@ -998,7 +1011,7 @@ class FileImporter:
                     if date_missing:
                         needs_date_scan = True
                         logger.info(
-                            f"File '{file_path.name}' has tracking title '{tracking_title}' but no valid date "
+                            f"File '{file_path.name}' needs date scan "
                             f"(confidence: {parsed.confidence}, pattern: {parsed.matched_pattern}). "
                             f"Will force text/OCR scan to extract date."
                         )
