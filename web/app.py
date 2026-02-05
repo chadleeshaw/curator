@@ -499,9 +499,7 @@ def _initialize_download_client() -> None:
                 f"{app_state.download_client.name}"
             )
         else:
-            logger.warning(
-                "Only Internet Archive search providers enabled but no IA download client configured"
-            )
+            logger.warning("Only Internet Archive search providers enabled but no IA download client configured")
             app_state.download_client = None
     else:
         # NZB providers present - use SABnzbd/NZBGet as primary

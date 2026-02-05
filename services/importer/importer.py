@@ -1397,8 +1397,7 @@ class FileImporter:
                     worker_result = future.result()
                     # skip_cleanup=True for library imports (skip_organize=True) - never delete library files
                     self._handle_import_result(
-                        worker_result, file_type, result, skip_reasons, folders_to_cleanup,
-                        skip_cleanup=skip_organize
+                        worker_result, file_type, result, skip_reasons, folders_to_cleanup, skip_cleanup=skip_organize
                     )
                 except Exception as e:
                     result.data["failed"] += 1
@@ -1492,8 +1491,7 @@ class FileImporter:
                 }
                 # skip_cleanup=True for library imports (skip_organize=True) - never delete library files
                 self._handle_import_result(
-                    worker_result, file_type, result, skip_reasons, folders_to_cleanup,
-                    skip_cleanup=skip_organize
+                    worker_result, file_type, result, skip_reasons, folders_to_cleanup, skip_cleanup=skip_organize
                 )
             except Exception as e:
                 result.data["failed"] += 1
