@@ -5,6 +5,8 @@ Tests for PDF metadata embedding functionality.
 The embedding writes natural text (e.g., "January 2024\nVolume 5 Issue 12")
 into PDF metadata fields, which text_scan then extracts and parses normally.
 """
+# pylint: disable=import-error
+# pypdf is an optional dependency - tests are skipped when not available
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch

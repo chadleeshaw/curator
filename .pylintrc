@@ -32,6 +32,7 @@ disable=
     too-many-statements,
     too-many-return-statements,
     too-many-nested-blocks,
+    too-many-lines,
     unspecified-encoding,
     expression-not-assigned,
     comparison-with-callable,
