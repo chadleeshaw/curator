@@ -1550,6 +1550,12 @@
   color: #428bca;
 }
 
+.collection-badge {
+  background: #fff3cd;
+  color: #856404;
+  margin-right: 5px;
+}
+
 /* ==========================================================================
    Input Highlight Effects (Added for JS Refactoring - Phase 3)
    ========================================================================== */

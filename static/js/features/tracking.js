@@ -390,6 +390,8 @@ export class TrackingManager {
       if (!uniquePeriodicals[normalizedKey]) {
         // Get file count from IA metadata if available
         const iaItemCount = result.metadata?.item_count;
+        // Check if this is a collection archive (bundles of multiple issues)
+        const isCollection = result.metadata?.is_collection || false;
 
         uniquePeriodicals[normalizedKey] = {
           displayTitle: cleanTitle,
@@ -397,6 +399,7 @@ export class TrackingManager {
           firstResult: result,
           isInternetArchive: isInternetArchive,
           hasItemCount: iaItemCount != null && iaItemCount > 0,
+          isCollection: isCollection,
         };
       }
       // Only increment count for non-IA items (grouping search results)
@@ -405,8 +408,14 @@ export class TrackingManager {
       }
     });
 
-    // Convert to array and sort by count (most common first)
-    const periodicalsList = Object.values(uniquePeriodicals).sort((a, b) => b.count - a.count);
+    // Convert to array and sort: collections first, then by count (most common first)
+    const periodicalsList = Object.values(uniquePeriodicals).sort((a, b) => {
+      // Collections always come first
+      if (a.isCollection && !b.isCollection) return -1;
+      if (!a.isCollection && b.isCollection) return 1;
+      // Then sort by count
+      return b.count - a.count;
+    });
 
     container.innerHTML = '<h4>Select a Periodical Edition:</h4><div class="search-results"></div>';
     const resultsContainer = container.querySelector('.search-results');
@@ -436,10 +445,15 @@ export class TrackingManager {
         ? '<span class="provider-badge ia-badge">🏛️ Internet Archive</span>'
         : '';
 
+      // Show collection badge for collection archives
+      const collectionBadge = periodical.isCollection
+        ? '<span class="provider-badge collection-badge">📦 Collection</span>'
+        : '';
+
       div.innerHTML = `
         <div class="result-info">
           <h5 class="result-title">${periodical.displayTitle}</h5>
-          ${providerBadge}
+          ${collectionBadge}${providerBadge}
           <p class="result-detail">${countDisplay}</p>
           ${publisher ? `<p class="result-detail"><strong>Publisher:</strong> ${publisher}</p>` : ''}
         </div>

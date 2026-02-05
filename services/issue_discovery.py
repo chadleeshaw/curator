@@ -106,6 +106,32 @@ class IssueDiscoveryService:
                     stats["rejected_non_periodical"] += 1
                     continue
 
+                # Skip IA collection archives (they contain many issues, not single issues)
+                raw_metadata = result.get("raw_metadata", {})
+                if raw_metadata.get("is_collection"):
+                    logger.debug(f"Skipping IA collection archive: {title}")
+                    stats["rejected_non_periodical"] += 1
+                    continue
+
+                # For IA results, verify title actually matches the periodical we're tracking
+                # IA returns items where search term appears anywhere in metadata, not just title
+                provider = result.get("provider", "")
+                if provider == "internet_archive":
+                    result_title_lower = title.lower()
+                    search_terms = tracking.title.lower().split()
+                    # Require significant search terms (3+ chars) to be in the title
+                    significant_terms = [t for t in search_terms if len(t) >= 3]
+                    if significant_terms:
+                        matching_terms = sum(1 for t in significant_terms if t in result_title_lower)
+                        match_ratio = matching_terms / len(significant_terms)
+                        if match_ratio < 0.5:
+                            logger.debug(
+                                f"Skipping IA result with poor title match: '{title}' "
+                                f"(tracking '{tracking.title}', match ratio: {match_ratio:.1%})"
+                            )
+                            stats["rejected_non_periodical"] += 1
+                            continue
+
                 url = result.get("url", "")
                 provider = result.get("provider", "")
                 pubdate_str = result.get("pubdate")

@@ -390,7 +390,7 @@ class InternetArchiveProvider(SearchProvider):
                     date_str = date_str[0] if date_str else None
                 publication_date = self._parse_date(date_str)
 
-                # Detect if this is a collection based on title
+                # Detect if this is a collection based on title keywords or item_count
                 is_collection = self._is_collection_title(title)
 
                 # Get item_count for collection-type items (number of sub-items)
@@ -400,6 +400,12 @@ class InternetArchiveProvider(SearchProvider):
                         item_count = int(item_count)
                     except (ValueError, TypeError):
                         item_count = None
+
+                # Collections typically have item_count > 1 (bundle of multiple files)
+                # Single issues usually have item_count = None, 0, or 1
+                if item_count is not None and item_count > 1:
+                    is_collection = True
+                    logger.debug(f"[{self.name}] Detected collection by item_count={item_count}: {title}")
 
                 # Build metadata
                 raw_metadata = {
