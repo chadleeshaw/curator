@@ -194,6 +194,16 @@ NUMBER_TO_MONTH_ABBR = {
 }
 """Month number to abbreviated English month name mapping"""
 
+# Season month ranges for fuzzy matching
+# Each season spans 3 months
+SEASON_MONTHS = {
+    "winter": {12, 1, 2},  # December, January, February
+    "spring": {3, 4, 5},  # March, April, May
+    "summer": {6, 7, 8},  # June, July, August
+    "fall": {9, 10, 11},  # September, October, November
+}
+"""Season name to set of months that belong to that season"""
+
 
 # ==============================================================================
 # Date Validation

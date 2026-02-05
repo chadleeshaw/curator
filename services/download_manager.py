@@ -256,21 +256,30 @@ class DownloadManager:
             logger.warning(f"Could not create DB search result: {e}", exc_info=True)
             return None
 
-    def _is_bad_file(self, tracking_id: int, fuzzy_group: str, session: Session) -> Optional[DownloadSubmission]:
+    def _is_bad_file(self, tracking_id: int, fuzzy_group: str, session: Session, url: str = "") -> Optional[DownloadSubmission]:
         """
         Check if this file has failed too many times and should not be retried.
 
         Uses fuzzy_match_group instead of URL because providers may return different
         URLs for the same file (e.g., different tokens/timestamps).
 
+        Note: Internet Archive downloads are treated more leniently since failures
+        are typically due to server load rather than bad files.
+
         Args:
             tracking_id: Periodical tracking ID
             fuzzy_group: Fuzzy match group identifier for the title
             session: Database session
+            url: Download URL (used to identify provider)
 
         Returns:
             The failed submission record if this is a bad file, None otherwise
         """
+        # Internet Archive failures are usually transient (server busy, rate limits)
+        # not bad files - don't mark them as permanently failed
+        if url and "archive.org" in url:
+            return None
+
         return (
             session.query(DownloadSubmission)
             .filter(
@@ -486,7 +495,8 @@ class DownloadManager:
 
         # Validate: skip files that have failed too many times
         fuzzy_group = get_fuzzy_group_id(title)
-        bad_file = self._is_bad_file(tracking_id, fuzzy_group, session)
+        url = search_result.get("url", "")
+        bad_file = self._is_bad_file(tracking_id, fuzzy_group, session, url=url)
         if bad_file:
             logger.info(
                 f"[DownloadManager] Skipping bad file (failed {bad_file.attempt_count} times): "

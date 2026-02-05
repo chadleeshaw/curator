@@ -34,11 +34,11 @@ class SearchScheduler:
 
     def __init__(
         self,
-        max_periodicals_per_run: int = 2,
-        rapid_interval_hours: int = 1,
-        normal_interval_hours: int = 6,
-        slow_interval_hours: int = 24,
-        very_slow_interval_hours: int = 168,  # 7 days
+        max_periodicals_per_run: int = 10,
+        rapid_interval_hours: float = 0.5,  # 30 minutes when finding new issues
+        normal_interval_hours: float = 2,  # 2 hours default
+        slow_interval_hours: float = 12,  # 12 hours after some empty searches
+        very_slow_interval_hours: float = 48,  # 2 days after many empty searches
         empty_search_threshold: int = 3,  # Slow down after N empty searches
     ):
         """
@@ -275,9 +275,43 @@ class SearchScheduler:
 
         return True
 
+    def reset_all_search_intervals(self, session: Session) -> Dict[str, int]:
+        """
+        Reset all tracked periodicals to normal search interval.
+
+        Useful after filter changes or to recover from overly slowed-down intervals.
+
+        Args:
+            session: Database session
+
+        Returns:
+            Dict with stats: {reset: count, already_normal: count}
+        """
+        stats = {"reset": 0, "already_normal": 0}
+
+        periodicals = session.query(PeriodicalTracking).all()
+
+        for tracking in periodicals:
+            if tracking.search_interval_hours != self.normal_interval_hours:
+                old_interval = tracking.search_interval_hours
+                tracking.search_interval_hours = self.normal_interval_hours
+                tracking.searches_without_new_issues = 0
+                stats["reset"] += 1
+                logger.debug(f"Reset interval for '{tracking.title}': {old_interval}h -> {self.normal_interval_hours}h")
+            else:
+                stats["already_normal"] += 1
+
+        session.commit()
+        logger.info(
+            f"Reset all search intervals: {stats['reset']} reset to normal, "
+            f"{stats['already_normal']} already at normal interval"
+        )
+
+        return stats
+
     # Private helper methods
 
-    def _calculate_new_interval(self, searches_without_new_issues: int) -> int:
+    def _calculate_new_interval(self, searches_without_new_issues: int) -> float:
         """
         Calculate new search interval based on consecutive empty searches.
 

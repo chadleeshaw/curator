@@ -31,8 +31,11 @@ MAX_PAGE_SIZE = 100
 MAX_DOWNLOAD_RETRIES = 1
 """Maximum number of retry attempts for failed downloads"""
 
+MAX_DOWNLOAD_RETRIES_IA = 5
+"""Maximum retries for Internet Archive downloads (failures usually transient)"""
+
 MAX_DOWNLOADS = 10
-"""Maximum number of concurrent downloads allowed system-wide"""
+"""Maximum number of concurrent downloads allowed system-wide"""""
 
 DOWNLOAD_FILE_SEARCH_DEPTH = 2
 """Maximum directory depth to search for downloaded files"""

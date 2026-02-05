@@ -17,7 +17,9 @@ from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from core.parsers import Parser, utc_now
+from core.utils.date import dates_are_fuzzy_match
 from core.utils.fuzzy_matching import get_fuzzy_group_id
+from core.constants.app import MAX_DOWNLOAD_RETRIES_IA
 from models.database import DiscoveredIssue, Periodical, PeriodicalTracking
 
 logger = logging.getLogger(__name__)
@@ -247,7 +249,10 @@ class IssueDiscoveryService:
                             if "search_result_id" in result and result["search_result_id"]
                             else []
                         ),
-                        max_retries=self.default_max_retries,
+                        # IA downloads get more retries since failures are usually transient (server busy)
+                        max_retries=(
+                            MAX_DOWNLOAD_RETRIES_IA if provider == "internet_archive" else self.default_max_retries
+                        ),
                         extra_metadata={
                             "raw_title": title,
                             "base_title": parsed.base_title,
@@ -793,6 +798,10 @@ class IssueDiscoveryService:
         """
         Check if an issue is already in the library.
 
+        Uses fuzzy date matching to handle:
+        - Date defaulting (Feb search result = Jan library item)
+        - Season spanning (Winter issue = Dec/Jan/Feb)
+
         Args:
             issue: DiscoveredIssue to check
             tracking: PeriodicalTracking for context
@@ -820,9 +829,15 @@ class IssueDiscoveryService:
             .all()
         )
 
-        # Check if any existing magazine matches the date (ignoring time)
+        # Check if any existing magazine matches the date (with fuzzy tolerance)
+        # This handles:
+        # - "February" search result matching "January" library item (±1 month tolerance)
+        # - "Winter 2024" matching Dec/Jan/Feb issues (season-based matching)
         for mag in existing:
-            if mag.issue_date and mag.issue_date.date() == issue_date_only:
+            if mag.issue_date and dates_are_fuzzy_match(mag.issue_date.date(), issue_date_only):
+                logger.debug(
+                    f"Fuzzy date match found: library {mag.issue_date.date()} matches search {issue_date_only}"
+                )
                 return mag.id
 
         return None

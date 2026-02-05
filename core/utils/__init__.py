@@ -45,6 +45,9 @@ from .thumbnail import (
 # Text processing utilities
 from .text import clean_title, normalize_text
 
+# Date utilities
+from .date import dates_are_fuzzy_match, get_season_for_month
+
 # Note: parse_month and parse_multi_month moved to core.parsers.date
 
 __all__ = [
@@ -57,6 +60,9 @@ __all__ = [
     "validate_cbr",
     # Database utilities
     "get_db_session",
+    # Date utilities
+    "dates_are_fuzzy_match",
+    "get_season_for_month",
     # EPUB utilities
     "extract_cover_from_epub",
     "extract_text_from_epub",
