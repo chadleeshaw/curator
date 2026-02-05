@@ -366,26 +366,43 @@ export class TrackingManager {
     const uniquePeriodicals = {};
 
     results.forEach((result) => {
+      // For Internet Archive items, use the full title as-is (each item is unique)
+      // and get file count from metadata
+      const isInternetArchive = result.provider?.toLowerCase() === 'internet_archive';
+
       // Extract clean title from the result title/filename
       let cleanTitle = result.title;
 
-      // Extract periodical name from filename (e.g., "PC.Gamer.US.No.405..." -> "PC Gamer US")
-      const match = result.title.match(/^([A-Za-z0-9\.\s]+?)(?:\.No\.|\.Issue\.|\.E|\.201|\.202)/i);
-      if (match) {
-        cleanTitle = match[1].replace(/\./g, ' ').trim();
+      if (!isInternetArchive) {
+        // Extract periodical name from filename (e.g., "PC.Gamer.US.No.405..." -> "PC Gamer US")
+        const match = result.title.match(/^([A-Za-z0-9\.\s]+?)(?:\.No\.|\.Issue\.|\.E|\.201|\.202)/i);
+        if (match) {
+          cleanTitle = match[1].replace(/\./g, ' ').trim();
+        }
       }
 
-      // Normalize title for deduplication
-      const normalizedKey = cleanTitle.toLowerCase().replace(/\s+/g, ' ').trim();
+      // Normalize title for deduplication (for non-IA items)
+      // For IA items, use identifier to keep them separate
+      const normalizedKey = isInternetArchive
+        ? result.metadata?.identifier || result.title
+        : cleanTitle.toLowerCase().replace(/\s+/g, ' ').trim();
 
       if (!uniquePeriodicals[normalizedKey]) {
+        // Get file count from IA metadata if available
+        const iaItemCount = result.metadata?.item_count;
+
         uniquePeriodicals[normalizedKey] = {
           displayTitle: cleanTitle,
-          count: 0,
+          count: iaItemCount || 0,
           firstResult: result,
+          isInternetArchive: isInternetArchive,
+          hasItemCount: iaItemCount != null && iaItemCount > 0,
         };
       }
-      uniquePeriodicals[normalizedKey].count++;
+      // Only increment count for non-IA items (grouping search results)
+      if (!isInternetArchive) {
+        uniquePeriodicals[normalizedKey].count++;
+      }
     });
 
     // Convert to array and sort by count (most common first)
@@ -401,12 +418,29 @@ export class TrackingManager {
       const div = document.createElement('div');
       div.className = CSS_CLASSES.RESULT_ITEM;
 
+      // For IA items, show file count or indicate it needs to be fetched
+      let countDisplay;
+      if (periodical.isInternetArchive) {
+        if (periodical.hasItemCount) {
+          countDisplay = `<strong>Files:</strong> ${periodical.count}`;
+        } else {
+          countDisplay = '<strong>Files:</strong> <span class="ia-file-count" data-identifier="' +
+            (result.metadata?.identifier || '') + '">Loading...</span>';
+        }
+      } else {
+        countDisplay = `<strong>Available Issues:</strong> ${periodical.count}`;
+      }
+
+      // Show provider badge for IA items
+      const providerBadge = periodical.isInternetArchive
+        ? '<span class="provider-badge ia-badge">🏛️ Internet Archive</span>'
+        : '';
+
       div.innerHTML = `
         <div class="result-info">
           <h5 class="result-title">${periodical.displayTitle}</h5>
-          <p class="result-detail">
-            <strong>Available Issues:</strong> ${periodical.count}
-          </p>
+          ${providerBadge}
+          <p class="result-detail">${countDisplay}</p>
           ${publisher ? `<p class="result-detail"><strong>Publisher:</strong> ${publisher}</p>` : ''}
         </div>
         <div class="result-select">→</div>
@@ -421,6 +455,43 @@ export class TrackingManager {
 
       resultsContainer.appendChild(div);
     });
+
+    // Fetch file counts for IA items that don't have them
+    this.fetchIAFileCounts();
+  }
+
+  /**
+   * Fetch file counts for Internet Archive items that are missing them
+   */
+  async fetchIAFileCounts() {
+    const fileCountElements = document.querySelectorAll('.ia-file-count');
+    if (fileCountElements.length === 0) return;
+
+    for (const element of fileCountElements) {
+      const identifier = element.dataset.identifier;
+      if (!identifier) {
+        element.textContent = '1+';
+        continue;
+      }
+
+      try {
+        // Fetch metadata from IA to get file count
+        const response = await fetch(`https://archive.org/metadata/${identifier}`);
+        if (response.ok) {
+          const metadata = await response.json();
+          const files = metadata.files || [];
+          // Count PDF files (Text PDF, Image Container PDF, etc.)
+          const pdfCount = files.filter(f =>
+            f.format && (f.format.toLowerCase().includes('pdf') || f.format === 'Text PDF')
+          ).length;
+          element.textContent = pdfCount > 0 ? pdfCount : '1+';
+        } else {
+          element.textContent = '1+';
+        }
+      } catch {
+        element.textContent = '1+';
+      }
+    }
   }
 
   /**

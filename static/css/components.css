@@ -1535,6 +1535,21 @@
   margin-left: 20px;
 }
 
+/* Provider badges for search results */
+.provider-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75em;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.ia-badge {
+  background: #e8f4fc;
+  color: #428bca;
+}
+
 /* ==========================================================================
    Input Highlight Effects (Added for JS Refactoring - Phase 3)
    ========================================================================== */

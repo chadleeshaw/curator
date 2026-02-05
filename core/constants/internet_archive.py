@@ -100,6 +100,7 @@ IA_SEARCH_FIELDS = [
     "mediatype",
     "collection",
     "format",
+    "item_count",
 ]
 
 # Status values for tracking downloads

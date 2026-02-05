@@ -393,6 +393,14 @@ class InternetArchiveProvider(SearchProvider):
                 # Detect if this is a collection based on title
                 is_collection = self._is_collection_title(title)
 
+                # Get item_count for collection-type items (number of sub-items)
+                item_count = item.get("item_count")
+                if isinstance(item_count, str):
+                    try:
+                        item_count = int(item_count)
+                    except (ValueError, TypeError):
+                        item_count = None
+
                 # Build metadata
                 raw_metadata = {
                     "identifier": identifier,
@@ -401,6 +409,8 @@ class InternetArchiveProvider(SearchProvider):
                     "collection": item.get("collection", []),
                     "mediatype": item.get("mediatype", ""),
                     "is_collection": is_collection,
+                    "item_count": item_count,  # File/item count from IA API
+                    "available_formats": available_formats,  # List of available formats
                 }
 
                 # The URL is the item identifier - the client will resolve the actual file
