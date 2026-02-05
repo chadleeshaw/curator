@@ -1,17 +1,21 @@
 """
 Database utilities.
-Provides consistent session management patterns.
+Provides consistent session management patterns and retry logic for database locks.
 """
 
+import logging
+import time
 from contextlib import contextmanager
 from typing import Callable, Generator, TypeVar
 
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from core.utils.aasync import run_in_thread
 
 T = TypeVar("T")
+logger = logging.getLogger(__name__)
 
 
 @contextmanager
@@ -81,6 +85,68 @@ async def with_db_session(session_factory: Callable, operation: Callable[[Sessio
             db_session.close()
 
     return await run_in_thread(_db_operation)
+
+
+def with_retry(operation: Callable[[], T], max_retries: int = 3, delay: float = 0.1) -> T:
+    """
+    Retry a database operation if it fails with OperationalError (database locked).
+
+    This helps handle transient database lock issues by automatically retrying with
+    exponential backoff. Useful for operations that may conflict with background tasks.
+
+    Usage:
+        def db_operation():
+            session = session_factory()
+            try:
+                # Perform database operations
+                session.add(obj)
+                session.commit()
+                return obj
+            finally:
+                session.close()
+
+        result = with_retry(db_operation, max_retries=5, delay=0.1)
+
+    Args:
+        operation: Function to execute (takes no arguments)
+        max_retries: Maximum number of retry attempts (default: 3)
+        delay: Initial delay between retries in seconds (default: 0.1)
+
+    Returns:
+        Result of the operation
+
+    Raises:
+        OperationalError: If all retries are exhausted
+        Exception: Any other exception from the operation
+    """
+    last_error = None
+    current_delay = delay
+
+    for attempt in range(max_retries + 1):
+        try:
+            return operation()
+        except OperationalError as e:
+            last_error = e
+            error_msg = str(e).lower()
+
+            # Only retry on database lock errors
+            if "database is locked" not in error_msg and "locked" not in error_msg:
+                raise
+
+            if attempt < max_retries:
+                logger.warning(
+                    f"Database locked, retrying in {current_delay:.2f}s (attempt {attempt + 1}/{max_retries})..."
+                )
+                time.sleep(current_delay)
+                current_delay *= 2  # Exponential backoff
+            else:
+                logger.error(f"Database operation failed after {max_retries} retries")
+                raise last_error
+
+    # Should never reach here, but just in case
+    if last_error:
+        raise last_error
+    raise RuntimeError("Unexpected state in with_retry")
 
 
 def mark_json_modified(obj, *field_names: str) -> None:

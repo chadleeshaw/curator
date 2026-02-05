@@ -256,7 +256,9 @@ class DownloadManager:
             logger.warning(f"Could not create DB search result: {e}", exc_info=True)
             return None
 
-    def _is_bad_file(self, tracking_id: int, fuzzy_group: str, session: Session, url: str = "") -> Optional[DownloadSubmission]:
+    def _is_bad_file(
+        self, tracking_id: int, fuzzy_group: str, session: Session, url: str = ""
+    ) -> Optional[DownloadSubmission]:
         """
         Check if this file has failed too many times and should not be retried.
 

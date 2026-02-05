@@ -6,8 +6,11 @@ import logging
 from contextlib import contextmanager
 from typing import Generator
 
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from core.constants.app import DB_LOCK_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +25,39 @@ class DatabaseManager:
         Args:
             db_url: SQLAlchemy database URL
         """
-        self.engine = create_engine(db_url, echo=False)
+        # Configure SQLite for concurrent access
+        # - check_same_thread: Allow connections across threads (FastAPI/uvicorn)
+        # - timeout: Wait up to 30 seconds before raising OperationalError
+        # - StaticPool: Reuse single connection across threads for in-memory DBs
+        connect_args = {
+            "check_same_thread": False,
+            "timeout": DB_LOCK_TIMEOUT,  # Wait for locks to be released
+        }
+
+        # Use StaticPool for in-memory databases, otherwise use default pooling
+        is_memory_db = ":memory:" in db_url
+        poolclass = StaticPool if is_memory_db else None
+
+        self.engine = create_engine(
+            db_url,
+            echo=False,
+            connect_args=connect_args,
+            poolclass=poolclass,
+            pool_pre_ping=True,  # Verify connections before using
+        )
+
+        # Enable WAL mode for better concurrent access (SQLite 3.7.0+)
+        # WAL allows multiple readers and one writer simultaneously
+        if "sqlite" in db_url and not is_memory_db:
+
+            @event.listens_for(self.engine, "connect")
+            def set_sqlite_pragma(dbapi_conn, connection_record):
+                cursor = dbapi_conn.cursor()
+                cursor.execute("PRAGMA journal_mode=WAL")
+                cursor.execute("PRAGMA synchronous=NORMAL")  # Faster writes with WAL
+                cursor.execute(f"PRAGMA busy_timeout={int(DB_LOCK_TIMEOUT * 1000)}")  # milliseconds
+                cursor.close()
+
         self.session_factory = sessionmaker(bind=self.engine)
 
     def create_tables(self):

@@ -35,13 +35,27 @@ MAX_DOWNLOAD_RETRIES_IA = 5
 """Maximum retries for Internet Archive downloads (failures usually transient)"""
 
 MAX_DOWNLOADS = 10
-"""Maximum number of concurrent downloads allowed system-wide"""""
+"""Maximum number of concurrent downloads allowed system-wide""" ""
 
 DOWNLOAD_FILE_SEARCH_DEPTH = 2
 """Maximum directory depth to search for downloaded files"""
 
 PROVIDER_SEARCH_TIMEOUT = 30
 """Timeout in seconds for provider search operations"""
+
+
+# ==============================================================================
+# Database Configuration
+# ==============================================================================
+
+DB_LOCK_TIMEOUT = 30.0
+"""Timeout in seconds to wait for database locks before raising error"""
+
+DB_LOCK_RETRY_MAX = 3
+"""Maximum number of retries for database lock errors"""
+
+DB_LOCK_RETRY_DELAY = 0.1
+"""Initial delay in seconds between database lock retries (exponential backoff)"""
 
 
 # ==============================================================================
