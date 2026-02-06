@@ -481,7 +481,7 @@ class ReorganizationMixin:
 
         # Step 4: Cleanup old directories
         if not dry_run:
-            self._cleanup_old_directories(old_directories, category_dir)
+            self._safe_cleanup_library_directories(old_directories, category_dir)
 
         # Step 5: Process sidecar files
         sidecar_results = self._reorganize_from_sidecars(
@@ -497,7 +497,7 @@ class ReorganizationMixin:
 
         # Final cleanup after sidecar processing
         if not dry_run and sidecar_results["files_reorganized"] > 0:
-            self._cleanup_old_directories(old_directories, category_dir)
+            self._safe_cleanup_library_directories(old_directories, category_dir)
 
         # Step 6: Build and return result
         return self._build_reorganization_result(

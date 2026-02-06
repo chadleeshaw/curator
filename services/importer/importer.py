@@ -5,7 +5,6 @@ Extracts cover art, categorizes files, and adds them to the database.
 
 import logging
 import re
-import shutil
 import threading
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -19,7 +18,7 @@ from core.constants.app import DEFAULT_FUZZY_THRESHOLD
 from core.constants.category import CATEGORY_KEYWORDS
 from core.constants.date import DUPLICATE_DATE_THRESHOLD_DAYS
 from core.constants.errors import ErrorCodes
-from core.constants.files import IMPORT_MARKER_FILE
+from core.constants.files import IMPORT_MARKER_FILE, SUPPORTED_FILE_EXTENSIONS
 from core.constants.language import DEFAULT_LANGUAGE
 from core.parsers.country import ISO_COUNTRIES
 from core.utils.general import generate_olid
@@ -1339,6 +1338,7 @@ class FileImporter:
 
         # Clean up folders after all files are processed
         # CRITICAL: Only cleanup folders that are in the downloads directory
+        # and contain no remaining supported files (PDF, EPUB, CBZ, CBR)
         for folder in folders_to_cleanup:
             try:
                 # Safety check: only delete folders in downloads directory
@@ -1352,8 +1352,7 @@ class FileImporter:
                     continue
 
                 if folder.exists():
-                    shutil.rmtree(folder)
-                    logger.info(f"Deleted download folder and contents: {folder.name}")
+                    self._safe_cleanup_download_folder(folder)
             except Exception as e:
                 logger.warning(f"Failed to delete folder {folder.name}: {e}")
 
@@ -1615,11 +1614,49 @@ class FileImporter:
                 parent_dir = pdf_path.parent
                 if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
                     if parent_dir.exists():
-                        # Remove directory and all its contents (e.g., .nzb, .par2, .nfo files)
-                        shutil.rmtree(parent_dir)
-                        logger.info(f"Deleted download folder and contents: {parent_dir.name}")
+                        self._safe_cleanup_download_folder(parent_dir)
         except Exception as e:
             logger.warning(f"Failed to cleanup download file: {e}")
+
+    def _safe_cleanup_download_folder(self, folder: Path) -> None:
+        """
+        Safely clean up a download folder, preserving any remaining supported files.
+
+        Recursively checks subdirectories bottom-up. Only removes folders and files
+        when no supported files (.pdf, .epub, .cbz, .cbr) remain at any level.
+        Leftover sidecar files (.nfo, .nzb, .par2, .txt, etc.) are removed when safe.
+
+        Args:
+            folder: Path to the download folder to clean up
+        """
+        # First, recursively clean any subdirectories bottom-up
+        for child in sorted(folder.iterdir()):
+            if child.is_dir():
+                self._safe_cleanup_download_folder(child)
+
+        # Now check this folder: any supported files remaining (directly)?
+        remaining_supported = [
+            f for f in folder.iterdir() if f.is_file() and f.suffix.lower() in SUPPORTED_FILE_EXTENSIONS
+        ]
+
+        if remaining_supported:
+            logger.info(
+                f"Keeping download folder (contains {len(remaining_supported)} " f"unprocessed file(s)): {folder.name}"
+            )
+            return
+
+        # No supported files remain — safe to remove leftover sidecars
+        for leftover in folder.iterdir():
+            if leftover.is_file():
+                logger.debug(f"Removing leftover download file: {leftover.name}")
+                leftover.unlink()
+
+        # Remove directory if now empty (subdirs should already be cleaned)
+        if not any(folder.iterdir()):
+            folder.rmdir()
+            logger.info(f"Deleted empty download folder: {folder.name}")
+        else:
+            logger.info(f"Keeping download folder (contains remaining items): {folder.name}")
 
     def _extract_cover(self, file_path: Path) -> Optional[Path]:
         """
