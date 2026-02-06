@@ -418,9 +418,7 @@ class TestConfidenceResolution:
             "used_ocr": True,
         }
 
-        derived = build_derived_metadata(
-            file_scan=file_scan, text_scan=text_scan, ocr_scan=ocr_scan
-        )
+        derived = build_derived_metadata(file_scan=file_scan, text_scan=text_scan, ocr_scan=ocr_scan)
 
         # OCR should win for year (2023, not the filename-guessed 2026)
         assert derived["year"]["value"] == 2023
