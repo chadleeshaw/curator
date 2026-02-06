@@ -972,7 +972,8 @@ class DownloadManager:
         from models.database import DiscoveredIssue
         from services import IssueDiscoveryService
 
-        logger.info(f"Submitting single issue download: {search_result['title']} (tracking_id: {tracking_id})")
+        title = search_result["title"]
+        logger.info(f"Submitting single issue download: {title} (tracking_id: {tracking_id})")
 
         # Use Issue Discovery service to create/find DiscoveredIssue
         # This ensures manual downloads go through the same system as automatic ones
@@ -986,39 +987,53 @@ class DownloadManager:
         )
 
         if record_result["new"] == 0 and record_result["updated"] == 0:
-            logger.warning(f"Failed to record search result for manual download: {search_result['title']}")
-            # Fall back to direct submission for backward compatibility
-            return self._legacy_direct_submission(tracking_id, search_result, session)
+            logger.warning(f"Failed to record search result for manual download: {title}")
+            return self._manual_direct_submission(tracking_id, search_result, session)
 
-        # Find the discovered issue we just created/updated
-        discovered_issue = (
-            session.query(DiscoveredIssue)
-            .filter(
-                DiscoveredIssue.tracking_id == tracking_id,
-                DiscoveredIssue.title == search_result["title"],
-            )
-            .first()
+        # Find the discovered issue by fuzzy_match_group (same approach as issue_discovery)
+        # NOTE: Don't match by exact title — record_search_results may have found an
+        # existing DiscoveredIssue whose stored title differs from this search result title
+        parsed = self.parser.parse_search_result(
+            title=title,
+            url=search_result.get("url", ""),
+            provider=search_result.get("provider", ""),
         )
 
+        discovered_issue = None
+        if parsed:
+            fuzzy_group = get_fuzzy_group_id(parsed.cleaned_title, parsed.publication_date)
+            discovered_issue = (
+                session.query(DiscoveredIssue)
+                .filter(
+                    DiscoveredIssue.tracking_id == tracking_id,
+                    DiscoveredIssue.fuzzy_match_group == fuzzy_group,
+                )
+                .first()
+            )
+
         if not discovered_issue:
-            logger.error(f"Could not find DiscoveredIssue after recording: {search_result['title']}")
-            return self._legacy_direct_submission(tracking_id, search_result, session)
+            logger.error(f"Could not find DiscoveredIssue after recording: {title}")
+            return self._manual_direct_submission(tracking_id, search_result, session)
 
         # Force status to "wanted" for manual downloads (user explicitly requested it)
+        # This allows re-downloading previously failed/completed/skipped issues
         if discovered_issue.download_status not in ["wanted", "queued", "downloading"]:
             discovered_issue.download_status = "wanted"
             discovered_issue.download_priority = 100  # Highest priority for manual downloads
+            discovered_issue.attempt_count = 0  # Reset attempts for manual re-download
+            discovered_issue.last_error = None
             session.commit()
 
         # Submit using the standard Issue Discovery flow
         return self.submit_from_discovered_issue(discovered_issue.id, session)
 
-    def _legacy_direct_submission(
+    def _manual_direct_submission(
         self, tracking_id: int, search_result: Dict[str, Any], session: Session
     ) -> Optional[DownloadSubmission]:
         """
-        Legacy direct submission method (bypasses Issue Discovery system).
-        Only used as fallback when Issue Discovery fails.
+        Direct submission for manual user-initiated downloads.
+        Bypasses duplicate checking since the user explicitly requested the download.
+        Used as fallback when Issue Discovery system fails.
         """
         # Create DB search result record
         search_result_db_id = None
@@ -1037,10 +1052,24 @@ class DownloadManager:
         except Exception as e:
             logger.warning(f"Could not create DB search result: {e}", exc_info=True)
 
-        # Submit download (still check for duplicates)
-        submission = self.submit_download(tracking_id, search_result, session, search_result_db_id)
+        # Skip duplicate checking for manual downloads — user explicitly wants this
+        # Check if at concurrent download limit; queue if so, otherwise submit directly
+        active_count = self._get_active_download_count(session)
+        if active_count >= self.max_downloads:
+            logger.info(
+                f"[DownloadManager] At download limit ({active_count}/{self.max_downloads}), "
+                f"queuing manual download: '{search_result['title']}'"
+            )
+            return self._create_submission_record(
+                tracking_id,
+                search_result,
+                DownloadSubmission.StatusEnum.QUEUED,
+                session,
+                search_result_db_id=search_result_db_id,
+                attempt_count=0,
+            )
 
-        return submission
+        return self._submit_to_client(tracking_id, search_result, session, search_result_db_id)
 
     def update_submission_status(self, job_id: str, session: Session) -> Optional[DownloadSubmission]:
         """
