@@ -217,6 +217,9 @@ class DownloadManager:
 
         if submission.status == DownloadSubmission.StatusEnum.PENDING:
             results["submitted"] += 1
+        elif submission.status == DownloadSubmission.StatusEnum.QUEUED:
+            results.setdefault("queued", 0)
+            results["queued"] += 1
         elif submission.status == DownloadSubmission.StatusEnum.SKIPPED:
             results["skipped"] += 1
         elif submission.status == DownloadSubmission.StatusEnum.FAILED:
@@ -880,6 +883,7 @@ class DownloadManager:
 
         logger.info(
             f"Selected editions download completed: submitted={results['submitted']}, "
+            f"queued={results.get('queued', 0)}, "
             f"skipped={results['skipped']}, failed={results['failed']}"
         )
 
@@ -924,27 +928,25 @@ class DownloadManager:
         # Sort results: English editions first, then by date (newest first)
         filtered_results.sort(key=self._get_result_sort_key)
 
-        # Limit to avoid overwhelming the download queue
-        selected_results = filtered_results[: self.max_downloads]
-
-        if selected_results:
+        if filtered_results:
             logger.info(
-                f"Submitting {len(selected_results)} issues (limited to {self.max_downloads} concurrent downloads, "
-                f"{len(filtered_results) - len(selected_results)} skipped)"
+                f"Submitting {len(filtered_results)} issues for download "
+                f"(max concurrent: {self.max_downloads}, excess will be queued)"
             )
-        elif len(filtered_results) == 0:
+        else:
             logger.info(
                 f"No new issues to download for '{tracking.title}' - all found issues already downloaded or pending"
             )
 
-        # Submit each selected result
-        for search_result in selected_results:
+        # Submit each result - submit_download will queue excess beyond max_downloads
+        for search_result in filtered_results:
             search_result_db_id = self._create_search_result_record(search_result, tracking.title, session)
             submission = self.submit_download(tracking_id, search_result, session, search_result_db_id)
             self._collect_submission_result(submission, search_result, results)
 
         logger.info(
             f"Download search completed: submitted={results['submitted']}, "
+            f"queued={results.get('queued', 0)}, "
             f"skipped={results['skipped']}, failed={results['failed']}"
         )
 

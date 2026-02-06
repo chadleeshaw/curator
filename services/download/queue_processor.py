@@ -111,8 +111,8 @@ class QueueProcessor:
                     f"(submission_id: {submission.id}, category: {category})"
                 )
 
-                job_id = self.download_client.add_nzb(
-                    url=submission.source_url,
+                job_id = self.download_client.submit(
+                    nzb_url=submission.source_url,
                     title=submission.result_title,
                     category=category,
                 )
