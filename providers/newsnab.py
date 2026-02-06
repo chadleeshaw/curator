@@ -8,7 +8,7 @@ import re
 import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 import requests
 
@@ -306,13 +306,18 @@ class NewsnabProvider(SearchProvider):
 
         return False
 
-    def search(self, query: str = "", category: str = None) -> List[SearchResult]:
+    def search(
+        self, query: str = "", category: str = None, aliases: Optional[Sequence[str]] = None
+    ) -> List[SearchResult]:
         """
         Search Newsnab-compatible service for NZBs.
+
+        Searches primary query first, then each alias as a separate API call.
 
         Args:
             query: Magazine title to search for. Empty string triggers RSS mode.
             category: Optional category filter ("Magazines", "Comics", etc.)
+            aliases: Optional alternative search terms to search individually
 
         Returns:
             List of SearchResult objects
@@ -347,6 +352,30 @@ class NewsnabProvider(SearchProvider):
             results = self._search_xml_api(search_query, category)
 
             logger.debug(f"[{self.name}] Query '{search_query}' returned {len(results)} results")
+
+            # Search each alias as a separate API call
+            if aliases:
+                seen_urls = {r.url for r in results}
+                for alias in aliases:
+                    alias = alias.strip()
+                    if not alias or alias == query:
+                        continue
+                    try:
+                        if self.request_delay_seconds > 0 and self._request_times:
+                            time_since_last = time.time() - self._request_times[-1]
+                            if time_since_last < self.request_delay_seconds:
+                                delay = self.request_delay_seconds - time_since_last
+                                time.sleep(delay)
+                        self._track_request()
+                        alias_results = self._search_xml_api(alias, category)
+                        for r in alias_results:
+                            if r.url not in seen_urls:
+                                seen_urls.add(r.url)
+                                results.append(r)
+                        logger.debug(f"[{self.name}] Alias '{alias}' returned {len(alias_results)} results")
+                    except Exception as e:
+                        logger.warning(f"[{self.name}] Alias search error for '{alias}': {e}")
+
             return results
 
         except Exception as e:

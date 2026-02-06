@@ -149,6 +149,7 @@ from .cache import (
     UPLOAD_DATE_FORMATS,
 )
 from .internet_archive import (
+    IA_CATEGORY_COLLECTION_MAP,
     IA_DEFAULT_MEDIATYPE,
     IA_DEFAULT_ROWS,
     IA_DEFAULT_SORT,
@@ -314,6 +315,7 @@ __all__ = [
     "MIN_SYNC_INTERVAL_SECONDS",
     "UPLOAD_DATE_FORMATS",
     # Internet Archive constants
+    "IA_CATEGORY_COLLECTION_MAP",
     "IA_DEFAULT_MEDIATYPE",
     "IA_DEFAULT_ROWS",
     "IA_DEFAULT_SORT",

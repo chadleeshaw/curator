@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 
 @dataclass
@@ -28,13 +28,14 @@ class SearchProvider(ABC):
         self.type = config.get("type", "unknown")
 
     @abstractmethod
-    def search(self, query: str, category: str = None) -> List[SearchResult]:
+    def search(self, query: str, category: str = None, aliases: Optional[Sequence[str]] = None) -> List[SearchResult]:
         """
         Search for periodicals matching query.
 
         Args:
             query: Periodical title or search term
             category: Optional category filter (e.g., "Magazines", "Comics")
+            aliases: Optional alternative search terms (e.g., search aliases from tracking)
 
         Returns:
             List of SearchResult objects
