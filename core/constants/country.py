@@ -239,6 +239,6 @@ COUNTRY_INDICATORS = {
     "NZ": ["[NZ]", " NZ ", ".NZ.", "New Zealand"],
     "BR": ["[BR]", " BR ", ".BR.", "Brazil", "Brazilian"],
     "AR": ["[AR]", " AR ", ".AR.", "Argentina", "Argentine"],
-    "ZA": ["[ZA]", " ZA ", ".ZA.", "South Africa", "Africa"],
+    "ZA": ["[ZA]", " ZA ", ".ZA.", "South Africa"],
 }
 """Keywords and patterns used to detect country from periodical titles"""
