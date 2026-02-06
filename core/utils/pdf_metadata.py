@@ -109,6 +109,12 @@ def embed_metadata_in_pdf(
     try:
         # Read existing PDF
         reader = PdfReader(str(path))
+
+        # Skip encrypted PDFs — we can't safely modify them
+        if reader.is_encrypted:
+            logger.debug(f"PDF is encrypted, skipping metadata embed: {path.name}")
+            return False
+
         writer = PdfWriter()
 
         # Copy all pages
@@ -163,5 +169,10 @@ def embed_metadata_in_pdf(
             return False
 
     except Exception as e:
-        logger.error(f"Failed to embed metadata in PDF {pdf_path}: {e}")
+        error_msg = str(e)
+        # Encrypted/DRM PDFs that slip past is_encrypted check (e.g., AES without cryptography package)
+        if "cryptography" in error_msg.lower() or "encrypted" in error_msg.lower():
+            logger.debug(f"PDF is encrypted, skipping metadata embed: {path.name}")
+        else:
+            logger.error(f"Failed to embed metadata in PDF {pdf_path}: {e}")
         return False
