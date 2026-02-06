@@ -40,6 +40,7 @@ from core.constants.ocr import (
     OCR_DISABLE_ENV_VALUES,
     OCR_ISSUE_PATTERNS,
     OCR_MAX_PAGES,
+    OCR_MAX_VOLUME,
     OCR_YEAR_PATTERN,
     OCR_VOLUME_PATTERNS,
     OCR_SPECIAL_EDITION_INDICATORS,
@@ -292,7 +293,10 @@ def _extract_volume(text_upper: str) -> Optional[int]:
     for pattern in OCR_VOLUME_PATTERNS:
         match = re.search(pattern, text_upper)
         if match:
-            return int(match.group(1))
+            vol = int(match.group(1))
+            if vol <= OCR_MAX_VOLUME:
+                return vol
+            logger.debug(f"Skipping unreasonable volume number {vol} (exceeds {OCR_MAX_VOLUME})")
     return None
 
 

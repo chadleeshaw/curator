@@ -47,9 +47,12 @@ OCR_YEAR_PATTERN = r"(?<![0-9])(19\d{2}|20\d{2})"
 OCR_VOLUME_PATTERNS = [
     r"VOL\.?\s*(\d+)",  # Vol. 1 or Vol 1
     r"VOLUME\s+(\d+)",  # Volume 1
-    r"V\.?\s*(\d+)",  # V. 1 or V 1
+    r"(?<![A-Z])V\.?\s*(\d+)",
 ]
 """Regex patterns for detecting volume numbers in OCR text"""
+
+OCR_MAX_VOLUME = 9999
+"""Maximum reasonable volume number for periodicals (filters out zip codes, addresses, etc.)"""
 
 OCR_SPECIAL_EDITION_INDICATORS = [
     " SPECIAL EDITION",
