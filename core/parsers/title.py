@@ -471,6 +471,11 @@ class TitleMatcher:
                 if re.match(r"^\d+$", word_lower):
                     continue
 
+                # Stop at punctuation/separator tokens (dashes, etc.)
+                # A dash typically separates "Title - Subtitle", not a special edition suffix
+                if re.match(r"^[\-–—]+$", word_lower):
+                    break
+
                 # If this is a common periodical word, stop counting
                 if word_lower in common_periodical_words:
                     break
@@ -486,9 +491,15 @@ class TitleMatcher:
 
                 # Make sure we have a reasonable base title left
                 if len(base_words) >= min_base_words:
+                    # Don't split if the word just before the special section is a separator (dash)
+                    # "Title - Name" patterns are subtitles, not special editions
+                    if re.match(r"^[\-–—]+$", base_words[-1]):
+                        return (title, False, "")
+
                     # Don't split if base_words ends with a conjunction (e.g., "Magazine &" shouldn't be a base title)
                     # This prevents titles like "Magazine & Other Magazine" from being split incorrectly
                     if base_words[-1].lower() in {"&", "and", "or", "the", "of", "for", "in", "on", "at", "to", "with"}:
+                        return (title, False, "")
                         return (title, False, "")
 
                     base_title = " ".join(base_words)
