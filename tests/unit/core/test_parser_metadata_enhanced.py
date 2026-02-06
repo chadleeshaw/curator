@@ -431,10 +431,10 @@ class TestTimestampIdPattern:
 
     def test_timestamp_id_with_dash_separator(self, extractor):
         """Test: Title (20240315-125500).pdf - timestamp with dash separator."""
-        path = Path("/magazines/Penthouse/Penthouse (20240315-125500).pdf")
+        path = Path("/magazines/Magazine/Magazine (20240315-125500).pdf")
         result = extractor.extract_from_filename(path)
 
-        assert result["title"] == "Penthouse"
+        assert result["title"] == "Magazine"
         assert result["year"] == 2024
         assert result["month_name"] == "March"
         assert result["pattern"] == "timestamp_id"

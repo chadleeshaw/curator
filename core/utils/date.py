@@ -105,8 +105,8 @@ def parse_multi_month(month_str: str) -> Tuple[Optional[int], str]:
 
     month_str = month_str.strip()
 
-    # Check for multi-month separators
-    for sep in ["/", "-", "&"]:
+    # Check for multi-month separators (including underscore for IA filenames)
+    for sep in ["/", "-", "&", "_"]:
         if sep in month_str:
             parts = month_str.split(sep)
             first_month = parts[0].strip()

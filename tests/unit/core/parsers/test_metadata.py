@@ -122,6 +122,18 @@ class TestParseMultiMonth:
         assert month_num == 6
         assert "June" in display and "July" in display
 
+    def test_parse_multi_month_underscore(self):
+        """Test parsing multi-month periods with underscore separator."""
+        month_num, display = parse_multi_month("February_March")
+        assert month_num == 2
+        assert display == "February/March"
+
+    def test_parse_multi_month_underscore_abbreviations(self):
+        """Test parsing abbreviated multi-month periods with underscore."""
+        month_num, display = parse_multi_month("Oct_Nov")
+        assert month_num == 10
+        assert display == "October/November"
+
     def test_parse_single_month(self):
         """Test that single months work correctly."""
         month_num, display = parse_multi_month("December")
@@ -225,6 +237,39 @@ class TestMetadataExtractorMultiMonth:
         assert result["year"] == 2023
         assert result["month_name"] == "Aug/Sep"  # Normalized to slash
         assert result["issue_date"].month == 8
+
+    def test_extract_multi_month_underscore(self):
+        """Test extracting metadata from underscore-separated multi-month filename."""
+        extractor = FilenameParser()
+        pdf_path = Path("/test/Magazine Letters - February_March 2019.pdf")
+
+        result = extractor.extract_from_filename(pdf_path)
+
+        assert result["title"] == "Magazine Letters"
+        assert result["year"] == 2019
+        assert result["month_name"] == "February/March"
+        assert result["issue_date"].year == 2019
+        assert result["issue_date"].month == 2
+        assert result["pattern"] == "multi_month"
+
+    def test_extract_multi_month_underscore_various(self):
+        """Test underscore-separated multi-month with various month pairs."""
+        extractor = FilenameParser()
+
+        cases = [
+            ("April_May 2019", 2019, 4, "April/May"),
+            ("June_July 2018", 2018, 6, "June/July"),
+            ("August_September 2020", 2020, 8, "August/September"),
+            ("October_November 2019", 2019, 10, "October/November"),
+        ]
+        for months_year, exp_year, exp_month, exp_name in cases:
+            pdf_path = Path(f"/test/Magazine - {months_year}.pdf")
+            result = extractor.extract_from_filename(pdf_path)
+
+            assert result["year"] == exp_year, f"Failed for {months_year}"
+            assert result["issue_date"].month == exp_month, f"Failed for {months_year}"
+            assert result["month_name"] == exp_name, f"Failed for {months_year}"
+            assert result["pattern"] == "multi_month", f"Failed for {months_year}"
 
     def test_standard_single_month_still_works(self):
         """Test that standard single-month parsing still works."""
