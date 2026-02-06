@@ -2338,37 +2338,40 @@ window.downloadAllAvailable = async function () {
 
     UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, `Downloading ${count} issues...`, 'info');
 
-    let successCount = 0;
-    let errorCount = 0;
-
-    // Download each issue sequentially to avoid overwhelming the server
-    for (const issue of tracking.availableIssues) {
-      try {
-        const response = await APIClient.post('/api/downloads/single-issue', {
-          tracking_id: trackingId,
+    try {
+      // Use batch endpoint to submit all issues in a single request
+      const response = await APIClient.post('/api/downloads/batch-issues', {
+        tracking_id: trackingId,
+        issues: tracking.availableIssues.map((issue) => ({
           title: issue.title,
           url: issue.url,
           provider: issue.provider,
-        });
-        const data = await response.json();
+        })),
+      });
+      const data = await response.json();
 
-        if (data.status === 'queued' || data.job_id) {
-          successCount++;
-        } else {
-          errorCount++;
-        }
-      } catch (err) {
-        console.error(`Failed to download ${issue.title}:`, err);
-        errorCount++;
-      }
+      const parts = [];
+      if (data.submitted > 0) parts.push(`${data.submitted} submitted`);
+      if (data.queued > 0) parts.push(`${data.queued} queued`);
+      if (data.skipped > 0) parts.push(`${data.skipped} skipped`);
+      if (data.failed > 0) parts.push(`${data.failed} failed`);
+      const message = parts.join(', ') || 'No issues to download';
+
+      const hasErrors = data.failed > 0;
+      UIUtils.showStatus(
+        ELEMENT_IDS.TRACKING_STATUS,
+        message,
+        hasErrors ? 'warning' : 'success'
+      );
+    } catch (err) {
+      console.error('Batch download error:', err);
+      UIUtils.showStatus(
+        ELEMENT_IDS.TRACKING_STATUS,
+        `Error: ${err.toUserMessage ? err.toUserMessage() : err.message}`,
+        'error'
+      );
     }
 
-    const message = `Submitted ${successCount} downloads${errorCount > 0 ? `, ${errorCount} failed` : ''}`;
-    UIUtils.showStatus(
-      ELEMENT_IDS.TRACKING_STATUS,
-      message,
-      errorCount > 0 ? 'warning' : 'success'
-    );
     setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), TIMEOUTS.AUTO_HIDE_LONG);
   } catch (err) {
     console.error('Bulk download error:', err);

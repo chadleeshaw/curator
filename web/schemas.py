@@ -216,6 +216,22 @@ class DownloadSingleIssueRequest(BaseModel):
     publication_date: Optional[str] = None  # Publication date if known
 
 
+class DownloadBatchIssueItem(BaseModel):
+    """A single issue within a batch download request"""
+
+    title: str
+    url: str
+    provider: Optional[str] = "manual"
+    publication_date: Optional[str] = None
+
+
+class DownloadBatchIssuesRequest(BaseModel):
+    """Request to download multiple issues in a single batch"""
+
+    tracking_id: int
+    issues: list[DownloadBatchIssueItem]
+
+
 class DownloadSubmissionResponse(BaseModel):
     """Response for a download submission"""
 
