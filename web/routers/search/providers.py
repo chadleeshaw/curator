@@ -122,8 +122,14 @@ def fetch_from_providers(
     """
     Fetch results from direct search providers.
 
+    Passes the primary query and any aliases to each provider in a single call.
+    Each provider handles aliases according to its capabilities:
+    - Internet Archive: combines into a single OR query (one API call)
+    - Newsnab: searches each alias separately
+    - RSS: matches against all terms in the in-memory filter
+
     Args:
-        search_queries: List of queries to search
+        search_queries: List of queries to search (first is primary, rest are aliases)
         category: Optional category filter
         seen_urls: Set of already seen URLs (modified in place)
 
@@ -140,11 +146,37 @@ def fetch_from_providers(
         provider_errors.append(error_msg)
         return results, provider_errors
 
-    # Search each query against each provider
-    for search_query in search_queries:
+    # Split into primary query and aliases
+    primary_query = search_queries[0]
+    aliases = search_queries[1:] if len(search_queries) > 1 else None
+
+    # Search each provider once with primary query + aliases
+    for provider in search_providers:
+        try:
+            provider_results = provider.search(primary_query, category=category, aliases=aliases)
+            for r in provider_results:
+                if r.url not in seen_urls:
+                    seen_urls.add(r.url)
+                    results.append(
+                        {
+                            "title": r.title,
+                            "url": r.url,
+                            "provider": r.provider,
+                            "publication_date": r.publication_date,
+                            "metadata": r.raw_metadata or {},
+                        }
+                    )
+        except Exception as e:
+            error_msg = f"{provider.__class__.__name__}: {str(e)}"
+            logger.warning(f"Error searching provider: {error_msg}")
+            provider_errors.append(error_msg)
+
+    # Retry without category filter if no results
+    if category and len(results) == 0:
+        logger.info(f"No results with category '{category}', expanding search to all categories")
         for provider in search_providers:
             try:
-                provider_results = provider.search(search_query, category=category)
+                provider_results = provider.search(primary_query, category=None, aliases=aliases)
                 for r in provider_results:
                     if r.url not in seen_urls:
                         seen_urls.add(r.url)
@@ -157,31 +189,7 @@ def fetch_from_providers(
                                 "metadata": r.raw_metadata or {},
                             }
                         )
-            except Exception as e:
-                error_msg = f"{provider.__class__.__name__}: {str(e)}"
-                logger.warning(f"Error searching provider: {error_msg}")
-                provider_errors.append(error_msg)
-
-    # Retry without category filter if no results
-    if category and len(results) == 0:
-        logger.info(f"No results with category '{category}', expanding search to all categories")
-        for search_query in search_queries:
-            for provider in search_providers:
-                try:
-                    provider_results = provider.search(search_query, category=None)
-                    for r in provider_results:
-                        if r.url not in seen_urls:
-                            seen_urls.add(r.url)
-                            results.append(
-                                {
-                                    "title": r.title,
-                                    "url": r.url,
-                                    "provider": r.provider,
-                                    "publication_date": r.publication_date,
-                                    "metadata": r.raw_metadata or {},
-                                }
-                            )
-                except Exception:
-                    pass  # Already logged above
+            except Exception:
+                pass  # Already logged above
 
     return results, provider_errors

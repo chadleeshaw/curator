@@ -6,7 +6,7 @@ Provides access to millions of free books, magazines, and periodicals.
 import logging
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from internetarchive import search_items, get_item, configure as ia_configure
 
@@ -108,7 +108,13 @@ class InternetArchiveProvider(SearchProvider):
                 logger.debug(f"[{self.name}] Delaying {delay:.1f}s before request")
                 time.sleep(delay)
 
-    def _build_search_query(self, query: str, category: Optional[str] = None, include_collections: bool = True) -> str:
+    def _build_search_query(
+        self,
+        query: str,
+        category: Optional[str] = None,
+        include_collections: bool = True,
+        aliases: Optional[Sequence[str]] = None,
+    ) -> str:
         """
         Build Internet Archive search query string.
 
@@ -116,18 +122,30 @@ class InternetArchiveProvider(SearchProvider):
             query: User search query (periodical title)
             category: Optional category filter (narrows collections when provided)
             include_collections: Whether to filter by configured collections
+            aliases: Optional additional search terms combined with OR
 
         Returns:
             Formatted IA search query string
         """
         parts = []
 
-        # Add title search - sanitize special characters for better matching
+        # Build title search terms - combine query + aliases with OR
+        title_terms = []
         if query:
-            # Replace & with AND for better search compatibility
             sanitized_query = query.replace("&", " ")
-            # Search in title field
-            parts.append(f'title:("{sanitized_query}")')
+            title_terms.append(f'title:("{sanitized_query}")')
+
+        if aliases:
+            for alias in aliases:
+                sanitized_alias = alias.strip().replace("&", " ")
+                if sanitized_alias:
+                    title_terms.append(f'title:("{sanitized_alias}")')
+
+        if title_terms:
+            if len(title_terms) == 1:
+                parts.append(title_terms[0])
+            else:
+                parts.append(f'({" OR ".join(title_terms)})')
 
         # Add mediatype filter
         parts.append(f"mediatype:{self.mediatype}")
@@ -282,13 +300,19 @@ class InternetArchiveProvider(SearchProvider):
 
         return None
 
-    def search(self, query: str, category: Optional[str] = None) -> List[SearchResult]:
+    def search(
+        self, query: str, category: Optional[str] = None, aliases: Optional[Sequence[str]] = None
+    ) -> List[SearchResult]:
         """
         Search Internet Archive for periodicals.
+
+        Combines query + aliases into a single IA search using OR on the title field,
+        so all terms are searched in one API call instead of N separate calls.
 
         Args:
             query: Periodical title to search for
             category: Optional category filter (e.g., "Magazines", "Comics")
+            aliases: Optional alternative search terms (combined with OR in title search)
 
         Returns:
             List of SearchResult objects
@@ -303,8 +327,8 @@ class InternetArchiveProvider(SearchProvider):
             self._apply_request_delay()
             self._track_request()
 
-            # Build search query with collection filter
-            ia_query = self._build_search_query(query, category, include_collections=True)
+            # Build search query with collection filter and aliases
+            ia_query = self._build_search_query(query, category, include_collections=True, aliases=aliases)
             logger.debug(f"[{self.name}] Searching IA with query: {ia_query}")
 
             # Execute search
@@ -327,7 +351,7 @@ class InternetArchiveProvider(SearchProvider):
                 self._apply_request_delay()
                 self._track_request()
 
-                ia_query_broad = self._build_search_query(query, category, include_collections=False)
+                ia_query_broad = self._build_search_query(query, category, include_collections=False, aliases=aliases)
                 logger.debug(f"[{self.name}] Broad search query: {ia_query_broad}")
 
                 search_results_broad = search_items(

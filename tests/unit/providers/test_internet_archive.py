@@ -198,6 +198,82 @@ class TestInternetArchiveProviderSearchQuery:
         # Falls back to all configured collections since no overlap
         assert "collection:newspaper" in query
 
+    def test_build_search_query_with_aliases(self):
+        """Test search query combines primary query and aliases with OR."""
+        config = {
+            "type": "internet_archive",
+            "name": "Test IA",
+            "collections": ["magazines"],
+        }
+        provider = InternetArchiveProvider(config)
+
+        query = provider._build_search_query("PC Gamer", aliases=["PC Gamer US", "PC Gamer Magazine"])
+
+        assert 'title:("PC Gamer")' in query
+        assert 'title:("PC Gamer US")' in query
+        assert 'title:("PC Gamer Magazine")' in query
+        assert " OR " in query
+
+    def test_build_search_query_aliases_combined_in_group(self):
+        """Test multiple title terms are wrapped in parentheses."""
+        config = {
+            "type": "internet_archive",
+            "name": "Test IA",
+            "collections": ["magazines"],
+        }
+        provider = InternetArchiveProvider(config)
+
+        query = provider._build_search_query("Wired", aliases=["Wired Magazine"])
+
+        # Should be grouped: (title:("Wired") OR title:("Wired Magazine"))
+        assert query.startswith("(")
+        assert 'title:("Wired") OR title:("Wired Magazine")' in query
+
+    def test_build_search_query_no_aliases(self):
+        """Test single query without aliases has no OR or grouping."""
+        config = {
+            "type": "internet_archive",
+            "name": "Test IA",
+            "collections": ["magazines"],
+        }
+        provider = InternetArchiveProvider(config)
+
+        query = provider._build_search_query("Wired", aliases=None)
+
+        assert 'title:("Wired")' in query
+        assert " OR " not in query.split("AND")[0]  # No OR in title part
+
+    def test_build_search_query_aliases_with_category(self):
+        """Test aliases work together with category filtering."""
+        config = {
+            "type": "internet_archive",
+            "name": "Test IA",
+            "collections": ["magazines", "comics"],
+        }
+        provider = InternetArchiveProvider(config)
+
+        query = provider._build_search_query("Batman", category="Comics", aliases=["Batman Comics"])
+
+        assert 'title:("Batman")' in query
+        assert 'title:("Batman Comics")' in query
+        assert "collection:comics" in query
+        assert "collection:magazines" not in query
+
+    def test_build_search_query_empty_aliases_ignored(self):
+        """Test empty alias strings are ignored."""
+        config = {
+            "type": "internet_archive",
+            "name": "Test IA",
+            "collections": ["magazines"],
+        }
+        provider = InternetArchiveProvider(config)
+
+        query = provider._build_search_query("Wired", aliases=["", "  "])
+
+        assert 'title:("Wired")' in query
+        # Should not have OR since aliases are empty
+        assert " OR " not in query.split("AND")[0]
+
 
 class TestInternetArchiveProviderDateParsing:
     """Test date parsing functionality"""
@@ -294,6 +370,39 @@ class TestInternetArchiveProviderSearch:
         results = provider.search("Wired")
 
         assert results == []
+
+    @patch("providers.internet_archive.search_items")
+    def test_search_with_aliases_combines_query(self, mock_search):
+        """Test search with aliases builds combined OR query in single API call."""
+        mock_search.return_value = iter(
+            [
+                {
+                    "identifier": "pcgamer_2024",
+                    "title": "PC Gamer January 2024",
+                    "date": "2024-01-01",
+                    "collection": ["magazines"],
+                    "mediatype": "texts",
+                    "format": ["Text PDF"],
+                }
+            ]
+        )
+
+        config = {"type": "internet_archive", "name": "Test IA", "collections": ["magazines"]}
+        provider = InternetArchiveProvider(config)
+
+        results = provider.search("PC Gamer", aliases=["PC Gamer US", "PC Gamer Magazine"])
+
+        # Should make exactly one API call (not 3 separate ones)
+        assert mock_search.call_count == 1
+
+        # Verify the query includes all terms with OR
+        actual_query = mock_search.call_args[0][0]
+        assert 'title:("PC Gamer")' in actual_query
+        assert 'title:("PC Gamer US")' in actual_query
+        assert 'title:("PC Gamer Magazine")' in actual_query
+        assert " OR " in actual_query
+
+        assert len(results) == 1
 
 
 class TestInternetArchiveProviderRateLimiting:
