@@ -21,6 +21,16 @@ IA_PERIODICAL_COLLECTIONS = [
     "newspaper",
 ]
 
+# Map Curator categories to specific IA collections
+# When a category is specified, only search relevant collections
+IA_CATEGORY_COLLECTION_MAP = {
+    "Magazines": ["magazines", "periodicals", "americana", "pulpmagazinearchive"],
+    "Comics": ["comics"],
+    "Graphic Novels": ["comics"],
+    "Books": ["americana"],
+    "Documents": ["americana", "periodicals"],
+}
+
 # Preferred file formats for download (in order of preference)
 # PDF is most common for magazines; EPUB for modern digital publications
 # ZIP/GZIP for collection archives containing multiple files

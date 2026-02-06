@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 from internetarchive import search_items, get_item, configure as ia_configure
 
 from core.constants.internet_archive import (
+    IA_CATEGORY_COLLECTION_MAP,
     IA_DEFAULT_MEDIATYPE,
     IA_DEFAULT_ROWS,
     IA_DEFAULT_SORT,
@@ -113,7 +114,7 @@ class InternetArchiveProvider(SearchProvider):
 
         Args:
             query: User search query (periodical title)
-            category: Optional category filter
+            category: Optional category filter (narrows collections when provided)
             include_collections: Whether to filter by configured collections
 
         Returns:
@@ -133,7 +134,14 @@ class InternetArchiveProvider(SearchProvider):
 
         # Add collection filter if collections specified and requested
         if include_collections and self.collections:
-            collection_query = " OR ".join([f"collection:{c}" for c in self.collections])
+            # If category specified, narrow to category-specific collections
+            if category and category in IA_CATEGORY_COLLECTION_MAP:
+                category_collections = [c for c in IA_CATEGORY_COLLECTION_MAP[category] if c in self.collections]
+                # Fall back to all configured collections if no overlap
+                collections = category_collections if category_collections else self.collections
+            else:
+                collections = self.collections
+            collection_query = " OR ".join([f"collection:{c}" for c in collections])
             parts.append(f"({collection_query})")
 
         return " AND ".join(parts)

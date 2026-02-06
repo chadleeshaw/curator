@@ -123,6 +123,81 @@ class TestInternetArchiveProviderSearchQuery:
         assert "collection:magazines" in query
         assert "collection:periodicals" in query
 
+    def test_build_search_query_with_comics_category(self):
+        """Test search query narrows to comics collection when category is Comics."""
+        config = {
+            "type": "internet_archive",
+            "name": "Test IA",
+            "collections": ["magazines", "periodicals", "comics", "americana"],
+        }
+        provider = InternetArchiveProvider(config)
+
+        query = provider._build_search_query("Batman", category="Comics")
+
+        assert "collection:comics" in query
+        assert "collection:magazines" not in query
+        assert "collection:periodicals" not in query
+        assert "collection:americana" not in query
+
+    def test_build_search_query_with_magazines_category(self):
+        """Test search query narrows to magazine collections when category is Magazines."""
+        config = {
+            "type": "internet_archive",
+            "name": "Test IA",
+            "collections": ["magazines", "periodicals", "comics", "americana", "pulpmagazinearchive"],
+        }
+        provider = InternetArchiveProvider(config)
+
+        query = provider._build_search_query("Wired", category="Magazines")
+
+        assert "collection:magazines" in query
+        assert "collection:periodicals" in query
+        assert "collection:americana" in query
+        assert "collection:pulpmagazinearchive" in query
+        assert "collection:comics" not in query
+
+    def test_build_search_query_with_unknown_category(self):
+        """Test search query uses all collections for unmapped category."""
+        config = {
+            "type": "internet_archive",
+            "name": "Test IA",
+            "collections": ["magazines", "comics"],
+        }
+        provider = InternetArchiveProvider(config)
+
+        query = provider._build_search_query("Test", category="UnknownCategory")
+
+        assert "collection:magazines" in query
+        assert "collection:comics" in query
+
+    def test_build_search_query_with_no_category(self):
+        """Test search query uses all collections when no category specified."""
+        config = {
+            "type": "internet_archive",
+            "name": "Test IA",
+            "collections": ["magazines", "comics"],
+        }
+        provider = InternetArchiveProvider(config)
+
+        query = provider._build_search_query("Test", category=None)
+
+        assert "collection:magazines" in query
+        assert "collection:comics" in query
+
+    def test_build_search_query_category_no_overlap_falls_back(self):
+        """Test search query falls back to all collections when category collections don't overlap."""
+        config = {
+            "type": "internet_archive",
+            "name": "Test IA",
+            "collections": ["newspaper"],  # Not in Comics mapping
+        }
+        provider = InternetArchiveProvider(config)
+
+        query = provider._build_search_query("Test", category="Comics")
+
+        # Falls back to all configured collections since no overlap
+        assert "collection:newspaper" in query
+
 
 class TestInternetArchiveProviderDateParsing:
     """Test date parsing functionality"""
