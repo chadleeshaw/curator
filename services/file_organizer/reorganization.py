@@ -135,7 +135,9 @@ class ReorganizationMixin:
                             f"'{original_filename}' for periodical {magazine.id}"
                         )
                 except Exception:
-                    logger.debug(f"Failed to parse original filename '{original_filename}' for periodical {magazine.id}")
+                    logger.debug(
+                        f"Failed to parse original filename '{original_filename}' for periodical {magazine.id}"
+                    )
 
         return volume, issue_number
 

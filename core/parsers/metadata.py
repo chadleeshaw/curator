@@ -1017,7 +1017,9 @@ class FilenameParser:
         metadata["month_name"] = NUMBER_TO_MONTH.get(month, "")
         metadata["pattern"] = "timestamp_id"
 
-        logger.info(f"Extracted title '{metadata['title']}' and date {year}-{month:02d} from timestamp filename: {filename}")
+        logger.info(
+            f"Extracted title '{metadata['title']}' and date {year}-{month:02d} from timestamp filename: {filename}"
+        )
         return metadata
 
     def _try_date_only_pattern(

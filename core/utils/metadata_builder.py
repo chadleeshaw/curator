@@ -180,9 +180,7 @@ def build_derived_metadata(
             # Validate volume values - reject unreasonable numbers (zip codes, addresses, etc.)
             if field == "volume" and isinstance(value, (int, float)):
                 if int(value) > OCR_MAX_VOLUME:
-                    logger.debug(
-                        f"Rejecting unreasonable volume {value} from {source_name} (exceeds {OCR_MAX_VOLUME})"
-                    )
+                    logger.debug(f"Rejecting unreasonable volume {value} from {source_name} (exceeds {OCR_MAX_VOLUME})")
                     continue
 
             # Get confidence - check per-field confidence first (e.g., year_confidence),
