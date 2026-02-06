@@ -223,9 +223,7 @@ async def download_batch_issues(
             }
 
             try:
-                submission = _shared._download_manager.download_single_issue(
-                    request.tracking_id, search_result, db
-                )
+                submission = _shared._download_manager.download_single_issue(request.tracking_id, search_result, db)
 
                 if submission:
                     status = submission.status.value
@@ -249,10 +247,7 @@ async def download_batch_issues(
                 results.append({"title": issue.title, "status": "failed", "error": str(e)})
 
         return success_response(
-            message=(
-                f"Batch download: {submitted} submitted, {queued} queued, "
-                f"{skipped} skipped, {failed} failed"
-            ),
+            message=(f"Batch download: {submitted} submitted, {queued} queued, " f"{skipped} skipped, {failed} failed"),
             tracking_id=request.tracking_id,
             magazine=tracking.title,
             submitted=submitted,
