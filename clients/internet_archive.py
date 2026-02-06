@@ -462,6 +462,11 @@ class InternetArchiveClient(DownloadClient):
                 dest_file = self.downloads_dir / f"{safe_title}_{counter}{ext}"
                 counter += 1
 
+            # Download to a .part file first to prevent the download monitor's folder scan
+            # from picking up incomplete files. The .part extension is in INCOMPLETE_DOWNLOAD_PATTERNS
+            # so find_supported_files() will skip it during import scans.
+            partial_file = dest_file.with_suffix(dest_file.suffix + ".part")
+
             logger.info(
                 f"[{self.name}] Downloading {download_url} -> {dest_file}"
                 f"{f' ({file_count} files via compress)' if is_collection else ''}"
@@ -485,7 +490,7 @@ class InternetArchiveClient(DownloadClient):
                     # Stream download with progress logging
                     job.downloaded_size = 0
 
-                    with open(dest_file, "wb") as f:
+                    with open(partial_file, "wb") as f:
                         for chunk in response.iter_content(chunk_size=IA_DOWNLOAD_CHUNK_SIZE):
                             if chunk:
                                 f.write(chunk)
@@ -495,8 +500,9 @@ class InternetArchiveClient(DownloadClient):
                                 if job.expected_size > 0:
                                     job.progress = int((job.downloaded_size / job.expected_size) * 100)
 
-                    # Verify download
-                    if dest_file.exists() and dest_file.stat().st_size > 0:
+                    # Verify download and rename from .part to final name atomically
+                    if partial_file.exists() and partial_file.stat().st_size > 0:
+                        partial_file.rename(dest_file)
                         logger.info(
                             f"[{self.name}] Download completed: {job.identifier} -> {dest_file} "
                             f"({job.downloaded_size / 1024 / 1024:.1f} MB)"
@@ -530,6 +536,9 @@ class InternetArchiveClient(DownloadClient):
                         f"[{self.name}] Download attempt {attempt + 1}/{IA_DOWNLOAD_RETRY_ATTEMPTS} "
                         f"failed for {job.identifier}: {e}"
                     )
+                    # Clean up partial file before retry or final failure
+                    if partial_file.exists():
+                        partial_file.unlink(missing_ok=True)
                     if attempt < IA_DOWNLOAD_RETRY_ATTEMPTS - 1:
                         time.sleep(IA_DOWNLOAD_RETRY_DELAY)
                     else:
@@ -543,6 +552,12 @@ class InternetArchiveClient(DownloadClient):
             job.status = IA_STATUS_FAILED
             job.error = str(e)
             logger.error(f"[{self.name}] Download failed for {job.identifier}: {e}", exc_info=True)
+            # Clean up partial file on failure
+            try:
+                if partial_file.exists():
+                    partial_file.unlink(missing_ok=True)
+            except (NameError, Exception):
+                pass  # partial_file may not be defined if failure was before download started
 
     def submit(self, nzb_url: str, title: str = None, category: str = None) -> Optional[str]:
         """
