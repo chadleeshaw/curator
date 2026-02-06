@@ -397,3 +397,105 @@ class TestConfidenceScoring:
         assert result["month"] == 8, "Should detect August (month 8) from NZB parsing"
         assert result["year"] == 2021
         assert result["country"] == "USA"
+
+
+class TestTimestampIdPattern:
+    """Test parsing filenames with download client timestamp identifiers."""
+
+    @pytest.fixture
+    def extractor(self):
+        """Create FilenameParser instance."""
+        return FilenameParser()
+
+    def test_timestamp_id_extracts_title_and_date(self, extractor):
+        """Test: Magazine (20260205_235420).pdf extracts title and date from filename."""
+        path = Path("/magazines/Magazine/Magazine (20260205_235420).pdf")
+        result = extractor.extract_from_filename(path)
+
+        assert result["title"] == "Magazine"
+        assert result["year"] == 2026
+        assert result["month_name"] == "February"
+        assert result["issue_date"] == datetime(2026, 2, 1)
+        assert result["pattern"] == "timestamp_id"
+
+    def test_timestamp_id_without_underscore(self, extractor):
+        """Test: Title (20240315125500).pdf - timestamp without separator."""
+        path = Path("/magazines/Hustler/Hustler (20240315125500).pdf")
+        result = extractor.extract_from_filename(path)
+
+        assert result["title"] == "Hustler"
+        assert result["year"] == 2024
+        assert result["month_name"] == "March"
+        assert result["issue_date"] == datetime(2024, 3, 1)
+        assert result["pattern"] == "timestamp_id"
+
+    def test_timestamp_id_with_dash_separator(self, extractor):
+        """Test: Title (20240315-125500).pdf - timestamp with dash separator."""
+        path = Path("/magazines/Penthouse/Penthouse (20240315-125500).pdf")
+        result = extractor.extract_from_filename(path)
+
+        assert result["title"] == "Penthouse"
+        assert result["year"] == 2024
+        assert result["month_name"] == "March"
+        assert result["pattern"] == "timestamp_id"
+
+    def test_timestamp_id_date_only_no_time(self, extractor):
+        """Test: Title (20240315).pdf - just YYYYMMDD, no time portion."""
+        path = Path("/magazines/Vogue/Vogue (20240315).pdf")
+        result = extractor.extract_from_filename(path)
+
+        assert result["title"] == "Vogue"
+        assert result["year"] == 2024
+        assert result["month_name"] == "March"
+        assert result["pattern"] == "timestamp_id"
+
+    def test_timestamp_id_multi_word_title(self, extractor):
+        """Test: Multi-word title with timestamp."""
+        path = Path("/magazines/National Geographic/National Geographic (20250601_120000).pdf")
+        result = extractor.extract_from_filename(path)
+
+        assert result["title"] == "National Geographic"
+        assert result["year"] == 2025
+        assert result["month_name"] == "June"
+        assert result["pattern"] == "timestamp_id"
+
+    def test_timestamp_id_title_not_from_directory(self, extractor):
+        """Test: Title comes from filename, not directory, even when directory differs."""
+        path = Path("/magazines/SomeOtherDir/Magazine (20260205_235420).pdf")
+        result = extractor.extract_from_filename(path)
+
+        assert result["title"] == "Magazine", "Title should come from filename, not directory"
+        assert result["pattern"] == "timestamp_id"
+
+    def test_timestamp_id_invalid_month_rejected(self, extractor):
+        """Test: Invalid month (13) should not match timestamp pattern."""
+        path = Path("/magazines/Test/Test (20261305_235420).pdf")
+        result = extractor.extract_from_filename(path)
+
+        # Should NOT match timestamp_id pattern since month 13 is invalid
+        assert result.get("pattern") != "timestamp_id"
+
+
+class TestYearOnlyTitleExtraction:
+    """Test that _try_year_only_pattern extracts title from filename text."""
+
+    @pytest.fixture
+    def extractor(self):
+        """Create FilenameParser instance."""
+        return FilenameParser()
+
+    def test_year_only_extracts_title_from_filename(self, extractor):
+        """Test: 'Magazine 2024.pdf' extracts title 'Magazine' from filename, not directory."""
+        path = Path("/magazines/SomeDir/Magazine 2024.pdf")
+        result = extractor.extract_from_filename(path)
+
+        assert result["title"] == "Magazine"
+        assert result["year"] == 2024
+
+    def test_year_only_extracts_multiword_title(self, extractor):
+        """Test: 'National Geographic 2024.pdf' extracts multi-word title."""
+        path = Path("/magazines/SomeDir/National Geographic 2024.pdf")
+        result = extractor.extract_from_filename(path)
+
+        assert result["title"] == "National Geographic"
+        assert result["year"] == 2024

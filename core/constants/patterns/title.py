@@ -56,6 +56,9 @@ TITLE_PATTERN_DATE_ONLY_COMPACT = r"^([A-Za-z]+)(\d{4})$"
 TITLE_PATTERN_DATE_ONLY_SPACED = r"^([A-Za-z]+)\s+(\d{4})$"
 """Pattern for date-only filename (spaced): April 2001"""
 
+TITLE_PATTERN_TIMESTAMP_ID = r"^(.+?)\s*\((\d{4})(\d{2})(\d{2})[_\-]?\d{0,6}\)$"
+"""Pattern for Title (YYYYMMDD_HHMMSS) download timestamps: Magazine (20260205_235420)"""
+
 # ==============================================================================
 # TITLE CLEANUP PATTERNS
 # ==============================================================================

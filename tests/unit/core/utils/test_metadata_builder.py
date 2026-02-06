@@ -437,3 +437,49 @@ class TestConfidenceResolution:
 
         # Title still from file_scan (OCR doesn't extract titles)
         assert derived["title"]["value"] == "Example Magazine"
+
+
+class TestVolumeValidation:
+    """Tests for volume validation in build_derived_metadata"""
+
+    def test_reasonable_volume_accepted(self):
+        """Volume within range is accepted from OCR"""
+        ocr_scan = {"volume": 354, "volume_confidence": 80, "overall_confidence": 90}
+        derived = build_derived_metadata(ocr_scan=ocr_scan)
+
+        assert "volume" in derived
+        assert derived["volume"]["value"] == 354
+        assert derived["volume"]["source"] == "ocr_scan"
+
+    def test_zip_code_volume_rejected(self):
+        """Volume that looks like a zip code (89147) is rejected"""
+        ocr_scan = {"volume": 89147, "volume_confidence": 74, "overall_confidence": 91}
+        file_scan = {"confidence": "high"}
+        derived = build_derived_metadata(file_scan=file_scan, ocr_scan=ocr_scan)
+
+        assert "volume" not in derived
+
+    def test_zip_code_volume_falls_back_to_lower_source(self):
+        """When OCR volume is rejected, fall back to file_scan volume if available"""
+        ocr_scan = {"volume": 89147, "volume_confidence": 74, "overall_confidence": 91}
+        file_scan = {"volume": 354, "confidence": "high"}
+        derived = build_derived_metadata(file_scan=file_scan, ocr_scan=ocr_scan)
+
+        assert "volume" in derived
+        assert derived["volume"]["value"] == 354
+        assert derived["volume"]["source"] == "file_scan"
+
+    def test_max_boundary_volume_accepted(self):
+        """Volume exactly at max (9999) is accepted"""
+        ocr_scan = {"volume": 9999, "volume_confidence": 80, "overall_confidence": 90}
+        derived = build_derived_metadata(ocr_scan=ocr_scan)
+
+        assert "volume" in derived
+        assert derived["volume"]["value"] == 9999
+
+    def test_over_max_volume_rejected(self):
+        """Volume just above max (10000) is rejected"""
+        ocr_scan = {"volume": 10000, "volume_confidence": 80, "overall_confidence": 90}
+        derived = build_derived_metadata(ocr_scan=ocr_scan)
+
+        assert "volume" not in derived

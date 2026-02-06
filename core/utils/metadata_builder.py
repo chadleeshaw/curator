@@ -5,6 +5,7 @@ Metadata builder utilities for constructing parsed_metadata, derived_metadata, a
 import logging
 from datetime import datetime
 from typing import Dict, Any, Optional
+from core.constants.ocr import OCR_MAX_VOLUME
 from core.parsers.models import ParsedMetadata
 
 logger = logging.getLogger(__name__)
@@ -174,6 +175,14 @@ def build_derived_metadata(
             if field == "month" and isinstance(value, str):
                 value = _normalize_month_to_int(value)
                 if value is None:
+                    continue
+
+            # Validate volume values - reject unreasonable numbers (zip codes, addresses, etc.)
+            if field == "volume" and isinstance(value, (int, float)):
+                if int(value) > OCR_MAX_VOLUME:
+                    logger.debug(
+                        f"Rejecting unreasonable volume {value} from {source_name} (exceeds {OCR_MAX_VOLUME})"
+                    )
                     continue
 
             # Get confidence - check per-field confidence first (e.g., year_confidence),
@@ -355,3 +364,72 @@ def sync_issue_date_from_derived(
     except (ValueError, OverflowError):
         # Invalid date values
         return None
+
+
+def get_derived_field(periodical, field: str, fallback_extra: bool = True) -> Any:
+    """
+    Get a field value from derived_metadata, with fallback to extra_metadata.
+
+    derived_metadata stores fields as {"value": ..., "source": ..., "confidence": ...}.
+    extra_metadata stores fields as direct values (legacy).
+
+    Args:
+        periodical: Periodical database object
+        field: Field name (e.g., "volume", "issue_number", "language")
+        fallback_extra: Whether to fall back to extra_metadata (default: True)
+
+    Returns:
+        The field value, or None if not found
+    """
+    # Primary: derived_metadata
+    derived = periodical.derived_metadata or {}
+    if field in derived:
+        entry = derived[field]
+        if isinstance(entry, dict):
+            return entry.get("value")
+        return entry
+
+    # Fallback: extra_metadata (legacy location)
+    if fallback_extra:
+        extra = periodical.extra_metadata or {}
+        return extra.get(field)
+
+    return None
+
+
+def is_periodical_special_edition(periodical) -> bool:
+    """
+    Check if a periodical is a special edition using all metadata sources.
+
+    Checks in order:
+    1. derived_metadata.special_edition or is_special_edition
+    2. extra_metadata.special_edition (legacy)
+    3. Title pattern matching via is_special_edition()
+
+    Args:
+        periodical: Periodical database object
+
+    Returns:
+        True if the periodical is a special edition
+    """
+    from core.utils.general import is_special_edition
+
+    # Check derived_metadata first
+    derived = periodical.derived_metadata or {}
+    for key in ("special_edition", "is_special_edition"):
+        entry = derived.get(key)
+        if entry is not None:
+            value = entry.get("value") if isinstance(entry, dict) else entry
+            if value:
+                return True
+
+    # Check extra_metadata (legacy)
+    extra = periodical.extra_metadata or {}
+    if isinstance(extra, dict) and extra.get("special_edition") is not None:
+        return True
+
+    # Fallback to title pattern matching
+    if periodical.title and is_special_edition(periodical.title):
+        return True
+
+    return False

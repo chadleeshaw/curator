@@ -18,6 +18,7 @@ from core.utils.general import (
     generate_olid,
     cleanup_empty_directories,
 )
+from core.utils.metadata_builder import is_periodical_special_edition, get_derived_field
 from models.database import PeriodicalTracking
 from web.schemas import TrackingPreferencesRequest
 from web.utils.responses import success_response
@@ -135,11 +136,7 @@ async def reorganize_tracking_files(tracking_id: int) -> Dict[str, Any]:
 
         for magazine in magazines:
             # Check if this is a special edition
-            is_special = False
-            if magazine.extra_metadata and isinstance(magazine.extra_metadata, dict):
-                is_special = magazine.extra_metadata.get("special_edition") is not None
-            if not is_special:
-                is_special = is_special_edition(magazine.title)
+            is_special = is_periodical_special_edition(magazine)
 
             # Only reorganize regular editions
             if not is_special:
@@ -156,7 +153,9 @@ async def reorganize_tracking_files(tracking_id: int) -> Dict[str, Any]:
                         "issue_date": magazine.issue_date,
                         "year": magazine.issue_date.year,
                         "month_name": magazine.issue_date.strftime("%B"),
-                        "language": (magazine.extra_metadata.get("language") if magazine.extra_metadata else None),
+                        "language": get_derived_field(magazine, "language") or DEFAULT_LANGUAGE,
+                        "volume": get_derived_field(magazine, "volume"),
+                        "issue_number": get_derived_field(magazine, "issue_number"),
                     }
 
                     # Get category from metadata
@@ -281,11 +280,7 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
 
             for magazine in magazines:
                 # Check if this is a special edition
-                is_special = False
-                if magazine.extra_metadata and isinstance(magazine.extra_metadata, dict):
-                    is_special = magazine.extra_metadata.get("special_edition") is not None
-                if not is_special:
-                    is_special = is_special_edition(magazine.title)
+                is_special = is_periodical_special_edition(magazine)
 
                 # Only reorganize regular editions
                 if not is_special:

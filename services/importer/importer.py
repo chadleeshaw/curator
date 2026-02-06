@@ -1068,6 +1068,8 @@ class FileImporter:
                     "year": parsed.year,
                     "month_name": parsed.month_name,
                     "language": parsed.language,
+                    "volume": parsed.volume,
+                    "issue_number": parsed.issue_number,
                 }
                 organized_path = self.organizer.organize(file_path, metadata, category, organization_pattern)
                 if not organized_path:

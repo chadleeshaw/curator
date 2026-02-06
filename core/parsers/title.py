@@ -486,8 +486,8 @@ class TitleMatcher:
 
                 # Make sure we have a reasonable base title left
                 if len(base_words) >= min_base_words:
-                    # Don't split if base_words ends with a conjunction (e.g., "Cheri &" shouldn't be a base title)
-                    # This prevents titles like "Cheri & Finally Legal" from being split incorrectly
+                    # Don't split if base_words ends with a conjunction (e.g., "Magazine &" shouldn't be a base title)
+                    # This prevents titles like "Magazine & Finally Legal" from being split incorrectly
                     if base_words[-1].lower() in {"&", "and", "or", "the", "of", "for", "in", "on", "at", "to", "with"}:
                         return (title, False, "")
 

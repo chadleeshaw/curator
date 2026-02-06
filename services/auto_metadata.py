@@ -214,6 +214,11 @@ class AutoMetadataService:
                     parsed = self.parser.parse_file(file_path)
                     file_scan = build_file_scan(parsed)
 
+                    # Supplement with metadata from original imported filename if available.
+                    # Files are often renamed during import (e.g., "354 - Magazine354 - Vol.354.pdf"
+                    # becomes "Magazine (20260205_235255).pdf"), losing volume/issue info.
+                    self._supplement_from_original_filename(file_scan, periodical)
+
                     # Update parsed_metadata
                     if not periodical.parsed_metadata:
                         periodical.parsed_metadata = {}
@@ -245,6 +250,54 @@ class AutoMetadataService:
             return True
 
         return False
+
+    def _supplement_from_original_filename(self, file_scan: Dict[str, Any], periodical: Periodical) -> None:
+        """
+        Supplement file_scan with metadata from the original imported filename.
+
+        Files are often renamed during import (e.g., "354 - Magazine354 - Vol.354.pdf"
+        becomes "Magazine (20260205_235255).pdf"). The original filename may contain
+        volume, issue number, or other metadata that the renamed file lacks.
+
+        Only supplements fields that are missing from the current file_scan.
+
+        Args:
+            file_scan: Current file_scan dict to supplement (modified in place)
+            periodical: Periodical with extra_metadata containing imported_from
+        """
+        extra = periodical.extra_metadata or {}
+        original_filename = extra.get("imported_from")
+        if not original_filename:
+            return
+
+        # Don't re-parse if current filename matches the original
+        current_filename = file_scan.get("filename", "")
+        if current_filename == original_filename:
+            return
+
+        try:
+            original_parsed = self.parser.parse_filename_string(original_filename)
+        except Exception:
+            logger.debug(f"Failed to parse original filename '{original_filename}' for periodical {periodical.id}")
+            return
+
+        # Fields to supplement from original filename (only if missing in current file_scan)
+        supplementable_fields = {
+            "volume": original_parsed.volume,
+            "issue_number": original_parsed.issue_number,
+        }
+
+        supplemented = []
+        for field, value in supplementable_fields.items():
+            if value is not None and field not in file_scan:
+                file_scan[field] = value
+                supplemented.append(f"{field}={value}")
+
+        if supplemented:
+            logger.info(
+                f"Supplemented file_scan from original filename '{original_filename}' "
+                f"for periodical {periodical.id}: {', '.join(supplemented)}"
+            )
 
     def _sync_issue_date(self, periodical: Periodical) -> bool:
         """

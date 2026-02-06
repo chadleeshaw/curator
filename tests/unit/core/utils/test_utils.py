@@ -196,7 +196,7 @@ class TestIsSpecialEdition:
         """Test that partial keyword matches don't trigger false positives."""
         # Space-bounded keywords prevent false matches
         assert not is_special_edition("Especially Good Magazine")  # 'special' not space-bounded
-        assert not is_special_edition("Cheri Magazine 13 Holiday")  # 'holiday' part of title
+        assert not is_special_edition("Magazine Magazine 13 Holiday")  # 'holiday' part of title
         assert not is_special_edition("Anniversary Street Magazine")  # 'anniversary' part of street name
 
         # These genuinely don't contain any special edition keywords

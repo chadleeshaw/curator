@@ -15,6 +15,7 @@ from core.utils.error_handling import handle_api_errors
 from web.utils.responses import success_response
 from core.utils.files import get_library_dir
 from core.utils.general import cleanup_empty_directories, is_special_edition
+from core.utils.metadata_builder import is_periodical_special_edition
 from core.utils.readers import (
     get_epub_metadata,
     get_epub_chapter,
@@ -448,11 +449,7 @@ async def move_issue_to_tracking(periodical_id: int, target_tracking_id: int) ->
         magazine.tracking_id = target_tracking_id
 
         # Check if this is a special edition
-        is_special = False
-        if magazine.extra_metadata and isinstance(magazine.extra_metadata, dict):
-            is_special = magazine.extra_metadata.get("special_edition") is not None
-        if not is_special:
-            is_special = is_special_edition(magazine.title)
+        is_special = is_periodical_special_edition(magazine)
 
         # Only update title and reorganize files for regular editions
         files_reorganized = False

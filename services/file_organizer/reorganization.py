@@ -78,6 +78,67 @@ class ReorganizationMixin:
 
         return target_dir, filename, target_dir / filename
 
+    def _resolve_volume_and_issue(self, magazine: Any) -> Tuple[Optional[int], Optional[int]]:
+        """
+        Resolve volume and issue number from all available metadata sources.
+
+        Checks sources in priority order:
+        1. derived_metadata (most authoritative - merged from all scans)
+        2. parsed_metadata.file_scan (from current filename parsing)
+        3. Original imported filename (from extra_metadata.imported_from)
+
+        Args:
+            magazine: Periodical database record
+
+        Returns:
+            Tuple of (volume, issue_number), either may be None
+        """
+        volume = None
+        issue_number = None
+
+        # Source 1: derived_metadata (highest priority)
+        derived = magazine.derived_metadata or {}
+        if "volume" in derived and isinstance(derived["volume"], dict):
+            volume = derived["volume"].get("value")
+        if "issue_number" in derived and isinstance(derived["issue_number"], dict):
+            issue_number = derived["issue_number"].get("value")
+
+        # Source 2: parsed_metadata.file_scan
+        if volume is None or issue_number is None:
+            parsed = magazine.parsed_metadata or {}
+            file_scan = parsed.get("file_scan", {})
+            if volume is None:
+                volume = file_scan.get("volume")
+            if issue_number is None:
+                issue_number = file_scan.get("issue_number")
+
+        # Source 3: Re-parse original imported filename
+        if volume is None or issue_number is None:
+            extra = magazine.extra_metadata or {}
+            original_filename = extra.get("imported_from")
+            if original_filename:
+                try:
+                    from core.parsers.parser import Parser
+
+                    parser = Parser()
+                    original_parsed = parser.parse_filename_string(original_filename)
+                    if volume is None and original_parsed.volume:
+                        volume = original_parsed.volume
+                        logger.debug(
+                            f"Recovered volume={volume} from original filename "
+                            f"'{original_filename}' for periodical {magazine.id}"
+                        )
+                    if issue_number is None and original_parsed.issue_number:
+                        issue_number = original_parsed.issue_number
+                        logger.debug(
+                            f"Recovered issue_number={issue_number} from original filename "
+                            f"'{original_filename}' for periodical {magazine.id}"
+                        )
+                except Exception:
+                    logger.debug(f"Failed to parse original filename '{original_filename}' for periodical {magazine.id}")
+
+        return volume, issue_number
+
     def _process_single_magazine_reorganization(
         self,
         magazine: Any,
@@ -122,12 +183,13 @@ class ReorganizationMixin:
             logger.debug(f"No tracking record, using magazine title: {magazine.title}")
 
         # Build expected path based on pattern
+        volume, issue_number = self._resolve_volume_and_issue(magazine)
         metadata = {
             "title": full_title,
             "issue_date": magazine.issue_date,
             "language": magazine.language or DEFAULT_LANGUAGE,
-            "issue_number": magazine.extra_metadata.get("issue_number") if magazine.extra_metadata else None,
-            "volume": magazine.extra_metadata.get("volume") if magazine.extra_metadata else None,
+            "issue_number": issue_number,
+            "volume": volume,
         }
 
         target_dir, filename, expected_path = self._build_target_path_info(metadata, category_with_prefix, pattern)

@@ -13,6 +13,7 @@ from core.utils.db import check_file_path_conflict, with_db_session
 from core.utils.error_handling import handle_api_errors
 from core.utils.files import get_library_dir, get_category_prefix
 from core.utils.general import cleanup_empty_directories, is_special_edition
+from core.utils.metadata_builder import is_periodical_special_edition
 from models.database import PeriodicalTracking
 from services.file_operations import reorganize_periodical_files
 from web.schemas import APIError
@@ -162,13 +163,7 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
 
                 # Only update title if this is NOT a special edition
                 # Special editions need to keep their distinct title to be grouped separately
-                is_special = False
-                if periodical.extra_metadata and isinstance(periodical.extra_metadata, dict):
-                    is_special = periodical.extra_metadata.get("special_edition") is not None
-
-                # Also check title using the is_special_edition function
-                if not is_special:
-                    is_special = is_special_edition(periodical.title)
+                is_special = is_periodical_special_edition(periodical)
 
                 # Only normalize title and reorganize files for regular editions
                 if not is_special:

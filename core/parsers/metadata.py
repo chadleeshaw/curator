@@ -46,6 +46,7 @@ from core.constants.patterns import (
     TITLE_PATTERN_SEASONAL,
     TITLE_PATTERN_SPACE_MONTH_ONLY,
     TITLE_PATTERN_SPACE_MONTH_YEAR,
+    TITLE_PATTERN_TIMESTAMP_ID,
     TITLE_PATTERN_VOLUME_ISSUE,
     TITLE_PATTERN_VOLUME_ONLY,
 )
@@ -575,6 +576,7 @@ class FilenameParser:
             or self._try_issue_number_pattern(filename, metadata)
             or self._try_volume_issue_pattern(filename, metadata)
             or self._try_seasonal_pattern(filename, metadata)
+            or self._try_timestamp_id_pattern(filename, metadata)
             or self._try_date_only_pattern(filename, metadata, magazine_name)
             or self._try_year_only_pattern(filename, metadata, magazine_name)
             # Patterns without dates - volume/issue only (will need date scan)
@@ -985,6 +987,39 @@ class FilenameParser:
         )
         return metadata
 
+    def _try_timestamp_id_pattern(self, filename: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Pattern: "Title (YYYYMMDD_HHMMSS)" - download client timestamp identifiers.
+
+        Handles filenames like "Magazine (20260205_235420)" where the parenthesized
+        portion is a unique download timestamp, not editorial metadata.
+        Extracts the title and full date (year + month) from the timestamp.
+        """
+        match = re.search(TITLE_PATTERN_TIMESTAMP_ID, filename)
+        if not match:
+            return None
+
+        title = match.group(1).strip()
+        year_str = match.group(2)
+        month_str = match.group(3)
+
+        year = int(year_str)
+        month = int(month_str)
+
+        if not MIN_VALID_YEAR <= year <= MAX_VALID_YEAR:
+            return None
+        if not 1 <= month <= 12:
+            return None
+
+        metadata["title"] = clean_title(title)
+        metadata["issue_date"] = datetime(year, month, 1)
+        metadata["year"] = year
+        metadata["month_name"] = NUMBER_TO_MONTH.get(month, "")
+        metadata["pattern"] = "timestamp_id"
+
+        logger.info(f"Extracted title '{metadata['title']}' and date {year}-{month:02d} from timestamp filename: {filename}")
+        return metadata
+
     def _try_date_only_pattern(
         self, filename: str, metadata: Dict[str, Any], magazine_name: Optional[str]
     ) -> Optional[Dict[str, Any]]:
@@ -1043,7 +1078,15 @@ class FilenameParser:
         metadata["year"] = year
         metadata["pattern"] = "year_only"
 
-        if magazine_name:
+        # Try to extract title from text before the year in the filename
+        text_before_year = filename[: match.start(1)].strip()
+        # Clean separators from end of title portion
+        text_before_year = re.sub(r"[\s\-_\.]+$", "", text_before_year).strip()
+
+        if text_before_year and len(text_before_year) >= 2:
+            metadata["title"] = clean_title(text_before_year)
+            logger.info(f"Extracted title '{metadata['title']}' and year {year_str} from filename: {filename}")
+        elif magazine_name:
             metadata["title"] = magazine_name
             logger.info(f"Extracted title '{magazine_name}' from directory for year-only filename: {filename}")
         else:
