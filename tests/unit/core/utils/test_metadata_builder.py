@@ -1,8 +1,10 @@
 """
 Unit tests for core/utils/metadata_builder.py
 
-Focuses on month normalization and issue_date sync from derived metadata,
-particularly the OCR/text_scan string month → int conversion pipeline.
+Focuses on:
+- Month normalization (string → int) for OCR/text_scan sources
+- Confidence resolution (per-field, overall, generic) and scale normalization (0-100 → 0-1)
+- issue_date sync from derived metadata
 """
 
 import sys
@@ -283,3 +285,157 @@ class TestEndToEndOCRMonthFlow:
 
         issue_date = sync_issue_date_from_derived(derived)
         assert issue_date == datetime(2023, 12, 1)
+
+
+class TestConfidenceResolution:
+    """Tests for confidence key resolution and scale normalization"""
+
+    def test_ocr_overall_confidence_used_when_no_confidence_key(self):
+        """OCR scan with overall_confidence but no confidence key should still work"""
+        ocr_scan = {
+            "year": 2023,
+            "month": "May",
+            "issue_number": 326,
+            "overall_confidence": 93,
+            "year_confidence": 96,
+            "month_confidence": 76,
+        }
+        derived = build_derived_metadata(ocr_scan=ocr_scan)
+
+        assert derived["year"]["value"] == 2023
+        assert derived["year"]["source"] == "ocr_scan"
+        assert derived["month"]["value"] == 5
+        assert derived["month"]["source"] == "ocr_scan"
+
+    def test_per_field_confidence_preferred_over_overall(self):
+        """Per-field confidence (year_confidence) takes priority over overall_confidence"""
+        ocr_scan = {
+            "year": 2023,
+            "overall_confidence": 50,
+            "year_confidence": 96,
+        }
+        derived = build_derived_metadata(ocr_scan=ocr_scan)
+
+        assert derived["year"]["value"] == 2023
+        assert derived["year"]["source"] == "ocr_scan"
+        # Should use year_confidence (96/100 = 0.96), not overall (50/100 = 0.50)
+        assert derived["year"]["confidence"] == 0.96
+
+    def test_confidence_0_100_scale_normalized_to_0_1(self):
+        """Confidence values > 1.0 are normalized to 0-1 scale"""
+        ocr_scan = {"year": 2023, "overall_confidence": 85}
+        derived = build_derived_metadata(ocr_scan=ocr_scan)
+
+        assert derived["year"]["confidence"] == 0.85
+
+    def test_confidence_already_0_1_scale_unchanged(self):
+        """Confidence values already in 0-1 range are not modified"""
+        file_scan = {"year": 2023, "confidence": 0.85}
+        derived = build_derived_metadata(file_scan=file_scan)
+
+        assert derived["year"]["confidence"] == 0.85
+
+    def test_string_confidence_high_mapped(self):
+        """String confidence 'high' maps to 0.85"""
+        file_scan = {"year": 2023, "confidence": "high"}
+        derived = build_derived_metadata(file_scan=file_scan)
+
+        assert derived["year"]["confidence"] == 0.85
+
+    def test_ocr_beats_file_scan_when_confidence_resolved(self):
+        """OCR should win over file_scan when confidence is properly resolved"""
+        file_scan = {
+            "year": 2026,
+            "month": 1,
+            "confidence": "high",
+            "title": "Example Magazine",
+        }
+        ocr_scan = {
+            "year": 2023,
+            "month": "May",
+            "issue_number": 326,
+            "overall_confidence": 93,
+            "year_confidence": 96,
+            "month_confidence": 76,
+        }
+        derived = build_derived_metadata(file_scan=file_scan, ocr_scan=ocr_scan)
+
+        # OCR should win for year and month (higher priority)
+        assert derived["year"]["value"] == 2023
+        assert derived["year"]["source"] == "ocr_scan"
+        assert derived["month"]["value"] == 5
+        assert derived["month"]["source"] == "ocr_scan"
+        # Title only from file_scan (OCR doesn't extract titles)
+        assert derived["title"]["value"] == "Example Magazine"
+        assert derived["title"]["source"] == "file_scan"
+
+    def test_real_world_ocr_confidence_missing_key_scenario(self):
+        """
+        Reproduces a production bug where OCR found year=2023, month=May but
+        derived_metadata used file_scan year=2026.
+
+        Root cause was OCR scan having no 'confidence' key (only 'overall_confidence'
+        and per-field confidences), so confidence defaulted to 0.0 which was below
+        the 0.70 threshold for ocr_scan.
+        """
+        file_scan = {
+            "parse_source": "file",
+            "confidence": "high",
+            "year": 2026,
+            "month": 1,
+            "language": "English",
+            "title": "Example Magazine",
+            "base_title": "Example Magazine",
+            "filename": "Example Magazine (20260205_232637).pdf",
+            "matched_pattern": "year_only",
+        }
+        text_scan = {
+            "issue_number": None,
+            "year": None,
+            "month": None,
+            "volume": None,
+            "special_edition": False,
+            "year_confidence": None,
+            "month_confidence": None,
+            "overall_confidence": None,
+            "extraction_method": "pdf_text",
+            "has_sufficient_metadata": False,
+        }
+        ocr_scan = {
+            "extraction_method": "ocr_pdf_pages",
+            "issue_number": 326,
+            "year": 2023,
+            "month": "May",
+            "volume": 89147,
+            "special_edition": False,
+            "year_confidence": 96,
+            "month_confidence": 76,
+            "issue_number_confidence": 96,
+            "volume_confidence": 95,
+            "overall_confidence": 93,
+            "ocr_available": True,
+            "text_found": True,
+            "used_ocr": True,
+        }
+
+        derived = build_derived_metadata(
+            file_scan=file_scan, text_scan=text_scan, ocr_scan=ocr_scan
+        )
+
+        # OCR should win for year (2023, not the filename-guessed 2026)
+        assert derived["year"]["value"] == 2023
+        assert derived["year"]["source"] == "ocr_scan"
+
+        # OCR should win for month (May = 5, not filename-guessed 1)
+        assert derived["month"]["value"] == 5
+        assert derived["month"]["source"] == "ocr_scan"
+
+        # month_name should be derived
+        assert derived["month_name"]["value"] == "May"
+
+        # issue_date should be May 2023
+        issue_date = sync_issue_date_from_derived(derived)
+        assert issue_date == datetime(2023, 5, 1)
+
+        # Title still from file_scan (OCR doesn't extract titles)
+        assert derived["title"]["value"] == "Example Magazine"

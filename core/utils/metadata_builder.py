@@ -176,13 +176,25 @@ def build_derived_metadata(
                 if value is None:
                     continue
 
-            # Get confidence
-            confidence = source_data.get("confidence", 0.0)
+            # Get confidence - check per-field confidence first (e.g., year_confidence),
+            # then overall_confidence, then generic confidence key.
+            # OCR/text scans use "{field}_confidence" and "overall_confidence" (0-100 int scale),
+            # while file_scan uses "confidence" (string like "high" or float 0-1).
+            field_confidence_key = f"{field}_confidence"
+            confidence = source_data.get(field_confidence_key)
+            if confidence is None:
+                confidence = source_data.get("overall_confidence")
+            if confidence is None:
+                confidence = source_data.get("confidence", 0.0)
 
-            # Convert string confidence to float
+            # Convert string confidence to float (file_scan uses "high"/"medium"/"low")
             if isinstance(confidence, str):
                 confidence_map = {"high": 0.85, "medium": 0.60, "low": 0.30}
                 confidence = confidence_map.get(confidence, 0.0)
+
+            # Normalize 0-100 scale to 0-1 (OCR/text scans use Tesseract's 0-100 scale)
+            if isinstance(confidence, (int, float)) and confidence > 1.0:
+                confidence = confidence / 100.0
 
             # Check if confidence meets threshold
             threshold = confidence_thresholds.get(source_name, 0.0)
