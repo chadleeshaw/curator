@@ -1018,7 +1018,8 @@ class FilenameParser:
         metadata["pattern"] = "timestamp_id"
 
         logger.info(
-            f"Extracted title '{metadata['title']}' and date {year}-{month:02d} from timestamp filename: {filename}"
+            f"Extracted title '{metadata['title']}' and low-confidence date {year}-{month:02d} "
+            f"from import timestamp filename: {filename}"
         )
         return metadata
 

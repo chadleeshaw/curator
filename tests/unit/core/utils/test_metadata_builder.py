@@ -15,9 +15,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 
 from core.utils.metadata_builder import (
     build_derived_metadata,
+    build_file_scan,
     sync_issue_date_from_derived,
     _normalize_month_to_int,
 )
+from core.parsers.models import ParsedMetadata
 
 
 class TestNormalizeMonthToInt:
@@ -118,8 +120,8 @@ class TestBuildDerivedMetadataMonthNormalization:
         assert derived["month_name"]["value"] == "March"
         assert derived["month_name"]["source"] == "ocr_scan"
 
-    def test_file_scan_month_name_preserved_when_exists(self):
-        """When file_scan provides explicit month_name, it's kept even if OCR wins month"""
+    def test_file_scan_month_name_overridden_by_winning_month(self):
+        """month_name is always derived from the winning month to prevent mismatches"""
         file_scan = {"year": 2024, "month": 6, "month_name": "June", "confidence": 0.85}
         ocr_scan = {"year": 2024, "month": "March", "confidence": 85}
         derived = build_derived_metadata(file_scan=file_scan, ocr_scan=ocr_scan)
@@ -127,9 +129,9 @@ class TestBuildDerivedMetadataMonthNormalization:
         # month from OCR wins (higher priority)
         assert derived["month"]["value"] == 3
         assert derived["month"]["source"] == "ocr_scan"
-        # month_name from file_scan wins the normal merge (only source with month_name)
-        assert derived["month_name"]["value"] == "June"
-        assert derived["month_name"]["source"] == "file_scan"
+        # month_name is overridden to match the winning month (March, not June)
+        assert derived["month_name"]["value"] == "March"
+        assert derived["month_name"]["source"] == "ocr_scan"
 
     def test_month_name_derived_when_no_source_provides_it(self):
         """When no source has month_name, it's derived from the winning month int"""
@@ -483,3 +485,67 @@ class TestVolumeValidation:
         derived = build_derived_metadata(ocr_scan=ocr_scan)
 
         assert "volume" not in derived
+
+
+class TestTimestampIdLowConfidence:
+    """Tests for timestamp_id pattern producing low-confidence date fields"""
+
+    def _make_parsed(self, pattern="timestamp_id"):
+        return ParsedMetadata(
+            title="Magazine",
+            year=2026,
+            month=2,
+            month_name="February",
+            confidence="high",
+            matched_pattern=pattern,
+        )
+
+    def test_timestamp_id_sets_low_date_confidence(self):
+        """Date fields from timestamp_id files should have per-field low confidence"""
+        parsed = self._make_parsed()
+        file_scan = build_file_scan(parsed)
+
+        assert file_scan["year_confidence"] == 0.10
+        assert file_scan["month_confidence"] == 0.10
+        assert file_scan["month_name_confidence"] == 0.10
+
+    def test_timestamp_id_title_keeps_normal_confidence(self):
+        """Title should NOT get low confidence — only date fields are unreliable"""
+        parsed = self._make_parsed()
+        file_scan = build_file_scan(parsed)
+
+        # No per-field confidence for title — falls back to overall confidence
+        assert "title_confidence" not in file_scan
+        assert file_scan["confidence"] == "high"
+
+    def test_non_timestamp_pattern_no_override(self):
+        """Other patterns should NOT get per-field confidence overrides"""
+        parsed = self._make_parsed(pattern="standard")
+        file_scan = build_file_scan(parsed)
+
+        assert "year_confidence" not in file_scan
+        assert "month_confidence" not in file_scan
+
+    def test_ocr_overrides_timestamp_date(self):
+        """OCR date should win over timestamp-derived date due to low confidence"""
+        parsed = self._make_parsed()
+        file_scan = build_file_scan(parsed)
+
+        ocr_scan = {"year": 2025, "month": 6, "year_confidence": 85, "month_confidence": 80}
+        derived = build_derived_metadata(file_scan=file_scan, ocr_scan=ocr_scan)
+
+        assert derived["year"]["value"] == 2025
+        assert derived["year"]["source"] == "ocr_scan"
+        assert derived["month"]["value"] == 6
+        assert derived["month"]["source"] == "ocr_scan"
+
+    def test_timestamp_date_used_as_fallback(self):
+        """Timestamp date should still be used when no other source provides one"""
+        parsed = self._make_parsed()
+        file_scan = build_file_scan(parsed)
+
+        derived = build_derived_metadata(file_scan=file_scan)
+
+        assert derived["year"]["value"] == 2026
+        assert derived["year"]["source"] == "file_scan"
+        assert derived["year"]["confidence"] == 0.10

@@ -56,6 +56,13 @@ def build_file_scan(parsed: ParsedMetadata) -> Dict[str, Any]:
     if parsed.matched_pattern:
         file_scan["matched_pattern"] = parsed.matched_pattern
 
+    # Timestamp ID pattern extracts the import timestamp, not the publication date.
+    # Set per-field low confidence for date fields so OCR/text scan can override them.
+    if parsed.matched_pattern == "timestamp_id":
+        for date_field in ("year", "month", "month_name"):
+            if date_field in file_scan:
+                file_scan[f"{date_field}_confidence"] = 0.10
+
     return file_scan
 
 
@@ -214,11 +221,11 @@ def build_derived_metadata(
                 }
                 break
 
-    # Ensure month_name is consistent with the winning month value.
-    # OCR/text scans provide month as a string name (e.g., "January") which we
-    # normalize to int above. Derive month_name from the winning month int so
-    # it always matches, regardless of which source won.
-    if "month" in derived and "month_name" not in derived:
+    # Ensure month_name is always consistent with the winning month value.
+    # month and month_name can be won by different sources (e.g., month=5 from OCR,
+    # month_name="February" from file_scan), so always derive month_name from the
+    # winning month int to prevent mismatches.
+    if "month" in derived:
         from core.constants.date import NUMBER_TO_MONTH
 
         month_int = derived["month"]["value"]

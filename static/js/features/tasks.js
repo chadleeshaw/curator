@@ -335,7 +335,7 @@ export class TasksManager {
         this.displayReorganizeResults(data, false);
         UIUtils.showStatus(
           'reorganize-status',
-          `✓ Reorganized ${data.files_reorganized} file(s) successfully`,
+          `Reorganized ${data.files_reorganized} file(s) successfully`,
           'success'
         );
       } else {

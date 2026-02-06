@@ -420,10 +420,10 @@ class TestTimestampIdPattern:
 
     def test_timestamp_id_without_underscore(self, extractor):
         """Test: Title (20240315125500).pdf - timestamp without separator."""
-        path = Path("/magazines/Hustler/Hustler (20240315125500).pdf")
+        path = Path("/magazines/Magazine/Magazine (20240315125500).pdf")
         result = extractor.extract_from_filename(path)
 
-        assert result["title"] == "Hustler"
+        assert result["title"] == "Magazine"
         assert result["year"] == 2024
         assert result["month_name"] == "March"
         assert result["issue_date"] == datetime(2024, 3, 1)

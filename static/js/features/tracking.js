@@ -602,7 +602,7 @@ export class TrackingManager {
     // Show a success message and scroll to the form
     UIUtils.showStatus(
       ELEMENT_IDS.TRACKING_STATUS,
-      `✓ Selected: ${result.title}. Review the fields below and click "Start Tracking".`,
+      `Selected: ${result.title}. Review the fields below and click "Start Tracking".`,
       'success'
     );
 
