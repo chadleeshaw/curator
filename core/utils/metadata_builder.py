@@ -2,9 +2,12 @@
 Metadata builder utilities for constructing parsed_metadata, derived_metadata, and extra_metadata.
 """
 
+import logging
 from datetime import datetime
 from typing import Dict, Any, Optional
 from core.parsers.models import ParsedMetadata
+
+logger = logging.getLogger(__name__)
 
 
 def build_file_scan(parsed: ParsedMetadata) -> Dict[str, Any]:
@@ -53,6 +56,33 @@ def build_file_scan(parsed: ParsedMetadata) -> Dict[str, Any]:
         file_scan["matched_pattern"] = parsed.matched_pattern
 
     return file_scan
+
+
+def _normalize_month_to_int(month_value: Any) -> Optional[int]:
+    """
+    Normalize a month value to an integer (1-12).
+
+    Handles:
+    - Integer month numbers (pass through)
+    - String month names ("January", "jan", etc.) via MONTH_TO_NUMBER
+
+    Args:
+        month_value: Month as int or string name
+
+    Returns:
+        Integer month (1-12) or None if not recognized
+    """
+    if isinstance(month_value, int):
+        return month_value if 1 <= month_value <= 12 else None
+
+    if isinstance(month_value, str):
+        from core.constants.date import MONTH_TO_NUMBER
+
+        month_int = MONTH_TO_NUMBER.get(month_value.lower())
+        if month_int:
+            return month_int
+
+    return None
 
 
 def build_derived_metadata(
@@ -140,6 +170,12 @@ def build_derived_metadata(
             if value is None:
                 continue
 
+            # Normalize month values to int so derived_metadata is always consistent
+            if field == "month" and isinstance(value, str):
+                value = _normalize_month_to_int(value)
+                if value is None:
+                    continue
+
             # Get confidence
             confidence = source_data.get("confidence", 0.0)
 
@@ -158,6 +194,22 @@ def build_derived_metadata(
                     "confidence": confidence,
                 }
                 break
+
+    # Ensure month_name is consistent with the winning month value.
+    # OCR/text scans provide month as a string name (e.g., "January") which we
+    # normalize to int above. Derive month_name from the winning month int so
+    # it always matches, regardless of which source won.
+    if "month" in derived and "month_name" not in derived:
+        from core.constants.date import NUMBER_TO_MONTH
+
+        month_int = derived["month"]["value"]
+        month_name = NUMBER_TO_MONTH.get(month_int)
+        if month_name:
+            derived["month_name"] = {
+                "value": month_name,
+                "source": derived["month"]["source"],
+                "confidence": derived["month"]["confidence"],
+            }
 
     # Add merge configuration
     derived["_merge_config"] = {
@@ -272,8 +324,14 @@ def sync_issue_date_from_derived(
 
     if month_data:
         month_value = month_data.get("value")
-        if month_value and isinstance(month_value, int):
-            month = month_value
+        if month_value is not None:
+            if isinstance(month_value, int):
+                month = month_value
+            elif isinstance(month_value, str):
+                # Handle string month names (e.g., "January") from OCR/text scans
+                month = _normalize_month_to_int(month_value)
+                if month:
+                    logger.debug(f"Converted string month '{month_value}' to {month} in sync_issue_date")
 
     # Create datetime
     try:
