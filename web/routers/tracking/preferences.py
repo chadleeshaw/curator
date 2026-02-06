@@ -10,6 +10,7 @@ from fastapi import HTTPException
 
 from core.constants.category import DEFAULT_CATEGORY
 from core.constants.errors import ErrorMessages
+from core.constants.language import DEFAULT_LANGUAGE
 from core.utils.db import check_file_path_conflict, with_db_session
 from core.utils.error_handling import handle_api_errors
 from core.utils.files import get_library_dir, get_category_prefix
