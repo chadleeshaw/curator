@@ -272,6 +272,122 @@ def test_run_task_now():
     print("Testing TaskScheduler.run_task_now()... ✓ PASS")
 
 
+def test_schedule_periodic_enabled_default():
+    """Test that tasks are enabled by default"""
+    scheduler = TaskScheduler()
+
+    async def dummy_task():
+        pass
+
+    scheduler.schedule_periodic("test_task", dummy_task, 60)
+
+    assert scheduler.tasks["test_task"]["enabled"] is True
+    status = scheduler.get_status()
+    assert status["tasks"]["test_task"]["enabled"] is True
+
+    print("Testing TaskScheduler enabled default... ✓ PASS")
+
+
+def test_schedule_periodic_disabled():
+    """Test scheduling a disabled task"""
+    scheduler = TaskScheduler()
+
+    async def dummy_task():
+        pass
+
+    scheduler.schedule_periodic("disabled_task", dummy_task, 60, enabled=False)
+
+    assert scheduler.tasks["disabled_task"]["enabled"] is False
+    status = scheduler.get_status()
+    assert status["tasks"]["disabled_task"]["enabled"] is False
+
+    print("Testing TaskScheduler schedule disabled... ✓ PASS")
+
+
+def test_disabled_task_does_not_run():
+    """Test that disabled tasks do not execute on schedule"""
+    scheduler = TaskScheduler()
+
+    execution_log = {"enabled": 0, "disabled": 0}
+
+    async def enabled_task():
+        execution_log["enabled"] += 1
+
+    async def disabled_task():
+        execution_log["disabled"] += 1
+
+    scheduler.schedule_periodic("enabled", enabled_task, 1, run_immediately=True, enabled=True)
+    scheduler.schedule_periodic("disabled", disabled_task, 1, run_immediately=True, enabled=False)
+
+    async def run_scheduler():
+        scheduler_task = asyncio.create_task(scheduler.start())
+        await asyncio.sleep(2)
+        scheduler.stop()
+        await asyncio.sleep(0.5)
+
+        if not scheduler_task.done():
+            scheduler_task.cancel()
+            try:
+                await scheduler_task
+            except asyncio.CancelledError:
+                pass
+
+    asyncio.run(run_scheduler())
+
+    assert execution_log["enabled"] >= 1, f"Enabled task should have run, got {execution_log['enabled']}"
+    assert execution_log["disabled"] == 0, f"Disabled task should not have run, got {execution_log['disabled']}"
+
+    print("Testing disabled task does not run... ✓ PASS")
+
+
+def test_set_task_enabled():
+    """Test enabling and disabling tasks at runtime"""
+    scheduler = TaskScheduler()
+
+    async def dummy_task():
+        pass
+
+    scheduler.schedule_periodic("toggle_task", dummy_task, 60, enabled=True)
+
+    # Disable
+    result = scheduler.set_task_enabled("toggle_task", False)
+    assert result is True
+    assert scheduler.tasks["toggle_task"]["enabled"] is False
+
+    # Re-enable
+    result = scheduler.set_task_enabled("toggle_task", True)
+    assert result is True
+    assert scheduler.tasks["toggle_task"]["enabled"] is True
+
+    # Non-existent task
+    result = scheduler.set_task_enabled("nonexistent", False)
+    assert result is False
+
+    print("Testing TaskScheduler.set_task_enabled()... ✓ PASS")
+
+
+def test_disabled_task_manual_run():
+    """Test that disabled tasks can still be triggered manually"""
+    scheduler = TaskScheduler()
+
+    task_executed = {"count": 0}
+
+    async def dummy_task():
+        task_executed["count"] += 1
+
+    scheduler.schedule_periodic("manual_disabled", dummy_task, 3600, enabled=False)
+
+    async def run_test():
+        # Manual trigger should work even when disabled
+        success = await scheduler.run_task_now("manual_disabled")
+        assert success is True
+        assert task_executed["count"] == 1
+
+    asyncio.run(run_test())
+
+    print("Testing disabled task manual run... ✓ PASS")
+
+
 if __name__ == "__main__":
     print("\n🧪 Task Scheduler Tests\n")
     print("=" * 50)

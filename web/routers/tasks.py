@@ -23,6 +23,18 @@ _folder_cleanup_task = None
 _file_importer = None
 _storage_config = None
 _task_scheduler = None
+_config_loader = None
+
+# Map task IDs to their config enabled keys
+TASK_ENABLED_CONFIG_KEYS = {
+    "auto_download": "auto_download_enabled",
+    "download_monitor": "download_monitor_enabled",
+    "cleanup_orphaned_covers": "cleanup_covers_enabled",
+    "ocr_processor": "ocr_processor_enabled",
+    "folder_cleanup": "folder_cleanup_enabled",
+    "auto_metadata": "auto_metadata_enabled",
+    "provider_cache_sync": "provider_cache_sync_enabled",
+}
 
 
 def set_dependencies(
@@ -33,9 +45,10 @@ def set_dependencies(
     ocr_processor_task: Optional[Any] = None,
     task_scheduler: Optional[Any] = None,
     folder_cleanup_task: Optional[Any] = None,
+    config_loader: Optional[Any] = None,
 ) -> None:  # pylint: disable=too-many-positional-arguments
     """Set dependencies from main app"""
-    global _session_factory, _download_monitor_task, _file_importer, _storage_config, _ocr_processor_task, _task_scheduler, _folder_cleanup_task
+    global _session_factory, _download_monitor_task, _file_importer, _storage_config, _ocr_processor_task, _task_scheduler, _folder_cleanup_task, _config_loader
     _session_factory = session_factory
     _download_monitor_task = download_monitor_task
     _file_importer = file_importer
@@ -43,6 +56,7 @@ def set_dependencies(
     _ocr_processor_task = ocr_processor_task
     _task_scheduler = task_scheduler
     _folder_cleanup_task = folder_cleanup_task
+    _config_loader = config_loader
 
 
 @router.get("/status")
@@ -58,12 +72,14 @@ async def get_tasks_status():
         dm_stats = getattr(_download_monitor_task, "stats", {})
         logger.debug(f"Tasks Status - Download Monitor: last_run={dm_last_run}, status={dm_status}")
 
-        # Get interval from scheduler
+        # Get interval and enabled from scheduler
         dm_interval = 30
+        dm_enabled = True
         if _task_scheduler:
             scheduler_status = _task_scheduler.get_status()
             if "download_monitor" in scheduler_status.get("tasks", {}):
                 dm_interval = scheduler_status["tasks"]["download_monitor"]["interval"]
+                dm_enabled = scheduler_status["tasks"]["download_monitor"].get("enabled", True)
 
         tasks.append(
             {
@@ -74,6 +90,7 @@ async def get_tasks_status():
                 "last_run": dm_last_run,
                 "next_run": getattr(_download_monitor_task, "next_run_time", None),
                 "last_status": dm_status,
+                "enabled": dm_enabled,
                 "stats": {
                     "total_runs": dm_stats.get("total_runs", 0),
                     "client_downloads_processed": dm_stats.get("client_downloads_processed", 0),
@@ -101,6 +118,7 @@ async def get_tasks_status():
         "last_run": None,
         "next_run": None,
         "last_status": None,
+        "enabled": True,
     }
     if scheduler_status and "auto_download" in scheduler_status.get("tasks", {}):
         task_data = scheduler_status["tasks"]["auto_download"]
@@ -116,6 +134,7 @@ async def get_tasks_status():
                 "last_run": last_run,
                 "next_run": task_data.get("next_run"),
                 "last_status": status,
+                "enabled": task_data.get("enabled", True),
             }
         )
     tasks.append(auto_download_info)
@@ -129,6 +148,7 @@ async def get_tasks_status():
         "last_run": None,
         "next_run": None,
         "last_status": None,
+        "enabled": True,
     }
     if scheduler_status and "cleanup_orphaned_covers" in scheduler_status.get("tasks", {}):
         task_data = scheduler_status["tasks"]["cleanup_orphaned_covers"]
@@ -144,6 +164,7 @@ async def get_tasks_status():
                 "last_run": last_run,
                 "next_run": task_data.get("next_run"),
                 "last_status": status,
+                "enabled": task_data.get("enabled", True),
             }
         )
     tasks.append(cleanup_covers_info)
@@ -157,6 +178,7 @@ async def get_tasks_status():
         "last_run": None,
         "next_run": None,
         "last_status": None,
+        "enabled": True,
     }
     if scheduler_status and "folder_cleanup" in scheduler_status.get("tasks", {}):
         task_data = scheduler_status["tasks"]["folder_cleanup"]
@@ -172,6 +194,7 @@ async def get_tasks_status():
                 "last_run": last_run,
                 "next_run": task_data.get("next_run"),
                 "last_status": status,
+                "enabled": task_data.get("enabled", True),
             }
         )
     tasks.append(folder_cleanup_info)
@@ -185,6 +208,7 @@ async def get_tasks_status():
         "last_run": None,
         "next_run": None,
         "last_status": None,
+        "enabled": True,
     }
     if scheduler_status and "auto_metadata" in scheduler_status.get("tasks", {}):
         task_data = scheduler_status["tasks"]["auto_metadata"]
@@ -200,6 +224,7 @@ async def get_tasks_status():
                 "last_run": last_run,
                 "next_run": task_data.get("next_run"),
                 "last_status": status,
+                "enabled": task_data.get("enabled", True),
             }
         )
     tasks.append(auto_metadata_info)
@@ -222,6 +247,7 @@ async def get_tasks_status():
             "last_run": last_run,
             "next_run": task_data.get("next_run"),
             "last_status": status,
+            "enabled": task_data.get("enabled", True),
         }
         tasks.append(auto_cache_info)
 
@@ -354,3 +380,48 @@ async def run_task_manually(task_id: str):
 
     else:
         return error_response(f"Unknown task: {task_id}")
+
+
+@router.post("/{task_id}/toggle")
+@handle_api_errors("Toggle task enabled state", logger)
+async def toggle_task(task_id: str):
+    """Toggle a task's enabled/disabled state.
+
+    Updates both the in-memory scheduler state and persists to config file.
+    Disabled tasks will not run on schedule but can still be triggered manually.
+    """
+    if not _task_scheduler:
+        return error_response("Task scheduler not available")
+
+    # Check task exists in scheduler
+    scheduler_status = _task_scheduler.get_status()
+    if task_id not in scheduler_status.get("tasks", {}):
+        return error_response(f"Unknown task: {task_id}")
+
+    # Toggle the current state
+    current_enabled = scheduler_status["tasks"][task_id].get("enabled", True)
+    new_enabled = not current_enabled
+
+    # Update scheduler in-memory state
+    _task_scheduler.set_task_enabled(task_id, new_enabled)
+
+    # Persist to config file
+    if _config_loader:
+        try:
+            config_key = TASK_ENABLED_CONFIG_KEYS.get(task_id)
+            if config_key:
+                all_config = _config_loader.get_all_config()
+                if "tasks" not in all_config:
+                    all_config["tasks"] = {}
+                all_config["tasks"][config_key] = new_enabled
+                _config_loader.save_config(all_config)
+                logger.info(f"Persisted task toggle: {task_id} -> {new_enabled}")
+        except Exception:
+            logger.warning(f"Failed to persist task toggle for {task_id} to config file")
+
+    state = "enabled" if new_enabled else "disabled"
+    return success_response(
+        f"Task {task_id} {state}",
+        task_id=task_id,
+        enabled=new_enabled,
+    )

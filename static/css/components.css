@@ -2000,3 +2000,54 @@
 [data-status='in_library'] {
   cursor: default;
 }
+
+/* ============================================================================
+   Task Toggle Switch
+   ============================================================================ */
+
+.task-toggle {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.task-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.task-toggle-slider {
+  position: absolute;
+  inset: 0;
+  background-color: var(--text-hint, #999);
+  border-radius: 20px;
+  transition: background-color 0.2s ease;
+}
+
+.task-toggle-slider::before {
+  content: '';
+  position: absolute;
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+}
+
+.task-toggle input:checked + .task-toggle-slider {
+  background-color: var(--accent, #4a9eff);
+}
+
+.task-toggle input:checked + .task-toggle-slider::before {
+  transform: translateX(16px);
+}
+
+.task-toggle:hover .task-toggle-slider {
+  opacity: 0.85;
+}

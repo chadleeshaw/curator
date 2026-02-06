@@ -677,6 +677,7 @@ def _schedule_periodic_tasks(
         auto_download_task,
         tasks_cfg.get("auto_download_interval", constants.AUTO_DOWNLOAD_INTERVAL),
         run_immediately=False,
+        enabled=tasks_cfg.get("auto_download_enabled", True),
     )
 
     scheduler.schedule_periodic(
@@ -684,12 +685,14 @@ def _schedule_periodic_tasks(
         download_monitoring_task,
         tasks_cfg.get("download_monitor_interval", constants.DOWNLOAD_MONITOR_INTERVAL),
         run_immediately=False,
+        enabled=tasks_cfg.get("download_monitor_enabled", True),
     )
 
     scheduler.schedule_periodic(
         "cleanup_orphaned_covers",
         cleanup_orphaned_covers_task,
         tasks_cfg.get("cleanup_covers_interval", constants.CLEANUP_COVERS_INTERVAL),
+        enabled=tasks_cfg.get("cleanup_covers_enabled", True),
     )
 
     scheduler.schedule_periodic(
@@ -697,18 +700,21 @@ def _schedule_periodic_tasks(
         ocr_processing_task,
         tasks_cfg.get("ocr_processor_interval", constants.OCR_PROCESSOR_INTERVAL),
         run_immediately=False,
+        enabled=tasks_cfg.get("ocr_processor_enabled", True),
     )
 
     scheduler.schedule_periodic(
         "folder_cleanup",
         folder_cleanup_periodic_task,
         tasks_cfg.get("folder_cleanup_interval", 86400),
+        enabled=tasks_cfg.get("folder_cleanup_enabled", True),
     )
 
     scheduler.schedule_periodic(
         "auto_metadata",
         auto_metadata_periodic_task,
         tasks_cfg.get("auto_metadata_interval", constants.AUTO_METADATA_INTERVAL),
+        enabled=tasks_cfg.get("auto_metadata_enabled", True),
     )
 
     # Provider cache sync (if enabled)
@@ -719,6 +725,7 @@ def _schedule_periodic_tasks(
             provider_cache_sync_task,
             sync_interval,
             run_immediately=False,
+            enabled=tasks_cfg.get("provider_cache_sync_enabled", True),
         )
         logger.info(f"Provider cache sync scheduled: every {sync_interval}s")
 
@@ -771,6 +778,7 @@ def _initialize_router_dependencies(app: FastAPI, auto_download_task) -> None:
         app_state.ocr_processor_task,
         app_state.task_scheduler,
         app_state.folder_cleanup_task,
+        app_state.config_loader,
     )
 
     config.set_dependencies(app_state.config_loader)

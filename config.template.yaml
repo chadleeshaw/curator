@@ -320,6 +320,17 @@ tasks:
   # Task interval settings (in seconds)
   # How often each background task runs
 
+  # Task enable/disable flags
+  # Set to false to disable a task entirely. Disabled tasks will not run
+  # on their schedule but can still be triggered manually from the UI.
+  auto_download_enabled: true
+  download_monitor_enabled: true
+  cleanup_covers_enabled: true
+  ocr_processor_enabled: true
+  folder_cleanup_enabled: true
+  auto_metadata_enabled: true
+  provider_cache_sync_enabled: true
+
   # Auto-download: Search for and download new tracked issues
   # IMPORTANT: With the new Issue Discovery & Tracking system, this interval
   # determines how often the scheduler runs (not how often each periodical is searched).
