@@ -527,7 +527,7 @@ def _initialize_cache_services() -> None:
         from services.cache import NzbCacheService
 
         cache_dir = Path(app_state.storage_config.get("cache_dir", "./local/cache"))
-        cache_db_path = cache_dir / "provider_cache.db"
+        cache_db_path = cache_dir / constants.CACHE_DB_FILENAME
 
         app_state.nzb_cache_service = NzbCacheService(
             cache_db_path=str(cache_db_path),

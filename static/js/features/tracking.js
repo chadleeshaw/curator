@@ -1747,10 +1747,16 @@ export class TrackingManager {
           ? `<div style="font-size: 10px; margin-top: 6px;">${this.formatProviderBadge(issue.provider)}</div>`
           : '';
 
+        // Filter variants by source when a filter is active
+        const filteredVariants = this.sourceFilter !== 'all' && issue.variants
+          ? issue.variants.filter((v) => v.provider && v.provider.toLowerCase() === this.sourceFilter)
+          : issue.variants || [];
+        const displayVariants = filteredVariants.length > 0 ? filteredVariants : (issue.variants || []);
+
         // Show language variants badge if multiple variants exist
-        const hasMultipleVariants = issue.variants && issue.variants.length > 1;
+        const hasMultipleVariants = displayVariants.length > 1;
         const variantsBadge = hasMultipleVariants
-          ? `<div style="font-size: 10px; margin-top: 6px; color: var(--primary-color); font-weight: 600;">🌍 ${issue.variants.length} variants</div>`
+          ? `<div style="font-size: 10px; margin-top: 6px; color: var(--primary-color); font-weight: 600;">🌍 ${displayVariants.length} variants</div>`
           : issue.language
             ? `<div style="font-size: 10px; margin-top: 6px; color: var(--text-secondary);">${issue.language}</div>`
             : '';
@@ -1775,25 +1781,16 @@ export class TrackingManager {
         "`;
 
         // Store variants globally and add click handler for all non-library items
-        if (!isLibraryItem && issue.variants && issue.variants.length > 0) {
+        if (!isLibraryItem && displayVariants.length > 0) {
           const issueKey = `${issue.year}-${issue.month}-${issue.issue}`;
           window.issueVariants = window.issueVariants || {};
-          window.issueVariants[issueKey] = issue.variants;
+          window.issueVariants[issueKey] = displayVariants;
           cardHtml += ` onclick='selectIssueWithVariants("${issueKey}", ${issue.already_downloaded || false}, ${issue.download_failed || false})'`;
 
           // Store available issues for bulk download
-          // When source filter is active, prefer variants from that source
-          if (status === 'available' && issue.variants.length > 0) {
-            let candidates = issue.variants.filter((v) => !v.download_failed);
-            if (candidates.length === 0) candidates = issue.variants;
-
-            // If source filter is active, prefer matching variants
-            if (this.sourceFilter !== 'all') {
-              const filtered = candidates.filter(
-                (v) => v.provider && v.provider.toLowerCase() === this.sourceFilter
-              );
-              if (filtered.length > 0) candidates = filtered;
-            }
+          if (status === 'available' && displayVariants.length > 0) {
+            let candidates = displayVariants.filter((v) => !v.download_failed);
+            if (candidates.length === 0) candidates = displayVariants;
 
             this.availableIssues.push({
               title: candidates[0].title,
