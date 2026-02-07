@@ -660,15 +660,22 @@ export class DownloadsManager {
    * @returns {string} HTML string of action buttons
    */
   getQueueActionButtons(item) {
-    const { status, submission_id: submissionId } = item;
+    const { status, submission_id: submissionId, error, extra_status: extraStatus } = item;
     let buttons = '';
 
+    if ((status === 'failed' && error) || extraStatus) {
+      const message = error || extraStatus;
+      const escapedMessage = message.replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+      const toastType = error ? 'error' : 'info';
+      buttons += `<span onclick="downloads.showItemInfo('${escapedMessage}', '${toastType}')" title="${escapedMessage}" style="cursor: pointer; font-size: 1.2em; padding: 2px 4px;">ℹ️</span>`;
+    }
+
     if (status === 'failed') {
-      buttons += `<button onclick="downloads.retryDownload(${submissionId})" class="btn-secondary" style="padding: 4px 8px; margin-right: 5px;">\uD83D\uDD04 Retry</button>`;
+      buttons += `<span onclick="downloads.retryDownload(${submissionId})" title="Retry" style="cursor: pointer; font-size: 1.2em; padding: 2px 4px;">🔄</span>`;
     }
 
     if (status !== 'completed') {
-      buttons += `<button onclick="downloads.deleteQueueItem(${submissionId})" class="btn-secondary" style="background: var(--status-failed); padding: 4px 8px;">Remove</button>`;
+      buttons += `<span onclick="downloads.deleteQueueItem(${submissionId})" title="Remove" style="cursor: pointer; font-size: 1.2em; padding: 2px 4px;">🗑️</span>`;
     }
 
     return buttons || '-';
@@ -782,22 +789,14 @@ export class DownloadsManager {
                 ${timeLeft || size ? `<div style="font-size: 0.7em; color: var(--text-secondary); margin-top: 2px;">${size ? size + ' ' : ''}${timeLeft ? '• ' + timeLeft : ''}</div>` : ''}
               </div>`;
           }
-          // Show error message for failed items
-          else if (status === 'failed' && error) {
-            statusInfo += `<div style="font-size: 0.75em; color: var(--status-failed); margin-top: 4px; font-style: italic;">❌ ${error}</div>`;
-          }
-          // Show extra_status for rate limiting or other info
-          else if (item.extra_status) {
-            statusInfo += `<div style="font-size: 0.75em; color: var(--text-secondary); margin-top: 4px; font-style: italic;">⏱️ ${item.extra_status}</div>`;
-          }
 
           return `
-          <tr>
-            <td style="padding: 10px; border-bottom: 1px solid var(--border-color);">${displayTitle}</td>
-            <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
+          <tr style="background: var(--surface-variant); border-radius: 6px;">
+            <td style="padding: 14px; border-bottom: 1px solid var(--border-color);">${displayTitle}</td>
+            <td style="padding: 14px; border-bottom: 1px solid var(--border-color); text-align: center; white-space: nowrap;">
               ${statusInfo}
             </td>
-            <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
+            <td style="padding: 14px; border-bottom: 1px solid var(--border-color); text-align: center; white-space: nowrap;">
               ${this.getQueueActionButtons(item)}
             </td>
           </tr>
@@ -809,20 +808,20 @@ export class DownloadsManager {
     const html = `
       <div class="modal-header">
         <h3>Manage Downloads: ${periodical}</h3>
-        <p style="color: var(--text-secondary); margin-top: 10px;">${items.length} issues - ${statusList}</p>
+        <p style="color: var(--text-secondary); margin-top: 8px; font-size: 0.95em;">${items.length} issues - ${statusList}</p>
         ${waitTimeAlert}
         <div id="modal-queue-status" class="hidden" style="margin-top: 10px;"></div>
-        <div style="display: flex; gap: 5px; margin-top: 15px; flex-wrap: wrap;">
+        <div style="display: flex; gap: 8px; margin-top: 15px; flex-wrap: wrap;">
           ${filterButtons}
         </div>
       </div>
-      <div class="modal-body" style="max-height: 400px; overflow-y: auto; margin: 20px 0;">
-        <table style="width: 100%; border-collapse: collapse;">
+      <div class="modal-body" style="max-height: 60vh; overflow-y: auto; margin: 20px 0;">
+        <table style="width: 100%; border-collapse: separate; border-spacing: 0 4px;">
           <thead style="position: sticky; top: 0; background: var(--surface); z-index: 1;">
             <tr>
-              <th style="text-align: left; padding: 10px; border-bottom: 2px solid var(--border-color);">Issue</th>
-              <th style="text-align: center; padding: 10px; border-bottom: 2px solid var(--border-color);">Status</th>
-              <th style="text-align: center; padding: 10px; border-bottom: 2px solid var(--border-color);">Actions</th>
+              <th style="text-align: left; padding: 12px 14px; border-bottom: 2px solid var(--border-color);">Issue</th>
+              <th style="text-align: center; padding: 12px 14px; border-bottom: 2px solid var(--border-color); min-width: 160px;">Status</th>
+              <th style="text-align: center; padding: 12px 14px; border-bottom: 2px solid var(--border-color); min-width: 80px;">Actions</th>
             </tr>
           </thead>
           <tbody>${tableRows}</tbody>
@@ -1144,6 +1143,17 @@ export class DownloadsManager {
    * @param {number} submissionId - The submission ID to retry
    * @returns {Promise<void>}
    */
+  showItemInfo(message, type = 'info') {
+    const decoded = message.replace(/&#39;/g, "'").replace(/&quot;/g, '"');
+    const statusEl = document.getElementById('modal-queue-status');
+    // Toggle off if already showing this same message
+    if (statusEl && !statusEl.classList.contains('hidden') && statusEl.textContent.includes(decoded)) {
+      UIUtils.hideStatus('modal-queue-status');
+      return;
+    }
+    UIUtils.showStatus('modal-queue-status', decoded, type === 'error' ? 'error' : 'info');
+  }
+
   async retryDownload(submissionId) {
     const confirmed = await UIUtils.confirm(
       'Retry Download',
