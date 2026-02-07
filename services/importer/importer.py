@@ -407,9 +407,15 @@ class FileImporter:
         pdf_path: Path,
         skip_organize: bool,
         session: Session,
+        content_hash: Optional[str] = None,
     ) -> bool:
         """
         Check for duplicate using fuzzy title matching and issue date.
+
+        If the incoming file's content hash differs from the existing entry's hash,
+        the file is treated as a different issue (not a duplicate) even if title and
+        date appear to match.  This prevents false positives caused by imprecise
+        filename date parsing.
 
         Args:
             tracking_title: Normalized tracking title
@@ -418,6 +424,7 @@ class FileImporter:
             pdf_path: Path to file being imported
             skip_organize: Whether to skip cleanup on duplicate
             session: Database session
+            content_hash: SHA256 hash of the incoming file (optional)
 
         Returns:
             True if duplicate found (caller should skip import), False otherwise
@@ -444,6 +451,16 @@ class FileImporter:
                 )
 
                 if date_diff <= DUPLICATE_DATE_THRESHOLD_DAYS and same_language:
+                    # Content hash safety net: if both hashes are available and differ,
+                    # the files are different content — do NOT treat as duplicate
+                    if content_hash and existing.content_hash and content_hash != existing.content_hash:
+                        logger.info(
+                            f"Fuzzy match for '{pdf_path.name}' against '{existing.title}' "
+                            f"({existing.issue_date.strftime('%b %Y')}) but content hashes differ — "
+                            f"importing as distinct issue."
+                        )
+                        continue
+
                     logger.warning(
                         f"Duplicate detected for '{pdf_path.name}': '{tracking_title}' ({parsed_issue_date.strftime('%b %Y')}, {parsed_language}) "
                         f"matches existing '{existing.title}' ({existing.issue_date.strftime('%b %Y')}, "
@@ -1024,7 +1041,7 @@ class FileImporter:
 
             # Step 5: Check for fuzzy duplicates
             if self._check_fuzzy_duplicate(
-                tracking_title, parsed.issue_date, parsed.language, file_path, skip_organize, session
+                tracking_title, parsed.issue_date, parsed.language, file_path, skip_organize, session, content_hash
             ):
                 return {"skip_reason": "duplicate_fuzzy"}
 

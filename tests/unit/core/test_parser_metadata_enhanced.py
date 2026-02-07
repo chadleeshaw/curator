@@ -476,6 +476,71 @@ class TestTimestampIdPattern:
         assert result.get("pattern") != "timestamp_id"
 
 
+class TestYearNumericMonthPattern:
+    """Test that _try_year_numeric_month_pattern correctly parses 'Title YYYY MM' filenames."""
+
+    @pytest.fixture
+    def extractor(self):
+        """Create FilenameParser instance."""
+        return FilenameParser()
+
+    def test_basic_year_month(self, extractor):
+        """Test: 'Magazine Legal 2017 12.pdf' → title='Magazine Legal', Dec 2017."""
+        path = Path("/downloads/Magazine Legal 2017 12.pdf")
+        result = extractor.extract_from_filename(path)
+
+        assert result["title"] == "Magazine Legal"
+        assert result["year"] == 2017
+        assert result["issue_date"].month == 12
+        assert result["issue_date"].year == 2017
+        assert result["pattern"] == "year_numeric_month"
+
+    def test_single_digit_month(self, extractor):
+        """Test: 'PC Gamer 2020 3.pdf' → title='PC Gamer', Mar 2020."""
+        path = Path("/downloads/PC Gamer 2020 3.pdf")
+        result = extractor.extract_from_filename(path)
+
+        assert result["title"] == "PC Gamer"
+        assert result["year"] == 2020
+        assert result["issue_date"].month == 3
+        assert result["pattern"] == "year_numeric_month"
+
+    def test_january(self, extractor):
+        """Test: 'Magazine 2019 01.pdf' → title='Magazine', Jan 2019."""
+        path = Path("/downloads/Magazine 2019 01.pdf")
+        result = extractor.extract_from_filename(path)
+
+        assert result["title"] == "Magazine"
+        assert result["issue_date"].month == 1
+        assert result["issue_date"].year == 2019
+        assert result["pattern"] == "year_numeric_month"
+
+    def test_multiword_title(self, extractor):
+        """Test: 'National Geographic 2024 06.pdf' → title='National Geographic', Jun 2024."""
+        path = Path("/downloads/National Geographic 2024 06.pdf")
+        result = extractor.extract_from_filename(path)
+
+        assert result["title"] == "National Geographic"
+        assert result["issue_date"].month == 6
+        assert result["issue_date"].year == 2024
+
+    def test_invalid_month_13_falls_through(self, extractor):
+        """Test: 'Magazine 2024 13.pdf' → invalid month, should NOT match year_numeric_month."""
+        path = Path("/downloads/Magazine 2024 13.pdf")
+        result = extractor.extract_from_filename(path)
+
+        # Should fall through to year_only since 13 is not a valid month
+        assert result["pattern"] != "year_numeric_month"
+
+    def test_does_not_match_three_digit_number(self, extractor):
+        """Test: 'Magazine 2024 123.pdf' → three digits, should NOT match (issue number, not month)."""
+        path = Path("/downloads/Magazine 2024 123.pdf")
+        result = extractor.extract_from_filename(path)
+
+        # Pattern requires 1-2 digits for month, so 123 should not match
+        assert result.get("pattern") != "year_numeric_month"
+
+
 class TestYearOnlyTitleExtraction:
     """Test that _try_year_only_pattern extracts title from filename text."""
 

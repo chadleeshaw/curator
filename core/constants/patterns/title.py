@@ -28,6 +28,9 @@ TITLE_PATTERN_SPACE_MONTH_ONLY = r"(.+?)\s+([A-Za-z]+)$"
 TITLE_PATTERN_ISO_DATE = r"(.+?)\s+(\d{4})-(\d{2})$"
 """Pattern for Title YYYY-MM: PC Gamer 2024-12"""
 
+TITLE_PATTERN_YEAR_NUMERIC_MONTH = r"(.+?)\s+(\d{4})\s+(\d{1,2})$"
+"""Pattern for Title YYYY MM: Magazine 2017 12"""
+
 TITLE_PATTERN_ISSUE_NUMBER = r"^(.+?)[\.\s]+(?:no\.?|number|issue)[\.\s]*(\d{1,3})[\.\s]+(\d{4})(?:[\.\s]+(.+))?$"
 """Pattern for Title No.XXX YYYY: PC Gamer No.405 2024"""
 

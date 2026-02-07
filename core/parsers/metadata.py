@@ -41,6 +41,7 @@ from core.constants.patterns import (
     TITLE_PATTERN_DOT_SEPARATED,
     TITLE_PATTERN_ISO_DATE,
     TITLE_PATTERN_ISSUE_NUMBER,
+    TITLE_PATTERN_YEAR_NUMERIC_MONTH,
     TITLE_PATTERN_ISSUE_ONLY,
     TITLE_PATTERN_LEADING_ISSUE,
     TITLE_PATTERN_SEASONAL,
@@ -578,6 +579,7 @@ class FilenameParser:
             or self._try_seasonal_pattern(filename, metadata)
             or self._try_timestamp_id_pattern(filename, metadata)
             or self._try_date_only_pattern(filename, metadata, magazine_name)
+            or self._try_year_numeric_month_pattern(filename, metadata)
             or self._try_year_only_pattern(filename, metadata, magazine_name)
             # Patterns without dates - volume/issue only (will need date scan)
             or self._try_leading_issue_pattern(filename, metadata)
@@ -1058,6 +1060,43 @@ class FilenameParser:
             metadata["title"] = filename
             logger.warning(f"Filename is date-only ({filename}) but no suitable magazine folder found")
 
+        return metadata
+
+    def _try_year_numeric_month_pattern(self, filename: str, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Pattern: "Title YYYY MM" (e.g., "Magazine 2017 12").
+
+        Handles filenames where a 4-digit year is followed by a space and a 1-2 digit
+        numeric month. Must appear at the end of the filename.
+        """
+        match = re.search(TITLE_PATTERN_YEAR_NUMERIC_MONTH, filename)
+        if not match:
+            return None
+
+        title = match.group(1).strip()
+        year_str = match.group(2)
+        month_str = match.group(3)
+
+        year = int(year_str)
+        month = int(month_str)
+
+        # Validate year and month
+        if not MIN_VALID_YEAR <= year <= MAX_VALID_YEAR:
+            return None
+        if not 1 <= month <= 12:
+            return None
+
+        title_clean = clean_title(title)
+        if not title_clean or len(title_clean) < 2:
+            return None
+
+        metadata["title"] = title_clean
+        metadata["issue_date"] = datetime(year, month, 1)
+        metadata["year"] = year
+        metadata["month_name"] = NUMBER_TO_MONTH.get(month, "")
+        metadata["pattern"] = "year_numeric_month"
+
+        logger.info(f"Extracted title '{metadata['title']}' and date {year}-{month:02d} " f"from filename: {filename}")
         return metadata
 
     def _try_year_only_pattern(
