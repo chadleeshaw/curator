@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
+from core.constants.download_clients import ENCRYPTION_INDICATORS, ENCRYPTION_INDICATORS_HISTORY
 from core.interfaces import DownloadClient
 
 logger = logging.getLogger(__name__)
@@ -25,25 +26,25 @@ class SABnzbdClient(DownloadClient):
         if not self.api_key:
             raise ValueError("SABnzbd client requires api_key")
 
-    def _parse_wait_time(self, extra_status: str) -> Optional[int]:
+    def _parse_wait_time(self, text: str) -> Optional[int]:
         """
-        Parse wait time from SABnzbd extra_status field.
+        Parse wait time from SABnzbd labels or status text.
 
         SABnzbd returns messages like:
         - "WAIT 3600 seconds until retry"
         - "WAIT 13887 seconds until retry"
 
         Args:
-            extra_status: The extra_status field from SABnzbd queue slot
+            text: Text from SABnzbd labels array or status field
 
         Returns:
             Wait time in seconds, or None if not a WAIT message
         """
-        if not extra_status:
+        if not text:
             return None
 
-        # Pattern: "WAIT X seconds until retry"
-        match = re.search(r"WAIT\s+(\d+)\s+seconds?", extra_status, re.IGNORECASE)
+        # Pattern: "WAIT X seconds until retry" or "WAIT X sec"
+        match = re.search(r"WAIT\s+(\d+)\s*(?:seconds?|sec)", text, re.IGNORECASE)
         if match:
             return int(match.group(1))
 
@@ -190,33 +191,34 @@ class SABnzbdClient(DownloadClient):
 
             for slot in slots:
                 if slot.get("nzo_id") == job_id:
-                    logger.debug(f"[SABnzbd] Found {job_id} in queue")
+                    logger.debug(f"[SABnzbd] Found {job_id} in queue: {slot}")
 
-                    # Check for paused job due to encryption
                     slot_status = slot.get("status", "")
-                    extra_status = slot.get("extra_status", "")
+                    labels = slot.get("labels", [])
                     msg = slot.get("msg", "")
-                    status_line = slot.get("status_line", "")
 
-                    # Check if paused due to encryption
-                    encryption_indicators = [
-                        "encrypted rar",
-                        "encrypted archive",
-                        "archive requires a password",
-                        "password protected",
-                        "all passwords were tried",
-                    ]
+                    # Search all labels for WAIT pattern (SABnzbd puts rate limit info in labels array)
+                    wait_text = ""
+                    for label in labels:
+                        if "WAIT" in label.upper():
+                            wait_text = label
+                            break
+
+                    # Also check status field as fallback
+                    if not wait_text and "WAIT" in slot_status.upper():
+                        wait_text = slot_status
+
+                    # Check if paused due to encryption (search labels and msg)
+                    all_text = " ".join(labels + [msg]).lower()
 
                     is_encrypted = slot_status == "Paused" and any(
-                        indicator in text.lower()
-                        for text in [extra_status, msg, status_line]
-                        for indicator in encryption_indicators
+                        indicator in all_text for indicator in ENCRYPTION_INDICATORS
                     )
 
                     if is_encrypted:
                         logger.warning(
                             f"[SABnzbd] Job {job_id} is paused due to encryption/password protection. "
-                            f"Status: {slot_status}, Extra: {extra_status}, Msg: {msg}"
+                            f"Status: {slot_status}, Labels: {labels}, Msg: {msg}"
                         )
                         return {
                             "status": "failed",
@@ -226,14 +228,14 @@ class SABnzbdClient(DownloadClient):
                         }
 
                     # Check for rate limit WAIT status
-                    wait_time = self._parse_wait_time(extra_status)
+                    wait_time = self._parse_wait_time(wait_text)
 
                     if wait_time:
                         # Provider rate limited - SABnzbd is waiting to retry
                         logger.warning(
                             f"[SABnzbd] Job {job_id} is rate limited by provider. "
                             f"Waiting {wait_time} seconds (~{wait_time / 3600:.1f} hours) before retry. "
-                            f"Extra status: {extra_status}"
+                            f"Labels: {labels}"
                         )
                         return {
                             "status": "pending",  # Keep as pending, not failed
@@ -300,16 +302,9 @@ class SABnzbdClient(DownloadClient):
                         logger.warning(f"[SABnzbd] Job {job_id} failed: {error_message}")
 
                         # Check if failure was due to encryption
-                        encryption_indicators = [
-                            "encrypted rar",
-                            "encrypted archive",
-                            "archive requires a password",
-                            "password protected",
-                            "unpacking failed",
-                            "all passwords were tried",
-                        ]
-
-                        is_encrypted = any(indicator in fail_message.lower() for indicator in encryption_indicators)
+                        is_encrypted = any(
+                            indicator in fail_message.lower() for indicator in ENCRYPTION_INDICATORS_HISTORY
+                        )
 
                         return {
                             "status": "failed",
