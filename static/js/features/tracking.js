@@ -57,6 +57,12 @@ export class TrackingManager {
     this.allTracked = [];
     /** @type {boolean} Whether periodicals have been loaded at least once */
     this.periodicalsLoaded = false;
+    /** @type {string} Current source filter for search results ('all', 'newsnab', 'internet_archive', 'rss') */
+    this.sourceFilter = 'all';
+    /** @type {Object|null} Last curated issues for re-rendering with filters */
+    this.lastCuratedIssues = null;
+    /** @type {string|null} Last search title for re-rendering */
+    this.lastSearchTitle = null;
   }
 
   /**
@@ -1222,6 +1228,11 @@ export class TrackingManager {
         this.fromCache = data.from_cache || false;
         this.cacheAgeDays = data.cache_age_days || 0;
 
+        // Store for re-rendering with filters
+        this.lastCuratedIssues = curatedIssues;
+        this.lastSearchTitle = title;
+        this.sourceFilter = 'all';
+
         this.displayCuratedIssues(curatedIssues, title);
       } else {
         let errorInfo = '';
@@ -1545,21 +1556,88 @@ export class TrackingManager {
     // Store available issues for bulk download
     this.availableIssues = [];
 
+    // Collect unique providers from available items for filter buttons
+    const allProviders = new Set();
+    Object.values(groupedByYear).forEach((yearGroup) => {
+      yearGroup.forEach((issue) => {
+        if (issue.status !== 'in_library' && issue.variants) {
+          issue.variants.forEach((v) => {
+            if (v.provider && v.provider !== 'Library') {
+              allProviders.add(v.provider.toLowerCase());
+            }
+          });
+        }
+      });
+    });
+
+    // Provider display config
+    const providerLabels = {
+      newsnab: { icon: '📰', label: 'Newsnab' },
+      internet_archive: { icon: '🏛️', label: 'Internet Archive' },
+      rss: { icon: '📡', label: 'RSS' },
+    };
+
+    // Build source filter buttons (only show if more than one provider)
+    let sourceFilterHtml = '';
+    if (allProviders.size > 1) {
+      const filterBtns = [`<button onclick="filterSearchBySource('all')" class="sort-btn${this.sourceFilter === 'all' ? ' active' : ''}">All</button>`];
+      allProviders.forEach((provider) => {
+        const cfg = providerLabels[provider] || { icon: '🔗', label: provider };
+        filterBtns.push(
+          `<button onclick="filterSearchBySource('${provider}')" class="sort-btn${this.sourceFilter === provider ? ' active' : ''}">${cfg.icon} ${cfg.label}</button>`
+        );
+      });
+      sourceFilterHtml = `
+        <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; align-items: center;">
+          <span style="font-size: 0.85em; color: var(--text-secondary); margin-right: 4px;">Source:</span>
+          ${filterBtns.join('')}
+        </div>`;
+    }
+
+    // Calculate filtered counts
+    let filteredLibraryCount = 0;
+    let filteredAvailableCount = 0;
+    let filteredTotalCount = 0;
+
+    Object.values(groupedByYear).forEach((yearGroup) => {
+      yearGroup.forEach((issue) => {
+        // Check if issue passes the source filter
+        const passesFilter = this.sourceFilter === 'all' || this.issueMatchesSourceFilter(issue, this.sourceFilter);
+        if (!passesFilter) return;
+
+        filteredTotalCount++;
+        if (issue.status === 'in_library') {
+          filteredLibraryCount++;
+        } else if (issue.status === 'available') {
+          filteredAvailableCount++;
+        }
+      });
+    });
+
     let html = `
       <div class="search-summary">
         <h3>Search Results for "${title}"${cacheInfo}</h3>
         <div class="summary-stats">
-          <span class="stat">📚 <strong>${this.libraryCount || 0}</strong> in library</span>
-          <span class="stat${this.availableCount > 0 ? ' clickable-stat' : ''}" ${this.availableCount > 0 ? 'onclick="downloadAllAvailable()" title="Click to download all available issues"' : ''}>📥 <strong>${this.availableCount || 0}</strong> available</span>
-          <span class="stat">🎯 <strong>${this.totalCount || 0}</strong> total</span>
+          <span class="stat">📚 <strong>${filteredLibraryCount}</strong> in library</span>
+          <span class="stat${filteredAvailableCount > 0 ? ' clickable-stat' : ''}" ${filteredAvailableCount > 0 ? 'onclick="downloadAllAvailable()" title="Click to download all available issues"' : ''}>📥 <strong>${filteredAvailableCount}</strong> available</span>
+          <span class="stat">🎯 <strong>${filteredTotalCount}</strong> total</span>
         </div>
+        ${sourceFilterHtml}
       </div>
       <div style="max-height: 70vh; overflow-y: auto;">`;
 
     const years = Object.keys(groupedByYear).sort((a, b) => b - a);
 
     years.forEach((year) => {
-      const issues = groupedByYear[year];
+      const allIssues = groupedByYear[year];
+
+      // Filter issues by source
+      const issues = this.sourceFilter === 'all'
+        ? allIssues
+        : allIssues.filter((issue) => this.issueMatchesSourceFilter(issue, this.sourceFilter));
+
+      if (issues.length === 0) return; // Skip empty year groups after filtering
+
       // Display "Collections" for year 0, otherwise show the year
       const yearLabel = year === '0' ? '📦 Collections' : `📅 ${year}`;
       html += `<div style="margin-bottom: 20px;">
@@ -1704,14 +1782,23 @@ export class TrackingManager {
           cardHtml += ` onclick='selectIssueWithVariants("${issueKey}", ${issue.already_downloaded || false}, ${issue.download_failed || false})'`;
 
           // Store available issues for bulk download
-          // Find first variant that hasn't failed
+          // When source filter is active, prefer variants from that source
           if (status === 'available' && issue.variants.length > 0) {
-            const firstNonFailedVariant =
-              issue.variants.find((v) => !v.download_failed) || issue.variants[0];
+            let candidates = issue.variants.filter((v) => !v.download_failed);
+            if (candidates.length === 0) candidates = issue.variants;
+
+            // If source filter is active, prefer matching variants
+            if (this.sourceFilter !== 'all') {
+              const filtered = candidates.filter(
+                (v) => v.provider && v.provider.toLowerCase() === this.sourceFilter
+              );
+              if (filtered.length > 0) candidates = filtered;
+            }
+
             this.availableIssues.push({
-              title: firstNonFailedVariant.title,
-              url: firstNonFailedVariant.url,
-              provider: firstNonFailedVariant.provider,
+              title: candidates[0].title,
+              url: candidates[0].url,
+              provider: candidates[0].provider,
             });
           }
         }
@@ -1740,6 +1827,35 @@ export class TrackingManager {
 
     html += `</div>`;
     issuesContent.innerHTML = html;
+  }
+
+  /**
+   * Check if an issue matches the given source filter.
+   * Library items always pass (they show regardless of source filter).
+   * Available/failed items pass if any variant matches the provider.
+   *
+   * @param {Object} issue - Curated issue object
+   * @param {string} source - Provider key (e.g., 'newsnab', 'internet_archive')
+   * @returns {boolean} Whether the issue should be shown
+   */
+  issueMatchesSourceFilter(issue, source) {
+    if (issue.status === 'in_library') return true;
+    if (!issue.variants || issue.variants.length === 0) return false;
+    return issue.variants.some(
+      (v) => v.provider && v.provider.toLowerCase() === source
+    );
+  }
+
+  /**
+   * Apply source filter and re-render search results
+   *
+   * @param {string} source - Provider key or 'all'
+   */
+  filterSearchBySource(source) {
+    this.sourceFilter = source;
+    if (this.lastCuratedIssues && this.lastSearchTitle) {
+      this.displayCuratedIssues(this.lastCuratedIssues, this.lastSearchTitle);
+    }
   }
 
   /**
@@ -2314,6 +2430,14 @@ window.confirmMerge = async function () {
   }
 };
 
+// Filter search results by source provider
+window.filterSearchBySource = function (source) {
+  const tracking = window.trackingManager;
+  if (tracking) {
+    tracking.filterSearchBySource(source);
+  }
+};
+
 // Download all available issues
 window.downloadAllAvailable = async function () {
   try {
@@ -2330,9 +2454,12 @@ window.downloadAllAvailable = async function () {
     }
 
     const count = tracking.availableIssues.length;
+    const sourceNote = tracking.sourceFilter && tracking.sourceFilter !== 'all'
+      ? ` from <strong>${tracking.sourceFilter === 'internet_archive' ? 'Internet Archive' : tracking.sourceFilter.charAt(0).toUpperCase() + tracking.sourceFilter.slice(1)}</strong>`
+      : '';
     const confirmed = await UIUtils.confirm(
       'Download All Available Issues',
-      `Are you sure you want to download all <strong>${count}</strong> available issues?`
+      `Are you sure you want to download all <strong>${count}</strong> available issues${sourceNote}?`
     );
     if (!confirmed) return;
 

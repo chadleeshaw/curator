@@ -861,10 +861,10 @@ async function confirmDeleteIssue() {
           window.location.href = '/#library';
         }, 1000);
       } else {
-        // Redirect to library to avoid staying on deleted periodical's page
-        statusDiv.textContent = '✓ Issue deleted. Returning to library...';
+        // Reload to show updated issue list
+        statusDiv.textContent = '✓ Issue deleted. Refreshing...';
         setTimeout(() => {
-          window.location.href = '/#library';
+          location.reload();
         }, 1000);
       }
     }, 1500);
@@ -1091,7 +1091,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   } catch (error) {
     console.error('Error rendering issues:', error);
-    // If there's an error (e.g., no data), go back to library
-    window.location.href = '/#library';
+    const errorDiv = document.getElementById('status-message');
+    if (errorDiv) {
+      errorDiv.className = 'status-error mt-20 p-15 rounded';
+      errorDiv.textContent = `Error loading issues: ${error.message}`;
+      errorDiv.style.display = 'block';
+    }
   }
 });
