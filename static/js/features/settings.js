@@ -393,6 +393,8 @@ export class SettingsManager {
     const nameInput = document.getElementById('download-client-name');
     const urlInput = document.getElementById('download-client-url');
     const apiKeyInput = document.getElementById('download-client-apikey');
+    const defaultCategoryInput = document.getElementById('download-client-default-category');
+    const remotePathInput = document.getElementById('download-client-remote-path');
     const downloadsDirInput = document.getElementById('download-client-downloads-dir');
     const maxConcurrentInput = document.getElementById('download-client-max-concurrent');
 
@@ -407,6 +409,8 @@ export class SettingsManager {
       apiKeyInput.setAttribute('data-original-key', clientConfig.api_key || '');
       apiKeyInput.placeholder = clientConfig.api_key ? '••••••••••••••••' : 'Enter API key';
     }
+    if (defaultCategoryInput) defaultCategoryInput.value = clientConfig.default_category || '';
+    if (remotePathInput) remotePathInput.value = clientConfig.remote_path || '';
 
     // Internet Archive fields
     if (downloadsDirInput) downloadsDirInput.value = clientConfig.downloads_dir || '';
@@ -705,6 +709,8 @@ export class SettingsManager {
       const url = document.getElementById('download-client-url')?.value;
       const apiKeyInput = document.getElementById('download-client-apikey');
       const apiKey = apiKeyInput?.value;
+      const defaultCategory = document.getElementById('download-client-default-category')?.value;
+      const remotePath = document.getElementById('download-client-remote-path')?.value;
 
       downloadClientConfig.api_url = url;
 
@@ -715,6 +721,9 @@ export class SettingsManager {
         // Preserve existing key from cached config
         downloadClientConfig.api_key = this.currentConfig.config.download_client.api_key;
       }
+
+      if (defaultCategory) downloadClientConfig.default_category = defaultCategory;
+      if (remotePath) downloadClientConfig.remote_path = remotePath;
     }
 
     try {
