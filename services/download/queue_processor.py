@@ -147,6 +147,18 @@ class QueueProcessor:
                     category=category,
                 )
 
+                if not job_id:
+                    logger.warning(
+                        f"Download client rejected submission: {submission.result_title} "
+                        f"(submission_id: {submission.id})"
+                    )
+                    submission.status = DownloadSubmission.StatusEnum.FAILED
+                    submission.last_error = "Download client rejected submission (no job ID returned)"
+                    submission.client_name = self.download_client.config.get("name", "Unknown")
+                    session.commit()
+                    errors.append(f"Submission {submission.id}: Client rejected (no job ID)")
+                    continue
+
                 # Update submission record
                 submission.status = DownloadSubmission.StatusEnum.PENDING
                 submission.job_id = job_id

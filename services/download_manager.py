@@ -1182,7 +1182,15 @@ class DownloadManager:
             }
 
             client_status_value = client_status.get("status")
-            new_status = status_map.get(client_status_value, DownloadSubmission.StatusEnum.PENDING)
+            if client_status_value == "unknown":
+                logger.warning(
+                    f"[DownloadManager] Job {job_id} returned 'unknown' status - "
+                    f"job no longer exists in download client"
+                )
+                new_status = DownloadSubmission.StatusEnum.FAILED
+                client_status.setdefault("error", "Job no longer exists in download client")
+            else:
+                new_status = status_map.get(client_status_value, DownloadSubmission.StatusEnum.PENDING)
 
             # Update submission
             submission.status = new_status

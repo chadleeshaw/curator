@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from core.constants.app import DOWNLOAD_FILE_SEARCH_DEPTH
 from core.constants.files import INCOMPLETE_DOWNLOAD_PATTERNS
+from core.parsers import utc_now
 from core.utils import find_supported_files
 from services.importer.sidecar import create_sidecar_file
 from models.database import DownloadSubmission, PeriodicalTracking, DiscoveredIssue
@@ -346,7 +347,15 @@ class DownloadMonitor:
 
         for submission in pending:
             if not submission.job_id:
-                logger.debug(f"[DownloadMonitor] Skipping submission {submission.id} - no job_id")
+                logger.warning(
+                    f"[DownloadMonitor] Marking submission {submission.id} as failed - "
+                    f"no job_id (stuck in pending)"
+                )
+                submission.status = DownloadSubmission.StatusEnum.FAILED
+                submission.last_error = "No job ID - download client never accepted this submission"
+                submission.updated_at = utc_now()
+                session.commit()
+                failed_count += 1
                 continue
 
             try:
