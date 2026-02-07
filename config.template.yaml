@@ -112,7 +112,7 @@ download_client:
 download_clients:
   internet_archive:
     type: internet_archive
-    name: Internet Archive Downloader
+    name: HTTP
     downloads_dir: ./local/downloads # Files download here before import
     max_concurrent: 3 # Max simultaneous downloads from archive.org
     file_formats: # Preferred formats (in order)

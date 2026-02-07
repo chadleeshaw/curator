@@ -539,6 +539,7 @@ class DownloadManager:
                 DownloadSubmission.StatusEnum.SKIPPED,
                 session,
                 search_result_db_id=search_result_db_id,
+                error_message="Skipped: blacklisted file extension",
             )
             return None
 
@@ -563,6 +564,7 @@ class DownloadManager:
                 DownloadSubmission.StatusEnum.SKIPPED,
                 session,
                 search_result_db_id=search_result_db_id,
+                error_message="Skipped: duplicate download",
             )
             logger.info(f"Skipped duplicate download: {title} (tracking_id: {tracking_id})")
             return None

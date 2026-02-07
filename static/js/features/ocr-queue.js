@@ -23,6 +23,16 @@ export class OCRQueueManager {
     this.currentSort = 'title';
     /** @type {boolean} Current sort order (true = ascending, false = descending) */
     this.sortAscending = true;
+    /** @type {string|null} Current periodical in modal */
+    this.currentModalPeriodical = null;
+    /** @type {Array|null} Current jobs in modal */
+    this.currentModalJobs = null;
+    /** @type {string} Current filter in modal */
+    this.currentModalFilter = 'all';
+    /** @type {string} Current sort field in modal */
+    this.currentModalSort = 'date';
+    /** @type {boolean} Current sort order in modal */
+    this.currentModalSortAsc = false;
 
     // Load preferences from localStorage
     this.loadSortPreference();
@@ -235,28 +245,55 @@ export class OCRQueueManager {
       headerRow.onclick = () => this.openPeriodicalModal(periodical, jobs);
 
       const statusCounts = this.getJobStatusCounts(jobs);
-      const statusBadges = Object.entries(statusCounts)
-        .filter(([, count]) => count > 0)
-        .map(([status, count]) => {
-          const color = this.getStatusColor(status);
-          return `<span style="background: ${color}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.85em; margin-right: 5px;">${count} ${status}</span>`;
-        })
-        .join('');
+
+      // Build status indicators for the Status column (active states)
+      const processingJobs = jobs.filter(j => j.status === 'processing');
+      let statusIndicators = '';
+      if (processingJobs.length > 0) {
+        statusIndicators += `<span style="background: var(--status-downloading); color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.85em; white-space: nowrap;">⚡ ${processingJobs.length} processing</span>`;
+      }
+
+      // Build uniform summary bubbles (fixed order, always shown)
+      const summaryStatuses = ['pending', 'processing', 'completed', 'failed'];
+      const summaryBubbles = summaryStatuses.map(status => {
+        const count = statusCounts[status] || 0;
+        const color = this.getStatusColor(status);
+        const padded = String(count).padStart(2, '0');
+        return `<span class="status-bubble" data-status="${status}" style="background: ${color}; color: white; min-width: 26px; display: inline-block; text-align: center; padding: 2px 6px; border-radius: 10px; font-size: 0.8em; cursor: pointer; font-weight: 600; font-variant-numeric: tabular-nums; opacity: ${count === 0 ? '0.3' : '1'};" title="${count} ${status}">${padded}</span>`;
+      }).join('');
 
       headerRow.innerHTML = `
-        <td colspan="2" style="padding: 12px; font-weight: bold;">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
-              <span style="font-size: 1.1em;">📋 ${periodical}</span>
-              <span style="margin-left: 15px; font-size: 0.9em; color: var(--text-secondary);">${jobs.length} issue${jobs.length !== 1 ? 's' : ''}</span>
-            </div>
-            <div style="display: flex; gap: 10px; align-items: center;">
-              ${statusBadges}
-              <span style="font-size: 1.2em; color: var(--text-secondary);">→</span>
+        <td style="padding: 12px; font-weight: bold;">
+          <div>
+            <span style="font-size: 1.1em;">📋 ${periodical}</span>
+            <span style="margin-left: 15px; font-size: 0.9em; color: var(--text-secondary);">${jobs.length} issue${jobs.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div class="mobile-summary" style="display: none; margin-top: 6px;">
+            <div style="display: inline-flex; gap: 4px; align-items: center;">
+              ${summaryBubbles}
+              <span style="font-size: 1.2em; color: var(--text-secondary); margin-left: 4px;">→</span>
             </div>
           </div>
         </td>
+        <td class="queue-status-col" style="padding: 12px; text-align: center; white-space: nowrap;">
+          ${statusIndicators}
+        </td>
+        <td class="queue-summary-col" style="padding: 12px; text-align: right; white-space: nowrap;">
+          <div style="display: inline-flex; gap: 4px; align-items: center;">
+            ${summaryBubbles}
+            <span style="font-size: 1.2em; color: var(--text-secondary); margin-left: 4px;">→</span>
+          </div>
+        </td>
       `;
+
+      // Add click handlers for individual status bubbles
+      headerRow.querySelectorAll('.status-bubble').forEach(bubble => {
+        bubble.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.openPeriodicalModal(periodical, jobs, bubble.dataset.status);
+        });
+      });
+
       tbody.appendChild(headerRow);
     });
   }
@@ -323,7 +360,21 @@ export class OCRQueueManager {
    * @param {string} periodical - Periodical name
    * @param {Array} jobs - Array of job objects for this periodical
    */
-  openPeriodicalModal(periodical, jobs) {
+  openPeriodicalModal(periodical, jobs, filter = 'all') {
+    this.currentModalPeriodical = periodical;
+    this.currentModalJobs = jobs;
+    this.currentModalFilter = filter;
+    this.renderPeriodicalModal();
+  }
+
+  /**
+   * Render the periodical modal with current filter and sort
+   * @returns {void}
+   */
+  renderPeriodicalModal() {
+    const { currentModalJobs: jobs, currentModalPeriodical: periodical, currentModalFilter: filter } = this;
+    if (!jobs || !periodical) return;
+
     // Build status summary
     const statusCounts = this.getJobStatusCounts(jobs);
     const statusList = Object.entries(statusCounts)
@@ -331,54 +382,122 @@ export class OCRQueueManager {
       .map(([status, count]) => `${count} ${status}`)
       .join(', ');
 
-    // Build table rows for jobs
-    const tableRows = jobs
-      .map((job) => {
-        const statusColor = this.getStatusColor(job.status);
-        const issueInfo =
-          `${job.magazine_issue || 'Unknown Issue'} ${job.magazine_year ? `(${job.magazine_year})` : ''}`.trim();
+    // Filter items
+    let filteredJobs;
+    if (filter === 'all') {
+      filteredJobs = jobs;
+    } else if (filter === 'active') {
+      filteredJobs = jobs.filter(j => j.status === 'pending' || j.status === 'processing');
+    } else {
+      filteredJobs = jobs.filter(j => j.status === filter);
+    }
 
-        return `
-        <tr>
-          <td style="padding: 10px; border-bottom: 1px solid var(--border-color);">
-            <div style="font-weight: 600;">${job.magazine_title}</div>
-            <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 2px;">${issueInfo}</div>
-          </td>
-          <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
-            <span style="background: ${statusColor}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.85em;">${job.status}</span>
-            ${job.status === 'completed' && job.processing_time_seconds ? `<div style="font-size: 0.75em; color: var(--text-secondary); margin-top: 4px;">${job.processing_time_seconds}s</div>` : ''}
-            ${job.status === 'failed' && job.attempt_count ? `<div style="font-size: 0.75em; color: var(--text-secondary); margin-top: 4px;">Attempt ${job.attempt_count}/${this.maxRetries}</div>` : ''}
-          </td>
-          <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
-            ${this.getPriorityBadge(job.priority)}
-          </td>
-          <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
-            <button onclick="event.stopPropagation(); ocrQueue.showJobDetails(${job.id})" class="btn-secondary" style="padding: 4px 8px; margin-right: 5px; font-size: 0.85em;">📄 Metadata</button>
-            <button onclick="event.stopPropagation(); ocrQueue.deleteJob(${job.id})" class="btn-secondary" style="padding: 4px 8px; background: var(--status-failed); font-size: 0.85em;">🗑️ Delete</button>
-          </td>
-        </tr>
-      `;
+    // Filter buttons
+    const activeCount = (statusCounts.pending ?? 0) + (statusCounts.processing ?? 0);
+    const filterButtons = ['all', 'active', 'completed', 'failed']
+      .map((f) => {
+        let count;
+        if (f === 'all') count = jobs.length;
+        else if (f === 'active') count = activeCount;
+        else count = statusCounts[f] ?? 0;
+        const selected = filter === f ? 'active' : '';
+        return `<button onclick="ocrQueue.filterOcrModal('${f}')" class="sort-btn ${selected}">${f.charAt(0).toUpperCase() + f.slice(1)} (${count})</button>`;
       })
-      .join('');
+      .join('\n');
+
+    // Sort
+    const sortField = this.currentModalSort;
+    const sortAsc = this.currentModalSortAsc;
+    const sorted = [...filteredJobs].sort((a, b) => {
+      let cmp = 0;
+      switch (sortField) {
+        case 'title':
+          cmp = (a.magazine_title || '').localeCompare(b.magazine_title || '');
+          break;
+        case 'status':
+          cmp = (a.status || '').localeCompare(b.status || '');
+          break;
+        case 'date':
+        default:
+          cmp = new Date(a.completed_at || a.created_at || 0) - new Date(b.completed_at || b.created_at || 0);
+          break;
+      }
+      return sortAsc ? cmp : -cmp;
+    });
+
+    // Build table rows
+    let tableRows = '';
+    if (sorted.length === 0) {
+      tableRows = `<tr><td colspan="5" style="padding: 40px; text-align: center; color: var(--text-secondary);">No ${filter === 'all' ? '' : filter} items found</td></tr>`;
+    } else {
+      tableRows = sorted
+        .map((job) => {
+          const statusColor = this.getStatusColor(job.status);
+          const issueInfo = `${job.magazine_issue || 'Unknown Issue'} ${job.magazine_year ? `(${job.magazine_year})` : ''}`.trim();
+
+          // Format relative time
+          const timestamp = job.completed_at || job.created_at;
+          let timeAgo = '';
+          if (timestamp) {
+            const diff = Date.now() - new Date(timestamp).getTime();
+            const mins = Math.floor(diff / 60000);
+            const hours = Math.floor(diff / 3600000);
+            const days = Math.floor(diff / 86400000);
+            if (mins < 1) timeAgo = 'just now';
+            else if (mins < 60) timeAgo = `${mins}m ago`;
+            else if (hours < 24) timeAgo = `${hours}h ago`;
+            else timeAgo = `${days}d ago`;
+          }
+
+          return `
+          <tr style="background: var(--surface-variant); border-radius: 6px;">
+            <td style="padding: 14px; border-bottom: 1px solid var(--border-color);">
+              <div style="font-weight: 600;">${job.magazine_title}</div>
+              <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 2px;">${issueInfo}</div>
+            </td>
+            <td style="padding: 14px; border-bottom: 1px solid var(--border-color); text-align: center; white-space: nowrap;">
+              <span style="background: ${statusColor}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.85em;">${job.status}</span>
+              ${job.status === 'completed' && job.processing_time_seconds ? `<div style="font-size: 0.75em; color: var(--text-secondary); margin-top: 4px;">${job.processing_time_seconds}s</div>` : ''}
+              ${job.status === 'failed' && job.attempt_count ? `<div style="font-size: 0.75em; color: var(--text-secondary); margin-top: 4px;">Attempt ${job.attempt_count}/${this.maxRetries}</div>` : ''}
+            </td>
+            <td style="padding: 14px; border-bottom: 1px solid var(--border-color); text-align: center; white-space: nowrap; font-size: 0.8em; color: var(--text-secondary);">
+              ${timeAgo}
+            </td>
+            <td style="padding: 14px; border-bottom: 1px solid var(--border-color); text-align: right; white-space: nowrap;">
+              <div style="display: inline-flex; gap: 6px; align-items: center;">
+                <button onclick="event.stopPropagation(); ocrQueue.showJobDetails(${job.id})" style="padding: 5px 10px; font-size: 0.8em; border: 1px solid var(--border-color); background: var(--surface); color: var(--text-secondary); border-radius: 6px; cursor: pointer;" title="View metadata">Details</button>
+                ${job.status === 'failed' ? `<button onclick="event.stopPropagation(); ocrQueue.retryJob(${job.id})" style="padding: 5px 10px; font-size: 0.8em; border: 1px solid var(--status-downloading); background: transparent; color: var(--status-downloading); border-radius: 6px; cursor: pointer;" title="Retry OCR">Retry</button>` : ''}
+                <button onclick="event.stopPropagation(); ocrQueue.deleteJob(${job.id})" style="padding: 5px 10px; font-size: 0.8em; border: 1px solid var(--status-failed); background: transparent; color: var(--status-failed); border-radius: 6px; cursor: pointer;" title="Remove job">Delete</button>
+              </div>
+            </td>
+          </tr>
+        `;
+        })
+        .join('');
+    }
 
     const html = `
       <div class="modal-header">
         <h3>OCR Queue: ${periodical}</h3>
         <p style="color: var(--text-secondary); margin-top: 10px;">${jobs.length} issue${jobs.length !== 1 ? 's' : ''} - ${statusList}</p>
+        <div style="display: flex; gap: 8px; margin-top: 15px; flex-wrap: wrap;">
+          ${filterButtons}
+        </div>
       </div>
-      <div class="modal-body" style="max-height: 400px; overflow-y: auto; margin: 20px 0;">
-        <table style="width: 100%; border-collapse: collapse;">
+      <div class="modal-body" style="max-height: 60vh; overflow-y: auto; margin: 20px 0;">
+        <table style="width: 100%; border-collapse: separate; border-spacing: 0 4px;">
           <thead style="position: sticky; top: 0; background: var(--surface); z-index: 1;">
             <tr>
-              <th style="text-align: left; padding: 10px; border-bottom: 2px solid var(--border-color);">Issue</th>
-              <th style="text-align: center; padding: 10px; border-bottom: 2px solid var(--border-color);">Status</th>
-              <th style="text-align: center; padding: 10px; border-bottom: 2px solid var(--border-color);">Priority</th>
-              <th style="text-align: center; padding: 10px; border-bottom: 2px solid var(--border-color);">Actions</th>
+              <th onclick="ocrQueue.sortOcrModal('title')" style="text-align: left; padding: 12px 14px; border-bottom: 2px solid var(--border-color); cursor: pointer; user-select: none;">Issue ${this.currentModalSort === 'title' ? (this.currentModalSortAsc ? '↑' : '↓') : ''}</th>
+              <th onclick="ocrQueue.sortOcrModal('status')" style="text-align: center; padding: 12px 14px; border-bottom: 2px solid var(--border-color); cursor: pointer; user-select: none;">Status ${this.currentModalSort === 'status' ? (this.currentModalSortAsc ? '↑' : '↓') : ''}</th>
+              <th onclick="ocrQueue.sortOcrModal('date')" style="text-align: center; padding: 12px 14px; border-bottom: 2px solid var(--border-color); min-width: 80px; cursor: pointer; user-select: none;">Date ${this.currentModalSort === 'date' ? (this.currentModalSortAsc ? '↑' : '↓') : ''}</th>
+              <th style="text-align: center; padding: 12px 14px; border-bottom: 2px solid var(--border-color); min-width: 80px;">Actions</th>
             </tr>
           </thead>
           <tbody>${tableRows}</tbody>
         </table>
       </div>
+      <div id="ocr-modal-status" class="hidden" style="padding: 10px 15px; border-radius: 6px; margin-bottom: 10px; font-size: 0.9em;"></div>
       <div class="modal-footer" style="display: flex; gap: 10px; justify-content: flex-end; padding-top: 20px; border-top: 1px solid var(--border-color);">
         <button onclick="ocrQueue.closePeriodicalModal()" class="btn-secondary">Close</button>
       </div>
@@ -397,6 +516,46 @@ export class OCRQueueManager {
    */
   closePeriodicalModal() {
     document.getElementById('ocr-periodical-modal')?.classList.add(CSS_CLASSES.HIDDEN);
+    this.currentModalJobs = null;
+    this.currentModalPeriodical = null;
+    this.currentModalFilter = 'all';
+  }
+
+  /**
+   * Show error info for a failed OCR job in the modal status bar
+   * @param {string} message - The error message to display
+   */
+  showJobInfo(message) {
+    const decoded = message.replace(/&#39;/g, "'").replace(/&quot;/g, '"');
+    const statusEl = document.getElementById('ocr-modal-status');
+    if (statusEl && !statusEl.classList.contains('hidden') && statusEl.textContent.includes(decoded)) {
+      UIUtils.hideStatus('ocr-modal-status');
+      return;
+    }
+    UIUtils.showStatus('ocr-modal-status', decoded, 'error');
+  }
+
+  /**
+   * Filter OCR modal by status
+   * @param {string} status - Status to filter by
+   */
+  filterOcrModal(status) {
+    this.currentModalFilter = status;
+    this.renderPeriodicalModal();
+  }
+
+  /**
+   * Sort OCR modal by column
+   * @param {string} field - Field to sort by ('title', 'status', 'date')
+   */
+  sortOcrModal(field) {
+    if (this.currentModalSort === field) {
+      this.currentModalSortAsc = !this.currentModalSortAsc;
+    } else {
+      this.currentModalSort = field;
+      this.currentModalSortAsc = field === 'title';
+    }
+    this.renderPeriodicalModal();
   }
 
   /**

@@ -58,6 +58,10 @@ export class DownloadsManager {
     this.currentModalPeriodical = null;
     /** @type {string} Current filter in modal */
     this.currentModalFilter = 'all';
+    /** @type {string} Current sort field in modal (title, status, date) */
+    this.currentModalSort = 'date';
+    /** @type {boolean} Current sort order in modal (true = ascending, false = descending) */
+    this.currentModalSortAsc = false;
     /** @type {string} Current filter for queue view (all, queued, pending, downloading, completed, failed, skipped) */
     this.currentFilter = 'all';
     /** @type {string} Current sort field for queue view (title, status, priority, created_at) */
@@ -525,13 +529,21 @@ export class DownloadsManager {
 
       headerRow.innerHTML = `
         <td style="padding: 12px; font-weight: bold;">
-          <span style="font-size: 1.1em;">\uD83D\uDCF0 ${periodical}</span>
-          <span style="margin-left: 15px; font-size: 0.9em; color: var(--text-secondary);">${items.length} issues</span>
+          <div>
+            <span style="font-size: 1.1em;">\uD83D\uDCF0 ${periodical}</span>
+            <span style="margin-left: 15px; font-size: 0.9em; color: var(--text-secondary);">${items.length} issues</span>
+          </div>
+          <div class="mobile-summary" style="display: none; margin-top: 6px;">
+            <div style="display: inline-flex; gap: 4px; align-items: center;">
+              ${summaryBubbles}
+              <span style="font-size: 1.2em; color: var(--text-secondary); margin-left: 4px;">\u2192</span>
+            </div>
+          </div>
         </td>
-        <td style="padding: 12px; text-align: center; white-space: nowrap;">
+        <td class="queue-status-col" style="padding: 12px; text-align: center; white-space: nowrap;">
           ${statusIndicators}
         </td>
-        <td style="padding: 12px; text-align: right; white-space: nowrap;">
+        <td class="queue-summary-col" style="padding: 12px; text-align: right; white-space: nowrap;">
           <div style="display: inline-flex; gap: 4px; align-items: center;">
             ${summaryBubbles}
             <span style="font-size: 1.2em; color: var(--text-secondary); margin-left: 4px;">\u2192</span>
@@ -661,25 +673,21 @@ export class DownloadsManager {
    * @returns {string} HTML string of action buttons
    */
   getQueueActionButtons(item) {
-    const { status, submission_id: submissionId, error, extra_status: extraStatus } = item;
+    const { status, submission_id: submissionId } = item;
     let buttons = '';
 
-    if ((status === 'failed' && error) || extraStatus) {
-      const message = error || extraStatus;
-      const escapedMessage = message.replace(/'/g, '&#39;').replace(/"/g, '&quot;');
-      const toastType = error ? 'error' : 'info';
-      buttons += `<span onclick="downloads.showItemInfo('${escapedMessage}', '${toastType}')" title="${escapedMessage}" style="cursor: pointer; font-size: 1.2em; padding: 2px 4px;">ℹ️</span>`;
-    }
+    // Details button - always shown
+    buttons += `<button onclick="event.stopPropagation(); downloads.showItemDetails(${submissionId})" style="padding: 5px 10px; font-size: 0.8em; border: 1px solid var(--border-color); background: var(--surface); color: var(--text-secondary); border-radius: 6px; cursor: pointer;" title="View details">Details</button>`;
 
     if (status === 'failed') {
-      buttons += `<span onclick="downloads.retryDownload(${submissionId})" title="Retry" style="cursor: pointer; font-size: 1.2em; padding: 2px 4px;">🔄</span>`;
+      buttons += `<button onclick="event.stopPropagation(); downloads.retryDownload(${submissionId})" style="padding: 5px 10px; font-size: 0.8em; border: 1px solid var(--status-downloading); background: transparent; color: var(--status-downloading); border-radius: 6px; cursor: pointer;" title="Retry download">Retry</button>`;
     }
 
     if (status !== 'completed') {
-      buttons += `<span onclick="downloads.deleteQueueItem(${submissionId})" title="Remove" style="cursor: pointer; font-size: 1.2em; padding: 2px 4px;">🗑️</span>`;
+      buttons += `<button class="modal-delete-btn" onclick="event.stopPropagation(); downloads.deleteQueueItem(${submissionId})" style="padding: 5px 10px; font-size: 0.8em; border: 1px solid var(--status-failed); background: transparent; color: var(--status-failed); border-radius: 6px; cursor: pointer;" title="Remove from queue">Delete</button>`;
     }
 
-    return buttons || '-';
+    return buttons;
   }
 
   /**
@@ -747,13 +755,33 @@ export class DownloadsManager {
     if (filteredItems.length === 0) {
       tableRows = `
         <tr>
-          <td colspan="3" style="padding: 40px; text-align: center; color: var(--text-secondary);">
+          <td colspan="4" style="padding: 40px; text-align: center; color: var(--text-secondary);">
             No ${filter === 'all' ? '' : filter} items found
           </td>
         </tr>
       `;
     } else {
-      tableRows = filteredItems
+      // Sort filtered items
+      const sortField = this.currentModalSort;
+      const sortAsc = this.currentModalSortAsc;
+      const sorted = [...filteredItems].sort((a, b) => {
+        let cmp = 0;
+        switch (sortField) {
+          case 'title':
+            cmp = (a.title || '').localeCompare(b.title || '');
+            break;
+          case 'status':
+            cmp = (a.status || '').localeCompare(b.status || '');
+            break;
+          case 'date':
+          default:
+            cmp = new Date(a.updated_at || a.created_at || 0) - new Date(b.updated_at || b.created_at || 0);
+            break;
+        }
+        return sortAsc ? cmp : -cmp;
+      });
+
+      tableRows = sorted
         .map((item) => {
           const {
             title,
@@ -764,6 +792,20 @@ export class DownloadsManager {
             error,
           } = item;
           const statusColor = this.getStatusColor(status);
+
+          // Format relative time
+          const timestamp = item.updated_at || createdAt;
+          let timeAgo = '';
+          if (timestamp) {
+            const diff = Date.now() - new Date(timestamp).getTime();
+            const mins = Math.floor(diff / 60000);
+            const hours = Math.floor(diff / 3600000);
+            const days = Math.floor(diff / 86400000);
+            if (mins < 1) timeAgo = 'just now';
+            else if (mins < 60) timeAgo = `${mins}m ago`;
+            else if (hours < 24) timeAgo = `${hours}h ago`;
+            else timeAgo = `${days}d ago`;
+          }
 
           // Add clarity if title equals magazine name
           let displayTitle = title;
@@ -804,8 +846,13 @@ export class DownloadsManager {
             <td style="padding: 14px; border-bottom: 1px solid var(--border-color); text-align: center; white-space: nowrap;">
               ${statusInfo}
             </td>
-            <td style="padding: 14px; border-bottom: 1px solid var(--border-color); text-align: center; white-space: nowrap;">
-              ${this.getQueueActionButtons(item)}
+            <td style="padding: 14px; border-bottom: 1px solid var(--border-color); text-align: center; white-space: nowrap; font-size: 0.8em; color: var(--text-secondary);">
+              ${timeAgo}
+            </td>
+            <td style="padding: 14px; border-bottom: 1px solid var(--border-color); text-align: right; white-space: nowrap;">
+              <div style="display: inline-flex; gap: 6px; align-items: center;">
+                ${this.getQueueActionButtons(item)}
+              </div>
             </td>
           </tr>
         `;
@@ -827,8 +874,9 @@ export class DownloadsManager {
         <table style="width: 100%; border-collapse: separate; border-spacing: 0 4px;">
           <thead style="position: sticky; top: 0; background: var(--surface); z-index: 1;">
             <tr>
-              <th style="text-align: left; padding: 12px 14px; border-bottom: 2px solid var(--border-color);">Issue</th>
-              <th style="text-align: center; padding: 12px 14px; border-bottom: 2px solid var(--border-color); min-width: 160px;">Status</th>
+              <th onclick="downloads.sortModalQueue('title')" style="text-align: left; padding: 12px 14px; border-bottom: 2px solid var(--border-color); cursor: pointer; user-select: none;">Issue ${this.currentModalSort === 'title' ? (this.currentModalSortAsc ? '↑' : '↓') : ''}</th>
+              <th onclick="downloads.sortModalQueue('status')" style="text-align: center; padding: 12px 14px; border-bottom: 2px solid var(--border-color); min-width: 160px; cursor: pointer; user-select: none;">Status ${this.currentModalSort === 'status' ? (this.currentModalSortAsc ? '↑' : '↓') : ''}</th>
+              <th onclick="downloads.sortModalQueue('date')" style="text-align: center; padding: 12px 14px; border-bottom: 2px solid var(--border-color); min-width: 80px; cursor: pointer; user-select: none;">Date ${this.currentModalSort === 'date' ? (this.currentModalSortAsc ? '↑' : '↓') : ''}</th>
               <th style="text-align: center; padding: 12px 14px; border-bottom: 2px solid var(--border-color); min-width: 80px;">Actions</th>
             </tr>
           </thead>
@@ -859,6 +907,22 @@ export class DownloadsManager {
    */
   filterModalQueue(status) {
     this.currentModalFilter = status;
+    this.renderManageQueueModal();
+  }
+
+  /**
+   * Sort modal queue by column
+   *
+   * @param {string} field - The field to sort by ('title', 'status', 'date')
+   * @returns {void}
+   */
+  sortModalQueue(field) {
+    if (this.currentModalSort === field) {
+      this.currentModalSortAsc = !this.currentModalSortAsc;
+    } else {
+      this.currentModalSort = field;
+      this.currentModalSortAsc = field === 'title'; // Default: title asc, others desc
+    }
     this.renderManageQueueModal();
   }
 
@@ -1160,6 +1224,84 @@ export class DownloadsManager {
       return;
     }
     UIUtils.showStatus('modal-queue-status', decoded, type === 'error' ? 'error' : 'info');
+  }
+
+  /**
+   * Show details modal for a download item
+   *
+   * @param {number} submissionId - The submission ID
+   * @returns {void}
+   */
+  showItemDetails(submissionId) {
+    const item = (this.currentModalItems || []).find(i => i.submission_id === submissionId);
+    if (!item) return;
+
+    const statusColor = this.getStatusColor(item.status);
+    const created = item.created_at ? new Date(item.created_at).toLocaleString() : '-';
+    const updated = item.updated_at ? new Date(item.updated_at).toLocaleString() : '-';
+
+    const rows = [
+      ['Title', item.title || '-'],
+      ['Periodical', item.magazine || '-'],
+      ['Status', `<span style="background: ${statusColor}; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.85em;">${item.status}</span>`],
+      ['Submission ID', `#${item.submission_id}`],
+      ['Job ID', item.job_id || '-'],
+      ['Client', item.client_name || '-'],
+      ['Attempts', item.attempts ?? '-'],
+      ['Created', created],
+      ['Updated', updated],
+    ];
+
+    if (item.url) {
+      rows.push(['Source URL', `<span style="word-break: break-all; font-size: 0.85em;">${item.url}</span>`]);
+    }
+    if (item.extra_status) {
+      rows.push(['Extra Status', `<span style="color: var(--status-pending);">${item.extra_status}</span>`]);
+    }
+    if (item.error) {
+      rows.push(['Error', `<span style="color: var(--status-failed); word-break: break-word;">${item.error}</span>`]);
+    }
+
+    const tableHtml = rows.map(([label, value]) =>
+      `<tr>
+        <td style="padding: 8px 12px; border-bottom: 1px solid var(--border-color); font-weight: 600; white-space: nowrap; vertical-align: top; width: 130px;">${label}</td>
+        <td style="padding: 8px 12px; border-bottom: 1px solid var(--border-color);">${value}</td>
+      </tr>`
+    ).join('');
+
+    const html = `
+      <div class="modal-header">
+        <h3>Download Details</h3>
+        <p style="color: var(--text-secondary); margin-top: 6px; font-size: 0.9em;">${item.title || 'Unknown'}</p>
+      </div>
+      <div class="modal-body" style="margin: 20px 0;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <tbody>${tableHtml}</tbody>
+        </table>
+      </div>
+      <div class="modal-footer" style="display: flex; gap: 10px; justify-content: flex-end; padding-top: 20px; border-top: 1px solid var(--border-color);">
+        <button onclick="downloads.closeItemDetails()" class="btn-secondary">Close</button>
+      </div>
+    `;
+
+    let modal = document.getElementById('download-details-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'download-details-modal';
+      modal.className = 'modal';
+      modal.innerHTML = '<div class="modal-content" style="max-width: 600px;"></div>';
+      document.body.appendChild(modal);
+    }
+    modal.querySelector('.modal-content').innerHTML = html;
+    modal.classList.remove(CSS_CLASSES.HIDDEN);
+  }
+
+  /**
+   * Close the download details modal
+   * @returns {void}
+   */
+  closeItemDetails() {
+    document.getElementById('download-details-modal')?.classList.add(CSS_CLASSES.HIDDEN);
   }
 
   async retryDownload(submissionId) {

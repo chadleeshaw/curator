@@ -81,6 +81,7 @@ async def get_download_queue_all(status: Optional[str] = None) -> Dict[str, Any]
                     "job_id": s.job_id,
                     "error": s.last_error,
                     "extra_status": s.extra_status,
+                    "client_name": s.client_name,
                     "attempts": s.attempt_count,
                     "progress": progress,
                     "time_left": time_left,
