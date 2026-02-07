@@ -37,11 +37,21 @@
       </header>
 
       <nav>
-        <button class="nav-btn" onclick="showTab('library', event)"><span class="nav-icon">📚</span><span class="nav-text">Library</span></button>
-        <button class="nav-btn" onclick="showTab('tracking', event)"><span class="nav-icon">📌</span><span class="nav-text">Track</span></button>
-        <button class="nav-btn" onclick="showTab('tasks', event)"><span class="nav-icon">⚙️</span><span class="nav-text">Tasks</span></button>
-        <button class="nav-btn" onclick="showTab('queue', event)"><span class="nav-icon">📥</span><span class="nav-text">Queue</span></button>
-        <button class="nav-btn" onclick="showTab('settings', event)"><span class="nav-icon">🔧</span><span class="nav-text">Settings</span></button>
+        <button class="nav-btn" onclick="showTab('library', event)">
+          <span class="nav-icon">📚</span><span class="nav-text">Library</span>
+        </button>
+        <button class="nav-btn" onclick="showTab('tracking', event)">
+          <span class="nav-icon">📌</span><span class="nav-text">Track</span>
+        </button>
+        <button class="nav-btn" onclick="showTab('tasks', event)">
+          <span class="nav-icon">⚙️</span><span class="nav-text">Tasks</span>
+        </button>
+        <button class="nav-btn" onclick="showTab('queue', event)">
+          <span class="nav-icon">📥</span><span class="nav-text">Queue</span>
+        </button>
+        <button class="nav-btn" onclick="showTab('settings', event)">
+          <span class="nav-icon">🔧</span><span class="nav-text">Settings</span>
+        </button>
       </nav>
 
       <!-- Library Tab -->
@@ -368,9 +378,7 @@
                 <button onclick="openTrackNewPeriodicalModal()" class="btn-primary">
                   📌 Track New Periodical
                 </button>
-                <button onclick="openMergeModal()" class="btn-primary">
-                  🔀 Merge Tracking
-                </button>
+                <button onclick="openMergeModal()" class="btn-primary">🔀 Merge Tracking</button>
               </div>
             </div>
 
@@ -403,7 +411,11 @@
         <div class="tasks-container">
           <!-- Queue Switcher Buttons -->
           <div class="queue-switcher">
-            <button id="switch-download-queue" class="queue-switch-btn active" data-queue="download">
+            <button
+              id="switch-download-queue"
+              class="queue-switch-btn active"
+              data-queue="download"
+            >
               📥 Downloads <span id="download-queue-badge" class="queue-badge">0</span>
             </button>
             <button id="switch-ocr-queue" class="queue-switch-btn" data-queue="ocr">
@@ -435,7 +447,9 @@
                     class="sort-toggle-btn"
                     onclick="toggleDownloadSortOrder()"
                     title="Toggle sort order"
-                  >↑</button>
+                  >
+                    ↑
+                  </button>
                 </div>
                 <div class="filter-row">
                   <label for="download-status-filter">Status:</label>
@@ -450,10 +464,16 @@
                   </select>
                   <button
                     class="btn-danger btn-sm"
-                    onclick="window.downloads.clearByStatus(document.getElementById('download-status-filter').value)"
+                    onclick="
+                      window.downloads.clearByStatus(
+                        document.getElementById('download-status-filter').value
+                      )
+                    "
                     title="Clear downloads with selected status"
-                    style="margin-left: 5px;"
-                  >🗑️</button>
+                    style="margin-left: 5px"
+                  >
+                    🗑️
+                  </button>
                 </div>
               </div>
             </div>
@@ -608,7 +628,9 @@
                     class="sort-toggle-btn"
                     onclick="toggleOCRSortOrder()"
                     title="Toggle sort order"
-                  >↑</button>
+                  >
+                    ↑
+                  </button>
                 </div>
                 <div class="filter-row">
                   <label for="ocr-status-filter">Status:</label>
@@ -621,10 +643,16 @@
                   </select>
                   <button
                     class="btn-danger btn-sm"
-                    onclick="window.ocrQueue.clearByStatus(document.getElementById('ocr-status-filter').value)"
+                    onclick="
+                      window.ocrQueue.clearByStatus(
+                        document.getElementById('ocr-status-filter').value
+                      )
+                    "
                     title="Clear OCR jobs with selected status"
-                    style="margin-left: 5px;"
-                  >🗑️</button>
+                    style="margin-left: 5px"
+                  >
+                    🗑️
+                  </button>
                 </div>
               </div>
             </div>
@@ -783,6 +811,26 @@
                     placeholder="Enter your API key"
                   />
                 </div>
+                <div class="settings-field">
+                  <label for="download-client-default-category">Default Category:</label>
+                  <input
+                    type="text"
+                    id="download-client-default-category"
+                    placeholder="e.g., books"
+                  />
+                </div>
+                <div class="settings-field">
+                  <label for="download-client-remote-path">Remote Path:</label>
+                  <input
+                    type="text"
+                    id="download-client-remote-path"
+                    placeholder="e.g., /downloads/"
+                  />
+                  <p class="text-sm text-hint mt-8">
+                    Path prefix as seen by the download client. Set when the client runs in a
+                    different container with different mount points.
+                  </p>
+                </div>
               </div>
               <!-- Internet Archive Fields -->
               <div id="download-client-ia-fields" class="hidden">
@@ -915,8 +963,8 @@
                   Auto-Cleanup Downloads Folder
                 </label>
                 <p class="text-sm text-hint mt-8">
-                  Automatically remove folders without importable files from downloads folder. Disable
-                  if downloads are being removed before processing.
+                  Automatically remove folders without importable files from downloads folder.
+                  Disable if downloads are being removed before processing.
                 </p>
               </div>
               <div class="settings-field">
@@ -925,8 +973,8 @@
                   Auto-Cleanup Library Folder
                 </label>
                 <p class="text-sm text-hint mt-8">
-                  Automatically remove empty folders from library after file reorganization. Generally
-                  safe to keep enabled.
+                  Automatically remove empty folders from library after file reorganization.
+                  Generally safe to keep enabled.
                 </p>
               </div>
               <p class="text-base text-muted mt-10">
@@ -1733,7 +1781,9 @@
             <!-- Application Control -->
             <div id="application-control-section" class="settings-section">
               <h3>Application Control</h3>
-              <p class="text-base text-muted mb-15">Restart the application to apply configuration changes</p>
+              <p class="text-base text-muted mb-15">
+                Restart the application to apply configuration changes
+              </p>
 
               <div class="settings-field">
                 <label>Restart Application:</label>
@@ -1778,93 +1828,24 @@
 
             <!-- Cache Management -->
             <div id="cache-section" class="settings-section">
-              <h3>Cache Management</h3>
+              <h3>NZB Cache</h3>
               <p class="text-base text-muted mb-15">
-                Manage search cache to reduce API calls and improve performance
+                Caches NZB file content to avoid repeated provider hits on retries
               </p>
 
               <div class="settings-field">
                 <label>
                   <input type="checkbox" id="cache-enabled" />
-                  <span>Enable Search Cache</span>
+                  <span>Enable NZB Content Caching</span>
                 </label>
                 <p class="text-sm text-hint mt-5">
-                  Cache search results locally to reduce API calls and improve search performance
-                  (95%+ reduction in provider requests)
+                  When enabled, NZB files are fetched once and cached locally.
+                  Download retries use cached content without hitting the provider again.
                 </p>
-              </div>
-
-              <div class="settings-field">
-                <label for="cache-retention">Cache Retention (days):</label>
-                <p class="text-sm text-hint mb-10">
-                  How long to keep cached releases before they expire
-                </p>
-                <input
-                  type="number"
-                  id="cache-retention"
-                  min="1"
-                  max="365"
-                  placeholder="90"
-                  style="width: 150px"
-                />
-              </div>
-
-              <div class="settings-field">
-                <label for="cache-sync-interval">Sync Interval (minutes):</label>
-                <p class="text-sm text-hint mb-10">
-                  How often to sync latest releases from providers (recommended: 30-60 minutes)
-                </p>
-                <input
-                  type="number"
-                  id="cache-sync-interval"
-                  min="5"
-                  max="1440"
-                  placeholder="30"
-                  style="width: 150px"
-                />
-              </div>
-
-              <div class="settings-field">
-                <label>Cache Statistics:</label>
-                <div
-                  id="cache-stats-display"
-                  style="
-                    background: var(--card-bg);
-                    border: 1px solid var(--border-color);
-                    border-radius: 8px;
-                    padding: 15px;
-                    margin-top: 10px;
-                  "
-                >
-                  <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px">
-                    <div>
-                      <div class="text-sm text-hint">Total Releases</div>
-                      <div id="cache-total-releases" class="text-lg" style="margin-top: 5px">-</div>
-                    </div>
-                    <div>
-                      <div class="text-sm text-hint">Last Sync</div>
-                      <div id="cache-last-sync" class="text-lg" style="margin-top: 5px">-</div>
-                    </div>
-                  </div>
-                  <div style="margin-top: 15px; text-align: center">
-                    <a
-                      href="javascript:void(0)"
-                      onclick="loadCacheStats()"
-                      style="color: var(--primary-color); text-decoration: none; font-size: 14px"
-                    >
-                      🔄 Refresh Stats
-                    </a>
-                  </div>
-                </div>
               </div>
 
               <div style="margin-top: 30px">
-                <button
-                  onclick="saveCacheSettings()"
-                  class="save-btn"
-                >
-                  Save Cache Settings
-                </button>
+                <button onclick="saveCacheSettings()" class="save-btn">Save Cache Settings</button>
               </div>
 
               <hr style="margin: 30px 0; border: none; border-top: 1px solid var(--border-color)" />
@@ -1875,11 +1856,9 @@
               </div>
 
               <div class="settings-field">
-                <label>Purge Search Cache:</label>
+                <label>Purge NZB Cache:</label>
                 <p class="text-sm text-hint mb-10">
-                  Clear all cached search results. Next searches will fetch fresh data from
-                  providers.
-                  <span id="cache-stats-text" class="text-hint"></span>
+                  Clear all cached NZB content. Future downloads will re-fetch from providers.
                 </p>
                 <button
                   onclick="openPurgeCacheModal()"
@@ -1925,11 +1904,7 @@
           <div id="provider-standard-fields">
             <div class="settings-field">
               <label for="new-provider-url">API URL:</label>
-              <input
-                type="text"
-                id="new-provider-url"
-                placeholder="http://example.com/api"
-              />
+              <input type="text" id="new-provider-url" placeholder="http://example.com/api" />
             </div>
             <div class="settings-field">
               <label for="new-provider-key">API Key:</label>
@@ -1950,11 +1925,14 @@
             <div class="settings-field">
               <label for="new-provider-collections"
                 >Collections
-                <span style="font-size: 11px; color: var(--text-secondary)"
-                  >(comma-separated)</span
+                <span style="font-size: 11px; color: var(--text-secondary)">(comma-separated)</span
                 >:</label
               >
-              <input type="text" id="new-provider-collections" placeholder="magazines, periodicals, americana, comics" />
+              <input
+                type="text"
+                id="new-provider-collections"
+                placeholder="magazines, periodicals, americana, comics"
+              />
             </div>
             <div class="settings-field">
               <label for="new-provider-formats"
@@ -1972,11 +1950,29 @@
                   >(lower = searched first)</span
                 >:</label
               >
-              <input type="number" id="new-provider-priority" placeholder="10" min="1" max="100" value="10" />
+              <input
+                type="number"
+                id="new-provider-priority"
+                placeholder="10"
+                min="1"
+                max="100"
+                value="10"
+              />
             </div>
-            <div class="settings-field" style="padding: 10px; background: var(--bg-secondary); border-radius: 6px; border: 1px solid var(--border-color); margin-top: 10px;">
-              <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">🔐 Optional Authentication (for restricted items)</div>
-              <div style="margin-bottom: 8px;">
+            <div
+              class="settings-field"
+              style="
+                padding: 10px;
+                background: var(--bg-secondary);
+                border-radius: 6px;
+                border: 1px solid var(--border-color);
+                margin-top: 10px;
+              "
+            >
+              <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px">
+                🔐 Optional Authentication (for restricted items)
+              </div>
+              <div style="margin-bottom: 8px">
                 <label for="new-provider-ia-username">Username (email):</label>
                 <input type="text" id="new-provider-ia-username" placeholder="user@example.com" />
               </div>
@@ -2080,7 +2076,8 @@
             class="w-full"
           />
           <small style="color: var(--text-secondary); display: block; margin-top: 3px"
-            >Comma-separated alternative names to search for (disables automatic query expansion)</small
+            >Comma-separated alternative names to search for (disables automatic query
+            expansion)</small
           >
         </div>
 

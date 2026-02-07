@@ -11,7 +11,6 @@ _search_providers: Optional[Any] = None
 _metadata_providers: Optional[Any] = None
 _title_matcher: Optional[Any] = None
 _session_factory: Optional[Callable] = None
-_provider_cache_service: Optional[Any] = None
 
 
 def set_dependencies(
@@ -19,15 +18,13 @@ def set_dependencies(
     metadata_providers: Any,
     title_matcher: Any,
     session_factory: Callable,
-    provider_cache_service: Any = None,
 ) -> None:
     """Set dependencies from main app"""
-    global _search_providers, _metadata_providers, _title_matcher, _session_factory, _provider_cache_service
+    global _search_providers, _metadata_providers, _title_matcher, _session_factory
     _search_providers = search_providers
     _metadata_providers = metadata_providers
     _title_matcher = title_matcher
     _session_factory = session_factory
-    _provider_cache_service = provider_cache_service
 
 
 def get_search_providers():
@@ -48,8 +45,3 @@ def get_title_matcher():
 def get_session_factory():
     """Get session factory."""
     return _session_factory
-
-
-def get_provider_cache_service():
-    """Get provider cache service."""
-    return _provider_cache_service

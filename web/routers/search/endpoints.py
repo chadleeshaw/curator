@@ -4,7 +4,6 @@ Search API endpoints.
 Contains all FastAPI route handlers for search functionality.
 """
 
-import json
 import logging
 from datetime import datetime
 from typing import Any, Dict
@@ -25,7 +24,6 @@ from .cache import (
     save_search_results_to_cache,
 )
 from .dependencies import (
-    get_provider_cache_service,
     get_search_providers,
     get_session_factory,
     get_title_matcher,
@@ -44,7 +42,6 @@ from .library import (
 )
 from .providers import (
     build_search_queries,
-    fetch_from_provider_cache,
     fetch_from_providers,
 )
 
@@ -88,37 +85,8 @@ async def search(request: SearchRequest) -> Dict[str, Any]:
     - Manual mode: search specific providers, return all results grouped
     """
     all_results = []
-    provider_cache_service = get_provider_cache_service()
     search_providers = get_search_providers()
     title_matcher = get_title_matcher()
-
-    # Try provider cache first if available
-    if provider_cache_service:
-        try:
-            cached_releases = provider_cache_service.search(request.query.strip(), limit=100)
-            if cached_releases:
-                logger.info(f"Found {len(cached_releases)} results from provider cache")
-                for release in cached_releases:
-                    # Note: cache.search() returns dicts, not objects
-                    raw_meta = release.get("raw_metadata") or {}
-                    # Handle raw_metadata being a JSON string (from raw SQL)
-                    if isinstance(raw_meta, str):
-                        try:
-                            raw_meta = json.loads(raw_meta)
-                        except (json.JSONDecodeError, TypeError):
-                            raw_meta = {}
-                    all_results.append(
-                        {
-                            "title": release.get("title"),
-                            "url": release.get("download_url"),
-                            "provider": release.get("provider_name"),
-                            "publication_date": release.get("upload_date") or release.get("publication_date"),
-                            "raw_metadata": raw_meta,
-                            "from_cache": True,
-                        }
-                    )
-        except Exception as e:
-            logger.warning(f"Provider cache search failed, falling back to direct providers: {e}")
 
     # Determine which providers to search
     providers = search_providers if search_providers else []
@@ -234,9 +202,6 @@ async def search_periodical_providers(
         fresh_results = []
         provider_errors = []
 
-        if not force_refresh:
-            fresh_results = fetch_from_provider_cache(search_queries, seen_urls)
-
         direct_results, direct_errors = fetch_from_providers(search_queries, category, seen_urls)
         fresh_results.extend(direct_results)
         provider_errors.extend(direct_errors)
@@ -339,7 +304,6 @@ async def get_periodical_editions(magazine_title: str) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail="Invalid periodical title")
 
     search_providers = get_search_providers()
-    provider_cache_service = get_provider_cache_service()
 
     if not search_providers:
         logger.error(ErrorMessages.SEARCH_PROVIDERS_UNAVAILABLE)
@@ -347,33 +311,6 @@ async def get_periodical_editions(magazine_title: str) -> Dict[str, Any]:
 
     # Search across search providers for specific editions
     results = []
-
-    # Try provider cache first if available
-    if provider_cache_service:
-        try:
-            cached_releases = provider_cache_service.search(magazine_title.strip(), limit=100)
-            if cached_releases:
-                logger.info(f"Found {len(cached_releases)} results from provider cache for '{magazine_title}'")
-                for release in cached_releases:
-                    results.append(
-                        type(
-                            "SearchResult",
-                            (),
-                            {
-                                "title": release.title,
-                                "url": release.download_url,
-                                "provider": release.provider_name,
-                                "publication_date": (
-                                    datetime.fromisoformat(release.raw_metadata.get("upload_date"))
-                                    if release.raw_metadata and release.raw_metadata.get("upload_date")
-                                    else None
-                                ),
-                                "raw_metadata": release.raw_metadata or {},
-                            },
-                        )()
-                    )
-        except Exception as e:
-            logger.warning(f"Provider cache search failed, falling back to direct providers: {e}")
 
     for provider in search_providers:
         try:
@@ -386,39 +323,3 @@ async def get_periodical_editions(magazine_title: str) -> Dict[str, Any]:
         return success_response(None, results=results)
     else:
         raise HTTPException(status_code=404, detail=f"Could not find editions for {magazine_title}")
-
-
-@router.get("/indexer-cache/status")
-@handle_api_errors("Get provider cache status", logger)
-async def get_provider_cache_status() -> Dict[str, Any]:
-    """
-    Get provider cache statistics and status.
-
-    Returns:
-        Dictionary with cache statistics including:
-        - total_entries: Number of cached releases
-        - last_sync: Timestamp of last successful sync
-        - providers: List of providers and their release counts
-    """
-    provider_cache_service = get_provider_cache_service()
-
-    if not provider_cache_service:
-        return {
-            "enabled": False,
-            "total_entries": 0,
-            "last_sync": None,
-            "providers": [],
-        }
-
-    def _get_stats():
-        stats = provider_cache_service.get_stats()
-        return {
-            "enabled": True,
-            "total_entries": stats.get("total_releases", 0),
-            "last_sync": stats.get("last_sync"),
-            "oldest_release": stats.get("oldest_release"),
-            "newest_release": stats.get("newest_release"),
-            "providers": stats.get("providers", []),
-        }
-
-    return await run_in_thread(_get_stats)

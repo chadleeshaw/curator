@@ -42,7 +42,8 @@ async def get_ocr_queue(status: Optional[str] = None):
         raise HTTPException(status_code=500, detail="Database not initialized")
 
     def operation(db):
-        query = db.query(OCRJob).join(Periodical, OCRJob.periodical_id == Periodical.id)
+        # Use outerjoin so OCR jobs with deleted periodicals still appear
+        query = db.query(OCRJob).outerjoin(Periodical, OCRJob.periodical_id == Periodical.id)
 
         # Filter by status if provided
         if status:
@@ -59,22 +60,27 @@ async def get_ocr_queue(status: Optional[str] = None):
         result = []
         for job in jobs:
             magazine = db.query(Periodical).filter(Periodical.id == job.periodical_id).first()
-            if not magazine:
-                continue
 
-            # Format issue date for display
-            issue_display = ""
-            if magazine.issue_date:
-                issue_display = magazine.issue_date.strftime("%b %Y")
+            # Handle orphaned jobs where periodical was deleted
+            if magazine:
+                issue_display = magazine.issue_date.strftime("%b %Y") if magazine.issue_date else ""
+                magazine_title = magazine.title
+                magazine_year = magazine.issue_date.year if magazine.issue_date else None
+                tracking_id = magazine.tracking_id
+            else:
+                issue_display = ""
+                magazine_title = f"[Deleted Periodical #{job.periodical_id}]"
+                magazine_year = None
+                tracking_id = None
 
             result.append(
                 {
                     "id": job.id,
                     "magazine_id": job.periodical_id,
-                    "magazine_title": magazine.title,
+                    "magazine_title": magazine_title,
                     "magazine_issue": issue_display,
-                    "magazine_year": (magazine.issue_date.year if magazine.issue_date else None),
-                    "tracking_id": magazine.tracking_id,
+                    "magazine_year": magazine_year,
+                    "tracking_id": tracking_id,
                     "tracking_title": None,  # Will be populated below
                     "status": job.status.value,
                     "priority": job.priority,

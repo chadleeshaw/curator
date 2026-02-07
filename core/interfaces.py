@@ -72,6 +72,23 @@ class DownloadClient(ABC):
             Job ID returned by the client
         """
 
+    def submit_content(self, nzb_content: str, title: str = None, category: str = None) -> Optional[str]:
+        """
+        Submit NZB content directly to download client (avoids provider URL fetch).
+
+        Override in subclasses to support direct NZB content upload.
+        Default implementation falls back to None (caller should use submit() with URL).
+
+        Args:
+            nzb_content: Raw NZB XML content as string
+            title: Optional title for the job
+            category: Optional category for download client
+
+        Returns:
+            Job ID returned by the client, or None if not supported
+        """
+        return None
+
     @abstractmethod
     def get_status(self, job_id: str) -> Dict[str, Any]:
         """

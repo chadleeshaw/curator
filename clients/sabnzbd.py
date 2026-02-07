@@ -112,6 +112,60 @@ class SABnzbdClient(DownloadClient):
             logger.error(f"Error submitting to SABnzbd: {e}")
             return None
 
+    def submit_content(self, nzb_content: str, title: str = None, category: str = None) -> Optional[str]:
+        """
+        Submit NZB content directly to SABnzbd via file upload.
+
+        Uses SABnzbd's addfile API mode to upload NZB XML content directly,
+        avoiding the provider URL fetch that would otherwise hit rate limits.
+
+        Args:
+            nzb_content: Raw NZB XML content as string
+            title: Optional title for the job
+            category: Optional category for download client
+
+        Returns:
+            Job ID (NZO ID), or None if submission failed
+        """
+        try:
+            params = {
+                "mode": "addfile",
+                "output": "json",
+                "apikey": self.api_key,
+            }
+
+            if title:
+                sanitized_title = title.replace("/", "-").replace("\\", "-").strip()
+                if len(sanitized_title) > 100:
+                    sanitized_title = sanitized_title[:100].strip()
+                params["nzbname"] = sanitized_title
+
+            if category:
+                params["cat"] = category
+
+            # Upload NZB content as multipart file
+            nzb_filename = f"{title or 'download'}.nzb"
+            files = {
+                "nzbfile": (nzb_filename, nzb_content.encode("utf-8"), "application/x-nzb"),
+            }
+
+            url = f"{self.api_url}/api"
+            response = requests.post(url, params=params, files=files, timeout=10)
+            response.raise_for_status()
+            result = response.json()
+
+            if result.get("status") is True:
+                job_id = result.get("nzo_ids", [None])[0]
+                logger.info(f"Submitted NZB content to SABnzbd: {title} -> {job_id}")
+                return job_id
+            else:
+                logger.error(f"SABnzbd content submission failed: {result}")
+                return None
+
+        except Exception as e:
+            logger.error(f"Error submitting NZB content to SABnzbd: {e}")
+            return None
+
     def get_status(self, job_id: str) -> Dict[str, Any]:
         """
         Get download status for a job.

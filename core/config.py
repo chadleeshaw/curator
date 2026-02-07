@@ -331,29 +331,15 @@ class ConfigLoader:
         Returns:
             Dictionary with cache settings:
             - enabled: Whether cache is enabled (default: True)
-            - retention_days: Days to retain cached releases (default: 90)
-            - sync: Sync settings (interval, limits)
+            - max_nzb_fetches_per_hour: Rate limit for NZB fetches
         """
-        from core.constants.cache import (
-            CACHE_RETENTION_DAYS,
-            DEFAULT_SYNC_INTERVAL_SECONDS,
-            INITIAL_SYNC_LIMIT,
-            INCREMENTAL_SYNC_LIMIT,
-        )
+        from core.constants.cache import DEFAULT_MAX_NZB_FETCHES_PER_HOUR
 
         cache_config = self.config.get(CONFIG_KEY_CACHE, {})
 
-        # Return config with defaults
         return {
             "enabled": cache_config.get("enabled", True),
-            "retention_days": cache_config.get("retention_days", CACHE_RETENTION_DAYS),
-            "sync": {
-                "interval_seconds": cache_config.get("sync", {}).get("interval_seconds", DEFAULT_SYNC_INTERVAL_SECONDS),
-                "initial_sync_limit": cache_config.get("sync", {}).get("initial_sync_limit", INITIAL_SYNC_LIMIT),
-                "incremental_sync_limit": cache_config.get("sync", {}).get(
-                    "incremental_sync_limit", INCREMENTAL_SYNC_LIMIT
-                ),
-            },
+            "max_nzb_fetches_per_hour": cache_config.get("max_nzb_fetches_per_hour", DEFAULT_MAX_NZB_FETCHES_PER_HOUR),
         }
 
     def get_matching(self) -> Dict[str, Any]:

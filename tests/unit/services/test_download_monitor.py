@@ -510,5 +510,147 @@ class TestIACollectionHandling:
         assert paths[2] == "file3.pdf"
 
 
+class TestRemotePathMapping:
+    """Test remote_path configuration for cross-container path remapping."""
+
+    def test_remap_client_path_with_remote_path(
+        self, test_db, temp_downloads_dir, download_manager, mock_file_importer
+    ):
+        """When remote_path is set, client paths should be remapped to local downloads_dir."""
+        engine, session_factory = test_db
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=temp_downloads_dir,
+            remote_path="/downloads/",
+        )
+
+        remapped = monitor._remap_client_path("/downloads/Books/Magazine.pdf")
+        assert remapped == str(temp_downloads_dir / "Books" / "Magazine.pdf")
+
+    def test_remap_preserves_subdirectory_structure(
+        self, test_db, temp_downloads_dir, download_manager, mock_file_importer
+    ):
+        """Remapping should preserve the full subdirectory structure after the prefix."""
+        engine, session_factory = test_db
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=temp_downloads_dir,
+            remote_path="/downloads",
+        )
+
+        remapped = monitor._remap_client_path("/downloads/Books/Magazines/2024/file.pdf")
+        assert remapped == str(temp_downloads_dir / "Books" / "Magazines" / "2024" / "file.pdf")
+
+    def test_no_remap_without_remote_path(self, test_db, temp_downloads_dir, download_manager, mock_file_importer):
+        """Without remote_path, paths should pass through unchanged."""
+        engine, session_factory = test_db
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=temp_downloads_dir,
+        )
+
+        original = "/some/other/path/file.pdf"
+        assert monitor._remap_client_path(original) == original
+
+    def test_no_remap_when_prefix_doesnt_match(self, test_db, temp_downloads_dir, download_manager, mock_file_importer):
+        """When path doesn't start with remote_path, it should pass through unchanged."""
+        engine, session_factory = test_db
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=temp_downloads_dir,
+            remote_path="/downloads/",
+        )
+
+        original = "/other/path/file.pdf"
+        assert monitor._remap_client_path(original) == original
+
+    def test_find_file_uses_remapped_path(self, test_db, temp_downloads_dir, download_manager, mock_file_importer):
+        """_find_file_in_downloads should use remapped path to find files."""
+        engine, session_factory = test_db
+
+        # Create a file in a subdirectory (simulating SABnzbd category folder)
+        books_dir = temp_downloads_dir / "Books"
+        books_dir.mkdir()
+        test_file = books_dir / "Test.Magazine.2024.pdf"
+        test_file.write_bytes(b"%PDF-1.4\ntest content")
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=temp_downloads_dir,
+            remote_path="/downloads/",
+        )
+
+        # SABnzbd reports: /downloads/Books/Test.Magazine.2024.pdf
+        # Curator should find it at: temp_downloads_dir/Books/Test.Magazine.2024.pdf
+        found = monitor._find_file_in_downloads("/downloads/Books/Test.Magazine.2024.pdf")
+        assert found is not None
+        assert found.name == "Test.Magazine.2024.pdf"
+
+    def test_find_file_remaps_directory_path(self, test_db, temp_downloads_dir, download_manager, mock_file_importer):
+        """_find_file_in_downloads should handle remapped directory paths (SABnzbd storage field)."""
+        engine, session_factory = test_db
+
+        # SABnzbd often returns directory paths in the "storage" field
+        magazine_dir = temp_downloads_dir / "Books" / "Magazine.Name.2024"
+        magazine_dir.mkdir(parents=True)
+        (magazine_dir / "magazine.pdf").write_bytes(b"%PDF-1.4\ntest content")
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=temp_downloads_dir,
+            remote_path="/downloads/",
+        )
+
+        # SABnzbd reports directory: /downloads/Books/Magazine.Name.2024
+        found = monitor._find_file_in_downloads("/downloads/Books/Magazine.Name.2024")
+        assert found is not None
+        assert found.name == "magazine.pdf"
+
+    def test_remote_path_trailing_slash_normalization(
+        self, test_db, temp_downloads_dir, download_manager, mock_file_importer
+    ):
+        """remote_path should work with or without trailing slash."""
+        engine, session_factory = test_db
+
+        # Without trailing slash
+        monitor1 = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=temp_downloads_dir,
+            remote_path="/downloads",
+        )
+
+        # With trailing slash
+        monitor2 = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=temp_downloads_dir,
+            remote_path="/downloads/",
+        )
+
+        # Both should produce the same remapped path
+        path1 = monitor1._remap_client_path("/downloads/Books/file.pdf")
+        path2 = monitor2._remap_client_path("/downloads/Books/file.pdf")
+        assert path1 == path2
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

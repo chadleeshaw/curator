@@ -3,8 +3,9 @@ NZBGet download client implementation.
 Handles NZB submissions and status tracking for NZBGet via JSON-RPC API.
 """
 
+import base64
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import requests
 
@@ -99,6 +100,56 @@ class NZBGetClient(DownloadClient):
 
         except Exception as e:
             logger.error(f"Error submitting to NZBGet: {e}")
+            return None
+
+    def submit_content(self, nzb_content: str, title: str = None, category: str = None) -> Optional[str]:
+        """
+        Submit NZB content directly to NZBGet via base64-encoded content.
+
+        Uses NZBGet's append method with NZBContent parameter to upload
+        NZB XML directly, avoiding the provider URL fetch.
+
+        Args:
+            nzb_content: Raw NZB XML content as string
+            title: Optional title for the job
+            category: Optional category for download client
+
+        Returns:
+            Job ID (NZBID), or None if submission failed
+        """
+        try:
+            nzb_name = title or "download"
+            nzb_name = nzb_name.replace("/", "-").replace("\\", "-").strip()
+            if len(nzb_name) > 100:
+                nzb_name = nzb_name[:100].strip()
+
+            # NZBGet's append method accepts base64-encoded NZB content
+            # as the first parameter instead of a URL
+            nzb_b64 = base64.b64encode(nzb_content.encode("utf-8")).decode("ascii")
+
+            params = [
+                nzb_name + ".nzb",  # NZBFilename
+                nzb_b64,  # NZBContent (base64)
+                category or "",  # Category
+                50,  # Priority
+                False,  # AddToTop
+                False,  # AddPaused
+                "",  # DupeKey
+                0,  # DupeScore
+                "ALL",  # DupeMode
+            ]
+            result = self._api_call("append", params)
+
+            if isinstance(result, (int, float)) and result > 0:
+                job_id = str(int(result))
+                logger.info(f"Submitted NZB content to NZBGet: {title} -> {job_id}")
+                return job_id
+            else:
+                logger.error(f"NZBGet content submission failed: {result}")
+                return None
+
+        except Exception as e:
+            logger.error(f"Error submitting NZB content to NZBGet: {e}")
             return None
 
     def get_status(self, job_id: str) -> Dict[str, Any]:

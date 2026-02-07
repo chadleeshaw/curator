@@ -97,6 +97,11 @@ download_client:
   api_url: http://localhost:8080
   api_key: your-sabnzbd-api-key
   default_category: books
+  # remote_path: /downloads/  # Path prefix as seen by the download client.
+  # Set this when the client runs in a different container with different mount points.
+  # Client paths starting with this prefix are remapped to storage.download_dir.
+  # Example: SABnzbd saves to /downloads/Books/file.pdf, Curator sees /app/local/downloads/Books/file.pdf
+  #   remote_path: /downloads/
 
 # Additional download clients (optional)
 # The system automatically routes downloads to the appropriate client:
@@ -121,48 +126,30 @@ storage:
   cache_dir: ./local/cache
 
 # ==============================================================================
-# Provider Cache Configuration
+# NZB Content Cache Configuration
 # ==============================================================================
-# Local caching of provider search results to dramatically reduce API calls
-# and improve search performance. Eliminates rate limit issues.
+# Caches NZB file content fetched from providers to avoid repeated hits
+# on download retries and resubmissions.
 #
 # How it works:
-# - Background sync fetches latest releases from providers (RSS mode)
-# - Search queries use local cache first (instant, no API calls)
-# - Download URLs are cached (NZB files fetched on-demand by download client)
+# - When a download is submitted, the NZB file is fetched once and cached
+# - Subsequent downloads/retries use the cached NZB content directly
+# - NZB content is sent directly to SABnzbd/NZBGet (no provider hit)
+# - Prowlarr proxy URLs are stored as-is (Prowlarr handles resolution)
 #
 # Benefits:
-# - 95%+ reduction in provider API calls
-# - Sub-100ms search response times (vs 1-5 seconds)
-# - Minimal storage usage (~1MB for 1000 releases)
-# - Eliminates rate limit errors
-# - Works offline for cached content
+# - Eliminates rate limit errors from NZB providers on retries
+# - Download retries never hit the provider again
 
 cache:
-  # Enable/disable provider cache
-  # When enabled, search results are cached locally for fast searching
-  # When disabled, all searches go directly to providers (traditional behavior)
+  # Enable/disable NZB content caching
   enabled: true
 
-  # Cache retention in days
-  # Releases older than this are automatically deleted during cleanup
-  # Recommended: 90 days (balances storage vs search coverage)
-  # Storage estimate: ~1MB for 90 days of releases (URL-only caching)
-  retention_days: 90
-
-  # Sync settings - background synchronization with providers
-  sync:
-    # Sync interval in seconds
-    # How often to fetch latest releases from providers
-    # Recommended: 1800-3600 (30 min - 1 hour)
-    # Note: Each sync only makes 2-4 API calls (RSS mode per provider)
-    interval_seconds: 1800 # 30 minutes
-
-    # Number of releases to fetch per provider
-    # Initial sync: First time syncing a provider
-    # Incremental sync: Subsequent syncs (fetches releases since last sync)
-    initial_sync_limit: 100 # Fetch 100 releases on first sync
-    incremental_sync_limit: 100 # Fetch 100 releases per sync
+  # NZB fetch rate limiting
+  # Maximum number of NZB file fetches per hour
+  # Applies when downloading NZB content for caching
+  # Set to 0 to disable rate limiting
+  max_nzb_fetches_per_hour: 50
 
 import:
   # Organization pattern for file structure
@@ -329,7 +316,6 @@ tasks:
   ocr_processor_enabled: true
   folder_cleanup_enabled: true
   auto_metadata_enabled: true
-  provider_cache_sync_enabled: true
 
   # Auto-download: Search for and download new tracked issues
   # IMPORTANT: With the new Issue Discovery & Tracking system, this interval

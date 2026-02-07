@@ -237,9 +237,9 @@ async def download_batch_issues(
                         failed += 1
                     results.append({"title": issue.title, "status": status})
                 else:
-                    # None means at capacity or error — issue stays in wanted status
-                    queued += 1
-                    results.append({"title": issue.title, "status": "queued"})
+                    # None means an error (already downloading, permanently failed, etc.)
+                    failed += 1
+                    results.append({"title": issue.title, "status": "failed"})
 
             except Exception as e:
                 _shared.logger.error(f"Failed to submit {issue.title}: {e}")

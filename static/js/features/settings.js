@@ -143,7 +143,6 @@ export class SettingsManager {
    */
   async loadSettingsTab() {
     await this.loadAPIToken();
-    await this.loadCacheStats();
     // Load categories for reorganize dropdown
     if (window.tasks) {
       await window.tasks.loadCategories();
@@ -393,6 +392,8 @@ export class SettingsManager {
     const nameInput = document.getElementById('download-client-name');
     const urlInput = document.getElementById('download-client-url');
     const apiKeyInput = document.getElementById('download-client-apikey');
+    const defaultCategoryInput = document.getElementById('download-client-default-category');
+    const remotePathInput = document.getElementById('download-client-remote-path');
     const downloadsDirInput = document.getElementById('download-client-downloads-dir');
     const maxConcurrentInput = document.getElementById('download-client-max-concurrent');
 
@@ -407,6 +408,8 @@ export class SettingsManager {
       apiKeyInput.setAttribute('data-original-key', clientConfig.api_key || '');
       apiKeyInput.placeholder = clientConfig.api_key ? '••••••••••••••••' : 'Enter API key';
     }
+    if (defaultCategoryInput) defaultCategoryInput.value = clientConfig.default_category || '';
+    if (remotePathInput) remotePathInput.value = clientConfig.remote_path || '';
 
     // Internet Archive fields
     if (downloadsDirInput) downloadsDirInput.value = clientConfig.downloads_dir || '';
@@ -705,6 +708,8 @@ export class SettingsManager {
       const url = document.getElementById('download-client-url')?.value;
       const apiKeyInput = document.getElementById('download-client-apikey');
       const apiKey = apiKeyInput?.value;
+      const defaultCategory = document.getElementById('download-client-default-category')?.value;
+      const remotePath = document.getElementById('download-client-remote-path')?.value;
 
       downloadClientConfig.api_url = url;
 
@@ -715,6 +720,9 @@ export class SettingsManager {
         // Preserve existing key from cached config
         downloadClientConfig.api_key = this.currentConfig.config.download_client.api_key;
       }
+
+      if (defaultCategory) downloadClientConfig.default_category = defaultCategory;
+      if (remotePath) downloadClientConfig.remote_path = remotePath;
     }
 
     try {
@@ -2042,71 +2050,13 @@ export class SettingsManager {
   }
 
   /**
-   * Load and display cache statistics
-   */
-  async loadCacheStats() {
-    try {
-      // Load old-style search result cache stats - this is what the "Cache Statistics" section displays
-      const response = await APIClient.authenticatedFetch('/api/cache/stats');
-      const stats = await response.json();
-
-      // Display the cache statistics at the top of the page
-      this.displayCacheStats(stats);
-
-      const statsText = document.getElementById('cache-stats-text');
-      if (statsText && stats.total_entries) {
-        const entryText = stats.total_entries === 1 ? 'entry' : 'entries';
-        const queryText = stats.unique_queries === 1 ? 'query' : 'queries';
-        statsText.textContent = `Currently ${stats.total_entries} ${entryText} from ${stats.unique_queries} ${queryText}.`;
-      }
-    } catch (error) {
-      console.error('Error loading cache stats:', error);
-      // Display empty stats on error
-      this.displayCacheStats({ total_entries: 0, last_sync: null });
-    }
-  }
-
-  /**
-   * Display cache statistics in the UI
-   */
-  displayCacheStats(stats) {
-    const totalReleases = document.getElementById('cache-total-releases');
-    const lastSync = document.getElementById('cache-last-sync');
-
-    if (totalReleases) {
-      totalReleases.textContent = stats.total_entries?.toLocaleString() || '0';
-    }
-    if (lastSync) {
-      // Try newest_entry first (from /api/cache/stats), then last_sync (from /api/indexer-cache/status)
-      const syncDate = stats.newest_entry || stats.last_sync;
-      if (syncDate) {
-        const date = new Date(syncDate);
-        lastSync.textContent = date.toLocaleString();
-      } else {
-        lastSync.textContent = 'Never';
-      }
-    }
-  }
-
-  /**
    * Display cache settings in the UI
    */
   displayCacheSettings(cacheConfig) {
     const cacheEnabled = document.getElementById('cache-enabled');
-    const cacheRetention = document.getElementById('cache-retention');
-    const cacheSyncInterval = document.getElementById('cache-sync-interval');
 
     if (cacheEnabled) {
       cacheEnabled.checked = cacheConfig?.enabled ?? true;
-    }
-    if (cacheRetention) {
-      cacheRetention.value = cacheConfig?.retention_days || 90;
-    }
-    if (cacheSyncInterval) {
-      const intervalMinutes = cacheConfig?.sync?.interval_seconds
-        ? Math.round(cacheConfig.sync.interval_seconds / 60)
-        : 30;
-      cacheSyncInterval.value = intervalMinutes;
     }
   }
 
@@ -2118,21 +2068,10 @@ export class SettingsManager {
       UIUtils.showStatus('settings-status', 'Saving cache settings...', 'info');
 
       const cacheEnabled = document.getElementById('cache-enabled')?.checked;
-      const cacheRetention = parseInt(document.getElementById('cache-retention')?.value || '90');
-      const cacheSyncInterval = parseInt(
-        document.getElementById('cache-sync-interval')?.value || '30'
-      );
 
       const payload = {
         cache: {
           enabled: cacheEnabled,
-          retention_days: cacheRetention,
-          sync: {
-            interval_seconds: cacheSyncInterval * 60,
-            initial_sync_limit: this.currentConfig?.config?.cache?.sync?.initial_sync_limit || 100,
-            incremental_sync_limit:
-              this.currentConfig?.config?.cache?.sync?.incremental_sync_limit || 100,
-          },
         },
       };
 
@@ -2192,8 +2131,6 @@ export class SettingsManager {
       if (result.success) {
         this.closePurgeCacheModal();
         UIUtils.showStatus('settings-status', result.message, 'success');
-        // Reload cache stats
-        this.loadCacheStats();
       } else {
         UIUtils.showStatus('settings-status', result.message || 'Cache purge failed', 'error');
       }
@@ -2312,6 +2249,5 @@ window.saveOCRWorkerSettings = () => settings.saveOCRWorkerSettings();
 window.saveImportSettings = () => settings.saveImportSettings();
 window.handlePatternSelectChange = (context) => settings.handlePatternSelectChange(context);
 window.saveCacheSettings = () => settings.saveCacheSettings();
-window.loadCacheStats = () => settings.loadCacheStats();
 window.onDownloadClientTypeChange = (type) => settings.onDownloadClientTypeChange(type);
 window.onProviderTypeChange = (type) => settings.onProviderTypeChange(type);

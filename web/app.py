@@ -101,8 +101,7 @@ class ServiceState:
     title_matcher: Optional[TitleMatcher] = None
     file_processor: Optional[FileOrganizer] = None
     file_importer: Optional[FileImporter] = None
-    provider_cache_service: Optional[Any] = None
-    provider_sync_service: Optional[Any] = None
+    nzb_cache_service: Optional[Any] = None
     issue_discovery_service: Optional[IssueDiscoveryService] = None
     search_scheduler: Optional[SearchScheduler] = None
 
@@ -300,24 +299,14 @@ class AppState:
         self.services.file_importer = value
 
     @property
-    def provider_cache_service(self) -> Optional[Any]:
-        """Backward compatibility: access services.provider_cache_service."""
-        return self.services.provider_cache_service
+    def nzb_cache_service(self) -> Optional[Any]:
+        """Backward compatibility: access services.nzb_cache_service."""
+        return self.services.nzb_cache_service
 
-    @provider_cache_service.setter
-    def provider_cache_service(self, value: Any) -> None:
-        """Backward compatibility: set services.provider_cache_service."""
-        self.services.provider_cache_service = value
-
-    @property
-    def provider_sync_service(self) -> Optional[Any]:
-        """Backward compatibility: access services.provider_sync_service."""
-        return self.services.provider_sync_service
-
-    @provider_sync_service.setter
-    def provider_sync_service(self, value: Any) -> None:
-        """Backward compatibility: set services.provider_sync_service."""
-        self.services.provider_sync_service = value
+    @nzb_cache_service.setter
+    def nzb_cache_service(self, value: Any) -> None:
+        """Backward compatibility: set services.nzb_cache_service."""
+        self.services.nzb_cache_service = value
 
     @property
     def issue_discovery_service(self) -> Optional[IssueDiscoveryService]:
@@ -523,42 +512,32 @@ def _initialize_cache_services() -> None:
     Internet Archive uses direct downloads and doesn't need caching.
     """
     if not app_state.cache_config.get("enabled", True):
-        logger.info("Provider cache disabled in configuration")
+        logger.info("NZB cache disabled in configuration")
         return
 
     # Check if there are any NZB providers (newsnab or rss) - Internet Archive doesn't need cache
     nzb_providers = [p for p in app_state.search_providers if p.type in ("newsnab", "rss")]
     if not nzb_providers:
-        logger.info("Provider cache not initialized: no NZB providers (newsnab/rss) enabled")
+        logger.info("NZB cache not initialized: no NZB providers (newsnab/rss) enabled")
         return
 
     try:
         from pathlib import Path
 
-        from services.cache import ProviderCacheService, ProviderSyncService
+        from services.cache import NzbCacheService
 
         cache_dir = Path(app_state.storage_config.get("cache_dir", "./local/cache"))
         cache_db_path = cache_dir / "provider_cache.db"
 
-        app_state.provider_cache_service = ProviderCacheService(
+        app_state.nzb_cache_service = NzbCacheService(
             cache_db_path=str(cache_db_path),
-            fuzzy_threshold=app_state.fuzzy_threshold,
+            max_nzb_fetches_per_hour=app_state.cache_config.get("max_nzb_fetches_per_hour", 50),
         )
-        logger.info(
-            f"Provider cache initialized: {cache_db_path} "
-            f"(retention: {app_state.cache_config.get('retention_days', 90)} days)"
-        )
-
-        app_state.provider_sync_service = ProviderSyncService(
-            cache_service=app_state.provider_cache_service,
-            search_providers=nzb_providers,  # Only sync NZB providers
-        )
-        logger.info(f"Provider sync service initialized for {len(nzb_providers)} NZB provider(s)")
+        logger.info(f"NZB cache initialized: {cache_db_path}")
 
     except Exception as e:
-        logger.warning(f"Provider cache not available: {e}", exc_info=True)
-        app_state.provider_cache_service = None
-        app_state.provider_sync_service = None
+        logger.warning(f"NZB cache not available: {e}", exc_info=True)
+        app_state.nzb_cache_service = None
 
 
 def _initialize_core_services() -> None:
@@ -591,7 +570,7 @@ def _initialize_core_services() -> None:
             download_client=app_state.download_client,
             fuzzy_threshold=app_state.fuzzy_threshold,
             max_downloads=app_state.downloads_config.get("max_concurrent", 10),
-            provider_cache_service=app_state.provider_cache_service,
+            nzb_cache_service=app_state.nzb_cache_service,
             download_clients=app_state.download_clients or None,  # Additional clients for routing
         )
         logger.info(f"Download manager initialized with {len(app_state.download_clients or {})} additional client(s)")
@@ -617,13 +596,26 @@ def _initialize_background_tasks() -> None:
     """Initialize background task handlers (not the scheduler itself)."""
     # Download monitor
     if app_state.download_manager:
+        # Get remote_path from download client config for path remapping
+        # This maps the client's path prefix to Curator's local downloads_dir
+        remote_path = None
+        try:
+            client_cfg = app_state.config_loader.get_download_client()
+            remote_path = client_cfg.get("remote_path")
+        except ValueError:
+            pass  # No download client configured
+
         app_state.download_monitor_task = DownloadMonitor(
             download_manager=app_state.download_manager,
             file_importer=app_state.file_importer,
             session_factory=app_state.session_factory,
             downloads_dir=app_state.storage_config.get("download_dir", "./downloads"),
+            remote_path=remote_path,
         )
-        logger.info("Download monitor task initialized")
+        if remote_path:
+            logger.info(f"Download monitor task initialized (remote_path: {remote_path})")
+        else:
+            logger.info("Download monitor task initialized")
 
     # Cover cleanup
     app_state.cover_cleanup_task = CoverCleanup(
@@ -665,12 +657,10 @@ def _schedule_periodic_tasks(
     ocr_processing_task,
     folder_cleanup_periodic_task,
     auto_metadata_periodic_task,
-    provider_cache_sync_task,
 ) -> None:
     """Schedule all periodic background tasks."""
     scheduler = app_state.task_scheduler
     tasks_cfg = app_state.tasks_config
-    cache_cfg = app_state.cache_config
 
     scheduler.schedule_periodic(
         "auto_download",
@@ -717,18 +707,6 @@ def _schedule_periodic_tasks(
         enabled=tasks_cfg.get("auto_metadata_enabled", True),
     )
 
-    # Provider cache sync (if enabled)
-    if app_state.provider_sync_service:
-        sync_interval = cache_cfg.get("sync", {}).get("interval_seconds", 1800)
-        scheduler.schedule_periodic(
-            "provider_cache_sync",
-            provider_cache_sync_task,
-            sync_interval,
-            run_immediately=False,
-            enabled=tasks_cfg.get("provider_cache_sync_enabled", True),
-        )
-        logger.info(f"Provider cache sync scheduled: every {sync_interval}s")
-
 
 def _initialize_router_dependencies(app: FastAPI, auto_download_task) -> None:
     """Initialize all router dependencies with app state."""
@@ -741,7 +719,6 @@ def _initialize_router_dependencies(app: FastAPI, auto_download_task) -> None:
         app_state.metadata_providers,
         app_state.title_matcher,
         app_state.session_factory,
-        app_state.provider_cache_service,
     )
 
     periodicals.set_dependencies(
@@ -985,22 +962,6 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 logger.error(f"Auto-metadata error: {e}", exc_info=True)
 
-        # Define provider cache sync task wrapper
-        async def provider_cache_sync_task():
-            """Sync provider cache with latest releases from providers."""
-            logger.info("Starting provider cache sync task")
-            if app_state.provider_sync_service:
-                try:
-                    stats = await app_state.provider_sync_service.sync_all_providers()
-                    if stats.get("total_added", 0) > 0:
-                        logger.info(
-                            f"Provider cache sync: {stats.get('total_added', 0)} added, "
-                            f"{stats.get('total_nzbs_downloaded', 0)} NZBs, "
-                            f"{stats.get('total_failed', 0)} failures"
-                        )
-                except Exception as e:
-                    logger.error(f"Provider cache sync error: {e}", exc_info=True)
-
         # Schedule all periodic tasks
         _schedule_periodic_tasks(
             auto_download_task,
@@ -1009,7 +970,6 @@ async def lifespan(app: FastAPI):
             ocr_processing_task,
             folder_cleanup_periodic_task,
             auto_metadata_periodic_task,
-            provider_cache_sync_task,
         )
 
         # Start scheduler in background

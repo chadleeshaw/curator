@@ -374,3 +374,88 @@ def test_sabnzbd_title_sanitization():
         assert "/" not in sanitized_title
         assert "\\" not in sanitized_title
         assert "-" in sanitized_title  # Should have replaced separators with dashes
+
+
+# --- submit_content tests ---
+
+
+def test_sabnzbd_submit_content_success():
+    """Test submitting NZB content directly to SABnzbd."""
+    config = {
+        "api_url": "http://localhost:8080",
+        "api_key": "test-key",
+    }
+    client = SABnzbdClient(config)
+    nzb_content = '<?xml version="1.0"?><nzb><file></file></nzb>'
+
+    with patch("clients.sabnzbd.requests.post") as mock_post:
+        mock_response = Mock()
+        mock_response.json.return_value = {"status": True, "nzo_ids": ["nzo_content_123"]}
+        mock_response.raise_for_status = Mock()
+        mock_post.return_value = mock_response
+
+        job_id = client.submit_content(nzb_content=nzb_content, title="Test Magazine", category="books")
+
+        assert job_id == "nzo_content_123"
+        mock_post.assert_called_once()
+        # Verify it used multipart file upload
+        call_kwargs = mock_post.call_args
+        assert "files" in call_kwargs.kwargs or "files" in (call_kwargs[1] if len(call_kwargs) > 1 else {})
+
+
+def test_sabnzbd_submit_content_failure():
+    """Test handling failed NZB content submission."""
+    config = {
+        "api_url": "http://localhost:8080",
+        "api_key": "test-key",
+    }
+    client = SABnzbdClient(config)
+    nzb_content = "<nzb></nzb>"
+
+    with patch("clients.sabnzbd.requests.post") as mock_post:
+        mock_response = Mock()
+        mock_response.json.return_value = {"status": False, "error": "Invalid NZB"}
+        mock_response.raise_for_status = Mock()
+        mock_post.return_value = mock_response
+
+        job_id = client.submit_content(nzb_content=nzb_content, title="Bad NZB")
+        assert job_id is None
+
+
+def test_sabnzbd_submit_content_with_category():
+    """Test NZB content submission includes category parameter."""
+    config = {
+        "api_url": "http://localhost:8080",
+        "api_key": "test-key",
+    }
+    client = SABnzbdClient(config)
+    nzb_content = "<nzb><file></file></nzb>"
+
+    with patch("clients.sabnzbd.requests.post") as mock_post:
+        mock_response = Mock()
+        mock_response.json.return_value = {"status": True, "nzo_ids": ["nzo_cat_123"]}
+        mock_response.raise_for_status = Mock()
+        mock_post.return_value = mock_response
+
+        job_id = client.submit_content(nzb_content=nzb_content, title="Test", category="magazines")
+        assert job_id == "nzo_cat_123"
+
+        # Verify category was included in params
+        call_kwargs = mock_post.call_args
+        params = call_kwargs.kwargs.get("params", {})
+        assert params.get("cat") == "magazines"
+
+
+def test_sabnzbd_submit_content_network_error():
+    """Test NZB content submission handles network errors gracefully."""
+    config = {
+        "api_url": "http://localhost:8080",
+        "api_key": "test-key",
+    }
+    client = SABnzbdClient(config)
+
+    with patch("clients.sabnzbd.requests.post") as mock_post:
+        mock_post.side_effect = Exception("Connection refused")
+
+        job_id = client.submit_content(nzb_content="<nzb/>", title="Test")
+        assert job_id is None

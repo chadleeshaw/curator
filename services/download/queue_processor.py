@@ -18,16 +18,46 @@ logger = logging.getLogger(__name__)
 class QueueProcessor:
     """Process queued downloads and submit to download client"""
 
-    def __init__(self, download_client: DownloadClient, max_downloads: int = 10):
+    def __init__(self, download_client: DownloadClient, max_downloads: int = 10, nzb_cache_service=None):
         """
         Initialize queue processor.
 
         Args:
             download_client: Download client to submit jobs to
             max_downloads: Maximum number of concurrent downloads allowed
+            nzb_cache_service: Optional NZB cache service for content caching
         """
         self.download_client = download_client
         self.max_downloads = max_downloads
+        self.nzb_cache_service = nzb_cache_service
+
+    def _submit_with_nzb_content(self, nzb_url: str, title: str, category: str = None) -> str:
+        """
+        Submit a download, preferring cached NZB content to avoid provider rate limits.
+
+        Args:
+            nzb_url: NZB download URL
+            title: Download title
+            category: Optional download category
+
+        Returns:
+            Job ID from download client
+        """
+        if self.nzb_cache_service and hasattr(self.download_client, "submit_content"):
+            try:
+                nzb_content = self.nzb_cache_service.get_nzb_content(nzb_url)
+                if nzb_content:
+                    job_id = self.download_client.submit_content(
+                        nzb_content=nzb_content, title=title, category=category
+                    )
+                    if job_id:
+                        logger.info(f"Submitted via cached NZB content: {title} -> {job_id}")
+                        return job_id
+                    logger.warning(f"submit_content failed for {title}, falling back to URL")
+            except Exception as e:
+                logger.warning(f"NZB content submission error: {e}, falling back to URL")
+
+        return self.download_client.submit(nzb_url=nzb_url, title=title, category=category)
 
     def process_queue(self, session: Session) -> Dict[str, Any]:
         """
@@ -105,13 +135,13 @@ class QueueProcessor:
 
                 category = tracking.category or self.download_client.config.get("default_category", "Other")
 
-                # Submit to download client
+                # Submit to download client (prefer cached NZB content)
                 logger.debug(
                     f"Submitting queued download: {submission.result_title} "
                     f"(submission_id: {submission.id}, category: {category})"
                 )
 
-                job_id = self.download_client.submit(
+                job_id = self._submit_with_nzb_content(
                     nzb_url=submission.source_url,
                     title=submission.result_title,
                     category=category,

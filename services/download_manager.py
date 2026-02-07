@@ -48,7 +48,7 @@ class DownloadManager:
         download_client: DownloadClient,
         fuzzy_threshold: int = DEFAULT_FUZZY_THRESHOLD,
         max_downloads: int = 10,
-        provider_cache_service: Optional[Any] = None,
+        nzb_cache_service: Optional[Any] = None,
         download_clients: Optional[Dict[str, DownloadClient]] = None,
         provider_client_map: Optional[Dict[str, str]] = None,
     ):
@@ -60,7 +60,7 @@ class DownloadManager:
             download_client: Default download client to submit jobs to
             fuzzy_threshold: Fuzzy matching threshold for deduplication
             max_downloads: Maximum number of concurrent downloads allowed
-            provider_cache_service: Optional provider cache service for NZB file caching
+            nzb_cache_service: Optional NZB cache service for content caching
             download_clients: Optional dict of additional download clients keyed by type
             provider_client_map: Optional mapping of provider types to client types
         """
@@ -85,14 +85,14 @@ class DownloadManager:
         self.max_downloads = max_downloads
         self.title_matcher = TitleMatcher(threshold=fuzzy_threshold)
         self.parser = Parser(fuzzy_threshold=fuzzy_threshold)
-        self.provider_cache_service = provider_cache_service
+        self.nzb_cache_service = nzb_cache_service
         self.categorizer = FileCategorizer()
 
         # Initialize services
         self.search_service = SearchService(search_providers, fuzzy_threshold)
         self.deduplication_service = DeduplicationService()
         self.submission_service = SubmissionService()
-        self.queue_processor = QueueProcessor(download_client, max_downloads)
+        self.queue_processor = QueueProcessor(download_client, max_downloads, nzb_cache_service)
 
         # Log available clients
         client_names = list(self.download_clients.keys())
@@ -118,6 +118,50 @@ class DownloadManager:
             client = self.download_clients["default"]
 
         return client
+
+    def _submit_with_nzb_content(
+        self,
+        client: DownloadClient,
+        nzb_url: str,
+        title: str,
+        category: Optional[str] = None,
+    ) -> Optional[str]:
+        """
+        Submit a download, preferring cached NZB content over URL to avoid provider rate limits.
+
+        Tries in order:
+        1. Cached NZB content from provider cache → submit_content() (no provider hit)
+        2. Fetch NZB content from provider → submit_content() (one provider hit, then cached)
+        3. Fallback to URL submission → submit() (provider hit by download client)
+
+        Args:
+            client: Download client to submit to
+            nzb_url: NZB download URL
+            title: Download title
+            category: Optional download category
+
+        Returns:
+            Job ID from download client, or None if all methods failed
+        """
+        # Try NZB content-based submission if cache service is available
+        if self.nzb_cache_service and hasattr(client, "submit_content"):
+            try:
+                nzb_content = self.nzb_cache_service.get_nzb_content(nzb_url)
+                if nzb_content:
+                    job_id = client.submit_content(
+                        nzb_content=nzb_content,
+                        title=title,
+                        category=category,
+                    )
+                    if job_id:
+                        logger.info(f"[DownloadManager] Submitted via cached NZB content: {title} -> {job_id}")
+                        return job_id
+                    logger.warning(f"[DownloadManager] submit_content failed for {title}, falling back to URL")
+            except Exception as e:
+                logger.warning(f"[DownloadManager] NZB content submission error: {e}, falling back to URL")
+
+        # Fallback: submit URL directly (download client fetches NZB from provider)
+        return client.submit(nzb_url=nzb_url, title=title, category=category)
 
     def _get_client_by_name(self, client_name: Optional[str]) -> DownloadClient:
         """
@@ -579,7 +623,8 @@ class DownloadManager:
                 f"{title} (category: {download_category})"
             )
 
-            job_id = client.submit(
+            job_id = self._submit_with_nzb_content(
+                client=client,
                 nzb_url=search_result["url"],
                 title=title,
                 category=download_category,
@@ -693,12 +738,27 @@ class DownloadManager:
             .count()
         )
 
-        # If at limit, keep in queue (don't change status)
+        # If at limit, create a QUEUED submission so the queue processor picks it up later
         if active_count >= self.max_downloads:
             logger.info(
-                f"At download limit ({active_count}/{self.max_downloads}), " f"keeping in queue: '{issue.title}'"
+                f"At download limit ({active_count}/{self.max_downloads}), " f"queuing download: '{issue.title}'"
             )
-            return None
+            submission = self._create_submission_record(
+                issue.tracking_id,
+                search_result,
+                DownloadSubmission.StatusEnum.QUEUED,
+                session,
+                attempt_count=0,
+            )
+
+            # Update DiscoveredIssue with submission info
+            issue.download_status = "queued"
+            issue.current_submission_id = submission.id
+            if submission.id not in (issue.submission_ids or []):
+                issue.submission_ids = (issue.submission_ids or []) + [submission.id]
+            session.commit()
+
+            return submission
 
         # Submit to download client
         try:
@@ -720,7 +780,8 @@ class DownloadManager:
                 f"(priority: {issue.download_priority}, category: {download_category}, provider: {provider})"
             )
 
-            job_id = client.submit(
+            job_id = self._submit_with_nzb_content(
+                client=client,
                 nzb_url=issue.latest_url,
                 title=issue.title,
                 category=download_category,
@@ -1257,7 +1318,8 @@ class DownloadManager:
             elif self.default_category:
                 download_category = self.default_category
 
-            job_id = client.submit(
+            job_id = self._submit_with_nzb_content(
+                client=client,
                 nzb_url=submission.source_url,
                 title=submission.result_title,
                 category=download_category,

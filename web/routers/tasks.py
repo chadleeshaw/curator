@@ -33,7 +33,6 @@ TASK_ENABLED_CONFIG_KEYS = {
     "ocr_processor": "ocr_processor_enabled",
     "folder_cleanup": "folder_cleanup_enabled",
     "auto_metadata": "auto_metadata_enabled",
-    "provider_cache_sync": "provider_cache_sync_enabled",
 }
 
 
@@ -229,28 +228,6 @@ async def get_tasks_status():
         )
     tasks.append(auto_metadata_info)
 
-    # Auto-cache task (provider cache sync) - only show if actually scheduled
-    # This task is only scheduled when there are enabled search providers
-    if scheduler_status and "provider_cache_sync" in scheduler_status.get("tasks", {}):
-        task_data = scheduler_status["tasks"]["provider_cache_sync"]
-        last_run = task_data.get("last_run")
-        failure_count = task_data.get("failure_count", 0)
-        # Only set status if task has run at least once
-        status = None
-        if last_run:
-            status = "failed" if failure_count > 0 else "success"
-        auto_cache_info = {
-            "id": "provider_cache_sync",
-            "name": "Auto-Cache",
-            "description": "Automatically syncs the provider cache with latest releases from search providers",
-            "interval": task_data.get("interval", 1800),
-            "last_run": last_run,
-            "next_run": task_data.get("next_run"),
-            "last_status": status,
-            "enabled": task_data.get("enabled", True),
-        }
-        tasks.append(auto_cache_info)
-
     logger.debug(f"Tasks Status - Returning {len(tasks)} tasks to client")
 
     return success_response(
@@ -347,21 +324,6 @@ async def run_task_manually(task_id: str):
             task_name="Auto-Metadata",
             stats=stats,
         )
-
-    elif task_id == "provider_cache_sync":
-        # Manually trigger provider cache sync via scheduler
-        if _task_scheduler:
-            try:
-                await _task_scheduler.run_task_now("provider_cache_sync")
-                return success_response(
-                    "Provider cache sync executed successfully",
-                    task_name="Auto-Cache",
-                )
-            except Exception as e:
-                logger.error(f"Error running provider cache sync: {e}", exc_info=True)
-                return error_response(f"Failed to run provider cache sync: {str(e)}")
-        else:
-            return error_response("Task scheduler not available")
 
     elif task_id == "cleanup_orphaned_covers":
         # Manually trigger cover cleanup via scheduler
