@@ -693,12 +693,27 @@ class DownloadManager:
             .count()
         )
 
-        # If at limit, keep in queue (don't change status)
+        # If at limit, create a QUEUED submission so the queue processor picks it up later
         if active_count >= self.max_downloads:
             logger.info(
-                f"At download limit ({active_count}/{self.max_downloads}), " f"keeping in queue: '{issue.title}'"
+                f"At download limit ({active_count}/{self.max_downloads}), " f"queuing download: '{issue.title}'"
             )
-            return None
+            submission = self._create_submission_record(
+                issue.tracking_id,
+                search_result,
+                DownloadSubmission.StatusEnum.QUEUED,
+                session,
+                attempt_count=0,
+            )
+
+            # Update DiscoveredIssue with submission info
+            issue.download_status = "queued"
+            issue.current_submission_id = submission.id
+            if submission.id not in (issue.submission_ids or []):
+                issue.submission_ids = (issue.submission_ids or []) + [submission.id]
+            session.commit()
+
+            return submission
 
         # Submit to download client
         try:
