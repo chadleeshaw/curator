@@ -1,17 +1,15 @@
 """
 Search provider helpers for fetching results from providers.
 
-Handles fetching from provider cache and direct provider searches.
+Handles fetching results from direct provider searches.
 """
 
-import json
 import logging
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from core.constants.errors import ErrorMessages
 
-from .dependencies import get_provider_cache_service, get_search_providers
+from .dependencies import get_search_providers
 
 logger = logging.getLogger(__name__)
 
@@ -45,73 +43,6 @@ def build_search_queries(query: str, tracking_id: Optional[int], db) -> List[str
                 )
 
     return search_queries
-
-
-def fetch_from_provider_cache(
-    search_queries: List[str],
-    seen_urls: set,
-) -> List[Dict[str, Any]]:
-    """
-    Fetch results from provider cache service.
-
-    Args:
-        search_queries: List of queries to search
-        seen_urls: Set of already seen URLs (modified in place)
-
-    Returns:
-        List of result dicts from cache
-    """
-    results = []
-    provider_cache_service = get_provider_cache_service()
-
-    if not provider_cache_service:
-        return results
-
-    try:
-        for search_query in search_queries:
-            cached_releases = provider_cache_service.search(search_query, limit=100)
-            if not cached_releases:
-                continue
-
-            logger.info(f"Found {len(cached_releases)} results from provider cache for '{search_query}'")
-
-            for r in cached_releases:
-                download_url = r.get("download_url")
-                if not download_url or download_url in seen_urls:
-                    continue
-
-                seen_urls.add(download_url)
-
-                # Handle raw_metadata being a JSON string
-                raw_meta = r.get("raw_metadata") or {}
-                if isinstance(raw_meta, str):
-                    try:
-                        raw_meta = json.loads(raw_meta)
-                    except (json.JSONDecodeError, TypeError):
-                        raw_meta = {}
-
-                # Parse publication date
-                pub_date = r.get("upload_date") or r.get("publication_date")
-                if isinstance(pub_date, str):
-                    try:
-                        pub_date = datetime.fromisoformat(pub_date.replace("Z", "+00:00"))
-                    except (ValueError, TypeError):
-                        pub_date = None
-
-                results.append(
-                    {
-                        "title": r.get("title"),
-                        "url": download_url,
-                        "provider": r.get("provider_name"),
-                        "publication_date": pub_date,
-                        "metadata": raw_meta,
-                        "from_cache": True,
-                    }
-                )
-    except Exception as e:
-        logger.warning(f"Provider cache search failed, falling back to direct providers: {e}")
-
-    return results
 
 
 def fetch_from_providers(

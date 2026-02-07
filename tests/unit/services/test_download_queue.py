@@ -27,10 +27,15 @@ class MockDownloadClient(DownloadClient):
     def __init__(self):
         super().__init__({"name": "MockClient", "type": "download_client"})
         self.submitted = []
+        self.submitted_content = []
 
     def submit(self, nzb_url, title=None, category=None):
         self.submitted.append({"url": nzb_url, "title": title, "category": category})
         return f"mock_job_{len(self.submitted)}"
+
+    def submit_content(self, nzb_content, title=None, category=None):
+        self.submitted_content.append({"content": nzb_content, "title": title, "category": category})
+        return f"mock_content_job_{len(self.submitted_content)}"
 
     def get_status(self, job_id):
         return {"status": "completed", "progress": 100}

@@ -1828,84 +1828,20 @@
 
             <!-- Cache Management -->
             <div id="cache-section" class="settings-section">
-              <h3>Cache Management</h3>
+              <h3>NZB Cache</h3>
               <p class="text-base text-muted mb-15">
-                Manage search cache to reduce API calls and improve performance
+                Caches NZB file content to avoid repeated provider hits on retries
               </p>
 
               <div class="settings-field">
                 <label>
                   <input type="checkbox" id="cache-enabled" />
-                  <span>Enable Search Cache</span>
+                  <span>Enable NZB Content Caching</span>
                 </label>
                 <p class="text-sm text-hint mt-5">
-                  Cache search results locally to reduce API calls and improve search performance
-                  (95%+ reduction in provider requests)
+                  When enabled, NZB files are fetched once and cached locally.
+                  Download retries use cached content without hitting the provider again.
                 </p>
-              </div>
-
-              <div class="settings-field">
-                <label for="cache-retention">Cache Retention (days):</label>
-                <p class="text-sm text-hint mb-10">
-                  How long to keep cached releases before they expire
-                </p>
-                <input
-                  type="number"
-                  id="cache-retention"
-                  min="1"
-                  max="365"
-                  placeholder="90"
-                  style="width: 150px"
-                />
-              </div>
-
-              <div class="settings-field">
-                <label for="cache-sync-interval">Sync Interval (minutes):</label>
-                <p class="text-sm text-hint mb-10">
-                  How often to sync latest releases from providers (recommended: 30-60 minutes)
-                </p>
-                <input
-                  type="number"
-                  id="cache-sync-interval"
-                  min="5"
-                  max="1440"
-                  placeholder="30"
-                  style="width: 150px"
-                />
-              </div>
-
-              <div class="settings-field">
-                <label>Cache Statistics:</label>
-                <div
-                  id="cache-stats-display"
-                  style="
-                    background: var(--card-bg);
-                    border: 1px solid var(--border-color);
-                    border-radius: 8px;
-                    padding: 15px;
-                    margin-top: 10px;
-                  "
-                >
-                  <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px">
-                    <div>
-                      <div class="text-sm text-hint">Total Releases</div>
-                      <div id="cache-total-releases" class="text-lg" style="margin-top: 5px">-</div>
-                    </div>
-                    <div>
-                      <div class="text-sm text-hint">Last Sync</div>
-                      <div id="cache-last-sync" class="text-lg" style="margin-top: 5px">-</div>
-                    </div>
-                  </div>
-                  <div style="margin-top: 15px; text-align: center">
-                    <a
-                      href="javascript:void(0)"
-                      onclick="loadCacheStats()"
-                      style="color: var(--primary-color); text-decoration: none; font-size: 14px"
-                    >
-                      🔄 Refresh Stats
-                    </a>
-                  </div>
-                </div>
               </div>
 
               <div style="margin-top: 30px">
@@ -1920,11 +1856,9 @@
               </div>
 
               <div class="settings-field">
-                <label>Purge Search Cache:</label>
+                <label>Purge NZB Cache:</label>
                 <p class="text-sm text-hint mb-10">
-                  Clear all cached search results. Next searches will fetch fresh data from
-                  providers.
-                  <span id="cache-stats-text" class="text-hint"></span>
+                  Clear all cached NZB content. Future downloads will re-fetch from providers.
                 </p>
                 <button
                   onclick="openPurgeCacheModal()"

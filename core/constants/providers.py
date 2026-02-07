@@ -72,3 +72,11 @@ SECONDS_PER_HOUR = 3600
 
 SECONDS_PER_DAY = 86400
 """Seconds in one day (24 hours)"""
+
+# Upload date parsing formats (try in order)
+UPLOAD_DATE_FORMATS = [
+    "%a, %d %b %Y %H:%M:%S %z",  # RFC 2822: "Mon, 20 Jan 2025 12:34:56 +0000"
+    "%Y-%m-%dT%H:%M:%S%z",  # ISO 8601 with timezone: "2025-01-20T12:34:56+0000"
+    "%Y-%m-%d %H:%M:%S",  # Simple format: "2025-01-20 12:34:56"
+]
+"""Date formats to try when parsing upload_date from provider responses"""

@@ -48,19 +48,7 @@ def mock_providers():
 
 
 @pytest.fixture
-def mock_cache_service():
-    """Create mock cache service"""
-    cache = MagicMock()
-    cache.search_cached_releases.return_value = []
-    cache.get_cache_status.return_value = {
-        "total_releases": 1000,
-        "providers": [{"name": "provider1", "releases": 1000}],
-    }
-    return cache
-
-
-@pytest.fixture
-def test_app(test_db, mock_providers, mock_cache_service):
+def test_app(test_db, mock_providers):
     """Create test FastAPI app with search router"""
     engine, session_factory = test_db
     mock_title_matcher = MagicMock()
@@ -69,7 +57,6 @@ def test_app(test_db, mock_providers, mock_cache_service):
         metadata_providers=[],
         title_matcher=mock_title_matcher,
         session_factory=session_factory,
-        provider_cache_service=mock_cache_service,
     )
 
     app = FastAPI(title="Test App")
@@ -151,12 +138,8 @@ class TestSearchPeriodicalProviders:
 class TestGetPeriodicalEditions:
     """Test GET /api/periodicals/editions/{magazine_title} endpoint"""
 
-    def test_get_periodical_editions_success(self, test_client, mock_cache_service):
+    def test_get_periodical_editions_success(self, test_client):
         """Test getting periodical editions"""
-        mock_cache_service.get_editions_for_title.return_value = [
-            {"title": "National Geographic US", "country": "US"},
-            {"title": "National Geographic UK", "country": "UK"},
-        ]
         response = test_client.get("/api/periodicals/editions/National+Geographic")
         assert response.status_code == 200
         data = response.json()
@@ -169,25 +152,3 @@ class TestGetPeriodicalEditions:
         # GET endpoint requires title in path, so 404 is expected
         response = test_client.get("/api/periodicals/editions/")
         assert response.status_code in [404, 422]
-
-
-class TestGetProviderCacheStatus:
-    """Test GET /api/indexer-cache/status endpoint"""
-
-    def test_get_cache_status_success(self, test_client):
-        """Test getting provider cache status"""
-        response = test_client.get("/api/indexer-cache/status")
-        assert response.status_code == 200
-        data = response.json()
-        # Check for actual response fields
-        assert "enabled" in data
-        assert isinstance(data, dict)
-
-    def test_get_cache_status_structure(self, test_client):
-        """Test cache status response structure"""
-        response = test_client.get("/api/indexer-cache/status")
-        assert response.status_code == 200
-        data = response.json()
-        # Verify actual response structure
-        assert "enabled" in data
-        assert isinstance(data["enabled"], bool)

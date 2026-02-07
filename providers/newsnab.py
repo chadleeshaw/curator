@@ -12,7 +12,6 @@ from typing import Any, Dict, List, Optional, Sequence
 
 import requests
 
-from core.constants.cache import UPLOAD_DATE_FORMATS
 from core.constants.providers import (
     NEWSNAB_CATEGORY_MAP,
     NEWSNAB_DEFAULT_API_URL,
@@ -23,6 +22,7 @@ from core.constants.providers import (
     NEWSNAB_REQUEST_TIMEOUT,
     SECONDS_PER_DAY,
     SECONDS_PER_HOUR,
+    UPLOAD_DATE_FORMATS,
     SECONDS_PER_MINUTE,
 )
 from core.interfaces import SearchProvider, SearchResult

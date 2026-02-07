@@ -376,3 +376,95 @@ def test_nzbget_api_call_with_error_response():
         result = client._api_call("invalid_method", [])
 
         assert result == {}  # Returns empty dict on error
+
+
+# --- submit_content tests ---
+
+
+def test_nzbget_submit_content_success():
+    """Test submitting NZB content directly to NZBGet."""
+    config = {
+        "name": "nzbget",
+        "type": "download_client",
+        "api_url": "http://localhost:6789",
+        "username": "nzbget",
+        "password": "test-password",
+    }
+    client = NZBGetClient(config)
+    nzb_content = '<?xml version="1.0"?><nzb><file></file></nzb>'
+
+    with patch.object(client, "_api_call") as mock_api:
+        mock_api.return_value = 12345  # NZBGet returns NZBID as integer
+
+        job_id = client.submit_content(nzb_content=nzb_content, title="Test Magazine", category="books")
+
+        assert job_id == "12345"
+        mock_api.assert_called_once()
+        # Verify base64-encoded content was passed
+        call_params = mock_api.call_args[0][1]
+        assert call_params[0] == "Test Magazine.nzb"  # NZBFilename
+        assert call_params[2] == "books"  # Category
+
+        # Verify content is valid base64
+        import base64
+
+        decoded = base64.b64decode(call_params[1]).decode("utf-8")
+        assert decoded == nzb_content
+
+
+def test_nzbget_submit_content_failure():
+    """Test handling failed NZB content submission."""
+    config = {
+        "name": "nzbget",
+        "type": "download_client",
+        "api_url": "http://localhost:6789",
+        "username": "nzbget",
+        "password": "test-password",
+    }
+    client = NZBGetClient(config)
+
+    with patch.object(client, "_api_call") as mock_api:
+        mock_api.return_value = 0  # NZBGet returns 0 on failure
+
+        job_id = client.submit_content(nzb_content="<nzb/>", title="Bad NZB")
+        assert job_id is None
+
+
+def test_nzbget_submit_content_exception():
+    """Test NZB content submission handles exceptions gracefully."""
+    config = {
+        "name": "nzbget",
+        "type": "download_client",
+        "api_url": "http://localhost:6789",
+        "username": "nzbget",
+        "password": "test-password",
+    }
+    client = NZBGetClient(config)
+
+    with patch.object(client, "_api_call") as mock_api:
+        mock_api.side_effect = Exception("API error")
+
+        job_id = client.submit_content(nzb_content="<nzb/>", title="Test")
+        assert job_id is None
+
+
+def test_nzbget_submit_content_title_sanitization():
+    """Test NZB content submission sanitizes titles."""
+    config = {
+        "name": "nzbget",
+        "type": "download_client",
+        "api_url": "http://localhost:6789",
+        "username": "nzbget",
+        "password": "test-password",
+    }
+    client = NZBGetClient(config)
+
+    with patch.object(client, "_api_call") as mock_api:
+        mock_api.return_value = 999
+
+        client.submit_content(nzb_content="<nzb/>", title="Bad/Path\\Name")
+
+        call_params = mock_api.call_args[0][1]
+        filename = call_params[0]
+        assert "/" not in filename.replace(".nzb", "")
+        assert "\\" not in filename

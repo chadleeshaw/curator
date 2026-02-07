@@ -48,6 +48,9 @@ from .text import clean_title, normalize_text
 # Date utilities
 from .date import dates_are_fuzzy_match, get_season_for_month
 
+# Rate limiting utilities
+from .rate_limiter import ProviderRateLimiter
+
 # Note: parse_month and parse_multi_month moved to core.parsers.date
 
 __all__ = [
@@ -75,6 +78,8 @@ __all__ = [
     # PDF utilities
     "extract_cover_from_pdf",
     "validate_pdf",
+    # Rate limiting utilities
+    "ProviderRateLimiter",
     # Text processing utilities
     "clean_title",
     "normalize_text",
