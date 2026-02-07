@@ -348,8 +348,7 @@ class DownloadMonitor:
         for submission in pending:
             if not submission.job_id:
                 logger.warning(
-                    f"[DownloadMonitor] Marking submission {submission.id} as failed - "
-                    f"no job_id (stuck in pending)"
+                    f"[DownloadMonitor] Marking submission {submission.id} as failed - " f"no job_id (stuck in pending)"
                 )
                 submission.status = DownloadSubmission.StatusEnum.FAILED
                 submission.last_error = "No job ID - download client never accepted this submission"
