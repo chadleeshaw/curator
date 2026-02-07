@@ -75,21 +75,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   updateHeaderStats();
 
   // Close delete modal when clicking outside of it
+  // Track mousedown target to prevent text selection drag from closing modal
   const modal = document.getElementById('delete-modal');
   if (modal) {
+    let mouseDownTarget = null;
+    modal.addEventListener('mousedown', (event) => {
+      mouseDownTarget = event.target;
+    });
     modal.addEventListener('click', (event) => {
-      if (event.target === modal) {
+      if (event.target === modal && mouseDownTarget === modal) {
         library.closeDeleteModal();
       }
+      mouseDownTarget = null;
     });
-
-    // Prevent modal content clicks from propagating to modal background
-    const modalContent = modal.querySelector('.modal-content');
-    if (modalContent) {
-      modalContent.addEventListener('click', (event) => {
-        event.stopPropagation();
-      });
-    }
   }
 
   console.log('[Main] Application initialized successfully');

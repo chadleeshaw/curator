@@ -746,8 +746,13 @@ export class OCRQueueManager {
     buttonContainer.appendChild(deleteBtn);
     modal.appendChild(modalContent);
 
+    let deleteMouseDown = null;
+    modal.addEventListener('mousedown', (e) => {
+      deleteMouseDown = e.target;
+    });
     modal.addEventListener('click', (e) => {
-      if (e.target === modal) modal.remove();
+      if (e.target === modal && deleteMouseDown === modal) modal.remove();
+      deleteMouseDown = null;
     });
 
     document.body.appendChild(modal);
@@ -841,9 +846,14 @@ export class OCRQueueManager {
     const closeBtn = modal.querySelector('#close-error-modal');
     closeBtn.addEventListener('click', () => modal.remove());
 
-    // Close modal when clicking outside
+    // Close modal when clicking outside (track mousedown to prevent text selection closing modal)
+    let ocrMouseDown = null;
+    modal.onmousedown = (e) => {
+      ocrMouseDown = e.target;
+    };
     modal.onclick = (e) => {
-      if (e.target === modal) modal.remove();
+      if (e.target === modal && ocrMouseDown === modal) modal.remove();
+      ocrMouseDown = null;
     };
 
     document.body.appendChild(modal);
@@ -1149,8 +1159,13 @@ export class OCRQueueManager {
       buttonContainer.appendChild(deleteBtn);
       modal.appendChild(modalContent);
 
+      let clearMouseDown = null;
+      modal.addEventListener('mousedown', (e) => {
+        clearMouseDown = e.target;
+      });
       modal.addEventListener('click', (e) => {
-        if (e.target === modal) modal.remove();
+        if (e.target === modal && clearMouseDown === modal) modal.remove();
+        clearMouseDown = null;
       });
 
       document.body.appendChild(modal);

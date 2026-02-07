@@ -200,9 +200,14 @@ export class SettingsManager {
       this.renderSearchProviders(config.config.search_providers);
     }
 
-    // Display download client config
+    // Display NZB download client config
     if (config.config?.download_client) {
       this.displayDownloadClient(config.config.download_client);
+    }
+
+    // Display Internet Archive client config
+    if (config.config?.download_clients?.internet_archive) {
+      this.displayIAClient(config.config.download_clients.internet_archive);
     }
 
     // Display storage settings
@@ -385,7 +390,7 @@ export class SettingsManager {
   }
 
   /**
-   * Display download client configuration
+   * Display NZB download client configuration (SABnzbd/NZBGet)
    */
   displayDownloadClient(clientConfig) {
     const typeSelect = document.getElementById('download-client-type');
@@ -394,14 +399,12 @@ export class SettingsManager {
     const apiKeyInput = document.getElementById('download-client-apikey');
     const defaultCategoryInput = document.getElementById('download-client-default-category');
     const remotePathInput = document.getElementById('download-client-remote-path');
-    const downloadsDirInput = document.getElementById('download-client-downloads-dir');
-    const maxConcurrentInput = document.getElementById('download-client-max-concurrent');
 
     const clientType = clientConfig.type || 'sabnzbd';
     if (typeSelect) typeSelect.value = clientType;
     if (nameInput) nameInput.value = clientConfig.name || '';
 
-    // NZB client fields (SABnzbd/NZBGet)
+    // NZB client fields
     if (urlInput) urlInput.value = clientConfig.api_url || '';
     if (apiKeyInput) {
       apiKeyInput.value = '';
@@ -410,13 +413,17 @@ export class SettingsManager {
     }
     if (defaultCategoryInput) defaultCategoryInput.value = clientConfig.default_category || '';
     if (remotePathInput) remotePathInput.value = clientConfig.remote_path || '';
+  }
 
-    // Internet Archive fields
-    if (downloadsDirInput) downloadsDirInput.value = clientConfig.downloads_dir || '';
-    if (maxConcurrentInput) maxConcurrentInput.value = clientConfig.max_concurrent || 3;
+  /**
+   * Display Internet Archive client configuration
+   */
+  displayIAClient(iaConfig) {
+    const downloadsDirInput = document.getElementById('ia-client-downloads-dir');
+    const maxConcurrentInput = document.getElementById('ia-client-max-concurrent');
 
-    // Trigger field visibility based on type
-    this.onDownloadClientTypeChange(clientType);
+    if (downloadsDirInput) downloadsDirInput.value = iaConfig.downloads_dir || './local/downloads';
+    if (maxConcurrentInput) maxConcurrentInput.value = iaConfig.max_concurrent || 3;
   }
 
   /**
@@ -696,34 +703,25 @@ export class SettingsManager {
       name,
     };
 
-    if (type === 'internet_archive') {
-      // Internet Archive specific fields
-      const downloadsDir = document.getElementById('download-client-downloads-dir')?.value;
-      const maxConcurrent = document.getElementById('download-client-max-concurrent')?.value;
+    // NZB client fields (SABnzbd/NZBGet)
+    const url = document.getElementById('download-client-url')?.value;
+    const apiKeyInput = document.getElementById('download-client-apikey');
+    const apiKey = apiKeyInput?.value;
+    const defaultCategory = document.getElementById('download-client-default-category')?.value;
+    const remotePath = document.getElementById('download-client-remote-path')?.value;
 
-      if (downloadsDir) downloadClientConfig.downloads_dir = downloadsDir;
-      if (maxConcurrent) downloadClientConfig.max_concurrent = parseInt(maxConcurrent, 10);
-    } else {
-      // NZB client fields (SABnzbd/NZBGet)
-      const url = document.getElementById('download-client-url')?.value;
-      const apiKeyInput = document.getElementById('download-client-apikey');
-      const apiKey = apiKeyInput?.value;
-      const defaultCategory = document.getElementById('download-client-default-category')?.value;
-      const remotePath = document.getElementById('download-client-remote-path')?.value;
+    downloadClientConfig.api_url = url;
 
-      downloadClientConfig.api_url = url;
-
-      // Only include api_key if user entered a new one
-      if (apiKey) {
-        downloadClientConfig.api_key = apiKey;
-      } else if (this.currentConfig?.config?.download_client?.api_key) {
-        // Preserve existing key from cached config
-        downloadClientConfig.api_key = this.currentConfig.config.download_client.api_key;
-      }
-
-      if (defaultCategory) downloadClientConfig.default_category = defaultCategory;
-      if (remotePath) downloadClientConfig.remote_path = remotePath;
+    // Only include api_key if user entered a new one
+    if (apiKey) {
+      downloadClientConfig.api_key = apiKey;
+    } else if (this.currentConfig?.config?.download_client?.api_key) {
+      // Preserve existing key from cached config
+      downloadClientConfig.api_key = this.currentConfig.config.download_client.api_key;
     }
+
+    if (defaultCategory) downloadClientConfig.default_category = defaultCategory;
+    if (remotePath) downloadClientConfig.remote_path = remotePath;
 
     try {
       const data = await APIHelper.executeWithErrorHandling(
@@ -738,7 +736,7 @@ export class SettingsManager {
       );
 
       if (data.success) {
-        UIUtils.showStatus('settings-status', 'Download client settings saved', 'success');
+        UIUtils.showStatus('settings-status', 'NZB download client settings saved', 'success');
         setTimeout(() => UIUtils.hideStatus('settings-status'), 3000);
       } else {
         UIUtils.showStatus('settings-status', data.message || 'Error saving settings', 'error');
@@ -750,40 +748,70 @@ export class SettingsManager {
   }
 
   /**
+   * Save Internet Archive client settings
+   */
+  async saveIAClientSettings() {
+    const downloadsDir = document.getElementById('ia-client-downloads-dir')?.value;
+    const maxConcurrent = document.getElementById('ia-client-max-concurrent')?.value;
+
+    const iaConfig = {
+      type: 'internet_archive',
+      name: 'HTTP',
+      downloads_dir: downloadsDir || './local/downloads',
+      max_concurrent: maxConcurrent ? parseInt(maxConcurrent, 10) : 3,
+    };
+
+    try {
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.post('/api/config', {
+            download_clients: {
+              internet_archive: iaConfig,
+            },
+          });
+          return await response.json();
+        },
+        'Settings',
+        'settings-status'
+      );
+
+      if (data.success) {
+        UIUtils.showStatus('settings-status', 'Internet Archive settings saved', 'success');
+        setTimeout(() => UIUtils.hideStatus('settings-status'), 3000);
+      } else {
+        UIUtils.showStatus('settings-status', data.message || 'Error saving settings', 'error');
+      }
+    } catch (error) {
+      console.error('Error saving Internet Archive settings:', error);
+      UIUtils.showStatus('settings-status', `Error: ${error.message}`, 'error');
+    }
+  }
+
+  /**
    * Test connection to download client
    */
   async testDownloadClientConnection() {
     try {
       const type = document.getElementById('download-client-type')?.value;
-      let testPayload = { type };
 
-      if (type === 'internet_archive') {
-        // Internet Archive just needs to verify downloads directory
-        const downloadsDir = document.getElementById('download-client-downloads-dir')?.value;
-        testPayload.downloads_dir = downloadsDir || './local/downloads';
-      } else {
-        // NZB clients need URL and API key
-        const url = document.getElementById('download-client-url')?.value;
-        const apiKeyInput = document.getElementById('download-client-apikey');
-        const apiKey = apiKeyInput?.value || apiKeyInput?.dataset.originalKey;
+      // NZB clients need URL and API key
+      const url = document.getElementById('download-client-url')?.value;
+      const apiKeyInput = document.getElementById('download-client-apikey');
+      const apiKey = apiKeyInput?.value || apiKeyInput?.dataset.originalKey;
 
-        if (!url) {
-          UIUtils.showStatus('settings-status', 'Please enter an API URL', 'error');
-          return;
-        }
-
-        if (!apiKey) {
-          UIUtils.showStatus('settings-status', 'Please enter an API key', 'error');
-          return;
-        }
-
-        testPayload.api_url = url;
-        testPayload.api_key = apiKey;
+      if (!url) {
+        UIUtils.showStatus('settings-status', 'Please enter an API URL', 'error');
+        return;
       }
 
-      // Show testing status
-      const typeName = type === 'internet_archive' ? 'Internet Archive' : type;
-      UIUtils.showStatus('settings-status', `Testing connection to ${typeName}...`, 'info');
+      if (!apiKey) {
+        UIUtils.showStatus('settings-status', 'Please enter an API key', 'error');
+        return;
+      }
+
+      const testPayload = { type, api_url: url, api_key: apiKey };
+
+      UIUtils.showStatus('settings-status', `Testing connection to ${type}...`, 'info');
 
       const data = await APIHelper.executeWithErrorHandling(
         async () => {
@@ -803,6 +831,40 @@ export class SettingsManager {
       }
     } catch (error) {
       console.error('Failed to test download client connection:', error);
+      UIUtils.showStatus('settings-status', 'Error: ' + error.message, 'error');
+    }
+  }
+
+  /**
+   * Test Internet Archive client connection
+   */
+  async testIAClientConnection() {
+    try {
+      const downloadsDir = document.getElementById('ia-client-downloads-dir')?.value;
+      const testPayload = {
+        type: 'internet_archive',
+        downloads_dir: downloadsDir || './local/downloads',
+      };
+
+      UIUtils.showStatus('settings-status', 'Testing Internet Archive client...', 'info');
+
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.post('/api/config/test-download-client', testPayload);
+          return await response.json();
+        },
+        'Settings',
+        'settings-status'
+      );
+
+      if (data.success) {
+        UIUtils.showStatus('settings-status', 'Internet Archive client OK!', 'success');
+        setTimeout(() => UIUtils.hideStatus('settings-status'), 5000);
+      } else {
+        UIUtils.showStatus('settings-status', data.message || 'Connection test failed', 'error');
+      }
+    } catch (error) {
+      console.error('Failed to test IA client connection:', error);
       UIUtils.showStatus('settings-status', 'Error: ' + error.message, 'error');
     }
   }
@@ -2166,25 +2228,6 @@ export class SettingsManager {
   }
 
   /**
-   * Handle download client type selection change
-   * Shows/hides appropriate fields based on client type
-   */
-  onDownloadClientTypeChange(type) {
-    const nzbFields = document.getElementById('download-client-nzb-fields');
-    const iaFields = document.getElementById('download-client-ia-fields');
-
-    if (!nzbFields || !iaFields) return;
-
-    if (type === 'internet_archive') {
-      nzbFields.classList.add('hidden');
-      iaFields.classList.remove('hidden');
-    } else {
-      nzbFields.classList.remove('hidden');
-      iaFields.classList.add('hidden');
-    }
-  }
-
-  /**
    * Handle provider type selection change
    * Shows/hides appropriate fields based on provider type
    */
@@ -2215,8 +2258,10 @@ export const settings = new SettingsManager();
 // Expose functions globally for onclick handlers
 window.saveProviderSettings = () => settings.saveProviderSettings();
 window.saveDownloadClientSettings = () => settings.saveDownloadClientSettings();
+window.saveIAClientSettings = () => settings.saveIAClientSettings();
 window.testProviderConnection = (index) => settings.testProviderConnection(index);
 window.testDownloadClientConnection = () => settings.testDownloadClientConnection();
+window.testIAClientConnection = () => settings.testIAClientConnection();
 window.editSearchProvider = (index) => settings.editSearchProvider(index);
 window.removeSearchProvider = (index) => settings.removeSearchProvider(index);
 window.addSearchProvider = () => settings.addSearchProvider();
@@ -2249,5 +2294,4 @@ window.saveOCRWorkerSettings = () => settings.saveOCRWorkerSettings();
 window.saveImportSettings = () => settings.saveImportSettings();
 window.handlePatternSelectChange = (context) => settings.handlePatternSelectChange(context);
 window.saveCacheSettings = () => settings.saveCacheSettings();
-window.onDownloadClientTypeChange = (type) => settings.onDownloadClientTypeChange(type);
 window.onProviderTypeChange = (type) => settings.onProviderTypeChange(type);

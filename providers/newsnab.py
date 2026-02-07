@@ -631,6 +631,13 @@ class NewsnabProvider(SearchProvider):
                     "status_code": 404,
                 }
 
+            if response.status_code == 410:
+                return {
+                    "success": False,
+                    "message": "Request rejected (410 Gone) - indexer may be down, account suspended, or API key revoked",
+                    "status_code": 410,
+                }
+
             response.raise_for_status()
 
             # Check if response is valid XML

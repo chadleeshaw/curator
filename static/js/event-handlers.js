@@ -101,14 +101,22 @@ export class EventHandlers {
 
   /**
    * Modal-specific handlers
-   * Handles modal background clicks and close button clicks
+   * Handles modal background clicks and close button clicks.
+   * Uses mousedown+click tracking to prevent text selection from closing modals.
    */
   static initModalHandlers() {
-    // Close modal when clicking background (outside modal content)
+    // Track where mousedown started to avoid closing on text selection drag
+    let modalMouseDownTarget = null;
+    document.addEventListener('mousedown', (e) => {
+      modalMouseDownTarget = e.target;
+    });
+
+    // Close modal only when both mousedown and click land on the modal backdrop
     document.addEventListener('click', (e) => {
-      if (e.target.classList.contains('modal')) {
+      if (e.target.classList.contains('modal') && modalMouseDownTarget === e.target) {
         e.target.classList.add(CSS_CLASSES.HIDDEN);
       }
+      modalMouseDownTarget = null;
     });
 
     // Close button handlers for all modals

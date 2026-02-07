@@ -82,6 +82,61 @@ def _deep_merge(base: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
+def _resolve_masked_provider_key(provider_config: Dict[str, Any]) -> Dict[str, Any]:
+    """Resolve masked API key (***) from saved config for provider testing.
+
+    When the UI displays provider API keys as '***', test requests may send
+    the masked value. This resolves the real key from the saved config by
+    matching the provider's API URL.
+
+    Args:
+        provider_config: Provider config that may contain a masked api_key
+
+    Returns:
+        Provider config with real api_key if it was masked
+    """
+    if provider_config.get("api_key") != "***" or not _config_loader:
+        return provider_config
+
+    # Look up real key from saved config by matching api_url
+    resolved = provider_config.copy()
+    saved_config = _config_loader.get_all_config()
+    test_url = provider_config.get("api_url", "")
+
+    for saved_provider in saved_config.get("search_providers", []):
+        if saved_provider.get("api_url") == test_url and saved_provider.get("api_key"):
+            resolved["api_key"] = saved_provider["api_key"]
+            logger.debug(f"Resolved masked API key for provider: {test_url}")
+            break
+    else:
+        logger.warning(f"Could not resolve masked API key for provider URL: {test_url}")
+
+    return resolved
+
+
+def _resolve_masked_client_key(client_config: Dict[str, Any]) -> Dict[str, Any]:
+    """Resolve masked API key (***) from saved config for download client testing.
+
+    Args:
+        client_config: Client config that may contain a masked api_key
+
+    Returns:
+        Client config with real api_key if it was masked
+    """
+    if client_config.get("api_key") != "***" or not _config_loader:
+        return client_config
+
+    resolved = client_config.copy()
+    saved_config = _config_loader.get_all_config()
+    saved_client = saved_config.get("download_client", {})
+
+    if saved_client.get("api_key"):
+        resolved["api_key"] = saved_client["api_key"]
+        logger.debug("Resolved masked API key for download client")
+
+    return resolved
+
+
 @router.get("")
 @handle_api_errors("Get config", logger)
 async def get_config():
@@ -216,6 +271,9 @@ async def test_provider_connection(provider_config: Dict[str, Any]):
         if not provider_type:
             raise HTTPException(status_code=400, detail="Provider type is required")
 
+        # Resolve masked API key from saved config
+        provider_config = _resolve_masked_provider_key(provider_config)
+
         # Import provider classes
         if provider_type == "newsnab":
             from providers.newsnab import NewsnabProvider
@@ -258,6 +316,9 @@ async def test_download_client_connection(client_config: Dict[str, Any]):
         client_type = client_config.get("type")
         if not client_type:
             raise HTTPException(status_code=400, detail="Download client type is required")
+
+        # Resolve masked API key from saved config
+        client_config = _resolve_masked_client_key(client_config)
 
         # Import client classes
         if client_type == "sabnzbd":

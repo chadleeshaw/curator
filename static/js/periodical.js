@@ -101,11 +101,17 @@ function closeDeleteModal() {
 }
 
 // Close modal when clicking outside of it
+// Track mousedown target to prevent text selection drag from closing modal
+let deleteModalMouseDown = null;
+document.addEventListener('mousedown', (event) => {
+  deleteModalMouseDown = event.target;
+});
 document.addEventListener('click', (event) => {
   const modal = document.getElementById('delete-modal');
-  if (modal && event.target === modal) {
+  if (modal && event.target === modal && deleteModalMouseDown === modal) {
     closeDeleteModal();
   }
+  deleteModalMouseDown = null;
 });
 
 function renderIssues() {
@@ -801,11 +807,17 @@ function showNotification(message, type) {
 }
 
 // Close metadata modal when clicking outside
+// Track mousedown target to prevent text selection drag from closing modal
+let metadataModalMouseDown = null;
+document.addEventListener('mousedown', (event) => {
+  metadataModalMouseDown = event.target;
+});
 document.addEventListener('click', (event) => {
   const modal = document.getElementById('metadata-modal');
-  if (event.target === modal) {
+  if (event.target === modal && metadataModalMouseDown === modal) {
     closeMetadataModal();
   }
+  metadataModalMouseDown = null;
 });
 
 // Delete an issue - opens the modal

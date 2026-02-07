@@ -337,12 +337,17 @@ export class UIUtils {
         resolve(false);
       };
 
-      // Close on background click
+      // Close on background click (track mousedown to prevent text selection closing modal)
+      let confirmMouseDown = null;
+      modal.onmousedown = (e) => {
+        confirmMouseDown = e.target;
+      };
       modal.onclick = (e) => {
-        if (e.target === modal) {
+        if (e.target === modal && confirmMouseDown === modal) {
           cleanup();
           resolve(false);
         }
+        confirmMouseDown = null;
       };
     });
   }

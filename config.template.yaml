@@ -88,9 +88,11 @@ search_providers:
 # ==============================================================================
 # Download Clients
 # ==============================================================================
-# Primary download client for NZB downloads.
-# Internet Archive downloads use their own built-in client automatically.
+# Downloads are automatically routed based on provider type:
+# - Newsnab/RSS providers → NZB client (SABnzbd or NZBGet) configured below
+# - Internet Archive providers → built-in HTTP client configured in download_clients
 
+# NZB download client (SABnzbd/NZBGet) for Newsnab and RSS downloads
 download_client:
   type: sabnzbd
   name: SABnzbd
@@ -103,12 +105,8 @@ download_client:
   # Example: SABnzbd saves to /downloads/Books/file.pdf, Curator sees /app/local/downloads/Books/file.pdf
   #   remote_path: /downloads/
 
-# Additional download clients (optional)
-# The system automatically routes downloads to the appropriate client:
-# - internet_archive provider results → Internet Archive client (built-in)
-# - newsnab/rss provider results → SABnzbd/NZBGet (configured above)
-#
-# To use Internet Archive downloads, add the IA client:
+# Internet Archive HTTP client (used automatically for IA provider downloads)
+# This is a built-in HTTP download client — no external software needed.
 download_clients:
   internet_archive:
     type: internet_archive
