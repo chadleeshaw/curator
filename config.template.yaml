@@ -97,6 +97,11 @@ download_client:
   api_url: http://localhost:8080
   api_key: your-sabnzbd-api-key
   default_category: books
+  # remote_path: /downloads/  # Path prefix as seen by the download client.
+  # Set this when the client runs in a different container with different mount points.
+  # Client paths starting with this prefix are remapped to storage.download_dir.
+  # Example: SABnzbd saves to /downloads/Books/file.pdf, Curator sees /app/local/downloads/Books/file.pdf
+  #   remote_path: /downloads/
 
 # Additional download clients (optional)
 # The system automatically routes downloads to the appropriate client:

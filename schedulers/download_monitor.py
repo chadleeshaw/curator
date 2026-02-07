@@ -38,6 +38,7 @@ class DownloadMonitor:
         session_factory: sessionmaker,
         downloads_dir: str,
         *,
+        remote_path: Optional[str] = None,
         import_callback: Optional[Callable] = None,
     ):
         """
@@ -48,12 +49,16 @@ class DownloadMonitor:
             file_importer: FileImporter instance for processing completed downloads
             session_factory: SQLAlchemy session factory
             downloads_dir: Path to downloads folder to scan
+            remote_path: Path prefix as seen by the download client (e.g., "/downloads/").
+                When set, client paths starting with this prefix are remapped to downloads_dir.
+                Useful when the client runs in a different container with different mount points.
             import_callback: Optional callback to run after importing (e.g., for file processing)
         """
         self.download_manager = download_manager
         self.file_importer = file_importer
         self.session_factory = session_factory
         self.downloads_dir = Path(downloads_dir)
+        self.remote_path = remote_path.rstrip("/") + "/" if remote_path else None
         self.import_callback = import_callback
         self.last_run_time = None
         self.next_run_time = None
@@ -154,6 +159,28 @@ class DownloadMonitor:
         finally:
             session.close()
 
+    def _remap_client_path(self, file_path: str) -> str:
+        """
+        Remap a download client path to the local filesystem.
+
+        When the download client runs in a different container, its paths
+        (e.g., "/downloads/Books/file.pdf") don't match Curator's mount
+        (e.g., "/app/local/downloads/Books/file.pdf"). This method replaces
+        the client's remote_path prefix with the local downloads_dir.
+
+        Args:
+            file_path: File path as reported by the download client
+
+        Returns:
+            Remapped path string, or original if no remapping applies
+        """
+        if self.remote_path and file_path.startswith(self.remote_path):
+            relative = file_path[len(self.remote_path) :]
+            remapped = str(self.downloads_dir / relative)
+            logger.debug(f"Remapped client path: {file_path} -> {remapped}")
+            return remapped
+        return file_path
+
     def _find_file_in_downloads(self, file_path: str, max_depth: int = DOWNLOAD_FILE_SEARCH_DEPTH) -> Optional[Path]:
         """
         Find a file in the downloads folder, checking multiple possible locations.
@@ -168,6 +195,9 @@ class DownloadMonitor:
         """
         if not file_path:
             return None
+
+        # Remap client path if remote_path is configured
+        file_path = self._remap_client_path(file_path)
 
         file_path_obj = Path(file_path)
         filename = file_path_obj.name

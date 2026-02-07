@@ -617,13 +617,26 @@ def _initialize_background_tasks() -> None:
     """Initialize background task handlers (not the scheduler itself)."""
     # Download monitor
     if app_state.download_manager:
+        # Get remote_path from download client config for path remapping
+        # This maps the client's path prefix to Curator's local downloads_dir
+        remote_path = None
+        try:
+            client_cfg = app_state.config_loader.get_download_client()
+            remote_path = client_cfg.get("remote_path")
+        except ValueError:
+            pass  # No download client configured
+
         app_state.download_monitor_task = DownloadMonitor(
             download_manager=app_state.download_manager,
             file_importer=app_state.file_importer,
             session_factory=app_state.session_factory,
             downloads_dir=app_state.storage_config.get("download_dir", "./downloads"),
+            remote_path=remote_path,
         )
-        logger.info("Download monitor task initialized")
+        if remote_path:
+            logger.info(f"Download monitor task initialized (remote_path: {remote_path})")
+        else:
+            logger.info("Download monitor task initialized")
 
     # Cover cleanup
     app_state.cover_cleanup_task = CoverCleanup(
