@@ -383,9 +383,7 @@ class DownloadManager:
         if submission:
             # First try by current_submission_id (most direct link)
             issue = (
-                session.query(DiscoveredIssue)
-                .filter(DiscoveredIssue.current_submission_id == submission.id)
-                .first()
+                session.query(DiscoveredIssue).filter(DiscoveredIssue.current_submission_id == submission.id).first()
             )
 
         if not issue and tracking_id and fuzzy_group:
@@ -1280,9 +1278,7 @@ class DownloadManager:
                 submission.last_error = client_status.get("error", "Unknown error")
 
                 # Use per-issue max_retries from DiscoveredIssue
-                max_retries = self._get_max_retries_for_submission_context(
-                    session, submission=submission
-                )
+                max_retries = self._get_max_retries_for_submission_context(session, submission=submission)
 
                 logger.warning(
                     f"[DownloadManager] Download failed for {job_id}: {submission.last_error} "

@@ -188,6 +188,5 @@ class SubmissionService:
         session.commit()
 
         logger.info(
-            f"Reset submission {submission.id} for retry "
-            f"(attempt {submission.attempt_count}/{max_retries})"
+            f"Reset submission {submission.id} for retry " f"(attempt {submission.attempt_count}/{max_retries})"
         )
