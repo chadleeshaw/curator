@@ -501,51 +501,52 @@ export class DownloadsManager {
       const statusCounts = this.getStatusCounts(items);
       const waitInfo = this.getLongestWaitTime(items);
       const rateLimitedCount = waitInfo ? waitInfo.count : 0;
-      const nonRateLimitedPending = (statusCounts.pending || 0) - rateLimitedCount;
 
-      const statusBadges = Object.entries(statusCounts)
-        .filter(([, count]) => count > 0)
-        .map(([status, count]) => {
-          // Split pending into regular pending and rate-limited
-          if (status === 'pending' && rateLimitedCount > 0) {
-            let badges = '';
-            const waitLabel = waitInfo.waitTime ? `WAIT ${waitInfo.waitTime}s` : 'WAIT';
-            badges += `<span style="background: var(--status-pending); color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.85em; margin-right: 5px; font-weight: 600;">⏸ ${rateLimitedCount} ${waitLabel}</span>`;
-            if (nonRateLimitedPending > 0) {
-              const color = this.getStatusColor(status);
-              badges += `<span style="background: ${color}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.85em; margin-right: 5px;">${nonRateLimitedPending} pending</span>`;
-            }
-            return badges;
-          }
-          const color = this.getStatusColor(status);
-          return `<span style="background: ${color}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.85em; margin-right: 5px;">${count} ${status}</span>`;
-        })
-        .join('');
-
-      // Get aggregate progress for downloading items
+      // Build status indicators for the Status column (active/dynamic states)
       const downloadingItems = items.filter(item => item.status === 'downloading' && item.progress != null);
-      const progressInfo = downloadingItems.length > 0
-        ? (() => {
-            const avgProgress = Math.round(downloadingItems.reduce((sum, item) => sum + item.progress, 0) / downloadingItems.length);
-            return `<span style="background: linear-gradient(90deg, var(--status-downloading), var(--accent-color)); color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.85em; margin-right: 5px; white-space: nowrap;">${downloadingItems.length > 1 ? downloadingItems.length + ' ' : ''}⏳ ${avgProgress}%</span>`;
-          })()
-        : '';
+      let statusIndicators = '';
+      if (downloadingItems.length > 0) {
+        const avgProgress = Math.round(downloadingItems.reduce((sum, item) => sum + item.progress, 0) / downloadingItems.length);
+        statusIndicators += `<span style="background: linear-gradient(90deg, var(--status-downloading), var(--accent-color)); color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.85em; margin-right: 5px; white-space: nowrap;">${downloadingItems.length > 1 ? downloadingItems.length + ' ' : ''}⏳ ${avgProgress}%</span>`;
+      }
+      if (rateLimitedCount > 0) {
+        const waitLabel = waitInfo.waitTime ? `WAIT ${this.formatWaitTime(waitInfo.waitTime)}` : 'WAIT';
+        statusIndicators += `<span style="background: var(--status-pending); color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.85em; font-weight: 600;">⏸ ${rateLimitedCount} ${waitLabel}</span>`;
+      }
+
+      // Build uniform summary bubbles (fixed order, always shown)
+      const summaryStatuses = ['queued', 'pending', 'completed', 'failed', 'skipped'];
+      const summaryBubbles = summaryStatuses.map(status => {
+        const count = statusCounts[status] || 0;
+        const color = this.getStatusColor(status);
+        const padded = String(count).padStart(2, '0');
+        return `<span class="status-bubble" data-status="${status}" style="background: ${color}; color: white; min-width: 26px; display: inline-block; text-align: center; padding: 2px 6px; border-radius: 10px; font-size: 0.8em; cursor: pointer; font-weight: 600; font-variant-numeric: tabular-nums; opacity: ${count === 0 ? '0.3' : '1'};" title="${count} ${status}">${padded}</span>`;
+      }).join('');
 
       headerRow.innerHTML = `
-        <td colspan="2" style="padding: 12px; font-weight: bold;">
-          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-            <div>
-              <span style="font-size: 1.1em;">\uD83D\uDCF0 ${periodical}</span>
-              <span style="margin-left: 15px; font-size: 0.9em; color: var(--text-secondary);">${items.length} issues</span>
-            </div>
-            <div style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;">
-              ${progressInfo}
-              ${statusBadges}
-              <span style="font-size: 1.2em; color: var(--text-secondary);">\u2192</span>
-            </div>
+        <td style="padding: 12px; font-weight: bold;">
+          <span style="font-size: 1.1em;">\uD83D\uDCF0 ${periodical}</span>
+          <span style="margin-left: 15px; font-size: 0.9em; color: var(--text-secondary);">${items.length} issues</span>
+        </td>
+        <td style="padding: 12px; text-align: center; white-space: nowrap;">
+          ${statusIndicators}
+        </td>
+        <td style="padding: 12px; text-align: right; white-space: nowrap;">
+          <div style="display: inline-flex; gap: 4px; align-items: center;">
+            ${summaryBubbles}
+            <span style="font-size: 1.2em; color: var(--text-secondary); margin-left: 4px;">\u2192</span>
           </div>
         </td>
       `;
+
+      // Add click handlers for individual status bubbles
+      headerRow.querySelectorAll('.status-bubble').forEach(bubble => {
+        bubble.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.openManageQueueModal(periodical, items, bubble.dataset.status);
+        });
+      });
+
       tbody.appendChild(headerRow);
     });
   }
@@ -646,15 +647,11 @@ export class DownloadsManager {
    * @returns {string} CSS color value
    */
   getStatusColor(status) {
-    const colors = {
-      pending: '#6c757d',
-      downloading: '#0d6efd',
-      processing: '#0dcaf0',
-      completed: '#198754',
-      failed: '#dc3545',
-      paused: '#ffc107',
-    };
-    return colors[status] ?? '#6c757d';
+    const root = document.documentElement;
+    const cssVar = getComputedStyle(root).getPropertyValue(`--status-${status}`).trim();
+    if (cssVar) return cssVar;
+    // Fallback for unmapped statuses
+    return getComputedStyle(root).getPropertyValue('--status-pending').trim() || '#6c757d';
   }
 
   /**
@@ -692,10 +689,10 @@ export class DownloadsManager {
    * @param {DownloadItem[]} items - Array of download items
    * @returns {void}
    */
-  openManageQueueModal(periodical, items) {
+  openManageQueueModal(periodical, items, filter = 'all') {
     this.currentModalItems = items;
     this.currentModalPeriodical = periodical;
-    this.currentModalFilter = 'all';
+    this.currentModalFilter = filter;
 
     this.renderManageQueueModal();
   }
@@ -738,7 +735,7 @@ export class DownloadsManager {
          </div>`
       : '';
 
-    const filterButtons = ['all', 'pending', 'downloading', 'completed', 'failed', 'skipped']
+    const filterButtons = ['all', 'queued', 'pending', 'downloading', 'completed', 'failed', 'skipped']
       .map((f) => {
         const count = f === 'all' ? items.length : (statusCounts[f] ?? 0);
         const active = filter === f ? 'active' : '';

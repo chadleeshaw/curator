@@ -133,7 +133,7 @@ class QueueProcessor:
                     errors.append(f"Submission {submission.id}: Tracking not found")
                     continue
 
-                category = tracking.category or self.download_client.config.get("default_category", "Other")
+                category = tracking.download_category or self.download_client.config.get("default_category")
 
                 # Submit to download client (prefer cached NZB content)
                 logger.debug(
