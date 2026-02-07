@@ -499,9 +499,24 @@ export class DownloadsManager {
       headerRow.onclick = () => this.openManageQueueModal(periodical, items);
 
       const statusCounts = this.getStatusCounts(items);
+      const waitInfo = this.getLongestWaitTime(items);
+      const rateLimitedCount = waitInfo ? waitInfo.count : 0;
+      const nonRateLimitedPending = (statusCounts.pending || 0) - rateLimitedCount;
+
       const statusBadges = Object.entries(statusCounts)
         .filter(([, count]) => count > 0)
         .map(([status, count]) => {
+          // Split pending into regular pending and rate-limited
+          if (status === 'pending' && rateLimitedCount > 0) {
+            let badges = '';
+            const waitLabel = waitInfo.waitTime ? `WAIT ${waitInfo.waitTime}s` : 'WAIT';
+            badges += `<span style="background: var(--status-pending); color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.85em; margin-right: 5px; font-weight: 600;">⏸ ${rateLimitedCount} ${waitLabel}</span>`;
+            if (nonRateLimitedPending > 0) {
+              const color = this.getStatusColor(status);
+              badges += `<span style="background: ${color}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.85em; margin-right: 5px;">${nonRateLimitedPending} pending</span>`;
+            }
+            return badges;
+          }
           const color = this.getStatusColor(status);
           return `<span style="background: ${color}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.85em; margin-right: 5px;">${count} ${status}</span>`;
         })
@@ -514,16 +529,6 @@ export class DownloadsManager {
             const avgProgress = Math.round(downloadingItems.reduce((sum, item) => sum + item.progress, 0) / downloadingItems.length);
             return `<span style="background: linear-gradient(90deg, var(--status-downloading), var(--accent-color)); color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.85em; margin-right: 5px; white-space: nowrap;">${downloadingItems.length > 1 ? downloadingItems.length + ' ' : ''}⏳ ${avgProgress}%</span>`;
           })()
-        : '';
-
-      // Check for rate limiting and get longest wait time
-      const waitInfo = this.getLongestWaitTime(items);
-      const waitTimeNote = waitInfo
-        ? `<div style="font-size: 0.8em; color: var(--status-failed); margin-top: 4px; font-weight: 600; display: flex; align-items: center; gap: 5px;">
-             <span style="font-size: 1.2em;">⏱️</span>
-             <span>Longest wait: ${this.formatWaitTime(waitInfo.waitTime)}</span>
-             ${waitInfo.count > 1 ? `<span style="font-size: 0.85em; color: var(--text-secondary); font-weight: normal;">(${waitInfo.count} rate limited)</span>` : ''}
-           </div>`
         : '';
 
       headerRow.innerHTML = `
@@ -539,7 +544,6 @@ export class DownloadsManager {
               <span style="font-size: 1.2em; color: var(--text-secondary);">\u2192</span>
             </div>
           </div>
-          ${waitTimeNote}
         </td>
       `;
       tbody.appendChild(headerRow);
@@ -772,7 +776,14 @@ export class DownloadsManager {
           }
 
           // Build status info with error or extra_status
-          let statusInfo = `<span style="background: ${statusColor}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.85em;">${status}</span>`;
+          let statusInfo = '';
+          if (status === 'pending' && item.extra_status) {
+            const waitTime = this.parseWaitTime(item.extra_status);
+            const waitLabel = waitTime ? `WAIT ${waitTime} sec` : 'WAIT';
+            statusInfo = `<span style="background: var(--status-pending); color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.85em; font-weight: 600;">⏸ ${waitLabel}</span>`;
+          } else {
+            statusInfo = `<span style="background: ${statusColor}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.85em;">${status}</span>`;
+          }
 
           // Show progress bar for active downloads
           if (status === 'downloading' && item.progress != null) {
