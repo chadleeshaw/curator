@@ -790,6 +790,42 @@
   position: relative;
 }
 
+/* Flexbox layout for modals with header/body/footer structure.
+   Keeps header and footer pinned; only the body scrolls. */
+#manage-queue-modal .modal-content,
+#manage-failed-modal .modal-content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#manage-queue-modal-content,
+#manage-failed-modal-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+#manage-queue-modal .modal-header,
+#manage-failed-modal .modal-header {
+  flex-shrink: 0;
+}
+
+#manage-queue-modal .modal-body,
+#manage-failed-modal .modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin: 10px 0;
+}
+
+#manage-queue-modal .modal-footer,
+#manage-failed-modal .modal-footer {
+  flex-shrink: 0;
+}
+
 .close {
   position: absolute;
   right: 20px;

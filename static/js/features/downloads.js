@@ -50,8 +50,10 @@ export class DownloadsManager {
     this.refreshInterval = null;
     /** @type {boolean} Whether to include permanently failed issues in display */
     this.showPermanentlyFailed = true;
-    /** @type {number} Maximum download retry attempts */
+    /** @type {number} Maximum download retry attempts (NZB) */
     this.maxRetries = 3; // Default value, will be loaded from API
+    /** @type {number} Maximum download retry attempts (Internet Archive) */
+    this.maxRetriesIA = 5; // Default value, will be loaded from API
     /** @type {DiscoveredIssue[]|null} Current items in modal */
     this.currentModalItems = null;
     /** @type {string|null} Current periodical in modal */
@@ -89,6 +91,9 @@ export class DownloadsManager {
       }, 'Downloads');
       if (data.success && data.max_download_retries) {
         this.maxRetries = data.max_download_retries;
+      }
+      if (data.success && data.max_download_retries_ia) {
+        this.maxRetriesIA = data.max_download_retries_ia;
       }
     } catch (error) {
       console.warn('[Downloads] Failed to load constants, using defaults:', error);
@@ -870,14 +875,14 @@ export class DownloadsManager {
           ${filterButtons}
         </div>
       </div>
-      <div class="modal-body" style="max-height: 60vh; overflow-y: auto; margin: 20px 0;">
-        <table style="width: 100%; border-collapse: separate; border-spacing: 0 4px;">
+      <div class="modal-body" style="margin: 20px 0;">
+        <table style="width: 100%; border-collapse: separate; border-spacing: 0 4px; min-width: 700px;">
           <thead style="position: sticky; top: 0; background: var(--surface); z-index: 1;">
             <tr>
               <th onclick="downloads.sortModalQueue('title')" style="text-align: left; padding: 12px 14px; border-bottom: 2px solid var(--border-color); cursor: pointer; user-select: none;">Issue ${this.currentModalSort === 'title' ? (this.currentModalSortAsc ? '↑' : '↓') : ''}</th>
               <th onclick="downloads.sortModalQueue('status')" style="text-align: center; padding: 12px 14px; border-bottom: 2px solid var(--border-color); min-width: 160px; cursor: pointer; user-select: none;">Status ${this.currentModalSort === 'status' ? (this.currentModalSortAsc ? '↑' : '↓') : ''}</th>
               <th onclick="downloads.sortModalQueue('date')" style="text-align: center; padding: 12px 14px; border-bottom: 2px solid var(--border-color); min-width: 80px; cursor: pointer; user-select: none;">Date ${this.currentModalSort === 'date' ? (this.currentModalSortAsc ? '↑' : '↓') : ''}</th>
-              <th style="text-align: center; padding: 12px 14px; border-bottom: 2px solid var(--border-color); min-width: 80px;">Actions</th>
+              <th style="text-align: right; padding: 12px 14px; border-bottom: 2px solid var(--border-color); min-width: 200px;">Actions</th>
             </tr>
           </thead>
           <tbody>${tableRows}</tbody>
@@ -999,7 +1004,7 @@ export class DownloadsManager {
         <p style="color: var(--text-secondary); margin-top: 10px;">${failedCount} recent failures, ${permanentlyFailedCount} permanently failed</p>
         <div id="modal-failed-status" class="hidden" style="margin-top: 10px;"></div>
       </div>
-      <div class="modal-body" style="max-height: 400px; overflow-y: auto; margin: 20px 0;">
+      <div class="modal-body" style="margin: 20px 0;">
         <table style="width: 100%; border-collapse: collapse;">
           <thead style="position: sticky; top: 0; background: var(--surface); z-index: 1;">
             <tr>

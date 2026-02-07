@@ -148,12 +148,13 @@ class SubmissionService:
         return submissions
 
     @staticmethod
-    def can_retry_submission(submission: DownloadSubmission) -> bool:
+    def can_retry_submission(submission: DownloadSubmission, max_retries: int = MAX_DOWNLOAD_RETRIES) -> bool:
         """
         Check if a failed submission can be retried.
 
         Args:
             submission: The submission record to check
+            max_retries: Maximum retry attempts allowed (provider-specific)
 
         Returns:
             True if submission can be retried, False otherwise
@@ -161,20 +162,23 @@ class SubmissionService:
         if submission.status != DownloadSubmission.StatusEnum.FAILED:
             return False
 
-        if submission.attempt_count >= MAX_DOWNLOAD_RETRIES:
-            logger.warning(f"Cannot retry submission {submission.id}: " f"max retries ({MAX_DOWNLOAD_RETRIES}) reached")
+        if submission.attempt_count >= max_retries:
+            logger.warning(f"Cannot retry submission {submission.id}: " f"max retries ({max_retries}) reached")
             return False
 
         return True
 
     @staticmethod
-    def update_submission_for_retry(submission: DownloadSubmission, session: Session) -> None:
+    def update_submission_for_retry(
+        submission: DownloadSubmission, session: Session, max_retries: int = MAX_DOWNLOAD_RETRIES
+    ) -> None:
         """
         Update submission record for a retry attempt.
 
         Args:
             submission: The submission record to update
             session: Database session
+            max_retries: Maximum retry attempts allowed (for logging)
         """
         submission.status = DownloadSubmission.StatusEnum.QUEUED
         submission.attempt_count += 1
@@ -185,5 +189,5 @@ class SubmissionService:
 
         logger.info(
             f"Reset submission {submission.id} for retry "
-            f"(attempt {submission.attempt_count}/{MAX_DOWNLOAD_RETRIES})"
+            f"(attempt {submission.attempt_count}/{max_retries})"
         )

@@ -15,6 +15,7 @@ from core.interfaces import DownloadClient, SearchProvider
 from core.constants.app import (
     DEFAULT_FUZZY_THRESHOLD,
     MAX_DOWNLOAD_RETRIES,
+    MAX_DOWNLOAD_RETRIES_IA,
 )
 from core.constants.category import DEFAULT_CATEGORY
 from core.constants.files import BLACKLISTED_FILE_EXTENSIONS
@@ -22,6 +23,7 @@ from core.parsers import utc_now, TitleMatcher, Parser
 from core.parsers.categorizer import FileCategorizer
 from core.utils.fuzzy_matching import get_fuzzy_group_id
 from models.database import (
+    DiscoveredIssue,
     DownloadSubmission,
     Periodical,
     PeriodicalTracking,
@@ -329,16 +331,82 @@ class DownloadManager:
         if url and "archive.org" in url:
             return None
 
+        # Use per-issue max_retries from DiscoveredIssue if available
+        max_retries = self._get_max_retries_for_submission_context(
+            tracking_id=tracking_id, fuzzy_group=fuzzy_group, url=url, session=session
+        )
+
         return (
             session.query(DownloadSubmission)
             .filter(
                 DownloadSubmission.tracking_id == tracking_id,
                 DownloadSubmission.fuzzy_match_group == fuzzy_group,
                 DownloadSubmission.status == DownloadSubmission.StatusEnum.FAILED,
-                DownloadSubmission.attempt_count > MAX_DOWNLOAD_RETRIES,
+                DownloadSubmission.attempt_count > max_retries,
             )
             .first()
         )
+
+    def _get_max_retries_for_submission_context(
+        self,
+        session: Session,
+        *,
+        submission: Optional[DownloadSubmission] = None,
+        tracking_id: Optional[int] = None,
+        fuzzy_group: Optional[str] = None,
+        url: Optional[str] = None,
+    ) -> int:
+        """
+        Determine the correct max_retries for a download based on its DiscoveredIssue.
+
+        Looks up the associated DiscoveredIssue to get per-issue max_retries,
+        which differs between IA (5) and NZB (config-based, typically 1-3).
+
+        Args:
+            session: Database session
+            submission: Optional DownloadSubmission to look up
+            tracking_id: Optional tracking ID (used if submission not provided)
+            fuzzy_group: Optional fuzzy match group (used if submission not provided)
+            url: Optional source URL for fallback provider detection
+
+        Returns:
+            The max_retries value for this download context
+        """
+        # Extract identifiers from submission if provided
+        if submission:
+            tracking_id = tracking_id or submission.tracking_id
+            fuzzy_group = fuzzy_group or submission.fuzzy_match_group
+            url = url or submission.source_url
+
+        # Try to find the associated DiscoveredIssue
+        issue = None
+        if submission:
+            # First try by current_submission_id (most direct link)
+            issue = (
+                session.query(DiscoveredIssue)
+                .filter(DiscoveredIssue.current_submission_id == submission.id)
+                .first()
+            )
+
+        if not issue and tracking_id and fuzzy_group:
+            # Fall back to tracking_id + fuzzy_match_group
+            issue = (
+                session.query(DiscoveredIssue)
+                .filter(
+                    DiscoveredIssue.tracking_id == tracking_id,
+                    DiscoveredIssue.fuzzy_match_group == fuzzy_group,
+                )
+                .first()
+            )
+
+        if issue:
+            return issue.max_retries
+
+        # Fallback: detect provider from URL
+        if url and "archive.org" in url:
+            return MAX_DOWNLOAD_RETRIES_IA
+
+        return MAX_DOWNLOAD_RETRIES
 
     def _get_active_download_count(self, session: Session) -> int:
         """
@@ -1211,13 +1279,18 @@ class DownloadManager:
                 submission.attempt_count = (submission.attempt_count or 0) + 1
                 submission.last_error = client_status.get("error", "Unknown error")
 
+                # Use per-issue max_retries from DiscoveredIssue
+                max_retries = self._get_max_retries_for_submission_context(
+                    session, submission=submission
+                )
+
                 logger.warning(
                     f"[DownloadManager] Download failed for {job_id}: {submission.last_error} "
-                    f"(attempt {submission.attempt_count}/{MAX_DOWNLOAD_RETRIES + 1})"
+                    f"(attempt {submission.attempt_count}/{max_retries + 1})"
                 )
 
                 # Check if max retries reached
-                if submission.attempt_count > MAX_DOWNLOAD_RETRIES:
+                if submission.attempt_count > max_retries:
                     logger.error(
                         f"[DownloadManager] Max retries reached for '{submission.result_title}' "
                         f"- marking as permanently failed (will not retry). "
@@ -1303,15 +1376,16 @@ class DownloadManager:
                 "message": f"Cannot retry submission with status: {submission.status.value}",
             }
 
-        # Check if this is a bad file (failed MAX_DOWNLOAD_RETRIES+ times)
-        if submission.attempt_count > MAX_DOWNLOAD_RETRIES:
+        # Check if this is a bad file (exceeded max retries for its provider type)
+        max_retries = self._get_max_retries_for_submission_context(session, submission=submission)
+        if submission.attempt_count > max_retries:
             logger.warning(
                 f"Cannot retry bad file (failed {submission.attempt_count} times): "
                 f"{submission.result_title} (ID: {submission_id})"
             )
             return {
                 "success": False,
-                "message": f"Cannot retry: file has failed {submission.attempt_count} times (max {MAX_DOWNLOAD_RETRIES + 1})",
+                "message": f"Cannot retry: file has failed {submission.attempt_count} times (max {max_retries + 1})",
             }
 
         try:
