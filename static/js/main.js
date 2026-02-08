@@ -7,7 +7,7 @@ import { AuthManager } from './core/auth.js?v=1767733177';
 import { APIClient, APIHelper } from './core/api.js';
 import { UIUtils } from './core/ui-utils.js?v=1767733177';
 import { library } from './features/library.js?v=1767733177';
-import { tracking } from './features/tracking.js?v=1767733177';
+import { tracking } from './features/tracking.js?v=1770583068';
 import { downloads } from './features/downloads.js?v=1767733177';
 import { ocrQueue } from './features/ocr-queue.js?v=1767733177';
 import { settings } from './features/settings.js?v=1767733177';

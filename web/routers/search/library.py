@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy import or_
 
+from core.constants.date import NUMBER_TO_MONTH
 from models.database import DownloadSubmission
 
 from .cache import get_fuzzy_group_id
@@ -167,9 +168,16 @@ def get_library_matches(
         is_match, score = title_matcher.match(query.strip(), lib_item.title)
 
         if is_match:
-            # Append year to title for frontend parser
-            year = lib_item.issue_date.year if lib_item.issue_date else None
-            title_with_year = f"{lib_item.title} {year}" if year else lib_item.title
+            # Append month and year to title for frontend parser to correctly group issues
+            if lib_item.issue_date:
+                year = lib_item.issue_date.year
+                month_name = NUMBER_TO_MONTH.get(lib_item.issue_date.month)
+                if month_name:
+                    title_with_year = f"{lib_item.title} {month_name} {year}"
+                else:
+                    title_with_year = f"{lib_item.title} {year}"
+            else:
+                title_with_year = lib_item.title
 
             matches.append(
                 {

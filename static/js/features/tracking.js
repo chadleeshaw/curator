@@ -1772,7 +1772,7 @@ export class TrackingManager {
           : displayVariants.length;
         const hasMultipleVariants = isLibraryItem ? providerVariantCount > 0 : displayVariants.length > 1;
         const variantsBadge = hasMultipleVariants
-          ? `<div style="font-size: 10px; margin-top: 6px; color: var(--primary-color); font-weight: 600;">📥 ${providerVariantCount} replacement${providerVariantCount !== 1 ? 's' : ''} available</div>`
+          ? `<div style="font-size: 10px; margin-top: 6px; color: var(--primary-color); font-weight: 600;">📥 ${providerVariantCount} variant${providerVariantCount !== 1 ? 's' : ''}</div>`
           : isLibraryItem
             ? ''
             : issue.language
