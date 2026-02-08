@@ -1745,12 +1745,13 @@ export class TrackingManager {
 
         let providerDisplay = '';
         if (isLibraryItem) {
-          // Show unique provider badges for library items based on their variants
+          // Show provider badges for non-library sources only
           const providers = [...new Set(
             (issue.variants || [])
               .map((v) => v.provider)
               .filter(Boolean)
               .map((p) => p.toLowerCase())
+              .filter((p) => p !== 'library')
           )];
           if (providers.length > 0) {
             providerDisplay = `<div style="font-size: 10px; margin-top: 6px;">${providers.map((p) => this.formatProviderBadge(p)).join(' ')}</div>`;
