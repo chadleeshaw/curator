@@ -192,6 +192,7 @@ class FileImporter:
         skip_reasons = {
             "duplicate_hash": 0,
             "duplicate_fuzzy": 0,
+            "duplicate_path": 0,
             "invalid_title": 0,
             "parse_error": 0,
             "organization_failed": 0,
@@ -282,6 +283,7 @@ class FileImporter:
                     reason_label = {
                         "duplicate_hash": "Duplicate (content hash)",
                         "duplicate_fuzzy": "Duplicate (title/date)",
+                        "duplicate_path": "Duplicate (file path)",
                         "invalid_title": "Invalid title",
                         "parse_error": "Parse error",
                         "organization_failed": "File organization failed",
@@ -1120,11 +1122,21 @@ class FileImporter:
             text_scan = pre_scan_result.get("text_scan_result") if pre_scan_result else None
             ocr_scan = pre_scan_result.get("ocr_scan_result") if pre_scan_result else None
 
+            # Check for existing record at the organized path (prevents UNIQUE constraint on file_path)
+            organized_path_str = str(organized_path)
+            existing_by_path = session.query(Periodical).filter(Periodical.file_path == organized_path_str).first()
+            if existing_by_path:
+                logger.info(
+                    f"File already in library at organized path: '{organized_path_str}' "
+                    f"(existing ID: {existing_by_path.id})"
+                )
+                return {"skip_reason": "duplicate_path"}
+
             magazine = Periodical(
                 title=organization_title,
                 issue_date=parsed.issue_date or datetime.now(),
                 language=parsed.language or DEFAULT_LANGUAGE,
-                file_path=str(organized_path),
+                file_path=organized_path_str,
                 cover_path=str(cover_path) if cover_path else None,
                 content_hash=content_hash,
                 parsed_metadata=build_parsed_metadata(file_scan=file_scan, text_scan=text_scan, ocr_scan=ocr_scan),
@@ -1736,6 +1748,7 @@ class FileImporter:
         skip_reasons = {
             "duplicate_hash": 0,
             "duplicate_fuzzy": 0,
+            "duplicate_path": 0,
             "invalid_title": 0,
             "parse_error": 0,
             "organization_failed": 0,

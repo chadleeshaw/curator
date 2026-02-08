@@ -97,6 +97,7 @@ LANGUAGE_TO_COUNTRY = {
     "Polish": "PL",
     "Russian": "RU",
     "Ukrainian": "UA",
+    "Slovak": "SK",
     "Japanese": "JP",
     "Chinese": "CN",
     "Korean": "KR",

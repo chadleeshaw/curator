@@ -220,8 +220,9 @@ async def search_periodical_providers(
             save_search_results_to_cache(db, query, fresh_results, tracking_id)
 
         # Step 6: Apply language/country/edition filters
-        filter_language = language if language else "English"
-        filter_country = country if country else "US"
+        # When language/country are None (user selected "Any"), don't filter
+        filter_language = language if language else None
+        filter_country = country if country else None
 
         results_before_lang = len(all_results)
         filtered_results = filter_by_language_and_country(all_results, filter_language, filter_country)
@@ -237,17 +238,17 @@ async def search_periodical_providers(
             library_items = [m for m in library_items if m.tracking_id == tracking_id]
         logger.debug(f"Checking against {len(library_items)} library items")
 
-        # Step 8: Deduplicate against library
+        # Step 8: Check against library (mark matches, don't remove)
         deduplicated_results = deduplicate_against_library(filtered_results, library_items)
-        duplicates_removed = len(filtered_results) - len(deduplicated_results)
+        library_matched = sum(1 for r in deduplicated_results if r.get("already_downloaded"))
 
         # Log filter summary
         logger.info(
             f"Search summary for '{query}': {len(deduplicated_results)} results | "
             f"Filters: language={filter_language}, country={filter_country} | "
             f"Removed: {non_periodical_filtered} non-periodicals, "
-            f"{language_country_filtered} language/country, {edition_filtered} editions, "
-            f"{duplicates_removed} library duplicates"
+            f"{language_country_filtered} language/country, {edition_filtered} editions | "
+            f"{library_matched} matched to library"
         )
 
         # Step 9: Mark failed downloads

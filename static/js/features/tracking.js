@@ -240,7 +240,7 @@ export class TrackingManager {
           const option = document.createElement('option');
           option.value = lang;
           option.textContent = lang;
-          if (lang === 'English' && languageSelect.id !== 'search-filter-language') {
+          if (lang === 'English') {
             option.selected = true;
           }
           languageSelect.appendChild(option);
@@ -1743,9 +1743,21 @@ export class TrackingManager {
           statusText = 'Available';
         }
 
-        const providerDisplay = !isLibraryItem
-          ? `<div style="font-size: 10px; margin-top: 6px;">${this.formatProviderBadge(issue.provider)}</div>`
-          : '';
+        let providerDisplay = '';
+        if (isLibraryItem) {
+          // Show unique provider badges for library items based on their variants
+          const providers = [...new Set(
+            (issue.variants || [])
+              .map((v) => v.provider)
+              .filter(Boolean)
+              .map((p) => p.toLowerCase())
+          )];
+          if (providers.length > 0) {
+            providerDisplay = `<div style="font-size: 10px; margin-top: 6px;">${providers.map((p) => this.formatProviderBadge(p)).join(' ')}</div>`;
+          }
+        } else {
+          providerDisplay = `<div style="font-size: 10px; margin-top: 6px;">${this.formatProviderBadge(issue.provider)}</div>`;
+        }
 
         // Filter variants by source when a filter is active
         const filteredVariants = this.sourceFilter !== 'all' && issue.variants
@@ -1754,12 +1766,18 @@ export class TrackingManager {
         const displayVariants = filteredVariants.length > 0 ? filteredVariants : (issue.variants || []);
 
         // Show language variants badge if multiple variants exist
-        const hasMultipleVariants = displayVariants.length > 1;
+        // For library items, only count downloadable (provider) variants
+        const providerVariantCount = isLibraryItem
+          ? displayVariants.filter((v) => v.status !== 'in_library' && v.from_provider !== false && v.url).length
+          : displayVariants.length;
+        const hasMultipleVariants = isLibraryItem ? providerVariantCount > 0 : displayVariants.length > 1;
         const variantsBadge = hasMultipleVariants
-          ? `<div style="font-size: 10px; margin-top: 6px; color: var(--primary-color); font-weight: 600;">🌍 ${displayVariants.length} variants</div>`
-          : issue.language
-            ? `<div style="font-size: 10px; margin-top: 6px; color: var(--text-secondary);">${issue.language}</div>`
-            : '';
+          ? `<div style="font-size: 10px; margin-top: 6px; color: var(--primary-color); font-weight: 600;">📥 ${providerVariantCount} replacement${providerVariantCount !== 1 ? 's' : ''} available</div>`
+          : isLibraryItem
+            ? ''
+            : issue.language
+              ? `<div style="font-size: 10px; margin-top: 6px; color: var(--text-secondary);">${issue.language}</div>`
+              : '';
 
         // Age badge for available/failed issues (not library items)
         const ageBadge =
@@ -1772,7 +1790,7 @@ export class TrackingManager {
           background: ${backgroundColor};
           border-radius: 8px;
           text-align: center;
-          cursor: ${isLibraryItem ? 'default' : 'pointer'};
+          cursor: pointer;
           transition: all 0.2s;
           border-left: 4px solid ${borderColor};
           opacity: ${opacity};
@@ -1780,11 +1798,15 @@ export class TrackingManager {
           box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         "`;
 
-        // Store variants globally and add click handler for all non-library items
-        if (!isLibraryItem && displayVariants.length > 0) {
-          const issueKey = `${issue.year}-${issue.month}-${issue.issue}`;
-          window.issueVariants = window.issueVariants || {};
-          window.issueVariants[issueKey] = displayVariants;
+        // Store variants globally for click handlers
+        const issueKey = `${issue.year}-${issue.month}-${issue.issue}`;
+        window.issueVariants = window.issueVariants || {};
+        window.issueVariants[issueKey] = displayVariants;
+
+        if (isLibraryItem) {
+          // Library items: show detail modal with original title and replacement options
+          cardHtml += ` onclick='showLibraryItemDetail("${issueKey}")'`;
+        } else if (displayVariants.length > 0) {
           cardHtml += ` onclick='selectIssueWithVariants("${issueKey}", ${issue.already_downloaded || false}, ${issue.download_failed || false})'`;
 
           // Store available issues for bulk download
@@ -1836,7 +1858,6 @@ export class TrackingManager {
    * @returns {boolean} Whether the issue should be shown
    */
   issueMatchesSourceFilter(issue, source) {
-    if (issue.status === 'in_library') return true;
     if (!issue.variants || issue.variants.length === 0) return false;
     return issue.variants.some(
       (v) => v.provider && v.provider.toLowerCase() === source
@@ -2184,6 +2205,332 @@ window.selectIssueWithVariants = function (issueKey, alreadyDownloaded, hasFaile
 window.closeLangVariantModal = function () {
   const modal = document.getElementById('language-variant-modal');
   if (modal) modal.remove();
+};
+
+/**
+ * Show detail modal for a library item with original import info and replacement options
+ *
+ * @param {string} issueKey - The issue key (year-month-issue)
+ */
+window.showLibraryItemDetail = function (issueKey) {
+  const variants = window.issueVariants[issueKey];
+  if (!variants || variants.length === 0) return;
+
+  // Separate library copies from downloadable provider variants
+  const libraryCopies = variants.filter(
+    (v) => v.status === 'in_library' || v.from_provider === false
+  );
+  const downloadableVariants = variants.filter(
+    (v) => v.status !== 'in_library' && v.from_provider !== false && v.url
+  );
+
+  // Build detail section for each library copy
+  let detailHtml = '';
+  libraryCopies.forEach((copy, index) => {
+    const metadata = copy.metadata || {};
+    const importedFrom = metadata.imported_from || 'Unknown';
+    const importDate = metadata.import_date
+      ? new Date(metadata.import_date).toLocaleDateString()
+      : '';
+    const filePath = copy.file_path || '';
+    const fileName = filePath ? filePath.split('/').pop() : '';
+
+    // Add separator between copies
+    if (index > 0) {
+      detailHtml += `<div style="border-top: 1px solid var(--border-color); margin: 12px 0;"></div>`;
+    }
+
+    // Copy header if multiple
+    if (libraryCopies.length > 1) {
+      detailHtml += `
+      <div style="font-size: 0.8em; color: var(--primary-color); font-weight: 600; margin-bottom: 8px;">Copy ${index + 1}</div>`;
+    }
+
+    detailHtml += `
+    <div style="margin-bottom: 16px;">
+      <div style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 4px;">Original Filename</div>
+      <div style="padding: 10px 12px; background: var(--surface-variant); border-radius: 6px; font-family: monospace; font-size: 0.9em; word-break: break-all;">${importedFrom}</div>
+    </div>`;
+
+    if (filePath) {
+      detailHtml += `
+      <div style="margin-bottom: 16px;">
+        <div style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 4px;">Current Path</div>
+        <div style="padding: 10px 12px; background: var(--surface-variant); border-radius: 6px; font-family: monospace; font-size: 0.85em; word-break: break-all;">${filePath}</div>
+      </div>`;
+    }
+
+    if (importDate) {
+      detailHtml += `
+      <div style="margin-bottom: 8px;">
+        <div style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 4px;">Imported</div>
+        <div style="font-size: 0.9em;">${importDate}</div>
+      </div>`;
+    }
+
+    // Delete button for each copy
+    const copyId = copy.library_item_id;
+    if (copyId) {
+      detailHtml += `
+      <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+        <button class="save-btn btn-cancel" style="font-size: 0.8em; padding: 4px 12px;"
+          onclick="moveLibraryCopy(${copyId}, '${issueKey}')">📦 Move to Tracking</button>
+        <button class="save-btn btn-delete" style="font-size: 0.8em; padding: 4px 12px;"
+          onclick="deleteLibraryCopy(${copyId}, '${issueKey}')">🗑️ Remove from Library</button>
+      </div>`;
+    }
+  });
+
+  // Build replacement options if available
+  let replacementHtml = '';
+  if (downloadableVariants.length > 0) {
+    const sorted = [...downloadableVariants].sort((a, b) => {
+      const dateA = a.publication_date ? new Date(a.publication_date) : new Date(0);
+      const dateB = b.publication_date ? new Date(b.publication_date) : new Date(0);
+      return dateB - dateA;
+    });
+
+    replacementHtml = `
+    <div style="border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px;">
+      <div style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 10px;">
+        Replace with a different version (${sorted.length} available):
+      </div>
+      <div id="library-replacement-options" style="display: flex; flex-direction: column; gap: 8px;"></div>
+    </div>`;
+  } else {
+    replacementHtml = `
+    <div style="border-top: 1px solid var(--border-color); padding-top: 12px; margin-top: 8px;">
+      <div style="font-size: 0.85em; color: var(--text-secondary); font-style: italic;">No replacement downloads available from providers.</div>
+    </div>`;
+  }
+
+  const modalHTML = `
+    <div id="library-detail-modal" class="modal" style="display: flex;">
+      <div class="modal-content" style="max-width: 550px;">
+        <span class="close" onclick="closeLibraryDetailModal()">&times;</span>
+        <h2 style="margin-bottom: 16px;">📚 Library Item</h2>
+        ${detailHtml}
+        ${replacementHtml}
+      </div>
+    </div>
+  `;
+
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+  // Click outside to close (with text-selection protection)
+  const modal = document.getElementById('library-detail-modal');
+  let mouseDownOnBackdrop = false;
+  modal.addEventListener('mousedown', (e) => {
+    mouseDownOnBackdrop = e.target === modal;
+  });
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal && mouseDownOnBackdrop) {
+      window.closeLibraryDetailModal();
+    }
+    mouseDownOnBackdrop = false;
+  });
+
+  // Add replacement option buttons
+  if (downloadableVariants.length > 0) {
+    const optionsDiv = document.getElementById('library-replacement-options');
+    const sorted = [...downloadableVariants].sort((a, b) => {
+      const dateA = a.publication_date ? new Date(a.publication_date) : new Date(0);
+      const dateB = b.publication_date ? new Date(b.publication_date) : new Date(0);
+      return dateB - dateA;
+    });
+
+    sorted.forEach((variant, index) => {
+      const age = formatRelativeAge(variant.publication_date);
+      const ageBadge = age ? `<span class="variant-age">${age} old</span>` : '';
+      const providerInfo = variant.provider
+        ? `<span class="variant-provider">${variant.provider}</span>`
+        : '';
+
+      const btn = document.createElement('button');
+      btn.className = 'btn-variant btn-variant-new';
+      btn.innerHTML = `
+        <div class="variant-label">
+          <span class="variant-number">#${index + 1}</span>
+          ${ageBadge}
+          ${providerInfo}
+        </div>
+        <div class="variant-title">${variant.title}</div>
+      `;
+      btn.onclick = () => {
+        window.closeLibraryDetailModal();
+        window.selectIssue(variant.title, variant.provider, variant.url, true, false);
+      };
+      optionsDiv.appendChild(btn);
+    });
+  }
+};
+
+window.closeLibraryDetailModal = function () {
+  const modal = document.getElementById('library-detail-modal');
+  if (modal) modal.remove();
+};
+
+/**
+ * Delete a library copy from the database with confirmation
+ *
+ * @param {number} periodicalId - The periodical database ID
+ * @param {string} issueKey - The issue key to refresh the modal after deletion
+ */
+window.deleteLibraryCopy = async function (periodicalId, issueKey) {
+  const confirmed = await UIUtils.confirm(
+    'Remove from Library',
+    '<p>Remove this copy from your library?</p>' +
+      '<p style="color: var(--text-secondary); font-size: 0.9em;">The file will be kept on disk but the database record will be removed.</p>'
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const response = await APIClient.authenticatedFetch(
+      `/api/periodicals/${periodicalId}?delete_files=false&remove_tracking=false&delete_all_issues=false`,
+      { method: 'DELETE' }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail ?? 'Failed to remove');
+    }
+
+    const result = await response.json();
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, result.message || 'Removed from library', 'success');
+    setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), 5000);
+
+    // Close modal and refresh search results
+    window.closeLibraryDetailModal();
+    if (window.trackingManager) {
+      window.trackingManager.searchPeriodicalMetadata();
+    }
+  } catch (error) {
+    console.error('[Library] Failed to delete copy:', error);
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, `Error: ${error.message}`, 'error');
+  }
+};
+
+/**
+ * Move a library copy to a different tracking record
+ *
+ * @param {number} periodicalId - The periodical database ID
+ * @param {string} issueKey - The issue key to refresh after move
+ */
+window.moveLibraryCopy = async function (periodicalId, issueKey) {
+  // Close the library detail modal first to avoid z-index issues
+  window.closeLibraryDetailModal();
+
+  try {
+    // Fetch all tracking records
+    const response = await APIClient.get('/api/periodicals/tracking?limit=1000');
+    const data = await response.json();
+    const trackingRecords = data.tracked_magazines || [];
+
+    if (trackingRecords.length === 0) {
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'No tracking records found', 'error');
+      return;
+    }
+
+    // Build options HTML
+    const optionsHtml = trackingRecords
+      .sort((a, b) => a.title.localeCompare(b.title))
+      .map(
+        (t) =>
+          `<option value="${t.id}">${t.title} (${t.category || 'Auto-detect'} - ${t.language || 'English'})</option>`
+      )
+      .join('');
+
+    const modalHTML = `
+      <div id="move-library-copy-modal" class="modal" style="display: flex;">
+        <div class="modal-content" style="max-width: 500px;">
+          <span class="close" onclick="closeMoveLibraryCopyModal()">&times;</span>
+          <h2 style="margin-bottom: 16px;">📦 Move to Tracking</h2>
+          <p style="color: var(--text-secondary); margin-bottom: 12px; font-size: 0.9em;">
+            Select the tracking record to move this issue to. The file will be renamed and reorganized automatically.
+          </p>
+          <select id="move-copy-target-tracking" class="w-full" style="margin-bottom: 16px;">
+            <option value="">Select a tracking record...</option>
+            ${optionsHtml}
+          </select>
+          <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <button class="save-btn btn-cancel" onclick="closeMoveLibraryCopyModal()">Cancel</button>
+            <button id="confirm-move-copy-btn" class="save-btn btn-primary" disabled
+              onclick="confirmMoveLibraryCopy(${periodicalId}, '${issueKey}')">Move</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+    // Enable/disable button based on selection
+    document.getElementById('move-copy-target-tracking').onchange = function () {
+      document.getElementById('confirm-move-copy-btn').disabled = !this.value;
+    };
+
+    // Click outside to close
+    const modal = document.getElementById('move-library-copy-modal');
+    let mouseDownOnBackdrop = false;
+    modal.addEventListener('mousedown', (e) => {
+      mouseDownOnBackdrop = e.target === modal;
+    });
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal && mouseDownOnBackdrop) {
+        window.closeMoveLibraryCopyModal();
+      }
+      mouseDownOnBackdrop = false;
+    });
+  } catch (error) {
+    console.error('[Library] Failed to load tracking records:', error);
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, `Error: ${error.message}`, 'error');
+  }
+};
+
+window.closeMoveLibraryCopyModal = function () {
+  const modal = document.getElementById('move-library-copy-modal');
+  if (modal) modal.remove();
+};
+
+/**
+ * Confirm moving a library copy to the selected tracking record
+ *
+ * @param {number} periodicalId - The periodical database ID
+ * @param {string} issueKey - The issue key to refresh after move
+ */
+window.confirmMoveLibraryCopy = async function (periodicalId, issueKey) {
+  const targetId = document.getElementById('move-copy-target-tracking')?.value;
+  if (!targetId) return;
+
+  const btn = document.getElementById('confirm-move-copy-btn');
+  btn.disabled = true;
+  btn.textContent = 'Moving...';
+
+  try {
+    const response = await APIClient.post(
+      `/api/periodicals/${periodicalId}/move-to-tracking?target_tracking_id=${targetId}`
+    );
+    const result = await response.json();
+
+    UIUtils.showStatus(
+      ELEMENT_IDS.TRACKING_STATUS,
+      result.message || 'Issue moved successfully',
+      'success'
+    );
+    setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), 5000);
+
+    window.closeMoveLibraryCopyModal();
+
+    // Refresh search results
+    if (window.trackingManager) {
+      window.trackingManager.searchPeriodicalMetadata();
+    }
+  } catch (error) {
+    console.error('[Library] Failed to move copy:', error);
+    btn.disabled = false;
+    btn.textContent = 'Move';
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, `Error: ${error.message}`, 'error');
+  }
 };
 
 // Select and download issue

@@ -25,20 +25,24 @@ def deduplicate_against_library(
     library_items: List,
 ) -> List[Dict[str, Any]]:
     """
-    Remove provider results that already exist in library.
+    Mark provider results that already exist in library, keeping them as replacement options.
+
+    Provider results matching library items are marked as already_downloaded instead of being
+    removed. This allows the frontend to show them as replacement/re-download options in the
+    library item detail modal.
 
     Args:
-        results: Provider results to deduplicate
+        results: Provider results to check against library
         library_items: Library items to check against
 
     Returns:
-        Deduplicated results with status badges added
+        All results with library-matching ones marked accordingly
     """
     deduplicated = []
     title_matcher = get_title_matcher()
 
     for result in results:
-        is_duplicate = False
+        matched_library_item = None
 
         for lib_item in library_items:
             if result.get("publication_date") and title_matcher:
@@ -51,13 +55,32 @@ def deduplicate_against_library(
                 )
 
                 if is_match:
+                    matched_library_item = lib_item
                     logger.debug(
-                        f"Hiding duplicate: '{result['title']}' matches library item '{lib_item.title}' (score: {score})"
+                        f"Library match: '{result['title']}' matches library item "
+                        f"'{lib_item.title}' (score: {score})"
                     )
-                    is_duplicate = True
                     break
 
-        if not is_duplicate:
+        if matched_library_item:
+            # Keep the result but mark it as already in library
+            result["status"] = "available"
+            result["status_badge"] = "Available"
+            result["library_item_id"] = matched_library_item.id
+            result["already_downloaded"] = True
+            result["download_failed"] = False
+            result["from_provider"] = True
+
+            # Format publication date to ISO string
+            pub_date = result.get("publication_date")
+            if pub_date:
+                if isinstance(pub_date, datetime):
+                    result["publication_date"] = pub_date.isoformat()
+                elif not isinstance(pub_date, str):
+                    result["publication_date"] = str(pub_date)
+
+            deduplicated.append(result)
+        else:
             # Add status badge for available items
             result["status"] = "available"
             result["status_badge"] = "Available"
