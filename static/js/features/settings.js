@@ -1507,30 +1507,7 @@ export class SettingsManager {
     }
   }
 
-  /**
-   * Save carousel/hover settings
-   */
-  async saveCarouselSettings() {
-    try {
-      const mode = document.getElementById('stack-carousel-mode')?.value;
 
-      if (!mode) {
-        UIUtils.showStatus('stack-hover-message', 'Please select a hover mode', 'error');
-        return;
-      }
-
-      // Apply carousel mode immediately via library manager
-      if (window.setStackCarouselMode) {
-        window.setStackCarouselMode(mode);
-      }
-
-      UIUtils.showStatus('stack-hover-message', `Hover mode changed to ${mode}`, 'success');
-      setTimeout(() => UIUtils.hideStatus('stack-hover-message'), 3000);
-    } catch (error) {
-      console.error('Error saving carousel settings:', error);
-      UIUtils.showStatus('stack-hover-message', 'Error: ' + error.message, 'error');
-    }
-  }
 
   /**
    * Save downloads settings
@@ -2296,7 +2273,6 @@ window.saveMatchingSettings = () => settings.saveMatchingSettings();
 window.saveMetadataSettings = () => settings.saveMetadataSettings();
 window.saveLoggingSettings = () => settings.saveLoggingSettings();
 window.saveThemeSettings = () => settings.saveThemeSettings();
-window.saveCarouselSettings = () => settings.saveCarouselSettings();
 window.saveAccountSettings = () => settings.saveAccountSettings();
 window.restartApplication = () => settings.restartApplication();
 window.confirmRestartApplication = () => settings.confirmRestartApplication();
