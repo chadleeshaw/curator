@@ -892,9 +892,43 @@ async function confirmDeleteIssue() {
 
 // eslint-disable-next-line no-unused-vars -- Called from HTML onclick handlers
 function goBack() {
+  // If we came from a stack page, go back there
+  if (window._stackReturnUrl) {
+    window.location.href = window._stackReturnUrl;
+    return;
+  }
   // Navigate to main page with library hash
   window.location.href = '/#library';
 }
+
+// Detect if navigated from a stack detail page and update breadcrumb
+(function initBreadcrumb() {
+  try {
+    const ref = document.referrer;
+    if (ref) {
+      const refUrl = new URL(ref);
+      const stackMatch = refUrl.pathname.match(/^\/stacks\/([^/]+)/);
+      if (stackMatch) {
+        window._stackReturnUrl = refUrl.pathname;
+        const breadcrumb = document.getElementById('breadcrumb');
+        if (breadcrumb) {
+          const stackSlug = stackMatch[1];
+          const title = document.getElementById('periodical-title')?.textContent || '';
+          breadcrumb.innerHTML =
+            `<a href="/#library">Library</a>` +
+            `<span class="separator">/</span>` +
+            `<a href="/#stacks">Stacks</a>` +
+            `<span class="separator">/</span>` +
+            `<a href="/stacks/${stackSlug}">${decodeURIComponent(stackSlug).replace(/-/g, ' ')}</a>` +
+            `<span class="separator">/</span>` +
+            `<span class="current">${title}</span>`;
+        }
+      }
+    }
+  } catch {
+    // Ignore referrer parsing errors
+  }
+})();
 
 // Move issue modal functions
 // eslint-disable-next-line no-unused-vars -- Called from HTML onclick handlers
@@ -1095,7 +1129,7 @@ document.addEventListener('DOMContentLoaded', () => {
       message.style.padding = '40px';
       message.style.color = 'var(--text-secondary)';
       message.innerHTML =
-        '<p>This periodical has no issues remaining.</p><p><button onclick="goBack()" class="back-button">← Back to Library</button></p>';
+        `<p>This periodical has no issues remaining.</p><p><button onclick="goBack()" class="back-button">← ${window._stackReturnUrl ? 'Back to Stack' : 'Back to Library'}</button></p>`;
       const statusDiv = document.getElementById('status-message');
       if (statusDiv && statusDiv.style.display === 'none') {
         // Show helpful message if not already showing deletion success

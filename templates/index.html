@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="/static/css/layout.css?v=1769743008" />
     <link rel="stylesheet" href="/static/css/components.css?v=1769743008" />
     <link rel="stylesheet" href="/static/css/pages.css?v=1769743013" />
+    <link rel="stylesheet" href="/static/css/stacks.css?v=1770652571" />
     <script type="module" src="/static/js/main.js?v=1770652571"></script>
   </head>
   <body>
@@ -42,6 +43,9 @@
         </button>
         <button class="nav-btn" onclick="showTab('tracking', event)">
           <span class="nav-icon">📌</span><span class="nav-text">Track</span>
+        </button>
+        <button class="nav-btn" onclick="showTab('stacks', event)">
+          <span class="nav-icon">📂</span><span class="nav-text">Stacks</span>
         </button>
         <button class="nav-btn" onclick="showTab('tasks', event)">
           <span class="nav-icon">⚙️</span><span class="nav-text">Tasks</span>
@@ -385,6 +389,24 @@
 
             <div id="tracking-status" class="hidden" style="margin-bottom: 20px"></div>
             <div id="tracked-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stacks Tab -->
+      <div id="stacks-tab" class="tab">
+        <div class="tasks-container">
+          <div class="stacks-header-row">
+            <div>
+              <h2>📂 Stacks</h2>
+              <p style="color: var(--text-secondary); margin-top: 4px">
+                Group related periodicals into stacks for easier organization.
+              </p>
+            </div>
+            <button onclick="openCreateStackModal()" class="btn-primary">➕ Create Stack</button>
+          </div>
+          <div id="stacks-list" class="grid gap-15">
+            <!-- Populated by JavaScript -->
           </div>
         </div>
       </div>
@@ -2364,15 +2386,24 @@
             </div>
           </div>
 
-          <div class="settings-field">
-            <label>Tracking Mode:</label>
-            <select id="new-tracking-mode" class="w-full">
-              <option value="none">Track Nothing - Monitor but don't auto-download</option>
-              <option value="new">
-                Track New Issues - Only download issues published after today
-              </option>
-              <option value="all">Track All Issues - Download all past and future issues</option>
-            </select>
+          <div class="field-row">
+            <div class="settings-field">
+              <label>Tracking Mode:</label>
+              <select id="new-tracking-mode" class="w-full">
+                <option value="none">Track Nothing - Monitor but don't auto-download</option>
+                <option value="new">
+                  Track New Issues - Only download issues published after today
+                </option>
+                <option value="all">Track All Issues - Download all past and future issues</option>
+              </select>
+            </div>
+
+            <div class="settings-field">
+              <label>Add to Stack (optional):</label>
+              <select id="new-tracking-stack" class="w-full">
+                <option value="">No stack</option>
+              </select>
+            </div>
           </div>
 
           <div class="settings-field">
@@ -2656,6 +2687,75 @@
           <button onclick="confirmRestartApplication()" class="save-btn btn-danger flex-0">
             Restart
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stack Create/Edit Modal -->
+    <div id="stack-create-modal" class="modal hidden">
+      <div class="modal-content" style="max-width: 500px">
+        <span class="close" onclick="closeStackCreateModal()">&times;</span>
+        <h3 id="stack-modal-title">➕ Create New Stack</h3>
+        <div class="settings-field" style="margin-top: 16px">
+          <label for="stack-name-input">Name</label>
+          <input
+            type="text"
+            id="stack-name-input"
+            placeholder="e.g. Science Magazines"
+            class="w-full"
+            style="padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--surface); color: var(--text-primary); font-size: 14px"
+          />
+        </div>
+        <div class="settings-field" style="margin-top: 12px">
+          <label for="stack-desc-input">Description (optional)</label>
+          <textarea
+            id="stack-desc-input"
+            placeholder="A brief description of this stack..."
+            rows="3"
+            class="w-full"
+            style="padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--surface); color: var(--text-primary); font-size: 14px; resize: vertical"
+          ></textarea>
+        </div>
+        <div class="flex gap-10 justify-end" style="margin-top: 20px">
+          <button type="button" onclick="closeStackCreateModal()" class="save-btn btn-cancel flex-0">Cancel</button>
+          <button type="button" id="stack-modal-save-btn" class="save-btn flex-0">Create</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stack Delete Confirmation Modal -->
+    <div id="stack-delete-modal" class="modal hidden">
+      <div class="modal-content delete-modal-content" style="max-width: 500px">
+        <h3 class="delete-modal-title">🗑️ Delete Stack</h3>
+        <p class="delete-modal-subtitle">
+          Are you sure you want to delete <strong id="delete-stack-name"></strong>?
+        </p>
+        <p id="delete-stack-count" style="color: var(--text-secondary); font-size: 0.9em; margin-bottom: 16px"></p>
+        <div class="flex gap-10 justify-end">
+          <button type="button" onclick="closeDeleteStackModal()" class="save-btn btn-cancel flex-0">Cancel</button>
+          <button type="button" onclick="confirmDeleteStack()" class="save-btn btn-delete flex-0">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stack Member Assignment Modal -->
+    <div id="stack-assign-modal" class="modal hidden">
+      <div class="modal-content" style="max-width: 800px">
+        <span class="close" onclick="closeStackAssignModal()">&times;</span>
+        <h3>📋 Manage Members — <span id="assign-stack-name"></span></h3>
+        <div class="stack-assignment-container" style="margin-top: 16px">
+          <div class="stack-assignment-column">
+            <h4>Current Members</h4>
+            <div id="stack-current-members" style="min-height: 100px">
+              <!-- Populated by JavaScript -->
+            </div>
+          </div>
+          <div class="stack-assignment-column">
+            <h4>Available Items</h4>
+            <div id="stack-available-items" style="min-height: 100px">
+              <!-- Populated by JavaScript -->
+            </div>
+          </div>
         </div>
       </div>
     </div>

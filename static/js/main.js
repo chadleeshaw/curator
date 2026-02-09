@@ -13,6 +13,7 @@ import { ocrQueue } from './features/ocr-queue.js?v=1767733177';
 import { settings } from './features/settings.js?v=1767733177';
 import { tasks } from './features/tasks.js?v=1767733177';
 import { imports } from './features/imports.js?v=1767733177';
+import { stacks } from './features/stacks.js?v=1770652571';
 import { EventHandlers } from './event-handlers.js?v=1767733177';
 import { CSS_CLASSES } from './core/constants.js';
 
@@ -39,7 +40,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Check if there's a tab in the URL hash
   const hash = window.location.hash.substring(1);
-  if (hash && ['library', 'tracking', 'tasks', 'queue', 'settings'].includes(hash)) {
+  if (hash && ['library', 'tracking', 'stacks', 'tasks', 'queue', 'settings'].includes(hash)) {
     // Show the tab from the hash
     const tabName = UIUtils.showTab(hash, null);
 
@@ -48,6 +49,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       library.loadPeriodicals();
     } else if (tabName === 'tracking') {
       tracking.loadTrackedPeriodicals();
+    } else if (tabName === 'stacks') {
+      stacks.loadStacks();
     } else if (tabName === 'settings') {
       settings.loadSettings();
       settings.loadSettingsTab();
@@ -108,6 +111,8 @@ window.addEventListener('hashchange', () => {
       library.loadPeriodicals();
     } else if (tabName === 'tracking') {
       tracking.loadTrackedPeriodicals();
+    } else if (tabName === 'stacks') {
+      stacks.loadStacks();
     } else if (tabName === 'settings') {
       settings.loadSettings();
       settings.loadSettingsTab();
@@ -220,6 +225,13 @@ window.showQueueView = showQueueView;
 window.updateQueueBadges = updateQueueBadges;
 window.updateHeaderStats = updateHeaderStats;
 
+// Stacks global functions (used by inline onclick handlers in index.html)
+window.openCreateStackModal = () => stacks.openCreateStackModal();
+window.closeStackCreateModal = () => UIUtils.closeModal('stack-create-modal');
+window.closeDeleteStackModal = () => stacks.closeDeleteStackModal();
+window.confirmDeleteStack = () => stacks.confirmDeleteStack();
+window.closeStackAssignModal = () => UIUtils.closeModal('stack-assign-modal');
+
 // Settings tab switcher
 window.showSettingsTab = (tabName, event) => {
   // Remove active class from all settings tab buttons
@@ -312,6 +324,7 @@ window.__modules = {
   settings,
   tasks,
   imports,
+  stacks,
   AuthManager,
   UIUtils,
 };

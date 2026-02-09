@@ -768,12 +768,89 @@ export class TrackingManager {
       return;
     }
 
+    // Group items by stack
+    const stackGroups = new Map(); // stack_id -> { name, slug, items: [] }
+    const ungrouped = [];
+
     filtered.forEach((trackingItem) => {
+      if (trackingItem.stack_id && trackingItem.stack_name) {
+        if (!stackGroups.has(trackingItem.stack_id)) {
+          stackGroups.set(trackingItem.stack_id, {
+            name: trackingItem.stack_name,
+            slug: trackingItem.stack_slug,
+            description: trackingItem.stack_description || '',
+            items: [],
+          });
+        }
+        stackGroups.get(trackingItem.stack_id).items.push(trackingItem);
+      } else {
+        ungrouped.push(trackingItem);
+      }
+    });
+
+    // Render stack groups with collapsible headers
+    stackGroups.forEach(({ name, slug, description, items }, stackId) => {
+      const group = document.createElement('div');
+      group.className = 'stack-group';
+
+      // Collapsible header
+      const header = document.createElement('div');
+      header.className = 'stack-group-header';
+
+      // Check localStorage for collapsed state
+      const collapseKey = `stack-collapse-${stackId}`;
+      const isExpanded = localStorage.getItem(collapseKey) !== 'collapsed';
+      if (isExpanded) header.classList.add('expanded');
+
+      const descHtml = description
+        ? `<span class="stack-group-desc">${description}</span>`
+        : '';
+
+      header.innerHTML = `
+        <span class="stack-group-chevron">▶</span>
+        <div class="stack-group-info">
+          <span class="stack-group-name">📚 ${name}</span>
+          ${descHtml}
+        </div>
+        <span class="stack-group-count">${items.length} item${items.length !== 1 ? 's' : ''}</span>
+        <button class="stack-group-search-btn" title="Search all items in this stack for new issues">🔍</button>
+      `;
+
+      // Header click toggles collapse (but not on the search button)
+      header.onclick = (e) => {
+        if (e.target.closest('.stack-group-search-btn')) return;
+        header.classList.toggle('expanded');
+        const nowExpanded = header.classList.contains('expanded');
+        localStorage.setItem(collapseKey, nowExpanded ? 'expanded' : 'collapsed');
+      };
+
+      // Search button click
+      const searchBtn = header.querySelector('.stack-group-search-btn');
+      searchBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.searchStackItems(name, items);
+      });
+
+      group.appendChild(header);
+
+      // Items container
+      const itemsContainer = document.createElement('div');
+      itemsContainer.className = 'stack-group-items';
+      items.forEach((trackingItem) => {
+        itemsContainer.appendChild(this.createTrackedCard(trackingItem));
+      });
+      group.appendChild(itemsContainer);
+
+      container.appendChild(group);
+    });
+
+    // Render ungrouped items
+    ungrouped.forEach((trackingItem) => {
       container.appendChild(this.createTrackedCard(trackingItem));
     });
 
     console.log(
-      `[Tracking] Rendered ${filtered.length} of ${this.allTracked.length} tracked periodicals`
+      `[Tracking] Rendered ${stackGroups.size} stack groups + ${ungrouped.length} ungrouped (${filtered.length} total)`
     );
   }
 
@@ -1166,6 +1243,110 @@ export class TrackingManager {
       console.error('Error loading tracking details:', err);
       UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Failed to load tracking details', 'error');
     }
+  }
+
+  /**
+   * Search all items in a stack sequentially, showing progress in the search modal
+   */
+  async searchStackItems(stackName, items) {
+    const issuesContent = document.getElementById('search-issues-content');
+    document.getElementById(ELEMENT_IDS.SEARCH_ISSUES_MODAL).classList.remove(CSS_CLASSES.HIDDEN);
+
+    // Build progress UI
+    issuesContent.innerHTML = `
+      <div class="search-summary">
+        <h3>Searching stack: "${stackName}"</h3>
+        <p style="color: var(--text-secondary); margin-top: 4px;">Searching ${items.length} tracked item${items.length !== 1 ? 's' : ''}...</p>
+      </div>
+      <div id="stack-search-rows" style="max-height: 70vh; overflow-y: auto;"></div>
+      <div id="stack-search-done" class="hidden" style="margin-top: 16px;"></div>`;
+
+    const rowsContainer = document.getElementById('stack-search-rows');
+    items.forEach((item, i) => {
+      const row = document.createElement('div');
+      row.className = 'stack-search-row';
+      row.id = `stack-sr-${i}`;
+      row.innerHTML = `
+        <div class="stack-search-row-status" id="stack-sr-status-${i}">\u23f3</div>
+        <div class="stack-search-row-title">${item.title}${item.language && item.language !== 'English' ? ` <span class="language-badge" style="font-size:9px;padding:1px 6px;margin:0">${item.language}</span>` : ''}</div>
+        <div class="stack-search-row-result" id="stack-sr-result-${i}">Waiting...</div>`;
+      rowsContainer.appendChild(row);
+    });
+
+    let totalAvailable = 0;
+    let totalInLibrary = 0;
+    let totalErrors = 0;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const statusEl = document.getElementById(`stack-sr-status-${i}`);
+      const resultEl = document.getElementById(`stack-sr-result-${i}`);
+      const rowEl = document.getElementById(`stack-sr-${i}`);
+
+      statusEl.textContent = '\ud83d\udd04';
+      resultEl.textContent = 'Searching...';
+      rowEl.classList.add('searching');
+
+      try {
+        const params = new URLSearchParams();
+        params.append('query', item.title);
+        params.append('tracking_id', item.id);
+        if (item.language) params.append('language', item.language);
+        if (item.country) params.append('country', item.country);
+        if (item.category) params.append('category', item.category);
+
+        const response = await APIClient.authenticatedFetch(
+          `/api/periodicals/search-providers?${params.toString()}`,
+          { method: 'POST' }
+        );
+        const data = await response.json();
+        rowEl.classList.remove('searching');
+
+        if (data.found && data.results) {
+          const available = data.results.filter((r) => !r.in_library).length;
+          const inLib = data.results.filter((r) => r.in_library).length;
+          totalAvailable += available;
+          totalInLibrary += inLib;
+
+          if (available > 0) {
+            statusEl.textContent = '\ud83d\udce5';
+            resultEl.innerHTML = `<strong>${available}</strong> available, ${inLib} in library`;
+            rowEl.classList.add('has-results');
+          } else {
+            statusEl.textContent = '\u2705';
+            resultEl.textContent = `${inLib} in library, nothing new`;
+            rowEl.classList.add('complete');
+          }
+        } else {
+          statusEl.textContent = '\u2796';
+          resultEl.textContent = 'No results';
+          rowEl.classList.add('complete');
+        }
+      } catch (err) {
+        console.error(`Stack search error for ${item.title}:`, err);
+        statusEl.textContent = '\u274c';
+        resultEl.textContent = 'Error';
+        rowEl.classList.remove('searching');
+        rowEl.classList.add('error');
+        totalErrors++;
+      }
+    }
+
+    // Show summary
+    const doneEl = document.getElementById('stack-search-done');
+    doneEl.classList.remove(CSS_CLASSES.HIDDEN);
+    let summaryHtml = '<div class="stack-search-stats" style="display:flex;gap:16px;flex-wrap:wrap;font-size:14px;color:var(--text-secondary);">';
+    if (totalAvailable > 0) {
+      summaryHtml += `<span style="color:#22c55e;">\ud83d\udce5 <strong>${totalAvailable}</strong> new issue${totalAvailable !== 1 ? 's' : ''} available</span>`;
+    } else {
+      summaryHtml += '<span>\u2705 All up to date</span>';
+    }
+    summaryHtml += `<span>\ud83d\udcda <strong>${totalInLibrary}</strong> already in library</span>`;
+    if (totalErrors > 0) {
+      summaryHtml += `<span style="color:var(--error-color);">\u274c ${totalErrors} error${totalErrors !== 1 ? 's' : ''}</span>`;
+    }
+    summaryHtml += '</div>';
+    doneEl.innerHTML = summaryHtml;
   }
 
   /**
@@ -1934,14 +2115,42 @@ export class TrackingManager {
 
     const searchError = document.getElementById('tracking-search-error');
     if (searchError) searchError.classList.add(CSS_CLASSES.HIDDEN);
+
+    const stackSelect = document.getElementById('new-tracking-stack');
+    if (stackSelect) stackSelect.value = '';
   }
 
   /**
    * Open track new periodical modal
    */
-  openTrackNewPeriodicalModal() {
+  async openTrackNewPeriodicalModal() {
     this.resetTracking();
     document.getElementById('track-new-periodical-modal').classList.remove(CSS_CLASSES.HIDDEN);
+    this.loadStacksDropdown();
+  }
+
+  /**
+   * Load available stacks into the new tracking modal dropdown
+   */
+  async loadStacksDropdown() {
+    const select = document.getElementById('new-tracking-stack');
+    if (!select) return;
+    select.innerHTML = '<option value="">No stack</option>';
+    try {
+      const response = await APIClient.authenticatedFetch('/api/stacks');
+      const data = await response.json();
+      const stacks = data.stacks || [];
+      if (stacks.length) {
+        stacks.forEach((stack) => {
+          const option = document.createElement('option');
+          option.value = stack.slug;
+          option.textContent = stack.name;
+          select.appendChild(option);
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load stacks for dropdown:', err);
+    }
   }
 
   /**
@@ -2977,6 +3186,20 @@ window.saveNewTracking = async () => {
         'Tracking',
         ELEMENT_IDS.TRACKING_STATUS
       );
+
+      // Add to stack if one was selected
+      const selectedStack = document.getElementById('new-tracking-stack')?.value;
+      if (selectedStack) {
+        try {
+          await APIClient.authenticatedFetch(`/api/stacks/${selectedStack}/members`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tracking_ids: [data.tracking_id] }),
+          });
+        } catch (stackErr) {
+          console.error('Failed to add to stack:', stackErr);
+        }
+      }
 
       UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Tracking started successfully', 'success');
       tracking.closeTrackNewPeriodicalModal();

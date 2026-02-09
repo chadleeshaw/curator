@@ -11,6 +11,7 @@ from . import (
     pages,
     periodicals,
     search,
+    stacks,
     tasks,
     tracking,
 )
@@ -24,6 +25,7 @@ __all__ = [
     "pages",
     "periodicals",
     "search",
+    "stacks",
     "tasks",
     "tracking",
 ]

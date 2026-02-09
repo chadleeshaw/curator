@@ -22,7 +22,11 @@
       data-years="{{YEARS_DATA}}"
       data-special-editions="{{SPECIAL_EDITIONS_DATA}}"
     >
-      <button onclick="goBack()" class="back-button">← Back to Library</button>
+      <nav id="breadcrumb" class="breadcrumb">
+        <a href="/#library">Library</a>
+        <span class="separator">/</span>
+        <span class="current">{{PERIODICAL_TITLE}}</span>
+      </nav>
 
       <div class="periodical-header">
         <h1 id="periodical-title">{{PERIODICAL_TITLE}}</h1>

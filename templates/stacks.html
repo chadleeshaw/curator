@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{STACK_NAME}} - Curator</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🪙</text></svg>"
+    />
+    <link rel="stylesheet" href="/static/css/base.css" />
+    <link rel="stylesheet" href="/static/css/themes.css" />
+    <link rel="stylesheet" href="/static/css/layout.css" />
+    <link rel="stylesheet" href="/static/css/components.css" />
+    <link rel="stylesheet" href="/static/css/pages.css" />
+    <link rel="stylesheet" href="/static/css/periodical.css" />
+    <link rel="stylesheet" href="/static/css/stacks.css" />
+  </head>
+  <body>
+    <div
+      class="container"
+      id="stack-container"
+      data-slug="{{STACK_SLUG}}"
+      data-members="{{MEMBERS_DATA}}"
+    >
+      <nav class="breadcrumb">
+        <a href="/#library">Library</a>
+        <span class="separator">/</span>
+        <a href="/#stacks">Stacks</a>
+        <span class="separator">/</span>
+        <span class="current">{{STACK_NAME}}</span>
+      </nav>
+
+      <div class="stack-page-header">
+        <h1 id="stack-title">📚 {{STACK_NAME}}</h1>
+        <p id="stack-description" class="stack-page-subtitle">{{STACK_DESCRIPTION}}</p>
+        <div class="stack-page-meta">
+          <span id="stack-member-count" class="stack-page-count"></span>
+          <button id="stack-search-btn" class="stack-page-search-btn" onclick="searchStack()" title="Search all tracked items for new issues">
+            🔍 Search for Issues
+          </button>
+        </div>
+      </div>
+
+      <!-- Search progress panel (hidden by default) -->
+      <div id="stack-search-panel" class="stack-search-panel hidden">
+        <div class="stack-search-panel-header">
+          <h3 id="stack-search-title">Searching...</h3>
+          <button onclick="closeSearchPanel()" class="stack-search-close" title="Close">&times;</button>
+        </div>
+        <div id="stack-search-progress" class="stack-search-progress"></div>
+        <div id="stack-search-summary" class="stack-search-summary hidden"></div>
+      </div>
+
+      <div id="stack-periodicals-grid" class="periodical-grid"></div>
+      <div id="stack-empty-state" class="hidden">
+        <div class="empty-state">
+          <div class="empty-state-icon">📚</div>
+          <h3>No Items in This Stack</h3>
+          <p>Add periodicals to this stack from the Stacks management tab.</p>
+          <button onclick="goBack()" class="btn-primary" style="margin-top: 16px">
+            ← Back to Library
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module">
+      import { AuthManager } from '/static/js/core/auth.js';
+      import { UIUtils } from '/static/js/core/ui-utils.js';
+      import { APIClient } from '/static/js/core/api.js';
+
+      // Initialize theme
+      UIUtils.initTheme();
+
+      // Check authentication
+      const isAuthenticated = await AuthManager.checkAuthentication();
+      if (!isAuthenticated) {
+        window.location.href = '/login.html';
+      }
+
+      // Back navigation - always go to library (not history.back which may loop)
+      window.goBack = function () {
+        window.location.href = '/#library';
+      };
+
+      // Get data from template
+      const container = document.getElementById('stack-container');
+      const slug = container.dataset.slug;
+      const membersData = JSON.parse(container.dataset.members || '[]');
+      const grid = document.getElementById('stack-periodicals-grid');
+      const emptyState = document.getElementById('stack-empty-state');
+      const countBadge = document.getElementById('stack-member-count');
+
+      // Update count badge
+      countBadge.textContent = `${membersData.length} item${membersData.length !== 1 ? 's' : ''}`;
+
+      // Hide search button if no tracked members
+      const trackedMembers = membersData.filter((m) => m.type === 'tracking' && m.tracking_id);
+      if (trackedMembers.length === 0) {
+        document.getElementById('stack-search-btn').classList.add('hidden');
+      }
+
+      // Search stack function
+      let isSearching = false;
+      window.searchStack = async function () {
+        if (isSearching) return;
+        isSearching = true;
+
+        const searchBtn = document.getElementById('stack-search-btn');
+        const panel = document.getElementById('stack-search-panel');
+        const progress = document.getElementById('stack-search-progress');
+        const summary = document.getElementById('stack-search-summary');
+        const titleEl = document.getElementById('stack-search-title');
+
+        searchBtn.disabled = true;
+        searchBtn.textContent = '⏳ Searching...';
+        panel.classList.remove('hidden');
+        summary.classList.add('hidden');
+        titleEl.textContent = `Searching ${trackedMembers.length} tracked item${trackedMembers.length !== 1 ? 's' : ''}...`;
+
+        // Build progress rows
+        progress.innerHTML = trackedMembers
+          .map(
+            (m, i) => `
+          <div class="stack-search-row" id="search-row-${i}">
+            <div class="stack-search-row-status" id="search-status-${i}">⏳</div>
+            <div class="stack-search-row-title">${m.title}${m.language && m.language !== 'English' ? ` <span class="language-badge" style="font-size:9px;padding:1px 6px;margin:0">${m.language}</span>` : ''}</div>
+            <div class="stack-search-row-result" id="search-result-${i}">Waiting...</div>
+          </div>`
+          )
+          .join('');
+
+        let totalAvailable = 0;
+        let totalInLibrary = 0;
+        let totalErrors = 0;
+
+        // Search each tracked member sequentially
+        for (let i = 0; i < trackedMembers.length; i++) {
+          const member = trackedMembers[i];
+          const statusEl = document.getElementById(`search-status-${i}`);
+          const resultEl = document.getElementById(`search-result-${i}`);
+          const rowEl = document.getElementById(`search-row-${i}`);
+
+          statusEl.textContent = '🔄';
+          resultEl.textContent = 'Searching...';
+          rowEl.classList.add('searching');
+
+          try {
+            const params = new URLSearchParams();
+            params.append('query', member.title);
+            params.append('tracking_id', member.tracking_id);
+            if (member.language) params.append('language', member.language);
+            if (member.country) params.append('country', member.country);
+            if (member.category) params.append('category', member.category);
+
+            const response = await APIClient.authenticatedFetch(
+              `/api/periodicals/search-providers?${params.toString()}`,
+              { method: 'POST' }
+            );
+            const data = await response.json();
+
+            rowEl.classList.remove('searching');
+
+            if (data.found && data.results) {
+              const available = data.results.filter((r) => !r.in_library).length;
+              const inLib = data.results.filter((r) => r.in_library).length;
+              totalAvailable += available;
+              totalInLibrary += inLib;
+
+              if (available > 0) {
+                statusEl.textContent = '📥';
+                resultEl.innerHTML = `<strong>${available}</strong> available, ${inLib} in library`;
+                rowEl.classList.add('has-results');
+              } else {
+                statusEl.textContent = '✅';
+                resultEl.textContent = `${inLib} in library, nothing new`;
+                rowEl.classList.add('complete');
+              }
+            } else {
+              statusEl.textContent = '➖';
+              resultEl.textContent = 'No results';
+              rowEl.classList.add('complete');
+            }
+          } catch (err) {
+            console.error(`Search error for ${member.title}:`, err);
+            statusEl.textContent = '❌';
+            resultEl.textContent = 'Error';
+            rowEl.classList.remove('searching');
+            rowEl.classList.add('error');
+            totalErrors++;
+          }
+        }
+
+        // Show summary
+        titleEl.textContent = 'Search Complete';
+        summary.classList.remove('hidden');
+        let summaryHtml = `<div class="stack-search-stats">`;
+        if (totalAvailable > 0) {
+          summaryHtml += `<span class="stat stat-available">📥 <strong>${totalAvailable}</strong> new issue${totalAvailable !== 1 ? 's' : ''} available</span>`;
+        } else {
+          summaryHtml += `<span class="stat">✅ All up to date</span>`;
+        }
+        summaryHtml += `<span class="stat">📚 <strong>${totalInLibrary}</strong> already in library</span>`;
+        if (totalErrors > 0) {
+          summaryHtml += `<span class="stat stat-error">❌ ${totalErrors} error${totalErrors !== 1 ? 's' : ''}</span>`;
+        }
+        summaryHtml += `</div>`;
+        summary.innerHTML = summaryHtml;
+
+        searchBtn.disabled = false;
+        searchBtn.textContent = '🔍 Search for Issues';
+        isSearching = false;
+      };
+
+      window.closeSearchPanel = function () {
+        document.getElementById('stack-search-panel').classList.add('hidden');
+      };
+
+      function navigateToItem(item) {
+        let url = `/periodicals/${encodeURIComponent(item.title)}`;
+        if (item.language) {
+          url += `?language=${encodeURIComponent(item.language)}`;
+        }
+        window.location.href = url;
+      }
+
+      if (membersData.length === 0) {
+        grid.classList.add('hidden');
+        emptyState.classList.remove('hidden');
+      } else {
+        membersData.forEach((item) => {
+          const card = document.createElement('div');
+          card.className = 'periodical-card stack-detail-card';
+          card.onclick = () => navigateToItem(item);
+
+          const cover = document.createElement('div');
+          cover.className = 'periodical-cover';
+
+          if (item.cover_path || item.cover_periodical_id) {
+            const img = document.createElement('img');
+            img.alt = item.title;
+            img.loading = 'lazy';
+            const coverId = item.cover_periodical_id || item.id;
+            img.src = `/api/periodicals/${coverId}/cover`;
+            cover.appendChild(img);
+          } else {
+            cover.textContent = item.title;
+          }
+          card.appendChild(cover);
+
+          const info = document.createElement('div');
+          info.className = 'periodical-info';
+
+          const h4 = document.createElement('h4');
+          h4.className = 'stack-detail-title';
+          h4.textContent = item.title;
+          info.appendChild(h4);
+
+          // Badges row
+          const badgesRow = document.createElement('div');
+          badgesRow.className = 'stack-detail-badges';
+
+          if (item.category) {
+            const catBadge = document.createElement('span');
+            catBadge.className = 'stack-detail-category-badge';
+            catBadge.textContent = item.category;
+            badgesRow.appendChild(catBadge);
+          }
+
+          if (item.language && item.language !== 'English') {
+            const langBadge = document.createElement('span');
+            langBadge.className = 'language-badge';
+            langBadge.textContent = item.language;
+            badgesRow.appendChild(langBadge);
+          }
+
+          if (badgesRow.children.length > 0) {
+            info.appendChild(badgesRow);
+          }
+
+          // Subtitle with issue info
+          const subtitle = document.createElement('p');
+          subtitle.className = 'stack-detail-subtitle';
+          if (item.type === 'tracking') {
+            const count = item.library_count || 0;
+            if (count > 0) {
+              subtitle.textContent = `${count} issue${count !== 1 ? 's' : ''} in library`;
+            } else {
+              subtitle.textContent = 'Tracking · no issues yet';
+            }
+          } else if (item.issue_date) {
+            const d = new Date(item.issue_date);
+            subtitle.textContent = d.toLocaleDateString(undefined, {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
+            });
+          }
+          info.appendChild(subtitle);
+
+          card.appendChild(info);
+          grid.appendChild(card);
+        });
+      }
+    </script>
+  </body>
+</html>

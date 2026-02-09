@@ -16,6 +16,7 @@ import {
 } from '../core/constants.js';
 import { ValidationError as _ValidationError } from '../core/errors.js';
 import { mediaWorker, Priority } from '../readers/media-worker-manager.js';
+import { stacks as stacksManager } from './stacks.js';
 
 /**
  * Library Manager class for managing periodical library operations
@@ -44,6 +45,8 @@ export class LibraryManager {
     this.workerInitialized = false;
     /** @type {IntersectionObserver|null} Observer for lazy loading thumbnails */
     this.thumbnailObserver = null;
+    /** @type {Array} All stacks loaded from API */
+    this.allStacks = [];
 
     // Initialize media worker
     this.initMediaWorker();
@@ -308,11 +311,35 @@ export class LibraryManager {
       this.allPeriodicals = data.periodicals || [];
       this.periodicalsLoaded = true;
 
+      // Load stacks data
+      await this.loadStacks();
+
       // Load unique languages for language filter (independent API call)
       await this.populateLanguageDropdown();
 
       // Apply filters and render
       this.applyFiltersAndRender();
+    }
+  }
+
+  /**
+   * Load stacks data from API for library display
+   *
+   * @returns {Promise<void>}
+   */
+  async loadStacks() {
+    try {
+      const data = await APIHelper.executeWithErrorHandling(async () => {
+        const response = await APIClient.authenticatedFetch('/api/stacks');
+        return await response.json();
+      }, 'Library');
+
+      if (data) {
+        this.allStacks = data.stacks || [];
+      }
+    } catch (error) {
+      console.warn('[Library] Failed to load stacks:', error);
+      this.allStacks = [];
     }
   }
 
@@ -340,18 +367,46 @@ export class LibraryManager {
       getTitleFn: (p) => p.title || '',
     });
 
+    // Separate items into stacked and ungrouped
+    const stackMap = new Map(); // stack_id -> { stack, items: [] }
+    const ungrouped = [];
+
+    // Build a lookup of stacks by ID
+    const stackLookup = new Map();
+    this.allStacks.forEach((s) => stackLookup.set(s.id, s));
+
+    filtered.forEach((periodical) => {
+      if (periodical.stack_id && stackLookup.has(periodical.stack_id)) {
+        if (!stackMap.has(periodical.stack_id)) {
+          stackMap.set(periodical.stack_id, {
+            stack: stackLookup.get(periodical.stack_id),
+            items: [],
+          });
+        }
+        stackMap.get(periodical.stack_id).items.push(periodical);
+      } else {
+        ungrouped.push(periodical);
+      }
+    });
+
     // Render results
-    if (filtered.length === 0) {
+    const totalItems = stackMap.size + ungrouped.length;
+    if (totalItems === 0) {
       const filterDesc = this.filterManager.getActiveFilterDescription();
       grid.innerHTML = `<p>No periodicals found${filterDesc}</p>`;
-      // Update header stats
       if (window.updateHeaderStats) {
         window.updateHeaderStats();
       }
       return;
     }
 
-    filtered.forEach((periodical) => {
+    // Render stack cards first
+    stackMap.forEach(({ stack, items }) => {
+      grid.appendChild(this.createStackCard(stack, items));
+    });
+
+    // Then render ungrouped periodicals
+    ungrouped.forEach((periodical) => {
       grid.appendChild(this.createPeriodicalCard(periodical));
     });
 
@@ -361,7 +416,7 @@ export class LibraryManager {
     }
 
     console.log(
-      `[Library] Rendered ${filtered.length} of ${this.allPeriodicals.length} periodicals`
+      `[Library] Rendered ${stackMap.size} stacks + ${ungrouped.length} items (${filtered.length} total periodicals)`
     );
   }
 
@@ -538,6 +593,130 @@ export class LibraryManager {
   }
 
   /**
+   * Create a fanned stack card element for the library grid
+   *
+   * @param {Object} stack - Stack data from API
+   * @param {Array} items - Filtered periodicals belonging to this stack
+   * @returns {HTMLElement} The created stack card element
+   */
+  createStackCard(stack, items) {
+    const card = document.createElement('div');
+    card.className = 'periodical-card stack-card';
+
+    // Build the fanned cover area
+    const cover = document.createElement('div');
+    cover.className = 'periodical-cover stack-cover';
+
+    // Use preview covers from the stack data, or fall back to items
+    const previewCovers = stack.preview_covers || [];
+    const coverIds = previewCovers.map((c) => c.periodical_id).filter(Boolean);
+
+    // If no preview covers, use the items from the filtered set
+    if (coverIds.length === 0) {
+      items.forEach((item) => {
+        if (item.cover_path && coverIds.length < 3) {
+          coverIds.push(item.id);
+        }
+      });
+    }
+
+    if (coverIds.length === 0) {
+      // No covers at all - show placeholder
+      const placeholder = document.createElement('div');
+      placeholder.className = 'stack-cover-placeholder';
+      placeholder.textContent = '📚';
+      cover.appendChild(placeholder);
+    } else if (coverIds.length === 1) {
+      // Single cover - show full size
+      const layer = document.createElement('div');
+      layer.className = 'stack-cover-layer layer-single';
+      const img = document.createElement('img');
+      img.alt = stack.name;
+      img.loading = 'lazy';
+      img.src = `/api/periodicals/${coverIds[0]}/cover`;
+      layer.appendChild(img);
+      cover.appendChild(layer);
+    } else {
+      // Multiple covers - create fanned layers (up to 4)
+      const layerClasses = ['layer-deep', 'layer-back', 'layer-middle', 'layer-front'];
+      const displayCovers = coverIds.slice(0, 4);
+
+      // Align layers so the front is always last
+      const startIdx = layerClasses.length - displayCovers.length;
+
+      displayCovers.forEach((coverId, idx) => {
+        const layerIdx = startIdx + idx;
+        if (layerIdx >= layerClasses.length) return;
+
+        const layer = document.createElement('div');
+        layer.className = `stack-cover-layer ${layerClasses[layerIdx]}`;
+        const img = document.createElement('img');
+        img.alt = stack.name;
+        img.loading = 'lazy';
+        img.src = `/api/periodicals/${coverId}/cover`;
+        layer.appendChild(img);
+        cover.appendChild(layer);
+      });
+    }
+
+    card.appendChild(cover);
+
+    // Info section
+    const info = document.createElement('div');
+    info.className = 'periodical-info';
+
+    const h4 = document.createElement('h4');
+    h4.textContent = stack.name;
+    info.appendChild(h4);
+
+    if (stack.description) {
+      const desc = document.createElement('p');
+      desc.textContent = stack.description;
+      desc.style.overflow = 'hidden';
+      desc.style.textOverflow = 'ellipsis';
+      desc.style.whiteSpace = 'nowrap';
+      info.appendChild(desc);
+    }
+
+    const countP = document.createElement('p');
+    countP.textContent = `${stack.member_count} periodical${stack.member_count !== 1 ? 's' : ''}`;
+    info.appendChild(countP);
+
+    // Action buttons matching periodical cards
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'periodical-actions';
+
+    const viewBtn = document.createElement('button');
+    viewBtn.className = 'btn-primary';
+    viewBtn.textContent = 'Open';
+    viewBtn.style.flex = '1';
+    viewBtn.style.padding = '8px 14px';
+    viewBtn.style.fontSize = '13px';
+    viewBtn.style.fontWeight = '600';
+    viewBtn.onclick = (e) => {
+      e.stopPropagation();
+      window.location.href = `/stacks/${stack.slug}`;
+    };
+    actionsDiv.appendChild(viewBtn);
+
+    // Placeholder to match the delete button width on regular cards
+    const spacer = document.createElement('div');
+    spacer.className = 'btn-icon';
+    spacer.style.visibility = 'hidden';
+    actionsDiv.appendChild(spacer);
+
+    info.appendChild(actionsDiv);
+    card.appendChild(info);
+
+    // Click navigates to stack detail page
+    card.onclick = () => {
+      window.location.href = `/stacks/${stack.slug}`;
+    };
+
+    return card;
+  }
+
+  /**
    * Create a periodical card element
    *
    * @param {Object} periodical - The periodical data
@@ -593,6 +772,14 @@ export class LibraryManager {
       cover.textContent = title;
     }
 
+    // Language overlay on cover
+    if (language && language !== 'English') {
+      const langOverlay = document.createElement('span');
+      langOverlay.className = 'language-overlay';
+      langOverlay.textContent = language;
+      cover.appendChild(langOverlay);
+    }
+
     card.appendChild(cover);
 
     const info = document.createElement('div');
@@ -601,14 +788,6 @@ export class LibraryManager {
     const h4 = document.createElement('h4');
     h4.textContent = title;
     info.appendChild(h4);
-
-    // Add language badge if present and not English
-    if (language && language !== 'English') {
-      const langBadge = document.createElement('span');
-      langBadge.className = 'language-badge';
-      langBadge.textContent = language;
-      info.appendChild(langBadge);
-    }
 
     const dateP = document.createElement('p');
     const dateText = new Date(issue_date).toLocaleDateString();

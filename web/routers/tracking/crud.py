@@ -14,7 +14,7 @@ from core.utils.error_handling import handle_api_errors
 from core.utils.general import (
     generate_olid,
 )
-from models.database import Periodical, PeriodicalTracking
+from models.database import Periodical, PeriodicalTracking, Stack, StackMembership
 from services.file_operations import reorganize_periodical_files
 from web.schemas import APIError
 from web.utils.responses import success_response, error_response
@@ -231,6 +231,19 @@ async def list_tracked_magazines(
             # Show total of both systems (UI will query both)
             failed_count = discovered_failed + legacy_failed
 
+            # Look up stack membership for this tracking item
+            stack_info = {"stack_id": None, "stack_name": None, "stack_slug": None, "stack_description": None}
+            stack_membership = db.query(StackMembership).filter(StackMembership.periodical_tracking_id == t.id).first()
+            if stack_membership:
+                stack = db.query(Stack).filter(Stack.id == stack_membership.stack_id).first()
+                if stack:
+                    stack_info = {
+                        "stack_id": stack.id,
+                        "stack_name": stack.name,
+                        "stack_slug": stack.slug,
+                        "stack_description": stack.description,
+                    }
+
             tracked_list.append(
                 {
                     "id": t.id,
@@ -249,6 +262,10 @@ async def list_tracked_magazines(
                     "failed_count": failed_count,
                     "created_at": (t.created_at.isoformat() if t.created_at else None),
                     "last_issue_added": (t.last_metadata_update.isoformat() if t.last_metadata_update else None),
+                    "stack_id": stack_info["stack_id"],
+                    "stack_name": stack_info["stack_name"],
+                    "stack_slug": stack_info["stack_slug"],
+                    "stack_description": stack_info["stack_description"],
                 }
             )
 

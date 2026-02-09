@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from core.utils.general import generate_olid
-from models.database import Periodical, PeriodicalTracking
+from models.database import Periodical, PeriodicalTracking, Stack, StackMembership
 from web.schemas import PeriodicalResponse
 from web.utils.responses import success_response
 
@@ -294,6 +294,10 @@ class PeriodicalQueryBuilder:
             if mag.tracking_id
             else (mag.title, mag.language or "English", None)
         )
+
+        # Look up stack membership
+        stack_info = self._get_stack_info_for_periodical(mag)
+
         return {
             "id": mag.id,
             "title": self.get_best_title(mag, tracking_titles),
@@ -308,7 +312,37 @@ class PeriodicalQueryBuilder:
             "metadata": mag.extra_metadata,
             "derived_metadata": mag.derived_metadata,
             "issue_count": issue_counts.get(count_key, 1),
+            "stack_id": stack_info.get("stack_id"),
+            "stack_name": stack_info.get("stack_name"),
+            "stack_slug": stack_info.get("stack_slug"),
         }
+
+    def _get_stack_info_for_periodical(self, mag: Periodical) -> Dict[str, Any]:
+        """
+        Get stack information for a periodical.
+
+        Checks both tracking-based and direct periodical memberships.
+
+        Args:
+            mag: Periodical object
+
+        Returns:
+            Dictionary with stack_id, stack_name, stack_slug (or empty values)
+        """
+        membership = None
+        if mag.tracking_id:
+            membership = (
+                self.db.query(StackMembership).filter(StackMembership.periodical_tracking_id == mag.tracking_id).first()
+            )
+        if not membership:
+            membership = self.db.query(StackMembership).filter(StackMembership.periodical_id == mag.id).first()
+
+        if membership:
+            stack = self.db.query(Stack).filter(Stack.id == membership.stack_id).first()
+            if stack:
+                return {"stack_id": stack.id, "stack_name": stack.name, "stack_slug": stack.slug}
+
+        return {"stack_id": None, "stack_name": None, "stack_slug": None}
 
 
 @router.get("/periodicals")

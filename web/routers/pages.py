@@ -14,7 +14,7 @@ from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from core.utils.general import is_special_edition
 from core.version import get_version_info
-from models.database import Periodical
+from models.database import Periodical, Stack, StackMembership
 
 router = APIRouter(tags=["pages"])
 logger = logging.getLogger(__name__)
@@ -391,5 +391,97 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
     html_content = template_content.replace("{{PERIODICAL_TITLE}}", display_title)
     html_content = html_content.replace("{{YEARS_DATA}}", years_json)
     html_content = html_content.replace("{{SPECIAL_EDITIONS_DATA}}", special_editions_json)
+
+    return HTMLResponse(content=html_content)
+
+
+@router.get("/stacks/{stack_slug}")
+@handle_api_errors("View stack", logger)
+async def view_stack(stack_slug: str):
+    """View all periodicals in a stack"""
+
+    def operation(db):
+        from models.database import PeriodicalTracking
+
+        stack = db.query(Stack).filter(Stack.slug == stack_slug).first()
+        if not stack:
+            raise HTTPException(status_code=404, detail=f"Stack '{stack_slug}' not found")
+
+        memberships = (
+            db.query(StackMembership)
+            .filter(StackMembership.stack_id == stack.id)
+            .order_by(StackMembership.added_at.asc())
+            .all()
+        )
+
+        members = []
+        for m in memberships:
+            if m.periodical_tracking_id:
+                tracking = (
+                    db.query(PeriodicalTracking).filter(PeriodicalTracking.id == m.periodical_tracking_id).first()
+                )
+                if tracking:
+                    library_count = db.query(Periodical).filter(Periodical.tracking_id == tracking.id).count()
+                    latest = (
+                        db.query(Periodical)
+                        .filter(
+                            Periodical.tracking_id == tracking.id,
+                            Periodical.cover_path.isnot(None),
+                        )
+                        .order_by(Periodical.issue_date.desc())
+                        .first()
+                    )
+                    member_data = {
+                        "tracking_id": tracking.id,
+                        "title": tracking.title,
+                        "language": tracking.language,
+                        "category": tracking.category,
+                        "type": "tracking",
+                        "library_count": library_count,
+                        "cover_periodical_id": latest.id if latest else None,
+                        "first_publish_year": tracking.first_publish_year,
+                        "country": tracking.country,
+                    }
+                    members.append(member_data)
+            elif m.periodical_id:
+                periodical = db.query(Periodical).filter(Periodical.id == m.periodical_id).first()
+                if periodical:
+                    category = None
+                    if periodical.tracking_id:
+                        pt = (
+                            db.query(PeriodicalTracking).filter(PeriodicalTracking.id == periodical.tracking_id).first()
+                        )
+                        category = pt.category if pt else None
+                    members.append(
+                        {
+                            "id": periodical.id,
+                            "title": periodical.title,
+                            "language": periodical.language,
+                            "category": category,
+                            "type": "periodical",
+                            "issue_date": (periodical.issue_date.isoformat() if periodical.issue_date else None),
+                            "cover_path": periodical.cover_path,
+                            "cover_periodical_id": (periodical.id if periodical.cover_path else None),
+                        }
+                    )
+
+        return stack, members
+
+    stack, members = await with_db_session(_session_factory, operation)
+
+    # Read and render template
+    try:
+        with open("templates/stacks.html", "r") as f:
+            template_content = f.read()
+    except FileNotFoundError:
+        logger.error("stacks.html template not found")
+        raise HTTPException(status_code=500, detail="Stack template not found")
+
+    members_json = json.dumps(members).replace('"', "&quot;")
+
+    html_content = template_content.replace("{{STACK_NAME}}", stack.name)
+    html_content = html_content.replace("{{STACK_SLUG}}", stack.slug)
+    html_content = html_content.replace("{{STACK_DESCRIPTION}}", stack.description or "")
+    html_content = html_content.replace("{{MEMBERS_DATA}}", members_json)
 
     return HTMLResponse(content=html_content)

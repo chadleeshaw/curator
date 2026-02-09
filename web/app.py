@@ -47,6 +47,7 @@ from web.routers import (
     pages,
     periodicals,
     search,
+    stacks,
     tasks,
     tracking,
 )
@@ -760,6 +761,7 @@ def _initialize_router_dependencies(app: FastAPI, auto_download_task) -> None:
 
     config.set_dependencies(app_state.config_loader)
     pages.set_dependencies(app_state.session_factory)
+    stacks.set_dependencies(app_state.session_factory)
     ocr_queue.set_dependencies(app_state.session_factory)
 
     discovery.set_dependencies(
@@ -1112,6 +1114,7 @@ app.include_router(downloads.router)
 app.include_router(imports.router)
 app.include_router(tasks.router)
 app.include_router(config.router)
+app.include_router(stacks.router)
 app.include_router(pages.router)
 app.include_router(ocr_queue.router)
 app.include_router(discovery.router)

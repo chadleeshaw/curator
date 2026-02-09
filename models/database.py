@@ -472,6 +472,58 @@ class DiscoveredIssue(Base):
         }
 
 
+class Stack(Base):
+    """User-created grouping of periodicals and tracking items"""
+
+    __tablename__ = "stacks"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255), nullable=False, unique=True, index=True)
+    slug = Column(String(255), nullable=False, unique=True, index=True)
+    description = Column(String(1024), nullable=True)
+    cover_override_path = Column(String(512), nullable=True)  # Custom cover image path
+    sort_order = Column(Integer, nullable=False, default=0)  # For manual ordering
+    created_at = Column(DateTime, default=utcnow, index=True)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize Stack to dictionary for API responses"""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "slug": self.slug,
+            "description": self.description,
+            "cover_override_path": self.cover_override_path,
+            "sort_order": self.sort_order,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class StackMembership(Base):
+    """Associates periodicals or tracking items with a stack (one stack per item)"""
+
+    __tablename__ = "stack_memberships"
+
+    id = Column(Integer, primary_key=True)
+    stack_id = Column(Integer, ForeignKey("stacks.id"), nullable=False, index=True)
+    periodical_tracking_id = Column(
+        Integer, ForeignKey("periodical_tracking.id"), nullable=True, unique=True, index=True
+    )
+    periodical_id = Column(Integer, ForeignKey("periodicals.id"), nullable=True, unique=True, index=True)
+    added_at = Column(DateTime, default=utcnow)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize StackMembership to dictionary for API responses"""
+        return {
+            "id": self.id,
+            "stack_id": self.stack_id,
+            "periodical_tracking_id": self.periodical_tracking_id,
+            "periodical_id": self.periodical_id,
+            "added_at": self.added_at.isoformat() if self.added_at else None,
+        }
+
+
 class ReadingProgress(Base):
     """Track reading progress for periodicals across different formats"""
 
