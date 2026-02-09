@@ -986,7 +986,7 @@ class FileImporter:
             # Step 3: Calculate content hash and check for hash-based duplicates
             content_hash = hash_file_in_chunks(str(file_path))
             if not content_hash:
-                logger.error(f"Failed to hash file {file_path}, skipping import", exc_info=True)
+                logger.error(f"Failed to hash file {file_path}, skipping import")
                 return {"skip_reason": "parse_error"}
 
             if self._check_hash_duplicate(content_hash, file_path, skip_organize, session):

@@ -173,6 +173,23 @@ async def list_tracked_magazines(
         elif sort_by == "created_at":
             sort_expr = PeriodicalTracking.created_at.desc() if is_descending else PeriodicalTracking.created_at.asc()
             query = query.order_by(sort_expr)
+        elif sort_by == "latest_issue":
+            sort_expr = (
+                PeriodicalTracking.last_metadata_update.desc()
+                if is_descending
+                else PeriodicalTracking.last_metadata_update.asc()
+            )
+            # Put items with no issues (NULL last_metadata_update) at the end
+            if is_descending:
+                query = query.order_by(
+                    PeriodicalTracking.last_metadata_update.is_(None),
+                    sort_expr,
+                )
+            else:
+                query = query.order_by(
+                    PeriodicalTracking.last_metadata_update.isnot(None),
+                    sort_expr,
+                )
         else:
             sort_expr = PeriodicalTracking.title.desc() if is_descending else PeriodicalTracking.title.asc()
             query = query.order_by(sort_expr)
@@ -231,6 +248,9 @@ async def list_tracked_magazines(
                     "library_count": library_count,
                     "failed_count": failed_count,
                     "created_at": (t.created_at.isoformat() if t.created_at else None),
+                    "last_issue_added": (
+                        t.last_metadata_update.isoformat() if t.last_metadata_update else None
+                    ),
                 }
             )
 

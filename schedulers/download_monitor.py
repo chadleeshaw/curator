@@ -311,6 +311,9 @@ class DownloadMonitor:
 
                 if imported_count > 0:
                     logger.info(f"[DownloadMonitor] Successfully imported {imported_count} files from folder")
+                    # Clean up any completed submissions from the download client
+                    # that correspond to files we just imported via folder scan
+                    self._cleanup_stale_completed_submissions(session)
 
                 if data.get("failed", 0) > 0:
                     errors = results.get("errors", [])
@@ -523,6 +526,50 @@ class DownloadMonitor:
                 logger.info(f"[DownloadMonitor] Deleted {reason} job {job_id} from {client.name}")
         except Exception as e:
             logger.error(f"Error deleting from client: {e}", exc_info=True)
+
+    def _cleanup_stale_completed_submissions(self, session: Session) -> None:
+        """
+        Clean up completed download submissions whose files have already been imported.
+
+        After folder-scan imports, some completed submissions may still be lingering
+        in the download client because they were imported via folder scan rather than
+        the client-based path. This finds those submissions and deletes them from the client.
+        """
+        try:
+            # Find completed submissions that still have file_path set
+            # (these weren't processed via the client path)
+            stale_submissions = (
+                session.query(DownloadSubmission)
+                .filter(
+                    DownloadSubmission.status == DownloadSubmission.StatusEnum.COMPLETED,
+                    DownloadSubmission.file_path.isnot(None),
+                )
+                .all()
+            )
+
+            if not stale_submissions:
+                return
+
+            for submission in stale_submissions:
+                # Check if the file still exists in downloads - if gone, it was imported
+                file_path = self._find_file_in_downloads(submission.file_path)
+                if file_path is None:
+                    logger.info(
+                        f"[DownloadMonitor] Completed submission {submission.id} ({submission.result_title}) "
+                        f"file no longer in downloads - marking processed and cleaning up client"
+                    )
+                    # Mark as processed
+                    self.download_manager.mark_processed(submission.id, session)
+
+                    # Sync DiscoveredIssue status
+                    self._sync_discovered_issue_status(submission, "completed", None, session)
+
+                    # Delete from client
+                    if submission.job_id and self._should_delete_from_client(submission.tracking_id, session):
+                        self._delete_from_client(submission.job_id, "completed (folder import)", submission.client_name)
+
+        except Exception as e:
+            logger.error(f"[DownloadMonitor] Error cleaning up stale submissions: {e}", exc_info=True)
 
     def _process_completed_downloads(self, session: Session) -> int:
         """
