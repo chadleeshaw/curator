@@ -245,11 +245,13 @@ async function searchStack() {
           // Store for bulk download
           memberSearchResults.set(i, {
             member,
-            availableIssues: availableIssues.map((r) => ({
-              title: r.title,
-              url: r.url || r.nzb_url || r.link,
-              provider: r.provider || 'newsnab',
-            })),
+            availableIssues: availableIssues
+              .map((r) => ({
+                title: r.title,
+                url: r.url || r.download_url || r.nzb_url || r.link,
+                provider: r.provider || 'newsnab',
+              }))
+              .filter((issue) => issue.url),
           });
 
           statusEl.textContent = '📥';

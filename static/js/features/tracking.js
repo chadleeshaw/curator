@@ -827,13 +827,21 @@ export class TrackingManager {
           ? `<span class="stack-group-desc">${description}</span>`
           : '';
 
+        const totalIssues = items.reduce((sum, item) => sum + (item.library_count || 0), 0);
+        const totalFailed = items.reduce((sum, item) => sum + (item.failed_count || 0), 0);
+        const failedBadge = totalFailed > 0
+          ? `<span class="stack-group-count stack-group-failed">${totalFailed} failed</span>`
+          : '';
+
         header.innerHTML = `
           <span class="stack-group-chevron">▶</span>
           <div class="stack-group-info">
             <span class="stack-group-name">📚 ${name}</span>
             ${descHtml}
           </div>
-          <span class="stack-group-count">${items.length} item${items.length !== 1 ? 's' : ''}</span>
+          <span class="stack-group-count">${items.length} periodical${items.length !== 1 ? 's' : ''}</span>
+          <span class="stack-group-count stack-group-issues">${totalIssues} issue${totalIssues !== 1 ? 's' : ''}</span>
+          ${failedBadge}
           <button class="stack-group-search-btn" title="Search all items in this stack for new issues">🔍</button>
         `;
 
@@ -1337,11 +1345,13 @@ export class TrackingManager {
             // Store for bulk download
             this.stackSearchResults.set(i, {
               trackingId: item.id,
-              availableIssues: availableIssues.map((r) => ({
-                title: r.title,
-                url: r.url || r.nzb_url || r.link,
-                provider: r.provider || 'newsnab',
-              })),
+              availableIssues: availableIssues
+                .map((r) => ({
+                  title: r.title,
+                  url: r.url || r.download_url || r.nzb_url || r.link,
+                  provider: r.provider || 'newsnab',
+                }))
+                .filter((issue) => issue.url),
             });
 
             statusEl.textContent = '\ud83d\udce5';

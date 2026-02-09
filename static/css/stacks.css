@@ -430,6 +430,17 @@
   align-items: center;
   justify-content: center;
   height: 44px;
+  white-space: nowrap;
+}
+
+.stack-group-issues {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--success-color, #10b981);
+}
+
+.stack-group-failed {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--danger-color, #ef4444);
 }
 
 .stack-group-search-btn {
@@ -1011,6 +1022,9 @@
 
   .stack-group-count {
     margin-left: 22px;
+    height: 36px;
+    font-size: 12px;
+    padding: 2px 8px;
   }
 
   .stack-group-items {

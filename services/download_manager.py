@@ -94,7 +94,9 @@ class DownloadManager:
         self.search_service = SearchService(search_providers, fuzzy_threshold)
         self.deduplication_service = DeduplicationService()
         self.submission_service = SubmissionService()
-        self.queue_processor = QueueProcessor(download_client, max_downloads, nzb_cache_service)
+        self.queue_processor = QueueProcessor(
+            download_client, max_downloads, nzb_cache_service, download_clients=self.download_clients
+        )
 
         # Log available clients
         client_names = list(self.download_clients.keys())
@@ -191,6 +193,19 @@ class DownloadManager:
         # Fallback to default
         logger.debug(f"Client '{client_name}' not found by name, using default")
         return self.download_clients["default"]
+
+    def _get_client_name_for_provider(self, provider: str) -> str:
+        """
+        Get the client name for a provider, for storing on QUEUED submissions.
+
+        Args:
+            provider: Provider type (e.g., 'internet_archive', 'newsnab')
+
+        Returns:
+            Client name string
+        """
+        client = self._get_client_for_provider(provider)
+        return client.name
 
     def _is_english_edition(self, title: str) -> bool:
         """
@@ -643,6 +658,7 @@ class DownloadManager:
         # Queue if at concurrent download limit
         active_count = self._get_active_download_count(session)
         if active_count >= self.max_downloads:
+            provider = search_result.get("provider", "unknown")
             logger.info(
                 f"[DownloadManager] At download limit ({active_count}/{self.max_downloads}), "
                 f"queuing download: '{title}'"
@@ -653,6 +669,7 @@ class DownloadManager:
                 DownloadSubmission.StatusEnum.QUEUED,
                 session,
                 search_result_db_id=search_result_db_id,
+                client_name=self._get_client_name_for_provider(provider),
                 attempt_count=0,
             )
             logger.info(f"Download queued: {title} (tracking_id: {tracking_id})")
@@ -813,6 +830,7 @@ class DownloadManager:
 
         # If at limit, create a QUEUED submission so the queue processor picks it up later
         if active_count >= self.max_downloads:
+            provider = issue.latest_provider or "unknown"
             logger.info(
                 f"At download limit ({active_count}/{self.max_downloads}), " f"queuing download: '{issue.title}'"
             )
@@ -821,6 +839,7 @@ class DownloadManager:
                 search_result,
                 DownloadSubmission.StatusEnum.QUEUED,
                 session,
+                client_name=self._get_client_name_for_provider(provider),
                 attempt_count=0,
             )
 
@@ -1190,6 +1209,7 @@ class DownloadManager:
         # Check if at concurrent download limit; queue if so, otherwise submit directly
         active_count = self._get_active_download_count(session)
         if active_count >= self.max_downloads:
+            provider = search_result.get("provider", "unknown")
             logger.info(
                 f"[DownloadManager] At download limit ({active_count}/{self.max_downloads}), "
                 f"queuing manual download: '{search_result['title']}'"
@@ -1200,6 +1220,7 @@ class DownloadManager:
                 DownloadSubmission.StatusEnum.QUEUED,
                 session,
                 search_result_db_id=search_result_db_id,
+                client_name=self._get_client_name_for_provider(provider),
                 attempt_count=0,
             )
 

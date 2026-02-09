@@ -711,6 +711,14 @@ export class LibraryManager {
       });
     }
 
+    // Also collect ALL item covers for the carousel (beyond the fan-out 3)
+    const allCoverIds = [...coverIds];
+    items.forEach((item) => {
+      if (item.cover_path && item.id && !allCoverIds.includes(item.id)) {
+        allCoverIds.push(item.id);
+      }
+    });
+
     if (coverIds.length === 0) {
       // No covers at all - show placeholder
       const placeholder = document.createElement('div');
@@ -751,14 +759,16 @@ export class LibraryManager {
       });
 
       // Build the 3D carousel scene (hidden until hover)
-      if (displayCovers.length > 1) {
+      // Use ALL covers for the carousel, not just the 3 fan-out ones
+      const carouselCovers = allCoverIds.length > 1 ? allCoverIds : displayCovers;
+      if (carouselCovers.length > 1) {
         const scene = document.createElement('div');
         scene.className = 'stack-carousel-scene';
 
         const ring = document.createElement('div');
         ring.className = 'stack-carousel-ring';
 
-        displayCovers.forEach((coverId, idx) => {
+        carouselCovers.forEach((coverId, idx) => {
           const face = document.createElement('div');
           face.className = 'stack-carousel-face';
           face.setAttribute('data-face-index', idx);
@@ -775,7 +785,7 @@ export class LibraryManager {
         // Indicator dots
         const dots = document.createElement('div');
         dots.className = 'stack-carousel-dots';
-        for (let i = 0; i < displayCovers.length; i++) {
+        for (let i = 0; i < carouselCovers.length; i++) {
           const dot = document.createElement('span');
           dot.className = 'stack-carousel-dot';
           if (i === 0) dot.classList.add('active');
@@ -786,7 +796,7 @@ export class LibraryManager {
         cover.appendChild(scene);
 
         // Attach 3D carousel interaction
-        this.attachStackCarousel(cover, ring, displayCovers.length);
+        this.attachStackCarousel(cover, ring, carouselCovers.length);
       }
     }
 
