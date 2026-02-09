@@ -16,19 +16,20 @@
     <link rel="stylesheet" href="/static/css/periodical.css" />
   </head>
   <body>
+    <!-- Breadcrumb (outside container for sticky positioning) -->
+    <nav id="breadcrumb" class="breadcrumb detail-breadcrumb">
+      <a href="/#library">Library</a>
+      <span class="separator">/</span>
+      <span class="current">{{PERIODICAL_TITLE}}</span>
+    </nav>
+
     <div
       class="container"
       id="periodical-container"
       data-years="{{YEARS_DATA}}"
       data-special-editions="{{SPECIAL_EDITIONS_DATA}}"
     >
-      <nav id="breadcrumb" class="breadcrumb">
-        <a href="/#library">Library</a>
-        <span class="separator">/</span>
-        <span class="current">{{PERIODICAL_TITLE}}</span>
-      </nav>
-
-      <div class="periodical-header">
+      <div class="periodical-header collapsible-header">
         <h1 id="periodical-title">{{PERIODICAL_TITLE}}</h1>
         <p>Published Issues by Year</p>
       </div>
@@ -212,7 +213,9 @@
                 />
                 <div id="cover-upload-preview" class="cover-upload-preview hidden">
                   <img id="cover-preview-img" alt="Cover preview" />
-                  <button type="button" onclick="clearCoverUpload()" class="btn-remove-preview">✕</button>
+                  <button type="button" onclick="clearCoverUpload()" class="btn-remove-preview">
+                    ✕
+                  </button>
                 </div>
               </div>
               <small class="form-hint"

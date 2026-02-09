@@ -1,24 +1,70 @@
 /* Curator - Periodical Page Styles */
 
+/* ==========================================================================
+   Detail page breadcrumb (periodical + stacks pages)
+   ========================================================================== */
+
+.detail-breadcrumb {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 12px 24px;
+  background: var(--background);
+  transition:
+    background 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+.header-collapsed .detail-breadcrumb {
+  background: var(--surface);
+  border-radius: 0 0 12px 12px;
+  box-shadow: var(--shadow-md);
+}
+
+/* Collapsible header banner (shared by periodical + stacks pages) */
+.collapsible-header {
+  transition:
+    max-height 0.3s ease,
+    padding 0.3s ease,
+    opacity 0.3s ease,
+    margin 0.3s ease;
+  max-height: 300px;
+  overflow: hidden;
+}
+
+.header-collapsed .collapsible-header {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  margin-bottom: 0;
+  opacity: 0;
+}
+
+/* ==========================================================================
+   Periodical Header
+   ========================================================================== */
+
 .periodical-header {
   background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
   color: white;
-  padding: 40px 20px;
-  margin-bottom: 30px;
+  padding: 20px 20px;
+  margin-bottom: 20px;
   text-align: center;
   border-radius: 8px;
 }
 
 .periodical-header h1 {
   margin: 0;
-  font-size: 2.5em;
+  font-size: 1.6em;
   font-weight: bold;
 }
 
 .periodical-header p {
-  margin: 10px 0 0 0;
+  margin: 4px 0 0 0;
   opacity: 0.9;
-  font-size: 1.1em;
+  font-size: 0.95em;
 }
 
 .back-button {

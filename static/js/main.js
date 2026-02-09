@@ -149,6 +149,9 @@ function showQueueView(queueType) {
   // Save current queue view to localStorage
   localStorage.setItem('lastQueueView', queueType);
 
+  // Update breadcrumb with queue sub-view
+  UIUtils.updateBreadcrumb('queue', queueType);
+
   // Update button active states
   document.querySelectorAll('.queue-switch-btn').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.queue === queueType);
@@ -255,6 +258,9 @@ window.showSettingsTab = (tabName, event) => {
 
   // Save the current tab to localStorage
   localStorage.setItem('curator-settings-tab', tabName);
+
+  // Update breadcrumb with settings sub-tab
+  UIUtils.updateBreadcrumb('settings', tabName);
 };
 
 // Restore last active settings tab on page load

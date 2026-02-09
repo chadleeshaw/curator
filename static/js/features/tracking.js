@@ -63,6 +63,8 @@ export class TrackingManager {
     this.lastCuratedIssues = null;
     /** @type {string|null} Last search title for re-rendering */
     this.lastSearchTitle = null;
+    /** @type {Map} Stack search results for bulk download */
+    this.stackSearchResults = new Map();
   }
 
   /**
@@ -768,11 +770,11 @@ export class TrackingManager {
       return;
     }
 
-    // Group items by stack
-    const stackGroups = new Map(); // stack_id -> { name, slug, items: [] }
-    const ungrouped = [];
+    // Group items by stack while tracking first-seen position for sort interleaving
+    const stackGroups = new Map(); // stack_id -> { name, slug, items: [], firstIndex }
+    const ungrouped = []; // { trackingItem, index }
 
-    filtered.forEach((trackingItem) => {
+    filtered.forEach((trackingItem, index) => {
       if (trackingItem.stack_id && trackingItem.stack_name) {
         if (!stackGroups.has(trackingItem.stack_id)) {
           stackGroups.set(trackingItem.stack_id, {
@@ -780,73 +782,90 @@ export class TrackingManager {
             slug: trackingItem.stack_slug,
             description: trackingItem.stack_description || '',
             items: [],
+            firstIndex: index,
           });
         }
         stackGroups.get(trackingItem.stack_id).items.push(trackingItem);
       } else {
-        ungrouped.push(trackingItem);
+        ungrouped.push({ trackingItem, index });
       }
     });
 
-    // Render stack groups with collapsible headers
-    stackGroups.forEach(({ name, slug, description, items }, stackId) => {
-      const group = document.createElement('div');
-      group.className = 'stack-group';
+    // Build a unified render list so stacks interleave with ungrouped items
+    // based on the server-side sort order (position of first member)
+    const renderItems = [];
 
-      // Collapsible header
-      const header = document.createElement('div');
-      header.className = 'stack-group-header';
-
-      // Check localStorage for collapsed state
-      const collapseKey = `stack-collapse-${stackId}`;
-      const isExpanded = localStorage.getItem(collapseKey) !== 'collapsed';
-      if (isExpanded) header.classList.add('expanded');
-
-      const descHtml = description
-        ? `<span class="stack-group-desc">${description}</span>`
-        : '';
-
-      header.innerHTML = `
-        <span class="stack-group-chevron">▶</span>
-        <div class="stack-group-info">
-          <span class="stack-group-name">📚 ${name}</span>
-          ${descHtml}
-        </div>
-        <span class="stack-group-count">${items.length} item${items.length !== 1 ? 's' : ''}</span>
-        <button class="stack-group-search-btn" title="Search all items in this stack for new issues">🔍</button>
-      `;
-
-      // Header click toggles collapse (but not on the search button)
-      header.onclick = (e) => {
-        if (e.target.closest('.stack-group-search-btn')) return;
-        header.classList.toggle('expanded');
-        const nowExpanded = header.classList.contains('expanded');
-        localStorage.setItem(collapseKey, nowExpanded ? 'expanded' : 'collapsed');
-      };
-
-      // Search button click
-      const searchBtn = header.querySelector('.stack-group-search-btn');
-      searchBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.searchStackItems(name, items);
-      });
-
-      group.appendChild(header);
-
-      // Items container
-      const itemsContainer = document.createElement('div');
-      itemsContainer.className = 'stack-group-items';
-      items.forEach((trackingItem) => {
-        itemsContainer.appendChild(this.createTrackedCard(trackingItem));
-      });
-      group.appendChild(itemsContainer);
-
-      container.appendChild(group);
+    stackGroups.forEach((group, stackId) => {
+      renderItems.push({ type: 'stack', stackId, group, sortIndex: group.firstIndex });
     });
 
-    // Render ungrouped items
-    ungrouped.forEach((trackingItem) => {
-      container.appendChild(this.createTrackedCard(trackingItem));
+    ungrouped.forEach(({ trackingItem, index }) => {
+      renderItems.push({ type: 'item', trackingItem, sortIndex: index });
+    });
+
+    renderItems.sort((a, b) => a.sortIndex - b.sortIndex);
+
+    // Render in unified sorted order
+    renderItems.forEach((entry) => {
+      if (entry.type === 'stack') {
+        const { stackId, group } = entry;
+        const { name, slug, description, items } = group;
+
+        const groupEl = document.createElement('div');
+        groupEl.className = 'stack-group';
+
+        // Collapsible header
+        const header = document.createElement('div');
+        header.className = 'stack-group-header';
+
+        // Check localStorage for collapsed state
+        const collapseKey = `stack-collapse-${stackId}`;
+        const isExpanded = localStorage.getItem(collapseKey) !== 'collapsed';
+        if (isExpanded) header.classList.add('expanded');
+
+        const descHtml = description
+          ? `<span class="stack-group-desc">${description}</span>`
+          : '';
+
+        header.innerHTML = `
+          <span class="stack-group-chevron">▶</span>
+          <div class="stack-group-info">
+            <span class="stack-group-name">📚 ${name}</span>
+            ${descHtml}
+          </div>
+          <span class="stack-group-count">${items.length} item${items.length !== 1 ? 's' : ''}</span>
+          <button class="stack-group-search-btn" title="Search all items in this stack for new issues">🔍</button>
+        `;
+
+        // Header click toggles collapse (but not on the search button)
+        header.onclick = (e) => {
+          if (e.target.closest('.stack-group-search-btn')) return;
+          header.classList.toggle('expanded');
+          const nowExpanded = header.classList.contains('expanded');
+          localStorage.setItem(collapseKey, nowExpanded ? 'expanded' : 'collapsed');
+        };
+
+        // Search button click
+        const searchBtn = header.querySelector('.stack-group-search-btn');
+        searchBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.searchStackItems(name, items);
+        });
+
+        groupEl.appendChild(header);
+
+        // Items container
+        const itemsContainer = document.createElement('div');
+        itemsContainer.className = 'stack-group-items';
+        items.forEach((trackingItem) => {
+          itemsContainer.appendChild(this.createTrackedCard(trackingItem));
+        });
+        groupEl.appendChild(itemsContainer);
+
+        container.appendChild(groupEl);
+      } else {
+        container.appendChild(this.createTrackedCard(entry.trackingItem));
+      }
     });
 
     console.log(
@@ -1252,6 +1271,9 @@ export class TrackingManager {
     const issuesContent = document.getElementById('search-issues-content');
     document.getElementById(ELEMENT_IDS.SEARCH_ISSUES_MODAL).classList.remove(CSS_CLASSES.HIDDEN);
 
+    // Reset download state for this search session
+    this.stackSearchResults = new Map();
+
     // Build progress UI
     issuesContent.innerHTML = `
       <div class="search-summary">
@@ -1269,6 +1291,7 @@ export class TrackingManager {
       row.innerHTML = `
         <div class="stack-search-row-status" id="stack-sr-status-${i}">\u23f3</div>
         <div class="stack-search-row-title">${item.title}${item.language && item.language !== 'English' ? ` <span class="language-badge" style="font-size:9px;padding:1px 6px;margin:0">${item.language}</span>` : ''}</div>
+        <div class="stack-search-row-actions" id="stack-sr-actions-${i}"></div>
         <div class="stack-search-row-result" id="stack-sr-result-${i}">Waiting...</div>`;
       rowsContainer.appendChild(row);
     });
@@ -1281,6 +1304,7 @@ export class TrackingManager {
       const item = items[i];
       const statusEl = document.getElementById(`stack-sr-status-${i}`);
       const resultEl = document.getElementById(`stack-sr-result-${i}`);
+      const actionsEl = document.getElementById(`stack-sr-actions-${i}`);
       const rowEl = document.getElementById(`stack-sr-${i}`);
 
       statusEl.textContent = '\ud83d\udd04';
@@ -1303,14 +1327,26 @@ export class TrackingManager {
         rowEl.classList.remove('searching');
 
         if (data.found && data.results) {
-          const available = data.results.filter((r) => !r.in_library).length;
+          const availableIssues = data.results.filter((r) => !r.in_library);
+          const available = availableIssues.length;
           const inLib = data.results.filter((r) => r.in_library).length;
           totalAvailable += available;
           totalInLibrary += inLib;
 
           if (available > 0) {
+            // Store for bulk download
+            this.stackSearchResults.set(i, {
+              trackingId: item.id,
+              availableIssues: availableIssues.map((r) => ({
+                title: r.title,
+                url: r.url || r.nzb_url || r.link,
+                provider: r.provider || 'newsnab',
+              })),
+            });
+
             statusEl.textContent = '\ud83d\udce5';
             resultEl.innerHTML = `<strong>${available}</strong> available, ${inLib} in library`;
+            actionsEl.innerHTML = `<button class="stack-search-dl-btn" onclick="downloadStackSearchMember(${i})" title="Download ${available} issues">\u2b07 ${available}</button>`;
             rowEl.classList.add('has-results');
           } else {
             statusEl.textContent = '\u2705';
@@ -1346,7 +1382,132 @@ export class TrackingManager {
       summaryHtml += `<span style="color:var(--error-color);">\u274c ${totalErrors} error${totalErrors !== 1 ? 's' : ''}</span>`;
     }
     summaryHtml += '</div>';
+    if (totalAvailable > 0) {
+      summaryHtml += `<div style="margin-top:10px;"><button class="stack-search-dl-all-btn" onclick="downloadAllStackSearchIssues()" id="stack-sr-dl-all">\u2b07 Download All ${totalAvailable} Issues</button></div>`;
+    }
     doneEl.innerHTML = summaryHtml;
+  }
+
+  /**
+   * Download available issues for a single member from stack search results
+   *
+   * @param {number} memberIdx - Index of the member in the search results
+   * @returns {Promise<void>}
+   */
+  async downloadStackSearchMember(memberIdx) {
+    const entry = this.stackSearchResults.get(memberIdx);
+    if (!entry || entry.availableIssues.length === 0) return;
+
+    const btn = document.querySelector(`#stack-sr-actions-${memberIdx} .stack-search-dl-btn`);
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '\u23f3';
+    }
+
+    try {
+      const response = await APIClient.authenticatedFetch('/api/downloads/batch-issues', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tracking_id: entry.trackingId,
+          issues: entry.availableIssues,
+        }),
+      });
+      const data = await response.json();
+
+      const parts = [];
+      if (data.submitted > 0) parts.push(`${data.submitted} sent`);
+      if (data.queued > 0) parts.push(`${data.queued} queued`);
+      if (data.skipped > 0) parts.push(`${data.skipped} skipped`);
+      if (data.failed > 0) parts.push(`${data.failed} failed`);
+
+      if (btn) {
+        const hasErrors = data.failed > 0;
+        btn.textContent = hasErrors ? '\u26a0\ufe0f' : '\u2705';
+        btn.title = parts.join(', ');
+        btn.classList.add(hasErrors ? 'dl-warning' : 'dl-done');
+      }
+
+      this.stackSearchResults.delete(memberIdx);
+    } catch (err) {
+      console.error(`Download error for stack member ${memberIdx}:`, err);
+      if (btn) {
+        btn.textContent = '\u274c';
+        btn.title = err.message;
+        btn.disabled = false;
+      }
+    }
+  }
+
+  /**
+   * Download all available issues across all members from stack search results
+   *
+   * @returns {Promise<void>}
+   */
+  async downloadAllStackSearchIssues() {
+    const dlAllBtn = document.getElementById('stack-sr-dl-all');
+    if (dlAllBtn) {
+      dlAllBtn.disabled = true;
+      dlAllBtn.textContent = '\u23f3 Downloading...';
+    }
+
+    let totalSubmitted = 0;
+    let totalQueued = 0;
+    let totalSkipped = 0;
+    let totalFailed = 0;
+
+    const entries = [...this.stackSearchResults.entries()];
+    for (const [idx, entry] of entries) {
+      const btn = document.querySelector(`#stack-sr-actions-${idx} .stack-search-dl-btn`);
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = '\u23f3';
+      }
+
+      try {
+        const response = await APIClient.authenticatedFetch('/api/downloads/batch-issues', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tracking_id: entry.trackingId,
+            issues: entry.availableIssues,
+          }),
+        });
+        const data = await response.json();
+
+        totalSubmitted += data.submitted || 0;
+        totalQueued += data.queued || 0;
+        totalSkipped += data.skipped || 0;
+        totalFailed += data.failed || 0;
+
+        if (btn) {
+          const hasErrors = data.failed > 0;
+          btn.textContent = hasErrors ? '\u26a0\ufe0f' : '\u2705';
+          btn.classList.add(hasErrors ? 'dl-warning' : 'dl-done');
+        }
+
+        this.stackSearchResults.delete(idx);
+      } catch (err) {
+        console.error(`Download error for stack member:`, err);
+        totalFailed += entry.availableIssues.length;
+        if (btn) {
+          btn.textContent = '\u274c';
+          btn.disabled = false;
+        }
+      }
+    }
+
+    if (dlAllBtn) {
+      const parts = [];
+      if (totalSubmitted > 0) parts.push(`${totalSubmitted} sent`);
+      if (totalQueued > 0) parts.push(`${totalQueued} queued`);
+      if (totalSkipped > 0) parts.push(`${totalSkipped} skipped`);
+      if (totalFailed > 0) parts.push(`${totalFailed} failed`);
+
+      const hasErrors = totalFailed > 0;
+      dlAllBtn.textContent = hasErrors ? `\u26a0\ufe0f ${parts.join(', ')}` : `\u2705 ${parts.join(', ')}`;
+      dlAllBtn.classList.add(hasErrors ? 'dl-warning' : 'dl-done');
+    }
   }
 
   /**
@@ -3339,7 +3500,10 @@ window.clearTrackingFilters = function () {
     tracking.filterManager.updateUI(
       'tracking-category-filter',
       'tracking-language-filter',
-      'tracking-search-bar'
+      'tracking-search-input'
     );
   }
 };
+
+window.downloadStackSearchMember = (idx) => tracking.downloadStackSearchMember(idx);
+window.downloadAllStackSearchIssues = () => tracking.downloadAllStackSearchIssues();

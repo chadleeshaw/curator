@@ -477,6 +477,25 @@
   letter-spacing: 0.4px;
 }
 
+/* Stack badge overlay on cover image (shown during search) */
+.stack-badge-overlay {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  z-index: 10;
+  backdrop-filter: blur(4px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .info-card {
   background: var(--surface);
   padding: 15px;

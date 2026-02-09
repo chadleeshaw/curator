@@ -8,6 +8,10 @@
 
 import { APIClient, APIHelper } from './core/api.js';
 import { CSS_CLASSES } from './core/constants.js';
+import { initScrollCollapse } from './core/scroll-collapse.js';
+
+// Initialize scroll-collapse for detail page header
+initScrollCollapse();
 
 // Parse years data and special editions from data attributes
 const container = document.getElementById('periodical-container');

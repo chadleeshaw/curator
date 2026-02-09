@@ -47,6 +47,8 @@ export class LibraryManager {
     this.thumbnailObserver = null;
     /** @type {Array} All stacks loaded from API */
     this.allStacks = [];
+    /** @type {string} Stack hover carousel mode: 'off', 'inline', 'popout', 'expanded' */
+    this.carouselMode = localStorage.getItem('stackCarouselMode') || 'inline';
 
     // Initialize media worker
     this.initMediaWorker();
@@ -82,6 +84,9 @@ export class LibraryManager {
       
       this.updateLibrarySortToggleButton();
     }
+
+    // Restore carousel mode dropdown (in Settings > Appearance)
+    this.syncCarouselDropdown();
 
     // Setup keyboard shortcuts
     this.setupKeyboardShortcuts();
@@ -301,7 +306,7 @@ export class LibraryManager {
     const data = await APIHelper.executeWithErrorHandling(async () => {
       const { field, order } = this.sortManager.getSortParams();
       const response = await APIClient.authenticatedFetch(
-        `/api/periodicals?sort_by=${field}&sort_order=${order}`
+        `/api/periodicals?sort_by=${field}&sort_order=${order}&limit=10000`
       );
       return await response.json();
     }, 'Library');
@@ -360,34 +365,67 @@ export class LibraryManager {
 
     grid.innerHTML = '';
 
-    // Use filterManager to apply filters
+    // Build a lookup of stacks by ID (needed before filtering for stack name search)
+    const stackLookup = new Map();
+    this.allStacks.forEach((s) => stackLookup.set(s.id, s));
+
+    // Use filterManager to apply filters - search matches periodical title or stack name
     const filtered = this.filterManager.applyFilters(this.allPeriodicals, {
       getCategoryFn: (p) => p.metadata?.category || 'Unknown',
       getLanguageFn: (p) => p.language || 'English',
-      getTitleFn: (p) => p.title || '',
+      getTitleFn: (p) => {
+        const title = p.title || '';
+        if (p.stack_id) {
+          const stack = stackLookup.get(p.stack_id);
+          if (stack) return `${title}\0${stack.name}`;
+        }
+        return title;
+      },
     });
+
+    // Determine if user is actively searching
+    const isSearching = this.filterManager.searchQuery && this.filterManager.searchQuery.trim() !== '';
 
     // Separate items into stacked and ungrouped
     const stackMap = new Map(); // stack_id -> { stack, items: [] }
     const ungrouped = [];
 
-    // Build a lookup of stacks by ID
-    const stackLookup = new Map();
-    this.allStacks.forEach((s) => stackLookup.set(s.id, s));
+    if (isSearching) {
+      // When searching, show individual items (not grouped into stack cards)
+      // so users can see exactly which item matched. Stack badge on each card
+      // shows which stack it belongs to via the stackLookup parameter.
+      const query = this.filterManager.searchQuery.toLowerCase().trim();
 
-    filtered.forEach((periodical) => {
-      if (periodical.stack_id && stackLookup.has(periodical.stack_id)) {
-        if (!stackMap.has(periodical.stack_id)) {
-          stackMap.set(periodical.stack_id, {
-            stack: stackLookup.get(periodical.stack_id),
-            items: [],
+      // Add all filtered items as individual cards
+      filtered.forEach((periodical) => ungrouped.push(periodical));
+
+      // Also include members of stacks whose name matches the search
+      const filteredIds = new Set(filtered.map((p) => p.id));
+      this.allStacks.forEach((stack) => {
+        if ((stack.name || '').toLowerCase().includes(query)) {
+          const members = this.allPeriodicals.filter((p) => p.stack_id === stack.id && !filteredIds.has(p.id));
+          members.forEach((m) => {
+            ungrouped.push(m);
+            filteredIds.add(m.id);
           });
         }
-        stackMap.get(periodical.stack_id).items.push(periodical);
-      } else {
-        ungrouped.push(periodical);
-      }
-    });
+      });
+    } else {
+      // Normal browsing: group stacked items into stack cards
+      filtered.forEach((periodical) => {
+        if (periodical.stack_id && stackLookup.has(periodical.stack_id)) {
+          if (!stackMap.has(periodical.stack_id)) {
+            stackMap.set(periodical.stack_id, {
+              stack: stackLookup.get(periodical.stack_id),
+              items: [],
+            });
+          }
+          stackMap.get(periodical.stack_id).items.push(periodical);
+        } else {
+          ungrouped.push(periodical);
+        }
+      });
+    }
 
     // Render results
     const totalItems = stackMap.size + ungrouped.length;
@@ -400,14 +438,67 @@ export class LibraryManager {
       return;
     }
 
-    // Render stack cards first
+    // Build a unified list of renderable items (stacks + ungrouped) for sorting
+    const renderItems = [];
+
     stackMap.forEach(({ stack, items }) => {
-      grid.appendChild(this.createStackCard(stack, items));
+      renderItems.push({ type: 'stack', stack, items });
     });
 
-    // Then render ungrouped periodicals
     ungrouped.forEach((periodical) => {
-      grid.appendChild(this.createPeriodicalCard(periodical));
+      renderItems.push({ type: 'periodical', periodical });
+    });
+
+    // Sort the unified list so stacks interleave with periodicals
+    const sortField = this.sortManager.field;
+    const isAsc = this.sortManager.order === 'asc';
+
+    const getSortKey = (item) => {
+      if (item.type === 'stack') {
+        const s = item.stack;
+        const items = item.items;
+        if (sortField === 'title') return (s.name || '').toLowerCase();
+        if (sortField === 'issue_date') {
+          // Use the most recent issue_date across all members
+          return items.reduce((max, i) => (i.issue_date > max ? i.issue_date : max), items[0]?.issue_date || '');
+        }
+        if (sortField === 'created_at') {
+          // Use the most recent created_at across all members
+          return items.reduce((max, i) => (i.created_at > max ? i.created_at : max), items[0]?.created_at || '');
+        }
+        if (sortField === 'issue_count') {
+          // Sum issue_count across all members
+          return items.reduce((sum, i) => sum + (i.issue_count || 0), 0);
+        }
+        return (s.name || '').toLowerCase();
+      }
+      const p = item.periodical;
+      if (sortField === 'title') return (p.title || '').toLowerCase();
+      if (sortField === 'issue_date') return p.issue_date || '';
+      if (sortField === 'created_at') return p.created_at || '';
+      if (sortField === 'issue_count') return p.issue_count || 0;
+      return (p.title || '').toLowerCase();
+    };
+
+    renderItems.sort((a, b) => {
+      const keyA = getSortKey(a);
+      const keyB = getSortKey(b);
+      let cmp = 0;
+      if (typeof keyA === 'number' && typeof keyB === 'number') {
+        cmp = keyA - keyB;
+      } else {
+        cmp = String(keyA).localeCompare(String(keyB));
+      }
+      return isAsc ? cmp : -cmp;
+    });
+
+    // Render in sorted order
+    renderItems.forEach((item) => {
+      if (item.type === 'stack') {
+        grid.appendChild(this.createStackCard(item.stack, item.items));
+      } else {
+        grid.appendChild(this.createPeriodicalCard(item.periodical, stackLookup));
+      }
     });
 
     // Update header stats
@@ -637,9 +728,9 @@ export class LibraryManager {
       layer.appendChild(img);
       cover.appendChild(layer);
     } else {
-      // Multiple covers - create fanned layers (up to 4)
-      const layerClasses = ['layer-deep', 'layer-back', 'layer-middle', 'layer-front'];
-      const displayCovers = coverIds.slice(0, 4);
+      // Multiple covers - create fanned layers (up to 3)
+      const layerClasses = ['layer-back', 'layer-middle', 'layer-front'];
+      const displayCovers = coverIds.slice(0, 3);
 
       // Align layers so the front is always last
       const startIdx = layerClasses.length - displayCovers.length;
@@ -650,6 +741,7 @@ export class LibraryManager {
 
         const layer = document.createElement('div');
         layer.className = `stack-cover-layer ${layerClasses[layerIdx]}`;
+        layer.setAttribute('data-carousel-index', idx);
         const img = document.createElement('img');
         img.alt = stack.name;
         img.loading = 'lazy';
@@ -657,6 +749,45 @@ export class LibraryManager {
         layer.appendChild(img);
         cover.appendChild(layer);
       });
+
+      // Build the 3D carousel scene (hidden until hover)
+      if (displayCovers.length > 1) {
+        const scene = document.createElement('div');
+        scene.className = 'stack-carousel-scene';
+
+        const ring = document.createElement('div');
+        ring.className = 'stack-carousel-ring';
+
+        displayCovers.forEach((coverId, idx) => {
+          const face = document.createElement('div');
+          face.className = 'stack-carousel-face';
+          face.setAttribute('data-face-index', idx);
+          const img = document.createElement('img');
+          img.alt = stack.name;
+          img.loading = 'lazy';
+          img.src = `/api/periodicals/${coverId}/cover`;
+          face.appendChild(img);
+          ring.appendChild(face);
+        });
+
+        scene.appendChild(ring);
+
+        // Indicator dots
+        const dots = document.createElement('div');
+        dots.className = 'stack-carousel-dots';
+        for (let i = 0; i < displayCovers.length; i++) {
+          const dot = document.createElement('span');
+          dot.className = 'stack-carousel-dot';
+          if (i === 0) dot.classList.add('active');
+          dots.appendChild(dot);
+        }
+        scene.appendChild(dots);
+
+        cover.appendChild(scene);
+
+        // Attach 3D carousel interaction
+        this.attachStackCarousel(cover, ring, displayCovers.length);
+      }
     }
 
     card.appendChild(cover);
@@ -717,6 +848,189 @@ export class LibraryManager {
   }
 
   /**
+   * Attach 3D floating carousel behavior to a stack cover.
+   * On hover the fanned layers hide and a 3D ring of covers appears.
+   * Mouse X position rotates the ring so each cover floats past.
+   *
+   * @param {HTMLElement} coverEl - The .stack-cover container
+   * @param {HTMLElement} ringEl - The .stack-carousel-ring element
+   * @param {number} count - Number of faces in the ring
+   * @returns {void}
+   * @private
+   */
+  attachStackCarousel(coverEl, ringEl, count) {
+    const sceneEl = coverEl.querySelector('.stack-carousel-scene');
+    const cardEl = coverEl.closest('.stack-card');
+    const angleStep = 360 / count;
+    let currentAngle = 0;
+    let isActive = false;
+    let sceneMovedToBody = false;
+
+    // Position each face around the ring
+    const faces = ringEl.querySelectorAll('.stack-carousel-face');
+    const dots = sceneEl ? sceneEl.querySelectorAll('.stack-carousel-dot') : [];
+    const radius = 90; // px – translateZ distance
+    faces.forEach((face, i) => {
+      face.style.transform = `rotateY(${i * angleStep}deg) translateZ(${radius}px)`;
+    });
+
+    const updateDots = (angle) => {
+      let normAngle = ((angle % 360) + 360) % 360;
+      const frontIdx = Math.round(normAngle / angleStep) % count;
+      const activeIdx = (count - frontIdx) % count;
+      dots.forEach((dot, di) => dot.classList.toggle('active', di === activeIdx));
+    };
+
+    const activate = () => {
+      if (this.carouselMode === 'off' || isActive) return;
+      isActive = true;
+      coverEl.classList.add('carousel-mode');
+      coverEl.classList.remove('carousel-inline', 'carousel-popout', 'carousel-expanded');
+      coverEl.classList.add(`carousel-${this.carouselMode}`);
+
+      // For pop-out: move scene to body so position:fixed works
+      // (CSS transforms on ancestors break fixed positioning)
+      if (this.carouselMode === 'popout' && sceneEl) {
+        document.body.appendChild(sceneEl);
+        sceneMovedToBody = true;
+        sceneEl.classList.add('popout-scene-active');
+        this.positionPopout(sceneEl, cardEl || coverEl);
+      }
+    };
+
+    const deactivate = () => {
+      if (!isActive) return;
+      isActive = false;
+      coverEl.classList.remove('carousel-mode', 'carousel-inline', 'carousel-popout', 'carousel-expanded');
+      currentAngle = 0;
+      ringEl.style.transform = `translateZ(-${radius}px) rotateY(0deg)`;
+      updateDots(0);
+
+      // Move scene back into the cover element
+      if (sceneMovedToBody && sceneEl) {
+        sceneEl.classList.remove('popout-scene-active');
+        coverEl.appendChild(sceneEl);
+        sceneMovedToBody = false;
+      }
+    };
+
+    const handleMove = (e) => {
+      if (this.carouselMode === 'off' || !isActive) return;
+      // Use card width for consistent horizontal mapping
+      const rect = (cardEl || coverEl).getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const ratio = Math.max(0, Math.min(1, x / rect.width));
+      currentAngle = ratio * 360;
+      ringEl.style.transform = `translateZ(-${radius}px) rotateY(${currentAngle}deg)`;
+      updateDots(currentAngle);
+    };
+
+    // Activate on cover enter
+    coverEl.addEventListener('mouseenter', activate);
+    coverEl.addEventListener('mousemove', handleMove);
+
+    // For pop-out: listen on the scene itself (it lives in body when active)
+    if (sceneEl) {
+      sceneEl.addEventListener('mouseenter', () => {
+        if (!isActive) activate();
+      });
+      sceneEl.addEventListener('mousemove', handleMove);
+      sceneEl.addEventListener('mouseleave', (e) => {
+        // Only deactivate if mouse didn't go back to the card
+        if (cardEl && cardEl.contains(e.relatedTarget)) return;
+        deactivate();
+      });
+    }
+
+    // Deactivate when leaving the card
+    if (cardEl) {
+      cardEl.addEventListener('mouseleave', (e) => {
+        // Don't deactivate if mouse moved to the pop-out scene
+        if (sceneMovedToBody && sceneEl && sceneEl.contains(e.relatedTarget)) return;
+        deactivate();
+      });
+    } else {
+      coverEl.addEventListener('mouseleave', deactivate);
+    }
+  }
+
+  /**
+   * Position the pop-out carousel scene using fixed positioning.
+   * Places above the card if room, otherwise below.
+   *
+   * @param {HTMLElement} sceneEl - The .stack-carousel-scene element
+   * @param {HTMLElement} anchorEl - The card element to anchor to
+   * @returns {void}
+   * @private
+   */
+  positionPopout(sceneEl, anchorEl) {
+    const sceneW = 260;
+    const sceneH = 300;
+    const gap = 12; // space between card and pop-out
+    const rect = anchorEl.getBoundingClientRect();
+
+    console.log('[Library] positionPopout: card rect =', rect.top, rect.left, rect.width, rect.height);
+
+    // Center horizontally on the card
+    let left = rect.left + rect.width / 2 - sceneW / 2;
+    // Clamp to viewport edges
+    left = Math.max(8, Math.min(left, window.innerWidth - sceneW - 8));
+
+    // Try above first
+    const spaceAbove = rect.top;
+    const spaceBelow = window.innerHeight - rect.bottom;
+
+    sceneEl.classList.remove('popout-above', 'popout-below');
+
+    let top;
+    if (spaceAbove >= sceneH + gap) {
+      top = rect.top - sceneH - gap;
+      sceneEl.classList.add('popout-above');
+    } else if (spaceBelow >= sceneH + gap) {
+      top = rect.bottom + gap;
+      sceneEl.classList.add('popout-below');
+    } else {
+      top = Math.max(8, rect.top - sceneH - gap);
+      sceneEl.classList.add('popout-above');
+    }
+
+    console.log('[Library] positionPopout: placing at top =', top, 'left =', left);
+
+    sceneEl.style.top = `${top}px`;
+    sceneEl.style.left = `${left}px`;
+  }
+
+  /**
+   * Set the stack hover carousel mode and persist it.
+   *
+   * @param {string} mode - 'off', 'inline', 'popout', or 'expanded'
+   * @returns {void}
+   */
+  setCarouselMode(mode) {
+    const valid = ['off', 'inline', 'popout', 'expanded'];
+    if (!valid.includes(mode)) return;
+    this.carouselMode = mode;
+    localStorage.setItem('stackCarouselMode', mode);
+    this.syncCarouselDropdown();
+    console.log(`[Library] Carousel mode set to: ${mode}`);
+    // Re-render to apply new mode
+    this.applyFiltersAndRender();
+  }
+
+  /**
+   * Sync the carousel mode dropdown in Settings > Appearance with current value
+   *
+   * @returns {void}
+   * @private
+   */
+  syncCarouselDropdown() {
+    const dropdown = document.getElementById('stack-carousel-mode');
+    if (dropdown) {
+      dropdown.value = this.carouselMode;
+    }
+  }
+
+  /**
    * Create a periodical card element
    *
    * @param {Object} periodical - The periodical data
@@ -726,12 +1040,13 @@ export class LibraryManager {
    * @param {string} [periodical.language] - Language of the periodical
    * @param {string} periodical.issue_date - Date of latest issue
    * @param {number} [periodical.issue_count=1] - Number of issues
+   * @param {Map} [stackLookup=null] - Optional map of stack ID to stack data for badge display
    * @returns {HTMLElement} The created card element
    *
    * @example
    * const card = library.createPeriodicalCard({ id: 1, title: 'PC Gamer', issue_date: '2024-01-01' });
    */
-  createPeriodicalCard(periodical) {
+  createPeriodicalCard(periodical, stackLookup = null) {
     const { id, title, cover_path, language, issue_date, issue_count = 1 } = periodical;
 
     const card = document.createElement('div');
@@ -778,6 +1093,18 @@ export class LibraryManager {
       langOverlay.className = 'language-overlay';
       langOverlay.textContent = language;
       cover.appendChild(langOverlay);
+    }
+
+    // Stack badge on cover when item belongs to a stack
+    if (periodical.stack_id && stackLookup) {
+      const stack = stackLookup.get(periodical.stack_id);
+      if (stack) {
+        const stackBadge = document.createElement('span');
+        stackBadge.className = 'stack-badge-overlay';
+        stackBadge.textContent = `\u{1F4DA} ${stack.name}`;
+        stackBadge.title = `In stack: ${stack.name}`;
+        cover.appendChild(stackBadge);
+      }
     }
 
     card.appendChild(cover);
@@ -1079,6 +1406,7 @@ window.toggleLibrarySortOrder = () => library.toggleLibrarySortOrder();
 window.setLibraryFilter = (filterType, value) => library.setLibraryFilter(filterType, value);
 window.onLibrarySearchInput = (query) => library.onSearchInput(query);
 window.clearLibraryFilters = () => library.clearFilters();
+window.setStackCarouselMode = (mode) => library.setCarouselMode(mode);
 window.deletePeriodical = (id, title, issueCount) => {
   console.log('[Library] window.deletePeriodical called with:', id, title, issueCount);
   return library.deletePeriodical(id, title, issueCount);
@@ -1092,3 +1420,11 @@ window.openImportModal = () => library.openImportModal();
 window.closeImportModal = () => library.closeImportModal();
 
 console.log('[Library] Window functions registered');
+
+// Bind search input event listener directly (more reliable than inline oninput)
+const librarySearchInput = document.getElementById('library-search-input');
+if (librarySearchInput) {
+  librarySearchInput.addEventListener('input', (e) => {
+    library.onSearchInput(e.target.value);
+  });
+}

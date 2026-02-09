@@ -190,6 +190,9 @@ async def list_tracked_magazines(
                     PeriodicalTracking.last_metadata_update.isnot(None),
                     sort_expr,
                 )
+        elif sort_by == "library_count":
+            # library_count is computed post-query; skip SQL ordering here
+            pass
         else:
             sort_expr = PeriodicalTracking.title.desc() if is_descending else PeriodicalTracking.title.asc()
             query = query.order_by(sort_expr)
@@ -268,6 +271,10 @@ async def list_tracked_magazines(
                     "stack_description": stack_info["stack_description"],
                 }
             )
+
+        # Post-query sort for library_count (computed field, not a SQL column)
+        if sort_by == "library_count":
+            tracked_list.sort(key=lambda x: x["library_count"], reverse=is_descending)
 
         return success_response(
             None,

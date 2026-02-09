@@ -17,6 +17,11 @@
     <script type="module" src="/static/js/main.js?v=1770652571"></script>
   </head>
   <body>
+    <!-- Breadcrumb Bar (outside container for reliable sticky) -->
+    <nav id="main-breadcrumb" class="breadcrumb">
+      <span class="current">Library</span>
+    </nav>
+
     <div class="container">
       <header>
         <div class="header-logout">
@@ -265,6 +270,7 @@
                   <option value="category">Category</option>
                   <option value="created_at">Added Date</option>
                   <option value="latest_issue">Latest Issue</option>
+                  <option value="library_count">Number of Issues</option>
                   <option value="tracking_mode">Tracking Mode</option>
                   <option value="language">Language</option>
                 </select>
@@ -827,8 +833,8 @@
             <div id="download-client-section" class="settings-section">
               <h3>NZB Download Client</h3>
               <p class="text-sm text-hint mb-15">
-                Used for Newsnab and RSS provider downloads. Select SABnzbd or NZBGet as your
-                Usenet download client.
+                Used for Newsnab and RSS provider downloads. Select SABnzbd or NZBGet as your Usenet
+                download client.
               </p>
               <div class="settings-field">
                 <label for="download-client-type">Type:</label>
@@ -892,17 +898,13 @@
             <div id="ia-client-section" class="settings-section">
               <h3>Internet Archive (HTTP)</h3>
               <p class="text-sm text-hint mb-15">
-                Downloads from Internet Archive use a built-in HTTP client — no external
-                software needed. These settings are applied automatically when an Internet Archive
-                search provider is configured above.
+                Downloads from Internet Archive use a built-in HTTP client — no external software
+                needed. These settings are applied automatically when an Internet Archive search
+                provider is configured above.
               </p>
               <div class="settings-field">
                 <label for="ia-client-downloads-dir">Downloads Directory:</label>
-                <input
-                  type="text"
-                  id="ia-client-downloads-dir"
-                  placeholder="./local/downloads"
-                />
+                <input type="text" id="ia-client-downloads-dir" placeholder="./local/downloads" />
               </div>
               <div class="settings-field">
                 <label for="ia-client-max-concurrent">Max Concurrent Downloads:</label>
@@ -1732,6 +1734,25 @@
               </div>
               <button onclick="saveThemeSettings()" class="save-btn">Save Theme Settings</button>
               <div id="theme-message" class="hidden"></div>
+            </div>
+
+            <!-- Stack Hover Settings -->
+            <div id="stack-hover-section" class="settings-section">
+              <h3>Stack Hover Effect</h3>
+              <p class="text-base text-muted mb-15">
+                Choose how stack covers behave when you hover over them in the library.
+              </p>
+              <div class="settings-field">
+                <label for="stack-carousel-mode">Hover Mode:</label>
+                <select id="stack-carousel-mode">
+                  <option value="off">Off &mdash; no carousel on hover</option>
+                  <option value="inline">Inline &mdash; 3D carousel within the card</option>
+                  <option value="popout">Pop-out &mdash; floating carousel above the card</option>
+                  <option value="expanded">Expanded &mdash; card scales up with carousel</option>
+                </select>
+              </div>
+              <button onclick="saveCarouselSettings()" class="save-btn">Save Hover Settings</button>
+              <div id="stack-hover-message" class="hidden"></div>
             </div>
           </div>
 
@@ -2703,7 +2724,14 @@
             id="stack-name-input"
             placeholder="e.g. Science Magazines"
             class="w-full"
-            style="padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--surface); color: var(--text-primary); font-size: 14px"
+            style="
+              padding: 10px 14px;
+              border: 1px solid var(--border-color);
+              border-radius: 6px;
+              background: var(--surface);
+              color: var(--text-primary);
+              font-size: 14px;
+            "
           />
         </div>
         <div class="settings-field" style="margin-top: 12px">
@@ -2713,11 +2741,25 @@
             placeholder="A brief description of this stack..."
             rows="3"
             class="w-full"
-            style="padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--surface); color: var(--text-primary); font-size: 14px; resize: vertical"
+            style="
+              padding: 10px 14px;
+              border: 1px solid var(--border-color);
+              border-radius: 6px;
+              background: var(--surface);
+              color: var(--text-primary);
+              font-size: 14px;
+              resize: vertical;
+            "
           ></textarea>
         </div>
         <div class="flex gap-10 justify-end" style="margin-top: 20px">
-          <button type="button" onclick="closeStackCreateModal()" class="save-btn btn-cancel flex-0">Cancel</button>
+          <button
+            type="button"
+            onclick="closeStackCreateModal()"
+            class="save-btn btn-cancel flex-0"
+          >
+            Cancel
+          </button>
           <button type="button" id="stack-modal-save-btn" class="save-btn flex-0">Create</button>
         </div>
       </div>
@@ -2730,10 +2772,21 @@
         <p class="delete-modal-subtitle">
           Are you sure you want to delete <strong id="delete-stack-name"></strong>?
         </p>
-        <p id="delete-stack-count" style="color: var(--text-secondary); font-size: 0.9em; margin-bottom: 16px"></p>
+        <p
+          id="delete-stack-count"
+          style="color: var(--text-secondary); font-size: 0.9em; margin-bottom: 16px"
+        ></p>
         <div class="flex gap-10 justify-end">
-          <button type="button" onclick="closeDeleteStackModal()" class="save-btn btn-cancel flex-0">Cancel</button>
-          <button type="button" onclick="confirmDeleteStack()" class="save-btn btn-delete flex-0">Delete</button>
+          <button
+            type="button"
+            onclick="closeDeleteStackModal()"
+            class="save-btn btn-cancel flex-0"
+          >
+            Cancel
+          </button>
+          <button type="button" onclick="confirmDeleteStack()" class="save-btn btn-delete flex-0">
+            Delete
+          </button>
         </div>
       </div>
     </div>
