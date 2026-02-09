@@ -110,8 +110,8 @@ def build_derived_metadata(
 
     Fields available from each source:
     - file_scan: title, year, month, month_name, issue_number, volume, country, language, is_special_edition, special_edition_name
-    - text_scan: year, month, issue_number, volume, special_edition
-    - ocr_scan: year, month, issue_number, volume, special_edition
+    - text_scan: year, month, issue_number, volume, special_edition (aliased to is_special_edition)
+    - ocr_scan: year, month, issue_number, volume, special_edition (aliased to is_special_edition)
 
     Note: Title only comes from filename parsing (file_scan). OCR/text scans don't extract titles.
     Note: issue_date is NOT in derived_metadata - it's calculated separately in the Periodical model
@@ -152,7 +152,9 @@ def build_derived_metadata(
         "ocr_scan": ocr_scan or {},
     }
 
-    # Fields to merge
+    # Fields to merge — each entry is the canonical field name.
+    # Alias mappings below allow different scan sources to use different field names
+    # for the same concept (e.g., file_scan uses "is_special_edition" while OCR uses "special_edition").
     fields = [
         "title",  # Title from any source
         "year",
@@ -162,18 +164,35 @@ def build_derived_metadata(
         "volume",
         "country",
         "language",
-        "special_edition",
         "is_special_edition",
         "special_edition_name",
     ]
 
+    # Alias mappings: canonical field → list of alternate field names to check in sources.
+    # This allows OCR's "special_edition" (bool) to compete with file_scan's "is_special_edition" (bool)
+    # for the same derived field, so higher-priority sources can override lower-priority ones.
+    field_aliases = {
+        "is_special_edition": ["special_edition"],
+    }
+
     derived = {}
 
     for field in fields:
+        # Build the list of source field names to check for this canonical field
+        source_field_names = [field] + field_aliases.get(field, [])
+
         # Try each source in priority order
         for source_name in source_priority:
             source_data = sources.get(source_name, {})
-            value = source_data.get(field)
+
+            # Check the canonical field name and any aliases
+            value = None
+            matched_field_name = field
+            for fname in source_field_names:
+                value = source_data.get(fname)
+                if value is not None:
+                    matched_field_name = fname
+                    break
 
             if value is None:
                 continue
@@ -194,7 +213,8 @@ def build_derived_metadata(
             # then overall_confidence, then generic confidence key.
             # OCR/text scans use "{field}_confidence" and "overall_confidence" (0-100 int scale),
             # while file_scan uses "confidence" (string like "high" or float 0-1).
-            field_confidence_key = f"{field}_confidence"
+            # Use matched_field_name for per-field keys (handles aliases like "special_edition_confidence").
+            field_confidence_key = f"{matched_field_name}_confidence"
             confidence = source_data.get(field_confidence_key)
             if confidence is None:
                 confidence = source_data.get("overall_confidence")
@@ -407,7 +427,7 @@ def is_periodical_special_edition(periodical) -> bool:
     Check if a periodical is a special edition using all metadata sources.
 
     Checks in order:
-    1. derived_metadata.special_edition or is_special_edition
+    1. derived_metadata.is_special_edition (unified field from all scan sources)
     2. extra_metadata.special_edition (legacy)
     3. Title pattern matching via is_special_edition()
 
@@ -419,14 +439,13 @@ def is_periodical_special_edition(periodical) -> bool:
     """
     from core.utils.general import is_special_edition
 
-    # Check derived_metadata first
+    # Check derived_metadata first (unified field: "is_special_edition")
     derived = periodical.derived_metadata or {}
-    for key in ("special_edition", "is_special_edition"):
-        entry = derived.get(key)
-        if entry is not None:
-            value = entry.get("value") if isinstance(entry, dict) else entry
-            if value:
-                return True
+    entry = derived.get("is_special_edition")
+    if entry is not None:
+        value = entry.get("value") if isinstance(entry, dict) else entry
+        if value:
+            return True
 
     # Check extra_metadata (legacy)
     extra = periodical.extra_metadata or {}

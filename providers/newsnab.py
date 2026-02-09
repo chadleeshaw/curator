@@ -65,9 +65,20 @@ class NewsnabProvider(SearchProvider):
         self._request_times: List[float] = []
         self._rate_limit_until: Optional[datetime] = None
         self._rate_limit_reason: Optional[str] = None
+        self._rate_limit_logged: bool = False
 
         if not self.api_key:
             raise ValueError("Newsnab provider requires api_key")
+
+    @property
+    def is_rate_limited(self) -> bool:
+        """Check if this provider is currently rate limited."""
+        if self._rate_limit_until and datetime.now() < self._rate_limit_until:
+            return True
+        # Also check self-imposed limit without setting state
+        now = time.time()
+        active_requests = [t for t in self._request_times if now - t < SECONDS_PER_HOUR]
+        return len(active_requests) >= self.max_requests_per_hour
 
     def _check_rate_limit(self) -> bool:
         """
@@ -77,13 +88,23 @@ class NewsnabProvider(SearchProvider):
             True if rate limited, False otherwise
         """
         # Check if we're in a rate limit cooldown period
-        if self._rate_limit_until and datetime.now() < self._rate_limit_until:
-            remaining = (self._rate_limit_until - datetime.now()).total_seconds()
-            logger.warning(
-                f"[{self.name}] Rate limited: {self._rate_limit_reason}. "
-                f"Will retry in {remaining:.0f} seconds ({remaining / 3600:.1f} hours)"
-            )
-            return True
+        if self._rate_limit_until:
+            if datetime.now() < self._rate_limit_until:
+                remaining = (self._rate_limit_until - datetime.now()).total_seconds()
+                # Only log once per cooldown period to avoid log spam
+                if not self._rate_limit_logged:
+                    logger.warning(
+                        f"[{self.name}] Rate limited: {self._rate_limit_reason}. "
+                        f"Will retry in {remaining:.0f} seconds ({remaining / 3600:.1f} hours)"
+                    )
+                    self._rate_limit_logged = True
+                return True
+            else:
+                # Cooldown expired — clear rate limit state
+                logger.info(f"[{self.name}] Rate limit cooldown expired, resuming searches")
+                self._rate_limit_until = None
+                self._rate_limit_reason = None
+                self._rate_limit_logged = False
 
         # Check if we've exceeded our self-imposed rate limit
         now = time.time()
@@ -101,6 +122,7 @@ class NewsnabProvider(SearchProvider):
             )
             self._rate_limit_until = wait_until
             self._rate_limit_reason = f"Self-limit: {self.max_requests_per_hour} requests/hour exceeded"
+            self._rate_limit_logged = False
             return True
 
         return False
@@ -174,6 +196,7 @@ class NewsnabProvider(SearchProvider):
 
         self._rate_limit_until = datetime.now() + timedelta(seconds=wait_time)
         self._rate_limit_reason = "HTTP 429 Too Many Requests"
+        self._rate_limit_logged = False
         logger.error(
             f"[{self.name}] Rate limited by provider (HTTP 429). "
             f"Will wait {wait_time} seconds (~{wait_time / 3600:.1f} hours)"
@@ -202,6 +225,7 @@ class NewsnabProvider(SearchProvider):
         if wait_time:
             self._rate_limit_until = datetime.now() + timedelta(seconds=wait_time)
             self._rate_limit_reason = f"Provider error: {error_desc}"
+            self._rate_limit_logged = False
             logger.error(
                 f"[{self.name}] Rate limited by provider: {error_desc}. "
                 f"Will wait {wait_time} seconds (~{wait_time / 3600:.1f} hours)"
@@ -296,6 +320,7 @@ class NewsnabProvider(SearchProvider):
             if wait_time:
                 self._rate_limit_until = datetime.now() + timedelta(seconds=wait_time)
                 self._rate_limit_reason = f"HTTP {http_error.response.status_code}: Rate limit"
+                self._rate_limit_logged = False
                 logger.error(
                     f"[{self.name}] Rate limited by provider (HTTP {http_error.response.status_code}). "
                     f"Will wait {wait_time} seconds (~{wait_time / 3600:.1f} hours)"

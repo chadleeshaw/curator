@@ -248,9 +248,7 @@ async def list_tracked_magazines(
                     "library_count": library_count,
                     "failed_count": failed_count,
                     "created_at": (t.created_at.isoformat() if t.created_at else None),
-                    "last_issue_added": (
-                        t.last_metadata_update.isoformat() if t.last_metadata_update else None
-                    ),
+                    "last_issue_added": (t.last_metadata_update.isoformat() if t.last_metadata_update else None),
                 }
             )
 

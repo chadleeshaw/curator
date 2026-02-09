@@ -41,6 +41,16 @@ class SearchProvider(ABC):
             List of SearchResult objects
         """
 
+    @property
+    def is_rate_limited(self) -> bool:
+        """
+        Check if this provider is currently rate limited.
+
+        Returns:
+            True if rate limited (searches will return empty), False otherwise
+        """
+        return False
+
     def get_provider_info(self) -> Dict[str, Any]:
         """Get metadata about this provider"""
         return {

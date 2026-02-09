@@ -76,6 +76,13 @@ class InternetArchiveProvider(SearchProvider):
             except Exception as e:
                 logger.error(f"[{self.name}] Failed to configure IA authentication: {e}")
 
+    @property
+    def is_rate_limited(self) -> bool:
+        """Check if this provider is currently rate limited."""
+        now = time.time()
+        active_requests = [t for t in self._request_times if now - t < 60]
+        return len(active_requests) >= self.max_requests_per_minute
+
     def _check_rate_limit(self) -> bool:
         """
         Check if we're currently rate limited.

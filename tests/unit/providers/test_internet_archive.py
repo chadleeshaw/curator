@@ -431,3 +431,43 @@ class TestInternetArchiveProviderRateLimiting:
         provider._request_times = [now, now, now]
 
         assert provider._check_rate_limit()
+
+    def test_is_rate_limited_false_initially(self):
+        """Test is_rate_limited is False with no requests."""
+        config = {"type": "internet_archive", "name": "Test IA"}
+        provider = InternetArchiveProvider(config)
+
+        assert not provider.is_rate_limited
+
+    def test_is_rate_limited_true_when_exceeded(self):
+        """Test is_rate_limited returns True when max requests exceeded."""
+        config = {
+            "type": "internet_archive",
+            "name": "Test IA",
+            "max_requests_per_minute": 2,
+        }
+        provider = InternetArchiveProvider(config)
+
+        import time
+
+        now = time.time()
+        provider._request_times = [now, now, now]
+
+        assert provider.is_rate_limited
+
+    def test_is_rate_limited_false_after_window_expires(self):
+        """Test is_rate_limited returns False after requests age out of window."""
+        config = {
+            "type": "internet_archive",
+            "name": "Test IA",
+            "max_requests_per_minute": 2,
+        }
+        provider = InternetArchiveProvider(config)
+
+        import time
+
+        # Requests from 61+ seconds ago should not count
+        old_time = time.time() - 61
+        provider._request_times = [old_time, old_time, old_time]
+
+        assert not provider.is_rate_limited

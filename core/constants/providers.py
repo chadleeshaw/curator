@@ -57,8 +57,8 @@ NEWSNAB_DEFAULT_REQUEST_DELAY = 1.0
 NEWSNAB_REQUEST_TIMEOUT = 10
 """Timeout in seconds for Newsnab API requests"""
 
-NEWSNAB_DEFAULT_RATE_LIMIT_WAIT = 3600
-"""Default wait time in seconds when rate limited (1 hour)"""
+NEWSNAB_DEFAULT_RATE_LIMIT_WAIT = 300
+"""Default wait time in seconds when rate limited without explicit Retry-After (5 minutes)"""
 
 # ==============================================================================
 # Time Conversion Constants

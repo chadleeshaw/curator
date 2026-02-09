@@ -24,6 +24,7 @@ from core.constants.title import (
     COMMON_PERIODICAL_WORDS,
     COUNTRY_CODE_NORMALIZATIONS,
     KNOWN_PERIODICAL_TITLES,
+    SPECIAL_EDITION_KEYWORDS,
 )
 from core.parsers.language import LANGUAGE_INDICATORS
 
@@ -402,6 +403,10 @@ class TitleMatcher:
         """
         Extract the base periodical title and detect if it's a special edition.
 
+        Uses explicit pattern matching and keyword-based detection only.
+        Does NOT use generic trailing-word heuristics, which produce false positives
+        for multi-word publication titles.
+
         Args:
             title: Standardized title
 
@@ -411,9 +416,7 @@ class TitleMatcher:
         Examples:
             >>> extract_base_title("National Geographic")
             ("National Geographic", False, "")
-            >>> extract_base_title("Sports Illustrated Swimsuit Kate Upton")
-            ("Sports Illustrated Swimsuit", True, "Kate Upton")
-            >>> extract_base_title("Time Magazine Person Of The Year")
+            >>> extract_base_title("Time Special Edition Person Of The Year")
             ("Time", True, "Person Of The Year")
         """
         # Pattern 1: Explicit "Special Edition" pattern with specific name
@@ -433,78 +436,22 @@ class TitleMatcher:
             base_title = match.group(1).strip()
             return (base_title, True, "Special Edition")
 
-        # Pattern 2: Generic detection of titles with identifying suffixes
-        # Strategy: Look for 2+ words at the end that appear to be proper names
-        # or edition identifiers (like person names or descriptive phrases)
-        #
-        # Check if title ends with regional indicators - these are part of the base title
-        words = title.split()
-        if len(words) >= 2:
-            last_word = words[-1].lower()
-            # Common two-word regional indicators
-            if len(words) >= 2 and " ".join(words[-2:]).lower() in MULTI_WORD_REGIONAL_INDICATORS:
-                # This is a regional edition, not a special edition
-                return (title, False, "")
-            # Single-word country names at the end
-            elif last_word in REGIONAL_EDITION_INDICATORS:
-                return (title, False, "")
+        # Pattern 2: Keyword-based detection using SPECIAL_EDITION_KEYWORDS
+        # Only flag as special edition if an explicit keyword is found in the title
+        title_lower = title.lower()
+        for keyword in SPECIAL_EDITION_KEYWORDS:
+            if keyword in title_lower:
+                # Found a keyword — extract it as the special edition indicator
+                # Try to split at the keyword position to get a base title
+                keyword_pos = title_lower.find(keyword)
+                base_part = title[:keyword_pos].strip()
+                # Strip separators (dash, colon) from the end of the base part
+                base_part = re.sub(r"[\s\-–—:]+$", "", base_part)
 
-        # Common periodical words that are part of the base title:
-        common_periodical_words = COMMON_PERIODICAL_WORDS
-
-        # Need at least 3 words: "Base" + "Special" + "Name"
-        if len(words) >= 3:
-            # Scan from the end to find where special identifiers start
-            # Special identifiers are 2+ consecutive words that are NOT common periodical words
-            # BUT: Always keep at least 2 words as the base title (never split 3-word titles)
-            # For longer titles (5+ words), we can be more aggressive
-            min_base_words = MIN_BASE_TITLE_WORDS
-
-            special_start_idx = None
-            consecutive_non_common = 0
-
-            # Scan backwards, but don't go past min_base_words
-            for i in range(len(words) - 1, min_base_words - 1, -1):
-                word_lower = words[i].lower()
-
-                # Skip numbers (years, issue numbers)
-                if re.match(r"^\d+$", word_lower):
-                    continue
-
-                # Stop at punctuation/separator tokens (dashes, etc.)
-                # A dash typically separates "Title - Subtitle", not a special edition suffix
-                if re.match(r"^[\-–—]+$", word_lower):
-                    break
-
-                # If this is a common periodical word, stop counting
-                if word_lower in common_periodical_words:
-                    break
-
-                consecutive_non_common += 1
-                special_start_idx = i
-
-            # If we found 2+ special words at the end, split the title
-            # But only if we'd have at least min_base_words remaining
-            if consecutive_non_common >= 2 and special_start_idx is not None:
-                base_words = words[:special_start_idx]
-                special_words = words[special_start_idx:]
-
-                # Make sure we have a reasonable base title left
-                if len(base_words) >= min_base_words:
-                    # Don't split if the word just before the special section is a separator (dash)
-                    # "Title - Name" patterns are subtitles, not special editions
-                    if re.match(r"^[\-–—]+$", base_words[-1]):
-                        return (title, False, "")
-
-                    # Don't split if base_words ends with a conjunction (e.g., "Magazine &" shouldn't be a base title)
-                    # This prevents titles like "Magazine & Other Magazine" from being split incorrectly
-                    if base_words[-1].lower() in {"&", "and", "or", "the", "of", "for", "in", "on", "at", "to", "with"}:
-                        return (title, False, "")
-                        return (title, False, "")
-
-                    base_title = " ".join(base_words)
-                    special_name = " ".join(special_words)
-                    return (base_title, True, special_name)
+                if base_part:
+                    # Use the keyword match and everything after as the special name
+                    special_part = title[keyword_pos:].strip()
+                    return (base_part, True, special_part)
 
         return (title, False, "")
 

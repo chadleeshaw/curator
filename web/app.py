@@ -800,8 +800,24 @@ async def lifespan(app: FastAPI):
                         return
 
                     # Phase 2: Search each selected periodical and record results
+                    # Check if all providers are rate limited before searching
+                    all_rate_limited = app_state.download_manager.all_providers_rate_limited
+                    if all_rate_limited:
+                        logger.info(
+                            "Auto-download: All search providers are rate limited, "
+                            "skipping searches (not penalizing adaptive scheduler)"
+                        )
+
                     for periodical in periodicals_to_search:
                         try:
+                            # Skip searching if all providers are rate limited
+                            # Don't update search stats — this isn't a real search
+                            if all_rate_limited:
+                                logger.debug(
+                                    f"Auto-download: Skipping '{periodical.title}' - all providers rate limited"
+                                )
+                                continue
+
                             logger.debug(f"Auto-download: Searching for '{periodical.title}'")
                             search_results = app_state.download_manager.search_periodical_issues(
                                 periodical.title, db_session
@@ -809,7 +825,9 @@ async def lifespan(app: FastAPI):
 
                             if not search_results:
                                 logger.debug(f"Auto-download: No results found for '{periodical.title}'")
-                                app_state.search_scheduler.update_search_stats(periodical.id, 0, db_session)
+                                # Only penalize scheduler if providers were actually reachable
+                                if not app_state.download_manager.all_providers_rate_limited:
+                                    app_state.search_scheduler.update_search_stats(periodical.id, 0, db_session)
                                 continue
 
                             logger.debug(f"Auto-download: Found {len(search_results)} results for '{periodical.title}'")

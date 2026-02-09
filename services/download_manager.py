@@ -100,6 +100,11 @@ class DownloadManager:
         client_names = list(self.download_clients.keys())
         logger.info(f"DownloadManager initialized with clients: {client_names}")
 
+    @property
+    def all_providers_rate_limited(self) -> bool:
+        """Check if all search providers are currently rate limited."""
+        return self.search_service.all_providers_rate_limited
+
     def _get_client_for_provider(self, provider: str) -> DownloadClient:
         """
         Get the appropriate download client for a provider.

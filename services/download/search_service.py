@@ -45,6 +45,13 @@ class SearchService:
         ]
         logger.info(f"SearchService initialized with providers (by priority): {provider_info}")
 
+    @property
+    def all_providers_rate_limited(self) -> bool:
+        """Check if all search providers are currently rate limited."""
+        if not self.search_providers:
+            return False
+        return all(p.is_rate_limited for p in self.search_providers)
+
     def search_periodical_issues(self, periodical_title: str, session: Session) -> List[Dict[str, Any]]:
         """
         Search all providers for available issues of a periodical.
