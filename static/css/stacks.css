@@ -504,10 +504,16 @@
   display: none;
 }
 
+.stack-sort-subtitle {
+  margin-top: 4px;
+  font-size: 0.9em;
+  color: rgba(255, 255, 255, 0.7);
+}
+
 .stack-page-meta {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 12px;
   margin-top: 10px;
   flex-wrap: wrap;
@@ -1084,6 +1090,10 @@
 
   .stack-page-header .stack-page-meta {
     justify-content: center !important;
+  }
+
+  .stack-sort-subtitle {
+    color: rgba(255, 255, 255, 0.6);
   }
 
   .stack-page-header .sort-controls {

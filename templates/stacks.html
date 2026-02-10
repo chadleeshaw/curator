@@ -35,16 +35,10 @@
       <div class="stack-page-header collapsible-header">
         <div class="header-content-row">
           <div class="header-title-area">
-            <h1 id="stack-title" style="display: flex; align-items: center; gap: 12px">
-              <span style="font-size: 0.9em; opacity: 0.9">📚</span>{{STACK_NAME}}
-            </h1>
+            <h1 id="stack-title"><span class="header-icon">📚</span>{{STACK_NAME}}</h1>
             <p id="stack-description" class="stack-page-subtitle">{{STACK_DESCRIPTION}}</p>
-            <p
-              id="stack-sort-subtitle"
-              class="stack-page-subtitle"
-              style="margin-top: 4px; font-size: 0.9em; color: var(--text-secondary)"
-            ></p>
-            <div class="stack-page-meta" style="justify-content: flex-start">
+            <p id="stack-sort-subtitle" class="stack-page-subtitle stack-sort-subtitle"></p>
+            <div class="stack-page-meta">
               <span id="stack-member-count" class="stack-page-count"></span>
               <button
                 id="stack-search-btn"
@@ -56,25 +50,12 @@
               </button>
             </div>
           </div>
-          <div class="sort-controls" style="flex-shrink: 0">
-            <label
-              for="stack-sort-select"
-              style="color: var(--text-secondary); font-size: 0.9em; font-weight: 500"
-              >Sort by:</label
-            >
+          <div class="sort-controls">
+            <label for="stack-sort-select">Sort by:</label>
             <select
               id="stack-sort-select"
               onchange="setStackSort(this.value)"
               aria-label="Sort stack members by"
-              style="
-                padding: 8px 12px;
-                border: 1px solid var(--border-color);
-                border-radius: 6px;
-                background: var(--surface);
-                color: var(--text-primary);
-                font-size: 14px;
-                cursor: pointer;
-              "
             >
               <option value="title">Title</option>
               <option value="category">Category</option>
