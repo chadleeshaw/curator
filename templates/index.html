@@ -49,9 +49,6 @@
         <button class="nav-btn" onclick="showTab('tracking', event)">
           <span class="nav-icon">📌</span><span class="nav-text">Track</span>
         </button>
-        <button class="nav-btn" onclick="showTab('stacks', event)">
-          <span class="nav-icon">📂</span><span class="nav-text">Stacks</span>
-        </button>
         <button class="nav-btn" onclick="showTab('tasks', event)">
           <span class="nav-icon">⚙️</span><span class="nav-text">Tasks</span>
         </button>
@@ -385,34 +382,17 @@
 
             <!-- Action Buttons -->
             <div class="tracking-controls-row mb-40">
-              <div style="display: flex; gap: 10px; flex-wrap: wrap">
+              <div style="display: flex; gap: 10px; flex-wrap: wrap; width: 100%; align-items: center">
                 <button onclick="openTrackNewPeriodicalModal()" class="btn-primary">
                   📌 Track New Periodical
                 </button>
                 <button onclick="openMergeModal()" class="btn-primary">🔀 Merge Tracking</button>
+                <button onclick="openCreateStackModal()" class="btn-primary" style="margin-left: auto">📂 Create Stack</button>
               </div>
             </div>
 
             <div id="tracking-status" class="hidden" style="margin-bottom: 20px"></div>
             <div id="tracked-list"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Stacks Tab -->
-      <div id="stacks-tab" class="tab">
-        <div class="tasks-container">
-          <div class="stacks-header-row">
-            <div>
-              <h2>📂 Stacks</h2>
-              <p style="color: var(--text-secondary); margin-top: 4px">
-                Group related periodicals into stacks for easier organization.
-              </p>
-            </div>
-            <button onclick="openCreateStackModal()" class="btn-primary">➕ Create Stack</button>
-          </div>
-          <div id="stacks-list" class="grid gap-15">
-            <!-- Populated by JavaScript -->
           </div>
         </div>
       </div>
@@ -2734,6 +2714,10 @@
               resize: vertical;
             "
           ></textarea>
+        </div>
+        <div class="settings-field" style="margin-top: 12px">
+          <label>Categories (optional)</label>
+          <div id="stack-categories-container" class="stack-categories-picker"></div>
         </div>
         <div class="flex gap-10 justify-end" style="margin-top: 20px">
           <button

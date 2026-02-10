@@ -14,6 +14,24 @@ from core.utils.error_handling import handle_api_errors
 from models.database import Periodical, PeriodicalTracking, Stack, StackMembership
 from web.utils.responses import success_response
 
+
+class CreateStackRequest(BaseModel):
+    """Request body for creating a stack"""
+
+    name: str
+    description: Optional[str] = None
+    categories: Optional[List[str]] = None
+
+
+class UpdateStackRequest(BaseModel):
+    """Request body for updating a stack"""
+
+    name: Optional[str] = None
+    description: Optional[str] = None
+    categories: Optional[List[str]] = None
+    sort_order: Optional[int] = None
+
+
 router = APIRouter(prefix="/api", tags=["stacks"])
 logger = logging.getLogger(__name__)
 
@@ -164,21 +182,22 @@ async def list_stacks() -> Dict[str, Any]:
 @router.post("/stacks")
 @handle_api_errors("Create stack", logger)
 async def create_stack(
-    name: str,
-    description: Optional[str] = None,
+    body: CreateStackRequest,
 ) -> Dict[str, Any]:
     """
     Create a new stack.
 
     Args:
-        name: Stack name (must be unique)
-        description: Optional description
+        body: Stack creation data (name, description, categories)
 
     Returns:
         Created stack data
     """
 
     def operation(db):
+        name = body.name
+        description = body.description
+        categories = body.categories
         # Check for duplicate name
         existing = db.query(Stack).filter(Stack.name == name.strip()).first()
         if existing:
@@ -195,6 +214,7 @@ async def create_stack(
             name=name.strip(),
             slug=slug,
             description=description.strip() if description else None,
+            categories=categories if categories else None,
             sort_order=next_order,
         )
         db.add(stack)
@@ -285,18 +305,14 @@ async def get_stack(slug: str) -> Dict[str, Any]:
 @handle_api_errors("Update stack", logger)
 async def update_stack(
     slug: str,
-    name: Optional[str] = None,
-    description: Optional[str] = None,
-    sort_order: Optional[int] = None,
+    body: UpdateStackRequest,
 ) -> Dict[str, Any]:
     """
     Update a stack's properties.
 
     Args:
         slug: Stack URL slug
-        name: New name (optional)
-        description: New description (optional)
-        sort_order: New sort order (optional)
+        body: Stack update data (name, description, categories, sort_order)
 
     Returns:
         Updated stack data
@@ -307,8 +323,8 @@ async def update_stack(
         if not stack:
             raise HTTPException(status_code=404, detail=f"Stack '{slug}' not found")
 
-        if name is not None:
-            stripped_name = name.strip()
+        if body.name is not None:
+            stripped_name = body.name.strip()
             # Check for duplicate name (excluding current stack)
             existing = db.query(Stack).filter(Stack.name == stripped_name, Stack.id != stack.id).first()
             if existing:
@@ -316,11 +332,14 @@ async def update_stack(
             stack.name = stripped_name
             stack.slug = _ensure_unique_slug(db, _generate_slug(stripped_name), exclude_id=stack.id)
 
-        if description is not None:
-            stack.description = description.strip() if description else None
+        if body.description is not None:
+            stack.description = body.description.strip() if body.description else None
 
-        if sort_order is not None:
-            stack.sort_order = sort_order
+        if body.categories is not None:
+            stack.categories = body.categories if body.categories else None
+
+        if body.sort_order is not None:
+            stack.sort_order = body.sort_order
 
         db.commit()
 

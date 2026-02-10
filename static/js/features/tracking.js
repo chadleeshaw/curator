@@ -18,6 +18,7 @@ import {
   MONTH_ABBR_LOWER,
 } from '../core/constants.js';
 import { escapeHtml } from '../readers/reader-utils.js';
+import { stacks } from './stacks.js';
 
 /** @type {string[]} Supported languages loaded from backend */
 let SUPPORTED_LANGUAGES = [];
@@ -781,6 +782,7 @@ export class TrackingManager {
             name: trackingItem.stack_name,
             slug: trackingItem.stack_slug,
             description: trackingItem.stack_description || '',
+            categories: trackingItem.stack_categories || [],
             items: [],
             firstIndex: index,
           });
@@ -803,13 +805,18 @@ export class TrackingManager {
       renderItems.push({ type: 'item', trackingItem, sortIndex: index });
     });
 
-    renderItems.sort((a, b) => a.sortIndex - b.sortIndex);
+    // Sort: stacks at top only when sorting by title, otherwise interleave by sort order
+    const stacksOnTop = this.sortManager.field === 'title';
+    renderItems.sort((a, b) => {
+      if (stacksOnTop && a.type !== b.type) return a.type === 'stack' ? -1 : 1;
+      return a.sortIndex - b.sortIndex;
+    });
 
     // Render in unified sorted order
     renderItems.forEach((entry) => {
       if (entry.type === 'stack') {
         const { stackId, group } = entry;
-        const { name, slug, description, items } = group;
+        const { name, slug, description, categories, items } = group;
 
         const groupEl = document.createElement('div');
         groupEl.className = 'stack-group';
@@ -823,41 +830,81 @@ export class TrackingManager {
         const isExpanded = localStorage.getItem(collapseKey) !== 'collapsed';
         if (isExpanded) header.classList.add('expanded');
 
-        const descHtml = description
-          ? `<span class="stack-group-desc">${description}</span>`
-          : '';
-
         const totalIssues = items.reduce((sum, item) => sum + (item.library_count || 0), 0);
         const totalFailed = items.reduce((sum, item) => sum + (item.failed_count || 0), 0);
-        const failedBadge = totalFailed > 0
-          ? `<span class="stack-group-count stack-group-failed">${totalFailed} failed</span>`
+
+        const failedHtml = totalFailed > 0
+          ? `<span class="stack-stat-failed">\u26a0\ufe0f ${totalFailed} failed</span>`
           : '';
 
+        const descHtml = description
+          ? `<span class="stack-group-desc"> — ${description}</span>`
+          : '';
+
+        const categoryBadges = (categories || [])
+          .map((c) => `<span class="stack-category-badge">${c}</span>`)
+          .join('');
+
         header.innerHTML = `
-          <span class="stack-group-chevron">▶</span>
+          <button class="stack-toggle-btn" aria-label="Toggle stack">
+            <span class="stack-toggle-icon">${isExpanded ? '\u2212' : '+'}</span>
+          </button>
           <div class="stack-group-info">
-            <span class="stack-group-name">📚 ${name}</span>
-            ${descHtml}
+            <div class="stack-group-title-row">
+              <span class="stack-group-name">${name}</span>${descHtml}
+              ${categoryBadges ? `<span class="stack-category-badges">${categoryBadges}</span>` : ''}
+            </div>
+            <div class="stack-group-meta">
+              <span class="meta-item">\ud83d\udcc1 ${items.length} periodical${items.length !== 1 ? 's' : ''}</span>
+              <span class="meta-item">\ud83d\udcda ${totalIssues} issue${totalIssues !== 1 ? 's' : ''}</span>
+              ${failedHtml}
+            </div>
           </div>
-          <span class="stack-group-count">${items.length} periodical${items.length !== 1 ? 's' : ''}</span>
-          <span class="stack-group-count stack-group-issues">${totalIssues} issue${totalIssues !== 1 ? 's' : ''}</span>
-          ${failedBadge}
-          <button class="stack-group-search-btn" title="Search all items in this stack for new issues">🔍</button>
+          <div class="tracked-card-buttons">
+            <button class="btn-icon stack-edit-btn" title="Edit stack">\u270f\ufe0f</button>
+            <button class="btn-icon stack-assign-btn" title="Manage members">\ud83d\udccb</button>
+            <button class="btn-icon stack-search-btn" title="Search for issues">\ud83d\udd0d</button>
+            <button class="btn-icon btn-danger stack-delete-btn" title="Delete stack">\ud83d\uddd1\ufe0f</button>
+          </div>
         `;
 
-        // Header click toggles collapse (but not on the search button)
+        // Header click toggles collapse (but not on action buttons)
         header.onclick = (e) => {
-          if (e.target.closest('.stack-group-search-btn')) return;
+          if (e.target.closest('.tracked-card-buttons')) return;
+          if (e.target.closest('.stack-toggle-btn')) {
+            header.classList.toggle('expanded');
+            const nowExpanded = header.classList.contains('expanded');
+            header.querySelector('.stack-toggle-icon').textContent = nowExpanded ? '\u2212' : '+';
+            localStorage.setItem(collapseKey, nowExpanded ? 'expanded' : 'collapsed');
+            return;
+          }
           header.classList.toggle('expanded');
           const nowExpanded = header.classList.contains('expanded');
+          header.querySelector('.stack-toggle-icon').textContent = nowExpanded ? '\u2212' : '+';
           localStorage.setItem(collapseKey, nowExpanded ? 'expanded' : 'collapsed');
         };
 
-        // Search button click
-        const searchBtn = header.querySelector('.stack-group-search-btn');
-        searchBtn.addEventListener('click', (e) => {
+        // Action button click handlers
+        const stackData = { id: stackId, name, slug, description, categories, member_count: items.length };
+
+        header.querySelector('.stack-edit-btn').addEventListener('click', (e) => {
+          e.stopPropagation();
+          stacks.openEditStackModal(stackData);
+        });
+
+        header.querySelector('.stack-assign-btn').addEventListener('click', (e) => {
+          e.stopPropagation();
+          stacks.openAssignModal(stackData);
+        });
+
+        header.querySelector('.stack-search-btn').addEventListener('click', (e) => {
           e.stopPropagation();
           this.searchStackItems(name, items);
+        });
+
+        header.querySelector('.stack-delete-btn').addEventListener('click', (e) => {
+          e.stopPropagation();
+          stacks.openDeleteStackModal(stackData);
         });
 
         groupEl.appendChild(header);
@@ -1335,9 +1382,16 @@ export class TrackingManager {
         rowEl.classList.remove('searching');
 
         if (data.found && data.results) {
-          const availableIssues = data.results.filter((r) => !r.in_library);
+          const inLib = data.results.filter(
+            (r) => r.status === 'in_library' || r.already_downloaded
+          ).length;
+          const availableIssues = data.results.filter(
+            (r) =>
+              r.status !== 'in_library' &&
+              !r.already_downloaded &&
+              !r.download_failed
+          );
           const available = availableIssues.length;
-          const inLib = data.results.filter((r) => r.in_library).length;
           totalAvailable += available;
           totalInLibrary += inLib;
 

@@ -774,23 +774,14 @@ export class LibraryManager {
     actionsDiv.className = 'periodical-actions';
 
     const viewBtn = document.createElement('button');
-    viewBtn.className = 'btn-primary';
-    viewBtn.textContent = 'Open';
-    viewBtn.style.flex = '1';
-    viewBtn.style.padding = '8px 14px';
-    viewBtn.style.fontSize = '13px';
-    viewBtn.style.fontWeight = '600';
+    viewBtn.className = 'stack-toggle-btn';
+    viewBtn.setAttribute('aria-label', 'Open stack');
+    viewBtn.innerHTML = '<span class="stack-toggle-icon">+</span>';
     viewBtn.onclick = (e) => {
       e.stopPropagation();
       window.location.href = `/stacks/${stack.slug}`;
     };
     actionsDiv.appendChild(viewBtn);
-
-    // Placeholder to match the delete button width on regular cards
-    const spacer = document.createElement('div');
-    spacer.className = 'btn-icon';
-    spacer.style.visibility = 'hidden';
-    actionsDiv.appendChild(spacer);
 
     info.appendChild(actionsDiv);
     card.appendChild(info);

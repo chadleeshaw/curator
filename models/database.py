@@ -481,6 +481,7 @@ class Stack(Base):
     name = Column(String(255), nullable=False, unique=True, index=True)
     slug = Column(String(255), nullable=False, unique=True, index=True)
     description = Column(String(1024), nullable=True)
+    categories = Column(JSON, nullable=True)
     cover_override_path = Column(String(512), nullable=True)  # Custom cover image path
     sort_order = Column(Integer, nullable=False, default=0)  # For manual ordering
     created_at = Column(DateTime, default=utcnow, index=True)
@@ -493,6 +494,7 @@ class Stack(Base):
             "name": self.name,
             "slug": self.slug,
             "description": self.description,
+            "categories": self.categories or [],
             "cover_override_path": self.cover_override_path,
             "sort_order": self.sort_order,
             "created_at": self.created_at.isoformat() if self.created_at else None,

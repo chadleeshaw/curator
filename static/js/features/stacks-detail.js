@@ -235,9 +235,16 @@ async function searchStack() {
       rowEl.classList.remove('searching');
 
       if (data.found && data.results) {
-        const availableIssues = data.results.filter((r) => !r.in_library);
+        const inLib = data.results.filter(
+          (r) => r.status === 'in_library' || r.already_downloaded
+        ).length;
+        const availableIssues = data.results.filter(
+          (r) =>
+            r.status !== 'in_library' &&
+            !r.already_downloaded &&
+            !r.download_failed
+        );
         const available = availableIssues.length;
-        const inLib = data.results.filter((r) => r.in_library).length;
         totalAvailable += available;
         totalInLibrary += inLib;
 

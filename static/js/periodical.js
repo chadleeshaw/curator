@@ -921,7 +921,7 @@ function goBack() {
           breadcrumb.innerHTML =
             `<a href="/#library">Library</a>` +
             `<span class="separator">/</span>` +
-            `<a href="/#stacks">Stacks</a>` +
+            `<a href="/#tracking">Tracking</a>` +
             `<span class="separator">/</span>` +
             `<a href="/stacks/${stackSlug}">${decodeURIComponent(stackSlug).replace(/-/g, ' ')}</a>` +
             `<span class="separator">/</span>` +

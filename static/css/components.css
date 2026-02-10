@@ -731,6 +731,7 @@
   flex-direction: row;
   align-items: center;
   justify-self: end;
+  grid-column: 3;
 }
 
 .btn-icon {

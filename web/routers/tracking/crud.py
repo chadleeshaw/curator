@@ -235,7 +235,13 @@ async def list_tracked_magazines(
             failed_count = discovered_failed + legacy_failed
 
             # Look up stack membership for this tracking item
-            stack_info = {"stack_id": None, "stack_name": None, "stack_slug": None, "stack_description": None}
+            stack_info = {
+                "stack_id": None,
+                "stack_name": None,
+                "stack_slug": None,
+                "stack_description": None,
+                "stack_categories": [],
+            }
             stack_membership = db.query(StackMembership).filter(StackMembership.periodical_tracking_id == t.id).first()
             if stack_membership:
                 stack = db.query(Stack).filter(Stack.id == stack_membership.stack_id).first()
@@ -245,6 +251,7 @@ async def list_tracked_magazines(
                         "stack_name": stack.name,
                         "stack_slug": stack.slug,
                         "stack_description": stack.description,
+                        "stack_categories": stack.categories or [],
                     }
 
             tracked_list.append(
@@ -269,6 +276,7 @@ async def list_tracked_magazines(
                     "stack_name": stack_info["stack_name"],
                     "stack_slug": stack_info["stack_slug"],
                     "stack_description": stack_info["stack_description"],
+                    "stack_categories": stack_info["stack_categories"],
                 }
             )
 

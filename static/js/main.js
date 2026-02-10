@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Check if there's a tab in the URL hash
   const hash = window.location.hash.substring(1);
-  if (hash && ['library', 'tracking', 'stacks', 'tasks', 'queue', 'settings'].includes(hash)) {
+  if (hash && ['library', 'tracking', 'tasks', 'queue', 'settings'].includes(hash)) {
     // Show the tab from the hash
     const tabName = UIUtils.showTab(hash, null);
 
@@ -49,8 +49,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       library.loadPeriodicals();
     } else if (tabName === 'tracking') {
       tracking.loadTrackedPeriodicals();
-    } else if (tabName === 'stacks') {
-      stacks.loadStacks();
     } else if (tabName === 'settings') {
       settings.loadSettings();
       settings.loadSettingsTab();
@@ -73,6 +71,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Load initial data for other tabs
   tracking.loadTrackedPeriodicals();
   settings.loadSettings();
+
+  // Wire up stacks change callback to refresh tracking list
+  stacks.onChange(() => tracking.loadTrackedPeriodicals());
 
   // Load initial header stats
   updateHeaderStats();
@@ -104,15 +105,15 @@ window.addEventListener('hashchange', () => {
     downloads.stopAutoRefresh();
     ocrQueue.stopAutoRefresh();
 
-    const tabName = UIUtils.showTab(hash, null);
+    // Redirect legacy stacks hash to tracking
+    const resolvedHash = hash === 'stacks' ? 'tracking' : hash;
+    const tabName = UIUtils.showTab(resolvedHash, null);
 
     // Load data for the tab if needed
     if (tabName === 'library') {
       library.loadPeriodicals();
     } else if (tabName === 'tracking') {
       tracking.loadTrackedPeriodicals();
-    } else if (tabName === 'stacks') {
-      stacks.loadStacks();
     } else if (tabName === 'settings') {
       settings.loadSettings();
       settings.loadSettingsTab();
@@ -233,7 +234,10 @@ window.openCreateStackModal = () => stacks.openCreateStackModal();
 window.closeStackCreateModal = () => UIUtils.closeModal('stack-create-modal');
 window.closeDeleteStackModal = () => stacks.closeDeleteStackModal();
 window.confirmDeleteStack = () => stacks.confirmDeleteStack();
-window.closeStackAssignModal = () => UIUtils.closeModal('stack-assign-modal');
+window.closeStackAssignModal = () => {
+  UIUtils.closeModal('stack-assign-modal');
+  stacks._notifyChange();
+};
 
 // Settings tab switcher
 window.showSettingsTab = (tabName, event) => {

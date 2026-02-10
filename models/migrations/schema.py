@@ -43,6 +43,9 @@ COLUMN_ADDITIONS = {
     "download_submissions": [
         ("extra_status", "VARCHAR(512)"),
     ],
+    "stacks": [
+        ("categories", "JSON"),
+    ],
     "discovered_issues": [
         ("country", "VARCHAR(50)"),
         ("latest_pubdate", "DATETIME"),  # When NZB was posted (for retention preference)

@@ -6,7 +6,6 @@
 
 import { APIClient, APIHelper } from '../core/api.js';
 import { UIUtils } from '../core/ui-utils.js';
-import { CSS_CLASSES } from '../core/constants.js';
 
 /**
  * Stacks Manager class for managing stack CRUD and assignment
@@ -24,6 +23,31 @@ export class StacksManager {
     this.availableItems = [];
     /** @type {Set} IDs selected for adding to stack */
     this.selectedForAdd = new Set();
+    /** @type {Function|null} Callback when stacks change (create/update/delete/assign) */
+    this.onChangeCallback = null;
+    /** @type {Array} Available categories from constants API */
+    this.availableCategories = [];
+    /** @type {Set} Currently selected categories in the modal */
+    this.selectedCategories = new Set();
+  }
+
+  /**
+   * Register a callback to be called when stacks are modified
+   *
+   * @param {Function} callback - Function to call on stack changes
+   */
+  onChange(callback) {
+    this.onChangeCallback = callback;
+  }
+
+  /**
+   * Notify listeners that stacks have changed
+   * @private
+   */
+  async _notifyChange() {
+    if (this.onChangeCallback) {
+      await this.onChangeCallback();
+    }
   }
 
   /**
@@ -146,6 +170,50 @@ export class StacksManager {
   }
 
   /**
+   * Load available categories from constants API and render pill toggles
+   *
+   * @param {Array} preselected - Categories to pre-select
+   */
+  async _loadCategoryPills(preselected = []) {
+    const container = document.getElementById('stack-categories-container');
+    if (!container) return;
+
+    // Load categories from API if not cached
+    if (this.availableCategories.length === 0) {
+      try {
+        const response = await APIClient.get('/api/constants/categories');
+        const data = await response.json();
+        this.availableCategories = data.categories || [];
+      } catch {
+        this.availableCategories = [];
+      }
+    }
+
+    this.selectedCategories = new Set(preselected);
+
+    container.innerHTML = this.availableCategories
+      .map((cat) => {
+        const selected = this.selectedCategories.has(cat) ? ' selected' : '';
+        return `<button type="button" class="stack-category-pill${selected}" data-category="${cat}">${cat}</button>`;
+      })
+      .join('');
+
+    // Attach click handlers
+    container.querySelectorAll('.stack-category-pill').forEach((pill) => {
+      pill.addEventListener('click', () => {
+        const cat = pill.dataset.category;
+        if (this.selectedCategories.has(cat)) {
+          this.selectedCategories.delete(cat);
+          pill.classList.remove('selected');
+        } else {
+          this.selectedCategories.add(cat);
+          pill.classList.add('selected');
+        }
+      });
+    });
+  }
+
+  /**
    * Open modal to create a new stack
    */
   openCreateStackModal() {
@@ -163,6 +231,7 @@ export class StacksManager {
       saveBtn.onclick = () => this.createStack();
     }
 
+    this._loadCategoryPills([]);
     UIUtils.showModal('stack-create-modal');
   }
 
@@ -188,6 +257,7 @@ export class StacksManager {
       saveBtn.onclick = () => this.updateStack();
     }
 
+    this._loadCategoryPills(stack.categories || []);
     UIUtils.showModal('stack-create-modal');
   }
 
@@ -197,17 +267,22 @@ export class StacksManager {
   async createStack() {
     const name = document.getElementById('stack-name-input')?.value?.trim();
     const description = document.getElementById('stack-desc-input')?.value?.trim();
+    const categories = [...this.selectedCategories];
 
     if (!name) {
       UIUtils.showToast('Please enter a stack name', 'error');
       return;
     }
 
+    const body = { name };
+    if (description) body.description = description;
+    if (categories.length > 0) body.categories = categories;
+
     const data = await APIHelper.executeWithErrorHandling(async () => {
-      const params = new URLSearchParams({ name });
-      if (description) params.append('description', description);
-      const response = await APIClient.authenticatedFetch(`/api/stacks?${params}`, {
+      const response = await APIClient.authenticatedFetch('/api/stacks', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
       });
       return await response.json();
     }, 'Stacks');
@@ -216,6 +291,7 @@ export class StacksManager {
       UIUtils.closeModal('stack-create-modal');
       UIUtils.showToast(`Stack "${name}" created`, 'success');
       await this.loadStacks();
+      await this._notifyChange();
     }
   }
 
@@ -227,18 +303,23 @@ export class StacksManager {
 
     const name = document.getElementById('stack-name-input')?.value?.trim();
     const description = document.getElementById('stack-desc-input')?.value?.trim();
+    const categories = [...this.selectedCategories];
 
     if (!name) {
       UIUtils.showToast('Please enter a stack name', 'error');
       return;
     }
 
+    const body = { name, description: description || '', categories };
+
     const data = await APIHelper.executeWithErrorHandling(async () => {
-      const params = new URLSearchParams({ name });
-      if (description) params.append('description', description);
       const response = await APIClient.authenticatedFetch(
-        `/api/stacks/${this.currentStack.slug}?${params}`,
-        { method: 'PUT' }
+        `/api/stacks/${this.currentStack.slug}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        }
       );
       return await response.json();
     }, 'Stacks');
@@ -248,6 +329,7 @@ export class StacksManager {
       UIUtils.showToast(`Stack "${name}" updated`, 'success');
       this.currentStack = null;
       await this.loadStacks();
+      await this._notifyChange();
     }
   }
 
@@ -293,6 +375,7 @@ export class StacksManager {
       UIUtils.showToast(`Stack "${this.currentStack.name}" deleted`, 'success');
       this.currentStack = null;
       await this.loadStacks();
+      await this._notifyChange();
     }
   }
 
