@@ -56,7 +56,7 @@ export async function initStackDetail() {
   const container = document.getElementById('stack-container');
   const membersData = JSON.parse(container.dataset.members || '[]');
   allMembersData = membersData;
-  
+
   // Set initial sort UI state
   if (document.getElementById('stack-sort-select')) {
     document.getElementById('stack-sort-select').value = currentSortField;
@@ -104,14 +104,14 @@ function renderMembers(members, grid) {
 function updateStackSubtitle() {
   const subtitle = document.getElementById('stack-sort-subtitle');
   if (!subtitle) return;
-  
+
   const subtitles = {
     title: 'Sorted by Title',
     category: 'Sorted by Category',
     library_count: 'Sorted by Number of Issues',
-    latest_issue: 'Sorted by Latest Issue'
+    latest_issue: 'Sorted by Latest Issue',
   };
-  
+
   subtitle.textContent = subtitles[currentSortField] || '';
 }
 
@@ -123,7 +123,7 @@ function updateStackSubtitle() {
 function sortMembers(members) {
   return members.sort((a, b) => {
     let comparison = 0;
-    
+
     switch (currentSortField) {
       case 'title':
         comparison = (a.title || '').localeCompare(b.title || '');
@@ -138,7 +138,7 @@ function sortMembers(members) {
         comparison = new Date(a.latest_issue || 0) - new Date(b.latest_issue || 0);
         break;
     }
-    
+
     return sortAscending ? comparison : -comparison;
   });
 }
@@ -270,15 +270,14 @@ function createMemberCard(item) {
   }
   info.appendChild(subtitle);
 
+  // Add inline navigation hint at bottom of info section
+  const navHint = document.createElement('div');
+  navHint.className = 'stack-detail-nav-hint';
+  navHint.textContent = 'View →';
+  info.appendChild(navHint);
+
   card.appendChild(info);
-  
-  // Add expand indicator to show this card is navigational
-  const expandIcon = document.createElement('div');
-  expandIcon.className = 'stack-card-expand-icon';
-  expandIcon.innerHTML = '→';
-  expandIcon.setAttribute('aria-label', 'View issues');
-  card.appendChild(expandIcon);
-  
+
   return card;
 }
 
@@ -353,10 +352,7 @@ async function searchStack() {
           (r) => r.status === 'in_library' || r.already_downloaded
         ).length;
         const availableIssues = data.results.filter(
-          (r) =>
-            r.status !== 'in_library' &&
-            !r.already_downloaded &&
-            !r.download_failed
+          (r) => r.status !== 'in_library' && !r.already_downloaded && !r.download_failed
         );
         const available = availableIssues.length;
         totalAvailable += available;

@@ -30,19 +30,33 @@
       data-special-editions="{{SPECIAL_EDITIONS_DATA}}"
     >
       <div class="periodical-header collapsible-header">
-        <div style="display: flex; justify-content: space-between; align-items: flex-end; width: 100%;">
+        <div class="header-content-row">
           <div>
-            <h1 id="periodical-title" style="display: flex; align-items: center; gap: 12px;"><span style="font-size: 0.85em; opacity: 0.85;">📖</span><span>{{PERIODICAL_TITLE}}</span></h1>
+            <h1 id="periodical-title">
+              <span class="header-icon">📖</span><span>{{PERIODICAL_TITLE}}</span>
+            </h1>
             <p id="periodical-subtitle">Published Issues by Year</p>
           </div>
-          <div class="sort-controls" style="flex-shrink: 0;">
-            <label for="periodical-sort-select" style="color: var(--text-secondary); font-size: 0.9em; font-weight: 500">Sort by:</label>
-            <select id="periodical-sort-select" onchange="setPeriodicalSort(this.value)" aria-label="Sort issues by" style="padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--surface); color: var(--text-primary); font-size: 14px; cursor: pointer;">
+          <div class="sort-controls">
+            <label for="periodical-sort-select">Sort by:</label>
+            <select
+              id="periodical-sort-select"
+              onchange="setPeriodicalSort(this.value)"
+              aria-label="Sort issues by"
+            >
               <option value="issue_date">Issue Date</option>
               <option value="title">Title</option>
               <option value="added_date">Added Date</option>
             </select>
-            <button id="periodical-sort-toggle" class="sort-toggle-btn" onclick="togglePeriodicalSortOrder()" aria-label="Toggle sort order" title="Toggle ascending/descending">↑</button>
+            <button
+              id="periodical-sort-toggle"
+              class="sort-toggle-btn"
+              onclick="togglePeriodicalSortOrder()"
+              aria-label="Toggle sort order"
+              title="Toggle ascending/descending"
+            >
+              ↑
+            </button>
           </div>
         </div>
       </div>

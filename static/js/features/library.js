@@ -48,7 +48,6 @@ export class LibraryManager {
     /** @type {Array} All stacks loaded from API */
     this.allStacks = [];
 
-
     // Initialize media worker
     this.initMediaWorker();
 
@@ -74,13 +73,13 @@ export class LibraryManager {
         'library-language-filter',
         'library-search-input'
       );
-      
+
       // Update sort dropdown
       const sortDropdown = document.getElementById('library-sort-select');
       if (sortDropdown) {
         sortDropdown.value = this.sortManager.field;
       }
-      
+
       this.updateLibrarySortToggleButton();
     }
 
@@ -202,7 +201,7 @@ export class LibraryManager {
     try {
       // FilterManager handles loading from localStorage
       this.filterManager.loadState();
-      
+
       // Update UI elements
       this.filterManager.updateUI(
         'library-category-filter',
@@ -237,7 +236,7 @@ export class LibraryManager {
     try {
       // FilterManager handles saving to localStorage
       this.filterManager.saveState();
-      
+
       // Also save sort settings
       const filters = {
         category: this.filterManager.categoryFilter,
@@ -279,7 +278,7 @@ export class LibraryManager {
       option.textContent = category;
       dropdown.appendChild(option);
     });
-    
+
     // Restore saved filter value
     if (currentValue && currentValue !== 'all') {
       dropdown.value = currentValue;
@@ -380,7 +379,8 @@ export class LibraryManager {
     });
 
     // Determine if user is actively searching
-    const isSearching = this.filterManager.searchQuery && this.filterManager.searchQuery.trim() !== '';
+    const isSearching =
+      this.filterManager.searchQuery && this.filterManager.searchQuery.trim() !== '';
 
     // Separate items into stacked and ungrouped
     const stackMap = new Map(); // stack_id -> { stack, items: [] }
@@ -399,7 +399,9 @@ export class LibraryManager {
       const filteredIds = new Set(filtered.map((p) => p.id));
       this.allStacks.forEach((stack) => {
         if ((stack.name || '').toLowerCase().includes(query)) {
-          const members = this.allPeriodicals.filter((p) => p.stack_id === stack.id && !filteredIds.has(p.id));
+          const members = this.allPeriodicals.filter(
+            (p) => p.stack_id === stack.id && !filteredIds.has(p.id)
+          );
           members.forEach((m) => {
             ungrouped.push(m);
             filteredIds.add(m.id);
@@ -456,11 +458,17 @@ export class LibraryManager {
         if (sortField === 'title') return (s.name || '').toLowerCase();
         if (sortField === 'issue_date') {
           // Use the most recent issue_date across all members
-          return items.reduce((max, i) => (i.issue_date > max ? i.issue_date : max), items[0]?.issue_date || '');
+          return items.reduce(
+            (max, i) => (i.issue_date > max ? i.issue_date : max),
+            items[0]?.issue_date || ''
+          );
         }
         if (sortField === 'created_at') {
           // Use the most recent created_at across all members
-          return items.reduce((max, i) => (i.created_at > max ? i.created_at : max), items[0]?.created_at || '');
+          return items.reduce(
+            (max, i) => (i.created_at > max ? i.created_at : max),
+            items[0]?.created_at || ''
+          );
         }
         if (sortField === 'issue_count') {
           // Sum issue_count across all members
@@ -478,13 +486,13 @@ export class LibraryManager {
 
     // Sort: stacks at top only when sorting by title, otherwise interleave by sort order
     const stacksOnTop = sortField === 'title';
-    
+
     renderItems.sort((a, b) => {
       // When sorting by title, put stacks at the top
       if (stacksOnTop && a.type !== b.type) {
         return a.type === 'stack' ? -1 : 1;
       }
-      
+
       // Otherwise sort by the selected field
       const keyA = getSortKey(a);
       const keyB = getSortKey(b);
@@ -625,7 +633,7 @@ export class LibraryManager {
   setLibraryFilter(filterType, value) {
     // Use FilterManager to handle filter updates
     this.filterManager.setFilter(filterType, value);
-    
+
     // Update dropdown UI
     if (filterType === 'category') {
       const dropdown = document.getElementById('library-category-filter');
@@ -634,7 +642,7 @@ export class LibraryManager {
       const dropdown = document.getElementById('library-language-filter');
       if (dropdown) dropdown.value = value;
     }
-    
+
     // If periodicals haven't been loaded yet, load them now
     if (!this.periodicalsLoaded) {
       this.loadPeriodicals();
@@ -668,7 +676,7 @@ export class LibraryManager {
   clearFilters() {
     // Use FilterManager to clear filters
     this.filterManager.clearFilters();
-    
+
     // Update UI to reflect cleared state
     this.filterManager.updateUI(
       'library-category-filter',
@@ -785,7 +793,7 @@ export class LibraryManager {
     const viewBtn = document.createElement('button');
     viewBtn.className = 'stack-toggle-btn';
     viewBtn.setAttribute('aria-label', 'Open stack');
-    viewBtn.innerHTML = '<span class="stack-toggle-icon">+</span>';
+    viewBtn.innerHTML = '<span class="stack-toggle-icon">→</span>';
     viewBtn.onclick = (e) => {
       e.stopPropagation();
       window.location.href = `/stacks/${stack.slug}`;
@@ -802,8 +810,6 @@ export class LibraryManager {
 
     return card;
   }
-
-
 
   /**
    * Create a periodical card element
