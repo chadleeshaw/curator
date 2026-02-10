@@ -476,7 +476,16 @@ export class LibraryManager {
       return (p.title || '').toLowerCase();
     };
 
+    // Sort: stacks at top only when sorting by title, otherwise interleave by sort order
+    const stacksOnTop = sortField === 'title';
+    
     renderItems.sort((a, b) => {
+      // When sorting by title, put stacks at the top
+      if (stacksOnTop && a.type !== b.type) {
+        return a.type === 'stack' ? -1 : 1;
+      }
+      
+      // Otherwise sort by the selected field
       const keyA = getSortKey(a);
       const keyB = getSortKey(b);
       let cmp = 0;

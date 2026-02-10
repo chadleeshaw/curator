@@ -321,7 +321,7 @@
 }
 
 .stack-stat-failed {
-  color: var(--danger-color, #ef4444);
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
@@ -552,6 +552,30 @@
 /* Stack detail cards — whole card clickable, titles wrap, compact info */
 .stack-detail-card {
   cursor: pointer;
+  position: relative;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.stack-detail-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.stack-detail-card:hover .stack-card-expand-icon {
+  opacity: 1;
+  transform: translateX(4px);
+}
+
+.stack-card-expand-icon {
+  position: absolute;
+  top: 50%;
+  right: 16px;
+  transform: translateY(-50%);
+  font-size: 24px;
+  color: var(--accent);
+  opacity: 0.6;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
 }
 
 .stack-detail-card .periodical-info {

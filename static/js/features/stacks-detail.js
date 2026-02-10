@@ -18,6 +18,13 @@ const memberSearchResults = new Map();
 /** @type {Array} Tracked members with tracking_id */
 let trackedMembers = [];
 
+/** @type {Array} All members data */
+let allMembersData = [];
+
+// Sorting state
+let currentSortField = localStorage.getItem('stack-sort-field') || 'title';
+let sortAscending = localStorage.getItem('stack-sort-order') !== 'desc';
+
 /**
  * Initialize the stack detail page
  * @returns {Promise<void>}
@@ -42,10 +49,20 @@ export async function initStackDetail() {
   window.closeSearchPanel = closeSearchPanel;
   window.downloadMemberIssues = downloadMemberIssues;
   window.downloadAllStackIssues = downloadAllStackIssues;
+  window.setStackSort = setStackSort;
+  window.toggleStackSortOrder = toggleStackSortOrder;
 
   // Get data from template
   const container = document.getElementById('stack-container');
   const membersData = JSON.parse(container.dataset.members || '[]');
+  allMembersData = membersData;
+  
+  // Set initial sort UI state
+  if (document.getElementById('stack-sort-select')) {
+    document.getElementById('stack-sort-select').value = currentSortField;
+    document.getElementById('stack-sort-toggle').textContent = sortAscending ? '↑' : '↓';
+    updateStackSubtitle();
+  }
   const grid = document.getElementById('stack-periodicals-grid');
   const emptyState = document.getElementById('stack-empty-state');
   const countBadge = document.getElementById('stack-member-count');
@@ -64,10 +81,99 @@ export async function initStackDetail() {
     grid.classList.add('hidden');
     emptyState.classList.remove('hidden');
   } else {
-    membersData.forEach((item) => {
-      grid.appendChild(createMemberCard(item));
-    });
+    renderMembers(membersData, grid);
   }
+}
+
+/**
+ * Render members with current sort
+ * @param {Array} members - Members to render
+ * @param {HTMLElement} grid - Grid element to render into
+ */
+function renderMembers(members, grid) {
+  const sortedMembers = sortMembers([...members]);
+  grid.innerHTML = '';
+  sortedMembers.forEach((item) => {
+    grid.appendChild(createMemberCard(item));
+  });
+}
+
+/**
+ * Update subtitle based on current sort field
+ */
+function updateStackSubtitle() {
+  const subtitle = document.getElementById('stack-sort-subtitle');
+  if (!subtitle) return;
+  
+  const subtitles = {
+    title: 'Sorted by Title',
+    category: 'Sorted by Category',
+    library_count: 'Sorted by Number of Issues',
+    latest_issue: 'Sorted by Latest Issue'
+  };
+  
+  subtitle.textContent = subtitles[currentSortField] || '';
+}
+
+/**
+ * Sort members based on current sort field and order
+ * @param {Array} members - Array of member objects
+ * @returns {Array} Sorted members
+ */
+function sortMembers(members) {
+  return members.sort((a, b) => {
+    let comparison = 0;
+    
+    switch (currentSortField) {
+      case 'title':
+        comparison = (a.title || '').localeCompare(b.title || '');
+        break;
+      case 'category':
+        comparison = (a.category || '').localeCompare(b.category || '');
+        break;
+      case 'library_count':
+        comparison = (a.library_count || 0) - (b.library_count || 0);
+        break;
+      case 'latest_issue':
+        comparison = new Date(a.latest_issue || 0) - new Date(b.latest_issue || 0);
+        break;
+    }
+    
+    return sortAscending ? comparison : -comparison;
+  });
+}
+
+/**
+ * Set the sort field and re-render
+ * @param {string} field - The field to sort by
+ */
+function setStackSort(field) {
+  currentSortField = field;
+  localStorage.setItem('stack-sort-field', field);
+  updateStackSubtitle();
+  const grid = document.getElementById('stack-periodicals-grid');
+  grid.style.opacity = '0.5';
+  grid.style.transition = 'opacity 0.2s ease';
+  setTimeout(() => {
+    renderMembers(allMembersData, grid);
+    grid.style.opacity = '1';
+  }, 100);
+}
+
+/**
+ * Toggle sort order and re-render
+ */
+function toggleStackSortOrder() {
+  sortAscending = !sortAscending;
+  localStorage.setItem('stack-sort-order', sortAscending ? 'asc' : 'desc');
+  document.getElementById('stack-sort-toggle').textContent = sortAscending ? '↑' : '↓';
+  const grid = document.getElementById('stack-periodicals-grid');
+  grid.style.opacity = '0.5';
+  grid.style.transition = 'opacity 0.2s ease';
+  setTimeout(() => {
+    renderMembers(allMembersData, grid);
+    grid.style.opacity = '1';
+  }, 100);
 }
 
 /**
@@ -165,6 +271,14 @@ function createMemberCard(item) {
   info.appendChild(subtitle);
 
   card.appendChild(info);
+  
+  // Add expand indicator to show this card is navigational
+  const expandIcon = document.createElement('div');
+  expandIcon.className = 'stack-card-expand-icon';
+  expandIcon.innerHTML = '→';
+  expandIcon.setAttribute('aria-label', 'View issues');
+  card.appendChild(expandIcon);
+  
   return card;
 }
 

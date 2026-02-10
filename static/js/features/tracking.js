@@ -1060,7 +1060,7 @@ export class TrackingManager {
         : '';
     const failedStats =
       failedCount > 0
-        ? `<span class="failed-count" style="color: var(--status-pending); cursor: pointer;" data-tracking-id="${id}" title="Click to view failed downloads">\u26A0\uFE0F ${failedCount} failed</span>`
+        ? `<span class="failed-count" style="color: var(--text-secondary); cursor: pointer;" data-tracking-id="${id}" title="Click to view failed downloads">\u26A0\uFE0F ${failedCount} failed</span>`
         : '';
 
     const checkboxHtml = this.mergeMode

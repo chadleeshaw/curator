@@ -23,6 +23,46 @@ let pendingDeleteId = null;
 let currentMagazineId = null;
 let currentMagazineData = null;
 
+// Sorting state
+let currentSortField = localStorage.getItem('periodical-sort-field') || 'issue_date';
+let sortAscending = localStorage.getItem('periodical-sort-order') !== 'desc';
+
+// Set initial sort UI state
+if (document.getElementById('periodical-sort-select')) {
+  document.getElementById('periodical-sort-select').value = currentSortField;
+  document.getElementById('periodical-sort-toggle').textContent = sortAscending ? '↑' : '↓';
+  updateSubtitle();
+}
+
+// Expose sorting functions globally
+window.setPeriodicalSort = setPeriodicalSort;
+window.togglePeriodicalSortOrder = togglePeriodicalSortOrder;
+
+/**
+ * Update subtitle based on current sort field
+ */
+function updateSubtitle() {
+  const subtitle = document.getElementById('periodical-subtitle');
+  if (!subtitle) return;
+  
+  // For issue_date sort, detect if grouped by year or volume
+  let issueGroupingLabel = 'Grouped by Publication Date';
+  if (currentSortField === 'issue_date' && yearsData.length > 0) {
+    // Check if the grouping keys look like years (numeric 4-digit) or volumes
+    const firstKey = String(yearsData[0].year);
+    const looksLikeYear = /^\d{4}$/.test(firstKey);
+    issueGroupingLabel = looksLikeYear ? 'Grouped by Year' : 'Grouped by Volume';
+  }
+  
+  const subtitles = {
+    issue_date: issueGroupingLabel,
+    title: 'Sorted by Title',
+    added_date: 'Sorted by Date Added'
+  };
+  
+  subtitle.textContent = subtitles[currentSortField] || issueGroupingLabel;
+}
+
 /**
  * Helper function to extract special edition value from data structure.
  * Checks derived_metadata (new location), extra_metadata, and metadata (legacy location).
@@ -154,8 +194,146 @@ function renderIssues() {
     container.appendChild(specialSection);
   }
 
-  // Render regular year sections
+  // Render based on sort mode
+  if (currentSortField !== 'issue_date') {
+    renderFlatView(container);
+  } else {
+    renderGroupedView(container);
+  }
+}
+
+/**
+ * Sort issues based on current sort field and order
+ * @param {Array} issues - Array of issue objects
+ * @returns {Array} Sorted issues
+ */
+function sortIssues(issues) {
+  return issues.sort((a, b) => {
+    let comparison = 0;
+    
+    switch (currentSortField) {
+      case 'issue_date':
+        comparison = new Date(a.issue_date || 0) - new Date(b.issue_date || 0);
+        break;
+      case 'title':
+        comparison = (a.special_edition_name || a.title || '').localeCompare(b.special_edition_name || b.title || '');
+        break;
+      case 'added_date':
+        comparison = new Date(a.created_at || 0) - new Date(b.created_at || 0);
+        break;
+    }
+    
+    return sortAscending ? comparison : -comparison;
+  });
+}
+
+/**
+ * Set the sort field and re-render
+ * @param {string} field - The field to sort by
+ */
+function setPeriodicalSort(field) {
+  currentSortField = field;
+  localStorage.setItem('periodical-sort-field', field);
+  updateSubtitle();
+  rerender();
+}
+
+/**
+ * Toggle sort order and re-render
+ */
+function togglePeriodicalSortOrder() {
+  sortAscending = !sortAscending;
+  localStorage.setItem('periodical-sort-order', sortAscending ? 'asc' : 'desc');
+  document.getElementById('periodical-sort-toggle').textContent = sortAscending ? '↑' : '↓';
+  rerender();
+}
+
+/**
+ * Re-render the issues with current sort settings
+ */
+function rerender() {
+  const container = document.getElementById('issues-container');
+  container.style.opacity = '0.5';
+  container.style.transition = 'opacity 0.2s ease';
+  
+  setTimeout(() => {
+    container.innerHTML = '';
+    
+    // For non-date sorts, show flattened view (no year grouping)
+    if (currentSortField !== 'issue_date') {
+      renderFlatView(container);
+    } else {
+      renderGroupedView(container);
+    }
+    
+    container.style.opacity = '1';
+  }, 100);
+}
+
+/**
+ * Render issues in a flat view (no year grouping)
+ * @param {HTMLElement} container - Container element
+ */
+function renderFlatView(container) {
+  // Collect all issues
+  const allIssues = [];
+  
+  if (specialEditionsData && specialEditionsData.length > 0) {
+    allIssues.push(...specialEditionsData);
+  }
+  
   yearsData.forEach((yearData) => {
+    allIssues.push(...yearData.issues);
+  });
+  
+  // Sort all issues together
+  const sortedIssues = sortIssues(allIssues);
+  
+  // Create single grid
+  const issuesGrid = document.createElement('div');
+  issuesGrid.className = 'issues-grid';
+  issuesGrid.style.marginTop = '20px';
+  
+  sortedIssues.forEach((issue) => {
+    const issueCard = createIssueCard(issue);
+    issuesGrid.appendChild(issueCard);
+  });
+  
+  container.appendChild(issuesGrid);
+}
+
+/**
+ * Render issues grouped by year
+ * @param {HTMLElement} container - Container element
+ */
+function renderGroupedView(container) {
+  // Re-render special editions section
+  if (specialEditionsData && specialEditionsData.length > 0) {
+    const specialSection = document.createElement('div');
+    specialSection.className = 'year-section';
+
+    const specialTitle = document.createElement('h2');
+    specialTitle.className = 'year-title';
+    specialTitle.textContent = 'Special Editions';
+    specialSection.appendChild(specialTitle);
+
+    const issuesGrid = document.createElement('div');
+    issuesGrid.className = 'issues-grid';
+
+    const sortedSpecials = sortIssues([...specialEditionsData]);
+    sortedSpecials.forEach((issue) => {
+      const issueCard = createIssueCard(issue);
+      issuesGrid.appendChild(issueCard);
+    });
+
+    specialSection.appendChild(issuesGrid);
+    container.appendChild(specialSection);
+  }
+
+  // Re-render regular year sections
+  yearsData.forEach((yearData) => {
+    const sortedIssues = sortIssues([...yearData.issues]);
+    
     const yearSection = document.createElement('div');
     yearSection.className = 'year-section';
 
@@ -167,7 +345,7 @@ function renderIssues() {
     const issuesGrid = document.createElement('div');
     issuesGrid.className = 'issues-grid';
 
-    yearData.issues.forEach((issue) => {
+    sortedIssues.forEach((issue) => {
       const issueCard = createIssueCard(issue);
       issuesGrid.appendChild(issueCard);
     });
