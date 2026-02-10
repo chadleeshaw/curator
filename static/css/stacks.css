@@ -1041,13 +1041,25 @@
   }
 
   .stack-group-header {
-    flex-wrap: wrap;
-    padding: 12px 16px;
-    gap: 8px;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .stack-group-header .stack-toggle-btn {
+    position: absolute;
+    top: 16px;
+    right: 16px;
   }
 
   .stack-group-info {
-    flex-basis: calc(100% - 40px);
+    flex-basis: 100%;
+    padding-right: 44px;
+  }
+
+  .stack-group-header .tracked-card-buttons {
+    width: 100%;
   }
 
   .stack-group-desc {
