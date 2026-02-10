@@ -309,3 +309,22 @@ class TestPeriodicalValidation:
         # Contains multiple periodical patterns - should be strongly accepted
         result = {"title": "Magazine V12 N3 January 2024"}
         assert service._validate_is_periodical(result) is True
+
+    def test_bare_volume_shorthand(self, service):
+        """Test: 'Magazine v12' recognized as periodical (bare v+digits volume shorthand)"""
+        result = {"title": "Magazine v12"}
+        assert service._validate_is_periodical(result) is True
+
+    def test_bare_volume_shorthand_uppercase(self, service):
+        """Test: 'Magazine V5' recognized as periodical (uppercase V+digits)"""
+        result = {"title": "Magazine V5"}
+        assert service._validate_is_periodical(result) is True
+
+    def test_nzb_title_with_bracketed_tag_and_volume(self, service):
+        """Test: NZB title with bracketed category tag and bare volume number should be accepted"""
+        result = {"title": "[XXX-COMIC] Hustlers Taboo Illustrated v12Hustler's Taboo Illustrated v12"}
+        assert service._validate_is_periodical(result) is True
+
+    def test_bracketed_tag_does_not_trigger_anti_pattern(self, service):
+        """Test: Bracketed category tags are not anti-periodical patterns"""
+        assert service._has_anti_periodical_patterns("[XXX-COMIC] Some Magazine January 2024") is False

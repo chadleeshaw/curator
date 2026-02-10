@@ -37,6 +37,7 @@ PERIODICAL_PATTERNS_STATIC = [
     r"#\d+\b",  # "#123"
     # Volume patterns - moderate indicators
     r"\b(vol\.?|volume)\s*\d+",
+    r"\bv\d+\b",  # Bare volume shorthand: "v12", "v5" (common in comics and illustrated periodicals)
     # Combined volume + issue - very strong indicator
     r"\bv\d+\s+(i|n|no\.?)\d+\b",  # "V12 N3", "V5 I2"
     # Weekly/bi-weekly date formats
