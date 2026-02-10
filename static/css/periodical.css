@@ -43,6 +43,23 @@
 }
 
 /* ==========================================================================
+   Shared header content row (periodical + stacks detail pages)
+   ========================================================================== */
+
+.header-content-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  width: 100%;
+  gap: 16px;
+}
+
+.header-title-area {
+  flex: 1;
+  text-align: left;
+}
+
+/* ==========================================================================
    Periodical Header
    ========================================================================== */
 

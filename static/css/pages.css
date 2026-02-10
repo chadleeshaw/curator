@@ -684,7 +684,7 @@
   border-radius: 8px;
   border: 1px solid var(--border);
   text-align: center;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .queue-stat-number {
@@ -1523,14 +1523,31 @@
     margin-bottom: 15px !important;
   }
 
+  /* Shared header row — stack vertically on mobile */
+  .header-content-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+    text-align: center !important;
+  }
+
+  .header-title-area {
+    text-align: center !important;
+  }
+
+  .header-content-row .sort-controls {
+    justify-content: center !important;
+  }
+
   .periodical-header {
-    padding: 30px 16px !important;
+    padding: 20px 16px !important;
     margin-bottom: 20px !important;
   }
 
   .periodical-header h1 {
-    font-size: 1.8em !important;
+    font-size: 1.4em !important;
     line-height: 1.2;
+    justify-content: center !important;
   }
 
   .periodical-header p {
