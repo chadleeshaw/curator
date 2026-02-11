@@ -322,8 +322,38 @@ class TestPeriodicalValidation:
 
     def test_nzb_title_with_bracketed_tag_and_volume(self, service):
         """Test: NZB title with bracketed category tag and bare volume number should be accepted"""
-        result = {"title": "[XXX-COMIC] Hustlers Taboo Illustrated v12Hustler's Taboo Illustrated v12"}
+        result = {"title": "[XXX-COMIC] Illustrated Monthly v12"}
         assert service._validate_is_periodical(result) is True
+
+    def test_bare_issue_number_zero_padded(self, service):
+        """Test: 'Illustrated Comix 07' recognized as periodical (bare zero-padded issue number)"""
+        result = {"title": "Illustrated Comix 07"}
+        assert service._validate_is_periodical(result) is True
+
+    def test_bare_issue_number_unpadded(self, service):
+        """Test: 'Illustrated Monthly 12' recognized as periodical (bare issue number)"""
+        result = {"title": "Illustrated Monthly 12"}
+        assert service._validate_is_periodical(result) is True
+
+    def test_bare_issue_number_single_digit(self, service):
+        """Test: 'Magazine Title 5' recognized as periodical (single digit issue)"""
+        result = {"title": "Magazine Title 5"}
+        assert service._validate_is_periodical(result) is True
+
+    def test_bare_issue_number_three_digits(self, service):
+        """Test: 'Long Running Magazine 389' recognized as periodical (3-digit issue)"""
+        result = {"title": "Long Running Magazine 389"}
+        assert service._validate_is_periodical(result) is True
+
+    def test_bare_issue_number_nzb_format(self, service):
+        """Test: NZB title with dots and bare issue number"""
+        result = {"title": "Illustrated.Comix.07.Magazine-GROUP"}
+        assert service._validate_is_periodical(result) is True
+
+    def test_bare_issue_number_does_not_match_year(self, service):
+        """Test: 4-digit year alone should NOT match as bare issue number"""
+        result = {"title": "Some Publication 2024"}
+        assert service._validate_is_periodical(result) is False
 
     def test_bracketed_tag_does_not_trigger_anti_pattern(self, service):
         """Test: Bracketed category tags are not anti-periodical patterns"""

@@ -38,6 +38,10 @@ PERIODICAL_PATTERNS_STATIC = [
     # Volume patterns - moderate indicators
     r"\b(vol\.?|volume)\s*\d+",
     r"\bv\d+\b",  # Bare volume shorthand: "v12", "v5" (common in comics and illustrated periodicals)
+    # Bare issue number after title text (common in NZB titles without "Issue"/"No." prefix)
+    # Matches: "Illustrated Comix 07", "Weekly Review 12", "Magazine 5"
+    # Requires a letter before the space+number to avoid matching standalone numbers
+    r"(?<=[a-z])\s+\d{1,3}\b",
     # Combined volume + issue - very strong indicator
     r"\bv\d+\s+(i|n|no\.?)\d+\b",  # "V12 N3", "V5 I2"
     # Weekly/bi-weekly date formats
@@ -154,6 +158,14 @@ ANTI_PERIODICAL_PATTERNS = [
     # Multi-Subtitle/Language (common in video)
     # ============================================================================
     r"\b(multi[\-\s]?sub|multisub|multi[\-\s]?lang)\b",
+    # ============================================================================
+    # Book/Novel Series Indicators
+    # ============================================================================
+    r"\bbooks?\s+\d+\b",  # "Book 1", "Books 2" - novel series numbering
+    # ============================================================================
+    # Collection Range Indicators (packs, not single issues)
+    # ============================================================================
+    r"\b(volumes?|issues?|books?|parts?)\s+\d+\s*[-–]\s*\d+",  # "Volumes 1-5", "Issues 10-20"
 ]
 
 
