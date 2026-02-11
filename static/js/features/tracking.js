@@ -384,7 +384,9 @@ export class TrackingManager {
 
       if (!isInternetArchive) {
         // Extract periodical name from filename (e.g., "PC.Gamer.US.No.405..." -> "PC Gamer US")
-        const match = result.title.match(/^([A-Za-z0-9\.\s]+?)(?:\.No\.|\.Issue\.|\.E|\.201|\.202)/i);
+        const match = result.title.match(
+          /^([A-Za-z0-9\.\s]+?)(?:\.No\.|\.Issue\.|\.E|\.201|\.202)/i
+        );
         if (match) {
           cleanTitle = match[1].replace(/\./g, ' ').trim();
         }
@@ -442,8 +444,10 @@ export class TrackingManager {
         if (periodical.hasItemCount) {
           countDisplay = `<strong>Files:</strong> ${periodical.count}`;
         } else {
-          countDisplay = '<strong>Files:</strong> <span class="ia-file-count" data-identifier="' +
-            (result.metadata?.identifier || '') + '">Loading...</span>';
+          countDisplay =
+            '<strong>Files:</strong> <span class="ia-file-count" data-identifier="' +
+            (result.metadata?.identifier || '') +
+            '">Loading...</span>';
         }
       } else {
         countDisplay = `<strong>Available Issues:</strong> ${periodical.count}`;
@@ -504,8 +508,8 @@ export class TrackingManager {
           const metadata = await response.json();
           const files = metadata.files || [];
           // Count PDF files (Text PDF, Image Container PDF, etc.)
-          const pdfCount = files.filter(f =>
-            f.format && (f.format.toLowerCase().includes('pdf') || f.format === 'Text PDF')
+          const pdfCount = files.filter(
+            (f) => f.format && (f.format.toLowerCase().includes('pdf') || f.format === 'Text PDF')
           ).length;
           element.textContent = pdfCount > 0 ? pdfCount : '1+';
         } else {
@@ -833,9 +837,10 @@ export class TrackingManager {
         const totalIssues = items.reduce((sum, item) => sum + (item.library_count || 0), 0);
         const totalFailed = items.reduce((sum, item) => sum + (item.failed_count || 0), 0);
 
-        const failedHtml = totalFailed > 0
-          ? `<span class="stack-stat-failed">\u26a0\ufe0f ${totalFailed} failed</span>`
-          : '';
+        const failedHtml =
+          totalFailed > 0
+            ? `<span class="stack-stat-failed">\u26a0\ufe0f ${totalFailed} failed</span>`
+            : '';
 
         const descHtml = description
           ? `<span class="stack-group-desc"> — ${description}</span>`
@@ -885,7 +890,14 @@ export class TrackingManager {
         };
 
         // Action button click handlers
-        const stackData = { id: stackId, name, slug, description, categories, member_count: items.length };
+        const stackData = {
+          id: stackId,
+          name,
+          slug,
+          description,
+          categories,
+          member_count: items.length,
+        };
 
         header.querySelector('.stack-edit-btn').addEventListener('click', (e) => {
           e.stopPropagation();
@@ -1386,10 +1398,7 @@ export class TrackingManager {
             (r) => r.status === 'in_library' || r.already_downloaded
           ).length;
           const availableIssues = data.results.filter(
-            (r) =>
-              r.status !== 'in_library' &&
-              !r.already_downloaded &&
-              !r.download_failed
+            (r) => r.status !== 'in_library' && !r.already_downloaded && !r.download_failed
           );
           const available = availableIssues.length;
           totalAvailable += available;
@@ -1435,7 +1444,8 @@ export class TrackingManager {
     // Show summary
     const doneEl = document.getElementById('stack-search-done');
     doneEl.classList.remove(CSS_CLASSES.HIDDEN);
-    let summaryHtml = '<div class="stack-search-stats" style="display:flex;gap:16px;flex-wrap:wrap;font-size:14px;color:var(--text-secondary);">';
+    let summaryHtml =
+      '<div class="stack-search-stats" style="display:flex;gap:16px;flex-wrap:wrap;font-size:14px;color:var(--text-secondary);">';
     if (totalAvailable > 0) {
       summaryHtml += `<span style="color:#22c55e;">\ud83d\udce5 <strong>${totalAvailable}</strong> new issue${totalAvailable !== 1 ? 's' : ''} available</span>`;
     } else {
@@ -1569,7 +1579,9 @@ export class TrackingManager {
       if (totalFailed > 0) parts.push(`${totalFailed} failed`);
 
       const hasErrors = totalFailed > 0;
-      dlAllBtn.textContent = hasErrors ? `\u26a0\ufe0f ${parts.join(', ')}` : `\u2705 ${parts.join(', ')}`;
+      dlAllBtn.textContent = hasErrors
+        ? `\u26a0\ufe0f ${parts.join(', ')}`
+        : `\u2705 ${parts.join(', ')}`;
       dlAllBtn.classList.add(hasErrors ? 'dl-warning' : 'dl-done');
     }
   }
@@ -1667,6 +1679,11 @@ export class TrackingManager {
         console.warn('[Tracking] Could not parse title:', result.title);
       }
       if (parsed) {
+        // Use volume from raw_metadata (backend parser) if title parsing missed it
+        if (!parsed.volume && result.raw_metadata && result.raw_metadata.volume) {
+          parsed.volume = result.raw_metadata.volume;
+        }
+
         // If month/issue not found in title, try to extract from publication_date
         if (parsed.month === 0 && result.publication_date) {
           try {
@@ -1679,9 +1696,9 @@ export class TrackingManager {
           }
         }
 
-        // Create unique key based on year, month, issue, and season
-        // Don't include title hash to allow proper deduplication across library/providers
-        const key = `${parsed.year}-${parsed.month}-${parsed.issue}-${parsed.season || ''}`;
+        // Create unique key based on year, month, issue, season, and volume
+        const vol = parsed.volume || 0;
+        const key = `${parsed.year}-${parsed.month}-${parsed.issue}-${parsed.season || ''}-v${vol}`;
 
         if (!issueMap.has(key)) {
           // Extract language variant from title if present
@@ -1728,14 +1745,15 @@ export class TrackingManager {
       }
     });
 
-    // Sort by year desc, month desc, issue desc
+    // Sort by year desc, volume desc, month desc, issue desc
     const sortedIssues = Array.from(issueMap.values()).sort((a, b) => {
       if (b.year !== a.year) return b.year - a.year;
+      if ((b.volume || 0) !== (a.volume || 0)) return (b.volume || 0) - (a.volume || 0);
       if (b.month !== a.month) return b.month - a.month;
       return b.issue - a.issue;
     });
 
-    // Group by year
+    // Group by year (volume-only items go under year 0)
     const grouped = {};
     sortedIssues.forEach((issue) => {
       if (!grouped[issue.year]) {
@@ -1805,6 +1823,7 @@ export class TrackingManager {
     let issue = null;
     let month = null;
     let season = null;
+    let volume = null;
 
     // First, try to extract season
     const seasonMatch = title.match(/\b(Spring|Summer|Fall|Autumn|Winter)\b/i);
@@ -1879,25 +1898,46 @@ export class TrackingManager {
       }
     }
 
-    if (year) {
-      return { year, issue: issue || 0, month: month || 0, season: season || null };
+    // Try to extract volume number
+    const volExtract = title.match(/\b(?:vol\.?|volume|v)[\s]*(\d+)\b/i);
+    if (volExtract) {
+      volume = parseInt(volExtract[1]);
     }
 
-    // Fallback: Handle "Set", "Collection", "Pack", "Vol", or "Part" releases without year
+    if (year) {
+      return {
+        year,
+        issue: issue || 0,
+        month: month || 0,
+        season: season || null,
+        volume: volume || 0,
+      };
+    }
+
+    // Fallback: Handle volume-only titles (e.g., "Magazine v12", "Title Vol.5")
     if (!year) {
+      const volMatch = title.match(/\b(?:vol\.?|volume|v)[\s]*(\d+)\b/i);
+      if (volMatch) {
+        volume = parseInt(volMatch[1]);
+        // Also try to extract issue number
+        const issueMatch = title.match(/(?:issue|no\.?|#)\s*(\d+)/i);
+        if (issueMatch) {
+          issue = parseInt(issueMatch[1]);
+        }
+        return { year: 0, issue: issue || 0, month: 0, season: null, volume };
+      }
+
       // Try to extract number from set/collection/pack
-      const setMatch = title.match(/(?:Set|Collection|Pack|Vol|Volume|Part)[\s._-]*(\d+)/i);
+      const setMatch = title.match(/(?:Set|Collection|Pack|Part)[\s._-]*(\d+)/i);
       if (setMatch) {
         const setNumber = parseInt(setMatch[1]);
-        // Use set number as issue, group under "Collections" year (0)
-        return { year: 0, issue: setNumber, month: 0, season: null, isCollection: true };
+        return { year: 0, issue: setNumber, month: 0, season: null, isCollection: true, volume: 0 };
       }
 
       // Handle collections without numbers (e.g., "Full Collection", "Complete Collection")
       const collectionMatch = title.match(/\b(Full|Complete|Entire)\s+(Collection|Archive|Run)\b/i);
       if (collectionMatch) {
-        // Group under "Collections" year (0), issue 0
-        return { year: 0, issue: 0, month: 0, season: null, isCollection: true };
+        return { year: 0, issue: 0, month: 0, season: null, isCollection: true, volume: 0 };
       }
     }
 
@@ -1986,7 +2026,9 @@ export class TrackingManager {
     // Build source filter buttons (only show if more than one provider)
     let sourceFilterHtml = '';
     if (allProviders.size > 1) {
-      const filterBtns = [`<button onclick="filterSearchBySource('all')" class="sort-btn${this.sourceFilter === 'all' ? ' active' : ''}">All</button>`];
+      const filterBtns = [
+        `<button onclick="filterSearchBySource('all')" class="sort-btn${this.sourceFilter === 'all' ? ' active' : ''}">All</button>`,
+      ];
       allProviders.forEach((provider) => {
         const cfg = providerLabels[provider] || { icon: '🔗', label: provider };
         filterBtns.push(
@@ -2008,7 +2050,8 @@ export class TrackingManager {
     Object.values(groupedByYear).forEach((yearGroup) => {
       yearGroup.forEach((issue) => {
         // Check if issue passes the source filter
-        const passesFilter = this.sourceFilter === 'all' || this.issueMatchesSourceFilter(issue, this.sourceFilter);
+        const passesFilter =
+          this.sourceFilter === 'all' || this.issueMatchesSourceFilter(issue, this.sourceFilter);
         if (!passesFilter) return;
 
         filteredTotalCount++;
@@ -2038,14 +2081,24 @@ export class TrackingManager {
       const allIssues = groupedByYear[year];
 
       // Filter issues by source
-      const issues = this.sourceFilter === 'all'
-        ? allIssues
-        : allIssues.filter((issue) => this.issueMatchesSourceFilter(issue, this.sourceFilter));
+      const issues =
+        this.sourceFilter === 'all'
+          ? allIssues
+          : allIssues.filter((issue) => this.issueMatchesSourceFilter(issue, this.sourceFilter));
 
       if (issues.length === 0) return; // Skip empty year groups after filtering
 
-      // Display "Collections" for year 0, otherwise show the year
-      const yearLabel = year === '0' ? '📦 Collections' : `📅 ${year}`;
+      // Display label for year groups
+      let yearLabel;
+      if (year === '0') {
+        const hasVolumes = issues.some((i) => i.volume > 0 && !i.isCollection);
+        const hasCollections = issues.some((i) => i.isCollection);
+        if (hasVolumes && hasCollections) yearLabel = '📦 Volumes & Collections';
+        else if (hasVolumes) yearLabel = '📦 Volumes';
+        else yearLabel = '📦 Collections';
+      } else {
+        yearLabel = `📅 ${year}`;
+      }
       html += `<div style="margin-bottom: 20px;">
         <h4 style="color: var(--primary-color); margin-bottom: 10px;">${yearLabel}</h4>
         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px;">`;
@@ -2062,19 +2115,31 @@ export class TrackingManager {
         else if (issue.season) {
           displayLabel = issue.season;
         }
-        // Priority 2: Month and Issue
+        // Priority 2: Volume with issue (e.g., "Vol 5 #12")
+        else if (issue.volume > 0 && issue.issue > 0) {
+          displayLabel = `Vol ${issue.volume} #${issue.issue}`;
+        }
+        // Priority 3: Volume with month (e.g., "Vol 5 Jan")
+        else if (issue.volume > 0 && issue.month > 0) {
+          displayLabel = `Vol ${issue.volume} ${NUMBER_TO_MONTH[issue.month]}`;
+        }
+        // Priority 4: Volume only (e.g., "Vol 12")
+        else if (issue.volume > 0) {
+          displayLabel = `Vol ${issue.volume}`;
+        }
+        // Priority 5: Month and Issue
         else if (issue.month > 0 && issue.issue > 0) {
           displayLabel = `${NUMBER_TO_MONTH[issue.month]} #${issue.issue}`;
         }
-        // Priority 3: Month only
+        // Priority 6: Month only
         else if (issue.month > 0) {
           displayLabel = NUMBER_TO_MONTH[issue.month];
         }
-        // Priority 4: Issue number only
+        // Priority 7: Issue number only
         else if (issue.issue > 0) {
           displayLabel = `#${issue.issue}`;
         }
-        // Fallback: Just show year (shouldn't happen often now)
+        // Fallback: Just show year
         else {
           displayLabel = `${issue.year}`;
         }
@@ -2152,13 +2217,15 @@ export class TrackingManager {
         let providerDisplay = '';
         if (isLibraryItem) {
           // Show provider badges for non-library sources only
-          const providers = [...new Set(
-            (issue.variants || [])
-              .map((v) => v.provider)
-              .filter(Boolean)
-              .map((p) => p.toLowerCase())
-              .filter((p) => p !== 'library')
-          )];
+          const providers = [
+            ...new Set(
+              (issue.variants || [])
+                .map((v) => v.provider)
+                .filter(Boolean)
+                .map((p) => p.toLowerCase())
+                .filter((p) => p !== 'library')
+            ),
+          ];
           if (providers.length > 0) {
             providerDisplay = `<div style="font-size: 10px; margin-top: 6px;">${providers.map((p) => this.formatProviderBadge(p)).join(' ')}</div>`;
           }
@@ -2167,17 +2234,25 @@ export class TrackingManager {
         }
 
         // Filter variants by source when a filter is active
-        const filteredVariants = this.sourceFilter !== 'all' && issue.variants
-          ? issue.variants.filter((v) => v.provider && v.provider.toLowerCase() === this.sourceFilter)
-          : issue.variants || [];
-        const displayVariants = filteredVariants.length > 0 ? filteredVariants : (issue.variants || []);
+        const filteredVariants =
+          this.sourceFilter !== 'all' && issue.variants
+            ? issue.variants.filter(
+                (v) => v.provider && v.provider.toLowerCase() === this.sourceFilter
+              )
+            : issue.variants || [];
+        const displayVariants =
+          filteredVariants.length > 0 ? filteredVariants : issue.variants || [];
 
         // Show language variants badge if multiple variants exist
         // For library items, only count downloadable (provider) variants
         const providerVariantCount = isLibraryItem
-          ? displayVariants.filter((v) => v.status !== 'in_library' && v.from_provider !== false && v.url).length
+          ? displayVariants.filter(
+              (v) => v.status !== 'in_library' && v.from_provider !== false && v.url
+            ).length
           : displayVariants.length;
-        const hasMultipleVariants = isLibraryItem ? providerVariantCount > 0 : displayVariants.length > 1;
+        const hasMultipleVariants = isLibraryItem
+          ? providerVariantCount > 0
+          : displayVariants.length > 1;
         const variantsBadge = hasMultipleVariants
           ? `<div style="font-size: 10px; margin-top: 6px; color: var(--primary-color); font-weight: 600;">📥 ${providerVariantCount} variant${providerVariantCount !== 1 ? 's' : ''}</div>`
           : isLibraryItem
@@ -2266,9 +2341,7 @@ export class TrackingManager {
    */
   issueMatchesSourceFilter(issue, source) {
     if (!issue.variants || issue.variants.length === 0) return false;
-    return issue.variants.some(
-      (v) => v.provider && v.provider.toLowerCase() === source
-    );
+    return issue.variants.some((v) => v.provider && v.provider.toLowerCase() === source);
   }
 
   /**
@@ -2832,7 +2905,11 @@ window.deleteLibraryCopy = async function (periodicalId, issueKey) {
     }
 
     const result = await response.json();
-    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, result.message || 'Removed from library', 'success');
+    UIUtils.showStatus(
+      ELEMENT_IDS.TRACKING_STATUS,
+      result.message || 'Removed from library',
+      'success'
+    );
     setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), 5000);
 
     // Close modal and refresh search results
@@ -3233,9 +3310,10 @@ window.downloadAllAvailable = async function () {
     }
 
     const count = tracking.availableIssues.length;
-    const sourceNote = tracking.sourceFilter && tracking.sourceFilter !== 'all'
-      ? ` from <strong>${tracking.sourceFilter === 'internet_archive' ? 'Internet Archive' : tracking.sourceFilter.charAt(0).toUpperCase() + tracking.sourceFilter.slice(1)}</strong>`
-      : '';
+    const sourceNote =
+      tracking.sourceFilter && tracking.sourceFilter !== 'all'
+        ? ` from <strong>${tracking.sourceFilter === 'internet_archive' ? 'Internet Archive' : tracking.sourceFilter.charAt(0).toUpperCase() + tracking.sourceFilter.slice(1)}</strong>`
+        : '';
     const confirmed = await UIUtils.confirm(
       'Download All Available Issues',
       `Are you sure you want to download all <strong>${count}</strong> available issues${sourceNote}?`
@@ -3264,11 +3342,7 @@ window.downloadAllAvailable = async function () {
       const message = parts.join(', ') || 'No issues to download';
 
       const hasErrors = data.failed > 0;
-      UIUtils.showStatus(
-        ELEMENT_IDS.TRACKING_STATUS,
-        message,
-        hasErrors ? 'warning' : 'success'
-      );
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, message, hasErrors ? 'warning' : 'success');
     } catch (err) {
       console.error('Batch download error:', err);
       UIUtils.showStatus(
