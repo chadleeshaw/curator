@@ -15,7 +15,14 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Setup keyboard navigation
-setupKeyboardNavigation(pdfReader);
+setupKeyboardNavigation({
+  previousItem: () => pdfReader.previousPage(),
+  nextItem: () => pdfReader.nextPage(),
+  adjustZoom: (delta) => pdfReader.adjustZoom(delta),
+  resetZoom: () => pdfReader.resetZoom(),
+  toggleFullscreen: () => pdfReader.toggleFullscreen(),
+  toggleSpreadMode: () => pdfReader.toggleSpreadMode(),
+});
 
 // Setup mobile sidebar toggle
 setupMobileSidebar();
