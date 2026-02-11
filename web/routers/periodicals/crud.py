@@ -483,6 +483,14 @@ async def delete_periodical(
             cover_path = Path(mag.cover_path) if mag.cover_path else None
             file_paths_to_delete.append((pdf_path, cover_path))
 
+        # Delete associated OCR jobs (non-nullable FK to periodicals)
+        from models.database import OCRJob
+
+        mag_ids = [mag.id for mag in magazines_to_delete]
+        ocr_deleted = db.query(OCRJob).filter(OCRJob.periodical_id.in_(mag_ids)).delete(synchronize_session="fetch")
+        if ocr_deleted:
+            logger.info(f"Deleted {ocr_deleted} OCR job(s) for periodical(s): {title}")
+
         # Delete database entries
         for mag in magazines_to_delete:
             db.delete(mag)
