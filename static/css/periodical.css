@@ -11,13 +11,6 @@
   max-width: 1280px;
   margin: 0 auto;
   padding: 12px 24px;
-  background: var(--background);
-  transition:
-    background 0.3s ease,
-    box-shadow 0.3s ease;
-}
-
-.header-collapsed .detail-breadcrumb {
   background: var(--surface);
   border-radius: 0 0 12px 12px;
   box-shadow: var(--shadow-md);
