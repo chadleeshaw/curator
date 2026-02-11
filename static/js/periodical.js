@@ -172,28 +172,6 @@ function renderIssues() {
   // Title is already set correctly by the backend from MagazineTracking.title
   // No need to extract it from issue titles
 
-  // Render special editions section first, if any exist
-  if (specialEditionsData && specialEditionsData.length > 0) {
-    const specialSection = document.createElement('div');
-    specialSection.className = 'year-section special-edition-section';
-
-    const specialTitle = document.createElement('h2');
-    specialTitle.className = 'year-title special-edition-title';
-    specialTitle.textContent = '🌟 Special Editions';
-    specialSection.appendChild(specialTitle);
-
-    const issuesGrid = document.createElement('div');
-    issuesGrid.className = 'issues-grid';
-
-    specialEditionsData.forEach((issue) => {
-      const issueCard = createIssueCard(issue);
-      issuesGrid.appendChild(issueCard);
-    });
-
-    specialSection.appendChild(issuesGrid);
-    container.appendChild(specialSection);
-  }
-
   // Render based on sort mode
   if (currentSortField !== 'issue_date') {
     renderFlatView(container);
@@ -307,13 +285,13 @@ function renderFlatView(container) {
  * @param {HTMLElement} container - Container element
  */
 function renderGroupedView(container) {
-  // Re-render special editions section
+  // Render special editions section with golden highlight
   if (specialEditionsData && specialEditionsData.length > 0) {
     const specialSection = document.createElement('div');
-    specialSection.className = 'year-section';
+    specialSection.className = 'year-section special-edition-section';
 
     const specialTitle = document.createElement('h2');
-    specialTitle.className = 'year-title';
+    specialTitle.className = 'year-title special-edition-title';
     specialTitle.textContent = 'Special Editions';
     specialSection.appendChild(specialTitle);
 
