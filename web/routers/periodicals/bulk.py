@@ -8,11 +8,12 @@ from typing import Any, Dict, List
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from core.utils.files import get_library_dir
-from core.utils.general import cleanup_empty_directories, is_special_edition
+from core.utils.general import cleanup_empty_directories
 from core.utils.metadata_builder import is_periodical_special_edition
 from models.database import Periodical, PeriodicalTracking
 from services.file_operations import reorganize_periodical_files
@@ -63,44 +64,61 @@ async def bulk_move_to_tracking(request: BulkMoveRequest) -> Dict[str, Any]:
         failed_ids = []
         dirs_to_cleanup = []
 
-        for periodical_id in request.periodical_ids:
-            magazine = db.query(Periodical).filter(Periodical.id == periodical_id).first()
-            if not magazine:
-                failed_ids.append(periodical_id)
-                logger.warning(f"Periodical {periodical_id} not found during bulk move")
-                continue
+        # Use no_autoflush to prevent premature flushes when querying the next
+        # periodical while previous ones have dirty file_path changes.
+        with db.no_autoflush:
+            for periodical_id in request.periodical_ids:
+                magazine = db.query(Periodical).filter(Periodical.id == periodical_id).first()
+                if not magazine:
+                    failed_ids.append(periodical_id)
+                    logger.warning(f"Periodical {periodical_id} not found during bulk move")
+                    continue
 
-            # Skip if already in the target tracking
-            if magazine.tracking_id == request.target_tracking_id:
-                continue
+                # Skip if already in the target tracking
+                if magazine.tracking_id == request.target_tracking_id:
+                    continue
 
-            old_tracking_id = magazine.tracking_id
-            magazine.tracking_id = request.target_tracking_id
+                # Use a savepoint so a single failure doesn't roll back the whole batch
+                savepoint = db.begin_nested()
+                try:
+                    magazine.tracking_id = request.target_tracking_id
 
-            is_special = is_periodical_special_edition(magazine)
+                    is_special = is_periodical_special_edition(magazine)
 
-            if not is_special:
-                old_pdf_path = Path(magazine.file_path)
-                old_dir = old_pdf_path.parent
+                    if not is_special:
+                        old_pdf_path = Path(magazine.file_path)
+                        old_dir = old_pdf_path.parent
 
-                result = reorganize_periodical_files(
-                    magazine,
-                    new_title=target_tracking.title,
-                    library_base_dir=library_base_dir,
-                    category_prefix=category_prefix,
-                    update_db=True,
-                )
+                        result = reorganize_periodical_files(
+                            magazine,
+                            new_title=target_tracking.title,
+                            library_base_dir=library_base_dir,
+                            category_prefix=category_prefix,
+                            update_db=True,
+                        )
 
-                if result.success:
-                    magazine.title = target_tracking.title
-                else:
-                    logger.error(f"Error reorganizing files for periodical {periodical_id}: {result.error}")
-                    magazine.title = target_tracking.title
+                        if result.success:
+                            magazine.title = target_tracking.title
+                        else:
+                            logger.error(f"Error reorganizing files for periodical {periodical_id}: {result.error}")
+                            magazine.title = target_tracking.title
 
-                if old_dir not in dirs_to_cleanup:
-                    dirs_to_cleanup.append(old_dir)
+                        if old_dir not in dirs_to_cleanup:
+                            dirs_to_cleanup.append(old_dir)
 
-            moved_count += 1
+                    # Flush this individual move so the DB sees the updated file_path
+                    # before we process the next periodical
+                    db.flush()
+                    moved_count += 1
+
+                except IntegrityError as e:
+                    savepoint.rollback()
+                    failed_ids.append(periodical_id)
+                    logger.warning(f"Skipped periodical {periodical_id} due to conflict: {e}")
+                except Exception as e:
+                    savepoint.rollback()
+                    failed_ids.append(periodical_id)
+                    logger.error(f"Error moving periodical {periodical_id}: {e}")
 
         db.commit()
 
