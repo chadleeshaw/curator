@@ -575,7 +575,7 @@ export class SortManager {
   }
 
   /**
-   * Set the sort field and reset order to ascending
+   * Set the sort field while preserving the current sort order
    *
    * @param {string} field - The field to sort by
    * @param {string} buttonSelector - CSS selector for sort buttons to update
@@ -586,7 +586,7 @@ export class SortManager {
    */
   setField(field, buttonSelector) {
     this.field = field;
-    this.order = 'asc';
+    // Don't reset order - preserve user's asc/desc preference
     this.updateButtons(buttonSelector);
     this.onChange?.();
   }

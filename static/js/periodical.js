@@ -308,8 +308,16 @@ function renderGroupedView(container) {
     container.appendChild(specialSection);
   }
 
+  // Sort years based on current sort order
+  const sortedYearsData = [...yearsData].sort((a, b) => {
+    const yearA = String(a.year);
+    const yearB = String(b.year);
+    const comparison = yearA.localeCompare(yearB, undefined, { numeric: true });
+    return sortAscending ? comparison : -comparison;
+  });
+
   // Re-render regular year sections
-  yearsData.forEach((yearData) => {
+  sortedYearsData.forEach((yearData) => {
     const sortedIssues = sortIssues([...yearData.issues]);
     
     const yearSection = document.createElement('div');

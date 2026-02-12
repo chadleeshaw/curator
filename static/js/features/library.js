@@ -574,7 +574,7 @@ export class LibraryManager {
    */
   setLibrarySortField(field) {
     this.sortManager.field = field;
-    this.sortManager.order = 'asc';
+    // Don't reset order - preserve user's asc/desc preference
 
     // Update dropdown selected value
     const selectElement = document.getElementById('library-sort-select');
