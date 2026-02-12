@@ -1,6 +1,162 @@
 /* Curator - Periodical Page Styles */
 
 /* ==========================================================================
+   Bulk Select Mode
+   ========================================================================== */
+
+.bulk-select-btn {
+  padding: 8px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast);
+  margin-right: 8px;
+}
+
+.bulk-select-btn:hover {
+  background: var(--surface-variant);
+  border-color: var(--primary-color);
+}
+
+.bulk-select-btn.active {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+/* Checkbox overlay on issue cards in bulk select mode */
+.issue-card .bulk-checkbox {
+  display: none;
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 10;
+  width: 24px;
+  height: 24px;
+  accent-color: var(--primary-color);
+  cursor: pointer;
+}
+
+.bulk-select-mode .issue-card {
+  position: relative;
+}
+
+.bulk-select-mode .issue-card .bulk-checkbox {
+  display: block;
+}
+
+.bulk-select-mode .issue-card .issue-cover {
+  position: relative;
+}
+
+.bulk-select-mode .issue-card.bulk-selected {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px var(--primary-color), 0 4px 12px rgb(99 102 241 / 0.3);
+}
+
+.bulk-select-mode .issue-card.bulk-selected .issue-cover::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgb(99 102 241 / 0.1);
+  pointer-events: none;
+}
+
+/* Bulk action bar (floating bottom) */
+.bulk-action-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 500;
+  background: var(--surface);
+  border-top: 2px solid var(--primary-color);
+  box-shadow: 0 -4px 20px rgb(0 0 0 / 0.2);
+  padding: 14px 24px;
+  transition:
+    transform 0.3s ease,
+    opacity 0.3s ease;
+}
+
+.bulk-action-bar.hidden {
+  display: none;
+}
+
+.bulk-action-content {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.bulk-action-info {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#bulk-selected-count {
+  color: var(--primary-color);
+  font-size: 1.1em;
+}
+
+.bulk-link-btn {
+  background: none;
+  border: none;
+  color: var(--primary-color);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.bulk-link-btn:hover {
+  color: var(--primary-dark);
+}
+
+.bulk-action-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.bulk-btn {
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  border: none;
+  transition:
+    background-color var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.bulk-btn:hover {
+  transform: translateY(-1px);
+}
+
+.btn-delete.bulk-btn {
+  background: var(--error-color);
+  color: white;
+}
+
+.btn-delete.bulk-btn:hover {
+  background: var(--error-dark, #dc2626);
+}
+
+/* ==========================================================================
    Detail page breadcrumb (periodical + stacks pages)
    ========================================================================== */
 
@@ -688,5 +844,28 @@ body.dark-mode #status-message.status-error {
     background: var(--error-color) !important;
     border-color: var(--error-color) !important;
     color: white !important;
+  }
+
+  /* Bulk action bar mobile */
+  .bulk-action-content {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .bulk-action-buttons {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .bulk-btn {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+
+  .bulk-select-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+    margin-right: 4px;
   }
 }

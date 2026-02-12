@@ -38,6 +38,14 @@
             <p id="periodical-subtitle">Published Issues by Year</p>
           </div>
           <div class="sort-controls">
+            <button
+              id="bulk-select-toggle"
+              class="bulk-select-btn"
+              onclick="toggleBulkSelectMode()"
+              title="Select multiple issues for bulk operations"
+            >
+              ☑ Select
+            </button>
             <label for="periodical-sort-select">Sort by:</label>
             <select
               id="periodical-sort-select"
@@ -298,6 +306,112 @@
               Move Issue
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bulk Action Bar (floating bottom) -->
+    <div id="bulk-action-bar" class="bulk-action-bar hidden">
+      <div class="bulk-action-content">
+        <div class="bulk-action-info">
+          <span id="bulk-selected-count">0</span> issue(s) selected
+          <button onclick="selectAllIssues()" class="bulk-link-btn">Select All</button>
+          <button onclick="deselectAllIssues()" class="bulk-link-btn">Deselect All</button>
+        </div>
+        <div class="bulk-action-buttons">
+          <button onclick="openBulkMoveModal()" class="btn-primary bulk-btn">
+            🔀 Move to Tracking
+          </button>
+          <button onclick="openBulkDeleteModal()" class="btn-delete bulk-btn">
+            🗑️ Delete
+          </button>
+          <button onclick="toggleBulkSelectMode()" class="btn-secondary bulk-btn">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bulk Move Modal -->
+    <div id="bulk-move-modal" class="modal hidden">
+      <div class="modal-content move-modal-content">
+        <h3>🔀 Move Issues to Different Tracking</h3>
+        <p class="modal-description">
+          Move <strong id="bulk-move-count">0</strong> selected issue(s) to a different tracking record.
+        </p>
+        <div id="bulk-move-loading" class="modal-loading">
+          <div class="loading-spinner"></div>
+          <p>Loading tracking options...</p>
+        </div>
+        <div id="bulk-move-options" class="hidden">
+          <select id="bulk-target-tracking-select" class="form-select">
+            <option value="">Select a tracking record...</option>
+          </select>
+          <div class="modal-actions">
+            <button onclick="closeBulkMoveModal()" class="btn-secondary">Cancel</button>
+            <button onclick="confirmBulkMove()" class="btn-primary" id="confirm-bulk-move-btn" disabled>
+              Move Issues
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bulk Delete Modal -->
+    <div id="bulk-delete-modal" class="modal hidden">
+      <div class="modal-content delete-modal-content">
+        <h3 class="delete-modal-title">Delete Issues</h3>
+        <p class="delete-modal-subtitle">
+          Are you sure you want to delete <strong id="bulk-delete-count">0</strong> selected issue(s)?
+        </p>
+
+        <div class="bg-warning rounded-lg p-15 mb-20">
+          <strong>⚠️ Warning:</strong> This action cannot be undone.
+        </div>
+
+        <div class="bg-surface-variant rounded-lg p-15 mb-20">
+          <p class="m-0 mb-10 font-bold text-primary">What would you like to do?</p>
+          <div class="flex gap-10 flex-col">
+            <label class="delete-option-label">
+              <input
+                type="radio"
+                name="bulk-delete-option"
+                value="db-only"
+                checked
+                class="radio-input"
+              />
+              <span
+                ><strong>Remove from library only</strong><br /><small
+                  >Files remain on disk</small
+                ></span
+              >
+            </label>
+            <label class="delete-option-label">
+              <input type="radio" name="bulk-delete-option" value="delete-files" class="radio-input" />
+              <span
+                ><strong>Delete from library AND disk</strong><br /><small
+                  >Files will be permanently deleted</small
+                ></span
+              >
+            </label>
+          </div>
+
+          <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border)">
+            <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer">
+              <input type="checkbox" id="bulk-mark-as-bad" style="margin-top: 3px" />
+              <span style="flex: 1">
+                <strong>Prevent auto-download</strong><br />
+                <small style="color: var(--text-secondary)"
+                  >Marks these issues as permanently failed to prevent automatic re-download</small
+                >
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <div class="flex gap-10 justify-end">
+          <button onclick="closeBulkDeleteModal()" class="save-btn btn-cancel">Cancel</button>
+          <button onclick="confirmBulkDelete()" class="save-btn btn-delete">Delete Issues</button>
         </div>
       </div>
     </div>

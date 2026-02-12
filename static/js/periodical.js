@@ -24,6 +24,10 @@ let pendingDeleteId = null;
 let currentMagazineId = null;
 let currentMagazineData = null;
 
+// Bulk selection state
+let bulkSelectMode = false;
+const selectedIssueIds = new Set();
+
 // Sorting state
 let currentSortField = localStorage.getItem('periodical-sort-field') || 'issue_date';
 let sortAscending = localStorage.getItem('periodical-sort-order') === 'asc'; // Default to desc for issue_date
@@ -38,6 +42,7 @@ if (document.getElementById('periodical-sort-select')) {
 // Expose sorting functions globally
 window.setPeriodicalSort = setPeriodicalSort;
 window.togglePeriodicalSortOrder = togglePeriodicalSortOrder;
+window.toggleBulkSelectMode = toggleBulkSelectMode;
 
 /**
  * Update subtitle based on current sort field
@@ -379,6 +384,30 @@ function renderGroupedView(container) {
 function createIssueCard(issue) {
   const issueCard = document.createElement('div');
   issueCard.className = 'issue-card';
+  issueCard.dataset.issueId = issue.id;
+
+  // Bulk select checkbox (hidden by default, shown in bulk mode)
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.className = 'bulk-checkbox';
+  checkbox.checked = selectedIssueIds.has(issue.id);
+  checkbox.onclick = (e) => {
+    e.stopPropagation();
+    toggleIssueSelection(issue.id, checkbox);
+  };
+  issueCard.appendChild(checkbox);
+
+  // In bulk mode, clicking the card toggles selection
+  if (bulkSelectMode) {
+    issueCard.classList.toggle('bulk-selected', selectedIssueIds.has(issue.id));
+    issueCard.addEventListener('click', (e) => {
+      if (!bulkSelectMode) return;
+      // Don't toggle if clicking an action button
+      if (e.target.closest('.issue-actions button')) return;
+      checkbox.checked = !checkbox.checked;
+      toggleIssueSelection(issue.id, checkbox);
+    });
+  }
 
   const coverDiv = document.createElement('div');
   coverDiv.className = 'issue-cover';
@@ -1287,6 +1316,288 @@ async function toggleSpecialEdition() {
   }
 }
 
+// ==========================================================================
+// Bulk Selection Mode
+// ==========================================================================
+
+/**
+ * Toggle bulk selection mode on/off
+ */
+function toggleBulkSelectMode() {
+  bulkSelectMode = !bulkSelectMode;
+  selectedIssueIds.clear();
+
+  const container = document.getElementById('issues-container');
+  const toggleBtn = document.getElementById('bulk-select-toggle');
+  const actionBar = document.getElementById('bulk-action-bar');
+
+  if (bulkSelectMode) {
+    container.classList.add('bulk-select-mode');
+    toggleBtn.classList.add('active');
+    toggleBtn.textContent = '☑ Selecting...';
+    actionBar.classList.remove(CSS_CLASSES.HIDDEN);
+  } else {
+    container.classList.remove('bulk-select-mode');
+    toggleBtn.classList.remove('active');
+    toggleBtn.textContent = '☑ Select';
+    actionBar.classList.add(CSS_CLASSES.HIDDEN);
+  }
+
+  updateBulkSelectionCount();
+  rerender();
+}
+
+/**
+ * Toggle selection of an individual issue
+ * @param {number} issueId - ID of the issue to toggle
+ * @param {HTMLInputElement} checkbox - The checkbox element
+ */
+function toggleIssueSelection(issueId, checkbox) {
+  if (checkbox.checked) {
+    selectedIssueIds.add(issueId);
+  } else {
+    selectedIssueIds.delete(issueId);
+  }
+
+  // Update card selected visual
+  const card = checkbox.closest('.issue-card');
+  if (card) {
+    card.classList.toggle('bulk-selected', checkbox.checked);
+  }
+
+  updateBulkSelectionCount();
+}
+
+/**
+ * Select all visible issues
+ */
+function selectAllIssues() {
+  const cards = document.querySelectorAll('.issue-card');
+  cards.forEach((card) => {
+    const id = parseInt(card.dataset.issueId, 10);
+    if (id) {
+      selectedIssueIds.add(id);
+      card.classList.add('bulk-selected');
+      const cb = card.querySelector('.bulk-checkbox');
+      if (cb) cb.checked = true;
+    }
+  });
+  updateBulkSelectionCount();
+}
+
+/**
+ * Deselect all issues
+ */
+function deselectAllIssues() {
+  selectedIssueIds.clear();
+  const cards = document.querySelectorAll('.issue-card');
+  cards.forEach((card) => {
+    card.classList.remove('bulk-selected');
+    const cb = card.querySelector('.bulk-checkbox');
+    if (cb) cb.checked = false;
+  });
+  updateBulkSelectionCount();
+}
+
+/**
+ * Update the selected count display in the action bar
+ */
+function updateBulkSelectionCount() {
+  const countEl = document.getElementById('bulk-selected-count');
+  if (countEl) {
+    countEl.textContent = selectedIssueIds.size;
+  }
+}
+
+/**
+ * Get array of selected issue IDs
+ * @returns {number[]}
+ */
+function getSelectedIds() {
+  return Array.from(selectedIssueIds);
+}
+
+// ==========================================================================
+// Bulk Move to Tracking
+// ==========================================================================
+
+async function openBulkMoveModal() {
+  const ids = getSelectedIds();
+  if (ids.length === 0) {
+    showNotification('No issues selected', 'error');
+    return;
+  }
+
+  const modal = document.getElementById('bulk-move-modal');
+  const loading = document.getElementById('bulk-move-loading');
+  const options = document.getElementById('bulk-move-options');
+  const select = document.getElementById('bulk-target-tracking-select');
+  const countEl = document.getElementById('bulk-move-count');
+
+  countEl.textContent = ids.length;
+  modal.classList.remove(CSS_CLASSES.HIDDEN);
+  loading.classList.remove(CSS_CLASSES.HIDDEN);
+  options.classList.add(CSS_CLASSES.HIDDEN);
+
+  try {
+    const data = await APIHelper.executeWithErrorHandling(async () => {
+      const response = await APIClient.get('/api/periodicals/tracking?limit=1000');
+      return await response.json();
+    }, 'Periodical');
+
+    const trackingRecords = data.tracked_magazines || [];
+
+    select.innerHTML = '<option value="">Select a tracking record...</option>';
+
+    trackingRecords.forEach((tracking) => {
+      const option = document.createElement('option');
+      option.value = tracking.id;
+      option.textContent = `${tracking.title} (${tracking.category || 'Auto-detect'} - ${tracking.language || 'English'})`;
+      select.appendChild(option);
+    });
+
+    loading.classList.add(CSS_CLASSES.HIDDEN);
+    options.classList.remove(CSS_CLASSES.HIDDEN);
+
+    select.onchange = function () {
+      document.getElementById('confirm-bulk-move-btn').disabled = !this.value;
+    };
+  } catch (error) {
+    console.error('[Periodical] Error loading tracking records for bulk move:', error);
+    const message = error.toUserMessage ? error.toUserMessage() : 'Failed to load tracking options';
+    showNotification(message, 'error');
+    closeBulkMoveModal();
+  }
+}
+
+function closeBulkMoveModal() {
+  document.getElementById('bulk-move-modal').classList.add(CSS_CLASSES.HIDDEN);
+}
+
+async function confirmBulkMove() {
+  const targetTrackingId = document.getElementById('bulk-target-tracking-select').value;
+  const ids = getSelectedIds();
+
+  if (!targetTrackingId || ids.length === 0) {
+    showNotification('Please select a tracking record', 'error');
+    return;
+  }
+
+  const confirmBtn = document.getElementById('confirm-bulk-move-btn');
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = 'Moving...';
+
+  try {
+    const totalIssues = document.querySelectorAll('.issue-card').length;
+    const isMovingAll = ids.length >= totalIssues;
+
+    const response = await APIHelper.executeWithErrorHandling(async () => {
+      return await APIClient.post('/api/periodicals/bulk/move-to-tracking', {
+        periodical_ids: ids,
+        target_tracking_id: parseInt(targetTrackingId, 10),
+      });
+    }, 'Periodical');
+
+    const result = await response.json();
+
+    const statusDiv = document.getElementById('status-message');
+    statusDiv.className = 'status-success mt-20 p-15 rounded';
+    statusDiv.textContent = `✓ ${result.message}`;
+    statusDiv.style.display = 'block';
+
+    closeBulkMoveModal();
+    toggleBulkSelectMode();
+
+    if (isMovingAll) {
+      statusDiv.textContent = '✓ All issues moved. Returning to library...';
+      setTimeout(() => {
+        window.location.href = '/#library';
+      }, 1500);
+    } else {
+      setTimeout(() => {
+        location.reload();
+      }, 1500);
+    }
+  } catch (error) {
+    console.error('[Periodical] Error in bulk move:', error);
+    const message = error.toUserMessage ? error.toUserMessage() : error.message;
+    showNotification('Failed to move issues: ' + message, 'error');
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = 'Move Issues';
+  }
+}
+
+// ==========================================================================
+// Bulk Delete
+// ==========================================================================
+
+function openBulkDeleteModal() {
+  const ids = getSelectedIds();
+  if (ids.length === 0) {
+    showNotification('No issues selected', 'error');
+    return;
+  }
+
+  const countEl = document.getElementById('bulk-delete-count');
+  countEl.textContent = ids.length;
+
+  const modal = document.getElementById('bulk-delete-modal');
+  modal.classList.remove(CSS_CLASSES.HIDDEN);
+}
+
+function closeBulkDeleteModal() {
+  document.getElementById('bulk-delete-modal').classList.add(CSS_CLASSES.HIDDEN);
+}
+
+async function confirmBulkDelete() {
+  const ids = getSelectedIds();
+  if (ids.length === 0) return;
+
+  const deleteOption = document.querySelector('input[name="bulk-delete-option"]:checked');
+  if (!deleteOption) return;
+
+  const deleteFiles = deleteOption.value === 'delete-files';
+  const markAsBad = document.getElementById('bulk-mark-as-bad')?.checked || false;
+
+  const totalIssues = document.querySelectorAll('.issue-card').length;
+  const isDeletingAll = ids.length >= totalIssues;
+
+  try {
+    const response = await APIHelper.executeWithErrorHandling(async () => {
+      return await APIClient.post('/api/periodicals/bulk/delete', {
+        periodical_ids: ids,
+        delete_files: deleteFiles,
+        mark_as_bad: markAsBad,
+      });
+    }, 'Periodical');
+
+    const result = await response.json();
+
+    const statusDiv = document.getElementById('status-message');
+    statusDiv.className = 'status-success mt-20 p-15 rounded';
+    statusDiv.textContent = `✓ ${result.message}`;
+    statusDiv.style.display = 'block';
+
+    closeBulkDeleteModal();
+    toggleBulkSelectMode();
+
+    if (isDeletingAll) {
+      statusDiv.textContent = '✓ All issues deleted. Returning to library...';
+      setTimeout(() => {
+        window.location.href = '/#library';
+      }, 1500);
+    } else {
+      setTimeout(() => {
+        location.reload();
+      }, 1500);
+    }
+  } catch (error) {
+    console.error('[Periodical] Error in bulk delete:', error);
+    const message = error.toUserMessage ? error.toUserMessage() : error.message;
+    showNotification('Failed to delete issues: ' + message, 'error');
+  }
+}
+
 // Expose functions to global scope for HTML onclick handlers
 // Must be done immediately so they're available when HTML loads
 window.goBack = goBack;
@@ -1302,6 +1613,16 @@ window.closeMoveIssueModal = closeMoveIssueModal;
 window.confirmMoveIssue = confirmMoveIssue;
 window.previewCoverUpload = previewCoverUpload;
 window.clearCoverUpload = clearCoverUpload;
+
+// Bulk operation functions
+window.selectAllIssues = selectAllIssues;
+window.deselectAllIssues = deselectAllIssues;
+window.openBulkMoveModal = openBulkMoveModal;
+window.closeBulkMoveModal = closeBulkMoveModal;
+window.confirmBulkMove = confirmBulkMove;
+window.openBulkDeleteModal = openBulkDeleteModal;
+window.closeBulkDeleteModal = closeBulkDeleteModal;
+window.confirmBulkDelete = confirmBulkDelete;
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {

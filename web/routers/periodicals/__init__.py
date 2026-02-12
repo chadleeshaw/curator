@@ -25,6 +25,13 @@ from .metadata import (
     toggle_special_edition,
     update_periodical,
 )
+
+# Bulk routes must be registered before files to avoid path parameter conflicts
+# (/api/periodicals/bulk/... vs /api/periodicals/{periodical_id}/...)
+from .bulk import (
+    bulk_move_to_tracking,
+    bulk_delete,
+)
 from .files import (
     get_pdf,
     move_issue_to_tracking,
@@ -56,6 +63,9 @@ __all__ = [
     # File operations
     "get_pdf",
     "move_issue_to_tracking",
+    # Bulk operations
+    "bulk_move_to_tracking",
+    "bulk_delete",
     # Progress operations
     "get_progress",
     "update_progress",
