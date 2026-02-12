@@ -12,8 +12,6 @@ Test Coverage:
 from datetime import datetime
 from unittest.mock import MagicMock, Mock, patch
 
-import pytest
-
 # Path setup handled by conftest.py
 
 from core.interfaces import SearchResult
