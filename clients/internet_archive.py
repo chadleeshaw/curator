@@ -38,6 +38,7 @@ from core.constants.internet_archive import (
     IA_DOWNLOAD_BASE_URL,
     IA_COMPRESS_BASE_URL,
 )
+from core.constants.files import SUPPORTED_FILE_EXTENSIONS
 from core.interfaces import DownloadClient
 
 logger = logging.getLogger(__name__)
@@ -331,7 +332,7 @@ class InternetArchiveClient(DownloadClient):
                     continue
                 # Extract only supported file types
                 member_ext = Path(member).suffix.lower()
-                if member_ext in (".pdf", ".epub", ".mobi", ".djvu", ".cbz", ".cbr"):
+                if member_ext in SUPPORTED_FILE_EXTENSIONS:
                     # Extract to flat directory (no subdirs)
                     member_name = Path(member).name
                     dest_path = dest_dir / member_name
@@ -357,7 +358,7 @@ class InternetArchiveClient(DownloadClient):
                 if member_name.startswith(".") or member_name.startswith("__"):
                     continue
                 member_ext = Path(member_name).suffix.lower()
-                if member_ext in (".pdf", ".epub", ".mobi", ".djvu", ".cbz", ".cbr"):
+                if member_ext in SUPPORTED_FILE_EXTENSIONS:
                     dest_path = dest_dir / member_name
                     counter = 1
                     while dest_path.exists():
@@ -380,7 +381,7 @@ class InternetArchiveClient(DownloadClient):
                 if member_name.startswith(".") or member_name.startswith("__"):
                     continue
                 member_ext = Path(member_name).suffix.lower()
-                if member_ext in (".pdf", ".epub", ".mobi", ".djvu", ".cbz", ".cbr"):
+                if member_ext in SUPPORTED_FILE_EXTENSIONS:
                     dest_path = dest_dir / member_name
                     counter = 1
                     while dest_path.exists():
@@ -398,6 +399,13 @@ class InternetArchiveClient(DownloadClient):
         out_name = archive_path.stem
         if not Path(out_name).suffix:
             out_name = out_name + ".pdf"  # Default to PDF if no extension
+
+        # Validate extracted file has supported extension
+        extracted_ext = Path(out_name).suffix.lower()
+        if extracted_ext and extracted_ext not in SUPPORTED_FILE_EXTENSIONS:
+            logger.warning(f"[{self.name}] Skipping gzip extraction: unsupported extension '{extracted_ext}'")
+            return []  # Return empty list to indicate no files extracted
+
         dest_path = dest_dir / out_name
         with gzip.open(archive_path, "rb") as src, open(dest_path, "wb") as dst:
             shutil.copyfileobj(src, dst)
@@ -450,9 +458,16 @@ class InternetArchiveClient(DownloadClient):
                 ext = ".zip"
                 logger.info(f"[{self.name}] Using compress URL for {file_count} {format_name} files")
             else:
-                # Direct download - use original file extension
+                # Direct download - use original file extension if supported
                 file_info = strategy.get("file_info", {})
                 ext = Path(file_info.get("name", ".pdf")).suffix or ".pdf"
+
+                # Validate extension is supported
+                if ext.lower() not in SUPPORTED_FILE_EXTENSIONS:
+                    job.status = IA_STATUS_FAILED
+                    job.error = f"Unsupported file extension '{ext}' for {job.identifier}"
+                    logger.warning(f"[{self.name}] Skipping download: {job.error}")
+                    return
 
             dest_file = self.downloads_dir / f"{safe_title}{ext}"
 
