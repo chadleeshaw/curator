@@ -102,8 +102,7 @@ class RssCacheService:
 
             # Cache hit - deserialize and return
             logger.debug(
-                f"[{provider_name}] RSS cache hit for '{cache_key}' "
-                f"(age: {(now - cached_at).total_seconds():.0f}s)"
+                f"[{provider_name}] RSS cache hit for '{cache_key}' " f"(age: {(now - cached_at).total_seconds():.0f}s)"
             )
 
             # Deserialize feed from JSON

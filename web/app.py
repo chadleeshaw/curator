@@ -847,9 +847,7 @@ async def lifespan(app: FastAPI):
                             # Build aliases list from tracking record for better RSS cache matching
                             aliases = None
                             if periodical.search_aliases:
-                                aliases = [
-                                    a.strip() for a in periodical.search_aliases.split(",") if a.strip()
-                                ]
+                                aliases = [a.strip() for a in periodical.search_aliases.split(",") if a.strip()]
                                 if aliases:
                                     logger.debug(
                                         f"Auto-download: Searching '{periodical.title}' "
