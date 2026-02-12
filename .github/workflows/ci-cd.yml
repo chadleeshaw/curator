@@ -38,7 +38,7 @@ jobs:
             ${{ runner.os }}-venv-
 
       - name: Create virtual environment
-        run: python -m venv .venv
+        run: python -m venv --clear .venv
 
       - name: Cache Node dependencies
         uses: actions/cache@v4
