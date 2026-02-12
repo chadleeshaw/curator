@@ -283,6 +283,25 @@ export class UIUtils {
   }
 
   /**
+   * Convert a string to title case (capitalize first letter of each word)
+   *
+   * @param {string} str - The string to convert
+   * @returns {string} The title-cased string
+   *
+   * @example
+   * UIUtils.toTitleCase('hello world'); // 'Hello World'
+   * UIUtils.toTitleCase('nat geo mines'); // 'Nat Geo Mines'
+   */
+  static toTitleCase(str) {
+    if (!str) return '';
+    return str
+      .toLowerCase()
+      .split(' ')
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  }
+
+  /**
    * Show a toast notification (temporary popup message)
    *
    * @param {string} message - The message to display

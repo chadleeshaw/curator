@@ -8,6 +8,7 @@
 
 import { APIClient, APIHelper } from './core/api.js';
 import { CSS_CLASSES } from './core/constants.js';
+import { UIUtils } from './core/ui-utils.js';
 import { initScrollCollapse } from './core/scroll-collapse.js';
 
 // Initialize scroll-collapse for detail page header
@@ -378,8 +379,9 @@ function createIssueCard(issue) {
   if (issue.special_edition_name) {
     const specialEditionP = document.createElement('p');
     specialEditionP.className = 'issue-title';
-    specialEditionP.textContent = issue.special_edition_name;
-    specialEditionP.title = issue.special_edition_name;
+    const titleCased = UIUtils.toTitleCase(issue.special_edition_name);
+    specialEditionP.textContent = titleCased;
+    specialEditionP.title = titleCased;
     infoDiv.appendChild(specialEditionP);
   }
 
@@ -1076,10 +1078,11 @@ function goBack() {
         if (breadcrumb) {
           const stackSlug = stackMatch[1];
           const title = document.getElementById('periodical-title')?.textContent || '';
+          const stackName = UIUtils.toTitleCase(decodeURIComponent(stackSlug).replace(/-/g, ' '));
           breadcrumb.innerHTML =
             `<a href="/#library">Library</a>` +
             `<span class="separator">/</span>` +
-            `<a href="/stacks/${stackSlug}">${decodeURIComponent(stackSlug).replace(/-/g, ' ')}</a>` +
+            `<a href="/stacks/${stackSlug}">${stackName}</a>` +
             `<span class="separator">/</span>` +
             `<span class="current">${title}</span>`;
         }

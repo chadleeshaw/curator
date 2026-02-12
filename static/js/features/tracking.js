@@ -829,9 +829,9 @@ export class TrackingManager {
         const header = document.createElement('div');
         header.className = 'stack-group-header';
 
-        // Check localStorage for collapsed state
+        // Check localStorage for collapsed state (default: collapsed)
         const collapseKey = `stack-collapse-${stackId}`;
-        const isExpanded = localStorage.getItem(collapseKey) !== 'collapsed';
+        const isExpanded = localStorage.getItem(collapseKey) === 'expanded';
         if (isExpanded) header.classList.add('expanded');
 
         const totalIssues = items.reduce((sum, item) => sum + (item.library_count || 0), 0);
