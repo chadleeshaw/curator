@@ -143,7 +143,7 @@ def _apply_scan_metadata_to_magazine(
             month = MONTH_TO_NUMBER.get(month_name.lower(), 1)
 
         try:
-            new_date = datetime(int(year), month, 1)
+            new_date = datetime(int(year), month, 1, tzinfo=UTC)
             # Only update if current issue_date appears to be a placeholder/default
             current_year = magazine.issue_date.year if magazine.issue_date else 1900
             if current_year < 1900 or (  # noqa: W504

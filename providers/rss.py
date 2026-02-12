@@ -1,6 +1,6 @@
 import logging
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import List, Optional, Sequence
 
 import feedparser
@@ -85,7 +85,7 @@ class RSSProvider(SearchProvider):
                 pub_date = None
                 if hasattr(entry, "published_parsed") and entry.published_parsed:
                     try:
-                        pub_date = datetime(*entry.published_parsed[:6])
+                        pub_date = datetime(*entry.published_parsed[:6], tzinfo=UTC)
                     except (TypeError, ValueError) as e:
                         logger.debug(f"Failed to parse publication date: {e}")
 

@@ -103,6 +103,7 @@ class ServiceState:
     file_processor: Optional[FileOrganizer] = None
     file_importer: Optional[FileImporter] = None
     nzb_cache_service: Optional[Any] = None
+    rss_cache_service: Optional[Any] = None  # Persistent RSS feed cache
     issue_discovery_service: Optional[IssueDiscoveryService] = None
     search_scheduler: Optional[SearchScheduler] = None
 
@@ -423,8 +424,22 @@ metadata_providers = app_state.metadata_providers
 
 
 def _initialize_search_providers() -> None:
-    """Initialize search providers (Newsnab, RSS) from config."""
+    """Initialize search providers (Newsnab, RSS, Internet Archive) from config."""
     search_provider_configs = app_state.config_loader.get_search_providers()
+
+    # Initialize RSS cache service first (before providers)
+    from pathlib import Path
+
+    from services.cache import RssCacheService
+
+    try:
+        cache_dir = Path(app_state.storage_config.get("cache_dir", "./local/cache"))
+        cache_db_path = cache_dir / constants.CACHE_DB_FILENAME
+        rss_cache_service = RssCacheService(cache_db_path=str(cache_db_path))
+        logger.info(f"RSS cache service initialized (for providers): {cache_db_path}")
+    except Exception as e:
+        logger.warning(f"RSS cache service not available, using in-memory fallback: {e}")
+        rss_cache_service = None
 
     for provider_config in search_provider_configs:
         try:
@@ -442,7 +457,7 @@ def _initialize_search_providers() -> None:
                 continue
 
             logger.debug(f"Creating search provider: {provider_config.get('name')} (type: {provider_type})")
-            provider = ProviderFactory.create(provider_config)
+            provider = ProviderFactory.create(provider_config, rss_cache_service=rss_cache_service)
             app_state.search_providers.append(provider)
             logger.info(f"Loaded search provider: {provider.name}")
 
@@ -507,11 +522,27 @@ def _initialize_download_client() -> None:
 
 
 def _initialize_cache_services() -> None:
-    """Initialize provider cache services (if enabled in config and NZB providers exist).
+    """Initialize cache services for NZB content and RSS feeds.
 
-    Cache is only needed for Newsnab and RSS providers that return NZB files.
-    Internet Archive uses direct downloads and doesn't need caching.
+    - NZB cache: Only for Newsnab and RSS providers that return NZB files
+    - RSS cache: For all providers that support RSS caching (Internet Archive, Newsnab)
     """
+    from pathlib import Path
+
+    from services.cache import NzbCacheService, RssCacheService
+
+    cache_dir = Path(app_state.storage_config.get("cache_dir", "./local/cache"))
+    cache_db_path = cache_dir / constants.CACHE_DB_FILENAME
+
+    # Initialize RSS cache service (persistent caching for all providers)
+    try:
+        app_state.rss_cache_service = RssCacheService(cache_db_path=str(cache_db_path))
+        logger.info(f"RSS cache service initialized: {cache_db_path}")
+    except Exception as e:
+        logger.warning(f"RSS cache service not available: {e}", exc_info=True)
+        app_state.rss_cache_service = None
+
+    # Initialize NZB cache service (only if NZB providers exist and cache is enabled)
     if not app_state.cache_config.get("enabled", True):
         logger.info("NZB cache disabled in configuration")
         return
@@ -523,18 +554,11 @@ def _initialize_cache_services() -> None:
         return
 
     try:
-        from pathlib import Path
-
-        from services.cache import NzbCacheService
-
-        cache_dir = Path(app_state.storage_config.get("cache_dir", "./local/cache"))
-        cache_db_path = cache_dir / constants.CACHE_DB_FILENAME
-
         app_state.nzb_cache_service = NzbCacheService(
             cache_db_path=str(cache_db_path),
             max_nzb_fetches_per_hour=app_state.cache_config.get("max_nzb_fetches_per_hour", 50),
         )
-        logger.info(f"NZB cache initialized: {cache_db_path}")
+        logger.info(f"NZB cache service initialized: {cache_db_path}")
 
     except Exception as e:
         logger.warning(f"NZB cache not available: {e}", exc_info=True)
@@ -820,9 +844,21 @@ async def lifespan(app: FastAPI):
                                 )
                                 continue
 
+                            # Build aliases list from tracking record for better RSS cache matching
+                            aliases = None
+                            if periodical.search_aliases:
+                                aliases = [
+                                    a.strip() for a in periodical.search_aliases.split(",") if a.strip()
+                                ]
+                                if aliases:
+                                    logger.debug(
+                                        f"Auto-download: Searching '{periodical.title}' "
+                                        f"with {len(aliases)} aliases: {aliases}"
+                                    )
+
                             logger.debug(f"Auto-download: Searching for '{periodical.title}'")
                             search_results = app_state.download_manager.search_periodical_issues(
-                                periodical.title, db_session
+                                periodical.title, db_session, aliases=aliases
                             )
 
                             if not search_results:

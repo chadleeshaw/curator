@@ -2,7 +2,7 @@
 Metadata operations for periodicals
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Dict
 
 
@@ -123,11 +123,11 @@ async def update_periodical(magazine_id: int, updates: Dict[str, Any]) -> Dict[s
             month_num, _ = _shared.parse_month_string(month_str)
 
             try:
-                magazine.issue_date = datetime(year, month_num, 1)
+                magazine.issue_date = datetime(year, month_num, 1, tzinfo=UTC)
             except ValueError:
                 # Invalid date (e.g., Feb 30) - default to year start
                 logger.warning(f"Invalid date: year={year}, month={month_num}")
-                magazine.issue_date = datetime(year, 1, 1)
+                magazine.issue_date = datetime(year, 1, 1, tzinfo=UTC)
 
         if "issue_number" in updates:
             magazine.extra_metadata["issue_number"] = updates["issue_number"]

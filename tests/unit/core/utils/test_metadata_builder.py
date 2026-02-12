@@ -8,7 +8,7 @@ Focuses on:
 """
 
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
@@ -171,7 +171,7 @@ class TestSyncIssueDateFromDerived:
             "month": {"value": 3, "source": "file_scan", "confidence": 0.85},
         }
         result = sync_issue_date_from_derived(derived)
-        assert result == datetime(2024, 3, 1)
+        assert result == datetime(2024, 3, 1, tzinfo=UTC)
 
     def test_year_and_string_month(self):
         """OCR-like case: year + string month → datetime (now handled)"""
@@ -180,7 +180,7 @@ class TestSyncIssueDateFromDerived:
             "month": {"value": "March", "source": "ocr_scan", "confidence": 85},
         }
         result = sync_issue_date_from_derived(derived)
-        assert result == datetime(2024, 3, 1)
+        assert result == datetime(2024, 3, 1, tzinfo=UTC)
 
     def test_year_only(self):
         """Year without month → January 1"""
@@ -188,7 +188,7 @@ class TestSyncIssueDateFromDerived:
             "year": {"value": 2024, "source": "file_scan", "confidence": 0.85},
         }
         result = sync_issue_date_from_derived(derived)
-        assert result == datetime(2024, 1, 1)
+        assert result == datetime(2024, 1, 1, tzinfo=UTC)
 
     def test_no_year(self):
         """No year → None"""
@@ -213,7 +213,7 @@ class TestSyncIssueDateFromDerived:
             "month": {"value": "Sep", "source": "ocr_scan", "confidence": 85},
         }
         result = sync_issue_date_from_derived(derived)
-        assert result == datetime(2024, 9, 1)
+        assert result == datetime(2024, 9, 1, tzinfo=UTC)
 
     def test_unrecognized_string_month_falls_to_january(self):
         """Unrecognized string month falls back to year-only (January 1)"""
@@ -222,7 +222,7 @@ class TestSyncIssueDateFromDerived:
             "month": {"value": "NotAMonth", "source": "ocr_scan", "confidence": 85},
         }
         result = sync_issue_date_from_derived(derived)
-        assert result == datetime(2024, 1, 1)
+        assert result == datetime(2024, 1, 1, tzinfo=UTC)
 
 
 class TestEndToEndOCRMonthFlow:
@@ -263,7 +263,7 @@ class TestEndToEndOCRMonthFlow:
 
         # issue_date should work correctly now
         issue_date = sync_issue_date_from_derived(derived)
-        assert issue_date == datetime(2024, 1, 1)
+        assert issue_date == datetime(2024, 1, 1, tzinfo=UTC)
 
     def test_text_scan_with_string_month_produces_correct_date(self):
         """
@@ -286,7 +286,7 @@ class TestEndToEndOCRMonthFlow:
         assert derived["month"]["source"] == "text_scan"
 
         issue_date = sync_issue_date_from_derived(derived)
-        assert issue_date == datetime(2023, 12, 1)
+        assert issue_date == datetime(2023, 12, 1, tzinfo=UTC)
 
 
 class TestConfidenceResolution:
@@ -435,7 +435,7 @@ class TestConfidenceResolution:
 
         # issue_date should be May 2023
         issue_date = sync_issue_date_from_derived(derived)
-        assert issue_date == datetime(2023, 5, 1)
+        assert issue_date == datetime(2023, 5, 1, tzinfo=UTC)
 
         # Title still from file_scan (OCR doesn't extract titles)
         assert derived["title"]["value"] == "Example Magazine"

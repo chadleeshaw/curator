@@ -44,6 +44,12 @@ search_providers:
     request_delay: 1.0 # Seconds between requests
     max_requests_per_minute: 15
 
+    # RSS feed caching (reduces API calls and helps avoid rate limiting)
+    # Collection RSS feeds are cached and searched first before hitting the API
+    rss_cache_enabled: true # Enable RSS caching (recommended)
+    rss_cache_ttl: 3600 # Cache feeds for 1 hour (3600 seconds)
+    rss_max_entries: 100 # Max RSS entries to fetch per collection
+
     # Optional authentication for restricted items (uncomment to enable)
     # Some items on archive.org require login to download.
     # Create a free account at https://archive.org/account/signup
@@ -72,6 +78,13 @@ search_providers:
     # You can safely increase these limits when cache is enabled.
     max_requests_per_hour: 100 # Self-imposed limit (default: 100 requests/hour)
     request_delay_seconds: 1.0 # Delay between requests (default: 1 second)
+
+    # RSS feed caching (reduces API calls and helps avoid rate limiting)
+    # RSS feeds are cached and searched first before hitting the API
+    # Particularly useful for Prowlarr/NZBHydra2 to reduce load
+    rss_cache_enabled: true # Enable RSS caching (recommended)
+    rss_cache_ttl: 3600 # Cache feeds for 1 hour (3600 seconds)
+    rss_max_results: 100 # Max RSS results to fetch and cache
 
   # RSS Provider (optional - for fast new release discovery)
   # Uncomment and configure to enable RSS-based searching

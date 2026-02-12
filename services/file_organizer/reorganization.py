@@ -7,7 +7,7 @@ database metadata and sidecar files.
 
 import logging
 import shutil
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -686,6 +686,7 @@ class ReorganizationMixin:
             year=parsed_dict["year"],
             month=parsed_dict.get("month", 1),
             day=1,
+            tzinfo=UTC,
         )
 
         # Build metadata dict

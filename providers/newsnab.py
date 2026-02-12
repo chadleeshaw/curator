@@ -7,9 +7,10 @@ import logging
 import re
 import time
 import xml.etree.ElementTree as ET
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional, Sequence
 
+import feedparser
 import requests
 
 from core.constants.providers import (
@@ -20,12 +21,16 @@ from core.constants.providers import (
     NEWSNAB_DEFAULT_RATE_LIMIT_WAIT,
     NEWSNAB_DEFAULT_REQUEST_DELAY,
     NEWSNAB_REQUEST_TIMEOUT,
+    NEWSNAB_RSS_CACHE_ENABLED,
+    NEWSNAB_RSS_CACHE_TTL,
+    NEWSNAB_RSS_MAX_RESULTS,
     SECONDS_PER_DAY,
     SECONDS_PER_HOUR,
     UPLOAD_DATE_FORMATS,
     SECONDS_PER_MINUTE,
 )
 from core.interfaces import SearchProvider, SearchResult
+from core.parsers import utc_now
 from core.utils.query_expansion import expand_search_queries
 
 logger = logging.getLogger(__name__)
@@ -34,7 +39,7 @@ logger = logging.getLogger(__name__)
 class NewsnabProvider(SearchProvider):
     """Search provider for Newsnab indexers (Prowlarr aggregator, etc.)"""
 
-    def __init__(self, config):
+    def __init__(self, config, rss_cache_service=None):
         super().__init__(config)
         api_url = config.get("api_url", NEWSNAB_DEFAULT_API_URL)
 
@@ -67,13 +72,19 @@ class NewsnabProvider(SearchProvider):
         self._rate_limit_reason: Optional[str] = None
         self._rate_limit_logged: bool = False
 
+        # RSS feed caching (via persistent cache service)
+        self.rss_cache_enabled = config.get("rss_cache_enabled", NEWSNAB_RSS_CACHE_ENABLED)
+        self.rss_cache_ttl = config.get("rss_cache_ttl", NEWSNAB_RSS_CACHE_TTL)
+        self.rss_max_results = config.get("rss_max_results", NEWSNAB_RSS_MAX_RESULTS)
+        self._rss_cache_service = rss_cache_service  # Persistent cache service
+
         if not self.api_key:
             raise ValueError("Newsnab provider requires api_key")
 
     @property
     def is_rate_limited(self) -> bool:
         """Check if this provider is currently rate limited."""
-        if self._rate_limit_until and datetime.now() < self._rate_limit_until:
+        if self._rate_limit_until and utc_now() < self._rate_limit_until:
             return True
         # Also check self-imposed limit without setting state
         now = time.time()
@@ -89,8 +100,8 @@ class NewsnabProvider(SearchProvider):
         """
         # Check if we're in a rate limit cooldown period
         if self._rate_limit_until:
-            if datetime.now() < self._rate_limit_until:
-                remaining = (self._rate_limit_until - datetime.now()).total_seconds()
+            if utc_now() < self._rate_limit_until:
+                remaining = (self._rate_limit_until - utc_now()).total_seconds()
                 # Only log once per cooldown period to avoid log spam
                 if not self._rate_limit_logged:
                     logger.warning(
@@ -113,8 +124,8 @@ class NewsnabProvider(SearchProvider):
 
         if len(self._request_times) >= self.max_requests_per_hour:
             oldest_request = min(self._request_times)
-            wait_until = datetime.fromtimestamp(oldest_request + SECONDS_PER_HOUR)
-            remaining = (wait_until - datetime.now()).total_seconds()
+            wait_until = datetime.fromtimestamp(oldest_request + SECONDS_PER_HOUR, tz=UTC)
+            remaining = (wait_until - utc_now()).total_seconds()
             logger.warning(
                 f"[{self.name}] Self-imposed rate limit reached "
                 f"({len(self._request_times)}/{self.max_requests_per_hour} requests in last hour). "
@@ -130,6 +141,164 @@ class NewsnabProvider(SearchProvider):
     def _track_request(self):
         """Track a request for rate limiting"""
         self._request_times.append(time.time())
+
+    def _get_rss_feed(self, category: Optional[str] = None) -> Optional[feedparser.FeedParserDict]:
+        """
+        Get RSS feed from cache if available and fresh, otherwise fetch and cache.
+
+        Uses persistent cache (database) if available, otherwise falls back
+        to in-memory cache.
+
+        Args:
+            category: Optional category filter
+
+        Returns:
+            Parsed RSS feed or None if fetch fails or caching disabled
+        """
+        if not self.rss_cache_enabled:
+            return None
+
+        # Determine which categories to fetch
+        cat_ids = self.categories
+        if category and category in self.category_map:
+            cat_ids = self.category_map[category]
+
+        # Use category as cache key
+        cache_key = f"{cat_ids}" if cat_ids else "all"
+
+        # Try persistent cache (if service available)
+        if self._rss_cache_service:
+            cached_feed = self._rss_cache_service.get_feed(self.name, cache_key, self.rss_cache_ttl)
+            if cached_feed:
+                logger.debug(f"[{self.name}] RSS cache hit for categories '{cat_ids}'")
+                return cached_feed
+
+        # Cache miss or service unavailable - fetch feed
+        logger.debug(f"[{self.name}] Fetching RSS feed for categories '{cat_ids}'")
+
+        # Track this request for rate limiting (RSS feed fetch is still an API call)
+        if self._check_rate_limit():
+            logger.warning(f"[{self.name}] Skipping RSS feed fetch - rate limited")
+            return None
+        self._track_request()
+
+        url = f"{self.api_url}/api"
+        params = {
+            "apikey": self.api_key,
+            "t": "search",  # Standard search endpoint
+            "cat": cat_ids,
+            "limit": self.rss_max_results,  # Max results to cache
+            # No 'q' parameter = latest releases RSS feed
+        }
+
+        try:
+            response = requests.get(url, params=params, timeout=NEWSNAB_REQUEST_TIMEOUT)
+            if response.status_code == 429:
+                self._handle_http_429(response)
+                return None
+
+            response.raise_for_status()
+            feed = feedparser.parse(response.content)
+
+            if feed and not feed.bozo:
+                # Save to persistent cache (if service available)
+                if self._rss_cache_service:
+                    self._rss_cache_service.save_feed(self.name, cache_key, feed, self.rss_cache_ttl)
+                    logger.debug(f"[{self.name}] Cached RSS for '{cat_ids}' ({len(feed.entries)} entries)")
+                return feed
+            else:
+                logger.warning(
+                    f"[{self.name}] RSS feed parsing issue: " f"{getattr(feed, 'bozo_exception', 'Unknown error')}"
+                )
+                return None
+        except requests.exceptions.HTTPError as e:
+            # Check for unsupported RSS (code 202 or 400)
+            if e.response is not None and e.response.status_code in [400, 404]:
+                logger.debug(f"[{self.name}] RSS mode not supported or disabled")
+                return None
+            if self._handle_http_error_rate_limit(e):
+                return None
+            logger.error(f"[{self.name}] Failed to fetch RSS feed: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"[{self.name}] Failed to fetch RSS feed: {e}")
+            return None
+
+    def _search_rss_cache(
+        self, query: str, category: Optional[str] = None, aliases: Optional[Sequence[str]] = None
+    ) -> List[SearchResult]:
+        """
+        Search cached RSS feed instead of hitting the API.
+        This reduces API calls and helps avoid rate limiting.
+
+        Args:
+            query: Periodical title to search for
+            category: Optional category filter
+            aliases: Optional alternative search terms
+
+        Returns:
+            List of SearchResult objects from cached RSS feed
+        """
+        if not self.rss_cache_enabled or not query:
+            return []
+
+        feed = self._get_rss_feed(category)
+        if not feed:
+            return []
+
+        results = []
+        search_terms = [query.lower()]
+        if aliases:
+            search_terms.extend(a.strip().lower() for a in aliases if a.strip())
+
+        seen_urls = set()
+
+        for entry in feed.entries:
+            title = entry.get("title", "")
+            title_lower = title.lower()
+
+            # Filter: include entries matching any search term
+            if not any(term in title_lower for term in search_terms):
+                continue
+
+            # Get NZB URL from enclosure or link
+            nzb_url = ""
+            if hasattr(entry, "enclosures") and entry.enclosures:
+                nzb_url = entry.enclosures[0].get("href", "")
+            elif hasattr(entry, "link"):
+                nzb_url = entry.link
+
+            # Skip duplicates
+            if nzb_url in seen_urls:
+                continue
+            seen_urls.add(nzb_url)
+
+            # Parse publication date
+            pub_date = None
+            if hasattr(entry, "published_parsed") and entry.published_parsed:
+                try:
+                    pub_date = datetime(*entry.published_parsed[:6], tzinfo=UTC)
+                except (TypeError, ValueError):
+                    pass
+
+            # Build metadata
+            raw_metadata = {"source": "rss_cache"}
+            if hasattr(entry, "id"):
+                raw_metadata["guid"] = entry.id
+
+            result = SearchResult(
+                title=title,
+                url=nzb_url,
+                provider=self.type,
+                publication_date=pub_date,
+                raw_metadata=raw_metadata,
+            )
+            results.append(result)
+
+        if results:
+            logger.info(f"[{self.name}] Found {len(results)} results from RSS cache for '{query}'")
+
+        return results
 
     def _parse_rate_limit_from_error(self, error_text: str) -> Optional[int]:
         """
@@ -194,7 +363,7 @@ class NewsnabProvider(SearchProvider):
         if not wait_time:
             wait_time = NEWSNAB_DEFAULT_RATE_LIMIT_WAIT
 
-        self._rate_limit_until = datetime.now() + timedelta(seconds=wait_time)
+        self._rate_limit_until = utc_now() + timedelta(seconds=wait_time)
         self._rate_limit_reason = "HTTP 429 Too Many Requests"
         self._rate_limit_logged = False
         logger.error(
@@ -223,7 +392,7 @@ class NewsnabProvider(SearchProvider):
         # Check if it's a rate limit error
         wait_time = self._parse_rate_limit_from_error(error_desc)
         if wait_time:
-            self._rate_limit_until = datetime.now() + timedelta(seconds=wait_time)
+            self._rate_limit_until = utc_now() + timedelta(seconds=wait_time)
             self._rate_limit_reason = f"Provider error: {error_desc}"
             self._rate_limit_logged = False
             logger.error(
@@ -318,7 +487,7 @@ class NewsnabProvider(SearchProvider):
             error_text = http_error.response.text
             wait_time = self._parse_rate_limit_from_error(error_text)
             if wait_time:
-                self._rate_limit_until = datetime.now() + timedelta(seconds=wait_time)
+                self._rate_limit_until = utc_now() + timedelta(seconds=wait_time)
                 self._rate_limit_reason = f"HTTP {http_error.response.status_code}: Rate limit"
                 self._rate_limit_logged = False
                 logger.error(
@@ -337,7 +506,8 @@ class NewsnabProvider(SearchProvider):
         """
         Search Newsnab-compatible service for NZBs.
 
-        Searches primary query first, then each alias as a separate API call.
+        First tries cached RSS feed (if caching enabled) to avoid API rate limiting.
+        Falls back to API search if RSS doesn't yield results.
 
         Args:
             query: Magazine title to search for. Empty string triggers RSS mode.
@@ -347,18 +517,30 @@ class NewsnabProvider(SearchProvider):
         Returns:
             List of SearchResult objects
         """
-        # Check if we're rate limited
-        if self._check_rate_limit():
-            logger.warning(f"[{self.name}] Skipping search for '{query}' - rate limited")
-            return []
-
         results = []
 
-        try:
-            # If query is empty, use RSS mode to fetch latest releases
-            if not query or query.strip() == "":
-                return self._search_xml_api_rss(category)
+        # If query is empty, use RSS mode to fetch latest releases
+        if not query or query.strip() == "":
+            if self._check_rate_limit():
+                logger.warning(f"[{self.name}] Skipping RSS fetch - rate limited")
+                return []
+            return self._search_xml_api_rss(category)
 
+        # Try RSS cache first to avoid API calls (if caching enabled)
+        if self.rss_cache_enabled:
+            logger.debug(f"[{self.name}] Trying RSS cache for '{query}'")
+            results = self._search_rss_cache(query, category, aliases)
+            if results:
+                logger.info(f"[{self.name}] Found {len(results)} results from RSS cache, skipping API search")
+                return results
+            logger.debug(f"[{self.name}] No RSS cache results found, falling back to API search")
+
+        # Fall back to API search if RSS didn't yield results or caching disabled
+        if self._check_rate_limit():
+            logger.warning(f"[{self.name}] Skipping API search for '{query}' - rate limited")
+            return []
+
+        try:
             # Search with exact query (no expansion)
             search_query = query
 
@@ -484,9 +666,10 @@ class NewsnabProvider(SearchProvider):
             url = f"{self.api_url}/api"
             params = {
                 "apikey": self.api_key,
-                "t": "rss",  # RSS mode instead of search
+                "t": "search",  # Standard search endpoint
                 "cat": cat_ids,
-                # DO NOT include 'q' parameter in RSS mode
+                "limit": self.rss_max_results,  # Limit results for RSS mode
+                # DO NOT include 'q' parameter = latest releases
             }
 
             logger.debug(f"Newsnab RSS mode: categories={cat_ids}, url={url}")
@@ -616,7 +799,8 @@ class NewsnabProvider(SearchProvider):
             try:
                 # Try parsing with the current format
                 parsed_date = datetime.strptime(date_str.strip(), date_format)
-                return parsed_date
+                # Make timezone-aware (assume UTC)
+                return parsed_date.replace(tzinfo=UTC)
             except (ValueError, TypeError):
                 continue
 

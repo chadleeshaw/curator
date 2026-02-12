@@ -15,9 +15,21 @@ class ProviderFactory:
         "internet_archive": "providers.internet_archive:InternetArchiveProvider",
     }
 
+    # Providers that support RSS caching
+    RSS_CACHE_PROVIDERS = {"newsnab", "internet_archive"}
+
     @staticmethod
-    def create(provider_config: Dict[str, Any]) -> SearchProvider:
-        """Create provider instance from config"""
+    def create(provider_config: Dict[str, Any], rss_cache_service=None) -> SearchProvider:
+        """
+        Create provider instance from config.
+
+        Args:
+            provider_config: Provider configuration dict
+            rss_cache_service: Optional RssCacheService for persistent RSS caching
+
+        Returns:
+            SearchProvider instance
+        """
         provider_type = provider_config.get("type")
 
         if provider_type not in ProviderFactory.PROVIDERS:
@@ -27,7 +39,11 @@ class ProviderFactory:
         module = __import__(module_path, fromlist=[class_name])
         provider_class = getattr(module, class_name)
 
-        return provider_class(provider_config)
+        # Pass RSS cache service to providers that support it
+        if provider_type in ProviderFactory.RSS_CACHE_PROVIDERS and rss_cache_service:
+            return provider_class(provider_config, rss_cache_service=rss_cache_service)
+        else:
+            return provider_class(provider_config)
 
 
 class ClientFactory:

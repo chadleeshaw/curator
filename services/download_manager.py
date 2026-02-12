@@ -474,18 +474,21 @@ class DownloadManager:
 
         return None
 
-    def search_periodical_issues(self, periodical_title: str, session: Session) -> List[Dict[str, Any]]:
+    def search_periodical_issues(
+        self, periodical_title: str, session: Session, aliases: Optional[List[str]] = None
+    ) -> List[Dict[str, Any]]:
         """
         Search all providers for available issues of a periodical.
 
         Args:
             periodical_title: Title of the periodical to search for (may include language)
             session: Database session
+            aliases: Optional list of alternative search terms (e.g., from tracking record)
 
         Returns:
             List of search results with deduplication grouping
         """
-        return self.search_service.search_periodical_issues(periodical_title, session)
+        return self.search_service.search_periodical_issues(periodical_title, session, aliases=aliases)
 
     def _create_submission_record(
         self,

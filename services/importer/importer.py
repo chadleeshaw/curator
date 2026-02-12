@@ -8,7 +8,7 @@ import re
 import threading
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -447,7 +447,11 @@ class FileImporter:
             is_match, score = self.title_matcher.match(tracking_title, existing_normalized)
 
             if is_match and parsed_issue_date and existing.issue_date:
-                date_diff = abs((parsed_issue_date - existing.issue_date).days)
+                # Normalize both datetimes to handle mixed naive/aware comparison
+                # (parsed dates are UTC-aware, but older DB records may be naive)
+                p_date = parsed_issue_date.replace(tzinfo=None) if parsed_issue_date.tzinfo else parsed_issue_date
+                e_date = existing.issue_date.replace(tzinfo=None) if existing.issue_date.tzinfo else existing.issue_date
+                date_diff = abs((p_date - e_date).days)
                 same_language = (existing.language == parsed_language) or (
                     not existing.language and parsed_language == DEFAULT_LANGUAGE
                 )

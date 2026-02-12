@@ -5,7 +5,7 @@ Handles various filename patterns and infers titles from parent directories.
 
 import logging
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -152,7 +152,7 @@ class FilenameParser:
                     "month": month_num,
                     "month_name": display_string,
                     "year": year,
-                    "issue_date": datetime(year, month_num, 1),
+                    "issue_date": datetime(year, month_num, 1, tzinfo=UTC),
                     "title_part": title_part,
                     "month1": month1_str,
                     "month2": month2_str,
@@ -171,7 +171,7 @@ class FilenameParser:
                     "year": year,
                     "month": month,
                     "month_name": NUMBER_TO_MONTH.get(month),
-                    "issue_date": datetime(year, month, 1),
+                    "issue_date": datetime(year, month, 1, tzinfo=UTC),
                     "match_text": iso_month_match.group(),
                 }
                 logger.debug(f"Pre-detected ISO month: {NUMBER_TO_MONTH.get(month)} {year}")
@@ -305,7 +305,7 @@ class FilenameParser:
                     metadata["year"] = year
                     metadata["month"] = month_num
                     metadata["month_name"] = display_string
-                    metadata["issue_date"] = datetime(year, month_num, 1)
+                    metadata["issue_date"] = datetime(year, month_num, 1, tzinfo=UTC)
                     # Only remove the date part, keep the title
                     remaining_text = remaining_text[: match.start()] + title_part + remaining_text[match.end() :]
                     remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
@@ -326,7 +326,7 @@ class FilenameParser:
                     metadata["month"] = month
                     metadata["month_name"] = NUMBER_TO_MONTH.get(month)
                     metadata["day"] = day
-                    metadata["issue_date"] = datetime(year, month, day)
+                    metadata["issue_date"] = datetime(year, month, day, tzinfo=UTC)
                     remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
                     remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                     date_extracted = True
@@ -342,7 +342,7 @@ class FilenameParser:
                     metadata["year"] = year
                     metadata["month"] = month_num
                     metadata["month_name"] = NUMBER_TO_MONTH.get(month_num)
-                    metadata["issue_date"] = datetime(year, month_num, 1)
+                    metadata["issue_date"] = datetime(year, month_num, 1, tzinfo=UTC)
                     remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
                     remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                     date_extracted = True
@@ -358,7 +358,7 @@ class FilenameParser:
                     metadata["year"] = year
                     metadata["month"] = month_num
                     metadata["month_name"] = NUMBER_TO_MONTH.get(month_num)
-                    metadata["issue_date"] = datetime(year, month_num, 1)
+                    metadata["issue_date"] = datetime(year, month_num, 1, tzinfo=UTC)
                     remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
                     remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                     date_extracted = True
@@ -374,7 +374,7 @@ class FilenameParser:
                     metadata["year"] = year
                     metadata["month"] = month_num
                     metadata["month_name"] = NUMBER_TO_MONTH.get(month_num)
-                    metadata["issue_date"] = datetime(year, month_num, 1)
+                    metadata["issue_date"] = datetime(year, month_num, 1, tzinfo=UTC)
                     remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
                     remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                     date_extracted = True
@@ -398,7 +398,7 @@ class FilenameParser:
                     metadata["year"] = year
                     metadata["month"] = month
                     metadata["month_name"] = NUMBER_TO_MONTH.get(month)
-                    metadata["issue_date"] = datetime(year, month, 1)
+                    metadata["issue_date"] = datetime(year, month, 1, tzinfo=UTC)
                     remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
                     remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                     date_extracted = True
@@ -412,7 +412,7 @@ class FilenameParser:
                     metadata["year"] = year
                     metadata["month"] = month
                     metadata["month_name"] = NUMBER_TO_MONTH.get(month)
-                    metadata["issue_date"] = datetime(year, month, 1)
+                    metadata["issue_date"] = datetime(year, month, 1, tzinfo=UTC)
                     remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
                     remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                     date_extracted = True
@@ -425,7 +425,7 @@ class FilenameParser:
                 if MIN_VALID_YEAR <= year <= MAX_VALID_YEAR:
                     metadata["year"] = year
                     metadata["month"] = 1  # Default to January
-                    metadata["issue_date"] = datetime(year, 1, 1)
+                    metadata["issue_date"] = datetime(year, 1, 1, tzinfo=UTC)
                     remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
                     remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                     date_extracted = True
@@ -560,7 +560,7 @@ class FilenameParser:
                     return nzb_result
                 # If no issue_date but has year/month, construct it
                 if nzb_result.get("year") and nzb_result.get("month"):
-                    nzb_result["issue_date"] = datetime(nzb_result["year"], nzb_result["month"], 1)
+                    nzb_result["issue_date"] = datetime(nzb_result["year"], nzb_result["month"], 1, tzinfo=UTC)
                     return nzb_result
             else:
                 logger.debug("NZB parsing failed or low confidence, falling back to standard patterns")
@@ -608,7 +608,7 @@ class FilenameParser:
                 return nzb_result
             # If no issue_date but has year/month, construct it
             if nzb_result.get("year") and nzb_result.get("month"):
-                nzb_result["issue_date"] = datetime(nzb_result["year"], nzb_result["month"], 1)
+                nzb_result["issue_date"] = datetime(nzb_result["year"], nzb_result["month"], 1, tzinfo=UTC)
                 return nzb_result
 
         logger.info(f"No date pattern matched in filename: {filename}, using current date")
@@ -635,7 +635,7 @@ class FilenameParser:
 
             year = int(year_str)
             metadata["title"] = clean_title(title)
-            metadata["issue_date"] = datetime(year, month1_num, 1)
+            metadata["issue_date"] = datetime(year, month1_num, 1, tzinfo=UTC)
             metadata["year"] = year
             metadata["month_name"] = f"{month1_str.capitalize()}/{month2_str.capitalize()}"
             metadata["pattern"] = "multi_month"
@@ -658,7 +658,7 @@ class FilenameParser:
 
             year = int(year_str)
             metadata["title"] = clean_title(title)
-            metadata["issue_date"] = datetime(year, month_num, 1)
+            metadata["issue_date"] = datetime(year, month_num, 1, tzinfo=UTC)
             metadata["year"] = year
             metadata["month_name"] = display_string
             metadata["pattern"] = "multi_month_numeric"
@@ -704,7 +704,7 @@ class FilenameParser:
             cleaned = re.sub(pattern_to_remove, "", cleaned, flags=re.IGNORECASE).strip()
 
         metadata["title"] = cleaned
-        metadata["issue_date"] = datetime(year, month_num, 1)
+        metadata["issue_date"] = datetime(year, month_num, 1, tzinfo=UTC)
         metadata["year"] = year
         metadata["month_name"] = normalized_month
         metadata["pattern"] = "dash_month_year"
@@ -729,7 +729,7 @@ class FilenameParser:
 
         year = int(year_str)
         metadata["title"] = clean_title(title)
-        metadata["issue_date"] = datetime(year, month_num, 1)
+        metadata["issue_date"] = datetime(year, month_num, 1, tzinfo=UTC)
         metadata["year"] = year
         metadata["month_name"] = normalized_month
         metadata["pattern"] = "dot_separated"
@@ -775,7 +775,7 @@ class FilenameParser:
             cleaned = re.sub(pattern_to_remove, "", cleaned, flags=re.IGNORECASE).strip()
 
         metadata["title"] = cleaned
-        metadata["issue_date"] = datetime(year, month_num, 1)
+        metadata["issue_date"] = datetime(year, month_num, 1, tzinfo=UTC)
         metadata["year"] = year
         metadata["month_name"] = normalized_month
         metadata["pattern"] = "space_month_year"
@@ -798,7 +798,7 @@ class FilenameParser:
             year = int(year_str)
             month_num = int(month_str)
             metadata["title"] = clean_title(title)
-            metadata["issue_date"] = datetime(year, month_num, 1)
+            metadata["issue_date"] = datetime(year, month_num, 1, tzinfo=UTC)
             metadata["year"] = year
             metadata["month_name"] = NUMBER_TO_MONTH.get(month_num, "")
             metadata["pattern"] = "iso_date"
@@ -827,7 +827,7 @@ class FilenameParser:
 
         year = int(year_str)
         metadata["title"] = title_clean
-        metadata["issue_date"] = datetime(year, 1, 1)
+        metadata["issue_date"] = datetime(year, 1, 1, tzinfo=UTC)
         metadata["year"] = year
         metadata["month_name"] = "January"
         metadata["edition_number"] = int(issue_num)
@@ -853,7 +853,7 @@ class FilenameParser:
 
         year = int(year_str)
         metadata["title"] = clean_title(title_part)
-        metadata["issue_date"] = datetime(year, 1, 1)
+        metadata["issue_date"] = datetime(year, 1, 1, tzinfo=UTC)
         metadata["year"] = year
         metadata["month_name"] = "January"
         metadata["volume"] = int(volume_num)
@@ -886,7 +886,7 @@ class FilenameParser:
         month = MONTH_TO_NUMBER.get(season, 1)
 
         metadata["title"] = title_clean
-        metadata["issue_date"] = datetime(year, month, 1)
+        metadata["issue_date"] = datetime(year, month, 1, tzinfo=UTC)
         metadata["year"] = year
         metadata["month_name"] = season.capitalize()
         metadata["is_special_edition"] = False
@@ -1014,7 +1014,7 @@ class FilenameParser:
             return None
 
         metadata["title"] = clean_title(title)
-        metadata["issue_date"] = datetime(year, month, 1)
+        metadata["issue_date"] = datetime(year, month, 1, tzinfo=UTC)
         metadata["year"] = year
         metadata["month_name"] = NUMBER_TO_MONTH.get(month, "")
         metadata["pattern"] = "timestamp_id"
@@ -1048,7 +1048,7 @@ class FilenameParser:
             return None
 
         year = int(year_str)
-        metadata["issue_date"] = datetime(year, month_num, 1)
+        metadata["issue_date"] = datetime(year, month_num, 1, tzinfo=UTC)
         metadata["year"] = year
         metadata["month_name"] = month_str.capitalize()
         metadata["pattern"] = "date_only"
@@ -1091,7 +1091,7 @@ class FilenameParser:
             return None
 
         metadata["title"] = title_clean
-        metadata["issue_date"] = datetime(year, month, 1)
+        metadata["issue_date"] = datetime(year, month, 1, tzinfo=UTC)
         metadata["year"] = year
         metadata["month_name"] = NUMBER_TO_MONTH.get(month, "")
         metadata["pattern"] = "year_numeric_month"
@@ -1116,7 +1116,7 @@ class FilenameParser:
         if not MIN_VALID_YEAR <= year <= MAX_VALID_YEAR:
             return None
 
-        metadata["issue_date"] = datetime(year, 1, 1)
+        metadata["issue_date"] = datetime(year, 1, 1, tzinfo=UTC)
         metadata["year"] = year
         metadata["pattern"] = "year_only"
 

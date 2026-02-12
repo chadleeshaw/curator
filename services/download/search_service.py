@@ -52,13 +52,16 @@ class SearchService:
             return False
         return all(p.is_rate_limited for p in self.search_providers)
 
-    def search_periodical_issues(self, periodical_title: str, session: Session) -> List[Dict[str, Any]]:
+    def search_periodical_issues(
+        self, periodical_title: str, session: Session, aliases: Optional[List[str]] = None
+    ) -> List[Dict[str, Any]]:
         """
         Search all providers for available issues of a periodical.
 
         Args:
             periodical_title: Title of the periodical to search for (may include language)
             session: Database session (for compatibility, not currently used)
+            aliases: Optional list of alternative search terms (e.g., from tracking record)
 
         Returns:
             List of search results with deduplication grouping
@@ -83,8 +86,8 @@ class SearchService:
                 try:
                     logger.debug(f"Searching {provider.name} for: {search_title}")
 
-                    # Execute search with timeout
-                    future = executor.submit(provider.search, search_title)
+                    # Execute search with timeout, passing aliases for RSS cache matching and IA OR queries
+                    future = executor.submit(provider.search, search_title, None, aliases)
                     try:
                         results = future.result(timeout=PROVIDER_SEARCH_TIMEOUT)
                     except FuturesTimeoutError:

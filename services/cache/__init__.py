@@ -1,12 +1,16 @@
 """
-NZB content cache service.
+Cache services for NZB content and RSS feeds.
 
-Caches NZB file content fetched from providers to avoid repeated
-provider hits on download retries and resubmissions.
+Caches data fetched from providers to avoid repeated
+provider hits and reduce rate limiting:
+- NZB file content (download retries)
+- RSS feeds (search optimization)
 """
 
 from .provider_cache import NzbCacheService
+from .rss_cache import RssCacheService
 
 __all__ = [
     "NzbCacheService",
+    "RssCacheService",
 ]

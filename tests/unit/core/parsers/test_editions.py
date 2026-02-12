@@ -51,7 +51,7 @@ def mock_search_provider():
     provider.name = "TestProvider"
     provider.type = "test"
 
-    def search_side_effect(query):
+    def search_side_effect(query, category=None, aliases=None):
         return [
             SearchResult(
                 title="Test Magazine - Issue 1",

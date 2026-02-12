@@ -3,7 +3,7 @@ Metadata builder utilities for constructing parsed_metadata, derived_metadata, a
 """
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Dict, Any, Optional
 from core.constants.ocr import OCR_MAX_VOLUME
 from core.parsers.models import ParsedMetadata
@@ -382,10 +382,10 @@ def sync_issue_date_from_derived(
     # Create datetime
     try:
         if month and 1 <= month <= 12:
-            return datetime(year, month, 1)
+            return datetime(year, month, 1, tzinfo=UTC)
         else:
             # Only year available - default to January
-            return datetime(year, 1, 1)
+            return datetime(year, 1, 1, tzinfo=UTC)
     except (ValueError, OverflowError):
         # Invalid date values
         return None

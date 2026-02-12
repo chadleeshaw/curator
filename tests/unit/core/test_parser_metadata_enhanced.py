@@ -12,7 +12,7 @@ Tests comprehensive metadata extraction from complex NZB filenames including:
 """
 
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
@@ -42,7 +42,7 @@ class TestEnhancedNZBParsing:
         assert result["quality"] == "True PDF"
         assert result["release_group"] == "PHOTOFILEv2"
         assert result["confidence"] == "high"
-        assert result["issue_date"] == datetime(2024, 1, 1)
+        assert result["issue_date"] == datetime(2024, 1, 1, tzinfo=UTC)
 
     def test_parse_iso_date_format(self, extractor):
         """Test: National.Geographic-2024-01-HQ.PDF"""
@@ -53,7 +53,7 @@ class TestEnhancedNZBParsing:
         assert result["month"] == 1
         assert result["quality"] == "HQ"
         assert result["confidence"] == "high"
-        assert result["issue_date"] == datetime(2024, 1, 1)
+        assert result["issue_date"] == datetime(2024, 1, 1, tzinfo=UTC)
 
     def test_parse_volume_issue_format(self, extractor):
         """Test: TIME.V202.N25.2023.pdf"""
@@ -65,7 +65,7 @@ class TestEnhancedNZBParsing:
         assert result["year"] == 2023
         assert result["month"] == 1  # Default when only year provided
         assert result["confidence"] == "high"
-        assert result["issue_date"] == datetime(2023, 1, 1)
+        assert result["issue_date"] == datetime(2023, 1, 1, tzinfo=UTC)
 
     def test_parse_uk_issue_format(self, extractor):
         """Test: PC.Gamer.UK.Issue.389.February.2024.pdf"""
@@ -77,7 +77,7 @@ class TestEnhancedNZBParsing:
         assert result["month"] == 2
         assert result["year"] == 2024
         assert result["confidence"] == "high"
-        assert result["issue_date"] == datetime(2024, 2, 1)
+        assert result["issue_date"] == datetime(2024, 2, 1, tzinfo=UTC)
 
     def test_parse_weekly_full_date(self, extractor):
         """Test: The.Economist.2024.01.20.pdf"""
@@ -88,7 +88,7 @@ class TestEnhancedNZBParsing:
         assert result["month"] == 1
         assert result["day"] == 20
         assert result["confidence"] == "high"
-        assert result["issue_date"] == datetime(2024, 1, 20)
+        assert result["issue_date"] == datetime(2024, 1, 20, tzinfo=UTC)
 
     def test_parse_abbreviated_month(self, extractor):
         """Test: National.Geographic.Jan2024.pdf"""
@@ -98,7 +98,7 @@ class TestEnhancedNZBParsing:
         assert result["year"] == 2024
         assert result["month"] == 1
         assert result["confidence"] == "high"
-        assert result["issue_date"] == datetime(2024, 1, 1)
+        assert result["issue_date"] == datetime(2024, 1, 1, tzinfo=UTC)
 
     def test_parse_numeric_month_year(self, extractor):
         """Test: Wired.01-2024.pdf"""
@@ -108,7 +108,7 @@ class TestEnhancedNZBParsing:
         assert result["year"] == 2024
         assert result["month"] == 1
         assert result["confidence"] == "high"
-        assert result["issue_date"] == datetime(2024, 1, 1)
+        assert result["issue_date"] == datetime(2024, 1, 1, tzinfo=UTC)
 
     def test_parse_quality_indicator(self, extractor):
         """Test: Time.Magazine.Retail.January.2024.pdf"""
@@ -379,7 +379,7 @@ class TestConfidenceScoring:
         assert result["year"] == 2021
         assert result["month"] == 8, "Month should be 8 (August), not 1 (January)"
         assert result["confidence"] == "high"
-        assert result["issue_date"] == datetime(2021, 8, 1)
+        assert result["issue_date"] == datetime(2021, 8, 1, tzinfo=UTC)
 
     def test_nzb_style_filename_prioritized(self, extractor):
         """
@@ -415,7 +415,7 @@ class TestTimestampIdPattern:
         assert result["title"] == "Magazine"
         assert result["year"] == 2026
         assert result["month_name"] == "February"
-        assert result["issue_date"] == datetime(2026, 2, 1)
+        assert result["issue_date"] == datetime(2026, 2, 1, tzinfo=UTC)
         assert result["pattern"] == "timestamp_id"
 
     def test_timestamp_id_without_underscore(self, extractor):
@@ -426,7 +426,7 @@ class TestTimestampIdPattern:
         assert result["title"] == "Magazine"
         assert result["year"] == 2024
         assert result["month_name"] == "March"
-        assert result["issue_date"] == datetime(2024, 3, 1)
+        assert result["issue_date"] == datetime(2024, 3, 1, tzinfo=UTC)
         assert result["pattern"] == "timestamp_id"
 
     def test_timestamp_id_with_dash_separator(self, extractor):
