@@ -241,7 +241,7 @@ class TestInternetArchiveProviderSearchQuery:
         query = provider._build_search_query("Wired", aliases=None)
 
         assert 'title:("Wired")' in query
-        assert " OR " not in query.split("AND")[0]  # No OR in title part
+        assert " OR " not in query.split("AND", maxsplit=1)[0]  # No OR in title part
 
     def test_build_search_query_aliases_with_category(self):
         """Test aliases work together with category filtering."""
@@ -272,7 +272,7 @@ class TestInternetArchiveProviderSearchQuery:
 
         assert 'title:("Wired")' in query
         # Should not have OR since aliases are empty
-        assert " OR " not in query.split("AND")[0]
+        assert " OR " not in query.split("AND", maxsplit=1)[0]
 
 
 class TestInternetArchiveProviderDateParsing:

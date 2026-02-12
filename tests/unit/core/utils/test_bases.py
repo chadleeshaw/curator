@@ -69,7 +69,7 @@ def test_search_provider_concrete_implementation():
     """Test a concrete implementation of SearchProvider"""
 
     class TestProvider(SearchProvider):
-        def search(self, query, category=None):
+        def search(self, query, category=None, aliases=None):
             return [
                 SearchResult(
                     title=f"Result for {query}",
@@ -93,7 +93,7 @@ def test_search_provider_get_provider_info():
     """Test SearchProvider get_provider_info method"""
 
     class TestProvider(SearchProvider):
-        def search(self, query, category=None):
+        def search(self, query, category=None, aliases=None):
             return []
 
     config = {"name": "TestProv", "type": "newsnab", "enabled": True}
@@ -185,7 +185,7 @@ def test_search_provider_default_values():
     """Test SearchProvider default name and type"""
 
     class MyProvider(SearchProvider):
-        def search(self, query, category=None):
+        def search(self, query, category=None, aliases=None):
             return []
 
     config = {}  # No name or type provided

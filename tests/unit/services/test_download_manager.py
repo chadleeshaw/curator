@@ -35,7 +35,7 @@ class MockSearchProvider(SearchProvider):
         super().__init__(config)
         self.mock_results = results or []
 
-    def search(self, query, category=None):
+    def search(self, query, category=None, aliases=None):
         """Return pre-configured mock results"""
         return self.mock_results
 
