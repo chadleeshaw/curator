@@ -29,16 +29,16 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Cache Python dependencies
+      - name: Create virtual environment
+        run: python -m venv .venv
+
+      - name: Cache pip downloads
         uses: actions/cache@v4
         with:
-          path: .venv
-          key: ${{ runner.os }}-venv-${{ hashFiles('**/requirements.txt') }}
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
           restore-keys: |
-            ${{ runner.os }}-venv-
-
-      - name: Create virtual environment
-        run: python -m venv --clear .venv
+            ${{ runner.os }}-pip-
 
       - name: Cache Node dependencies
         uses: actions/cache@v4
