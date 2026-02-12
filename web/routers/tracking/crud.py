@@ -388,6 +388,16 @@ async def delete_tracking(tracking_id: int) -> Dict[str, Any]:
             raise HTTPException(status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND)
 
         title = tracking.title
+
+        # Clean up stack memberships referencing this tracking
+        membership_deleted = (
+            db.query(StackMembership)
+            .filter(StackMembership.periodical_tracking_id == tracking_id)
+            .delete(synchronize_session="fetch")
+        )
+        if membership_deleted:
+            logger.info(f"Removed {membership_deleted} stack membership(s) for tracking: {title}")
+
         db.delete(tracking)
         db.commit()
 

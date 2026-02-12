@@ -315,9 +315,27 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
                 else:
                     periodical_data["special_edition_name"] = ""
 
-            # Fallback to title pattern matching
-            if not is_special and is_special_edition(p.title):
-                is_special = True
+            # Before title fallback, check if any scan explicitly determined NOT special edition
+            if not is_special:
+                scan_checked = False
+                parsed = p.parsed_metadata or {}
+                if isinstance(parsed, dict):
+                    for scan_key in ("ocr_scan", "text_scan", "file_scan"):
+                        scan = parsed.get(scan_key)
+                        if isinstance(scan, dict):
+                            for field_name in ("special_edition", "is_special_edition"):
+                                val = scan.get(field_name)
+                                if val is not None:
+                                    scan_checked = True
+                                    if val:
+                                        is_special = True
+                                    break
+                            if scan_checked:
+                                break
+
+                # Fallback to title pattern matching only if no scan addressed the field
+                if not is_special and not scan_checked and is_special_edition(p.title):
+                    is_special = True
 
             if is_special:
                 special_editions.append(periodical_data)

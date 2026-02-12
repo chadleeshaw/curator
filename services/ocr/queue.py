@@ -501,15 +501,9 @@ class OCRQueueService:
                         metadata_discovered = True
                         logger.debug(f"Updated issue_date to {new_issue_date.strftime('%Y-%m')} from derived_metadata")
 
-                    # Check if OCR found volume/issue
+                    # Check if OCR found volume/issue (flag for reorganization)
                     if metadata.get("volume") or metadata.get("issue_number"):
                         metadata_discovered = True
-                        if not magazine.extra_metadata:
-                            magazine.extra_metadata = {}
-                        if metadata.get("volume"):
-                            magazine.extra_metadata["volume"] = metadata["volume"]
-                        if metadata.get("issue_number"):
-                            magazine.extra_metadata["issue_number"] = metadata["issue_number"]
 
                     # Flag for reorganization if we discovered new metadata
                     if metadata_discovered:

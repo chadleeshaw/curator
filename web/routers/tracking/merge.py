@@ -14,7 +14,7 @@ from core.utils.error_handling import handle_api_errors
 from core.utils.files import get_library_dir, get_category_prefix
 from core.utils.general import cleanup_empty_directories, is_special_edition
 from core.utils.metadata_builder import is_periodical_special_edition
-from models.database import PeriodicalTracking
+from models.database import PeriodicalTracking, StackMembership
 from services.file_operations import reorganize_periodical_files
 from web.schemas import APIError
 from web.utils.responses import success_response
@@ -250,6 +250,23 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
             for submission in submissions:
                 submission.tracking_id = target.id
                 submissions_moved += 1
+
+            # Transfer stack membership from source to target (if target doesn't already have one)
+            source_membership = (
+                db.query(StackMembership).filter(StackMembership.periodical_tracking_id == source.id).first()
+            )
+            if source_membership:
+                target_membership = (
+                    db.query(StackMembership).filter(StackMembership.periodical_tracking_id == target.id).first()
+                )
+                if target_membership:
+                    # Target already in a stack — just remove the source membership
+                    db.delete(source_membership)
+                    logger.info(f"Removed stack membership for merged source tracking: {source.title}")
+                else:
+                    # Transfer source's stack membership to target
+                    source_membership.periodical_tracking_id = target.id
+                    logger.info(f"Transferred stack membership from '{source.title}' to '{target.title}'")
 
             # Delete source tracking record
             db.delete(source)

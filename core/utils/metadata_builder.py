@@ -452,7 +452,20 @@ def is_periodical_special_edition(periodical) -> bool:
     if isinstance(extra, dict) and extra.get("special_edition") is not None:
         return True
 
-    # Fallback to title pattern matching
+    # Before title fallback, check if any scan explicitly determined NOT special edition.
+    # If a scan returned special_edition=false, trust the scan over keyword matching.
+    parsed = periodical.parsed_metadata or {}
+    if isinstance(parsed, dict):
+        for scan_key in ("ocr_scan", "text_scan", "file_scan"):
+            scan = parsed.get(scan_key)
+            if isinstance(scan, dict):
+                for field_name in ("special_edition", "is_special_edition"):
+                    val = scan.get(field_name)
+                    if val is not None:
+                        # Scan explicitly checked — return its verdict
+                        return bool(val)
+
+    # Fallback to title pattern matching (only if no scan addressed the field)
     if periodical.title and is_special_edition(periodical.title):
         return True
 

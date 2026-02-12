@@ -491,6 +491,15 @@ async def delete_periodical(
         if ocr_deleted:
             logger.info(f"Deleted {ocr_deleted} OCR job(s) for periodical(s): {title}")
 
+        # Clean up stack memberships referencing these periodicals
+        membership_deleted = (
+            db.query(StackMembership)
+            .filter(StackMembership.periodical_id.in_(mag_ids))
+            .delete(synchronize_session="fetch")
+        )
+        if membership_deleted:
+            logger.info(f"Removed {membership_deleted} stack membership(s) for periodical(s): {title}")
+
         # Delete database entries
         for mag in magazines_to_delete:
             db.delete(mag)
@@ -533,6 +542,14 @@ async def delete_periodical(
             olid = generate_olid(title)
             tracking = db.query(PeriodicalTracking).filter(PeriodicalTracking.olid == olid).first()
             if tracking:
+                # Clean up stack memberships referencing this tracking
+                tracking_membership_deleted = (
+                    db.query(StackMembership)
+                    .filter(StackMembership.periodical_tracking_id == tracking.id)
+                    .delete(synchronize_session="fetch")
+                )
+                if tracking_membership_deleted:
+                    logger.info(f"Removed {tracking_membership_deleted} stack membership(s) for tracking: {title}")
                 db.delete(tracking)
                 db.commit()
                 logger.info(f"Removed tracking record for: {title}")
@@ -607,6 +624,10 @@ async def purge_database() -> Dict[str, Any]:
         ocr_count = db.query(OCRJob).count()
         issue_count = db.query(DiscoveredIssue).count()
 
+        # Delete all stack memberships and stacks
+        membership_count = db.query(StackMembership).delete()
+        stack_count = db.query(Stack).delete()
+
         # Delete all library entries (will cascade delete OCR jobs due to foreign key)
         db.query(Periodical).delete()
 
@@ -628,13 +649,15 @@ async def purge_database() -> Dict[str, Any]:
         logger.warning(
             f"Database purged successfully. Removed {magazine_count} library entries, "
             f"{tracking_count} tracking records, {download_count} download submissions, "
-            f"{ocr_count} OCR jobs, and {issue_count} discovered issues."
+            f"{ocr_count} OCR jobs, {issue_count} discovered issues, "
+            f"{stack_count} stacks, and {membership_count} stack memberships."
         )
 
         return success_response(
             message=f"Database purged successfully. Removed {magazine_count} library entries, "
             f"{tracking_count} tracking records, {download_count} downloads, "
-            f"{ocr_count} OCR jobs, and {issue_count} discovered issues. "
+            f"{ocr_count} OCR jobs, {issue_count} discovered issues, "
+            f"and {stack_count} stacks. "
             f"Files on disk remain untouched.",
             counts={
                 "magazines": magazine_count,
@@ -642,6 +665,8 @@ async def purge_database() -> Dict[str, Any]:
                 "downloads": download_count,
                 "ocr_jobs": ocr_count,
                 "discovered_issues": issue_count,
+                "stacks": stack_count,
+                "stack_memberships": membership_count,
             },
         )
 

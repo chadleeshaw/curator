@@ -665,15 +665,9 @@ class FileImporter:
                 metadata_discovered = True
                 logger.debug(f"Updated issue_date to {new_issue_date.strftime('%Y-%m')} from derived_metadata")
 
-            # Check if text scan found volume/issue
+            # Check if text scan found volume/issue (flag for reorganization)
             if scan_result.get("volume") or scan_result.get("issue_number"):
                 metadata_discovered = True
-                if not magazine.extra_metadata:
-                    magazine.extra_metadata = {}
-                if scan_result.get("volume"):
-                    magazine.extra_metadata["volume"] = scan_result["volume"]
-                if scan_result.get("issue_number"):
-                    magazine.extra_metadata["issue_number"] = scan_result["issue_number"]
 
             # Flag for reorganization if we discovered new metadata
             if metadata_discovered:
