@@ -26,7 +26,7 @@ let currentMagazineData = null;
 
 // Sorting state
 let currentSortField = localStorage.getItem('periodical-sort-field') || 'issue_date';
-let sortAscending = localStorage.getItem('periodical-sort-order') !== 'desc';
+let sortAscending = localStorage.getItem('periodical-sort-order') === 'asc'; // Default to desc for issue_date
 
 // Set initial sort UI state
 if (document.getElementById('periodical-sort-select')) {
@@ -58,6 +58,7 @@ function updateSubtitle() {
   const subtitles = {
     issue_date: issueGroupingLabel,
     title: 'Sorted by Title',
+    volume: 'Sorted by Volume',
     added_date: 'Sorted by Date Added'
   };
   
@@ -182,6 +183,27 @@ function renderIssues() {
 }
 
 /**
+ * Helper function to get volume number from periodical metadata
+ * @param {Object} data - The periodical data object
+ * @returns {number} The volume number or 0 if not found
+ */
+function getVolumeNumber(data) {
+  // Check derived_metadata first (new structure)
+  const derivedVolume = data.derived_metadata?.volume?.value;
+  if (derivedVolume !== undefined && derivedVolume !== null) {
+    return parseInt(derivedVolume, 10) || 0;
+  }
+
+  // Check metadata (legacy structure)
+  const metadataVolume = data.metadata?.volume;
+  if (metadataVolume !== undefined && metadataVolume !== null) {
+    return parseInt(metadataVolume, 10) || 0;
+  }
+
+  return 0;
+}
+
+/**
  * Sort issues based on current sort field and order
  * @param {Array} issues - Array of issue objects
  * @returns {Array} Sorted issues
@@ -192,10 +214,21 @@ function sortIssues(issues) {
     
     switch (currentSortField) {
       case 'issue_date':
+        // Primary sort by issue_date
         comparison = new Date(a.issue_date || 0) - new Date(b.issue_date || 0);
+        
+        // If both have invalid/missing dates (epoch 0), fallback to volume number
+        if (comparison === 0 && (!a.issue_date || !b.issue_date)) {
+          const volumeA = getVolumeNumber(a);
+          const volumeB = getVolumeNumber(b);
+          comparison = volumeA - volumeB;
+        }
         break;
       case 'title':
         comparison = (a.special_edition_name || a.title || '').localeCompare(b.special_edition_name || b.title || '');
+        break;
+      case 'volume':
+        comparison = getVolumeNumber(a) - getVolumeNumber(b);
         break;
       case 'added_date':
         comparison = new Date(a.created_at || 0) - new Date(b.created_at || 0);
