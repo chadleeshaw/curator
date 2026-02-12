@@ -90,10 +90,10 @@ ci-lint:
 	@find . -name '*.py' -not -path './.venv/*' -not -path './node_modules/*' -print0 | xargs -0 .venv/bin/python -m black --check --line-length=120
 	@echo ""
 	@echo "📜 Running eslint..."
-	@npx eslint $(JS_FILES)
+	@npx --no-install eslint $(JS_FILES)
 	@echo ""
 	@echo "🎨 Running stylelint..."
-	@npx stylelint $(CSS_FILES)
+	@npx --no-install stylelint $(CSS_FILES)
 	@echo ""
 	@echo "✅ All CI linters passed!"
 

@@ -727,7 +727,6 @@ function closeMetadataModal() {
   cancelMetadataEdit();
 }
 
-// eslint-disable-next-line no-unused-vars -- Called from HTML onclick handlers
 function enableMetadataEdit() {
   if (!currentMagazineData) return;
 
@@ -817,7 +816,6 @@ function cancelMetadataEdit() {
   clearCoverUpload();
 }
 
-// eslint-disable-next-line no-unused-vars -- Called from HTML onclick handlers
 function previewCoverUpload(input) {
   const preview = document.getElementById('cover-upload-preview');
   const previewImg = document.getElementById('cover-preview-img');
@@ -835,7 +833,6 @@ function previewCoverUpload(input) {
   }
 }
 
-// eslint-disable-next-line no-unused-vars -- Called from HTML onclick handlers
 function clearCoverUpload() {
   const fileInput = document.getElementById('edit-cover-file');
   const preview = document.getElementById('cover-upload-preview');
@@ -873,7 +870,6 @@ async function uploadCoverImage(magazineId) {
   return true; // Successfully uploaded
 }
 
-// eslint-disable-next-line no-unused-vars -- Called from HTML onclick handlers
 async function saveMetadataEdit() {
   if (!currentMagazineId) return;
 
@@ -994,7 +990,6 @@ function deleteIssue(magazineId, title) {
 }
 
 // Confirm delete from modal
-// eslint-disable-next-line no-unused-vars -- Called from HTML onclick handlers
 async function confirmDeleteIssue() {
   if (!pendingDeleteId) {
     console.error('No issue selected for deletion');
@@ -1058,7 +1053,6 @@ async function confirmDeleteIssue() {
   }
 }
 
-// eslint-disable-next-line no-unused-vars -- Called from HTML onclick handlers
 function goBack() {
   // If we came from a stack page, go back there
   if (window._stackReturnUrl) {
@@ -1097,7 +1091,6 @@ function goBack() {
 })();
 
 // Move issue modal functions
-// eslint-disable-next-line no-unused-vars -- Called from HTML onclick handlers
 async function openMoveIssueModal() {
   if (!currentMagazineId) {
     alert('No magazine selected');
@@ -1157,7 +1150,6 @@ function closeMoveIssueModal() {
   document.getElementById('move-issue-modal').classList.add(CSS_CLASSES.HIDDEN);
 }
 
-// eslint-disable-next-line no-unused-vars -- Called from HTML onclick handlers
 async function confirmMoveIssue() {
   const targetTrackingId = document.getElementById('target-tracking-select').value;
 
@@ -1215,7 +1207,6 @@ async function confirmMoveIssue() {
 }
 
 // Toggle special edition status
-// eslint-disable-next-line no-unused-vars -- Called from HTML onclick handlers
 async function toggleSpecialEdition() {
   if (!currentMagazineId || !currentMagazineData) {
     alert('No magazine selected');
