@@ -33,5 +33,5 @@ pytest-benchmark>=4.0.0
 locust>=2.20.0
 pylint>=3.0.0
 flake8>=6.1.0
-black>=24.0.0
+black>=25.0.0
 isort>=5.13.0
