@@ -29,9 +29,6 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Create virtual environment
-        run: python -m venv .venv
-
       - name: Cache Python dependencies
         uses: actions/cache@v4
         with:
@@ -39,6 +36,9 @@ jobs:
           key: ${{ runner.os }}-venv-${{ hashFiles('**/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-venv-
+
+      - name: Create virtual environment
+        run: python -m venv .venv
 
       - name: Cache Node dependencies
         uses: actions/cache@v4
