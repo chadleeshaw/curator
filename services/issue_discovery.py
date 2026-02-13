@@ -231,7 +231,7 @@ class IssueDiscoveryService:
                         normalized_title=parsed.cleaned_title.lower(),
                         fuzzy_match_group=fuzzy_group,
                         issue_date=parsed.publication_date,
-                        issue_number=None,  # Not easily extractable from search results
+                        issue_number=parsed.raw_metadata.get("issue"),
                         year=parsed.publication_date.year if parsed.publication_date else None,
                         month=parsed.publication_date.month if parsed.publication_date else None,
                         language=parsed.language,
