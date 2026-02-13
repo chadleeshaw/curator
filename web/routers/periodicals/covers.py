@@ -17,6 +17,8 @@ from core.constants.ocr import PDF_COVER_DPI_OCR
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from core.utils.pdf import extract_cover_from_pdf
+from models.database import OCRJob
+from services.ocr.queue import OCRQueueService
 from services.ocr.service import OCRService
 from web.utils.responses import success_response
 
@@ -248,6 +250,100 @@ async def upload_cover(magazine_id: int, file: UploadFile = File(...)) -> Dict[s
         return success_response(
             "Cover uploaded successfully",
             cover_path=str(cover_path),
+        )
+
+    return await with_db_session(_shared._session_factory, operation)
+
+
+@router.post("/periodicals/{magazine_id}/regenerate-thumbnail-ocr")
+@handle_api_errors("Regenerate thumbnail and OCR", logger)
+async def regenerate_thumbnail_ocr(magazine_id: int) -> Dict[str, Any]:
+    """
+    Regenerate cover thumbnail and queue OCR for a single periodical.
+
+    Extracts a fresh cover from the PDF (using the stored cover page or page 1),
+    invalidates the cached thumbnail, and queues an OCR job.
+
+    Args:
+        magazine_id: ID of the periodical
+
+    Returns:
+        Success response with cover path and OCR job status
+    """
+
+    def operation(db):
+        magazine, pdf_path = _shared.get_periodical_with_file(db, magazine_id)
+
+        # Determine cover directory
+        if _shared._library_base_dir:
+            cover_dir = _shared._library_base_dir / ".covers"
+        else:
+            cover_dir = pdf_path.parent.parent.parent / ".covers"
+
+        # Use stored cover page or default to 1
+        page_number = 1
+        if magazine.extra_metadata and isinstance(magazine.extra_metadata, dict):
+            page_number = magazine.extra_metadata.get("cover_page", 1)
+
+        # Invalidate old thumbnail before regenerating
+        if magazine.cover_path:
+            old_cover = Path(magazine.cover_path)
+            old_thumbnail = old_cover.parent / f"{old_cover.stem}_thumb.jpg"
+            if old_thumbnail.exists():
+                old_thumbnail.unlink()
+                logger.debug(f"Removed old thumbnail: {old_thumbnail}")
+
+        # Extract cover from PDF
+        if OCRService.is_available():
+            cover_path = extract_cover_from_pdf(
+                pdf_path,
+                cover_dir,
+                dpi=PDF_COVER_DPI_OCR,
+                quality=PDF_COVER_QUALITY_HIGH,
+                page_number=page_number,
+            )
+        else:
+            cover_path = extract_cover_from_pdf(pdf_path, cover_dir, page_number=page_number)
+
+        if not cover_path:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to extract cover from PDF. You can upload a thumbnail manually using Edit Metadata.",
+            )
+
+        # Update database with new cover path
+        magazine.cover_path = str(cover_path)
+        # Clear uploaded flag since we regenerated from PDF
+        if magazine.extra_metadata and isinstance(magazine.extra_metadata, dict):
+            magazine.extra_metadata.pop("cover_uploaded", None)
+
+        # Queue OCR job
+        ocr_queued = False
+        ocr_message = "OCR not available"
+        if OCRService.is_available():
+            job = OCRQueueService.queue_ocr_job(
+                db=db,
+                periodical_id=magazine_id,
+                priority=OCRJob.PriorityEnum.HIGH.value,
+                language=magazine.language,
+            )
+            if job:
+                ocr_queued = True
+                ocr_message = f"OCR job queued (job #{job.id})"
+            else:
+                ocr_message = "OCR job already queued for this periodical"
+        else:
+            ocr_message = "OCR (Tesseract) is not installed — OCR skipped"
+
+        db.commit()
+
+        logger.info(f"Regenerated thumbnail and queued OCR for magazine {magazine_id} (page {page_number})")
+
+        return success_response(
+            f"Thumbnail regenerated from page {page_number}. {ocr_message}",
+            cover_path=str(cover_path),
+            ocr_queued=ocr_queued,
+            ocr_message=ocr_message,
         )
 
     return await with_db_session(_shared._session_factory, operation)

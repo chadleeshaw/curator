@@ -907,6 +907,37 @@ function clearCoverUpload() {
   if (previewImg) previewImg.src = '';
 }
 
+async function regenerateThumbnailOcr() {
+  if (!currentMagazineId) return;
+
+  showNotification('🔄 Regenerating thumbnail and queuing OCR...', 'info');
+
+  try {
+    const data = await APIHelper.executeWithErrorHandling(async () => {
+      const response = await APIClient.post(
+        `/api/periodicals/${currentMagazineId}/regenerate-thumbnail-ocr`
+      );
+      return await response.json();
+    }, 'Periodical');
+
+    const ocrNote = data.ocr_queued
+      ? 'OCR job queued — metadata will update when processing completes.'
+      : data.ocr_message || 'OCR was not queued.';
+
+    showNotification(`✅ Thumbnail regenerated. ${ocrNote}`, 'success');
+
+    // Refresh the metadata modal and page to show updated cover
+    await viewMetadata(currentMagazineId);
+    setTimeout(() => window.location.reload(), 1500);
+  } catch (error) {
+    console.error('[Periodical] Error regenerating thumbnail/OCR:', error);
+    const message = error.toUserMessage
+      ? error.toUserMessage()
+      : 'Failed to regenerate thumbnail. You can upload a cover manually via Edit Metadata.';
+    showNotification(message, 'error');
+  }
+}
+
 async function uploadCoverImage(magazineId) {
   const fileInput = document.getElementById('edit-cover-file');
   if (!fileInput || !fileInput.files || !fileInput.files[0]) {
@@ -1613,6 +1644,7 @@ window.closeMoveIssueModal = closeMoveIssueModal;
 window.confirmMoveIssue = confirmMoveIssue;
 window.previewCoverUpload = previewCoverUpload;
 window.clearCoverUpload = clearCoverUpload;
+window.regenerateThumbnailOcr = regenerateThumbnailOcr;
 
 // Bulk operation functions
 window.selectAllIssues = selectAllIssues;

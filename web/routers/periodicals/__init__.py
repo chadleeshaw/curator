@@ -20,6 +20,7 @@ from .crud import (
 from .covers import (
     get_cover,
     regenerate_cover,
+    regenerate_thumbnail_ocr,
 )
 from .metadata import (
     toggle_special_edition,
@@ -57,6 +58,7 @@ __all__ = [
     # Cover operations
     "get_cover",
     "regenerate_cover",
+    "regenerate_thumbnail_ocr",
     # Metadata operations
     "toggle_special_edition",
     "update_periodical",
