@@ -160,6 +160,101 @@ class TestReorganizePeriodicalFiles:
         assert result2.new_pdf_path != result1.new_pdf_path
         assert "(" in result2.new_pdf_path  # Timestamp marker
 
+    def test_reorganize_handles_multiple_conflicts_same_second(self, tmp_path, temp_library_dir):
+        """Test that multiple conflicts in the same second get unique paths via counter"""
+        old_dir = tmp_path / "old_location"
+        old_dir.mkdir()
+
+        results = []
+        for i in range(4):
+            pdf_path = old_dir / f"magazine_{i}.pdf"
+            pdf_path.write_text(f"PDF content {i}")
+
+            periodical = MagicMock()
+            periodical.file_path = str(pdf_path)
+            periodical.cover_path = None
+            periodical.issue_date = datetime(2024, 3, 15)
+            periodical.extra_metadata = {"category": "Magazines"}
+
+            result = reorganize_periodical_files(periodical, "Same Title", temp_library_dir)
+            assert result.success is True
+            results.append(result.new_pdf_path)
+
+        # All paths must be unique
+        assert len(set(results)) == 4, f"Expected 4 unique paths, got: {results}"
+
+    def test_reorganize_preserves_epub_extension(self, tmp_path, temp_library_dir):
+        """Test that non-PDF file extensions are preserved during reorganization"""
+        old_dir = tmp_path / "old_location"
+        old_dir.mkdir()
+
+        epub_path = old_dir / "old_magazine.epub"
+        epub_path.write_text("EPUB content")
+
+        periodical = MagicMock()
+        periodical.file_path = str(epub_path)
+        periodical.cover_path = None
+        periodical.issue_date = datetime(2024, 6, 1)
+        periodical.extra_metadata = {"category": "Magazines"}
+
+        result = reorganize_periodical_files(periodical, "Test Title", temp_library_dir)
+
+        assert result.success is True
+        assert result.new_pdf_path.endswith(".epub"), f"Expected .epub extension, got: {result.new_pdf_path}"
+        assert Path(result.new_pdf_path).exists()
+
+    def test_reorganize_preserves_cbz_extension(self, tmp_path, temp_library_dir):
+        """Test that CBZ file extensions are preserved during reorganization"""
+        old_dir = tmp_path / "old_location"
+        old_dir.mkdir()
+
+        cbz_path = old_dir / "old_comic.cbz"
+        cbz_path.write_text("CBZ content")
+
+        periodical = MagicMock()
+        periodical.file_path = str(cbz_path)
+        periodical.cover_path = None
+        periodical.issue_date = datetime(2024, 6, 1)
+        periodical.extra_metadata = {"category": "Comics"}
+
+        result = reorganize_periodical_files(periodical, "Test Comic", temp_library_dir)
+
+        assert result.success is True
+        assert result.new_pdf_path.endswith(".cbz"), f"Expected .cbz extension, got: {result.new_pdf_path}"
+        assert Path(result.new_pdf_path).exists()
+
+    def test_reorganize_epub_conflict_preserves_extension(self, tmp_path, temp_library_dir):
+        """Test that conflicts for non-PDF files still preserve the correct extension"""
+        old_dir = tmp_path / "old_location"
+        old_dir.mkdir()
+
+        # First EPUB
+        epub1 = old_dir / "first.epub"
+        epub1.write_text("EPUB 1")
+        p1 = MagicMock()
+        p1.file_path = str(epub1)
+        p1.cover_path = None
+        p1.issue_date = datetime(2024, 6, 1)
+        p1.extra_metadata = {"category": "Magazines"}
+
+        result1 = reorganize_periodical_files(p1, "Same Title", temp_library_dir)
+        assert result1.success is True
+        assert result1.new_pdf_path.endswith(".epub")
+
+        # Second EPUB with same date/title
+        epub2 = old_dir / "second.epub"
+        epub2.write_text("EPUB 2")
+        p2 = MagicMock()
+        p2.file_path = str(epub2)
+        p2.cover_path = None
+        p2.issue_date = datetime(2024, 6, 1)
+        p2.extra_metadata = {"category": "Magazines"}
+
+        result2 = reorganize_periodical_files(p2, "Same Title", temp_library_dir)
+        assert result2.success is True
+        assert result2.new_pdf_path.endswith(".epub")
+        assert result2.new_pdf_path != result1.new_pdf_path
+
     def test_reorganize_files_already_in_correct_location(self, mock_periodical, temp_library_dir):
         """Test when files are already in the correct location"""
         # First reorganization
