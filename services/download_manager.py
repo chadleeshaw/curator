@@ -1672,19 +1672,21 @@ class DownloadManager:
 
         return None
 
-    def _resubmit_to_client(self, submission: DownloadSubmission, session: Session) -> Optional[str]:
+    def _resubmit_to_client(
+        self, submission: DownloadSubmission, category: Optional[str], session: Session
+    ) -> Optional[str]:
         """
         Resubmit a failed submission to the download client.
 
         Args:
             submission: Submission record to retry
+            category: Download category to use
             session: Database session
 
         Returns:
             New job ID or None if submission failed
         """
         client = self._get_client_by_name(submission.client_name)
-        download_category = self._get_download_category(submission.tracking_id, session)
 
         logger.info(f"Retrying submission {submission.id} with {client.name}: {submission.result_title}")
 
@@ -1692,7 +1694,7 @@ class DownloadManager:
             client=client,
             nzb_url=submission.source_url,
             title=submission.result_title,
-            category=download_category,
+            category=category,
         )
 
         if not job_id:
@@ -1724,8 +1726,11 @@ class DownloadManager:
             return validation_error
 
         try:
+            # Get download category using helper
+            download_category = self._get_download_category(submission.tracking_id, session)
+
             # Resubmit to download client
-            job_id = self._resubmit_to_client(submission, session)
+            job_id = self._resubmit_to_client(submission, download_category, session)
             if not job_id:
                 return {
                     "success": False,

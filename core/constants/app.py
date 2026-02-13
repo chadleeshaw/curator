@@ -92,6 +92,9 @@ FEED_SYNC_MATCH_BATCH_SIZE = 200
 FEED_ENTRY_RETENTION_DAYS = 7
 """Number of days to retain RSS feed entries before expiring them"""
 
+CACHE_AWARE_SEARCH_SKIP_HOURS = 1
+"""Skip API searches for periodicals with cache matches within this many hours (0 = disabled)"""
+
 SEARCH_RESULT_RETENTION_DAYS = 30
 """Number of days to retain search results in the main database before cleanup"""
 

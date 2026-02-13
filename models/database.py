@@ -153,6 +153,11 @@ class PeriodicalTracking(Base):
     search_count = Column(Integer, default=0)  # Total searches performed
     search_interval_hours = Column(Integer, default=6)  # How often to search (adaptive)
 
+    # Cache-first optimization
+    last_cache_match = Column(
+        DateTime(timezone=True), nullable=True, index=True
+    )  # When cache matching last found results
+
     # Discovery statistics
     total_issues_discovered = Column(Integer, default=0)  # Total unique issues found
     last_discovery_count = Column(Integer, default=0)  # New issues found in last search
@@ -189,6 +194,7 @@ class PeriodicalTracking(Base):
             "last_searched": self.last_searched.isoformat() if self.last_searched else None,
             "search_count": self.search_count,
             "search_interval_hours": self.search_interval_hours,
+            "last_cache_match": self.last_cache_match.isoformat() if self.last_cache_match else None,
             "total_issues_discovered": self.total_issues_discovered,
             "last_discovery_count": self.last_discovery_count,
             "last_discovery_date": self.last_discovery_date.isoformat() if self.last_discovery_date else None,
@@ -510,7 +516,11 @@ class StackMembership(Base):
     id = Column(Integer, primary_key=True)
     stack_id = Column(Integer, ForeignKey("stacks.id"), nullable=False, index=True)
     periodical_tracking_id = Column(
-        Integer, ForeignKey("periodical_tracking.id"), nullable=True, unique=True, index=True
+        Integer,
+        ForeignKey("periodical_tracking.id"),
+        nullable=True,
+        unique=True,
+        index=True,
     )
     periodical_id = Column(Integer, ForeignKey("periodicals.id"), nullable=True, unique=True, index=True)
     added_at = Column(DateTime(timezone=True), default=utcnow)

@@ -114,6 +114,18 @@ def _process_cache_matches(app_state: "AppState", db_session) -> int:
             eval_stats = app_state.issue_discovery_service.evaluate_discovered_issues(tracking_id, db_session)
             if eval_stats["wanted"] > 0:
                 logger.info(f"Auto-download: Cache match - {eval_stats['wanted']} wanted from tracking {tracking_id}")
+
+            # Update last_cache_match timestamp if we found any results (new or updated)
+            # This helps the adaptive scheduler avoid redundant API searches
+            if record_stats["new"] > 0 or record_stats["updated"] > 0:
+                from models.database import PeriodicalTracking
+
+                tracking = db_session.query(PeriodicalTracking).filter_by(id=tracking_id).first()
+                if tracking:
+                    tracking.last_cache_match = utc_now()
+                    db_session.commit()
+                    logger.debug(f"Auto-download: Updated last_cache_match for tracking {tracking_id}")
+
         except Exception as e:
             logger.error(
                 f"Auto-download: Error recording cache matches for tracking {tracking_id}: {e}",
@@ -147,11 +159,29 @@ def _process_periodical_searches(app_state: "AppState", db_session) -> None:
             "skipping API searches (not penalizing adaptive scheduler)"
         )
 
+    # Get cache-aware search skip threshold from config (default: 1 hour)
+    cache_skip_threshold_hours = app_state.tasks_config.get("cache_aware_search_skip_hours", 1)
+    now = utc_now()
+
     for periodical in periodicals_to_search:
         try:
             if all_rate_limited:
                 logger.debug(f"Auto-download: Skipping '{periodical.title}' - all providers rate limited")
                 continue
+
+            # Cache-aware optimization: Skip API searches if cache matching found results recently
+            # This prevents redundant API calls when the feed cache is already working
+            if periodical.last_cache_match and cache_skip_threshold_hours > 0:
+                time_since_cache_match = now - periodical.last_cache_match
+                hours_since_cache_match = time_since_cache_match.total_seconds() / 3600
+
+                if hours_since_cache_match < cache_skip_threshold_hours:
+                    logger.info(
+                        f"Auto-download: Skipping API search for '{periodical.title}' - "
+                        f"cache matched {hours_since_cache_match:.1f}h ago "
+                        f"(threshold: {cache_skip_threshold_hours}h)"
+                    )
+                    continue
 
             aliases = _extract_search_aliases(periodical)
 

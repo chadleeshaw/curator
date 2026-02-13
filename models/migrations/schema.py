@@ -24,6 +24,7 @@ COLUMN_ADDITIONS = {
         ("last_searched", "DATETIME"),
         ("search_count", "INTEGER DEFAULT 0"),
         ("search_interval_hours", "INTEGER DEFAULT 6"),
+        ("last_cache_match", "DATETIME"),  # Cache-first optimization
         ("total_issues_discovered", "INTEGER DEFAULT 0"),
         ("last_discovery_count", "INTEGER DEFAULT 0"),
         ("last_discovery_date", "DATETIME"),
@@ -48,7 +49,10 @@ COLUMN_ADDITIONS = {
     ],
     "discovered_issues": [
         ("country", "VARCHAR(50)"),
-        ("latest_pubdate", "DATETIME"),  # When NZB was posted (for retention preference)
+        (
+            "latest_pubdate",
+            "DATETIME",
+        ),  # When NZB was posted (for retention preference)
     ],
 }
 
