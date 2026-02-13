@@ -530,9 +530,12 @@ class TestTrackingMergeIntegration:
             file_paths = [p.file_path for p in remaining]
             assert len(file_paths) == len(set(file_paths)), "All file paths should be unique"
 
-            # Verify at least one file has been renamed with (2) or (3) suffix
-            renamed_count = sum(1 for path in file_paths if " (2)" in path or " (3)" in path)
-            assert renamed_count >= 1, f"Expected at least 1 renamed file, got {renamed_count}"
+            # Verify at least one file has been renamed with a conflict suffix
+            # The file-level conflict resolution uses timestamp suffixes like (20260213_160735)
+            # while the db-level fallback uses (2), (3), etc.
+            base_path = "Magazine - February2024.pdf"
+            renamed_count = sum(1 for path in file_paths if base_path not in path)
+            assert renamed_count >= 1, f"Expected at least 1 renamed file, got {renamed_count}\nPaths: {file_paths}"
 
             # Verify titles were normalized
             for periodical in remaining:
