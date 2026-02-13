@@ -188,3 +188,25 @@ MAX_COUNTRY_REMOVAL_PASSES = 3
 Titles occasionally have multiple country identifiers (e.g., "Magazine US USA United States").
 Three passes handles the observed maximum while preventing infinite loops on malformed data.
 """
+
+
+# ==============================================================================
+# Title Abbreviation
+# ==============================================================================
+
+TITLE_SKIP_WORDS = {
+    "the",
+    "a",
+    "an",
+    "and",
+    "or",
+    "of",
+    "magazine",
+    "mag",
+}
+"""
+Common filler words to skip when generating title abbreviations.
+
+Used when creating short abbreviations from multi-word titles (e.g., "National Geographic" -> "ng").
+These words don't contribute meaningful information to abbreviations.
+"""

@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from typing import Generator
 
 from sqlalchemy import create_engine, event, inspect, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -118,7 +119,7 @@ class DatabaseManager:
                             conn.commit()
                         migrations_applied += 1
                         logger.info(f"✓ Added column {table_name}.{column_name}")
-                    except Exception as e:
+                    except SQLAlchemyError as e:
                         logger.error(f"Failed to add column {table_name}.{column_name}: {e}")
 
         # Import column renames from migrations package

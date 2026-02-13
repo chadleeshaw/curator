@@ -355,14 +355,6 @@ class ConfigLoader:
             },
         )
 
-        return self.config.get(
-            CONFIG_KEY_MATCHING,
-            {
-                "fuzzy_threshold": DEFAULT_FUZZY_THRESHOLD,
-                "duplicate_date_threshold_days": DUPLICATE_DATE_THRESHOLD_DAYS,
-            },
-        )
-
     def get_import(self) -> Dict[str, Any]:
         """Get import configuration"""
         return self.config.get(

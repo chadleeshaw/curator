@@ -155,7 +155,7 @@ def reorganize_periodical_files(
             files_moved=files_moved,
         )
 
-    except Exception as e:
+    except (OSError, shutil.Error) as e:
         logger.error(f"Error reorganizing periodical files: {e}", exc_info=True)
         return FileReorganizationResult(success=False, new_pdf_path=None, new_cover_path=None, error=str(e))
 
@@ -209,6 +209,6 @@ def move_files_with_cleanup(
 
         return True, None
 
-    except Exception as e:
+    except (OSError, shutil.Error) as e:
         logger.error(f"Error moving files: {e}", exc_info=True)
         return False, str(e)

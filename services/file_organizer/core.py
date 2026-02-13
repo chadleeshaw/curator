@@ -26,6 +26,7 @@ from services.importer.matcher import TrackingMatcher
 from services.cover_extractor import CoverExtractor
 
 from .cleanup import CleanupMixin
+from .models import FilenameComponents
 from .reorganization import ReorganizationMixin
 
 logger = logging.getLogger(__name__)
@@ -242,51 +243,38 @@ class FileOrganizer(ReorganizationMixin, CleanupMixin):
 
         return str(file_path), str(jpg_path)
 
-    def _build_filename(  # pylint: disable=too-many-positional-arguments
-        self,
-        safe_title: str,
-        volume: Optional[int],
-        issue_number: Optional[int],
-        month: Optional[str],
-        year: Optional[str],
-        extension: str = ".pdf",
-    ) -> str:
+    def _build_filename(self, components: FilenameComponents) -> str:
         """
         Build organized filename with optional volume and issue information.
 
         Supports files with volume/issue but no date information.
 
         Args:
-            safe_title: Sanitized title
-            volume: Volume number (optional)
-            issue_number: Issue number (optional)
-            month: Month abbreviation (e.g., "Dec") - optional if volume/issue present
-            year: Year (e.g., "2006") - optional if volume/issue present
-            extension: File extension (default: ".pdf")
+            components: FilenameComponents dataclass with title, volume, issue, month, year, extension
 
         Returns:
             Filename with specified extension
         """
-        filename_parts = [safe_title]
+        filename_parts = [components.title]
 
         # Add volume if present (e.g., "Vol1")
-        if volume:
-            filename_parts.append(f"{VOLUME_PREFIX}{volume}")
+        if components.volume:
+            filename_parts.append(f"{VOLUME_PREFIX}{components.volume}")
 
         # Add issue number if present (e.g., "No123")
-        if issue_number:
-            filename_parts.append(f"{ISSUE_PREFIX}{issue_number}")
+        if components.issue_number:
+            filename_parts.append(f"{ISSUE_PREFIX}{components.issue_number}")
 
         # Add date if both month and year are present (e.g., "Dec2024")
-        if month and year:
-            filename_parts.append(f"{month}{year}")
-        elif volume or issue_number:
+        if components.month and components.year:
+            filename_parts.append(f"{components.month}{components.year}")
+        elif components.volume or components.issue_number:
             # If we have volume/issue but no date, that's okay - no need to add anything
             pass
         # If we have no date, volume, or issue - just use the title without a suffix
         # Don't add "Unknown" - it looks unprofessional and confuses the parser
 
-        return f"{ORGANIZED_FILENAME_SEPARATOR.join(filename_parts)}{extension}"
+        return f"{ORGANIZED_FILENAME_SEPARATOR.join(filename_parts)}{components.extension}"
 
     def _build_default_directory(
         self,
@@ -471,7 +459,16 @@ class FileOrganizer(ReorganizationMixin, CleanupMixin):
             extension = pdf_path.suffix.lower().rstrip("'")
 
             # Build filename with preserved extension
-            filename = self._build_filename(safe_title, volume, issue_number, month, year, extension)
+            filename = self._build_filename(
+                FilenameComponents(
+                    title=safe_title,
+                    volume=volume,
+                    issue_number=issue_number,
+                    month=month,
+                    year=year,
+                    extension=extension,
+                )
+            )
 
             # Apply category prefix
             category_with_prefix = f"{self.category_prefix}{category}"

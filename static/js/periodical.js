@@ -28,6 +28,35 @@ let currentMagazineData = null;
 let bulkSelectMode = false;
 const selectedIssueIds = new Set();
 
+/**
+ * Load languages from API and populate the edit-language dropdown
+ *
+ * @returns {Promise<void>}
+ */
+async function loadLanguageDropdown() {
+  try {
+    const response = await APIClient.get('/api/constants/languages');
+    const data = await response.json();
+    if (data.success && data.languages) {
+      const dropdown = document.getElementById('edit-language');
+      if (!dropdown) return;
+      const currentValue = dropdown.value;
+      dropdown.innerHTML = '';
+      data.languages.forEach((lang) => {
+        const option = document.createElement('option');
+        option.value = lang;
+        option.textContent = lang;
+        dropdown.appendChild(option);
+      });
+      if (currentValue) {
+        dropdown.value = currentValue;
+      }
+    }
+  } catch (error) {
+    console.error('[Periodical] Failed to load languages:', error);
+  }
+}
+
 // Sorting state
 let currentSortField = localStorage.getItem('periodical-sort-field') || 'issue_date';
 let sortAscending = localStorage.getItem('periodical-sort-order') === 'asc'; // Default to desc for issue_date
@@ -1658,6 +1687,9 @@ window.confirmBulkDelete = confirmBulkDelete;
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
+  // Load dynamic dropdown data
+  loadLanguageDropdown();
+
   // Ensure delete modal is closed on page load
   const deleteModal = document.getElementById('delete-modal');
   if (deleteModal && typeof deleteModal.close === 'function') {

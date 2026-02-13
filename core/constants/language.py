@@ -109,3 +109,28 @@ LANGUAGE_KEYWORDS = {
     "Korean": ["Korean", "한국어", "Korea", "KR"],
 }
 """Keywords used to detect language from periodical titles"""
+
+
+# ==============================================================================
+# English Language Indicators
+# ==============================================================================
+
+ENGLISH_INDICATORS = [
+    "english",
+    " en ",
+    " en-",
+    "-en ",
+    "usa",
+    " uk ",
+    " uk-",
+    "-uk ",
+    " us ",
+    " us-",
+    "-us ",
+]
+"""
+Language and region indicators for English editions.
+
+Used to detect English-language periodicals from search results and filenames.
+Space-bounded indicators (e.g., ' en ') prevent false matches with words containing 'en'.
+"""

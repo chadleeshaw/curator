@@ -15,6 +15,7 @@ from core.constants.date import (
     MONTH_TO_NUMBER,
     NUMBER_TO_MONTH,
 )
+from core.constants.files import MAX_FILE_EXTENSION_LENGTH, YEAR_STRING_LENGTH
 from core.constants.language import SUPPORTED_LANGUAGES
 from core.constants.validation import ANTI_PERIODICAL_PATTERNS
 from core.constants.patterns import (
@@ -101,23 +102,70 @@ class FilenameParser:
         original_title = nzb_title
 
         # EARLY CHECK: Reject non-periodical content (movies, TV shows, audiobooks) FIRST
-        # This is a performance optimization - no point parsing obvious video files
         if self._has_anti_periodical_patterns(nzb_title):
             logger.debug(f"Rejecting '{nzb_title}': Contains anti-periodical patterns (likely movie/TV/audiobook)")
             return None
 
-        # Remove file extension if present (but preserve years like "2021")
-        if "." in nzb_title:
-            parts = nzb_title.rsplit(".", 1)
-            last_part = parts[-1]
-            # Check if it's a likely extension (≤4 chars), but NOT a year (4 digits between 1900-2100)
-            is_extension = len(last_part) <= 4
-            is_year = last_part.isdigit() and len(last_part) == 4 and MIN_VALID_YEAR <= int(last_part) <= MAX_VALID_YEAR
-            if is_extension and not is_year:
-                nzb_title = parts[0]
+        # Preprocess: Remove file extension if present (but preserve years like "2021")
+        nzb_title = self._preprocess_title(nzb_title)
 
         # Initialize metadata dictionary
-        metadata: Dict[str, Any] = {
+        metadata = self._initialize_metadata()
+
+        # Pre-check: Extract numeric multi-month and ISO dates BEFORE normalization
+        # These patterns would be destroyed by dot-to-space conversion
+        numeric_month_data = self._extract_numeric_multi_month(nzb_title)
+        iso_date_data = self._extract_iso_date(nzb_title)
+
+        # Normalize delimiters: dots, underscores → spaces (but keep dashes)
+        remaining_text = self._normalize_delimiters(nzb_title)
+
+        # Remove pre-detected ISO date from remaining text
+        if iso_date_data:
+            pattern_to_remove = f"{iso_date_data['year']} {iso_date_data['month']:02d}"
+            remaining_text = remaining_text.replace(pattern_to_remove, "", 1)
+            remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
+            logger.debug(f"Removed ISO date from remaining text, left with: '{remaining_text}'")
+
+        # Extract release metadata (group, quality, country, language, edition)
+        remaining_text = self._extract_release_metadata(nzb_title, remaining_text, metadata)
+
+        # Extract dates from various formats
+        remaining_text = self._extract_dates(remaining_text, metadata, numeric_month_data, iso_date_data)
+
+        # Extract volume and issue numbers (AFTER dates to avoid conflicts)
+        remaining_text = self._extract_volume_issue(remaining_text, metadata)
+
+        # What remains is the title - clean it up
+        metadata["title"] = self._extract_title_from_remaining(remaining_text, original_title)
+
+        # Calculate confidence score
+        metadata["confidence"] = self._calculate_confidence(metadata)
+
+        logger.debug(f"Extracted NZB metadata from '{original_title}': {metadata}")
+        return metadata
+
+    def _preprocess_title(self, nzb_title: str) -> str:
+        """Remove file extension if present (but preserve years like '2021')."""
+        if "." not in nzb_title:
+            return nzb_title
+
+        parts = nzb_title.rsplit(".", 1)
+        last_part = parts[-1]
+        # Check if it's a likely extension (≤4 chars), but NOT a year (4 digits between 1900-2100)
+        is_extension = len(last_part) <= MAX_FILE_EXTENSION_LENGTH
+        is_year = (
+            last_part.isdigit()
+            and len(last_part) == YEAR_STRING_LENGTH
+            and MIN_VALID_YEAR <= int(last_part) <= MAX_VALID_YEAR
+        )
+        if is_extension and not is_year:
+            return parts[0]
+        return nzb_title
+
+    def _initialize_metadata(self) -> Dict[str, Any]:
+        """Initialize metadata dictionary with default values."""
+        return {
             "title": None,
             "year": None,
             "month": None,
@@ -134,82 +182,79 @@ class FilenameParser:
             "issue_date": None,
         }
 
-        # Pre-check: Look for numeric multi-month patterns BEFORE normalization
-        # This handles cases like "11.10" which would be destroyed by dot-to-space conversion
+    def _extract_numeric_multi_month(self, nzb_title: str) -> Optional[Dict[str, Any]]:
+        """
+        Extract numeric multi-month patterns BEFORE normalization.
+        Handles cases like '11.10' which would be destroyed by dot-to-space conversion.
+        """
         numeric_month_match = re.search(DATE_PATTERN_MULTI_MONTH_NUMERIC, nzb_title)
-        numeric_month_data = None
-        if numeric_month_match:
-            title_part = numeric_month_match.group(1).strip()
-            month1_str = numeric_month_match.group(2)
-            month2_str = numeric_month_match.group(3)
-            year_str = numeric_month_match.group(4)
-            year = int(year_str)
-            month_num, display_string = parse_numeric_month_range(month1_str, month2_str)
+        if not numeric_month_match:
+            return None
 
-            if month_num and MIN_VALID_YEAR <= year <= MAX_VALID_YEAR:
-                # Store this data to use later
-                numeric_month_data = {
-                    "month": month_num,
-                    "month_name": display_string,
-                    "year": year,
-                    "issue_date": datetime(year, month_num, 1, tzinfo=UTC),
-                    "title_part": title_part,
-                    "month1": month1_str,
-                    "month2": month2_str,
-                }
-                logger.debug(f"Pre-detected numeric multi-month: {display_string} {year} from '{title_part}'")
+        title_part = numeric_month_match.group(1).strip()
+        month1_str = numeric_month_match.group(2)
+        month2_str = numeric_month_match.group(3)
+        year_str = numeric_month_match.group(4)
+        year = int(year_str)
+        month_num, display_string = parse_numeric_month_range(month1_str, month2_str)
 
-        # Pre-check: Extract ISO date formats from ORIGINAL text (before dot normalization destroys them)
-        # This handles "2023.09" which becomes "2023 09" after normalization
-        iso_date_data = None
-        # Try ISO month format first (2023.09 or 2023-09)
+        if month_num and MIN_VALID_YEAR <= year <= MAX_VALID_YEAR:
+            logger.debug(f"Pre-detected numeric multi-month: {display_string} {year} from '{title_part}'")
+            return {
+                "month": month_num,
+                "month_name": display_string,
+                "year": year,
+                "issue_date": datetime(year, month_num, 1, tzinfo=UTC),
+                "title_part": title_part,
+                "month1": month1_str,
+                "month2": month2_str,
+            }
+        return None
+
+    def _extract_iso_date(self, nzb_title: str) -> Optional[Dict[str, Any]]:
+        """
+        Extract ISO date formats from ORIGINAL text (before dot normalization destroys them).
+        Handles '2023.09' which becomes '2023 09' after normalization.
+        """
         iso_month_match = re.search(DATE_PATTERN_ISO_MONTH, nzb_title)
-        if iso_month_match:
-            year, month = int(iso_month_match.group(1)), int(iso_month_match.group(2))
-            if MIN_VALID_YEAR <= year <= MAX_VALID_YEAR and 1 <= month <= 12:
-                iso_date_data = {
-                    "year": year,
-                    "month": month,
-                    "month_name": NUMBER_TO_MONTH.get(month),
-                    "issue_date": datetime(year, month, 1, tzinfo=UTC),
-                    "match_text": iso_month_match.group(),
-                }
-                logger.debug(f"Pre-detected ISO month: {NUMBER_TO_MONTH.get(month)} {year}")
+        if not iso_month_match:
+            return None
 
-        # Normalize delimiters: dots, underscores → spaces (but keep dashes)
-        normalized = nzb_title.replace(".", " ").replace("_", " ")
-        remaining_text = normalized
+        year, month = int(iso_month_match.group(1)), int(iso_month_match.group(2))
+        if MIN_VALID_YEAR <= year <= MAX_VALID_YEAR and 1 <= month <= 12:
+            logger.debug(f"Pre-detected ISO month: {NUMBER_TO_MONTH.get(month)} {year}")
+            return {
+                "year": year,
+                "month": month,
+                "month_name": NUMBER_TO_MONTH.get(month),
+                "issue_date": datetime(year, month, 1, tzinfo=UTC),
+                "match_text": iso_month_match.group(),
+            }
+        return None
 
-        # If we pre-detected an ISO date, remove it from remaining_text now
-        if iso_date_data:
-            # The pattern "2023.09" becomes "2023 09" after normalization
-            # Remove the year and month from remaining text
-            pattern_to_remove = f"{iso_date_data['year']} {iso_date_data['month']:02d}"
-            remaining_text = remaining_text.replace(pattern_to_remove, "", 1)
-            remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
-            logger.debug(f"Removed ISO date from remaining text, left with: '{remaining_text}'")
+    def _normalize_delimiters(self, nzb_title: str) -> str:
+        """Normalize delimiters: dots, underscores → spaces (but keep dashes)."""
+        return nzb_title.replace(".", " ").replace("_", " ")
 
-        # Step 1: Extract release group (from end)
+    def _extract_release_metadata(self, nzb_title: str, remaining_text: str, metadata: Dict[str, Any]) -> str:
+        """Extract release group, quality, country, language, and edition from title."""
+        # Extract release group (from end)
         for pattern in NZB_RELEASE_GROUP_PATTERNS:
             match = re.search(pattern, nzb_title, re.IGNORECASE)
             if match:
                 metadata["release_group"] = match.group(1)
-                # Remove from remaining text
                 end_pos = remaining_text.rfind(match.group(1))
                 if end_pos != -1:
                     remaining_text = remaining_text[:end_pos].strip()
                 break
 
-        # Step 2: Extract quality indicators (search in ORIGINAL before normalization)
+        # Extract quality indicators (search in ORIGINAL before normalization)
         for pattern in NZB_QUALITY_PATTERNS:
             match = re.search(pattern, nzb_title, re.IGNORECASE)
             if match:
                 quality_text = match.group(1).replace(".", " ")
                 metadata["quality"] = quality_text
-                # Remove from remaining text (normalized version)
-                # Replace dots with spaces in the matched quality text to find it in normalized
                 quality_normalized = quality_text.lower().replace(" ", " ")
-                # Try to find and remove quality keywords from remaining text
                 for word in quality_normalized.split():
                     remaining_text = re.sub(
                         rf"\b{re.escape(word)}\b",
@@ -220,21 +265,17 @@ class FilenameParser:
                 remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                 break
 
-        # Step 3: Extract country/region
+        # Extract country/region
         for pattern in NZB_COUNTRY_PATTERNS:
             match = re.search(pattern, remaining_text, re.IGNORECASE)
             if match:
                 country = match.group(1)
-                # Special handling for "US" vs "USA"
-                if country.upper() in ["US", "USA"]:
-                    metadata["country"] = "USA"
-                else:
-                    metadata["country"] = country.upper()
+                metadata["country"] = "USA" if country.upper() in ["US", "USA"] else country.upper()
                 remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
                 remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                 break
 
-        # Step 4: Extract language
+        # Extract language
         for pattern in NZB_LANGUAGE_PATTERNS:
             match = re.search(pattern, remaining_text, re.IGNORECASE)
             if match:
@@ -243,7 +284,7 @@ class FilenameParser:
                 remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                 break
 
-        # Step 5: Extract edition/variant
+        # Extract edition/variant
         for pattern in NZB_EDITION_PATTERNS:
             match = re.search(pattern, remaining_text, re.IGNORECASE)
             if match:
@@ -252,8 +293,19 @@ class FilenameParser:
                 remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                 break
 
-        # Step 6: Extract dates FIRST (before volume/issue to avoid conflicts)
-        # This prevents "Jan2024" from being parsed as "issue 2024"
+        return remaining_text
+
+    def _extract_dates(
+        self,
+        remaining_text: str,
+        metadata: Dict[str, Any],
+        numeric_month_data: Optional[Dict[str, Any]],
+        iso_date_data: Optional[Dict[str, Any]],
+    ) -> str:
+        """
+        Extract dates from various formats.
+        Tries multiple patterns in order of specificity.
+        """
         date_extracted = False
 
         # Format 0a: Use pre-detected numeric multi-month if found
@@ -264,9 +316,6 @@ class FilenameParser:
             metadata["issue_date"] = numeric_month_data["issue_date"]
 
             # Remove the numeric month pattern from remaining text
-            # The pattern could be "11.10 2019" -> "11 10 2019" (dots converted to spaces)
-            # Or "11/10 2019" -> "11/10 2019" (slashes kept)
-            # Or "11-10 2019" -> "11-10 2019" (dashes kept)
             m1 = numeric_month_data["month1"]
             m2 = numeric_month_data["month2"]
             year = str(numeric_month_data["year"])
@@ -288,16 +337,14 @@ class FilenameParser:
             date_extracted = True
             logger.debug(f"Used pre-detected numeric multi-month: {numeric_month_data['month_name']} {year}")
 
-        # Format 1: ISO full date (2024.01.20 or 2024-01-20)
+        # Format 1: Numeric multi-month in remaining text
         if not date_extracted:
             match = re.search(DATE_PATTERN_MULTI_MONTH_NUMERIC, remaining_text)
             if match:
-                title_part, month1_str, month2_str, year_str = (
-                    match.group(1),
-                    match.group(2),
-                    match.group(3),
-                    match.group(4),
-                )
+                title_part = match.group(1)
+                month1_str = match.group(2)
+                month2_str = match.group(3)
+                year_str = match.group(4)
                 year = int(year_str)
                 month_num, display_string = parse_numeric_month_range(month1_str, month2_str)
 
@@ -306,21 +353,18 @@ class FilenameParser:
                     metadata["month"] = month_num
                     metadata["month_name"] = display_string
                     metadata["issue_date"] = datetime(year, month_num, 1, tzinfo=UTC)
-                    # Only remove the date part, keep the title
                     remaining_text = remaining_text[: match.start()] + title_part + remaining_text[match.end() :]
                     remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                     date_extracted = True
                     logger.debug(f"Extracted numeric multi-month: {display_string} {year}")
 
-        # Format 1: ISO full date (2024.01.20 or 2024-01-20)
+        # Format 2: ISO full date (2024.01.20 or 2024-01-20)
         if not date_extracted:
             match = re.search(DATE_PATTERN_ISO_FULL, remaining_text)
             if match:
-                year, month, day = (
-                    int(match.group(1)),
-                    int(match.group(2)),
-                    int(match.group(3)),
-                )
+                year = int(match.group(1))
+                month = int(match.group(2))
+                day = int(match.group(3))
                 if MIN_VALID_YEAR <= year <= MAX_VALID_YEAR and 1 <= month <= 12 and 1 <= day <= 31:
                     metadata["year"] = year
                     metadata["month"] = month
@@ -331,11 +375,12 @@ class FilenameParser:
                     remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                     date_extracted = True
 
-        # Format 2: Full month name with year (January 2024)
+        # Format 3: Full month name with year (January 2024)
         if not date_extracted:
             match = re.search(DATE_PATTERN_FULL_MONTH_YEAR, remaining_text, re.IGNORECASE)
             if match:
-                month_str, year_str = match.group(1), match.group(2)
+                month_str = match.group(1)
+                year_str = match.group(2)
                 month_num = parse_month(month_str)
                 year = int(year_str)
                 if month_num and MIN_VALID_YEAR <= year <= MAX_VALID_YEAR:
@@ -347,11 +392,12 @@ class FilenameParser:
                     remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                     date_extracted = True
 
-        # Format 3: Abbreviated month with year (Jan 2024, Jan2024)
+        # Format 4: Abbreviated month with year (Jan 2024, Jan2024)
         if not date_extracted:
             match = re.search(DATE_PATTERN_ABBR_MONTH_YEAR, remaining_text, re.IGNORECASE)
             if match:
-                month_str, year_str = match.group(1), match.group(2)
+                month_str = match.group(1)
+                year_str = match.group(2)
                 month_num = parse_month(month_str)
                 year = int(year_str)
                 if month_num and MIN_VALID_YEAR <= year <= MAX_VALID_YEAR:
@@ -363,11 +409,12 @@ class FilenameParser:
                     remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                     date_extracted = True
 
-        # Format 3b: Abbreviated month with year, no word boundaries (Jan2024 in middle of string)
+        # Format 5: Abbreviated month with year, no word boundaries
         if not date_extracted:
             match = re.search(DATE_PATTERN_ABBR_MONTH_YEAR_NO_BOUNDARY, remaining_text, re.IGNORECASE)
             if match:
-                month_str, year_str = match.group(1), match.group(2)
+                month_str = match.group(1)
+                year_str = match.group(2)
                 month_num = parse_month(month_str)
                 year = int(year_str)
                 if month_num and MIN_VALID_YEAR <= year <= MAX_VALID_YEAR:
@@ -379,8 +426,7 @@ class FilenameParser:
                     remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                     date_extracted = True
 
-        # Format 4: ISO month format (2024-01 or 2024.01)
-        # Use pre-detected ISO date if available (extracted before normalization)
+        # Format 6: ISO month format (2024-01 or 2024.01) - use pre-detected if available
         if not date_extracted and iso_date_data:
             metadata["year"] = iso_date_data["year"]
             metadata["month"] = iso_date_data["month"]
@@ -389,11 +435,12 @@ class FilenameParser:
             date_extracted = True
             logger.debug(f"Used pre-detected ISO date: {iso_date_data['month_name']} {iso_date_data['year']}")
 
-        # If no pre-detected ISO date, try matching on remaining_text
+        # Format 7: ISO month format in remaining text
         if not date_extracted:
             match = re.search(DATE_PATTERN_ISO_MONTH, remaining_text)
             if match:
-                year, month = int(match.group(1)), int(match.group(2))
+                year = int(match.group(1))
+                month = int(match.group(2))
                 if MIN_VALID_YEAR <= year <= MAX_VALID_YEAR and 1 <= month <= 12:
                     metadata["year"] = year
                     metadata["month"] = month
@@ -403,11 +450,12 @@ class FilenameParser:
                     remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                     date_extracted = True
 
-        # Format 5: Numeric month-year (01-2024 or 1/2024) - check BEFORE year-only
+        # Format 8: Numeric month-year (01-2024 or 1/2024)
         if not date_extracted:
             match = re.search(DATE_PATTERN_MONTH_YEAR_NUMERIC, remaining_text)
             if match:
-                month, year = int(match.group(1)), int(match.group(2))
+                month = int(match.group(1))
+                year = int(match.group(2))
                 if MIN_VALID_YEAR <= year <= MAX_VALID_YEAR and 1 <= month <= 12:
                     metadata["year"] = year
                     metadata["month"] = month
@@ -417,7 +465,7 @@ class FilenameParser:
                     remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                     date_extracted = True
 
-        # Format 6: Just a year (2024) - LAST to avoid false matches
+        # Format 9: Just a year (2024) - LAST to avoid false matches
         if not date_extracted:
             match = re.search(DATE_PATTERN_YEAR_ONLY, remaining_text)
             if match:
@@ -430,7 +478,10 @@ class FilenameParser:
                     remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                     date_extracted = True
 
-        # Step 7: Extract volume and issue numbers (AFTER dates to avoid conflicts)
+        return remaining_text
+
+    def _extract_volume_issue(self, remaining_text: str, metadata: Dict[str, Any]) -> str:
+        """Extract volume and issue numbers from remaining text."""
         # Volume patterns: Vol.12, Volume 5, V202
         match = re.search(NZB_VOLUME_PATTERN, remaining_text, re.IGNORECASE)
         if match:
@@ -446,30 +497,26 @@ class FilenameParser:
             remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
             remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
 
-        # Step 8: What remains is the title
-        # Clean up remaining text before using as title
+        return remaining_text
+
+    def _extract_title_from_remaining(self, remaining_text: str, original_title: str) -> str:
+        """Clean up remaining text and extract title."""
+        # Clean up remaining text
         remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
         remaining_text = re.sub(r"^[-\s]+|[-\s]+$", "", remaining_text).strip()  # Remove leading/trailing dashes
         remaining_text = re.sub(r"\s*-\s*$", "", remaining_text).strip()  # Remove trailing dash with spaces
         remaining_text = re.sub(r"--+", "-", remaining_text).strip()  # Collapse multiple dashes
         remaining_text = re.sub(
             TITLE_CLEANUP_TRAILING_DASH_DIGITS, "", remaining_text
-        ).strip()  # Remove trailing dash+digits (e.g., "-01")
+        ).strip()  # Remove trailing dash+digits
         remaining_text = re.sub(
             TITLE_CLEANUP_TRAILING_SPACE_DIGITS, "", remaining_text
-        ).strip()  # Remove trailing space+digits (e.g., " 01")
+        ).strip()  # Remove trailing space+digits
 
         if remaining_text:
-            metadata["title"] = clean_title(remaining_text)
-        else:
-            # Fallback to original if everything was extracted
-            metadata["title"] = clean_title(original_title)
-
-        # Step 9: Calculate confidence score
-        metadata["confidence"] = self._calculate_confidence(metadata)
-
-        logger.debug(f"Extracted NZB metadata from '{original_title}': {metadata}")
-        return metadata
+            return clean_title(remaining_text)
+        # Fallback to original if everything was extracted
+        return clean_title(original_title)
 
     def _calculate_confidence(self, metadata: Dict[str, Any]) -> str:
         """
@@ -1160,7 +1207,7 @@ class FilenameParser:
                 continue
 
             # Skip year folders (but allow magazine names like "2600")
-            if folder_name.isdigit() and len(folder_name) == 4:
+            if folder_name.isdigit() and len(folder_name) == YEAR_STRING_LENGTH:
                 year_value = int(folder_name)
                 if MIN_VALID_YEAR <= year_value <= MAX_VALID_YEAR:
                     current = current.parent

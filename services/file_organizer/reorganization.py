@@ -12,11 +12,14 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from core.constants.country import ISO_COUNTRIES
+from core.constants.files import SUPPORTED_FILE_EXTENSIONS
 from core.constants.language import DEFAULT_LANGUAGE
 from core.parsers import sanitize_filename
 from core.utils.db import check_file_path_conflict
 from core.utils.files import resolve_periodical_file_path
 from services.importer.sidecar import read_sidecar_file
+
+from .models import FilenameComponents
 
 logger = logging.getLogger(__name__)
 
@@ -54,11 +57,13 @@ class ReorganizationMixin:
         day = issue_date.strftime("%d")
 
         filename = self._build_filename(
-            safe_title,
-            metadata.get("volume"),
-            metadata.get("issue_number"),
-            month,
-            year,
+            FilenameComponents(
+                title=safe_title,
+                volume=metadata.get("volume"),
+                issue_number=metadata.get("issue_number"),
+                month=month,
+                year=year,
+            )
         )
 
         if not pattern:
@@ -392,7 +397,7 @@ class ReorganizationMixin:
                 continue
 
             # Strip trailing quotes from extension (for files like 'Magazine.pdf')
-            if file_path.suffix.lower().rstrip("'") not in [".pdf", ".epub", ".cbz", ".cbr"]:
+            if file_path.suffix.lower().rstrip("'") not in SUPPORTED_FILE_EXTENSIONS:
                 continue
 
             files_found.append(str(file_path))
@@ -469,7 +474,13 @@ class ReorganizationMixin:
         for magazine in magazines:
             files_found += 1
             result = self._process_magazine_with_error_handling(
-                magazine, db_session, category_with_prefix, pattern, dry_run, old_directories, errors
+                magazine,
+                db_session,
+                category_with_prefix,
+                pattern,
+                dry_run,
+                old_directories,
+                errors,
             )
 
             if result["status"] == "reorganized":
@@ -485,7 +496,12 @@ class ReorganizationMixin:
 
         # Step 5: Process sidecar files
         sidecar_results = self._reorganize_from_sidecars(
-            db_session, category_dir, category_with_prefix, pattern, dry_run, old_directories
+            db_session,
+            category_dir,
+            category_with_prefix,
+            pattern,
+            dry_run,
+            old_directories,
         )
 
         files_found += sidecar_results["files_found"]
@@ -542,7 +558,12 @@ class ReorganizationMixin:
         original_file_path = magazine.file_path
         try:
             return self._process_single_magazine_reorganization(
-                magazine, db_session, category_with_prefix, pattern, dry_run, old_directories
+                magazine,
+                db_session,
+                category_with_prefix,
+                pattern,
+                dry_run,
+                old_directories,
             )
         except Exception as e:
             db_session.rollback()
@@ -591,7 +612,7 @@ class ReorganizationMixin:
                 continue
 
             # Strip trailing quotes from extension (for files like 'Magazine.pdf')
-            if file_path.suffix.lower().rstrip("'") not in [".pdf", ".epub", ".cbz", ".cbr"]:
+            if file_path.suffix.lower().rstrip("'") not in SUPPORTED_FILE_EXTENSIONS:
                 continue
 
             # Skip if file is already in database
@@ -608,7 +629,12 @@ class ReorganizationMixin:
             try:
                 files_found += 1
                 result = self._process_sidecar_file(
-                    file_path, sidecar_data, category_with_prefix, pattern, dry_run, old_directories
+                    file_path,
+                    sidecar_data,
+                    category_with_prefix,
+                    pattern,
+                    dry_run,
+                    old_directories,
                 )
 
                 if result["status"] == "reorganized":

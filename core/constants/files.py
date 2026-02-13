@@ -132,3 +132,14 @@ INCOMPLETE_DOWNLOAD_PATTERNS = {
 
 DEFAULT_HASH_CHUNK_SIZE = 8192
 """Default chunk size in bytes for reading files during hashing (8KB)"""
+
+
+# ==============================================================================
+# File Extension Detection
+# ==============================================================================
+
+MAX_FILE_EXTENSION_LENGTH = 4
+"""Maximum length for file extensions when detecting extensions in filenames"""
+
+YEAR_STRING_LENGTH = 4
+"""Length of a year string (YYYY format)"""

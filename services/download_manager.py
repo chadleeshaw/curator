@@ -19,6 +19,7 @@ from core.constants.app import (
 )
 from core.constants.category import DEFAULT_CATEGORY
 from core.constants.files import BLACKLISTED_FILE_EXTENSIONS
+from core.constants.language import ENGLISH_INDICATORS
 from core.parsers import utc_now, TitleMatcher, Parser
 from core.utils.fuzzy_matching import get_fuzzy_group_id
 from models.database import (
@@ -28,7 +29,12 @@ from models.database import (
     PeriodicalTracking,
 )
 from models.database import SearchResult as DBSearchResult
-from services.download import SearchService, DeduplicationService, SubmissionService, QueueProcessor
+from services.download import (
+    SearchService,
+    DeduplicationService,
+    SubmissionService,
+    QueueProcessor,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +99,10 @@ class DownloadManager:
         self.deduplication_service = DeduplicationService()
         self.submission_service = SubmissionService()
         self.queue_processor = QueueProcessor(
-            download_client, max_downloads, nzb_cache_service, download_clients=self.download_clients
+            download_client,
+            max_downloads,
+            nzb_cache_service,
+            download_clients=self.download_clients,
         )
 
         # Lock to serialize slot counting + submission between concurrent callers
@@ -212,11 +221,7 @@ class DownloadManager:
 
     def _is_english_edition(self, title: str) -> bool:
         """
-        Check if a search result title appears to be an English-language edition.
-
-        Used to prioritize English editions when downloading all issues.
-        Detection is intentionally broad - false positives (e.g., "Queen Magazine"
-        matching "en") are acceptable since this only affects sort order, not filtering.
+        Check if title contains English language/region indicators.
 
         Args:
             title: Search result title to check
@@ -225,8 +230,7 @@ class DownloadManager:
             True if title contains English language/region indicators
         """
         title_lower = title.lower()
-        english_indicators = ["english", " en ", " en-", "-en ", "usa", " uk ", " uk-", "-uk ", " us ", " us-", "-us "]
-        return any(indicator in f" {title_lower} " for indicator in english_indicators)
+        return any(indicator in f" {title_lower} " for indicator in ENGLISH_INDICATORS)
 
     def _get_result_sort_key(self, result: Dict[str, Any]) -> Tuple[int, float]:
         """
@@ -478,7 +482,10 @@ class DownloadManager:
         return None
 
     def search_periodical_issues(
-        self, periodical_title: str, session: Session, aliases: Optional[List[str]] = None
+        self,
+        periodical_title: str,
+        session: Session,
+        aliases: Optional[List[str]] = None,
     ) -> List[Dict[str, Any]]:
         """
         Search all providers for available issues of a periodical.
@@ -1480,7 +1487,10 @@ class DownloadManager:
                 session.query(DownloadSubmission)
                 .filter(
                     DownloadSubmission.status.in_(
-                        [DownloadSubmission.StatusEnum.PENDING, DownloadSubmission.StatusEnum.DOWNLOADING]
+                        [
+                            DownloadSubmission.StatusEnum.PENDING,
+                            DownloadSubmission.StatusEnum.DOWNLOADING,
+                        ]
                     )
                 )
                 .count()
@@ -1508,7 +1518,10 @@ class DownloadManager:
                             f"(priority {issue.download_priority}, job_id: {submission.job_id})"
                         )
                 except Exception as e:
-                    logger.error(f"Auto-download: Error submitting '{issue.title}': {e}", exc_info=True)
+                    logger.error(
+                        f"Auto-download: Error submitting '{issue.title}': {e}",
+                        exc_info=True,
+                    )
 
             if submitted_count > 0:
                 logger.info(f"Auto-download: Submitted {submitted_count} downloads")

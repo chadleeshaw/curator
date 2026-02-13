@@ -22,6 +22,8 @@ import { stacks } from './stacks.js';
 
 /** @type {string[]} Supported languages loaded from backend */
 let SUPPORTED_LANGUAGES = [];
+/** @type {string[]} Content categories loaded from backend */
+let CATEGORIES = [];
 /** @type {Object.<string, string>} ISO country codes to names */
 let ISO_COUNTRIES = {};
 /** @type {Object.<string, string>} Language to default country mapping */
@@ -96,6 +98,7 @@ export class TrackingManager {
       );
       if (data.success) {
         SUPPORTED_LANGUAGES = data.languages ?? [];
+        CATEGORIES = data.categories ?? [];
         ISO_COUNTRIES = data.countries ?? {};
         LANGUAGE_TO_COUNTRY = data.language_to_country ?? {};
         COUNTRY_INDICATORS = data.country_indicators ?? {};
@@ -107,48 +110,61 @@ export class TrackingManager {
   }
 
   /**
-   * Load categories from API and populate dropdown
+   * Load categories from constants and populate all category dropdowns
    *
-   * @returns {Promise<void>}
-   */
-  async loadCategories() {
-    try {
-      const response = await APIClient.get('/api/constants/categories');
-      const data = await response.json();
-
-      if (data.success && data.categories) {
-        this.populateCategoryDropdown(data.categories);
-      }
-    } catch (error) {
-      console.error('[Tracking] Failed to load categories:', error);
-    }
-  }
-
-  /**
-   * Populate the category filter dropdown with categories
-   *
-   * @param {string[]} categories - Array of category names
    * @returns {void}
    */
-  populateCategoryDropdown(categories) {
-    const dropdown = document.getElementById('tracking-category-filter');
-    if (!dropdown) return;
+  loadCategories() {
+    if (CATEGORIES.length === 0) return;
 
-    // Keep the "All" option
-    dropdown.innerHTML = '<option value="all">All</option>';
-
-    // Add each category as an option
-    categories.forEach((category) => {
-      const option = document.createElement('option');
-      option.value = category;
-      option.textContent = category;
-      dropdown.appendChild(option);
-    });
-
-    // Restore saved filter value
-    if (this.filterManager.categoryFilter) {
-      dropdown.value = this.filterManager.categoryFilter;
+    // Populate the filter dropdown
+    const filterDropdown = document.getElementById('tracking-category-filter');
+    if (filterDropdown) {
+      filterDropdown.innerHTML = '<option value="all">All</option>';
+      CATEGORIES.forEach((category) => {
+        const option = document.createElement('option');
+        option.value = category;
+        option.textContent = category;
+        filterDropdown.appendChild(option);
+      });
+      if (this.filterManager.categoryFilter) {
+        filterDropdown.value = this.filterManager.categoryFilter;
+      }
     }
+
+    // Populate form category dropdowns (edit, new, import)
+    const formDropdowns = [
+      { id: 'edit-tracking-category', defaultLabel: 'Auto-detect from title', defaultValue: '' },
+      { id: 'new-tracking-category', defaultLabel: 'Auto-detect from title', defaultValue: '' },
+      { id: 'import-category', defaultLabel: 'Auto-detect from title', defaultValue: 'auto' },
+    ];
+
+    formDropdowns.forEach(({ id, defaultLabel, defaultValue }) => {
+      const dropdown = document.getElementById(id);
+      if (!dropdown) return;
+
+      const currentValue = dropdown.value;
+      dropdown.innerHTML = '';
+
+      // Add default option
+      const defaultOption = document.createElement('option');
+      defaultOption.value = defaultValue;
+      defaultOption.textContent = defaultLabel;
+      dropdown.appendChild(defaultOption);
+
+      // Add each category
+      CATEGORIES.forEach((category) => {
+        const option = document.createElement('option');
+        option.value = category;
+        option.textContent = category;
+        dropdown.appendChild(option);
+      });
+
+      // Restore previous value if valid
+      if (currentValue) {
+        dropdown.value = currentValue;
+      }
+    });
   }
 
   /**

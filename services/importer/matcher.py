@@ -10,6 +10,8 @@ from dataclasses import dataclass
 
 from fuzzywuzzy import fuzz
 
+from core.constants.title import TITLE_SKIP_WORDS
+
 logger = logging.getLogger(__name__)
 
 
@@ -164,8 +166,7 @@ class TrackingMatcher:
         words = normalized.lower().split()
 
         # Skip common filler words
-        skip_words = {"the", "a", "an", "and", "or", "of", "magazine", "mag"}
-        significant_words = [w for w in words if w not in skip_words and w.strip()]
+        significant_words = [w for w in words if w not in TITLE_SKIP_WORDS and w.strip()]
 
         # Take first letter of each significant word
         abbreviation = "".join(word[0] for word in significant_words if word)

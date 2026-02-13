@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 from datetime import datetime
 
+from core.constants.files import YEAR_STRING_LENGTH
 from core.constants.language import DEFAULT_LANGUAGE
 
 logger = logging.getLogger(__name__)
@@ -293,7 +294,7 @@ class Parser:
         # Try to find year in path
         year = None
         for part in file_path.parts:
-            if part.isdigit() and len(part) == 4:
+            if part.isdigit() and len(part) == YEAR_STRING_LENGTH:
                 try:
                     year_val = int(part)
                     if 1900 <= year_val <= 2100:
