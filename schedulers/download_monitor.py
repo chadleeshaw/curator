@@ -374,13 +374,16 @@ class DownloadMonitor:
             if not failed_imports:
                 return 0
 
-            logger.info(f"[DownloadMonitor] Found {len(failed_imports)} failed imports eligible for retry")
+            logger.debug(f"[DownloadMonitor] Found {len(failed_imports)} failed imports eligible for retry")
 
             for submission in failed_imports:
                 file_path = self._find_file_in_downloads(submission.file_path)
 
                 if not file_path:
-                    # File no longer on disk — can't retry import, leave as failed
+                    # File no longer on disk — mark as permanently failed so it stops being retried
+                    submission.attempt_count = MAX_IMPORT_RETRIES
+                    submission.last_error = "Import file no longer exists on disk"
+                    session.commit()
                     logger.debug(f"[DownloadMonitor] Import retry skipped: file gone for submission {submission.id}")
                     continue
 
