@@ -88,18 +88,30 @@ def reorganize_periodical_files(
         year = issue_date.strftime("%Y")
         filename_base = f"{safe_title} - {month}{year}"
 
+        # Preserve the original file extension instead of assuming .pdf
+        file_ext = old_pdf_path.suffix if old_pdf_path.suffix else ".pdf"
+
         category_with_prefix = f"{category_prefix}{category}"
         target_dir = library_base_dir / category_with_prefix / safe_title / year
         target_dir.mkdir(parents=True, exist_ok=True)
 
-        new_pdf_path = target_dir / f"{filename_base}.pdf"
+        new_pdf_path = target_dir / f"{filename_base}{file_ext}"
         new_cover_path = target_dir / f"{filename_base}.jpg" if old_cover_path else None
 
-        # Handle filename conflicts by appending timestamp
+        # Handle filename conflicts by appending timestamp with counter
         if new_pdf_path.exists() and new_pdf_path != old_pdf_path:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename_base_with_ts = f"{safe_title} - {month}{year} ({timestamp})"
-            new_pdf_path = target_dir / f"{filename_base_with_ts}.pdf"
+            new_pdf_path = target_dir / f"{filename_base_with_ts}{file_ext}"
+
+            # If the timestamped path also exists (multiple moves in the same second),
+            # append an incrementing counter until we find a unique path
+            counter = 1
+            while new_pdf_path.exists() and new_pdf_path != old_pdf_path:
+                filename_base_with_ts = f"{safe_title} - {month}{year} ({timestamp}_{counter})"
+                new_pdf_path = target_dir / f"{filename_base_with_ts}{file_ext}"
+                counter += 1
+
             if old_cover_path:
                 new_cover_path = target_dir / f"{filename_base_with_ts}.jpg"
 
