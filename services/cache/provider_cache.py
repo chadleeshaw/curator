@@ -117,6 +117,11 @@ class NzbCacheService:
         Returns:
             NZB XML content as string, or None if unavailable
         """
+        # Skip non-URL identifiers (e.g. Internet Archive slugs like "magazine-2008-13")
+        if not download_url.startswith(("http://", "https://")):
+            logger.debug(f"Skipping NZB cache for non-URL identifier: {download_url[:80]}")
+            return None
+
         session = self._session_factory()
         try:
             # Check cache first

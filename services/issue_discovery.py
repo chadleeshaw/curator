@@ -136,7 +136,7 @@ class IssueDiscoveryService:
 
                 url = result.get("url", "")
                 provider = result.get("provider", "")
-                pubdate_str = result.get("pubdate")
+                pubdate_str = result.get("pubdate") or result.get("publication_date")
 
                 # Parse pubdate string to datetime if provided
                 pubdate = None
@@ -231,7 +231,7 @@ class IssueDiscoveryService:
                         normalized_title=parsed.cleaned_title.lower(),
                         fuzzy_match_group=fuzzy_group,
                         issue_date=parsed.publication_date,
-                        issue_number=None,  # Not easily extractable from search results
+                        issue_number=parsed.raw_metadata.get("issue"),
                         year=parsed.publication_date.year if parsed.publication_date else None,
                         month=parsed.publication_date.month if parsed.publication_date else None,
                         language=parsed.language,
@@ -798,9 +798,10 @@ class IssueDiscoveryService:
         """
         Check if an issue is already in the library.
 
-        Uses fuzzy date matching to handle:
-        - Date defaulting (Feb search result = Jan library item)
-        - Season spanning (Winter issue = Dec/Jan/Feb)
+        Uses two matching strategies:
+        1. Fuzzy date matching (primary) - handles date defaulting and season spanning
+        2. Fuzzy group ID matching (fallback) - handles missing dates by comparing
+           normalized title+date identifiers against library items
 
         Args:
             issue: DiscoveredIssue to check
@@ -810,15 +811,6 @@ class IssueDiscoveryService:
         Returns:
             Magazine ID if issue already exists in library, None otherwise
         """
-        # Check by fuzzy match - look for similar titles and dates
-        if not issue.issue_date:
-            # Without a date, we can't reliably determine if we have it
-            return None
-
-        # Normalize dates to just the date part (ignore time) for comparison
-        issue_date_only = issue.issue_date.date()
-
-        # Query for magazines with similar title and same date
         existing = (
             session.query(Periodical)
             .filter(
@@ -829,15 +821,29 @@ class IssueDiscoveryService:
             .all()
         )
 
-        # Check if any existing magazine matches the date (with fuzzy tolerance)
-        # This handles:
-        # - "February" search result matching "January" library item (±1 month tolerance)
-        # - "Winter 2024" matching Dec/Jan/Feb issues (season-based matching)
-        for mag in existing:
-            if mag.issue_date and dates_are_fuzzy_match(mag.issue_date.date(), issue_date_only):
-                logger.debug(
-                    f"Fuzzy date match found: library {mag.issue_date.date()} matches search {issue_date_only}"
-                )
-                return mag.id
+        if not existing:
+            return None
+
+        # Primary: fuzzy date matching (when issue has a date)
+        if issue.issue_date:
+            issue_date_only = issue.issue_date.date()
+            for mag in existing:
+                if mag.issue_date and dates_are_fuzzy_match(mag.issue_date.date(), issue_date_only):
+                    logger.debug(
+                        f"Fuzzy date match found: library {mag.issue_date.date()} matches search {issue_date_only}"
+                    )
+                    return mag.id
+
+        # Fallback: match by fuzzy group ID against library items
+        # This catches cases where date parsing failed but the issue is clearly the same
+        if issue.fuzzy_match_group:
+            for mag in existing:
+                if mag.issue_date:
+                    lib_group = get_fuzzy_group_id(mag.title, mag.issue_date)
+                    if lib_group == issue.fuzzy_match_group:
+                        logger.debug(
+                            f"Fuzzy group match found: library '{mag.title}' matches {issue.fuzzy_match_group}"
+                        )
+                        return mag.id
 
         return None

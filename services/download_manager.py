@@ -155,7 +155,8 @@ class DownloadManager:
             Job ID from download client, or None if all methods failed
         """
         # Try NZB content-based submission if cache service is available
-        if self.nzb_cache_service and hasattr(client, "submit_content"):
+        # Check that the client actually overrides submit_content (not the base class no-op)
+        if self.nzb_cache_service and type(client).submit_content is not DownloadClient.submit_content:
             try:
                 nzb_content = self.nzb_cache_service.get_nzb_content(nzb_url)
                 if nzb_content:

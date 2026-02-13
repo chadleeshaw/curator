@@ -74,13 +74,12 @@ class QueueProcessor:
         Returns:
             Job ID from download client
         """
-        if self.nzb_cache_service and hasattr(client or self.download_client, "submit_content"):
+        active_client = client or self.download_client
+        if self.nzb_cache_service and type(active_client).submit_content is not DownloadClient.submit_content:
             try:
                 nzb_content = self.nzb_cache_service.get_nzb_content(nzb_url)
                 if nzb_content:
-                    job_id = (client or self.download_client).submit_content(
-                        nzb_content=nzb_content, title=title, category=category
-                    )
+                    job_id = active_client.submit_content(nzb_content=nzb_content, title=title, category=category)
                     if job_id:
                         logger.info(f"Submitted via cached NZB content: {title} -> {job_id}")
                         return job_id
@@ -88,7 +87,7 @@ class QueueProcessor:
             except Exception as e:
                 logger.warning(f"NZB content submission error: {e}, falling back to URL")
 
-        return (client or self.download_client).submit(nzb_url=nzb_url, title=title, category=category)
+        return active_client.submit(nzb_url=nzb_url, title=title, category=category)
 
     def process_queue(self, session: Session) -> Dict[str, Any]:
         """
