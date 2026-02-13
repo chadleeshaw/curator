@@ -469,7 +469,10 @@ def _initialize_search_providers() -> None:
             logger.info(f"Loaded search provider: {provider.name}")
 
         except Exception as e:
-            logger.error(f"Failed to load search provider {provider_config.get('name')}: {e}", exc_info=True)
+            logger.error(
+                f"Failed to load search provider {provider_config.get('name')}: {e}",
+                exc_info=True,
+            )
 
 
 def _initialize_download_client() -> None:
@@ -852,307 +855,55 @@ async def lifespan(app: FastAPI):
         _initialize_core_services()
         _initialize_background_tasks()
 
-        # Define feed sync task (Phase 1: lightweight RSS polling)
-        async def feed_sync_task():
-            """Sync RSS feeds from all providers into the local entry cache."""
+        # Import background tasks from dedicated module
+        from web.background_tasks import (
+            auto_download_task,
+            auto_metadata_periodic_task,
+            cleanup_orphaned_covers_task,
+            download_monitoring_task,
+            feed_sync_task,
+            folder_cleanup_periodic_task,
+            ocr_processing_task,
+        )
 
-            def _run_feed_sync():
-                if not app_state.feed_sync_service or not app_state.search_providers:
-                    return
+        # Create task wrappers that pass app_state to the background task functions
+        async def feed_sync_wrapper():
+            await feed_sync_task(app_state)
 
-                logger.debug("Feed sync: Starting RSS feed sync")
+        async def auto_download_wrapper():
+            await auto_download_task(app_state)
 
-                # Sync all providers (one HTTP GET per provider)
-                stats = app_state.feed_sync_service.sync_all_providers(app_state.search_providers)
+        async def download_monitoring_wrapper():
+            await download_monitoring_task(app_state)
 
-                if stats["total_new"] > 0:
-                    logger.info(
-                        f"Feed sync: {stats['total_new']} new entries, "
-                        f"{stats['total_updated']} updated across "
-                        f"{stats['providers_synced']} providers"
-                    )
+        async def cleanup_orphaned_covers_wrapper():
+            await cleanup_orphaned_covers_task(app_state)
 
-                # Expire old entries periodically
-                app_state.feed_sync_service.expire_old_entries()
+        async def ocr_processing_wrapper():
+            await ocr_processing_task(app_state)
 
-            try:
-                loop = asyncio.get_event_loop()
-                await loop.run_in_executor(None, _run_feed_sync)
-            except Exception as e:
-                logger.error(f"Feed sync error: {e}", exc_info=True)
+        async def folder_cleanup_wrapper():
+            await folder_cleanup_periodic_task(app_state)
 
-        # Define auto-download task (uses Issue Discovery & Tracking system)
-        async def auto_download_task():
-            """Cache-first adaptive search and download for tracked periodicals."""
-            logger.info("Starting auto-download task")
-
-            def _run_auto_download():
-                db_session = app_state.session_factory()
-                try:
-                    if not app_state.download_manager:
-                        return
-
-                    logger.debug("Auto-download: Starting Issue Discovery & Tracking run")
-
-                    # ============================================================
-                    # Phase 1.5: Cache-first local matching (zero API calls)
-                    # Match new RSS feed entries against ALL tracked periodicals
-                    # ============================================================
-                    cache_match_new = 0
-                    if app_state.feed_sync_service and app_state.feed_match_service:
-                        batch_size = app_state.tasks_config.get(
-                            "feed_sync_match_batch_size", constants.FEED_SYNC_MATCH_BATCH_SIZE
-                        )
-                        new_entries = app_state.feed_sync_service.get_new_entries(limit=batch_size)
-
-                        if new_entries:
-                            logger.debug(f"Auto-download: Matching {len(new_entries)} cached feed entries")
-                            match_result = app_state.feed_match_service.match_entries_against_tracking(
-                                new_entries, db_session
-                            )
-
-                            # Record matched entries as discovered issues
-                            for tracking_id, search_results in match_result["matches"].items():
-                                try:
-                                    record_stats = app_state.issue_discovery_service.record_search_results(
-                                        tracking_id, search_results, db_session
-                                    )
-                                    if record_stats["new"] > 0:
-                                        cache_match_new += record_stats["new"]
-
-                                    eval_stats = app_state.issue_discovery_service.evaluate_discovered_issues(
-                                        tracking_id, db_session
-                                    )
-                                    if eval_stats["wanted"] > 0:
-                                        logger.info(
-                                            f"Auto-download: Cache match - "
-                                            f"{eval_stats['wanted']} wanted from tracking {tracking_id}"
-                                        )
-                                except Exception as e:
-                                    logger.error(
-                                        f"Auto-download: Error recording cache matches "
-                                        f"for tracking {tracking_id}: {e}",
-                                        exc_info=True,
-                                    )
-
-                            # Update entry statuses in the feed cache
-                            app_state.feed_sync_service.mark_entries_matched(match_result["matched_entry_ids"])
-                            app_state.feed_sync_service.mark_entries_skipped(match_result["skipped_entry_ids"])
-
-                            if cache_match_new > 0:
-                                logger.info(
-                                    f"Auto-download: Cache-first matching found {cache_match_new} new issues "
-                                    f"from {match_result['stats']['matched']} feed entries (zero API calls)"
-                                )
-
-                    # ============================================================
-                    # Phase 2: Adaptive per-periodical API search (existing flow)
-                    # Only for periodicals that need refresh per adaptive scheduler
-                    # ============================================================
-                    periodicals_to_search = app_state.search_scheduler.select_periodicals_to_search(db_session)
-                    if not periodicals_to_search:
-                        if cache_match_new == 0:
-                            logger.debug("Auto-download: No periodicals need searching at this time")
-                            # Still check download queue (Phase 3) even if no searches needed
-
-                    # Check if all providers are rate limited before searching
-                    all_rate_limited = app_state.download_manager.all_providers_rate_limited
-                    if all_rate_limited and periodicals_to_search:
-                        logger.info(
-                            "Auto-download: All search providers are rate limited, "
-                            "skipping API searches (not penalizing adaptive scheduler)"
-                        )
-
-                    for periodical in periodicals_to_search:
-                        try:
-                            # Skip searching if all providers are rate limited
-                            # Don't update search stats — this isn't a real search
-                            if all_rate_limited:
-                                logger.debug(
-                                    f"Auto-download: Skipping '{periodical.title}' - all providers rate limited"
-                                )
-                                continue
-
-                            # Build aliases list from tracking record for better RSS cache matching
-                            aliases = None
-                            if periodical.search_aliases:
-                                aliases = [a.strip() for a in periodical.search_aliases.split(",") if a.strip()]
-                                if aliases:
-                                    logger.debug(
-                                        f"Auto-download: Searching '{periodical.title}' "
-                                        f"with {len(aliases)} aliases: {aliases}"
-                                    )
-
-                            logger.debug(f"Auto-download: Searching for '{periodical.title}'")
-                            search_results = app_state.download_manager.search_periodical_issues(
-                                periodical.title, db_session, aliases=aliases
-                            )
-
-                            if not search_results:
-                                logger.debug(f"Auto-download: No results found for '{periodical.title}'")
-                                # Only penalize scheduler if providers were actually reachable
-                                if not app_state.download_manager.all_providers_rate_limited:
-                                    app_state.search_scheduler.update_search_stats(periodical.id, 0, db_session)
-                                continue
-
-                            logger.debug(f"Auto-download: Found {len(search_results)} results for '{periodical.title}'")
-
-                            record_stats = app_state.issue_discovery_service.record_search_results(
-                                periodical.id, search_results, db_session
-                            )
-
-                            if record_stats["new"] > 0:
-                                logger.info(f"Auto-download: '{periodical.title}' - {record_stats['new']} new issues")
-
-                            eval_stats = app_state.issue_discovery_service.evaluate_discovered_issues(
-                                periodical.id, db_session
-                            )
-                            if eval_stats["wanted"] > 0:
-                                logger.info(f"Auto-download: '{periodical.title}' - {eval_stats['wanted']} queued")
-
-                            app_state.search_scheduler.update_search_stats(
-                                periodical.id, record_stats["new"], db_session
-                            )
-
-                        except Exception as e:
-                            logger.error(f"Auto-download: Error processing '{periodical.title}': {e}", exc_info=True)
-
-                    # ============================================================
-                    # Phase 3: Download from priority queue (thread-safe)
-                    # ============================================================
-                    logger.debug("Auto-download: Checking download queue")
-                    app_state.download_manager.submit_discovered_batch(db_session, app_state.issue_discovery_service)
-
-                    # ============================================================
-                    # Phase 4: Cleanup stale search results
-                    # ============================================================
-                    try:
-                        from datetime import timedelta
-
-                        from models.database import SearchResult as DBSearchResult
-
-                        retention_days = app_state.tasks_config.get(
-                            "search_result_retention_days", constants.SEARCH_RESULT_RETENTION_DAYS
-                        )
-                        # Use naive datetime for SQLite compatibility in filter comparison
-                        cutoff = utc_now().replace(tzinfo=None) - timedelta(days=retention_days)
-                        deleted = (
-                            db_session.query(DBSearchResult)
-                            .filter(DBSearchResult.created_at < cutoff)
-                            .delete(synchronize_session=False)
-                        )
-                        db_session.commit()
-                        if deleted > 0:
-                            logger.info(
-                                f"Auto-download: Cleaned up {deleted} search results "
-                                f"older than {retention_days} days"
-                            )
-                    except Exception as e:
-                        logger.warning(f"Auto-download: Search result cleanup error: {e}")
-
-                    logger.debug("Auto-download: Completed run")
-                finally:
-                    db_session.close()
-
-            try:
-                loop = asyncio.get_event_loop()
-                await loop.run_in_executor(None, _run_auto_download)
-            except Exception as e:
-                logger.error(f"Auto-download error: {e}", exc_info=True)
-
-        # Define download monitoring task
-        async def download_monitoring_task():
-            """Monitor download client and scan downloads folder for files to import."""
-            if app_state.download_monitor_task:
-                try:
-                    from datetime import datetime, timedelta
-
-                    interval = app_state.tasks_config.get(
-                        "download_monitor_interval", constants.DOWNLOAD_MONITOR_INTERVAL
-                    )
-                    app_state.download_monitor_task.next_run_time = datetime.now() + timedelta(seconds=interval)
-                    await app_state.download_monitor_task.run()
-                except Exception as e:
-                    logger.error(f"Download monitoring error: {e}", exc_info=True)
-
-        # Define cover cleanup task wrapper
-        async def cleanup_orphaned_covers_task():
-            """Clean up cover files that aren't tied to any periodical."""
-            await app_state.cover_cleanup_task.run()
-
-        # Define OCR processor task wrapper
-        async def ocr_processing_task():
-            """Process queued OCR jobs with process pool."""
-            try:
-                from datetime import datetime, timedelta
-
-                interval = app_state.tasks_config.get("ocr_processor_interval", constants.OCR_PROCESSOR_INTERVAL)
-                app_state.ocr_processor_task.next_run_time = datetime.now() + timedelta(seconds=interval)
-
-                stats = await app_state.ocr_processor_task.run()
-                if stats.get("processed", 0) > 0:
-                    logger.info(f"OCR processor: {stats}")
-            except Exception as e:
-                logger.error(f"OCR processor error: {e}", exc_info=True)
-
-        # Define folder cleanup task wrapper
-        async def folder_cleanup_periodic_task():
-            """Clean up empty folders and folders without importable files."""
-            try:
-                loop = asyncio.get_event_loop()
-                stats = await loop.run_in_executor(None, app_state.folder_cleanup_task.run)
-                if stats.get("total_deleted", 0) > 0:
-                    logger.info(f"Folder cleanup: {stats}")
-            except Exception as e:
-                logger.error(f"Folder cleanup error: {e}", exc_info=True)
-
-        # Define auto-metadata task wrapper
-        async def auto_metadata_periodic_task():
-            """Backfill derived_metadata, sync issue_date, and queue missing OCR/text scans."""
-            try:
-                from core.utils import run_in_thread
-                from services.auto_metadata import AutoMetadataService
-
-                def _run_auto_metadata():
-                    service = AutoMetadataService(
-                        app_state.db_manager,
-                        library_base_dir=app_state.storage_config.get("library_dir"),
-                        category_prefix=app_state.category_prefix,
-                    )
-                    session = app_state.session_factory()
-                    try:
-                        return service.run_full_scan(session)
-                    finally:
-                        session.close()
-
-                stats = await run_in_thread(_run_auto_metadata)
-                logger.info(
-                    f"Auto-metadata: Processed {stats.get('total_periodicals', 0)} periodicals, "
-                    f"fixed {stats.get('paths_fixed', 0)} paths, "
-                    f"backfilled {stats.get('derived_metadata_backfilled', 0)} metadata, "
-                    f"synced {stats.get('issue_date_synced', 0)} dates, "
-                    f"queued {stats.get('ocr_queued', 0)} OCR, "
-                    f"queued {stats.get('text_scan_queued', 0)} text scans"
-                )
-            except Exception as e:
-                logger.error(f"Auto-metadata error: {e}", exc_info=True)
+        async def auto_metadata_wrapper():
+            await auto_metadata_periodic_task(app_state)
 
         # Schedule all periodic tasks
         _schedule_periodic_tasks(
-            feed_sync_task,
-            auto_download_task,
-            download_monitoring_task,
-            cleanup_orphaned_covers_task,
-            ocr_processing_task,
-            folder_cleanup_periodic_task,
-            auto_metadata_periodic_task,
+            feed_sync_wrapper,
+            auto_download_wrapper,
+            download_monitoring_wrapper,
+            cleanup_orphaned_covers_wrapper,
+            ocr_processing_wrapper,
+            folder_cleanup_wrapper,
+            auto_metadata_wrapper,
         )
 
         # Start scheduler in background
         app_state.scheduler_task = asyncio.create_task(app_state.task_scheduler.start())
 
         # Initialize router dependencies
-        _initialize_router_dependencies(app, auto_download_task)
+        _initialize_router_dependencies(app, auto_download_wrapper)
 
     except Exception as e:
         logger.error(f"Startup error: {e}")

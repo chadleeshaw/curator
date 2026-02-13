@@ -306,179 +306,222 @@ class FilenameParser:
         Extract dates from various formats.
         Tries multiple patterns in order of specificity.
         """
-        date_extracted = False
-
         # Format 0a: Use pre-detected numeric multi-month if found
         if numeric_month_data:
-            metadata["year"] = numeric_month_data["year"]
-            metadata["month"] = numeric_month_data["month"]
-            metadata["month_name"] = numeric_month_data["month_name"]
-            metadata["issue_date"] = numeric_month_data["issue_date"]
-
-            # Remove the numeric month pattern from remaining text
-            m1 = numeric_month_data["month1"]
-            m2 = numeric_month_data["month2"]
-            year = str(numeric_month_data["year"])
-
-            # Try multiple removal patterns to handle different separators
-            patterns_to_try = [
-                rf"\b{m1}\s+{m2}\s+{year}\b",  # After dot normalization: "11 10 2019"
-                rf"\b{m1}/{m2}\s+{year}\b",  # Slash separator: "11/10 2019"
-                rf"\b{m1}-{m2}\s+{year}\b",  # Dash separator: "11-10 2019"
-            ]
-
-            for pattern in patterns_to_try:
-                new_text = re.sub(pattern, "", remaining_text, count=1)
-                if new_text != remaining_text:
-                    remaining_text = new_text
-                    break
-
-            remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
-            date_extracted = True
-            logger.debug(f"Used pre-detected numeric multi-month: {numeric_month_data['month_name']} {year}")
+            remaining_text = self._apply_numeric_multi_month(remaining_text, metadata, numeric_month_data)
+            return remaining_text
 
         # Format 1: Numeric multi-month in remaining text
-        if not date_extracted:
-            match = re.search(DATE_PATTERN_MULTI_MONTH_NUMERIC, remaining_text)
-            if match:
-                title_part = match.group(1)
-                month1_str = match.group(2)
-                month2_str = match.group(3)
-                year_str = match.group(4)
-                year = int(year_str)
-                month_num, display_string = parse_numeric_month_range(month1_str, month2_str)
-
-                if month_num and MIN_VALID_YEAR <= year <= MAX_VALID_YEAR:
-                    metadata["year"] = year
-                    metadata["month"] = month_num
-                    metadata["month_name"] = display_string
-                    metadata["issue_date"] = datetime(year, month_num, 1, tzinfo=UTC)
-                    remaining_text = remaining_text[: match.start()] + title_part + remaining_text[match.end() :]
-                    remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
-                    date_extracted = True
-                    logger.debug(f"Extracted numeric multi-month: {display_string} {year}")
+        remaining_text, extracted = self._try_numeric_multi_month_pattern(remaining_text, metadata)
+        if extracted:
+            return remaining_text
 
         # Format 2: ISO full date (2024.01.20 or 2024-01-20)
-        if not date_extracted:
-            match = re.search(DATE_PATTERN_ISO_FULL, remaining_text)
-            if match:
-                year = int(match.group(1))
-                month = int(match.group(2))
-                day = int(match.group(3))
-                if MIN_VALID_YEAR <= year <= MAX_VALID_YEAR and 1 <= month <= 12 and 1 <= day <= 31:
-                    metadata["year"] = year
-                    metadata["month"] = month
-                    metadata["month_name"] = NUMBER_TO_MONTH.get(month)
-                    metadata["day"] = day
-                    metadata["issue_date"] = datetime(year, month, day, tzinfo=UTC)
-                    remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
-                    remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
-                    date_extracted = True
+        remaining_text, extracted = self._try_iso_full_date_pattern(remaining_text, metadata)
+        if extracted:
+            return remaining_text
 
-        # Format 3: Full month name with year (January 2024)
-        if not date_extracted:
-            match = re.search(DATE_PATTERN_FULL_MONTH_YEAR, remaining_text, re.IGNORECASE)
-            if match:
-                month_str = match.group(1)
-                year_str = match.group(2)
-                month_num = parse_month(month_str)
-                year = int(year_str)
-                if month_num and MIN_VALID_YEAR <= year <= MAX_VALID_YEAR:
-                    metadata["year"] = year
-                    metadata["month"] = month_num
-                    metadata["month_name"] = NUMBER_TO_MONTH.get(month_num)
-                    metadata["issue_date"] = datetime(year, month_num, 1, tzinfo=UTC)
-                    remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
-                    remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
-                    date_extracted = True
+        # Format 3-5: Month name/abbreviation with year patterns
+        remaining_text, extracted = self._try_month_name_patterns(remaining_text, metadata)
+        if extracted:
+            return remaining_text
 
-        # Format 4: Abbreviated month with year (Jan 2024, Jan2024)
-        if not date_extracted:
-            match = re.search(DATE_PATTERN_ABBR_MONTH_YEAR, remaining_text, re.IGNORECASE)
-            if match:
-                month_str = match.group(1)
-                year_str = match.group(2)
-                month_num = parse_month(month_str)
-                year = int(year_str)
-                if month_num and MIN_VALID_YEAR <= year <= MAX_VALID_YEAR:
-                    metadata["year"] = year
-                    metadata["month"] = month_num
-                    metadata["month_name"] = NUMBER_TO_MONTH.get(month_num)
-                    metadata["issue_date"] = datetime(year, month_num, 1, tzinfo=UTC)
-                    remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
-                    remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
-                    date_extracted = True
-
-        # Format 5: Abbreviated month with year, no word boundaries
-        if not date_extracted:
-            match = re.search(DATE_PATTERN_ABBR_MONTH_YEAR_NO_BOUNDARY, remaining_text, re.IGNORECASE)
-            if match:
-                month_str = match.group(1)
-                year_str = match.group(2)
-                month_num = parse_month(month_str)
-                year = int(year_str)
-                if month_num and MIN_VALID_YEAR <= year <= MAX_VALID_YEAR:
-                    metadata["year"] = year
-                    metadata["month"] = month_num
-                    metadata["month_name"] = NUMBER_TO_MONTH.get(month_num)
-                    metadata["issue_date"] = datetime(year, month_num, 1, tzinfo=UTC)
-                    remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
-                    remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
-                    date_extracted = True
-
-        # Format 6: ISO month format (2024-01 or 2024.01) - use pre-detected if available
-        if not date_extracted and iso_date_data:
-            metadata["year"] = iso_date_data["year"]
-            metadata["month"] = iso_date_data["month"]
-            metadata["month_name"] = iso_date_data["month_name"]
-            metadata["issue_date"] = iso_date_data["issue_date"]
-            date_extracted = True
-            logger.debug(f"Used pre-detected ISO date: {iso_date_data['month_name']} {iso_date_data['year']}")
+        # Format 6: ISO month format - use pre-detected if available
+        if iso_date_data:
+            self._apply_iso_date_data(metadata, iso_date_data)
+            return remaining_text
 
         # Format 7: ISO month format in remaining text
-        if not date_extracted:
-            match = re.search(DATE_PATTERN_ISO_MONTH, remaining_text)
-            if match:
-                year = int(match.group(1))
-                month = int(match.group(2))
-                if MIN_VALID_YEAR <= year <= MAX_VALID_YEAR and 1 <= month <= 12:
-                    metadata["year"] = year
-                    metadata["month"] = month
-                    metadata["month_name"] = NUMBER_TO_MONTH.get(month)
-                    metadata["issue_date"] = datetime(year, month, 1, tzinfo=UTC)
-                    remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
-                    remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
-                    date_extracted = True
+        remaining_text, extracted = self._try_iso_month_pattern(remaining_text, metadata)
+        if extracted:
+            return remaining_text
 
         # Format 8: Numeric month-year (01-2024 or 1/2024)
-        if not date_extracted:
-            match = re.search(DATE_PATTERN_MONTH_YEAR_NUMERIC, remaining_text)
-            if match:
-                month = int(match.group(1))
-                year = int(match.group(2))
-                if MIN_VALID_YEAR <= year <= MAX_VALID_YEAR and 1 <= month <= 12:
-                    metadata["year"] = year
-                    metadata["month"] = month
-                    metadata["month_name"] = NUMBER_TO_MONTH.get(month)
-                    metadata["issue_date"] = datetime(year, month, 1, tzinfo=UTC)
-                    remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
-                    remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
-                    date_extracted = True
+        remaining_text, extracted = self._try_numeric_month_year_pattern(remaining_text, metadata)
+        if extracted:
+            return remaining_text
 
         # Format 9: Just a year (2024) - LAST to avoid false matches
-        if not date_extracted:
-            match = re.search(DATE_PATTERN_YEAR_ONLY, remaining_text)
-            if match:
-                year = int(match.group(1))
-                if MIN_VALID_YEAR <= year <= MAX_VALID_YEAR:
-                    metadata["year"] = year
-                    metadata["month"] = 1  # Default to January
-                    metadata["issue_date"] = datetime(year, 1, 1, tzinfo=UTC)
-                    remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
-                    remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
-                    date_extracted = True
-
+        remaining_text, _ = self._try_year_only_pattern(remaining_text, metadata)
         return remaining_text
+
+    def _apply_numeric_multi_month(
+        self,
+        remaining_text: str,
+        metadata: Dict[str, Any],
+        numeric_month_data: Dict[str, Any],
+    ) -> str:
+        """Apply pre-detected numeric multi-month data and remove from text."""
+        metadata["year"] = numeric_month_data["year"]
+        metadata["month"] = numeric_month_data["month"]
+        metadata["month_name"] = numeric_month_data["month_name"]
+        metadata["issue_date"] = numeric_month_data["issue_date"]
+
+        m1 = numeric_month_data["month1"]
+        m2 = numeric_month_data["month2"]
+        year = str(numeric_month_data["year"])
+
+        patterns_to_try = [
+            rf"\b{m1}\s+{m2}\s+{year}\b",
+            rf"\b{m1}/{m2}\s+{year}\b",
+            rf"\b{m1}-{m2}\s+{year}\b",
+        ]
+
+        for pattern in patterns_to_try:
+            new_text = re.sub(pattern, "", remaining_text, count=1)
+            if new_text != remaining_text:
+                remaining_text = new_text
+                break
+
+        remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
+        logger.debug(f"Used pre-detected numeric multi-month: {numeric_month_data['month_name']} {year}")
+        return remaining_text
+
+    def _try_numeric_multi_month_pattern(self, remaining_text: str, metadata: Dict[str, Any]) -> tuple:
+        """Try to match numeric multi-month pattern in remaining text."""
+        match = re.search(DATE_PATTERN_MULTI_MONTH_NUMERIC, remaining_text)
+        if not match:
+            return remaining_text, False
+
+        title_part = match.group(1)
+        month1_str = match.group(2)
+        month2_str = match.group(3)
+        year_str = match.group(4)
+        year = int(year_str)
+        month_num, display_string = parse_numeric_month_range(month1_str, month2_str)
+
+        if not month_num or not MIN_VALID_YEAR <= year <= MAX_VALID_YEAR:
+            return remaining_text, False
+
+        metadata["year"] = year
+        metadata["month"] = month_num
+        metadata["month_name"] = display_string
+        metadata["issue_date"] = datetime(year, month_num, 1, tzinfo=UTC)
+        remaining_text = remaining_text[: match.start()] + title_part + remaining_text[match.end() :]
+        remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
+        logger.debug(f"Extracted numeric multi-month: {display_string} {year}")
+        return remaining_text, True
+
+    def _try_iso_full_date_pattern(self, remaining_text: str, metadata: Dict[str, Any]) -> tuple:
+        """Try to match ISO full date pattern (2024.01.20 or 2024-01-20)."""
+        match = re.search(DATE_PATTERN_ISO_FULL, remaining_text)
+        if not match:
+            return remaining_text, False
+
+        year = int(match.group(1))
+        month = int(match.group(2))
+        day = int(match.group(3))
+
+        if not (MIN_VALID_YEAR <= year <= MAX_VALID_YEAR and 1 <= month <= 12 and 1 <= day <= 31):
+            return remaining_text, False
+
+        metadata["year"] = year
+        metadata["month"] = month
+        metadata["month_name"] = NUMBER_TO_MONTH.get(month)
+        metadata["day"] = day
+        metadata["issue_date"] = datetime(year, month, day, tzinfo=UTC)
+        remaining_text = self._remove_match_and_cleanup(remaining_text, match)
+        return remaining_text, True
+
+    def _try_month_name_patterns(self, remaining_text: str, metadata: Dict[str, Any]) -> tuple:
+        """Try month name patterns in order: full, abbreviated, no boundaries."""
+        patterns = [
+            (DATE_PATTERN_FULL_MONTH_YEAR, "full month name"),
+            (DATE_PATTERN_ABBR_MONTH_YEAR, "abbreviated month"),
+            (
+                DATE_PATTERN_ABBR_MONTH_YEAR_NO_BOUNDARY,
+                "abbreviated month (no boundary)",
+            ),
+        ]
+
+        for pattern, pattern_name in patterns:
+            match = re.search(pattern, remaining_text, re.IGNORECASE)
+            if not match:
+                continue
+
+            month_str = match.group(1)
+            year_str = match.group(2)
+            month_num = parse_month(month_str)
+            year = int(year_str)
+
+            if not month_num or not MIN_VALID_YEAR <= year <= MAX_VALID_YEAR:
+                continue
+
+            metadata["year"] = year
+            metadata["month"] = month_num
+            metadata["month_name"] = NUMBER_TO_MONTH.get(month_num)
+            metadata["issue_date"] = datetime(year, month_num, 1, tzinfo=UTC)
+            remaining_text = self._remove_match_and_cleanup(remaining_text, match)
+            return remaining_text, True
+
+        return remaining_text, False
+
+    def _apply_iso_date_data(self, metadata: Dict[str, Any], iso_date_data: Dict[str, Any]) -> None:
+        """Apply pre-detected ISO date data to metadata."""
+        metadata["year"] = iso_date_data["year"]
+        metadata["month"] = iso_date_data["month"]
+        metadata["month_name"] = iso_date_data["month_name"]
+        metadata["issue_date"] = iso_date_data["issue_date"]
+        logger.debug(f"Used pre-detected ISO date: {iso_date_data['month_name']} {iso_date_data['year']}")
+
+    def _try_iso_month_pattern(self, remaining_text: str, metadata: Dict[str, Any]) -> tuple:
+        """Try to match ISO month format (2024-01 or 2024.01)."""
+        match = re.search(DATE_PATTERN_ISO_MONTH, remaining_text)
+        if not match:
+            return remaining_text, False
+
+        year = int(match.group(1))
+        month = int(match.group(2))
+
+        if not (MIN_VALID_YEAR <= year <= MAX_VALID_YEAR and 1 <= month <= 12):
+            return remaining_text, False
+
+        metadata["year"] = year
+        metadata["month"] = month
+        metadata["month_name"] = NUMBER_TO_MONTH.get(month)
+        metadata["issue_date"] = datetime(year, month, 1, tzinfo=UTC)
+        remaining_text = self._remove_match_and_cleanup(remaining_text, match)
+        return remaining_text, True
+
+    def _try_numeric_month_year_pattern(self, remaining_text: str, metadata: Dict[str, Any]) -> tuple:
+        """Try to match numeric month-year (01-2024 or 1/2024)."""
+        match = re.search(DATE_PATTERN_MONTH_YEAR_NUMERIC, remaining_text)
+        if not match:
+            return remaining_text, False
+
+        month = int(match.group(1))
+        year = int(match.group(2))
+
+        if not (MIN_VALID_YEAR <= year <= MAX_VALID_YEAR and 1 <= month <= 12):
+            return remaining_text, False
+
+        metadata["year"] = year
+        metadata["month"] = month
+        metadata["month_name"] = NUMBER_TO_MONTH.get(month)
+        metadata["issue_date"] = datetime(year, month, 1, tzinfo=UTC)
+        remaining_text = self._remove_match_and_cleanup(remaining_text, match)
+        return remaining_text, True
+
+    def _try_year_only_pattern(self, remaining_text: str, metadata: Dict[str, Any]) -> tuple:
+        """Try to match year-only pattern (2024) - LAST to avoid false matches."""
+        match = re.search(DATE_PATTERN_YEAR_ONLY, remaining_text)
+        if not match:
+            return remaining_text, False
+
+        year = int(match.group(1))
+        if not MIN_VALID_YEAR <= year <= MAX_VALID_YEAR:
+            return remaining_text, False
+
+        metadata["year"] = year
+        metadata["month"] = 1  # Default to January
+        metadata["issue_date"] = datetime(year, 1, 1, tzinfo=UTC)
+        remaining_text = self._remove_match_and_cleanup(remaining_text, match)
+        return remaining_text, True
+
+    def _remove_match_and_cleanup(self, text: str, match) -> str:
+        """Remove matched pattern from text and cleanup whitespace."""
+        text = text[: match.start()] + text[match.end() :]
+        return re.sub(r"\s+", " ", text).strip()
 
     def _extract_volume_issue(self, remaining_text: str, metadata: Dict[str, Any]) -> str:
         """Extract volume and issue numbers from remaining text."""
@@ -627,7 +670,7 @@ class FilenameParser:
             or self._try_timestamp_id_pattern(filename, metadata)
             or self._try_date_only_pattern(filename, metadata, magazine_name)
             or self._try_year_numeric_month_pattern(filename, metadata)
-            or self._try_year_only_pattern(filename, metadata, magazine_name)
+            or self._try_year_only_filename_pattern(filename, metadata, magazine_name)
             # Patterns without dates - volume/issue only (will need date scan)
             or self._try_leading_issue_pattern(filename, metadata)
             or self._try_volume_only_pattern(filename, metadata)
@@ -1146,7 +1189,7 @@ class FilenameParser:
         logger.info(f"Extracted title '{metadata['title']}' and date {year}-{month:02d} " f"from filename: {filename}")
         return metadata
 
-    def _try_year_only_pattern(
+    def _try_year_only_filename_pattern(
         self, filename: str, metadata: Dict[str, Any], magazine_name: Optional[str]
     ) -> Optional[Dict[str, Any]]:
         """

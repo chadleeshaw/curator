@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
+from core.constants.app import HTTP_REQUEST_TIMEOUT
 from core.constants.download_clients import (
     NZBGET_DOWNLOADING_STATUSES,
     NZBGET_HISTORY_STATUS_MESSAGES,
@@ -55,7 +56,7 @@ class NZBGetClient(DownloadClient):
                 url,
                 json=payload,
                 auth=(self.username, self.password),
-                timeout=10,
+                timeout=HTTP_REQUEST_TIMEOUT,
             )
             response.raise_for_status()
             result = response.json()

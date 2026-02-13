@@ -6,10 +6,12 @@ import copy
 import logging
 import os
 import sys
+import time
 from typing import Any, Dict
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
+from core.constants.app import RESTART_SHUTDOWN_DELAY
 from core.utils.error_handling import handle_api_errors
 from web.utils.responses import error_response, status_response, success_response
 
@@ -172,9 +174,7 @@ async def update_config(config_update: Dict[str, Any], background_tasks: Backgro
 
     # Schedule restart in background
     def restart_process():
-        import time
-
-        time.sleep(1)  # Give time for response to be sent
+        time.sleep(RESTART_SHUTDOWN_DELAY)  # Give time for response to be sent
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
     background_tasks.add_task(restart_process)
@@ -244,9 +244,7 @@ async def restart_application(background_tasks: BackgroundTasks):
     logger.info("Restart request received - restarting application")
 
     def restart_process():
-        import time
-
-        time.sleep(1)  # Give time for response to be sent
+        time.sleep(RESTART_SHUTDOWN_DELAY)  # Give time for response to be sent
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
     background_tasks.add_task(restart_process)

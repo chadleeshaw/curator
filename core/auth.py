@@ -45,8 +45,7 @@ class AuthManager:
         Returns:
             Tuple of (success, message) where success is True if credentials created successfully
         """
-        session = self.session_factory()
-        try:
+        with get_db_session(self.session_factory) as session:
             # Check if credentials already exist
             existing = session.query(Credentials).first()
             if existing:
@@ -56,13 +55,7 @@ class AuthManager:
             creds = Credentials(username=username.lower())
             creds.set_password(password)
             session.add(creds)
-            session.commit()
             return True, "Credentials created successfully"
-        except Exception as e:
-            session.rollback()
-            return False, f"Error creating credentials: {str(e)}"
-        finally:
-            session.close()
 
     def verify_credentials(self, username: str, password: str) -> Tuple[bool, str]:
         """
@@ -75,8 +68,7 @@ class AuthManager:
         Returns:
             Tuple of (success, message) where success is True if credentials are valid
         """
-        session = self.session_factory()
-        try:
+        with get_db_session(self.session_factory) as session:
             # Query using lowercase username for case-insensitive comparison
             creds = session.query(Credentials).filter_by(username=username.lower()).first()
             if not creds:
@@ -84,12 +76,7 @@ class AuthManager:
 
             if creds.verify_password(password):
                 return True, "Credentials verified"
-            else:
-                return False, "Invalid username or password"
-        except Exception as e:
-            return False, f"Error verifying credentials: {str(e)}"
-        finally:
-            session.close()
+            return False, "Invalid username or password"
 
     def create_token(self, username: str) -> str:
         """
@@ -140,8 +127,7 @@ class AuthManager:
         Returns:
             Tuple of (success, message) where success is True if password updated successfully
         """
-        session = self.session_factory()
-        try:
+        with get_db_session(self.session_factory) as session:
             creds = session.query(Credentials).first()
             if not creds:
                 return False, "No credentials exist"
@@ -151,13 +137,7 @@ class AuthManager:
 
             creds.set_password(new_password)
             creds.updated_at = utc_now()
-            session.commit()
             return True, "Password updated successfully"
-        except Exception as e:
-            session.rollback()
-            return False, f"Error updating password: {str(e)}"
-        finally:
-            session.close()
 
     def update_username(self, old_username: str, new_username: str) -> Tuple[bool, str]:
         """
@@ -170,8 +150,7 @@ class AuthManager:
         Returns:
             Tuple of (success, message) where success is True if username updated successfully
         """
-        session = self.session_factory()
-        try:
+        with get_db_session(self.session_factory) as session:
             # Query using lowercase username for case-insensitive comparison
             creds = session.query(Credentials).filter_by(username=old_username.lower()).first()
             if not creds:
@@ -184,13 +163,7 @@ class AuthManager:
 
             creds.username = new_username.lower()
             creds.updated_at = utc_now()
-            session.commit()
             return True, "Username updated successfully"
-        except Exception as e:
-            session.rollback()
-            return False, f"Error updating username: {str(e)}"
-        finally:
-            session.close()
 
     def get_api_token(self) -> Tuple[bool, Optional[str]]:
         """
@@ -199,16 +172,11 @@ class AuthManager:
         Returns:
             Tuple of (success, api_token) where api_token is None if doesn't exist
         """
-        session = self.session_factory()
-        try:
+        with get_db_session(self.session_factory) as session:
             creds = session.query(Credentials).first()
             if not creds:
                 return False, None
             return True, creds.api_token
-        except Exception:
-            return False, None
-        finally:
-            session.close()
 
     def regenerate_api_token(self) -> Tuple[bool, Optional[str]]:
         """
@@ -217,20 +185,13 @@ class AuthManager:
         Returns:
             Tuple of (success, new_api_token) where new_api_token is the generated token
         """
-        session = self.session_factory()
-        try:
+        with get_db_session(self.session_factory) as session:
             creds = session.query(Credentials).first()
             if not creds:
                 return False, None
 
             new_token = creds.generate_api_token()
-            session.commit()
             return True, new_token
-        except Exception:
-            session.rollback()
-            return False, None
-        finally:
-            session.close()
 
     def verify_api_token(self, token: str) -> Tuple[bool, Optional[str]]:
         """
@@ -242,13 +203,8 @@ class AuthManager:
         Returns:
             Tuple of (is_valid, username) where username is None if token is invalid
         """
-        session = self.session_factory()
-        try:
+        with get_db_session(self.session_factory) as session:
             creds = session.query(Credentials).filter_by(api_token=token).first()
             if not creds:
                 return False, None
             return True, creds.username
-        except Exception:
-            return False, None
-        finally:
-            session.close()

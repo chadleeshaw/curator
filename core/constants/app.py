@@ -100,6 +100,20 @@ TASK_SCHEDULER_CHECK_INTERVAL = 60
 
 
 # ==============================================================================
+# HTTP Timeouts
+# ==============================================================================
+
+HTTP_REQUEST_TIMEOUT = 10
+"""Default timeout in seconds for HTTP requests to download clients and providers"""
+
+VERSION_CHECK_TIMEOUT = 5
+"""Timeout in seconds for checking application version updates"""
+
+RESTART_SHUTDOWN_DELAY = 1
+"""Delay in seconds before restarting/shutting down to allow response to be sent"""
+
+
+# ==============================================================================
 # Authentication
 # ==============================================================================
 

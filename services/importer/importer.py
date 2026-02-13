@@ -620,7 +620,11 @@ class FileImporter:
                 logger.debug(f"Detected special edition '{special_name}' for: {tracking_title}")
 
     def _run_text_scan(
-        self, magazine: Periodical, organized_path: Path, parsed_language: Optional[str], session: Session
+        self,
+        magazine: Periodical,
+        organized_path: Path,
+        parsed_language: Optional[str],
+        session: Session,
     ) -> None:
         """
         Run direct text extraction on the imported file.
@@ -649,7 +653,10 @@ class FileImporter:
             magazine.parsed_metadata["text_scan"] = scan_result
 
             # Rebuild derived_metadata with text scan results
-            from core.utils.metadata_builder import build_derived_metadata, sync_issue_date_from_derived
+            from core.utils.metadata_builder import (
+                build_derived_metadata,
+                sync_issue_date_from_derived,
+            )
 
             magazine.derived_metadata = build_derived_metadata(
                 file_scan=magazine.parsed_metadata.get("file_scan"),
@@ -762,7 +769,10 @@ class FileImporter:
                 result["text_scan_result"] = scan_result  # Store for DB
 
                 if scan_result.get("year"):
-                    from core.utils.metadata_builder import sync_issue_date_from_derived, build_derived_metadata
+                    from core.utils.metadata_builder import (
+                        sync_issue_date_from_derived,
+                        build_derived_metadata,
+                    )
 
                     # Build derived metadata to get issue_date
                     derived = build_derived_metadata(text_scan=scan_result)
@@ -802,7 +812,10 @@ class FileImporter:
                 result["ocr_scan_result"] = ocr_result  # Store for DB
 
                 if ocr_result and ocr_result.get("year"):
-                    from core.utils.metadata_builder import sync_issue_date_from_derived, build_derived_metadata
+                    from core.utils.metadata_builder import (
+                        sync_issue_date_from_derived,
+                        build_derived_metadata,
+                    )
 
                     # Build derived metadata to get issue_date
                     derived = build_derived_metadata(ocr_scan=ocr_result)
@@ -878,7 +891,10 @@ class FileImporter:
             magazine.parsed_metadata["ocr_scan"] = ocr_result
 
             # Rebuild derived_metadata with OCR results
-            from core.utils.metadata_builder import build_derived_metadata, sync_issue_date_from_derived
+            from core.utils.metadata_builder import (
+                build_derived_metadata,
+                sync_issue_date_from_derived,
+            )
 
             magazine.derived_metadata = build_derived_metadata(
                 file_scan=magazine.parsed_metadata.get("file_scan"),
@@ -935,6 +951,375 @@ class FileImporter:
     # Main Import Method
     # =========================================================================
 
+    def _parse_and_validate_file(self, file_path: Path):
+        """
+        Parse file and validate title.
+
+        Args:
+            file_path: Path to file
+
+        Returns:
+            Parsed result or None if invalid
+        """
+        parsed = self.parser.parse_file(file_path)
+        if not self.title_matcher.validate_before_parsing(parsed.title):
+            logger.warning(f"Skipping invalid release title: {parsed.title} (from {file_path.name})")
+            return None
+
+        logger.debug(
+            f"Parsed metadata: '{parsed.title}' - Date: {parsed.issue_date.strftime('%b %Y') if parsed.issue_date else 'None'} "
+            f"(confidence: {parsed.confidence}, pattern: {parsed.matched_pattern})"
+        )
+        return parsed
+
+    def _get_content_hash(self, file_path: Path, skip_organize: bool, session: Session) -> Optional[str]:
+        """
+        Calculate content hash and check for hash-based duplicates.
+
+        Args:
+            file_path: Path to file
+            skip_organize: Whether to skip organization
+            session: Database session
+
+        Returns:
+            Content hash or None if duplicate found or hashing failed
+        """
+        content_hash = hash_file_in_chunks(str(file_path))
+        if not content_hash:
+            logger.error(f"Failed to hash file {file_path}, skipping import")
+            return None
+
+        if self._check_hash_duplicate(content_hash, file_path, skip_organize, session):
+            return None
+
+        return content_hash
+
+    def _determine_title_and_scan_need(
+        self, tracking_id: Optional[int], parsed, file_path: Path, session: Session
+    ) -> tuple[str, bool]:
+        """
+        Determine title and whether date scan is needed.
+
+        High confidence means filename parsing succeeded well - the file might be a different
+        periodical than what was tracked (e.g., IA collection with multiple periodicals).
+        Low/medium confidence means filename is ambiguous - trust the tracking association.
+
+        Args:
+            tracking_id: Optional tracking ID
+            parsed: Parsed metadata
+            file_path: Path to file
+            session: Database session
+
+        Returns:
+            Tuple of (tracking_title, needs_date_scan)
+        """
+        needs_date_scan = False
+
+        if tracking_id:
+            target_tracking_temp = (
+                session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
+            )
+            if target_tracking_temp:
+                # Check if parsed title has high confidence
+                if parsed.confidence == "high" and parsed.issue_date is not None:
+                    # High confidence parse - use the parsed title (might differ from tracking)
+                    tracking_title = self._build_tracking_title(parsed.base_title, parsed.country, file_path)
+                    logger.info(
+                        f"High confidence parse for '{file_path.name}': using parsed title '{tracking_title}' "
+                        f"(tracking was '{target_tracking_temp.title}')"
+                    )
+                else:
+                    # Low/medium confidence - fall back to tracking title
+                    tracking_title = target_tracking_temp.title
+                    logger.debug(
+                        f"Using tracking title from sidecar: '{tracking_title}' (ID: {tracking_id}) "
+                        f"for low/medium confidence parse (parsed: '{parsed.base_title}', "
+                        f"confidence: {parsed.confidence})"
+                    )
+
+                # Check if we need to force text/OCR scan to find date
+                date_missing = (
+                    parsed.issue_date is None
+                    or parsed.confidence == "low"
+                    or parsed.matched_pattern == "no_match_fallback"
+                )
+                if date_missing:
+                    needs_date_scan = True
+                    logger.info(
+                        f"File '{file_path.name}' needs date scan "
+                        f"(confidence: {parsed.confidence}, pattern: {parsed.matched_pattern}). "
+                        f"Will force text/OCR scan to extract date."
+                    )
+            else:
+                # Sidecar had invalid tracking_id, fall back to parsed title
+                logger.warning(f"Sidecar tracking_id={tracking_id} not found, using parsed title")
+                tracking_title = self._build_tracking_title(parsed.base_title, parsed.country, file_path)
+        else:
+            # No sidecar tracking_id, build from parsed filename
+            tracking_title = self._build_tracking_title(parsed.base_title, parsed.country, file_path)
+
+        return tracking_title, needs_date_scan
+
+    def _run_pre_scan_if_needed(
+        self, needs_date_scan: bool, skip_organize: bool, file_path: Path, parsed
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Run pre-scan for missing date if needed.
+
+        For files needing date scan, run text/OCR BEFORE organization.
+        This allows us to use discovered metadata for the correct file path.
+
+        Args:
+            needs_date_scan: Whether date scan is needed
+            skip_organize: Whether to skip organization
+            file_path: Path to file
+            parsed: Parsed metadata (will be modified if date found)
+
+        Returns:
+            Pre-scan result or None
+        """
+        pre_scan_result = None
+        if needs_date_scan and not skip_organize:
+            pre_scan_result = self._scan_for_missing_date(file_path, parsed.language)
+            if pre_scan_result.get("issue_date"):
+                # Update parsed metadata with discovered date for organization
+                parsed.issue_date = pre_scan_result["issue_date"]
+                parsed.year = pre_scan_result.get("year")
+                parsed.month_name = pre_scan_result.get("month_name")
+                parsed.confidence = "medium"  # Upgrade confidence since we found a date
+                logger.info(
+                    f"Updated metadata from {pre_scan_result['source']}: "
+                    f"date={parsed.issue_date.strftime('%Y-%m')}, year={parsed.year}"
+                )
+        return pre_scan_result
+
+    def _organize_file_and_extract_cover(
+        self,
+        skip_organize: bool,
+        skip_enhancement: bool,
+        file_path: Path,
+        parsed,
+        category: str,
+        organization_pattern: Optional[str],
+        target_tracking,
+        tracking_title: str,
+        use_ocr: bool,
+    ) -> tuple[Optional[Path], Optional[Path]]:
+        """
+        Organize file and extract cover if needed.
+
+        Args:
+            skip_organize: Whether to skip organization
+            skip_enhancement: Whether to skip cover extraction
+            file_path: Path to file
+            parsed: Parsed metadata
+            category: File category
+            organization_pattern: Optional organization pattern
+            target_tracking: Target tracking record
+            tracking_title: Tracking title
+            use_ocr: Whether OCR is enabled
+
+        Returns:
+            Tuple of (organized_path, cover_path)
+        """
+        organization_title = target_tracking.title if target_tracking else tracking_title
+
+        # Extract cover unless skip_enhancement is enabled (for bulk imports)
+        cover_path = None if skip_enhancement else self._extract_cover(file_path)
+
+        if skip_organize:
+            organized_path = file_path
+            logger.info(f"Using file in place (already in library): {file_path}")
+        else:
+            metadata = {
+                "title": organization_title,
+                "issue_date": parsed.issue_date,
+                "year": parsed.year,
+                "month_name": parsed.month_name,
+                "language": parsed.language,
+                "volume": parsed.volume,
+                "issue_number": parsed.issue_number,
+            }
+            organized_path = self.organizer.organize(file_path, metadata, category, organization_pattern)
+
+        return organized_path, cover_path
+
+    def _create_periodical_record(
+        self,
+        organized_path: Path,
+        cover_path: Optional[Path],
+        content_hash: str,
+        parsed,
+        pre_scan_result: Optional[Dict[str, Any]],
+        needs_date_scan: bool,
+        file_path: Path,
+        category: str,
+        target_tracking,
+        tracking_title: str,
+        session: Session,
+    ) -> Optional[Periodical]:
+        """
+        Create periodical database record.
+
+        Args:
+            organized_path: Path to organized file
+            cover_path: Path to cover image
+            content_hash: File content hash
+            parsed: Parsed metadata
+            pre_scan_result: Pre-scan results
+            needs_date_scan: Whether date scan is needed
+            file_path: Original file path
+            category: File category
+            target_tracking: Target tracking record
+            tracking_title: Tracking title
+            session: Database session
+
+        Returns:
+            Created Periodical record or None if duplicate found
+        """
+        from core.utils.metadata_builder import (
+            build_file_scan,
+            build_parsed_metadata,
+            build_derived_metadata,
+            build_extra_metadata,
+        )
+
+        organization_title = target_tracking.title if target_tracking else tracking_title
+
+        # Check for existing record at the organized path (prevents UNIQUE constraint on file_path)
+        organized_path_str = str(organized_path)
+        existing_by_path = session.query(Periodical).filter(Periodical.file_path == organized_path_str).first()
+        if existing_by_path:
+            logger.info(
+                f"File already in library at organized path: '{organized_path_str}' "
+                f"(existing ID: {existing_by_path.id})"
+            )
+            return None
+
+        file_scan = build_file_scan(parsed)
+        if parsed.is_special_edition:
+            file_scan["special_edition_name"] = parsed.special_edition_name
+            file_scan["is_special_edition"] = True
+
+        # Build extra metadata, flagging if date scan is needed
+        extra_meta = build_extra_metadata(
+            imported_from=file_path.name,
+            import_date=datetime.now().isoformat(),
+            category=category,
+            import_method="auto",
+        )
+        if needs_date_scan and not (pre_scan_result and pre_scan_result.get("issue_date")):
+            # Only flag for future date scan if pre-scan didn't find a date
+            extra_meta["needs_date_scan"] = True
+            extra_meta["date_scan_reason"] = "tracking_title_without_parsed_date"
+
+        # Include pre-scan results in parsed_metadata if available
+        text_scan = pre_scan_result.get("text_scan_result") if pre_scan_result else None
+        ocr_scan = pre_scan_result.get("ocr_scan_result") if pre_scan_result else None
+
+        magazine = Periodical(
+            title=organization_title,
+            issue_date=parsed.issue_date or datetime.now(),
+            language=parsed.language or DEFAULT_LANGUAGE,
+            file_path=organized_path_str,
+            cover_path=str(cover_path) if cover_path else None,
+            content_hash=content_hash,
+            parsed_metadata=build_parsed_metadata(file_scan=file_scan, text_scan=text_scan, ocr_scan=ocr_scan),
+            derived_metadata=build_derived_metadata(file_scan=file_scan, text_scan=text_scan, ocr_scan=ocr_scan),
+            extra_metadata=extra_meta,
+        )
+        session.add(magazine)
+        return magazine
+
+    def _run_post_import_text_scan(
+        self,
+        magazine: Periodical,
+        organized_path: Path,
+        language: Optional[str],
+        needs_date_scan: bool,
+        skip_enhancement: bool,
+        pre_scan_result: Optional[Dict[str, Any]],
+        tracking_title: str,
+        session: Session,
+    ) -> None:
+        """
+        Run text scan for additional metadata after import.
+
+        Force text scan if needs_date_scan (even during bulk imports) to try to find date/volume.
+        Otherwise skip during bulk imports for speed.
+
+        Args:
+            magazine: Periodical record
+            organized_path: Path to organized file
+            language: Parsed language
+            needs_date_scan: Whether date scan is needed
+            skip_enhancement: Whether to skip enhancements
+            pre_scan_result: Pre-scan results
+            tracking_title: Tracking title
+            session: Database session
+        """
+        pre_scan_did_text = pre_scan_result and pre_scan_result.get("text_scan_result") is not None
+
+        if not pre_scan_did_text and (not skip_enhancement or needs_date_scan):
+            if needs_date_scan:
+                logger.info(f"Forcing text scan for '{tracking_title}' to find missing date/volume")
+            self._run_text_scan(magazine, organized_path, language, session)
+
+    def _run_post_import_ocr(
+        self,
+        magazine: Periodical,
+        organized_path: Path,
+        parsed,
+        needs_date_scan: bool,
+        should_queue_ocr: bool,
+        skip_organize: bool,
+        pre_scan_result: Optional[Dict[str, Any]],
+        tracking_title: str,
+        session: Session,
+    ) -> None:
+        """
+        Run OCR if needed after import.
+
+        For needs_date_scan files: run OCR synchronously to get date before next file
+        (avoids duplicate detection issues when multiple files have same fallback date).
+        For other files: queue OCR for background processing.
+
+        Args:
+            magazine: Periodical record
+            organized_path: Path to organized file
+            parsed: Parsed metadata
+            needs_date_scan: Whether date scan is needed
+            should_queue_ocr: Whether OCR should be queued
+            skip_organize: Whether organization was skipped
+            pre_scan_result: Pre-scan results
+            tracking_title: Tracking title
+            session: Database session
+        """
+        pre_scan_did_ocr = pre_scan_result and pre_scan_result.get("ocr_scan_result") is not None
+        pre_scan_found_date = pre_scan_result and pre_scan_result.get("issue_date") is not None
+
+        text_scan_result = magazine.parsed_metadata.get("text_scan", {}) if magazine.parsed_metadata else {}
+        text_scan_sufficient = text_scan_result.get("has_sufficient_metadata", False)
+        text_scan_found_date = text_scan_result.get("year") is not None
+
+        # For files needing date scan, run OCR synchronously to get date immediately
+        # But skip if pre-scan already did OCR or found a date
+        if needs_date_scan and not text_scan_found_date and not pre_scan_found_date and not pre_scan_did_ocr:
+            # Text scan didn't find date - run OCR immediately (not queued)
+            # This is critical to avoid duplicate detection issues
+            logger.info(f"Text scan didn't find date for '{tracking_title}' - running immediate OCR scan")
+            ocr_found_date = self._run_ocr_scan(magazine, organized_path, parsed.language, session)
+            if not ocr_found_date:
+                logger.warning(
+                    f"Could not determine date for '{tracking_title}' from filename, text, or OCR. "
+                    f"Using fallback date. Manual review recommended."
+                )
+        elif not pre_scan_did_ocr and should_queue_ocr and not text_scan_sufficient:
+            # Normal case: queue OCR for background processing
+            self._queue_ocr_job(magazine, parsed.language, skip_organize, session)
+        elif text_scan_sufficient or pre_scan_found_date:
+            logger.info(f"Skipping OCR for '{parsed.title}' - sufficient metadata already found")
+
     def import_supported_files(
         self,
         file_path: Path,
@@ -972,176 +1357,77 @@ class FileImporter:
             )
 
             # Step 2: Parse file and validate
-            parsed = self.parser.parse_file(file_path)
-            if not self.title_matcher.validate_before_parsing(parsed.title):
-                logger.warning(f"Skipping invalid release title: {parsed.title} (from {file_path.name})")
+            parsed = self._parse_and_validate_file(file_path)
+            if not parsed:
                 return {"skip_reason": "invalid_title"}
-            logger.debug(
-                f"Parsed metadata: '{parsed.title}' - Date: {parsed.issue_date.strftime('%b %Y') if parsed.issue_date else 'None'} "
-                f"(confidence: {parsed.confidence}, pattern: {parsed.matched_pattern})"
-            )
 
             # Step 3: Calculate content hash and check for hash-based duplicates
-            content_hash = hash_file_in_chunks(str(file_path))
+            content_hash = self._get_content_hash(file_path, skip_organize, session)
             if not content_hash:
-                logger.error(f"Failed to hash file {file_path}, skipping import")
                 return {"skip_reason": "parse_error"}
 
-            if self._check_hash_duplicate(content_hash, file_path, skip_organize, session):
-                return {"skip_reason": "duplicate_hash"}
-
-            # Step 4: Determine title - use parsed title if confidence is high, otherwise fall back to tracking
-            # High confidence means filename parsing succeeded well - the file might be a different
-            # periodical than what was tracked (e.g., IA collection with multiple periodicals)
-            # Low/medium confidence means filename is ambiguous - trust the tracking association
-            needs_date_scan = False
-            if tracking_id:
-                target_tracking_temp = (
-                    session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
-                )
-                if target_tracking_temp:
-                    # Check if parsed title has high confidence
-                    if parsed.confidence == "high" and parsed.issue_date is not None:
-                        # High confidence parse - use the parsed title (might differ from tracking)
-                        tracking_title = self._build_tracking_title(parsed.base_title, parsed.country, file_path)
-                        logger.info(
-                            f"High confidence parse for '{file_path.name}': using parsed title '{tracking_title}' "
-                            f"(tracking was '{target_tracking_temp.title}')"
-                        )
-                    else:
-                        # Low/medium confidence - fall back to tracking title
-                        tracking_title = target_tracking_temp.title
-                        logger.debug(
-                            f"Using tracking title from sidecar: '{tracking_title}' (ID: {tracking_id}) "
-                            f"for low/medium confidence parse (parsed: '{parsed.base_title}', "
-                            f"confidence: {parsed.confidence})"
-                        )
-                    # Check if we need to force text/OCR scan to find date
-                    # When we have a tracking title but couldn't parse a date from filename,
-                    # we should scan the document content to try to extract date/volume info
-                    date_missing = (
-                        parsed.issue_date is None
-                        or parsed.confidence == "low"
-                        or parsed.matched_pattern == "no_match_fallback"
-                    )
-                    if date_missing:
-                        needs_date_scan = True
-                        logger.info(
-                            f"File '{file_path.name}' needs date scan "
-                            f"(confidence: {parsed.confidence}, pattern: {parsed.matched_pattern}). "
-                            f"Will force text/OCR scan to extract date."
-                        )
-                else:
-                    # Sidecar had invalid tracking_id, fall back to parsed title
-                    logger.warning(f"Sidecar tracking_id={tracking_id} not found, using parsed title")
-                    tracking_title = self._build_tracking_title(parsed.base_title, parsed.country, file_path)
-            else:
-                # No sidecar tracking_id, build from parsed filename
-                tracking_title = self._build_tracking_title(parsed.base_title, parsed.country, file_path)
+            # Step 4: Determine title and check if date scan is needed
+            tracking_title, needs_date_scan = self._determine_title_and_scan_need(
+                tracking_id, parsed, file_path, session
+            )
 
             # Step 5: Check for fuzzy duplicates
             if self._check_fuzzy_duplicate(
-                tracking_title, parsed.issue_date, parsed.language, file_path, skip_organize, session, content_hash
+                tracking_title,
+                parsed.issue_date,
+                parsed.language,
+                file_path,
+                skip_organize,
+                session,
+                content_hash,
             ):
                 return {"skip_reason": "duplicate_fuzzy"}
 
             # Step 6: Determine category and find tracking match
             category = self.categorizer.categorize(parsed.title)
             target_tracking = self._find_tracking_match(
-                tracking_id, tracking_title, parsed.language, parsed.country, category, session
+                tracking_id,
+                tracking_title,
+                parsed.language,
+                parsed.country,
+                category,
+                session,
             )
 
-            # Step 7: For files needing date scan, run text/OCR BEFORE organization
-            # This allows us to use discovered metadata for the correct file path
-            pre_scan_result = None
-            if needs_date_scan and not skip_organize:
-                pre_scan_result = self._scan_for_missing_date(file_path, parsed.language)
-                if pre_scan_result.get("issue_date"):
-                    # Update parsed metadata with discovered date for organization
-                    parsed.issue_date = pre_scan_result["issue_date"]
-                    parsed.year = pre_scan_result.get("year")
-                    parsed.month_name = pre_scan_result.get("month_name")
-                    parsed.confidence = "medium"  # Upgrade confidence since we found a date
-                    logger.info(
-                        f"Updated metadata from {pre_scan_result['source']}: "
-                        f"date={parsed.issue_date.strftime('%Y-%m')}, year={parsed.year}"
-                    )
+            # Step 7: Run pre-scan for missing date if needed
+            pre_scan_result = self._run_pre_scan_if_needed(needs_date_scan, skip_organize, file_path, parsed)
 
-            # Step 8: Organize file (use tracking title for folder consistency)
-            organization_title = target_tracking.title if target_tracking else tracking_title
-
-            # Extract cover unless skip_enhancement is enabled (for bulk imports)
-            cover_path = None if skip_enhancement else self._extract_cover(file_path)
-            should_queue_ocr = use_ocr and (cover_path or file_path) and OCRService.is_available()
-
-            if skip_organize:
-                organized_path = file_path
-                logger.info(f"Using file in place (already in library): {file_path}")
-            else:
-                metadata = {
-                    "title": organization_title,
-                    "issue_date": parsed.issue_date,
-                    "year": parsed.year,
-                    "month_name": parsed.month_name,
-                    "language": parsed.language,
-                    "volume": parsed.volume,
-                    "issue_number": parsed.issue_number,
-                }
-                organized_path = self.organizer.organize(file_path, metadata, category, organization_pattern)
-                if not organized_path:
-                    return {"skip_reason": "organization_failed"}
-
-            # Step 9: Build metadata and create database record
-            from core.utils.metadata_builder import (
-                build_file_scan,
-                build_parsed_metadata,
-                build_derived_metadata,
-                build_extra_metadata,
+            # Step 8: Organize file and extract cover
+            organized_path, cover_path = self._organize_file_and_extract_cover(
+                skip_organize,
+                skip_enhancement,
+                file_path,
+                parsed,
+                category,
+                organization_pattern,
+                target_tracking,
+                tracking_title,
+                use_ocr,
             )
+            if not organized_path:
+                return {"skip_reason": "organization_failed"}
 
-            file_scan = build_file_scan(parsed)
-            if parsed.is_special_edition:
-                file_scan["special_edition_name"] = parsed.special_edition_name
-                file_scan["is_special_edition"] = True
-
-            # Build extra metadata, flagging if date scan is needed
-            extra_meta = build_extra_metadata(
-                imported_from=file_path.name,
-                import_date=datetime.now().isoformat(),
-                category=category,
-                import_method="auto",
+            # Step 9: Create database record
+            magazine = self._create_periodical_record(
+                organized_path,
+                cover_path,
+                content_hash,
+                parsed,
+                pre_scan_result,
+                needs_date_scan,
+                file_path,
+                category,
+                target_tracking,
+                tracking_title,
+                session,
             )
-            if needs_date_scan and not (pre_scan_result and pre_scan_result.get("issue_date")):
-                # Only flag for future date scan if pre-scan didn't find a date
-                extra_meta["needs_date_scan"] = True
-                extra_meta["date_scan_reason"] = "tracking_title_without_parsed_date"
-
-            # Include pre-scan results in parsed_metadata if available
-            text_scan = pre_scan_result.get("text_scan_result") if pre_scan_result else None
-            ocr_scan = pre_scan_result.get("ocr_scan_result") if pre_scan_result else None
-
-            # Check for existing record at the organized path (prevents UNIQUE constraint on file_path)
-            organized_path_str = str(organized_path)
-            existing_by_path = session.query(Periodical).filter(Periodical.file_path == organized_path_str).first()
-            if existing_by_path:
-                logger.info(
-                    f"File already in library at organized path: '{organized_path_str}' "
-                    f"(existing ID: {existing_by_path.id})"
-                )
+            if not magazine:
                 return {"skip_reason": "duplicate_path"}
-
-            magazine = Periodical(
-                title=organization_title,
-                issue_date=parsed.issue_date or datetime.now(),
-                language=parsed.language or DEFAULT_LANGUAGE,
-                file_path=organized_path_str,
-                cover_path=str(cover_path) if cover_path else None,
-                content_hash=content_hash,
-                parsed_metadata=build_parsed_metadata(file_scan=file_scan, text_scan=text_scan, ocr_scan=ocr_scan),
-                derived_metadata=build_derived_metadata(file_scan=file_scan, text_scan=text_scan, ocr_scan=ocr_scan),
-                extra_metadata=extra_meta,
-            )
-            session.add(magazine)
 
             # Step 10: Link to existing tracking or create new one
             self._link_or_create_tracking(
@@ -1161,45 +1447,33 @@ class FileImporter:
             session.commit()
             logger.info(f"Added to database: {parsed.title} ({category})")
 
-            # Step 11: Run text scan for additional metadata (skip if pre-scan already ran)
-            # Force text scan if needs_date_scan (even during bulk imports) to try to find date/volume
-            # Otherwise skip during bulk imports for speed
-            pre_scan_did_text = pre_scan_result and pre_scan_result.get("text_scan_result") is not None
-            pre_scan_did_ocr = pre_scan_result and pre_scan_result.get("ocr_scan_result") is not None
-            pre_scan_found_date = pre_scan_result and pre_scan_result.get("issue_date") is not None
+            # Step 11: Run text scan for additional metadata
+            should_queue_ocr = use_ocr and (cover_path or file_path) and OCRService.is_available()
+            self._run_post_import_text_scan(
+                magazine,
+                organized_path,
+                parsed.language,
+                needs_date_scan,
+                skip_enhancement,
+                pre_scan_result,
+                tracking_title,
+                session,
+            )
 
-            if not pre_scan_did_text and (not skip_enhancement or needs_date_scan):
-                if needs_date_scan:
-                    logger.info(f"Forcing text scan for '{organization_title}' to find missing date/volume")
-                self._run_text_scan(magazine, organized_path, parsed.language, session)
+            # Step 12: Run OCR if needed
+            self._run_post_import_ocr(
+                magazine,
+                organized_path,
+                parsed,
+                needs_date_scan,
+                should_queue_ocr,
+                skip_organize,
+                pre_scan_result,
+                tracking_title,
+                session,
+            )
 
-            # Step 12: Run OCR if needed (skip if pre-scan already ran OCR)
-            # For needs_date_scan files: run OCR synchronously to get date before next file
-            # (avoids duplicate detection issues when multiple files have same fallback date)
-            # For other files: queue OCR for background processing
-            text_scan_result = magazine.parsed_metadata.get("text_scan", {}) if magazine.parsed_metadata else {}
-            text_scan_sufficient = text_scan_result.get("has_sufficient_metadata", False)
-            text_scan_found_date = text_scan_result.get("year") is not None
-
-            # For files needing date scan, run OCR synchronously to get date immediately
-            # But skip if pre-scan already did OCR or found a date
-            if needs_date_scan and not text_scan_found_date and not pre_scan_found_date and not pre_scan_did_ocr:
-                # Text scan didn't find date - run OCR immediately (not queued)
-                # This is critical to avoid duplicate detection issues
-                logger.info(f"Text scan didn't find date for '{organization_title}' - running immediate OCR scan")
-                ocr_found_date = self._run_ocr_scan(magazine, organized_path, parsed.language, session)
-                if not ocr_found_date:
-                    logger.warning(
-                        f"Could not determine date for '{organization_title}' from filename, text, or OCR. "
-                        f"Using fallback date. Manual review recommended."
-                    )
-            elif not pre_scan_did_ocr and should_queue_ocr and not text_scan_sufficient:
-                # Normal case: queue OCR for background processing
-                self._queue_ocr_job(magazine, parsed.language, skip_organize, session)
-            elif text_scan_sufficient or pre_scan_found_date:
-                logger.info(f"Skipping OCR for '{parsed.title}' - sufficient metadata already found")
-
-            # Step 13: Cleanup download file (defer folder deletion to batch processing)
+            # Step 13: Cleanup download file
             if not skip_organize:
                 self._cleanup_download_file(file_path, defer_folder_deletion=True)
 
@@ -1438,7 +1712,12 @@ class FileImporter:
                     worker_result = future.result()
                     # skip_cleanup=True for library imports (skip_organize=True) - never delete library files
                     self._handle_import_result(
-                        worker_result, file_type, result, skip_reasons, folders_to_cleanup, skip_cleanup=skip_organize
+                        worker_result,
+                        file_type,
+                        result,
+                        skip_reasons,
+                        folders_to_cleanup,
+                        skip_cleanup=skip_organize,
                     )
                 except Exception as e:
                     result.data["failed"] += 1
@@ -1532,7 +1811,12 @@ class FileImporter:
                 }
                 # skip_cleanup=True for library imports (skip_organize=True) - never delete library files
                 self._handle_import_result(
-                    worker_result, file_type, result, skip_reasons, folders_to_cleanup, skip_cleanup=skip_organize
+                    worker_result,
+                    file_type,
+                    result,
+                    skip_reasons,
+                    folders_to_cleanup,
+                    skip_cleanup=skip_organize,
                 )
             except Exception as e:
                 result.data["failed"] += 1

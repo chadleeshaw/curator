@@ -92,45 +92,66 @@ class NewsnabProvider(SearchProvider):
         Returns:
             True if rate limited, False otherwise
         """
-        # Check if we're in a rate limit cooldown period
-        if self._rate_limit_until:
-            if utc_now() < self._rate_limit_until:
-                remaining = (self._rate_limit_until - utc_now()).total_seconds()
-                # Only log once per cooldown period to avoid log spam
-                if not self._rate_limit_logged:
-                    logger.warning(
-                        f"[{self.name}] Rate limited: {self._rate_limit_reason}. "
-                        f"Will retry in {remaining:.0f} seconds ({remaining / 3600:.1f} hours)"
-                    )
-                    self._rate_limit_logged = True
-                return True
-            else:
-                # Cooldown expired — clear rate limit state
-                logger.info(f"[{self.name}] Rate limit cooldown expired, resuming searches")
-                self._rate_limit_until = None
-                self._rate_limit_reason = None
-                self._rate_limit_logged = False
+        # Check self-imposed limit if no external rate limit is active
+        if not self._rate_limit_until:
+            return self._check_self_imposed_limit()
 
-        # Check if we've exceeded our self-imposed rate limit
+        # External rate limit active - check if cooldown expired
+        if utc_now() >= self._rate_limit_until:
+            self._clear_rate_limit_state()
+            return False
+
+        # Still in cooldown - log once and return True
+        self._log_rate_limit_once()
+        return True
+
+    def _clear_rate_limit_state(self) -> None:
+        """Clear rate limit state after cooldown expires."""
+        logger.info(f"[{self.name}] Rate limit cooldown expired, resuming searches")
+        self._rate_limit_until = None
+        self._rate_limit_reason = None
+        self._rate_limit_logged = False
+
+    def _log_rate_limit_once(self) -> None:
+        """Log rate limit warning once per cooldown period."""
+        if self._rate_limit_logged:
+            return
+
+        remaining = (self._rate_limit_until - utc_now()).total_seconds()
+        logger.warning(
+            f"[{self.name}] Rate limited: {self._rate_limit_reason}. "
+            f"Will retry in {remaining:.0f} seconds ({remaining / 3600:.1f} hours)"
+        )
+        self._rate_limit_logged = True
+
+    def _check_self_imposed_limit(self) -> bool:
+        """
+        Check if we've exceeded our self-imposed rate limit.
+
+        Returns:
+            True if self-imposed limit is reached, False otherwise
+        """
         now = time.time()
-        # Remove requests older than 1 hour
         self._request_times = [t for t in self._request_times if now - t < SECONDS_PER_HOUR]
 
-        if len(self._request_times) >= self.max_requests_per_hour:
-            oldest_request = min(self._request_times)
-            wait_until = datetime.fromtimestamp(oldest_request + SECONDS_PER_HOUR, tz=UTC)
-            remaining = (wait_until - utc_now()).total_seconds()
-            logger.warning(
-                f"[{self.name}] Self-imposed rate limit reached "
-                f"({len(self._request_times)}/{self.max_requests_per_hour} requests in last hour). "
-                f"Will retry in {remaining:.0f} seconds"
-            )
-            self._rate_limit_until = wait_until
-            self._rate_limit_reason = f"Self-limit: {self.max_requests_per_hour} requests/hour exceeded"
-            self._rate_limit_logged = False
-            return True
+        if len(self._request_times) < self.max_requests_per_hour:
+            return False
 
-        return False
+        # Self-imposed limit reached - set cooldown
+        oldest_request = min(self._request_times)
+        wait_until = datetime.fromtimestamp(oldest_request + SECONDS_PER_HOUR, tz=UTC)
+        remaining = (wait_until - utc_now()).total_seconds()
+
+        logger.warning(
+            f"[{self.name}] Self-imposed rate limit reached "
+            f"({len(self._request_times)}/{self.max_requests_per_hour} requests in last hour). "
+            f"Will retry in {remaining:.0f} seconds"
+        )
+
+        self._rate_limit_until = wait_until
+        self._rate_limit_reason = f"Self-limit: {self.max_requests_per_hour} requests/hour exceeded"
+        self._rate_limit_logged = False
+        return True
 
     def _track_request(self):
         """Track a request for rate limiting"""
@@ -337,7 +358,10 @@ class NewsnabProvider(SearchProvider):
         return False
 
     def search(
-        self, query: str = "", category: str = None, aliases: Optional[Sequence[str]] = None
+        self,
+        query: str = "",
+        category: str = None,
+        aliases: Optional[Sequence[str]] = None,
     ) -> List[SearchResult]:
         """
         Search Newsnab-compatible service for NZBs.
@@ -653,7 +677,7 @@ class NewsnabProvider(SearchProvider):
             }
 
             logger.info(f"Testing Newsnab connection to {url}")
-            response = requests.get(url, params=params, timeout=10)
+            response = requests.get(url, params=params, timeout=NEWSNAB_REQUEST_TIMEOUT)
 
             if response.status_code == 401:
                 return {

@@ -10,6 +10,8 @@ import logging
 from pathlib import Path
 from functools import lru_cache
 
+from core.constants.app import VERSION_CHECK_TIMEOUT
+
 logger = logging.getLogger(__name__)
 
 
@@ -26,7 +28,7 @@ def get_build_hash() -> str:
             ["git", "rev-parse", "--short=7", "HEAD"],
             capture_output=True,
             text=True,
-            timeout=5,
+            timeout=VERSION_CHECK_TIMEOUT,
             cwd=Path(__file__).parent.parent,
             check=False,
         )
@@ -59,7 +61,7 @@ def get_version() -> str:
             ["git", "describe", "--tags", "--always"],
             capture_output=True,
             text=True,
-            timeout=5,
+            timeout=VERSION_CHECK_TIMEOUT,
             cwd=Path(__file__).parent.parent,
             check=False,
         )
