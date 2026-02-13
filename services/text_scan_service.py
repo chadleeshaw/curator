@@ -1,8 +1,7 @@
 """Text scanning service for extracting text directly from PDF and EPUB files."""
 
 import logging
-import signal
-from contextlib import contextmanager
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from pathlib import Path
 from typing import Optional, Dict
 
@@ -12,6 +11,8 @@ try:
     from pypdf import PdfReader
 
     PDF_TEXT_AVAILABLE = True
+    # Suppress noisy pypdf warnings about malformed objects in corrupted/unusual PDFs
+    logging.getLogger("pypdf._reader").setLevel(logging.ERROR)
 except ImportError:
     PDF_TEXT_AVAILABLE = False
     logger.debug("pypdf not available for PDF text extraction")
@@ -23,27 +24,6 @@ class PDFReadTimeout(Exception):
     pass
 
 
-@contextmanager
-def timeout_handler(seconds: int):
-    """Context manager to timeout long-running operations."""
-
-    def _timeout_handler(signum, frame):
-        raise PDFReadTimeout(f"PDF reading timed out after {seconds} seconds")
-
-    # Only works on Unix-like systems
-    try:
-        old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
-        signal.alarm(seconds)
-        try:
-            yield
-        finally:
-            signal.alarm(0)
-            signal.signal(signal.SIGALRM, old_handler)
-    except (ValueError, AttributeError):
-        # signal.SIGALRM not available (Windows), just yield without timeout
-        yield
-
-
 class TextScanService:
     """Service for extracting text directly from PDF and EPUB files (without OCR)."""
 
@@ -53,7 +33,33 @@ class TextScanService:
         return PDF_TEXT_AVAILABLE
 
     @staticmethod
-    def extract_text_from_pdf(pdf_path: str, max_pages: int = 3, timeout_seconds: int = 30) -> str:
+    def _read_pdf_text(pdf_path: str, max_pages: int) -> str:
+        """Read text from PDF. Intended to be run inside a thread with a timeout."""
+        reader = PdfReader(pdf_path)
+        text_parts = []
+
+        # Extract text from PDF metadata fields first
+        # This picks up embedded metadata from previous OCR processing
+        if reader.metadata:
+            # Subject and Keywords often contain date/issue info
+            for field in ("/Subject", "/Keywords"):
+                value = reader.metadata.get(field)
+                if value and isinstance(value, str):
+                    text_parts.append(value)
+
+        # Extract text from first few pages
+        for i, page in enumerate(reader.pages[:max_pages]):
+            try:
+                page_text = page.extract_text()
+                if page_text:
+                    text_parts.append(page_text)
+            except Exception as e:
+                logger.debug(f"Could not extract text from page {i}: {e}")
+
+        return "\n".join(text_parts).strip()
+
+    @staticmethod
+    def extract_text_from_pdf(pdf_path: str, max_pages: int = 3, timeout_seconds: int = 3) -> str:
         """
         Extract text directly from PDF (for PDFs with embedded text).
         Much faster than OCR for text-based PDFs.
@@ -61,10 +67,13 @@ class TextScanService:
         Also extracts text from PDF metadata fields (Subject, Keywords) which may
         contain metadata embedded by previous OCR processing.
 
+        Uses a thread pool for timeout enforcement since signal-based timeouts
+        (SIGALRM) only work from the main thread.
+
         Args:
             pdf_path: Path to the PDF file
             max_pages: Maximum number of pages to extract (default: first 3 pages)
-            timeout_seconds: Timeout for reading corrupted/slow PDFs (default: 30s)
+            timeout_seconds: Timeout for reading corrupted/slow PDFs (default: 3s)
 
         Returns:
             Extracted text as string
@@ -74,32 +83,11 @@ class TextScanService:
             return ""
 
         try:
-            with timeout_handler(timeout_seconds):
-                reader = PdfReader(pdf_path)
-                text_parts = []
-
-                # Extract text from PDF metadata fields first
-                # This picks up embedded metadata from previous OCR processing
-                if reader.metadata:
-                    # Subject and Keywords often contain date/issue info
-                    for field in ("/Subject", "/Keywords"):
-                        value = reader.metadata.get(field)
-                        if value and isinstance(value, str):
-                            text_parts.append(value)
-
-                # Extract text from first few pages
-                for i, page in enumerate(reader.pages[:max_pages]):
-                    try:
-                        page_text = page.extract_text()
-                        if page_text:
-                            text_parts.append(page_text)
-                    except Exception as e:
-                        logger.debug(f"Could not extract text from page {i}: {e}")
-
-                full_text = "\n".join(text_parts)
-                return full_text.strip()
-        except PDFReadTimeout:
-            logger.warning(f"PDF reading timed out for {pdf_path} - file may be corrupted")
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(TextScanService._read_pdf_text, pdf_path, max_pages)
+                return future.result(timeout=timeout_seconds)
+        except FuturesTimeoutError:
+            logger.warning(f"PDF reading timed out after {timeout_seconds}s for {pdf_path} - file may be corrupted")
             return ""
         except Exception as e:
             logger.debug(f"Could not extract text from PDF {pdf_path}: {e}")
