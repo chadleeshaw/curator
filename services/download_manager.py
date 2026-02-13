@@ -6,7 +6,7 @@ Coordinates search, deduplication, submission, and status tracking.
 # pylint: disable=too-many-lines
 
 import logging
-from datetime import datetime
+from threading import Lock
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
@@ -20,7 +20,6 @@ from core.constants.app import (
 from core.constants.category import DEFAULT_CATEGORY
 from core.constants.files import BLACKLISTED_FILE_EXTENSIONS
 from core.parsers import utc_now, TitleMatcher, Parser
-from core.parsers.categorizer import FileCategorizer
 from core.utils.fuzzy_matching import get_fuzzy_group_id
 from models.database import (
     DiscoveredIssue,
@@ -88,7 +87,6 @@ class DownloadManager:
         self.title_matcher = TitleMatcher(threshold=fuzzy_threshold)
         self.parser = Parser(fuzzy_threshold=fuzzy_threshold)
         self.nzb_cache_service = nzb_cache_service
-        self.categorizer = FileCategorizer()
 
         # Initialize services
         self.search_service = SearchService(search_providers, fuzzy_threshold)
@@ -97,6 +95,10 @@ class DownloadManager:
         self.queue_processor = QueueProcessor(
             download_client, max_downloads, nzb_cache_service, download_clients=self.download_clients
         )
+
+        # Lock to serialize slot counting + submission between concurrent callers
+        # (auto-download Phase 3 and download monitor's process_queue)
+        self._slot_lock = Lock()
 
         # Log available clients
         client_names = list(self.download_clients.keys())
@@ -818,18 +820,7 @@ class DownloadManager:
         }
 
         # Check if we're at the concurrent download limit
-        active_count = (
-            session.query(DownloadSubmission)
-            .filter(
-                DownloadSubmission.status.in_(
-                    [
-                        DownloadSubmission.StatusEnum.PENDING,
-                        DownloadSubmission.StatusEnum.DOWNLOADING,
-                    ]
-                )
-            )
-            .count()
-        )
+        active_count = self._get_active_download_count(session)
 
         # If at limit, create a QUEUED submission so the queue processor picks it up later
         if active_count >= self.max_downloads:
@@ -857,14 +848,8 @@ class DownloadManager:
 
         # Submit to download client
         try:
-            # Get tracking for category
-            tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == issue.tracking_id).first()
-
-            download_category = None
-            if tracking and tracking.download_category:
-                download_category = tracking.download_category
-            elif self.default_category:
-                download_category = self.default_category
+            # Get category for this periodical
+            download_category = self._get_download_category(issue.tracking_id, session)
 
             # Get the appropriate client for this provider
             provider = issue.latest_provider or "unknown"
@@ -1419,13 +1404,8 @@ class DownloadManager:
 
             # Resubmit to download client
             logger.info(f"Retrying submission {submission_id} with {client.name}: {submission.result_title}")
-            # Determine download client category: tracked item download_category > config default
-            tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == submission.tracking_id).first()
-            download_category = None
-            if tracking and tracking.download_category:
-                download_category = tracking.download_category
-            elif self.default_category:
-                download_category = self.default_category
+            # Determine download client category
+            download_category = self._get_download_category(submission.tracking_id, session)
 
             job_id = self._submit_with_nzb_content(
                 client=client,
@@ -1464,9 +1444,8 @@ class DownloadManager:
         """
         Process queued downloads and submit them when slots are available.
 
-        This method should be called periodically (e.g., by a scheduler) to:
-        1. Check how many active downloads are running
-        2. Submit queued downloads if slots are available
+        Thread-safe: acquires _slot_lock to prevent concurrent slot counting
+        from auto-download Phase 3 and download monitor from exceeding max_downloads.
 
         Args:
             session: Database session
@@ -1474,7 +1453,66 @@ class DownloadManager:
         Returns:
             Dict with processing results
         """
-        return self.queue_processor.process_queue(session)
+        with self._slot_lock:
+            return self.queue_processor.process_queue(session)
+
+    def submit_discovered_batch(self, session: Session, issue_discovery_service) -> int:
+        """
+        Submit discovered issues from the download queue, respecting slot limits.
+
+        Thread-safe: acquires _slot_lock to prevent concurrent slot counting
+        from process_queue() from exceeding max_downloads.
+
+        This replaces inline Phase 3 logic in auto_download_task, consolidating
+        all slot-aware submission through DownloadManager.
+
+        Args:
+            session: Database session
+            issue_discovery_service: IssueDiscoveryService for fetching queue
+
+        Returns:
+            Number of issues successfully submitted
+        """
+        with self._slot_lock:
+            # Count active downloads under the lock
+            active_count = (
+                session.query(DownloadSubmission)
+                .filter(
+                    DownloadSubmission.status.in_(
+                        [DownloadSubmission.StatusEnum.PENDING, DownloadSubmission.StatusEnum.DOWNLOADING]
+                    )
+                )
+                .count()
+            )
+
+            remaining_slots = max(0, self.max_downloads - active_count)
+            logger.debug(f"Auto-download: {remaining_slots} slots available ({active_count} in progress)")
+
+            if remaining_slots <= 0:
+                return 0
+
+            download_queue = issue_discovery_service.get_download_queue(session, limit=remaining_slots)
+            if not download_queue:
+                return 0
+
+            logger.info(f"Auto-download: Submitting {len(download_queue)} issues")
+            submitted_count = 0
+            for issue in download_queue:
+                try:
+                    submission = self.submit_from_discovered_issue(issue.id, session)
+                    if submission:
+                        submitted_count += 1
+                        logger.info(
+                            f"Auto-download: Submitted '{issue.title}' "
+                            f"(priority {issue.download_priority}, job_id: {submission.job_id})"
+                        )
+                except Exception as e:
+                    logger.error(f"Auto-download: Error submitting '{issue.title}': {e}", exc_info=True)
+
+            if submitted_count > 0:
+                logger.info(f"Auto-download: Submitted {submitted_count} downloads")
+
+            return submitted_count
 
 
 # Export all public items for wildcard imports

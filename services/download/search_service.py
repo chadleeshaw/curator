@@ -14,6 +14,7 @@ from core.interfaces import SearchProvider
 from core.constants.app import PROVIDER_SEARCH_TIMEOUT
 from core.parsers import Parser, TitleMatcher, LANGUAGE_INDICATORS
 from core.utils.fuzzy_matching import get_fuzzy_group_id
+from core.utils.ia_filtering import filter_ia_result
 
 logger = logging.getLogger(__name__)
 
@@ -112,29 +113,14 @@ class SearchService:
                             logger.debug(f"Skipping non-periodical result: {result.title}")
                             continue
 
-                        # Skip IA collection archives (they contain many issues, not single issues)
-                        raw_metadata = result.raw_metadata or {}
-                        if raw_metadata.get("is_collection"):
-                            logger.debug(f"Skipping IA collection archive: {result.title}")
+                        # Filter IA collection archives and poor title matches
+                        if not filter_ia_result(
+                            result_title=result.title,
+                            result_provider=result.provider,
+                            raw_metadata=result.raw_metadata,
+                            search_query=search_title,
+                        ):
                             continue
-
-                        # For IA results, verify title actually matches the periodical we're searching for
-                        # IA returns items where search term appears anywhere in metadata, not just title
-                        if result.provider == "internet_archive":
-                            # Check if the search title appears in the result title
-                            result_title_lower = result.title.lower()
-                            search_terms = search_title.lower().split()
-                            # Require all significant search terms (3+ chars) to be in the title
-                            significant_terms = [t for t in search_terms if len(t) >= 3]
-                            if significant_terms:
-                                matching_terms = sum(1 for t in significant_terms if t in result_title_lower)
-                                match_ratio = matching_terms / len(significant_terms)
-                                if match_ratio < 0.5:
-                                    logger.debug(
-                                        f"Skipping IA result with poor title match: '{result.title}' "
-                                        f"(searching for '{search_title}', match ratio: {match_ratio:.1%})"
-                                    )
-                                    continue
 
                         # Apply language filter if specified
                         if language_filter and parsed.language != language_filter:
@@ -144,8 +130,8 @@ class SearchService:
                         normalized_search = search_title.replace(".", " ").replace("_", " ")
                         normalized_result = parsed.title.replace(".", " ").replace("_", " ")
 
-                        search_variant = self.title_matcher._extract_edition_variant(normalized_search)
-                        result_variant = self.title_matcher._extract_edition_variant(normalized_result)
+                        search_variant = self.title_matcher.extract_edition_variant(normalized_search)
+                        result_variant = self.title_matcher.extract_edition_variant(normalized_result)
 
                         # Skip results with mismatched edition variants
                         if not (

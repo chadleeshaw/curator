@@ -19,7 +19,7 @@ from core.config import ConfigLoader
 from core import constants
 from core.database import DatabaseManager
 from core.factories import ClientFactory, ProviderFactory
-from core.parsers import TitleMatcher
+from core.parsers import TitleMatcher, utc_now
 from services import (
     DownloadManager,
     FileImporter,
@@ -103,7 +103,8 @@ class ServiceState:
     file_processor: Optional[FileOrganizer] = None
     file_importer: Optional[FileImporter] = None
     nzb_cache_service: Optional[Any] = None
-    rss_cache_service: Optional[Any] = None  # Persistent RSS feed cache
+    feed_sync_service: Optional[Any] = None  # RSS feed entry sync (cache-first auto-download)
+    feed_match_service: Optional[Any] = None  # Local matching against cached feed entries
     issue_discovery_service: Optional[IssueDiscoveryService] = None
     search_scheduler: Optional[SearchScheduler] = None
 
@@ -311,6 +312,26 @@ class AppState:
         self.services.nzb_cache_service = value
 
     @property
+    def feed_sync_service(self) -> Optional[Any]:
+        """Backward compatibility: access services.feed_sync_service."""
+        return self.services.feed_sync_service
+
+    @feed_sync_service.setter
+    def feed_sync_service(self, value: Any) -> None:
+        """Backward compatibility: set services.feed_sync_service."""
+        self.services.feed_sync_service = value
+
+    @property
+    def feed_match_service(self) -> Optional[Any]:
+        """Backward compatibility: access services.feed_match_service."""
+        return self.services.feed_match_service
+
+    @feed_match_service.setter
+    def feed_match_service(self, value: Any) -> None:
+        """Backward compatibility: set services.feed_match_service."""
+        self.services.feed_match_service = value
+
+    @property
     def issue_discovery_service(self) -> Optional[IssueDiscoveryService]:
         """Backward compatibility: access services.issue_discovery_service."""
         return self.services.issue_discovery_service
@@ -427,20 +448,6 @@ def _initialize_search_providers() -> None:
     """Initialize search providers (Newsnab, RSS, Internet Archive) from config."""
     search_provider_configs = app_state.config_loader.get_search_providers()
 
-    # Initialize RSS cache service first (before providers)
-    from pathlib import Path
-
-    from services.cache import RssCacheService
-
-    try:
-        cache_dir = Path(app_state.storage_config.get("cache_dir", "./local/cache"))
-        cache_db_path = cache_dir / constants.CACHE_DB_FILENAME
-        rss_cache_service = RssCacheService(cache_db_path=str(cache_db_path))
-        logger.info(f"RSS cache service initialized (for providers): {cache_db_path}")
-    except Exception as e:
-        logger.warning(f"RSS cache service not available, using in-memory fallback: {e}")
-        rss_cache_service = None
-
     for provider_config in search_provider_configs:
         try:
             provider_type = provider_config.get("type")
@@ -457,7 +464,7 @@ def _initialize_search_providers() -> None:
                 continue
 
             logger.debug(f"Creating search provider: {provider_config.get('name')} (type: {provider_type})")
-            provider = ProviderFactory.create(provider_config, rss_cache_service=rss_cache_service)
+            provider = ProviderFactory.create(provider_config)
             app_state.search_providers.append(provider)
             logger.info(f"Loaded search provider: {provider.name}")
 
@@ -522,25 +529,52 @@ def _initialize_download_client() -> None:
 
 
 def _initialize_cache_services() -> None:
-    """Initialize cache services for NZB content and RSS feeds.
+    """Initialize cache services for NZB content and feed sync.
+
+    Creates a single shared SQLAlchemy engine for the cache database, then
+    passes the session factory to both services. This avoids duplicate
+    connections and potential SQLite lock contention.
 
     - NZB cache: Only for Newsnab and RSS providers that return NZB files
-    - RSS cache: For all providers that support RSS caching (Internet Archive, Newsnab)
+    - Feed sync: Individual feed entry cache for cache-first auto-download
+    - Feed match: Local matching of cached entries against tracked periodicals
     """
     from pathlib import Path
 
-    from services.cache import NzbCacheService, RssCacheService
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    from models.cache import CacheBase
+    from services.cache import FeedMatchService, FeedSyncService, NzbCacheService
 
     cache_dir = Path(app_state.storage_config.get("cache_dir", "./local/cache"))
     cache_db_path = cache_dir / constants.CACHE_DB_FILENAME
 
-    # Initialize RSS cache service (persistent caching for all providers)
+    # Create shared engine and session factory for the cache database
+    # Both FeedSyncService and NzbCacheService use the same SQLite file,
+    # so a single engine avoids redundant connections and lock contention.
+    import os
+
+    os.makedirs(cache_dir, exist_ok=True)
+    db_url = f"sqlite:///{cache_db_path}"
+    cache_engine = create_engine(db_url, echo=False)
+    cache_session_factory = sessionmaker(bind=cache_engine)
+    CacheBase.metadata.create_all(cache_engine)
+
+    # Initialize feed sync service (cache-first auto-download)
     try:
-        app_state.rss_cache_service = RssCacheService(cache_db_path=str(cache_db_path))
-        logger.info(f"RSS cache service initialized: {cache_db_path}")
+        retention_days = app_state.tasks_config.get("feed_entry_retention_days", constants.FEED_ENTRY_RETENTION_DAYS)
+        app_state.feed_sync_service = FeedSyncService(
+            cache_db_path=str(cache_db_path),
+            retention_days=retention_days,
+            session_factory=cache_session_factory,
+        )
+        app_state.feed_match_service = FeedMatchService()
+        logger.info(f"Feed sync service initialized (retention: {retention_days} days)")
     except Exception as e:
-        logger.warning(f"RSS cache service not available: {e}", exc_info=True)
-        app_state.rss_cache_service = None
+        logger.warning(f"Feed sync service not available: {e}", exc_info=True)
+        app_state.feed_sync_service = None
+        app_state.feed_match_service = None
 
     # Initialize NZB cache service (only if NZB providers exist and cache is enabled)
     if not app_state.cache_config.get("enabled", True):
@@ -557,6 +591,7 @@ def _initialize_cache_services() -> None:
         app_state.nzb_cache_service = NzbCacheService(
             cache_db_path=str(cache_db_path),
             max_nzb_fetches_per_hour=app_state.cache_config.get("max_nzb_fetches_per_hour", 50),
+            session_factory=cache_session_factory,
         )
         logger.info(f"NZB cache service initialized: {cache_db_path}")
 
@@ -676,6 +711,7 @@ def _initialize_background_tasks() -> None:
 
 
 def _schedule_periodic_tasks(
+    feed_sync_task,
     auto_download_task,
     download_monitoring_task,
     cleanup_orphaned_covers_task,
@@ -686,6 +722,15 @@ def _schedule_periodic_tasks(
     """Schedule all periodic background tasks."""
     scheduler = app_state.task_scheduler
     tasks_cfg = app_state.tasks_config
+
+    # Feed sync runs more frequently than auto-download (lightweight RSS polling)
+    scheduler.schedule_periodic(
+        "feed_sync",
+        feed_sync_task,
+        tasks_cfg.get("feed_sync_interval", constants.FEED_SYNC_INTERVAL),
+        run_immediately=True,  # Populate cache on first run
+        enabled=tasks_cfg.get("feed_sync_enabled", True),
+    )
 
     scheduler.schedule_periodic(
         "auto_download",
@@ -758,6 +803,7 @@ def _initialize_router_dependencies(app: FastAPI, auto_download_task) -> None:
         auto_download_task,
         app_state.storage_config,
         app_state.import_config,
+        app_state.feed_sync_service,
     )
 
     downloads.set_dependencies(
@@ -806,9 +852,38 @@ async def lifespan(app: FastAPI):
         _initialize_core_services()
         _initialize_background_tasks()
 
+        # Define feed sync task (Phase 1: lightweight RSS polling)
+        async def feed_sync_task():
+            """Sync RSS feeds from all providers into the local entry cache."""
+
+            def _run_feed_sync():
+                if not app_state.feed_sync_service or not app_state.search_providers:
+                    return
+
+                logger.debug("Feed sync: Starting RSS feed sync")
+
+                # Sync all providers (one HTTP GET per provider)
+                stats = app_state.feed_sync_service.sync_all_providers(app_state.search_providers)
+
+                if stats["total_new"] > 0:
+                    logger.info(
+                        f"Feed sync: {stats['total_new']} new entries, "
+                        f"{stats['total_updated']} updated across "
+                        f"{stats['providers_synced']} providers"
+                    )
+
+                # Expire old entries periodically
+                app_state.feed_sync_service.expire_old_entries()
+
+            try:
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(None, _run_feed_sync)
+            except Exception as e:
+                logger.error(f"Feed sync error: {e}", exc_info=True)
+
         # Define auto-download task (uses Issue Discovery & Tracking system)
         async def auto_download_task():
-            """Adaptive search and download for tracked periodicals."""
+            """Cache-first adaptive search and download for tracked periodicals."""
             logger.info("Starting auto-download task")
 
             def _run_auto_download():
@@ -819,19 +894,73 @@ async def lifespan(app: FastAPI):
 
                     logger.debug("Auto-download: Starting Issue Discovery & Tracking run")
 
-                    # Phase 1: Select periodicals to search (adaptive scheduling)
+                    # ============================================================
+                    # Phase 1.5: Cache-first local matching (zero API calls)
+                    # Match new RSS feed entries against ALL tracked periodicals
+                    # ============================================================
+                    cache_match_new = 0
+                    if app_state.feed_sync_service and app_state.feed_match_service:
+                        batch_size = app_state.tasks_config.get(
+                            "feed_sync_match_batch_size", constants.FEED_SYNC_MATCH_BATCH_SIZE
+                        )
+                        new_entries = app_state.feed_sync_service.get_new_entries(limit=batch_size)
+
+                        if new_entries:
+                            logger.debug(f"Auto-download: Matching {len(new_entries)} cached feed entries")
+                            match_result = app_state.feed_match_service.match_entries_against_tracking(
+                                new_entries, db_session
+                            )
+
+                            # Record matched entries as discovered issues
+                            for tracking_id, search_results in match_result["matches"].items():
+                                try:
+                                    record_stats = app_state.issue_discovery_service.record_search_results(
+                                        tracking_id, search_results, db_session
+                                    )
+                                    if record_stats["new"] > 0:
+                                        cache_match_new += record_stats["new"]
+
+                                    eval_stats = app_state.issue_discovery_service.evaluate_discovered_issues(
+                                        tracking_id, db_session
+                                    )
+                                    if eval_stats["wanted"] > 0:
+                                        logger.info(
+                                            f"Auto-download: Cache match - "
+                                            f"{eval_stats['wanted']} wanted from tracking {tracking_id}"
+                                        )
+                                except Exception as e:
+                                    logger.error(
+                                        f"Auto-download: Error recording cache matches "
+                                        f"for tracking {tracking_id}: {e}",
+                                        exc_info=True,
+                                    )
+
+                            # Update entry statuses in the feed cache
+                            app_state.feed_sync_service.mark_entries_matched(match_result["matched_entry_ids"])
+                            app_state.feed_sync_service.mark_entries_skipped(match_result["skipped_entry_ids"])
+
+                            if cache_match_new > 0:
+                                logger.info(
+                                    f"Auto-download: Cache-first matching found {cache_match_new} new issues "
+                                    f"from {match_result['stats']['matched']} feed entries (zero API calls)"
+                                )
+
+                    # ============================================================
+                    # Phase 2: Adaptive per-periodical API search (existing flow)
+                    # Only for periodicals that need refresh per adaptive scheduler
+                    # ============================================================
                     periodicals_to_search = app_state.search_scheduler.select_periodicals_to_search(db_session)
                     if not periodicals_to_search:
-                        logger.debug("Auto-download: No periodicals need searching at this time")
-                        return
+                        if cache_match_new == 0:
+                            logger.debug("Auto-download: No periodicals need searching at this time")
+                            # Still check download queue (Phase 3) even if no searches needed
 
-                    # Phase 2: Search each selected periodical and record results
                     # Check if all providers are rate limited before searching
                     all_rate_limited = app_state.download_manager.all_providers_rate_limited
-                    if all_rate_limited:
+                    if all_rate_limited and periodicals_to_search:
                         logger.info(
                             "Auto-download: All search providers are rate limited, "
-                            "skipping searches (not penalizing adaptive scheduler)"
+                            "skipping API searches (not penalizing adaptive scheduler)"
                         )
 
                     for periodical in periodicals_to_search:
@@ -888,46 +1017,38 @@ async def lifespan(app: FastAPI):
                         except Exception as e:
                             logger.error(f"Auto-download: Error processing '{periodical.title}': {e}", exc_info=True)
 
-                    # Phase 3: Download from priority queue
+                    # ============================================================
+                    # Phase 3: Download from priority queue (thread-safe)
+                    # ============================================================
                     logger.debug("Auto-download: Checking download queue")
-                    from models.database import DownloadSubmission
+                    app_state.download_manager.submit_discovered_batch(db_session, app_state.issue_discovery_service)
 
-                    pending_count = (
-                        db_session.query(DownloadSubmission)
-                        .filter(
-                            DownloadSubmission.status.in_(
-                                [DownloadSubmission.StatusEnum.PENDING, DownloadSubmission.StatusEnum.DOWNLOADING]
+                    # ============================================================
+                    # Phase 4: Cleanup stale search results
+                    # ============================================================
+                    try:
+                        from datetime import timedelta
+
+                        from models.database import SearchResult as DBSearchResult
+
+                        retention_days = app_state.tasks_config.get(
+                            "search_result_retention_days", constants.SEARCH_RESULT_RETENTION_DAYS
+                        )
+                        # Use naive datetime for SQLite compatibility in filter comparison
+                        cutoff = utc_now().replace(tzinfo=None) - timedelta(days=retention_days)
+                        deleted = (
+                            db_session.query(DBSearchResult)
+                            .filter(DBSearchResult.created_at < cutoff)
+                            .delete(synchronize_session=False)
+                        )
+                        db_session.commit()
+                        if deleted > 0:
+                            logger.info(
+                                f"Auto-download: Cleaned up {deleted} search results "
+                                f"older than {retention_days} days"
                             )
-                        )
-                        .count()
-                    )
-
-                    remaining_slots = max(0, app_state.download_manager.max_downloads - pending_count)
-                    logger.debug(f"Auto-download: {remaining_slots} slots available ({pending_count} in progress)")
-
-                    if remaining_slots > 0:
-                        download_queue = app_state.issue_discovery_service.get_download_queue(
-                            db_session, limit=remaining_slots
-                        )
-                        if download_queue:
-                            logger.info(f"Auto-download: Submitting {len(download_queue)} issues")
-                            submitted_count = 0
-                            for issue in download_queue:
-                                try:
-                                    submission = app_state.download_manager.submit_from_discovered_issue(
-                                        issue.id, db_session
-                                    )
-                                    if submission:
-                                        submitted_count += 1
-                                        logger.info(
-                                            f"Auto-download: Submitted '{issue.title}' "
-                                            f"(priority {issue.download_priority}, job_id: {submission.job_id})"
-                                        )
-                                except Exception as e:
-                                    logger.error(f"Auto-download: Error submitting '{issue.title}': {e}", exc_info=True)
-
-                            if submitted_count > 0:
-                                logger.info(f"Auto-download: Submitted {submitted_count} downloads")
+                    except Exception as e:
+                        logger.warning(f"Auto-download: Search result cleanup error: {e}")
 
                     logger.debug("Auto-download: Completed run")
                 finally:
@@ -1018,6 +1139,7 @@ async def lifespan(app: FastAPI):
 
         # Schedule all periodic tasks
         _schedule_periodic_tasks(
+            feed_sync_task,
             auto_download_task,
             download_monitoring_task,
             cleanup_orphaned_covers_task,

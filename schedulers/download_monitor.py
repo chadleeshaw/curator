@@ -12,6 +12,7 @@ from typing import Callable, Optional
 from sqlalchemy.orm import Session, sessionmaker
 
 from core.constants.app import DOWNLOAD_FILE_SEARCH_DEPTH
+from core.constants.app import MAX_IMPORT_RETRIES
 from core.constants.files import INCOMPLETE_DOWNLOAD_PATTERNS
 from core.parsers import utc_now
 from core.utils import find_supported_files
@@ -118,6 +119,12 @@ class DownloadMonitor:
             folder_imported = self._scan_downloads_folder(session)
             self.stats["folder_files_imported"] += folder_imported
             self.stats["last_folder_scan"] = datetime.now()
+
+            # Part 3: Retry failed imports where the file still exists on disk
+            logger.debug("[DownloadMonitor] Checking for retryable import failures...")
+            import_retried = self._retry_failed_imports(session)
+            if import_retried > 0:
+                logger.info(f"[DownloadMonitor] Retried {import_retried} previously failed imports")
 
             # Warn if no files found but there are active downloads (potential config mismatch)
             # Rate limit to once every 30 minutes to avoid log spam
@@ -292,6 +299,10 @@ class DownloadMonitor:
 
             # Check for PDFs, EPUBs, CBZs, and CBRs recursively
             all_files = find_supported_files(self.downloads_dir, recursive=True)
+
+            # Filter out incomplete/temporary downloads (e.g., .part, _UNPACK_, .crdownload)
+            all_files = [f for f in all_files if not any(pattern in f.name for pattern in INCOMPLETE_DOWNLOAD_PATTERNS)]
+
             # Strip trailing quotes from suffix (for files like 'Magazine.pdf')
             pdf_files = [f for f in all_files if f.suffix.lower().rstrip("'") == ".pdf"]
             epub_files = [f for f in all_files if f.suffix.lower().rstrip("'") == ".epub"]
@@ -328,6 +339,86 @@ class DownloadMonitor:
             logger.error(f"Error scanning downloads folder: {e}", exc_info=True)
 
         return imported_count
+
+    def _retry_failed_imports(self, session: Session) -> int:
+        """
+        Retry imports for FAILED submissions where the file still exists on disk.
+
+        Picks up submissions that failed during import (not download failures)
+        and re-attempts the import up to MAX_IMPORT_RETRIES times. This handles
+        transient failures like disk full, temporary permission issues, or
+        intermittent parsing errors.
+
+        Args:
+            session: Database session
+
+        Returns:
+            Number of imports successfully retried
+        """
+        retried_count = 0
+
+        try:
+            # Find FAILED submissions where the error indicates an import failure
+            # and attempt_count is below the retry threshold
+            failed_imports = (
+                session.query(DownloadSubmission)
+                .filter(
+                    DownloadSubmission.status == DownloadSubmission.StatusEnum.FAILED,
+                    DownloadSubmission.file_path.isnot(None),
+                    DownloadSubmission.attempt_count < MAX_IMPORT_RETRIES,
+                    DownloadSubmission.last_error.like("%Import%"),
+                )
+                .all()
+            )
+
+            if not failed_imports:
+                return 0
+
+            logger.info(f"[DownloadMonitor] Found {len(failed_imports)} failed imports eligible for retry")
+
+            for submission in failed_imports:
+                file_path = self._find_file_in_downloads(submission.file_path)
+
+                if not file_path:
+                    # File no longer on disk — can't retry import, leave as failed
+                    logger.debug(f"[DownloadMonitor] Import retry skipped: file gone for submission {submission.id}")
+                    continue
+
+                logger.info(
+                    f"[DownloadMonitor] Retrying import for submission {submission.id}: "
+                    f"{file_path.name} (attempt {submission.attempt_count + 1}/{MAX_IMPORT_RETRIES})"
+                )
+
+                submission.attempt_count += 1
+
+                if self._process_single_file(file_path, submission, session):
+                    retried_count += 1
+                    self._sync_discovered_issue_status(submission, "completed", None, session)
+                    self.download_manager.mark_processed(submission.id, session)
+
+                    if self._should_delete_from_client(submission.tracking_id, session):
+                        self._delete_from_client(submission.job_id, "completed (import retry)", submission.client_name)
+
+                    logger.info(f"[DownloadMonitor] Import retry succeeded: {file_path.name}")
+                else:
+                    if submission.attempt_count >= MAX_IMPORT_RETRIES:
+                        submission.last_error = (
+                            f"Import/processing permanently failed after {MAX_IMPORT_RETRIES} attempts"
+                        )
+                        logger.warning(
+                            f"[DownloadMonitor] Import retry exhausted for submission {submission.id}: "
+                            f"{file_path.name} ({MAX_IMPORT_RETRIES} attempts)"
+                        )
+                    else:
+                        submission.last_error = (
+                            f"Import/processing failed (attempt {submission.attempt_count}/{MAX_IMPORT_RETRIES})"
+                        )
+                    session.commit()
+
+        except Exception as e:
+            logger.error(f"[DownloadMonitor] Error in import retry: {e}", exc_info=True)
+
+        return retried_count
 
     def _update_pending_downloads(self, session: Session) -> int:
         """

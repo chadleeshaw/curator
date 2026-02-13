@@ -60,15 +60,8 @@ NEWSNAB_REQUEST_TIMEOUT = 10
 NEWSNAB_DEFAULT_RATE_LIMIT_WAIT = 300
 """Default wait time in seconds when rate limited without explicit Retry-After (5 minutes)"""
 
-# RSS feed caching configuration (reduces API calls)
-NEWSNAB_RSS_CACHE_ENABLED = True
-"""Enable RSS feed caching by default"""
-
-NEWSNAB_RSS_CACHE_TTL = 3600
-"""Cache RSS feeds for 1 hour (3600 seconds)"""
-
 NEWSNAB_RSS_MAX_RESULTS = 100
-"""Maximum number of RSS results to fetch and cache"""
+"""Maximum number of RSS results to fetch (used by FeedSyncService for cache-first auto-download)"""
 
 # ==============================================================================
 # Time Conversion Constants

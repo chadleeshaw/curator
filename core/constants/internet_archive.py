@@ -99,12 +99,6 @@ IA_DOWNLOAD_BASE_URL = "https://archive.org/download"
 IA_COMPRESS_BASE_URL = "https://archive.org/compress"
 IA_DETAILS_BASE_URL = "https://archive.org/details"
 IA_METADATA_BASE_URL = "https://archive.org/metadata"
-IA_RSS_BASE_URL = "https://archive.org/services/collection-rss.php"
-
-# RSS feed caching configuration
-IA_RSS_CACHE_TTL = 3600  # Cache RSS feeds for 1 hour (3600 seconds)
-IA_RSS_CACHE_ENABLED = True  # Enable RSS caching by default
-IA_RSS_MAX_ENTRIES = 100  # Maximum number of RSS entries to fetch per collection
 
 # Search query templates
 IA_SEARCH_FIELDS = [

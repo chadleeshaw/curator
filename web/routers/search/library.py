@@ -12,9 +12,10 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import or_
 
 from core.constants.date import NUMBER_TO_MONTH
+from core.parsers import utc_now
 from models.database import DownloadSubmission
 
-from .cache import get_fuzzy_group_id
+from core.utils.fuzzy_matching import get_fuzzy_group_id
 from .dependencies import get_title_matcher
 from .filters import filter_by_language_and_country
 
@@ -264,6 +265,16 @@ def build_search_response(
     Returns:
         Response dict
     """
+    # Calculate cache age once (handle naive/aware datetime comparison)
+    cache_age_days = None
+    if cached_results:
+        now = utc_now()
+        cache_created = cached_results[0].created_at
+        # Strip timezone if needed for consistent comparison with SQLite naive datetimes
+        if cache_created and cache_created.tzinfo is None:
+            now = now.replace(tzinfo=None)
+        cache_age_days = (now - cache_created).days if cache_created else None
+
     final_results = library_matches + provider_results
 
     if final_results:
@@ -278,7 +289,7 @@ def build_search_response(
             "total_results": len(final_results),
             "provider_errors": provider_errors if provider_errors else None,
             "from_cache": len(cached_results) > 0,
-            "cache_age_days": (datetime.utcnow() - cached_results[0].created_at).days if cached_results else None,
+            "cache_age_days": cache_age_days,
             "message": f"Found {len(final_results)} results for '{query}'",
         }
 
@@ -296,5 +307,5 @@ def build_search_response(
         "total_results": 0,
         "provider_errors": provider_errors if provider_errors else None,
         "from_cache": len(cached_results) > 0,
-        "cache_age_days": (datetime.utcnow() - cached_results[0].created_at).days if cached_results else None,
+        "cache_age_days": cache_age_days,
     }

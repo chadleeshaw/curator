@@ -82,6 +82,13 @@ async def start_tracking_periodical(
         db.add(tracking)
         db.commit()
 
+        # Reset skipped feed entries so they get re-evaluated against the new tracking
+        if _shared._feed_sync_service:
+            try:
+                _shared._feed_sync_service.reset_skipped_entries()
+            except Exception as e:
+                logger.warning(f"Failed to reset skipped feed entries: {e}")
+
         logger.info(f"Started tracking periodical: {title}")
         return success_response(
             f"Started tracking '{title}'",

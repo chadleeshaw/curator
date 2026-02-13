@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 from core.constants.country import LANGUAGE_TO_COUNTRY
 from core.constants.language import LANGUAGE_KEYWORDS
 from core.parsers.country import detect_country
+from core.utils.ia_filtering import filter_ia_result
 from services.issue_discovery import IssueDiscoveryService
 
 from .dependencies import get_title_matcher
@@ -49,7 +50,7 @@ def filter_edition_variants(results: List[Dict[str, Any]], query: str) -> List[D
     filtered = []
 
     # Extract edition variant from query
-    query_variant = title_matcher._extract_edition_variant(query)
+    query_variant = title_matcher.extract_edition_variant(query)
     logger.debug(f"Filtering edition variants: Query '{query}' has variant: {query_variant}")
     logger.debug(f"Examining {len(results)} results...")
 
@@ -59,7 +60,7 @@ def filter_edition_variants(results: List[Dict[str, Any]], query: str) -> List[D
         # Lightly normalize the title (dots -> spaces) but preserve dates, issue numbers, country codes
         # Don't use clean_release_title() as it removes too much metadata
         normalized_title = raw_title.replace(".", " ").replace("_", " ")
-        result_variant = title_matcher._extract_edition_variant(normalized_title)
+        result_variant = title_matcher.extract_edition_variant(normalized_title)
 
         # Keep result if edition variants match
         # - Both have no variant: keep (e.g., "National Geographic" query, "National Geographic" result)
@@ -121,6 +122,50 @@ def filter_non_periodicals(results: List[Dict[str, Any]]) -> List[Dict[str, Any]
             logger.debug(f"[FILTER] Rejected as non-periodical: {result.get('title', '')}")
 
     logger.debug(f"[FILTER] Filtered {len(results) - len(filtered)} non-periodical results, kept {len(filtered)}")
+    return filtered
+
+
+def filter_ia_results(results: List[Dict[str, Any]], search_query: str) -> List[Dict[str, Any]]:
+    """
+    Filter Internet Archive results to remove collection archives and poor title matches.
+
+    IA search is broad — it returns items where the search term appears anywhere
+    in metadata (description, creator, subject), not just the title. This filter
+    removes results that don't actually match the search query and collection
+    archives that bundle many issues together.
+
+    Non-IA results pass through unchanged.
+
+    Args:
+        results: List of search result dictionaries
+        search_query: The original search query for title-match verification
+
+    Returns:
+        Filtered list with only relevant IA results (plus all non-IA results)
+    """
+    if not results:
+        return results
+
+    filtered = []
+    ia_filtered_count = 0
+
+    for result in results:
+        provider = result.get("provider", "")
+        metadata = result.get("metadata", {})
+
+        if filter_ia_result(
+            result_title=result.get("title", ""),
+            result_provider=provider,
+            raw_metadata=metadata,
+            search_query=search_query,
+        ):
+            filtered.append(result)
+        else:
+            ia_filtered_count += 1
+
+    if ia_filtered_count > 0:
+        logger.debug(f"[FILTER] Removed {ia_filtered_count} irrelevant Internet Archive results")
+
     return filtered
 
 

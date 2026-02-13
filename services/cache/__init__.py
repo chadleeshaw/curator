@@ -1,16 +1,18 @@
 """
-Cache services for NZB content and RSS feeds.
+Cache services for NZB content and feed sync.
 
 Caches data fetched from providers to avoid repeated
 provider hits and reduce rate limiting:
 - NZB file content (download retries)
-- RSS feeds (search optimization)
+- Individual feed entries for cache-first auto-download
 """
 
+from .feed_match import FeedMatchService
+from .feed_sync import FeedSyncService
 from .provider_cache import NzbCacheService
-from .rss_cache import RssCacheService
 
 __all__ = [
+    "FeedMatchService",
+    "FeedSyncService",
     "NzbCacheService",
-    "RssCacheService",
 ]

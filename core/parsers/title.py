@@ -502,7 +502,7 @@ class TitleMatcher:
 
         return volume, issue
 
-    def _extract_edition_variant(self, title: str) -> Optional[str]:
+    def extract_edition_variant(self, title: str) -> Optional[str]:
         """
         Extract edition variant indicator from title.
 
@@ -616,8 +616,8 @@ class TitleMatcher:
         # Step 1.5: Check for edition variant mismatch
         # If one title has an edition variant and the other doesn't (or has a different one),
         # they're different publications despite similar base names
-        provider_edition = self._extract_edition_variant(provider_title)
-        library_edition = self._extract_edition_variant(library_title)
+        provider_edition = self.extract_edition_variant(provider_title)
+        library_edition = self.extract_edition_variant(library_title)
 
         # If both have edition variants, they must match
         if provider_edition is not None and library_edition is not None:

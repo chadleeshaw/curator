@@ -5,8 +5,10 @@ Handles fetching results from direct provider searches.
 """
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from typing import Any, Dict, List, Optional
 
+from core.constants.app import PROVIDER_SEARCH_TIMEOUT
 from core.constants.errors import ErrorMessages
 
 from .dependencies import get_search_providers
@@ -81,33 +83,20 @@ def fetch_from_providers(
     primary_query = search_queries[0]
     aliases = search_queries[1:] if len(search_queries) > 1 else None
 
-    # Search each provider once with primary query + aliases
-    for provider in search_providers:
-        try:
-            provider_results = provider.search(primary_query, category=category, aliases=aliases)
-            for r in provider_results:
-                if r.url not in seen_urls:
-                    seen_urls.add(r.url)
-                    results.append(
-                        {
-                            "title": r.title,
-                            "url": r.url,
-                            "provider": r.provider,
-                            "publication_date": r.publication_date,
-                            "metadata": r.raw_metadata or {},
-                        }
-                    )
-        except Exception as e:
-            error_msg = f"{provider.__class__.__name__}: {str(e)}"
-            logger.warning(f"Error searching provider: {error_msg}")
-            provider_errors.append(error_msg)
-
-    # Retry without category filter if no results
-    if category and len(results) == 0:
-        logger.info(f"No results with category '{category}', expanding search to all categories")
+    # Search each provider once with primary query + aliases (with timeout protection)
+    # Use one worker per provider so a hung provider doesn't block others
+    with ThreadPoolExecutor(max_workers=len(search_providers)) as executor:
         for provider in search_providers:
             try:
-                provider_results = provider.search(primary_query, category=None, aliases=aliases)
+                future = executor.submit(provider.search, primary_query, category, aliases)
+                try:
+                    provider_results = future.result(timeout=PROVIDER_SEARCH_TIMEOUT)
+                except FuturesTimeoutError:
+                    error_msg = f"{provider.__class__.__name__}: timed out after {PROVIDER_SEARCH_TIMEOUT}s"
+                    logger.warning(f"Provider search timeout: {error_msg}")
+                    provider_errors.append(error_msg)
+                    continue
+
                 for r in provider_results:
                     if r.url not in seen_urls:
                         seen_urls.add(r.url)
@@ -120,7 +109,36 @@ def fetch_from_providers(
                                 "metadata": r.raw_metadata or {},
                             }
                         )
-            except Exception:
-                pass  # Already logged above
+            except Exception as e:
+                error_msg = f"{provider.__class__.__name__}: {str(e)}"
+                logger.warning(f"Error searching provider: {error_msg}")
+                provider_errors.append(error_msg)
+
+    # Retry without category filter if no results
+    if category and len(results) == 0:
+        logger.info(f"No results with category '{category}', expanding search to all categories")
+        with ThreadPoolExecutor(max_workers=len(search_providers)) as executor:
+            for provider in search_providers:
+                try:
+                    future = executor.submit(provider.search, primary_query, None, aliases)
+                    try:
+                        provider_results = future.result(timeout=PROVIDER_SEARCH_TIMEOUT)
+                    except FuturesTimeoutError:
+                        continue  # Already logged above for this provider
+
+                    for r in provider_results:
+                        if r.url not in seen_urls:
+                            seen_urls.add(r.url)
+                            results.append(
+                                {
+                                    "title": r.title,
+                                    "url": r.url,
+                                    "provider": r.provider,
+                                    "publication_date": r.publication_date,
+                                    "metadata": r.raw_metadata or {},
+                                }
+                            )
+                except Exception:
+                    pass  # Already logged above
 
     return results, provider_errors

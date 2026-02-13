@@ -239,9 +239,11 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
         old_title = tracking.title
         old_language = tracking.language
         old_pattern = tracking.organization_pattern
+        old_aliases = tracking.search_aliases
         title_changed = "title" in updates and updates["title"] != old_title
         language_changed = "language" in updates and updates["language"] != old_language
         pattern_changed = "organization_pattern" in updates and updates["organization_pattern"] != old_pattern
+        aliases_changed = "search_aliases" in updates and updates["search_aliases"] != old_aliases
 
         if "title" in updates:
             tracking.title = updates["title"]
@@ -378,6 +380,7 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
             "old_language": old_language,
             "title_changed": title_changed,
             "language_changed": language_changed,
+            "aliases_changed": aliases_changed,
             "language_updates": language_updates,
             "pattern_changed": pattern_changed,
             "files_affected_by_pattern": files_affected_by_pattern,
@@ -390,6 +393,7 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
     tracking_data = result["tracking_data"]
     title_changed = result["title_changed"]
     language_changed = result["language_changed"]
+    aliases_changed = result["aliases_changed"]
     language_updates = result["language_updates"]
     pattern_changed = result["pattern_changed"]
     files_affected_by_pattern = result["files_affected_by_pattern"]
@@ -415,6 +419,16 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
             f"Language changed from '{old_language}' to '{tracking_data.get('language', 'English')}', "
             f"updated {language_updates} periodical records"
         )
+
+    # Reset skipped feed entries when title or aliases change so they get
+    # re-evaluated against the updated search terms on the next auto-download cycle
+    if (title_changed or aliases_changed) and _shared._feed_sync_service:
+        try:
+            reset_count = _shared._feed_sync_service.reset_skipped_entries()
+            if reset_count > 0:
+                logger.info(f"Reset {reset_count} feed entries for re-evaluation after tracking update")
+        except Exception:
+            logger.warning("Failed to reset skipped feed entries after tracking update")
 
     # Note: We don't trigger immediate auto-download here to avoid blocking the response.
     # The scheduled auto-download task will pick up changes on its next run.

@@ -34,6 +34,9 @@ MAX_DOWNLOAD_RETRIES = 1
 MAX_DOWNLOAD_RETRIES_IA = 5
 """Maximum retries for Internet Archive downloads (failures usually transient)"""
 
+MAX_IMPORT_RETRIES = 3
+"""Maximum number of retry attempts for failed file imports (file exists but import failed)"""
+
 MAX_DOWNLOADS = 10
 """Maximum number of concurrent downloads allowed system-wide""" ""
 
@@ -79,6 +82,18 @@ OCR_PROCESSOR_INTERVAL = 10
 
 AUTO_METADATA_INTERVAL = 604800
 """Interval for automatic metadata backfill and sync (7 days / 1 week)"""
+
+FEED_SYNC_INTERVAL = 900
+"""Interval for RSS feed sync task (15 minutes)"""
+
+FEED_SYNC_MATCH_BATCH_SIZE = 200
+"""Maximum number of new RSS feed entries to match per auto-download run"""
+
+FEED_ENTRY_RETENTION_DAYS = 7
+"""Number of days to retain RSS feed entries before expiring them"""
+
+SEARCH_RESULT_RETENTION_DAYS = 30
+"""Number of days to retain search results in the main database before cleanup"""
 
 TASK_SCHEDULER_CHECK_INTERVAL = 60
 """Interval for task scheduler checking (1 minute)"""

@@ -4,7 +4,6 @@ Handles creation, status updates, and retrieval of download submissions.
 """
 
 import logging
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
@@ -182,7 +181,7 @@ class SubmissionService:
         """
         submission.status = DownloadSubmission.StatusEnum.QUEUED
         submission.attempt_count += 1
-        submission.error_message = None
+        submission.last_error = None
         submission.job_id = None
         submission.updated_at = utc_now()
         session.commit()

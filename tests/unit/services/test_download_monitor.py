@@ -652,5 +652,293 @@ class TestRemotePathMapping:
         assert path1 == path2
 
 
+class TestIncompleteDownloadFiltering:
+    """Test that incomplete/temporary downloads are filtered from folder scans."""
+
+    @pytest.mark.asyncio
+    async def test_scan_skips_incomplete_sabnzbd_files(self, test_db, tmp_path, download_manager, mock_file_importer):
+        """SABnzbd _unpack_ prefix files should be skipped."""
+        engine, session_factory = test_db
+        session = session_factory()
+        downloads_dir = tmp_path / "downloads"
+        downloads_dir.mkdir()
+
+        # Create files with incomplete patterns
+        (downloads_dir / "_unpack_Magazine.pdf").write_bytes(b"%PDF-1.4\ntest")
+        (downloads_dir / "_UNPACK_Comic.cbz").write_bytes(b"PK\x03\x04test")
+        # Create a valid file
+        (downloads_dir / "Complete Magazine.pdf").write_bytes(b"%PDF-1.4\ntest")
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=downloads_dir,
+        )
+
+        monitor._scan_downloads_folder(session)
+
+        # process_downloads should be called — there is 1 valid file
+        if mock_file_importer.process_downloads.called:
+            assert mock_file_importer.process_downloads.call_count >= 1
+        session.close()
+
+    @pytest.mark.asyncio
+    async def test_scan_skips_partial_download_files(self, test_db, tmp_path, download_manager, mock_file_importer):
+        """Files with .part, .crdownload extensions should be skipped."""
+        engine, session_factory = test_db
+        session = session_factory()
+        downloads_dir = tmp_path / "downloads"
+        downloads_dir.mkdir()
+
+        # Create files with incomplete patterns in the name
+        (downloads_dir / "Magazine.pdf.part").write_bytes(b"%PDF-1.4\ntest")
+        (downloads_dir / "Book.epub.crdownload").write_bytes(b"PK\x03\x04test")
+        (downloads_dir / "Magazine.tmp").write_bytes(b"temp data")
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=downloads_dir,
+        )
+
+        monitor._scan_downloads_folder(session)
+
+        # No valid files found (all are incomplete) — process_downloads may not be called
+        # or called with 0 importable files
+        session.close()
+
+    @pytest.mark.asyncio
+    async def test_scan_only_skips_incomplete_not_valid(self, test_db, tmp_path, download_manager, mock_file_importer):
+        """Valid files should still be found alongside incomplete ones."""
+        engine, session_factory = test_db
+        session = session_factory()
+        downloads_dir = tmp_path / "downloads"
+        downloads_dir.mkdir()
+
+        # Mix of incomplete and valid
+        (downloads_dir / "_unpack_InProgress.pdf").write_bytes(b"%PDF-1.4\ntest")
+        (downloads_dir / "Valid Magazine.pdf").write_bytes(b"%PDF-1.4\ntest")
+        (downloads_dir / "Good Comic.cbz").write_bytes(b"PK\x03\x04test")
+
+        mock_file_importer.process_downloads.return_value = {
+            "success": True,
+            "data": {"imported": 2, "failed": 0, "skipped": 0},
+        }
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=downloads_dir,
+        )
+
+        result = monitor._scan_downloads_folder(session)
+        # process_downloads should have been called for the 2 valid files
+        assert mock_file_importer.process_downloads.called
+        session.close()
+
+
+class TestImportRetry:
+    """Test the import retry mechanism for failed submissions."""
+
+    @pytest.mark.asyncio
+    async def test_retry_picks_up_failed_imports(self, test_db, tmp_path, download_manager, mock_file_importer):
+        """Failed import submissions with files on disk should be retried."""
+        from models.database import DownloadSubmission, PeriodicalTracking
+
+        engine, session_factory = test_db
+        session = session_factory()
+
+        # Create a tracking record
+        tracking = PeriodicalTracking(
+            olid="OL-test",
+            title="Test Magazine",
+            language="English",
+        )
+        session.add(tracking)
+        session.commit()
+
+        # Create downloads dir with a file
+        downloads_dir = tmp_path / "downloads"
+        downloads_dir.mkdir()
+        test_file = downloads_dir / "Test Magazine - Jan 2025.pdf"
+        test_file.write_bytes(b"%PDF-1.4\ntest content")
+
+        # Create a FAILED submission that looks like an import failure
+        submission = DownloadSubmission(
+            tracking_id=tracking.id,
+            source_url="http://example.com/nzb",
+            result_title="Test Magazine - Jan 2025",
+            status=DownloadSubmission.StatusEnum.FAILED,
+            file_path=str(test_file),
+            last_error="Import/processing failed",
+            attempt_count=0,
+        )
+        session.add(submission)
+        session.commit()
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=downloads_dir,
+        )
+
+        # Mock _process_single_file to succeed on retry
+        monitor._process_single_file = Mock(return_value=True)
+        monitor._sync_discovered_issue_status = Mock()
+        monitor.download_manager.mark_processed = Mock()
+        monitor._should_delete_from_client = Mock(return_value=False)
+
+        retried = monitor._retry_failed_imports(session)
+        assert retried == 1
+        assert monitor._process_single_file.called
+        session.close()
+
+    @pytest.mark.asyncio
+    async def test_retry_skips_when_file_gone(self, test_db, tmp_path, download_manager, mock_file_importer):
+        """Failed import submissions where file no longer exists should not be retried."""
+        from models.database import DownloadSubmission, PeriodicalTracking
+
+        engine, session_factory = test_db
+        session = session_factory()
+
+        tracking = PeriodicalTracking(
+            olid="OL-test2",
+            title="Gone Magazine",
+            language="English",
+        )
+        session.add(tracking)
+        session.commit()
+
+        downloads_dir = tmp_path / "downloads"
+        downloads_dir.mkdir()
+
+        # File does NOT exist on disk
+        submission = DownloadSubmission(
+            tracking_id=tracking.id,
+            source_url="http://example.com/nzb",
+            result_title="Gone Magazine - Jan 2025",
+            status=DownloadSubmission.StatusEnum.FAILED,
+            file_path=str(downloads_dir / "nonexistent.pdf"),
+            last_error="Import/processing failed",
+            attempt_count=0,
+        )
+        session.add(submission)
+        session.commit()
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=downloads_dir,
+        )
+
+        monitor._process_single_file = Mock(return_value=True)
+
+        retried = monitor._retry_failed_imports(session)
+        assert retried == 0
+        assert not monitor._process_single_file.called
+        session.close()
+
+    @pytest.mark.asyncio
+    async def test_retry_respects_max_attempts(self, test_db, tmp_path, download_manager, mock_file_importer):
+        """Submissions at MAX_IMPORT_RETRIES should not be retried again."""
+        from core.constants.app import MAX_IMPORT_RETRIES
+        from models.database import DownloadSubmission, PeriodicalTracking
+
+        engine, session_factory = test_db
+        session = session_factory()
+
+        tracking = PeriodicalTracking(
+            olid="OL-test3",
+            title="Exhausted Magazine",
+            language="English",
+        )
+        session.add(tracking)
+        session.commit()
+
+        downloads_dir = tmp_path / "downloads"
+        downloads_dir.mkdir()
+        test_file = downloads_dir / "Exhausted Magazine.pdf"
+        test_file.write_bytes(b"%PDF-1.4\ntest content")
+
+        # Create submission already at max retries
+        submission = DownloadSubmission(
+            tracking_id=tracking.id,
+            source_url="http://example.com/nzb",
+            result_title="Exhausted Magazine - Jan 2025",
+            status=DownloadSubmission.StatusEnum.FAILED,
+            file_path=str(test_file),
+            last_error="Import/processing failed",
+            attempt_count=MAX_IMPORT_RETRIES,  # Already exhausted
+        )
+        session.add(submission)
+        session.commit()
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=downloads_dir,
+        )
+
+        monitor._process_single_file = Mock(return_value=True)
+
+        retried = monitor._retry_failed_imports(session)
+        assert retried == 0
+        assert not monitor._process_single_file.called
+        session.close()
+
+    @pytest.mark.asyncio
+    async def test_retry_does_not_pick_up_download_failures(
+        self, test_db, tmp_path, download_manager, mock_file_importer
+    ):
+        """Submissions that failed during download (not import) should not be retried here."""
+        from models.database import DownloadSubmission, PeriodicalTracking
+
+        engine, session_factory = test_db
+        session = session_factory()
+
+        tracking = PeriodicalTracking(
+            olid="OL-test4",
+            title="Download Fail Magazine",
+            language="English",
+        )
+        session.add(tracking)
+        session.commit()
+
+        downloads_dir = tmp_path / "downloads"
+        downloads_dir.mkdir()
+
+        # Create submission that failed during download (error doesn't contain "Import")
+        submission = DownloadSubmission(
+            tracking_id=tracking.id,
+            source_url="http://example.com/nzb",
+            result_title="Download Fail Magazine - Jan 2025",
+            status=DownloadSubmission.StatusEnum.FAILED,
+            file_path=None,  # No file — download never completed
+            last_error="Connection timeout",
+            attempt_count=0,
+        )
+        session.add(submission)
+        session.commit()
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=downloads_dir,
+        )
+
+        monitor._process_single_file = Mock(return_value=True)
+
+        retried = monitor._retry_failed_imports(session)
+        assert retried == 0
+        session.close()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

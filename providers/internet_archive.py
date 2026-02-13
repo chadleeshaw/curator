@@ -8,7 +8,6 @@ import time
 from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional, Sequence
 
-import feedparser
 from internetarchive import search_items, get_item, configure as ia_configure
 
 from core.constants.internet_archive import (
@@ -25,10 +24,6 @@ from core.constants.internet_archive import (
     IA_SEARCH_TIMEOUT,
     IA_PROVIDER_TYPE,
     IA_SEARCH_FIELDS,
-    IA_RSS_BASE_URL,
-    IA_RSS_CACHE_TTL,
-    IA_RSS_CACHE_ENABLED,
-    IA_RSS_MAX_ENTRIES,
 )
 from core.interfaces import SearchProvider, SearchResult
 
@@ -38,7 +33,7 @@ logger = logging.getLogger(__name__)
 class InternetArchiveProvider(SearchProvider):
     """Search provider for Internet Archive (archive.org)"""
 
-    def __init__(self, config: Dict[str, Any], rss_cache_service=None):
+    def __init__(self, config: Dict[str, Any], **kwargs):
         super().__init__(config)
         self.type = IA_PROVIDER_TYPE
 
@@ -54,12 +49,6 @@ class InternetArchiveProvider(SearchProvider):
         self.max_requests_per_minute = config.get("max_requests_per_minute", IA_DEFAULT_MAX_REQUESTS_PER_MINUTE)
         self._request_times: List[float] = []
 
-        # RSS feed caching (via persistent cache service)
-        self.rss_cache_enabled = config.get("rss_cache_enabled", IA_RSS_CACHE_ENABLED)
-        self.rss_cache_ttl = config.get("rss_cache_ttl", IA_RSS_CACHE_TTL)
-        self.rss_max_entries = config.get("rss_max_entries", IA_RSS_MAX_ENTRIES)
-        self._rss_cache_service = rss_cache_service  # Persistent cache service
-
         # Priority for provider preference (lower = higher priority)
         self.priority = config.get("priority", 10)
 
@@ -71,8 +60,7 @@ class InternetArchiveProvider(SearchProvider):
         logger.info(
             f"[{self.name}] Initialized with collections={self.collections}, "
             f"formats={self.preferred_formats}, priority={self.priority}, "
-            f"authenticated={bool(self.username)}, "
-            f"rss_caching={'enabled' if self.rss_cache_enabled and self._rss_cache_service else 'disabled'}"
+            f"authenticated={bool(self.username)}"
         )
 
     def _configure_auth(self):
@@ -126,122 +114,6 @@ class InternetArchiveProvider(SearchProvider):
                 delay = self.request_delay - time_since_last
                 logger.debug(f"[{self.name}] Delaying {delay:.1f}s before request")
                 time.sleep(delay)
-
-    def _get_rss_feed(self, collection: str) -> Optional[feedparser.FeedParserDict]:
-        """
-        Get RSS feed for a collection, from cache if available and fresh.
-
-        Uses persistent cache (database) to store and retrieve feeds.
-
-        Args:
-            collection: Internet Archive collection name
-
-        Returns:
-            Parsed RSS feed or None if fetch fails
-        """
-        if not self.rss_cache_enabled:
-            return None
-
-        # Try persistent cache (if service available)
-        if self._rss_cache_service:
-            cached_feed = self._rss_cache_service.get_feed(self.name, collection, self.rss_cache_ttl)
-            if cached_feed:
-                logger.debug(f"[{self.name}] RSS cache hit for '{collection}'")
-                return cached_feed
-
-        # Cache miss or service unavailable - fetch feed
-        feed_url = f"{IA_RSS_BASE_URL}?collection={collection}&count={self.rss_max_entries}"
-        logger.debug(f"[{self.name}] Fetching RSS feed for '{collection}'")
-
-        try:
-            feed = feedparser.parse(feed_url)
-            if feed and not feed.bozo:
-                # Save to persistent cache (if service available)
-                if self._rss_cache_service:
-                    self._rss_cache_service.save_feed(self.name, collection, feed, self.rss_cache_ttl)
-                    logger.debug(f"[{self.name}] Cached RSS for '{collection}' ({len(feed.entries)} entries)")
-                return feed
-            else:
-                logger.warning(
-                    f"[{self.name}] RSS feed parsing issue for '{collection}': "
-                    f"{getattr(feed, 'bozo_exception', 'Unknown error')}"
-                )
-                return None
-        except Exception as e:
-            logger.error(f"[{self.name}] Failed to fetch RSS feed for '{collection}': {e}")
-            return None
-
-    def _search_rss_feeds(
-        self, query: str, collections: List[str], aliases: Optional[Sequence[str]] = None
-    ) -> List[SearchResult]:
-        """
-        Search RSS feeds for collections instead of hitting the API.
-        This reduces API calls and helps avoid rate limiting.
-
-        Args:
-            query: Periodical title to search for
-            collections: List of collections to search
-            aliases: Optional alternative search terms
-
-        Returns:
-            List of SearchResult objects from RSS feeds
-        """
-        if not self.rss_cache_enabled or not collections:
-            return []
-
-        results = []
-        search_terms = [query.lower()]
-        if aliases:
-            search_terms.extend(a.strip().lower() for a in aliases if a.strip())
-
-        for collection in collections:
-            feed = self._get_rss_feed(collection)
-            if not feed:
-                continue
-
-            for entry in feed.entries:
-                title = entry.get("title", "")
-                title_lower = title.lower()
-
-                # Filter: include entries matching any search term
-                if not any(term in title_lower for term in search_terms):
-                    continue
-
-                # Extract identifier from link (e.g., https://archive.org/details/identifier)
-                link = entry.get("link", "")
-                identifier = link.split("/details/")[-1] if "/details/" in link else ""
-
-                # Parse publication date
-                pub_date = None
-                if hasattr(entry, "published_parsed") and entry.published_parsed:
-                    try:
-                        pub_date = datetime(*entry.published_parsed[:6], tzinfo=UTC)
-                    except (TypeError, ValueError):
-                        pass
-
-                # Build metadata
-                raw_metadata = {
-                    "identifier": identifier,
-                    "description": entry.get("summary", ""),
-                    "collection": [collection],
-                    "mediatype": self.mediatype,
-                    "is_collection": self._is_collection_title(title),
-                    "source": "rss",  # Mark as RSS result
-                }
-
-                result = SearchResult(
-                    title=title,
-                    url=identifier,
-                    provider=self.type,
-                    publication_date=pub_date,
-                    raw_metadata=raw_metadata,
-                )
-                results.append(result)
-
-        if results:
-            logger.info(f"[{self.name}] Found {len(results)} results from RSS feeds for '{query}'")
-
-        return results
 
     def _build_search_query(
         self,
@@ -468,16 +340,7 @@ class InternetArchiveProvider(SearchProvider):
             if category_collections:
                 search_collections = category_collections
 
-        # Try RSS feeds first to avoid API rate limiting
-        if self.rss_cache_enabled and search_collections:
-            logger.debug(f"[{self.name}] Trying RSS feeds for '{query}' in collections: {search_collections}")
-            results = self._search_rss_feeds(query, search_collections, aliases)
-            if results:
-                logger.info(f"[{self.name}] Found {len(results)} results from RSS feeds, skipping API search")
-                return results
-            logger.debug(f"[{self.name}] No RSS results found, falling back to API search")
-
-        # Fall back to API search if RSS didn't yield results or caching disabled
+        # Search via API
         if self._check_rate_limit():
             logger.warning(f"[{self.name}] Skipping API search for '{query}' - rate limited")
             return []

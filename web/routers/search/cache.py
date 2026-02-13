@@ -11,34 +11,10 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy import func, or_
 
-from core.parsers.date import normalize_month_name
+from core.utils.fuzzy_matching import get_fuzzy_group_id
 from models.database import DownloadSubmission, SearchResult
 
 logger = logging.getLogger(__name__)
-
-
-def get_fuzzy_group_id(title: str) -> str:
-    """
-    Get a normalized group ID for fuzzy matching duplicates.
-    Uses title matching to create consistent grouping.
-
-    Args:
-        title: Title to normalize
-
-    Returns:
-        Group ID string
-    """
-    # Normalize title: lowercase, remove special chars, collapse spaces
-    normalized = " ".join(title.lower().split())
-
-    # Normalize common month abbreviations to full names for better matching
-    words = []
-    for word in normalized.split():
-        words.append(normalize_month_name(word))
-
-    # Keep first few significant words as group ID
-    group_words = [w for w in words if len(w) > 2][:3]
-    return "-".join(group_words)
 
 
 def get_cached_search_results(

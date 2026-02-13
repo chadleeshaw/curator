@@ -5,13 +5,11 @@ Contains all FastAPI route handlers for search functionality.
 """
 
 import logging
-from datetime import datetime
 from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException, Query
 
 from core.constants.errors import ErrorMessages
-from core.utils import run_in_thread
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from models.database import Periodical
@@ -31,6 +29,7 @@ from .dependencies import (
 from .filters import (
     filter_by_language_and_country,
     filter_edition_variants,
+    filter_ia_results,
     filter_non_periodicals,
 )
 from .library import (
@@ -38,7 +37,6 @@ from .library import (
     deduplicate_against_library,
     get_library_matches,
     mark_failed_downloads,
-    sort_results_by_relevance,
 )
 from .providers import (
     build_search_queries,
@@ -215,6 +213,11 @@ async def search_periodical_providers(
         all_results = filter_non_periodicals(all_results)
         non_periodical_filtered = total_before_filtering - len(all_results)
 
+        # Step 4b: Filter IA collection archives and poor title matches
+        ia_before = len(all_results)
+        all_results = filter_ia_results(all_results, query)
+        ia_filtered = ia_before - len(all_results)
+
         # Step 5: Save fresh results to cache
         if fresh_results:
             save_search_results_to_cache(db, query, fresh_results, tracking_id)
@@ -246,7 +249,7 @@ async def search_periodical_providers(
         logger.info(
             f"Search summary for '{query}': {len(deduplicated_results)} results | "
             f"Filters: language={filter_language}, country={filter_country} | "
-            f"Removed: {non_periodical_filtered} non-periodicals, "
+            f"Removed: {non_periodical_filtered} non-periodicals, {ia_filtered} IA irrelevant, "
             f"{language_country_filtered} language/country, {edition_filtered} editions | "
             f"{library_matched} matched to library"
         )
@@ -257,10 +260,7 @@ async def search_periodical_providers(
         # Step 10: Get library matches
         library_matches = get_library_matches(query, library_items, filter_language, filter_country)
 
-        # Step 11: Sort results by relevance
-        final_results = sort_results_by_relevance(library_matches + deduplicated_results, query)
-
-        # Step 12: Build and return response
+        # Step 11: Build and return response (sorts results internally)
         return build_search_response(query, library_matches, deduplicated_results, cached_results, provider_errors)
 
     return await with_db_session(session_factory, operation)

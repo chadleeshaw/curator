@@ -11,7 +11,7 @@ import os
 from typing import Dict, Optional
 
 import requests
-from sqlalchemy import create_engine, func
+from sqlalchemy import create_engine, func, text
 from sqlalchemy.orm import sessionmaker
 
 from core.constants.cache import DEFAULT_MAX_NZB_FETCHES_PER_HOUR
@@ -36,6 +36,7 @@ class NzbCacheService:
         self,
         cache_db_path: str,
         max_nzb_fetches_per_hour: int = DEFAULT_MAX_NZB_FETCHES_PER_HOUR,
+        session_factory=None,
     ):
         """
         Initialize NZB cache service.
@@ -43,6 +44,8 @@ class NzbCacheService:
         Args:
             cache_db_path: Path to cache SQLite database
             max_nzb_fetches_per_hour: Max NZB fetches per hour (0 = unlimited)
+            session_factory: Optional pre-built sessionmaker for shared engine usage.
+                             If not provided, creates its own engine (backward compatible).
         """
         self.cache_db_path = cache_db_path
         self._nzb_rate_limiter = ProviderRateLimiter(max_requests=max_nzb_fetches_per_hour)
@@ -51,11 +54,16 @@ class NzbCacheService:
         cache_dir = os.path.dirname(cache_db_path)
         os.makedirs(cache_dir, exist_ok=True)
 
-        # Initialize database
-        db_url = f"sqlite:///{cache_db_path}"
-        self._engine = create_engine(db_url, echo=False)
-        self._session_factory = sessionmaker(bind=self._engine)
-        CacheBase.metadata.create_all(self._engine)
+        if session_factory is not None:
+            # Use shared engine/session factory (preferred — avoids duplicate connections)
+            self._session_factory = session_factory
+            self._engine = None
+        else:
+            # Create own engine (backward compatible for tests and standalone usage)
+            db_url = f"sqlite:///{cache_db_path}"
+            self._engine = create_engine(db_url, echo=False)
+            self._session_factory = sessionmaker(bind=self._engine)
+            CacheBase.metadata.create_all(self._engine)
 
         # Drop legacy tables from the old search cache system
         self._drop_legacy_tables()
@@ -63,24 +71,33 @@ class NzbCacheService:
         logger.info(f"NZB cache initialized: {cache_db_path}")
 
     def _drop_legacy_tables(self):
-        """Drop tables from the old provider search cache that are no longer needed."""
-        legacy_tables = ["cached_releases", "cached_releases_fts", "sync_status"]
+        """Drop tables from old cache systems that are no longer needed."""
+        legacy_tables = ["cached_releases", "cached_releases_fts", "sync_status", "rss_cache"]
         legacy_triggers = [
             "cached_releases_fts_insert",
             "cached_releases_fts_delete",
             "cached_releases_fts_update",
         ]
 
-        with self._engine.connect() as conn:
+        # Get engine — either our own or extract from session factory binding
+        engine = self._engine
+        if engine is None:
+            try:
+                engine = self._session_factory.kw["bind"]
+            except (AttributeError, KeyError):
+                logger.debug("Cannot drop legacy tables: no engine available")
+                return
+
+        with engine.connect() as conn:
             for trigger in legacy_triggers:
                 try:
-                    conn.execute(__import__("sqlalchemy", fromlist=["text"]).text(f"DROP TRIGGER IF EXISTS {trigger}"))
+                    conn.execute(text(f"DROP TRIGGER IF EXISTS {trigger}"))
                 except Exception:
                     pass
 
             for table in legacy_tables:
                 try:
-                    conn.execute(__import__("sqlalchemy", fromlist=["text"]).text(f"DROP TABLE IF EXISTS {table}"))
+                    conn.execute(text(f"DROP TABLE IF EXISTS {table}"))
                 except Exception:
                     pass
             conn.commit()
@@ -137,7 +154,7 @@ class NzbCacheService:
                 return nzb_content
 
             except requests.exceptions.RequestException as e:
-                logger.error(f"Failed to fetch NZB from {download_url[:80]}: {e}")
+                logger.error(f"Failed to fetch NZB from {download_url[:80]}: {e}", exc_info=True)
                 return None
 
         finally:

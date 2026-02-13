@@ -1,0 +1,145 @@
+flowchart TB
+    %% ============================================================
+    %% SCHEDULED TASKS (Background)
+    %% ============================================================
+
+    subgraph scheduled["Scheduled Background Tasks"]
+        direction TB
+
+        subgraph feedSync["Feed Sync Task (every 15 min)"]
+            FS1[FeedSyncService]
+            FS2[Poll RSS feeds from\neach provider]
+            FS3[Upsert entries into\nRssFeedEntry cache]
+            FS4[Expire entries older\nthan 7 days]
+            FS1 --> FS2 --> FS3 --> FS4
+        end
+
+        subgraph autoDownload["Auto-Download Task (every 30 min)"]
+            direction TB
+
+            subgraph phase15["Phase 1.5: Cache-First Match (zero API calls)"]
+                P15A[Get new entries\nfrom RssFeedEntry]
+                P15B[FeedMatchService:\nMatch against all\nPeriodicalTracking records]
+                P15C[IssueDiscoveryService:\nRecord search results]
+                P15D[Evaluate discovered issues\nwanted / ignored / completed]
+                P15E[Mark feed entries\nmatched or skipped]
+                P15A --> P15B --> P15C --> P15D --> P15E
+            end
+
+            subgraph phase2["Phase 2: Adaptive API Search"]
+                P2A[SearchScheduler:\nSelect periodicals\nneeding refresh]
+                P2B{All providers\nrate limited?}
+                P2C[Search each periodical\nvia DownloadManager]
+                P2D[IssueDiscoveryService:\nRecord + evaluate results]
+                P2E[Update adaptive\nsearch stats]
+                P2A --> P2B
+                P2B -- Yes --> P2Skip[Skip API searches\nno scheduler penalty]
+                P2B -- No --> P2C --> P2D --> P2E
+            end
+
+            subgraph phase3["Phase 3: Download Queue"]
+                P3A[Check available\ndownload slots]
+                P3B[Get prioritized\ndownload queue]
+                P3C[Submit to download\nclient via DownloadManager]
+                P3A --> P3B --> P3C
+            end
+
+            phase15 --> phase2 --> phase3
+        end
+
+        subgraph dlMonitor["Download Monitor Task"]
+            DM1[Check pending downloads\nwith client API]
+            DM2[Process completed\ndownloads]
+            DM3[FileImporter:\nOrganize into library]
+            DM4[Scan downloads folder\nfor orphaned files]
+            DM1 --> DM2 --> DM3
+            DM1 --> DM4
+        end
+    end
+
+    %% ============================================================
+    %% UI SEARCH FLOW
+    %% ============================================================
+
+    subgraph uiSearch["UI Search Flow"]
+        direction TB
+        U1[User enters\nsearch query]
+        U2[/search/periodicals/search-providers/]
+        U3[Check search result cache]
+        U4[Fetch from providers\nNewsnab API / Internet Archive]
+        U5[Merge + deduplicate\n+ filter results]
+        U6[Match against library\nmark existing issues]
+        U7[Return results to UI]
+        U1 --> U2 --> U3 --> U4 --> U5 --> U6 --> U7
+    end
+
+    subgraph uiDownload["UI Download Flow"]
+        direction TB
+        D1[User selects issue\nto download]
+        D2[/downloads/single-issue/]
+        D3[DownloadManager:\nSubmit to client]
+        D4[DownloadSubmission\ncreated in DB]
+        D1 --> D2 --> D3 --> D4
+    end
+
+    %% ============================================================
+    %% DATA STORES
+    %% ============================================================
+
+    subgraph stores["Data Stores"]
+        direction LR
+        RFE[(RssFeedEntry\nCache DB)]
+        DI[(DiscoveredIssue\nMain DB)]
+        DS[(DownloadSubmission\nMain DB)]
+        NC[(NzbCache\nCache DB)]
+        PT[(PeriodicalTracking\nMain DB)]
+        LIB[(Periodical\nLibrary DB)]
+    end
+
+    subgraph clients["Download Clients"]
+        SAB[SABnzbd]
+        NZB[NZBGet]
+    end
+
+    %% ============================================================
+    %% CONNECTIONS
+    %% ============================================================
+
+    %% Feed Sync writes to cache
+    FS3 --> RFE
+
+    %% Phase 1.5 reads from cache
+    RFE --> P15A
+    PT --> P15B
+
+    %% Discovery flows
+    P15D --> DI
+    P2D --> DI
+
+    %% Phase 3 reads from discovery, writes submissions
+    DI --> P3B
+    P3C --> DS
+    P3C --> SAB
+    P3C --> NZB
+
+    %% NZB cache used for retries
+    NC -.->|NZB content\nfor retries| P3C
+
+    %% Download monitor checks clients
+    SAB --> DM1
+    NZB --> DM1
+    DS --> DM2
+    DM3 --> LIB
+
+    %% UI download creates submission
+    D3 --> DS
+    D3 --> SAB
+    D3 --> NZB
+    NC -.-> D3
+
+    %% UI search checks library
+    LIB --> U6
+
+    %% Download monitor connects back
+    DM2 -.->|Update status| DS
+    DM3 -.->|Sync status| DI

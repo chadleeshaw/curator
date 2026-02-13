@@ -44,12 +44,6 @@ search_providers:
     request_delay: 1.0 # Seconds between requests
     max_requests_per_minute: 15
 
-    # RSS feed caching (reduces API calls and helps avoid rate limiting)
-    # Collection RSS feeds are cached and searched first before hitting the API
-    rss_cache_enabled: true # Enable RSS caching (recommended)
-    rss_cache_ttl: 3600 # Cache feeds for 1 hour (3600 seconds)
-    rss_max_entries: 100 # Max RSS entries to fetch per collection
-
     # Optional authentication for restricted items (uncomment to enable)
     # Some items on archive.org require login to download.
     # Create a free account at https://archive.org/account/signup
@@ -78,13 +72,6 @@ search_providers:
     # You can safely increase these limits when cache is enabled.
     max_requests_per_hour: 100 # Self-imposed limit (default: 100 requests/hour)
     request_delay_seconds: 1.0 # Delay between requests (default: 1 second)
-
-    # RSS feed caching (reduces API calls and helps avoid rate limiting)
-    # RSS feeds are cached and searched first before hitting the API
-    # Particularly useful for Prowlarr/NZBHydra2 to reduce load
-    rss_cache_enabled: true # Enable RSS caching (recommended)
-    rss_cache_ttl: 3600 # Cache feeds for 1 hour (3600 seconds)
-    rss_max_results: 100 # Max RSS results to fetch and cache
 
   # RSS Provider (optional - for fast new release discovery)
   # Uncomment and configure to enable RSS-based searching
@@ -321,6 +308,7 @@ tasks:
   # Task enable/disable flags
   # Set to false to disable a task entirely. Disabled tasks will not run
   # on their schedule but can still be triggered manually from the UI.
+  feed_sync_enabled: true
   auto_download_enabled: true
   download_monitor_enabled: true
   cleanup_covers_enabled: true
@@ -328,15 +316,36 @@ tasks:
   folder_cleanup_enabled: true
   auto_metadata_enabled: true
 
+  # ==============================================================================
+  # Feed Sync: Cache-first auto-download system
+  # Polls each provider's RSS feed on a lightweight schedule (one HTTP GET per
+  # provider per interval). Entries are cached locally and matched against ALL
+  # tracked periodicals with zero additional API calls.
+  # ==============================================================================
+
+  # How often to poll provider RSS feeds (in seconds)
+  # This is lightweight (one GET per provider), so it can run frequently.
+  # Recommended: 900 (15 min) - catches new uploads quickly without hammering APIs
+  feed_sync_interval: 900 # 15 minutes
+
+  # Maximum feed entries to match per auto-download run
+  # Controls how many cached entries are processed at once.
+  # Higher = faster catch-up after downtime, but more DB work per cycle.
+  # Recommended: 100-200
+  feed_sync_match_batch_size: 200
+
+  # Days to retain feed entries before expiring them
+  # Entries older than this are deleted. Bounds the working set.
+  feed_entry_retention_days: 7
+
   # Auto-download: Search for and download new tracked issues
-  # IMPORTANT: With the new Issue Discovery & Tracking system, this interval
-  # determines how often the scheduler runs (not how often each periodical is searched).
-  # The system now intelligently selects 1-2 periodicals per run using adaptive scheduling.
+  # IMPORTANT: With the cache-first system, most discovery happens via feed sync
+  # (zero API calls). This task now primarily:
+  # 1. Matches cached feed entries against tracked periodicals (local, instant)
+  # 2. Falls back to per-periodical API search for adaptive scheduler items
+  # 3. Processes the download queue
   #
   # Recommended: 1800-3600 (30 min - 1 hour)
-  # - Runs more frequently to process the download queue
-  # - Each run only searches 1-2 periodicals (not all)
-  # - Individual periodicals have their own adaptive intervals
   auto_download_interval: 1800 # 30 minutes (recommended with new system)
 
   # Download monitor: Check download status and import completed files

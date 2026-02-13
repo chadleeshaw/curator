@@ -21,6 +21,7 @@ _search_providers: Optional[Any] = None
 _auto_download_task_func: Optional[Any] = None
 _storage_config: Optional[Dict[str, Any]] = None
 _import_config: Optional[Dict[str, Any]] = None
+_feed_sync_service: Optional[Any] = None
 
 
 def set_dependencies(
@@ -29,6 +30,7 @@ def set_dependencies(
     auto_download_task: Optional[Any] = None,
     storage_config: Optional[Dict[str, Any]] = None,
     import_config: Optional[Dict[str, Any]] = None,
+    feed_sync_service: Optional[Any] = None,
 ) -> None:
     """
     Set dependencies from main app.
@@ -39,13 +41,15 @@ def set_dependencies(
         auto_download_task: Optional auto-download task function
         storage_config: Storage configuration dict
         import_config: Import configuration dict
+        feed_sync_service: Optional FeedSyncService for cache re-evaluation
     """
-    global _session_factory, _search_providers, _auto_download_task_func, _storage_config, _import_config
+    global _session_factory, _search_providers, _auto_download_task_func, _storage_config, _import_config, _feed_sync_service
     _session_factory = session_factory
     _search_providers = search_providers
     _auto_download_task_func = auto_download_task
     _storage_config = storage_config or {}
     _import_config = import_config or {}
+    _feed_sync_service = feed_sync_service
 
 
 def get_search_providers() -> Optional[Any]:
