@@ -60,6 +60,9 @@ DB_LOCK_RETRY_MAX = 3
 DB_LOCK_RETRY_DELAY = 0.1
 """Initial delay in seconds between database lock retries (exponential backoff)"""
 
+DB_COMMIT_RETRY_DELAY = 1.0
+"""Initial delay in seconds between commit retries on database lock (exponential backoff, longer than query retries)"""
+
 
 # ==============================================================================
 # Time Intervals (in seconds)

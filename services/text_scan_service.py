@@ -1,11 +1,16 @@
 """Text scanning service for extracting text directly from PDF and EPUB files."""
 
 import logging
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+import multiprocessing
 from pathlib import Path
 from typing import Optional, Dict
 
+from core.constants.ocr import PDF_TEXT_SCAN_TIMEOUT
+
 logger = logging.getLogger(__name__)
+
+# Use 'spawn' context to avoid fork-safety issues in multithreaded processes
+_mp_ctx = multiprocessing.get_context("spawn")
 
 try:
     from pypdf import PdfReader
@@ -22,6 +27,41 @@ class PDFReadTimeout(Exception):
     """Raised when PDF reading times out."""
 
     pass
+
+
+def _read_pdf_in_process(pdf_path: str, max_pages: int, result_queue) -> None:
+    """
+    Read PDF text in a child process. Puts result into queue.
+
+    Using a separate process allows us to hard-kill it if pypdf hangs
+    on a corrupted file (threads cannot be killed in Python).
+    """
+    try:
+        # Suppress pypdf warnings in child process too
+        logging.getLogger("pypdf._reader").setLevel(logging.ERROR)
+
+        reader = PdfReader(pdf_path)
+        text_parts = []
+
+        # Extract text from PDF metadata fields first
+        if reader.metadata:
+            for field in ("/Subject", "/Keywords"):
+                value = reader.metadata.get(field)
+                if value and isinstance(value, str):
+                    text_parts.append(value)
+
+        # Extract text from first few pages
+        for i, page in enumerate(reader.pages[:max_pages]):
+            try:
+                page_text = page.extract_text()
+                if page_text:
+                    text_parts.append(page_text)
+            except Exception:
+                pass
+
+        result_queue.put("\n".join(text_parts).strip())
+    except Exception as e:
+        result_queue.put(f"__ERROR__:{e}")
 
 
 class TextScanService:
@@ -59,7 +99,7 @@ class TextScanService:
         return "\n".join(text_parts).strip()
 
     @staticmethod
-    def extract_text_from_pdf(pdf_path: str, max_pages: int = 3, timeout_seconds: int = 3) -> str:
+    def extract_text_from_pdf(pdf_path: str, max_pages: int = 3, timeout_seconds: int = PDF_TEXT_SCAN_TIMEOUT) -> str:
         """
         Extract text directly from PDF (for PDFs with embedded text).
         Much faster than OCR for text-based PDFs.
@@ -67,8 +107,8 @@ class TextScanService:
         Also extracts text from PDF metadata fields (Subject, Keywords) which may
         contain metadata embedded by previous OCR processing.
 
-        Uses a thread pool for timeout enforcement since signal-based timeouts
-        (SIGALRM) only work from the main thread.
+        Uses a child process with a hard kill timeout since pypdf can hang
+        indefinitely on corrupted PDFs and Python threads cannot be killed.
 
         Args:
             pdf_path: Path to the PDF file
@@ -83,11 +123,31 @@ class TextScanService:
             return ""
 
         try:
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(TextScanService._read_pdf_text, pdf_path, max_pages)
-                return future.result(timeout=timeout_seconds)
-        except FuturesTimeoutError:
-            logger.warning(f"PDF reading timed out after {timeout_seconds}s for {pdf_path} - file may be corrupted")
+            result_queue = _mp_ctx.Queue()
+            proc = _mp_ctx.Process(
+                target=_read_pdf_in_process,
+                args=(pdf_path, max_pages, result_queue),
+                daemon=True,
+            )
+            proc.start()
+            proc.join(timeout=timeout_seconds)
+
+            if proc.is_alive():
+                # Process hung on corrupted PDF — kill it
+                proc.kill()
+                proc.join(timeout=2)
+                logger.warning(
+                    f"PDF reading timed out after {timeout_seconds}s for {pdf_path} - file may be corrupted"
+                )
+                return ""
+
+            if not result_queue.empty():
+                result = result_queue.get_nowait()
+                if isinstance(result, str) and result.startswith("__ERROR__:"):
+                    logger.debug(f"Could not extract text from PDF {pdf_path}: {result[10:]}")
+                    return ""
+                return result
+
             return ""
         except Exception as e:
             logger.debug(f"Could not extract text from PDF {pdf_path}: {e}")

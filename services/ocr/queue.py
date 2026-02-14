@@ -1,6 +1,7 @@
 """Background OCR queue service for sequential processing."""
 
 import logging
+import multiprocessing
 import os
 import time
 from datetime import UTC, datetime
@@ -14,14 +15,19 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 from core import constants
 from core.config import ConfigLoader
+from core.constants.app import DB_COMMIT_RETRY_DELAY, DB_LOCK_RETRY_MAX
+from core.constants.ocr import PNG_GENERATION_TIMEOUT
 from models.database import OCRJob, Periodical
 from .service import OCRService
 
 logger = logging.getLogger(__name__)
 
+# Use 'spawn' context to avoid fork-safety issues in multithreaded processes
+_mp_ctx = multiprocessing.get_context("spawn")
+
 # Retry settings for SQLite lock contention
-_COMMIT_MAX_RETRIES = 3
-_COMMIT_BASE_DELAY = 1.0  # seconds
+_COMMIT_MAX_RETRIES = DB_LOCK_RETRY_MAX
+_COMMIT_BASE_DELAY = DB_COMMIT_RETRY_DELAY
 
 
 def _safe_commit(db: Session, context: str = "") -> None:
@@ -54,6 +60,42 @@ def _safe_commit(db: Session, context: str = "") -> None:
                 time.sleep(delay)
             else:
                 raise
+
+
+def _generate_png_in_process(pdf_path: str, png_path: str, dpi: int, max_dimension: int, result_queue) -> None:
+    """
+    Generate OCR PNG from PDF in a child process.
+
+    Using a separate process allows us to hard-kill poppler if it hangs
+    on a corrupted PDF (threads cannot be killed in Python).
+    """
+    try:
+        from pdf2image import convert_from_path
+        from PIL import Image
+
+        images = convert_from_path(
+            pdf_path,
+            first_page=1,
+            last_page=1,
+            dpi=dpi,
+            fmt="png",
+        )
+
+        if images:
+            img = images[0]
+            original_size = img.size
+
+            if max(img.size) > max_dimension:
+                ratio = max_dimension / max(img.size)
+                new_size = tuple(int(dim * ratio) for dim in img.size)
+                img = img.resize(new_size, Image.Resampling.LANCZOS)
+
+            img.save(png_path, "PNG")
+            result_queue.put({"success": True, "original_size": original_size})
+        else:
+            result_queue.put({"success": False, "error": "No images extracted"})
+    except Exception as e:
+        result_queue.put({"success": False, "error": str(e)})
 
 
 def _apply_scan_metadata_to_magazine(
@@ -449,33 +491,36 @@ class OCRQueueService:
                                 PDF_COVER_DPI_OCR,
                                 OCR_IMAGE_MAX_DIMENSION,
                             )
-                            from pdf2image import convert_from_path
-                            from PIL import Image
 
-                            images = convert_from_path(
-                                str(pdf_path),
-                                first_page=1,
-                                last_page=1,
-                                dpi=PDF_COVER_DPI_OCR,
-                                fmt="png",
+                            # Run in a child process so we can hard-kill poppler
+                            # if it hangs on a corrupted PDF
+                            result_queue = _mp_ctx.Queue()
+                            proc = _mp_ctx.Process(
+                                target=_generate_png_in_process,
+                                args=(str(pdf_path), str(png_path), PDF_COVER_DPI_OCR, OCR_IMAGE_MAX_DIMENSION, result_queue),
+                                daemon=True,
                             )
+                            proc.start()
+                            proc.join(timeout=PNG_GENERATION_TIMEOUT)
 
-                            if images:
-                                img = images[0]
-
-                                # Resize if too large (using optimal max dimension)
-
-                                if max(img.size) > OCR_IMAGE_MAX_DIMENSION:
-                                    ratio = OCR_IMAGE_MAX_DIMENSION / max(img.size)
-                                    new_size = tuple(int(dim * ratio) for dim in img.size)
-                                    img = img.resize(new_size, Image.Resampling.LANCZOS)
-                                    logger.debug(f"Resized OCR PNG from {images[0].size} to {new_size}")
-
-                                img.save(str(png_path), "PNG")
-                                png_generated = True
-                                logger.debug(f"Generated OCR PNG: {png_path}")
+                            if proc.is_alive():
+                                proc.kill()
+                                proc.join(timeout=2)
+                                logger.warning(
+                                    f"PNG generation timed out after {PNG_GENERATION_TIMEOUT}s "
+                                    f"for magazine {magazine.id} - PDF may be corrupted"
+                                )
+                            elif not result_queue.empty():
+                                result = result_queue.get_nowait()
+                                if result.get("success"):
+                                    png_generated = True
+                                    logger.debug(f"Generated OCR PNG: {png_path}")
+                                else:
+                                    logger.warning(
+                                        f"Failed to generate OCR PNG from {pdf_path}: {result.get('error')}"
+                                    )
                             else:
-                                logger.warning(f"Failed to generate OCR PNG from {pdf_path}")
+                                logger.warning(f"PNG generation process exited without result for {pdf_path}")
                         except Exception as e:
                             logger.error(f"Error generating OCR PNG for magazine {magazine.id}: {e}")
 

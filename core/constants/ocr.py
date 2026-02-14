@@ -85,3 +85,9 @@ OCR_MAX_PAGES = 2
 
 PDF_COVER_DPI_OCR = 300
 """Optimal DPI for OCR text extraction (balances quality and performance, ~2267x2933 for 8.5x11")"""
+
+PNG_GENERATION_TIMEOUT = 30
+"""Timeout in seconds for PDF-to-PNG conversion (poppler can hang on corrupted PDFs)"""
+
+PDF_TEXT_SCAN_TIMEOUT = 3
+"""Timeout in seconds for direct PDF text extraction (pypdf can hang on corrupted PDFs)"""
