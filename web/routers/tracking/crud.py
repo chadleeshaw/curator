@@ -390,6 +390,8 @@ async def delete_tracking(tracking_id: int) -> Dict[str, Any]:
     """Delete a magazine tracking record"""
 
     def operation(db):
+        from models.database import DiscoveredIssue, DownloadSubmission
+
         tracking = db.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
         if not tracking:
             raise HTTPException(status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND)
@@ -404,6 +406,34 @@ async def delete_tracking(tracking_id: int) -> Dict[str, Any]:
         )
         if membership_deleted:
             logger.info(f"Removed {membership_deleted} stack membership(s) for tracking: {title}")
+
+        # Null out tracking_id on linked periodicals to prevent orphaned FK references
+        # (periodicals remain in library but are no longer linked to this tracking)
+        unlinked = (
+            db.query(Periodical)
+            .filter(Periodical.tracking_id == tracking_id)
+            .update({Periodical.tracking_id: None}, synchronize_session="fetch")
+        )
+        if unlinked:
+            logger.info(f"Unlinked {unlinked} periodical(s) from tracking: {title}")
+
+        # Clean up discovered issues (non-nullable FK to tracking)
+        issues_deleted = (
+            db.query(DiscoveredIssue)
+            .filter(DiscoveredIssue.tracking_id == tracking_id)
+            .delete(synchronize_session="fetch")
+        )
+        if issues_deleted:
+            logger.info(f"Removed {issues_deleted} discovered issue(s) for tracking: {title}")
+
+        # Clean up download submissions (non-nullable FK to tracking)
+        downloads_deleted = (
+            db.query(DownloadSubmission)
+            .filter(DownloadSubmission.tracking_id == tracking_id)
+            .delete(synchronize_session="fetch")
+        )
+        if downloads_deleted:
+            logger.info(f"Removed {downloads_deleted} download submission(s) for tracking: {title}")
 
         db.delete(tracking)
         db.commit()

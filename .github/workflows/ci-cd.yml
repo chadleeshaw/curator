@@ -109,6 +109,17 @@ jobs:
             type=sha,prefix=sha-
             type=raw,value=latest,enable={{is_default_branch}}
 
+      - name: Compute build metadata
+        id: build_meta
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "version=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=v1.0.0-${SHORT_SHA}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -123,6 +134,8 @@ jobs:
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
           build-args: |
             BUILDKIT_INLINE_CACHE=1
+            BUILD_VERSION=${{ steps.build_meta.outputs.version }}
+            BUILD_HASH=${{ steps.build_meta.outputs.short_sha }}
 
       - name: Trigger Portainer Webhook
         if: github.ref == 'refs/heads/main'

@@ -5,7 +5,7 @@ CRUD operations for periodicals
 from pathlib import Path
 from typing import Any, Dict, List
 
-from sqlalchemy import cast, case, func, String
+from sqlalchemy import cast, case, func, literal, String
 from sqlalchemy.orm import Session
 
 from core.utils.db import with_db_session
@@ -42,11 +42,20 @@ class PeriodicalQueryBuilder:
         Build case expression for grouping by tracking_id or periodical.id.
 
         Groups tracked items together while keeping untracked items separate.
+        Uses string prefixes ("t_" for tracked, "p_" for untracked) to prevent
+        namespace collisions between tracking_id and periodical.id integers.
         """
         return case(
-            (Periodical.tracking_id.isnot(None), Periodical.tracking_id),
-            else_=Periodical.id,
+            (
+                Periodical.tracking_id.isnot(None),
+                literal("t_").concat(cast(Periodical.tracking_id, String)),
+            ),
+            else_=literal("p_").concat(cast(Periodical.id, String)),
         )
+
+    def _build_language_expression(self):
+        """Build coalesce expression for language, defaulting NULL to 'English'."""
+        return func.coalesce(Periodical.language, "English")
 
     def _build_date_subquery(self):
         """Build subquery to find the most recent issue date for each group."""
@@ -54,10 +63,10 @@ class PeriodicalQueryBuilder:
             self._date_subquery = (
                 self.db.query(
                     self._build_group_key_expression().label("group_key"),
-                    Periodical.language,
+                    self._build_language_expression().label("language"),
                     func.max(Periodical.issue_date).label("max_date"),
                 )
-                .group_by("group_key", Periodical.language)
+                .group_by("group_key", "language")
                 .subquery()
             )
         return self._date_subquery
@@ -67,19 +76,20 @@ class PeriodicalQueryBuilder:
         if self._id_subquery is None:
             date_subquery = self._build_date_subquery()
             group_key_expr = self._build_group_key_expression()
+            lang_expr = self._build_language_expression()
             self._id_subquery = (
                 self.db.query(
                     group_key_expr.label("group_key"),
-                    Periodical.language,
+                    lang_expr.label("language"),
                     func.max(Periodical.id).label("max_id"),
                 )
                 .join(
                     date_subquery,
                     (group_key_expr == date_subquery.c.group_key)
-                    & (Periodical.language == date_subquery.c.language)
+                    & (lang_expr == date_subquery.c.language)
                     & (Periodical.issue_date == date_subquery.c.max_date),
                 )
-                .group_by("group_key", Periodical.language)
+                .group_by("group_key", "language")
                 .subquery()
             )
         return self._id_subquery
@@ -90,10 +100,10 @@ class PeriodicalQueryBuilder:
             self._count_subquery = (
                 self.db.query(
                     self._build_group_key_expression().label("group_key"),
-                    Periodical.language,
+                    self._build_language_expression().label("language"),
                     func.count(Periodical.id).label("issue_count"),  # pylint: disable=not-callable
                 )
-                .group_by("group_key", Periodical.language)
+                .group_by("group_key", "language")
                 .subquery()
             )
         return self._count_subquery
@@ -107,11 +117,12 @@ class PeriodicalQueryBuilder:
         """
         id_subquery = self._build_id_subquery()
         group_key_expr = self._build_group_key_expression()
+        lang_expr = self._build_language_expression()
 
         query = self.db.query(Periodical).join(
             id_subquery,
             (group_key_expr == id_subquery.c.group_key)
-            & (Periodical.language == id_subquery.c.language)
+            & (lang_expr == id_subquery.c.language)
             & (Periodical.id == id_subquery.c.max_id),
         )
 
@@ -145,10 +156,11 @@ class PeriodicalQueryBuilder:
         """Apply sorting by issue count with title as secondary sort."""
         count_subquery = self._build_count_subquery()
         group_key_expr = self._build_group_key_expression()
+        lang_expr = self._build_language_expression()
 
         query = query.outerjoin(
             count_subquery,
-            (group_key_expr == count_subquery.c.group_key) & (Periodical.language == count_subquery.c.language),
+            (group_key_expr == count_subquery.c.group_key) & (lang_expr == count_subquery.c.language),
         )
 
         sort_expr = count_subquery.c.issue_count.desc() if is_descending else count_subquery.c.issue_count.asc()

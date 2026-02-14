@@ -507,14 +507,6 @@ class IssueDiscoveryService:
         logger.debug(f"[VALIDATION] ✓ ACCEPTED: {title}")
         return True
 
-        # Layer 2: File size heuristics (if available)
-        if not self._validate_file_size(search_result):
-            logger.debug(f"[VALIDATION] Rejecting '{title}': Suspicious file size")
-            return False
-
-        logger.debug(f"[VALIDATION] ✓ ACCEPTED: {title}")
-        return True
-
     def _has_periodical_patterns(self, title: str) -> bool:
         """
         Check if title contains patterns typical of periodicals.
@@ -587,43 +579,6 @@ class IssueDiscoveryService:
                 return True
 
         return False
-
-    def _validate_file_size(self, search_result: Dict[str, Any]) -> bool:
-        """
-        Validate file size is within typical periodical range.
-
-        Typical ranges:
-        - Magazines (PDF): 10MB - 500MB
-        - Comics (CBZ/CBR): 50MB - 500MB
-        - Suspiciously small: <5MB (likely article/ebook)
-        - Suspiciously large: >1000MB (likely collection/pack)
-
-        Args:
-            search_result: Search result dictionary
-
-        Returns:
-            True if size is reasonable for periodical (or unknown)
-        """
-        from core.constants.validation import FILE_SIZE_MIN_MB, FILE_SIZE_MAX_MB
-
-        size_bytes = search_result.get("size", 0)
-        if size_bytes == 0:
-            # Unknown size - allow (can't validate)
-            return True
-
-        size_mb = size_bytes / (1024 * 1024)
-
-        # Suspiciously small (likely book/article)
-        if size_mb < FILE_SIZE_MIN_MB:
-            logger.debug(f"Suspicious: Very small file ({size_mb:.1f}MB), likely not a periodical")
-            return False
-
-        # Suspiciously large (likely collection/pack)
-        if size_mb > FILE_SIZE_MAX_MB:
-            logger.debug(f"Suspicious: Very large file ({size_mb:.1f}MB), likely a collection")
-            return False
-
-        return True
 
     def _should_download(self, issue: DiscoveredIssue, tracking: PeriodicalTracking) -> bool:
         """

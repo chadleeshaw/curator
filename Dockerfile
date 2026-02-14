@@ -46,8 +46,14 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
 COPY --from=builder /root/.local /root/.local
 ENV PATH=/root/.local/bin:$PATH
 
+# Build-time version info (passed from CI/CD or docker build)
+ARG BUILD_VERSION=unknown
+ARG BUILD_HASH=unknown
+
 # Set environment variables
 ENV HOME=/root
+ENV BUILD_VERSION=${BUILD_VERSION}
+ENV BUILD_HASH=${BUILD_HASH}
 
 # Copy application code
 COPY . .

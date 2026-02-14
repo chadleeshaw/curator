@@ -80,6 +80,14 @@ def reorganize_periodical_files(
         )
         issue_date = periodical.issue_date
 
+        if not issue_date:
+            return FileReorganizationResult(
+                success=False,
+                new_pdf_path=None,
+                new_cover_path=None,
+                error=f"Cannot reorganize periodical {periodical.id}: missing issue_date",
+            )
+
         # Build new path structure
         # Strip any accumulated timestamp/counter suffixes before sanitizing
         clean_title = strip_duplicate_suffixes(new_title)
