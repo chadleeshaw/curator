@@ -13,7 +13,6 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 from core import constants
 from core.config import ConfigLoader
-from core.constants.date import NUMBER_TO_MONTH
 from models.database import OCRJob, Periodical
 from .service import OCRService
 
@@ -75,11 +74,27 @@ def _apply_scan_metadata_to_magazine(
     field_overrides = metadata_config.get("field_overrides", {})
 
     # Gather metadata from all sources
+    # Read existing values (from prior filename parsing) from derived_metadata
+    filename_source = {}
+    if magazine.derived_metadata:
+        for key, val in magazine.derived_metadata.items():
+            if isinstance(val, dict) and "value" in val:
+                filename_source[key] = val["value"]
+                # Propagate confidence if available
+                if "confidence" in val:
+                    conf = val["confidence"]
+                    filename_source[f"{key}_confidence"] = conf * 100 if conf <= 1.0 else conf
+            else:
+                filename_source[key] = val
+
     sources = {
-        "filename": magazine.extra_metadata.copy(),  # Already populated by filename parsing
-        "text_scan": magazine.extra_metadata.get("text_scan", {}),
+        "filename": filename_source,
+        "text_scan": (magazine.parsed_metadata or {}).get("text_scan", {}),
         "ocr": scan_metadata or {},  # Current scan/OCR result
     }
+
+    # All scan-derived fields belong in derived_metadata (structured with source/confidence)
+    # (derived_fields set kept for documentation; all fields go to derived_metadata)
 
     # Fields to aggregate
     fields_to_process = ["year", "month", "volume", "issue_number", "special_edition"]
@@ -97,6 +112,14 @@ def _apply_scan_metadata_to_magazine(
             if value is None:
                 continue  # This source doesn't have this field
 
+            # Normalize month to int for consistency with build_derived_metadata
+            if field == "month" and isinstance(value, str):
+                from core.constants.date import MONTH_TO_NUMBER
+
+                value = MONTH_TO_NUMBER.get(value.lower())
+                if value is None:
+                    continue
+
             # Get confidence score (if available)
             confidence_key = f"{field}_confidence"
             confidence = source_data.get(confidence_key, 100)  # Default 100 if no confidence
@@ -106,41 +129,45 @@ def _apply_scan_metadata_to_magazine(
 
             # Check if confidence meets threshold
             if confidence is None or confidence >= threshold:
-                # This source wins! Use its value
-                if field == "month" and isinstance(value, int):
-                    # Convert month number to name
-                    month_name = NUMBER_TO_MONTH.get(value, "")
-                    if month_name and magazine.extra_metadata.get(field) != month_name:
-                        magazine.extra_metadata[field] = month_name
-                        updated = True
-                        logger.info(
-                            f"Applied {field}={month_name} from {source_name} "
-                            f"(confidence={confidence}%, threshold={threshold}%) to {magazine.title}"
-                        )
-                else:
-                    if magazine.extra_metadata.get(field) != value:
-                        magazine.extra_metadata[field] = value
-                        updated = True
-                        logger.info(
-                            f"Applied {field}={value} from {source_name} "
-                            f"(confidence={confidence}%, threshold={threshold}%) to {magazine.title}"
-                        )
+                # All scan-derived fields go to derived_metadata
+                if not magazine.derived_metadata:
+                    magazine.derived_metadata = {}
+                norm_confidence = (
+                    (confidence / 100.0) if isinstance(confidence, (int, float)) and confidence > 1.0 else confidence
+                )
+                current = magazine.derived_metadata.get(field)
+                current_value = current.get("value") if isinstance(current, dict) else None
+                if current_value != value:
+                    magazine.derived_metadata[field] = {
+                        "value": value,
+                        "source": source_name,
+                        "confidence": norm_confidence,
+                    }
+                    updated = True
+                    logger.info(
+                        f"Applied {field}={value} from {source_name} "
+                        f"(confidence={confidence}%, threshold={threshold}%) to {magazine.title}"
+                    )
                 break  # Stop trying other sources for this field
 
             # Confidence didn't meet threshold
             logger.debug(f"Skipped {source_name} for {field}: confidence {confidence}% < threshold {threshold}%")
 
-    # Update issue_date if we have year
-    if updated and magazine.extra_metadata.get("year"):
-        year = magazine.extra_metadata["year"]
-        # Convert month name to number if present
-        month_name = magazine.extra_metadata.get("month")
+    # Update issue_date if we have year in derived_metadata
+    year_entry = magazine.derived_metadata.get("year") if magazine.derived_metadata else None
+    if updated and year_entry:
+        year = year_entry["value"] if isinstance(year_entry, dict) else year_entry
+        # Get month from derived_metadata (stored as int)
+        month_entry = magazine.derived_metadata.get("month") if magazine.derived_metadata else None
         month = 1  # Default to January
-        if month_name:
-            # Reverse lookup month name to number
-            from core.constants.date import MONTH_TO_NUMBER
+        if month_entry:
+            month_val = month_entry["value"] if isinstance(month_entry, dict) else month_entry
+            if isinstance(month_val, int):
+                month = month_val
+            elif isinstance(month_val, str):
+                from core.constants.date import MONTH_TO_NUMBER
 
-            month = MONTH_TO_NUMBER.get(month_name.lower(), 1)
+                month = MONTH_TO_NUMBER.get(month_val.lower(), 1)
 
         try:
             new_date = datetime(int(year), month, 1, tzinfo=UTC)

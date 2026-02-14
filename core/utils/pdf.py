@@ -69,17 +69,15 @@ def extract_cover_from_pdf(
         Path to extracted cover image, or None if failed
     """
     try:
-        from core.utils.files import strip_duplicate_suffixes
-
         # First validate that the PDF is readable
         if not validate_pdf(pdf_path):
             logger.error(f"Invalid or corrupted PDF file: {pdf_path}")
             return None
 
         output_dir.mkdir(parents=True, exist_ok=True)
-        # Strip timestamp/counter suffixes to prevent accumulation
-        clean_filename = strip_duplicate_suffixes(f"{pdf_path.stem}.jpg")
-        cover_path = output_dir / clean_filename
+        # Use the source filename stem directly - the caller is responsible
+        # for providing a path with a unique name (e.g., after organization)
+        cover_path = output_dir / f"{pdf_path.stem}.jpg"
 
         images = convert_from_path(str(pdf_path), first_page=page_number, last_page=page_number, dpi=dpi)
         if not images:

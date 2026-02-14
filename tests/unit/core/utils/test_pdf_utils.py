@@ -292,6 +292,41 @@ class TestPDFUtilsIntegration:
         assert len(set(r.name for r in results)) == 3  # All unique names
 
     @patch("core.utils.pdf.convert_from_path")
+    def test_timestamped_filenames_produce_unique_covers(self, mock_convert, tmp_path):
+        """Test that files with timestamp suffixes produce unique cover filenames.
+
+        When two files differ only by timestamp (e.g., after deduplication),
+        their covers should have different names to avoid overwriting each other.
+        """
+        pdf_dir = tmp_path / "pdfs"
+        pdf_dir.mkdir()
+        output_dir = tmp_path / "covers"
+
+        # Simulate two files that differ only by timestamp suffix
+        pdf_files = [
+            pdf_dir / "Magazine - January2024.pdf",
+            pdf_dir / "Magazine - January2024 (20260203_151457).pdf",
+        ]
+
+        for pdf_path in pdf_files:
+            pdf_path.touch()
+
+        mock_image = Mock()
+        mock_convert.return_value = [mock_image]
+
+        results = []
+        for pdf_path in pdf_files:
+            result = extract_cover_from_pdf(pdf_path, output_dir)
+            results.append(result)
+
+        assert len(results) == 2
+        assert all(r is not None for r in results)
+        # Cover filenames must be unique - second should NOT overwrite first
+        assert results[0].name != results[1].name
+        assert results[0].name == "Magazine - January2024.jpg"
+        assert results[1].name == "Magazine - January2024 (20260203_151457).jpg"
+
+    @patch("core.utils.pdf.convert_from_path")
     def test_extract_cover_workflow(self, mock_convert, tmp_path):
         """Test complete workflow of cover extraction."""
         # Setup

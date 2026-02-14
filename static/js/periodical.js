@@ -849,17 +849,24 @@ function enableMetadataEdit() {
     languageContainer.style.opacity = '1';
   }
 
-  // Year field
+  // Year field - read from derived_metadata first, fall back to extra_metadata
   document.getElementById('edit-year').value =
-    (currentMagazineData.metadata && currentMagazineData.metadata.year) || '';
+    currentMagazineData.derived_metadata?.year?.value ??
+    currentMagazineData.metadata?.year ??
+    '';
 
-  // Month field
+  // Month field - read month_name from derived_metadata first, fall back to extra_metadata
   document.getElementById('edit-month').value =
-    (currentMagazineData.metadata && currentMagazineData.metadata.month) || '';
+    currentMagazineData.derived_metadata?.month_name?.value ??
+    currentMagazineData.metadata?.month ??
+    '';
 
-  // Country field
+  // Country field - read from derived_metadata first, fall back to extra_metadata
   const countryField = document.getElementById('edit-country');
-  countryField.value = (currentMagazineData.metadata && currentMagazineData.metadata.country) || '';
+  countryField.value =
+    currentMagazineData.derived_metadata?.country?.value ??
+    currentMagazineData.metadata?.country ??
+    '';
 
   // Disable country if controlled by tracking
   const countryContainer = document.getElementById('edit-country-container');
@@ -874,10 +881,15 @@ function enableMetadataEdit() {
   }
 
   // Issue-specific fields (always editable)
+  // Read from derived_metadata first (structured format), fall back to extra_metadata (legacy)
   document.getElementById('edit-issue-number').value =
-    (currentMagazineData.metadata && currentMagazineData.metadata.issue_number) || '';
+    currentMagazineData.derived_metadata?.issue_number?.value ??
+    currentMagazineData.metadata?.issue_number ??
+    '';
   document.getElementById('edit-volume').value =
-    (currentMagazineData.metadata && currentMagazineData.metadata.volume) || '';
+    currentMagazineData.derived_metadata?.volume?.value ??
+    currentMagazineData.metadata?.volume ??
+    '';
 
   // Always show special edition field in edit mode
   const specialField = document.getElementById('special-edition-name-field');

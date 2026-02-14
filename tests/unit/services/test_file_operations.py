@@ -296,6 +296,52 @@ class TestReorganizePeriodicalFiles:
         assert mock_periodical.file_path == original_pdf
         assert mock_periodical.cover_path == original_cover
 
+    def test_reorganize_after_date_metadata_change(self, tmp_path, temp_library_dir):
+        """Test that files are reorganized when issue_date changes (metadata update scenario).
+
+        When a user updates year/month metadata on a periodical, the files should
+        be moved to reflect the new date in the directory structure and filename.
+        """
+        # Set up initial file in the library under January 2024
+        initial_dir = temp_library_dir / "_Magazines" / "Wired" / "2024"
+        initial_dir.mkdir(parents=True)
+
+        pdf_path = initial_dir / "Wired - January2024.pdf"
+        pdf_path.write_text("PDF content")
+        cover_path = initial_dir / "Wired - January2024.jpg"
+        cover_path.write_text("Cover content")
+
+        periodical = MagicMock()
+        periodical.file_path = str(pdf_path)
+        periodical.cover_path = str(cover_path)
+        periodical.extra_metadata = {"category": "Magazines"}
+
+        # Simulate metadata update: change date from January 2024 to March 2025
+        periodical.issue_date = datetime(2025, 3, 1)
+
+        result = reorganize_periodical_files(
+            periodical,
+            new_title="Wired",
+            library_base_dir=temp_library_dir,
+            update_db=True,
+        )
+
+        assert result.success is True
+        assert result.files_moved is True
+
+        # Files should now be under the new year directory with new month
+        new_pdf = Path(result.new_pdf_path)
+        new_cover = Path(result.new_cover_path)
+        assert new_pdf.exists()
+        assert new_cover.exists()
+        assert "2025" in str(new_pdf)
+        assert "March2025" in new_pdf.name
+        assert "March2025" in new_cover.name
+
+        # Old files should no longer exist
+        assert not pdf_path.exists()
+        assert not cover_path.exists()
+
 
 class TestMoveFilesWithCleanup:
     """Test move_files_with_cleanup function"""

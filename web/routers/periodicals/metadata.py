@@ -3,12 +3,15 @@ Metadata operations for periodicals
 """
 
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Dict
 
 
 from core.constants.date import NUMBER_TO_MONTH
 from core.utils.db import mark_json_modified, with_db_session
 from core.utils.error_handling import handle_api_errors
+from core.utils.files import get_library_dir
+from services.file_operations import reorganize_periodical_files
 from web.utils.responses import success_response
 
 from . import _shared
@@ -93,27 +96,66 @@ async def update_periodical(magazine_id: int, updates: Dict[str, Any]) -> Dict[s
         if magazine.extra_metadata is None:
             magazine.extra_metadata = {}
 
+        # Ensure derived_metadata is initialized
+        if magazine.derived_metadata is None:
+            magazine.derived_metadata = {}
+
         # Country can only be updated if NOT linked to tracking
         if "country" in updates and not has_tracking:
-            magazine.extra_metadata["country"] = updates["country"]
+            magazine.derived_metadata["country"] = {
+                "value": updates["country"],
+                "source": "manual",
+                "confidence": 1.0,
+            }
 
         # Handle year and month updates
         year_provided = "year" in updates and updates["year"]
         month_provided = "month" in updates
 
-        # Update metadata fields
+        # Update derived_metadata fields (structured with source/confidence)
         if year_provided:
-            magazine.extra_metadata["year"] = updates["year"]
+            magazine.derived_metadata["year"] = {
+                "value": int(updates["year"]),
+                "source": "manual",
+                "confidence": 1.0,
+            }
 
         if month_provided:
-            magazine.extra_metadata["month"] = updates["month"]
+            magazine.derived_metadata["month_name"] = {
+                "value": updates["month"],
+                "source": "manual",
+                "confidence": 1.0,
+            }
+            # Also store numeric month if parseable
+            month_num_val, _ = _shared.parse_month_string(updates["month"])
+            if month_num_val and month_num_val > 1:  # parse_month_string defaults to 1
+                magazine.derived_metadata["month"] = {
+                    "value": month_num_val,
+                    "source": "manual",
+                    "confidence": 1.0,
+                }
 
         # Auto-populate from issue_date if fields not provided
         if magazine.issue_date:
             if not year_provided:
-                magazine.extra_metadata["year"] = magazine.issue_date.year
+                magazine.derived_metadata["year"] = {
+                    "value": magazine.issue_date.year,
+                    "source": "issue_date",
+                    "confidence": 1.0,
+                }
             if not month_provided or not updates.get("month"):
-                magazine.extra_metadata["month"] = NUMBER_TO_MONTH.get(magazine.issue_date.month, "")
+                month_name = NUMBER_TO_MONTH.get(magazine.issue_date.month, "")
+                if month_name:
+                    magazine.derived_metadata["month_name"] = {
+                        "value": month_name,
+                        "source": "issue_date",
+                        "confidence": 1.0,
+                    }
+                    magazine.derived_metadata["month"] = {
+                        "value": magazine.issue_date.month,
+                        "source": "issue_date",
+                        "confidence": 1.0,
+                    }
 
         # Reconstruct issue_date when year is provided
         # This keeps the database field in sync for sorting/filtering
@@ -130,10 +172,18 @@ async def update_periodical(magazine_id: int, updates: Dict[str, Any]) -> Dict[s
                 magazine.issue_date = datetime(year, 1, 1, tzinfo=UTC)
 
         if "issue_number" in updates:
-            magazine.extra_metadata["issue_number"] = updates["issue_number"]
+            magazine.derived_metadata["issue_number"] = {
+                "value": updates["issue_number"],
+                "source": "manual",
+                "confidence": 1.0,
+            }
 
         if "volume" in updates:
-            magazine.extra_metadata["volume"] = updates["volume"]
+            magazine.derived_metadata["volume"] = {
+                "value": updates["volume"],
+                "source": "manual",
+                "confidence": 1.0,
+            }
 
         # Handle cover page number (stored in extra_metadata)
         if "cover_page" in updates:
@@ -143,9 +193,6 @@ async def update_periodical(magazine_id: int, updates: Dict[str, Any]) -> Dict[s
                 logger.info(f"Updated cover page to {cover_page_value} for magazine {magazine_id}")
 
         # Handle special edition in derived_metadata (structured storage)
-        if magazine.derived_metadata is None:
-            magazine.derived_metadata = {}
-
         if "special_edition" in updates:
             if updates["special_edition"]:
                 # Store as structured data with source indicator
@@ -162,6 +209,28 @@ async def update_periodical(magazine_id: int, updates: Dict[str, Any]) -> Dict[s
         db.commit()
         db.refresh(magazine)
 
+        # Reorganize files if date-affecting metadata changed (year/month)
+        # This keeps the filesystem paths in sync with metadata
+        files_reorganized = False
+        if year_provided or month_provided:
+            library_base_dir = _shared._library_base_dir or get_library_dir(None)
+            category_prefix = _shared._category_prefix
+
+            result = reorganize_periodical_files(
+                magazine,
+                new_title=magazine.title,
+                library_base_dir=library_base_dir,
+                category_prefix=category_prefix,
+                update_db=True,
+            )
+            if result.success and result.files_moved:
+                files_reorganized = True
+                db.commit()
+                db.refresh(magazine)
+                logger.info(f"Reorganized files for periodical {magazine_id} after metadata update")
+            elif not result.success:
+                logger.warning(f"Failed to reorganize files for periodical {magazine_id}: {result.error}")
+
         return success_response(
             "Metadata updated successfully",
             periodical={
@@ -169,8 +238,12 @@ async def update_periodical(magazine_id: int, updates: Dict[str, Any]) -> Dict[s
                 "title": magazine.title,
                 "language": magazine.language,
                 "issue_date": (magazine.issue_date.isoformat() if magazine.issue_date else None),
+                "file_path": magazine.file_path,
+                "cover_path": magazine.cover_path,
                 "metadata": magazine.extra_metadata,
+                "derived_metadata": magazine.derived_metadata,
             },
+            files_reorganized=files_reorganized,
         )
 
     return await with_db_session(_shared._session_factory, operation)

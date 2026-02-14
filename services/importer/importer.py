@@ -916,12 +916,20 @@ class FileImporter:
             # Check if OCR found volume/issue that we didn't have
             if ocr_result.get("volume") or ocr_result.get("issue_number"):
                 metadata_discovered = True
-                if not magazine.extra_metadata:
-                    magazine.extra_metadata = {}
+                if not magazine.derived_metadata:
+                    magazine.derived_metadata = {}
                 if ocr_result.get("volume"):
-                    magazine.extra_metadata["volume"] = ocr_result["volume"]
+                    magazine.derived_metadata["volume"] = {
+                        "value": ocr_result["volume"],
+                        "source": "ocr_scan",
+                        "confidence": ocr_result.get("volume_confidence", 70) / 100.0,
+                    }
                 if ocr_result.get("issue_number"):
-                    magazine.extra_metadata["issue_number"] = ocr_result["issue_number"]
+                    magazine.derived_metadata["issue_number"] = {
+                        "value": ocr_result["issue_number"],
+                        "source": "ocr_scan",
+                        "confidence": ocr_result.get("issue_number_confidence", 70) / 100.0,
+                    }
 
             # Flag for reorganization if we discovered new metadata
             # This allows the file to be renamed/moved later with correct metadata
@@ -1124,9 +1132,6 @@ class FileImporter:
         """
         organization_title = target_tracking.title if target_tracking else tracking_title
 
-        # Extract cover unless skip_enhancement is enabled (for bulk imports)
-        cover_path = None if skip_enhancement else self._extract_cover(file_path)
-
         if skip_organize:
             organized_path = file_path
             logger.info(f"Using file in place (already in library): {file_path}")
@@ -1141,6 +1146,14 @@ class FileImporter:
                 "issue_number": parsed.issue_number,
             }
             organized_path = self.organizer.organize(file_path, metadata, category, organization_pattern)
+
+        # Extract cover AFTER organization so the cover filename is derived from
+        # the organized path (which already has uniqueness via timestamps).
+        # This prevents different periodicals with similar names from overwriting
+        # each other's covers in the .covers/ directory.
+        cover_path = None
+        if not skip_enhancement and organized_path:
+            cover_path = self._extract_cover(organized_path)
 
         return organized_path, cover_path
 
