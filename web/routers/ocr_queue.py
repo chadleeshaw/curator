@@ -244,6 +244,21 @@ async def clear_pending_ocr_jobs():
     return await with_db_session(_session_factory, operation)
 
 
+@router.delete("/queue/pending")
+@handle_api_errors("Clear pending OCR jobs", logger)
+async def clear_pending_ocr_jobs_by_status():
+    """
+    Clear all pending OCR jobs from the queue (explicit /pending path).
+
+    This is an alias for DELETE /queue to support the frontend's
+    status-based endpoint pattern (e.g., /queue/pending, /queue/failed).
+
+    Returns:
+        Number of jobs cleared
+    """
+    return await clear_pending_ocr_jobs()
+
+
 @router.delete("/queue/completed")
 @handle_api_errors("Clear completed OCR jobs", logger)
 async def clear_completed_ocr_jobs():
