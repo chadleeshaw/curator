@@ -961,6 +961,11 @@ async function regenerateThumbnailOcr() {
       return await response.json();
     }, 'Periodical');
 
+    if (data.skipped) {
+      showNotification(`ℹ️ ${data.message}`, 'info');
+      return;
+    }
+
     const ocrNote = data.ocr_queued
       ? 'OCR job queued — metadata will update when processing completes.'
       : data.ocr_message || 'OCR was not queued.';

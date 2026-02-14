@@ -172,6 +172,7 @@ async def bulk_regenerate_thumbnail_ocr(request: BulkRegenerateRequest) -> Dict[
 
         regenerated_count = 0
         ocr_queued_count = 0
+        skipped_count = 0
         failed_ids = []
 
         for periodical_id in request.periodical_ids:
@@ -192,6 +193,18 @@ async def bulk_regenerate_thumbnail_ocr(request: BulkRegenerateRequest) -> Dict[
                 failed_ids.append(periodical_id)
                 logger.warning(f"File not found for periodical {periodical_id}: {magazine.file_path}")
                 continue
+
+            # Skip if custom cover was uploaded and the file still exists
+            if magazine.extra_metadata and isinstance(magazine.extra_metadata, dict):
+                if magazine.extra_metadata.get("cover_uploaded") and magazine.cover_path:
+                    if Path(magazine.cover_path).exists():
+                        logger.debug(f"Skipping periodical {periodical_id} — custom uploaded cover exists")
+                        skipped_count += 1
+                        continue
+                    else:
+                        logger.info(
+                            f"Custom cover missing for periodical {periodical_id}, regenerating from PDF"
+                        )
 
             # Determine cover directory
             if _shared._library_base_dir:
@@ -257,6 +270,8 @@ async def bulk_regenerate_thumbnail_ocr(request: BulkRegenerateRequest) -> Dict[
             msg += f", queued {ocr_queued_count} OCR job(s)"
         else:
             msg += " (OCR not available)"
+        if skipped_count:
+            msg += f" ({skipped_count} skipped — custom covers)"
         if failed_ids:
             msg += f" ({len(failed_ids)} failed)"
 
@@ -265,6 +280,7 @@ async def bulk_regenerate_thumbnail_ocr(request: BulkRegenerateRequest) -> Dict[
             msg,
             regenerated_count=regenerated_count,
             ocr_queued_count=ocr_queued_count,
+            skipped_count=skipped_count,
             failed_ids=failed_ids,
         )
 
