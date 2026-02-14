@@ -202,9 +202,7 @@ async def bulk_regenerate_thumbnail_ocr(request: BulkRegenerateRequest) -> Dict[
                         skipped_count += 1
                         continue
                     else:
-                        logger.info(
-                            f"Custom cover missing for periodical {periodical_id}, regenerating from PDF"
-                        )
+                        logger.info(f"Custom cover missing for periodical {periodical_id}, regenerating from PDF")
 
             # Determine cover directory
             if _shared._library_base_dir:

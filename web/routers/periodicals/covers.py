@@ -279,18 +279,14 @@ async def regenerate_thumbnail_ocr(magazine_id: int) -> Dict[str, Any]:
             if magazine.extra_metadata.get("cover_uploaded") and magazine.cover_path:
                 cover_file = Path(magazine.cover_path)
                 if cover_file.exists():
-                    logger.info(
-                        f"Skipping regeneration for magazine {magazine_id} — custom uploaded cover exists"
-                    )
+                    logger.info(f"Skipping regeneration for magazine {magazine_id} — custom uploaded cover exists")
                     return success_response(
                         "Skipped — custom uploaded cover exists. Use Edit Metadata to change the cover.",
                         cover_path=str(cover_file),
                         skipped=True,
                     )
                 else:
-                    logger.info(
-                        f"Custom cover missing for magazine {magazine_id}, regenerating from PDF"
-                    )
+                    logger.info(f"Custom cover missing for magazine {magazine_id}, regenerating from PDF")
 
         # Determine cover directory
         if _shared._library_base_dir:
