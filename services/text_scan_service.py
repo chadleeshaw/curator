@@ -136,9 +136,7 @@ class TextScanService:
                 # Process hung on corrupted PDF — kill it
                 proc.kill()
                 proc.join(timeout=2)
-                logger.warning(
-                    f"PDF reading timed out after {timeout_seconds}s for {pdf_path} - file may be corrupted"
-                )
+                logger.warning(f"PDF reading timed out after {timeout_seconds}s for {pdf_path} - file may be corrupted")
                 return ""
 
             if not result_queue.empty():

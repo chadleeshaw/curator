@@ -497,7 +497,13 @@ class OCRQueueService:
                             result_queue = _mp_ctx.Queue()
                             proc = _mp_ctx.Process(
                                 target=_generate_png_in_process,
-                                args=(str(pdf_path), str(png_path), PDF_COVER_DPI_OCR, OCR_IMAGE_MAX_DIMENSION, result_queue),
+                                args=(
+                                    str(pdf_path),
+                                    str(png_path),
+                                    PDF_COVER_DPI_OCR,
+                                    OCR_IMAGE_MAX_DIMENSION,
+                                    result_queue,
+                                ),
                                 daemon=True,
                             )
                             proc.start()
@@ -516,9 +522,7 @@ class OCRQueueService:
                                     png_generated = True
                                     logger.debug(f"Generated OCR PNG: {png_path}")
                                 else:
-                                    logger.warning(
-                                        f"Failed to generate OCR PNG from {pdf_path}: {result.get('error')}"
-                                    )
+                                    logger.warning(f"Failed to generate OCR PNG from {pdf_path}: {result.get('error')}")
                             else:
                                 logger.warning(f"PNG generation process exited without result for {pdf_path}")
                         except Exception as e:
