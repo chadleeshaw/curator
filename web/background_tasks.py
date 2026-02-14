@@ -8,6 +8,7 @@ performs a specific maintenance or processing operation.
 
 import asyncio
 import logging
+import time
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -145,29 +146,48 @@ def _process_cache_matches(app_state: "AppState", db_session) -> int:
 
 
 def _process_periodical_searches(app_state: "AppState", db_session) -> None:
-    """Search for issues of periodicals that need refresh per adaptive scheduler."""
+    """Search for issues of periodicals that need refresh per adaptive scheduler.
+
+    Includes rate-limit-aware pacing: re-checks provider status after each search
+    and stops early when all providers are exhausted, avoiding wasted iterations
+    and unfair adaptive scheduler penalties.
+    """
     periodicals_to_search = app_state.search_scheduler.select_periodicals_to_search(db_session)
 
     if not periodicals_to_search:
         logger.debug("Auto-download: No periodicals need searching at this time")
         return
 
-    all_rate_limited = app_state.download_manager.all_providers_rate_limited
-    if all_rate_limited:
+    # Check if all providers are rate-limited before we even start
+    if app_state.download_manager.all_providers_rate_limited:
         logger.info(
-            "Auto-download: All search providers are rate limited, "
-            "skipping API searches (not penalizing adaptive scheduler)"
+            "Auto-download: All search providers are rate limited, deferring %d periodical searches to next run",
+            len(periodicals_to_search),
         )
+        return
 
     # Get cache-aware search skip threshold from config (default: 1 hour)
     cache_skip_threshold_hours = app_state.tasks_config.get("cache_aware_search_skip_hours", 1)
+    # Delay between per-periodical API searches (seconds) to pace requests
+    inter_search_delay = app_state.tasks_config.get("inter_search_delay", 5)
     now = utc_now()
 
-    for periodical in periodicals_to_search:
+    searched_count = 0
+    skipped_cache = 0
+
+    for i, periodical in enumerate(periodicals_to_search):
         try:
-            if all_rate_limited:
-                logger.debug(f"Auto-download: Skipping '{periodical.title}' - all providers rate limited")
-                continue
+            # Re-check rate limits before each search — providers may have become
+            # rate-limited from the previous iteration's API calls
+            if app_state.download_manager.all_providers_rate_limited:
+                remaining = len(periodicals_to_search) - i
+                logger.info(
+                    "Auto-download: All providers hit rate limits after %d searches, "
+                    "deferring %d remaining periodicals to next run",
+                    searched_count,
+                    remaining,
+                )
+                break
 
             # Cache-aware optimization: Skip API searches if cache matching found results recently
             # This prevents redundant API calls when the feed cache is already working
@@ -185,7 +205,13 @@ def _process_periodical_searches(app_state: "AppState", db_session) -> None:
                         f"cache matched {hours_since_cache_match:.1f}h ago "
                         f"(threshold: {cache_skip_threshold_hours}h)"
                     )
+                    skipped_cache += 1
                     continue
+
+            # Pace searches: add delay between API searches (skip delay for the first one)
+            if searched_count > 0 and inter_search_delay > 0:
+                logger.debug(f"Auto-download: Waiting {inter_search_delay}s before next search")
+                time.sleep(inter_search_delay)
 
             aliases = _extract_search_aliases(periodical)
 
@@ -193,9 +219,12 @@ def _process_periodical_searches(app_state: "AppState", db_session) -> None:
             search_results = app_state.download_manager.search_periodical_issues(
                 periodical.title, db_session, aliases=aliases
             )
+            searched_count += 1
 
             if not search_results:
                 logger.debug(f"Auto-download: No results found for '{periodical.title}'")
+                # Only penalize the adaptive scheduler if providers aren't all rate-limited
+                # (if they are, the empty result is due to rate limiting, not a real empty search)
                 if not app_state.download_manager.all_providers_rate_limited:
                     app_state.search_scheduler.update_search_stats(periodical.id, 0, db_session)
                 continue
@@ -220,6 +249,9 @@ def _process_periodical_searches(app_state: "AppState", db_session) -> None:
                 f"Auto-download: Error processing '{periodical.title}': {e}",
                 exc_info=True,
             )
+
+    if searched_count > 0 or skipped_cache > 0:
+        logger.info(f"Auto-download: Searched {searched_count} periodicals, " f"{skipped_cache} skipped (cache-fresh)")
 
 
 def _extract_search_aliases(periodical) -> list:

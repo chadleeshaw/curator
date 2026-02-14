@@ -77,23 +77,27 @@ class SearchScheduler:
         now = utc_now()
         candidates = []
 
+        # Only search periodicals that have download criteria set.
+        # "Watch Only" items (track_all=False, track_new=False, no selected_years)
+        # will never download anything, so searching wastes API rate limit budget.
+        # selected_years is a JSON column that may be NULL or [] so we filter in Python.
+
         # Priority 1: Never searched before
-        never_searched = (
-            session.query(PeriodicalTracking)
-            .filter(PeriodicalTracking.last_searched.is_(None))
-            .limit(self.max_periodicals_per_run)
-            .all()
-        )
+        never_searched = session.query(PeriodicalTracking).filter(PeriodicalTracking.last_searched.is_(None)).all()
+
+        # Filter to only downloadable periodicals (track_all, track_new, or selected_years)
+        never_searched = [p for p in never_searched if self._has_download_criteria(p)]
 
         if never_searched:
-            logger.debug(f"Found {len(never_searched)} periodicals never searched before")
-            candidates.extend(never_searched)
+            logger.debug(f"Found {len(never_searched)} downloadable periodicals never searched before")
+            candidates.extend(never_searched[: self.max_periodicals_per_run])
 
         # If we have enough, return
         if len(candidates) >= self.max_periodicals_per_run:
             return candidates[: self.max_periodicals_per_run]
 
         # Priority 2: Overdue for search
+        remaining = self.max_periodicals_per_run - len(candidates)
         overdue = (
             session.query(PeriodicalTracking)
             .filter(
@@ -105,17 +109,41 @@ class SearchScheduler:
                 )
             )
             .order_by(PeriodicalTracking.last_searched.asc())  # Oldest first
-            .limit(self.max_periodicals_per_run - len(candidates))
             .all()
         )
 
+        # Filter to only downloadable periodicals
+        overdue = [p for p in overdue if self._has_download_criteria(p)][:remaining]
+
         if overdue:
-            logger.debug(f"Found {len(overdue)} periodicals overdue for search")
+            logger.debug(f"Found {len(overdue)} downloadable periodicals overdue for search")
             candidates.extend(overdue)
 
         logger.debug(f"Selected {len(candidates)} periodicals to search: " f"{[p.title for p in candidates]}")
 
         return candidates[: self.max_periodicals_per_run]
+
+    @staticmethod
+    def _has_download_criteria(tracking: PeriodicalTracking) -> bool:
+        """Check if a tracked periodical has any download criteria set.
+
+        Periodicals in "Watch Only" mode (no download flags or year selections)
+        should not be searched during auto-download since they would never
+        download anything, wasting API rate limit budget.
+
+        Args:
+            tracking: PeriodicalTracking record to check
+
+        Returns:
+            True if the periodical has criteria that could trigger downloads
+        """
+        if tracking.track_all_editions:
+            return True
+        if tracking.track_new_only:
+            return True
+        if tracking.selected_years and len(tracking.selected_years) > 0:
+            return True
+        return False
 
     def update_search_stats(
         self,

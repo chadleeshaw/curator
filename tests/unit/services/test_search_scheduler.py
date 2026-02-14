@@ -182,6 +182,95 @@ class TestSelectPeriodicalsToSearch:
 
         session.close()
 
+    def test_skips_watch_only_periodicals(self, test_db, search_scheduler):
+        """Test that watch-only periodicals (no download criteria) are excluded from auto-search"""
+        engine, session_factory = test_db
+        session = session_factory()
+
+        # Watch-only: both flags False, no selected_years
+        watch_only = PeriodicalTracking(
+            olid="watch-only",
+            title="Watch Only Magazine",
+            track_all_editions=False,
+            track_new_only=False,
+            last_searched=None,
+        )
+        # Track all editions: should be included
+        track_all = PeriodicalTracking(
+            olid="track-all",
+            title="Track All Magazine",
+            track_all_editions=True,
+            track_new_only=False,
+            last_searched=None,
+        )
+        # Track new only: should be included
+        track_new = PeriodicalTracking(
+            olid="track-new",
+            title="Track New Magazine",
+            track_all_editions=False,
+            track_new_only=True,
+            last_searched=None,
+        )
+        # Selected years: should be included
+        track_years = PeriodicalTracking(
+            olid="track-years",
+            title="Track Years Magazine",
+            track_all_editions=False,
+            track_new_only=False,
+            selected_years=[2024, 2025],
+            last_searched=None,
+        )
+        session.add_all([watch_only, track_all, track_new, track_years])
+        session.commit()
+
+        # Use a higher limit to get all candidates
+        search_scheduler.max_periodicals_per_run = 10
+        selected = search_scheduler.select_periodicals_to_search(session)
+
+        selected_ids = {p.id for p in selected}
+        # Watch-only should NOT be selected
+        assert watch_only.id not in selected_ids
+        # All others should be selected
+        assert track_all.id in selected_ids
+        assert track_new.id in selected_ids
+        assert track_years.id in selected_ids
+        assert len(selected) == 3
+
+        session.close()
+
+    def test_skips_watch_only_overdue(self, test_db, search_scheduler):
+        """Test that overdue watch-only periodicals are still excluded"""
+        engine, session_factory = test_db
+        session = session_factory()
+
+        # Watch-only but overdue
+        watch_overdue = PeriodicalTracking(
+            olid="watch-overdue",
+            title="Watch Overdue",
+            track_all_editions=False,
+            track_new_only=False,
+            last_searched=datetime.now(UTC) - timedelta(days=30),
+            search_interval_hours=6,
+        )
+        # Downloadable and overdue
+        download_overdue = PeriodicalTracking(
+            olid="download-overdue",
+            title="Download Overdue",
+            track_all_editions=True,
+            last_searched=datetime.now(UTC) - timedelta(days=30),
+            search_interval_hours=6,
+        )
+        session.add_all([watch_overdue, download_overdue])
+        session.commit()
+
+        selected = search_scheduler.select_periodicals_to_search(session)
+
+        selected_ids = {p.id for p in selected}
+        assert watch_overdue.id not in selected_ids
+        assert download_overdue.id in selected_ids
+
+        session.close()
+
 
 class TestUpdateSearchStats:
     """Test updating search statistics and interval adjustments"""

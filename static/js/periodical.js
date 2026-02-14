@@ -7,7 +7,7 @@
 /* global FileReader */
 
 import { APIClient, APIHelper } from './core/api.js';
-import { CSS_CLASSES } from './core/constants.js';
+import { CSS_CLASSES, API_LIMITS } from './core/constants.js';
 import { UIUtils } from './core/ui-utils.js';
 import { initScrollCollapse } from './core/scroll-collapse.js';
 
@@ -1234,7 +1234,7 @@ async function openMoveIssueModal() {
   try {
     // Fetch all tracking records
     const data = await APIHelper.executeWithErrorHandling(async () => {
-      const response = await APIClient.get('/api/periodicals/tracking?limit=1000');
+      const response = await APIClient.get(`/api/periodicals/tracking?limit=${API_LIMITS.TRACKING_LIST}`);
       return await response.json();
     }, 'Periodical');
 
@@ -1501,7 +1501,7 @@ async function openBulkMoveModal() {
 
   try {
     const data = await APIHelper.executeWithErrorHandling(async () => {
-      const response = await APIClient.get('/api/periodicals/tracking?limit=1000');
+      const response = await APIClient.get(`/api/periodicals/tracking?limit=${API_LIMITS.TRACKING_LIST}`);
       return await response.json();
     }, 'Periodical');
 

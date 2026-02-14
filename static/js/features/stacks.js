@@ -6,6 +6,7 @@
 
 import { APIClient, APIHelper } from '../core/api.js';
 import { UIUtils } from '../core/ui-utils.js';
+import { API_LIMITS } from '../core/constants.js';
 
 /**
  * Stacks Manager class for managing stack CRUD and assignment
@@ -400,14 +401,14 @@ export class StacksManager {
     // Load all tracking items
     const trackingData = await APIHelper.executeWithErrorHandling(async () => {
       const response = await APIClient.authenticatedFetch(
-        '/api/periodicals/tracking?limit=1000'
+        `/api/periodicals/tracking?limit=${API_LIMITS.TRACKING_LIST}`
       );
       return await response.json();
     }, 'Stacks');
 
     // Load library periodicals (to find untracked items)
     const libraryData = await APIHelper.executeWithErrorHandling(async () => {
-      const response = await APIClient.authenticatedFetch('/api/periodicals?limit=1000');
+      const response = await APIClient.authenticatedFetch(`/api/periodicals?limit=${API_LIMITS.PERIODICAL_LIST}`);
       return await response.json();
     }, 'Stacks');
 

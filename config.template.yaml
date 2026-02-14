@@ -348,6 +348,12 @@ tasks:
   # Recommended: 1800-3600 (30 min - 1 hour)
   auto_download_interval: 1800 # 30 minutes (recommended with new system)
 
+  # Delay (in seconds) between per-periodical API searches during auto-download.
+  # Spreads out API calls to avoid hitting provider rate limits when tracking
+  # many periodicals. Set to 0 to disable pacing.
+  # Recommended: 3-10 seconds depending on number of tracked periodicals
+  inter_search_delay: 5
+
   # Download monitor: Check download status and import completed files
   download_monitor_interval: 30 # 30 seconds
 

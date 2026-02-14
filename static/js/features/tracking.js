@@ -16,6 +16,7 @@ import {
   NUMBER_TO_MONTH,
   MONTH_NAMES_LOWER,
   MONTH_ABBR_LOWER,
+  API_LIMITS,
 } from '../core/constants.js';
 import { escapeHtml } from '../readers/reader-utils.js';
 import { stacks } from './stacks.js';
@@ -725,7 +726,7 @@ export class TrackingManager {
       const { field, order } = this.sortManager.getSortParams();
       const data = await APIHelper.executeWithErrorHandling(async () => {
         const response = await APIClient.authenticatedFetch(
-          `/api/periodicals/tracking?sort_by=${field}&sort_order=${order}`
+          `/api/periodicals/tracking?sort_by=${field}&sort_order=${order}&limit=${API_LIMITS.TRACKING_LIST}`
         );
         return await response.json();
       }, 'Tracking');
@@ -2951,7 +2952,7 @@ window.moveLibraryCopy = async function (periodicalId, issueKey) {
 
   try {
     // Fetch all tracking records
-    const response = await APIClient.get('/api/periodicals/tracking?limit=1000');
+    const response = await APIClient.get(`/api/periodicals/tracking?limit=${API_LIMITS.TRACKING_LIST}`);
     const data = await response.json();
     const trackingRecords = data.tracked_magazines || [];
 
@@ -3103,7 +3104,7 @@ window.openMergeModal = async function () {
   try {
     const data = await APIHelper.executeWithErrorHandling(
       async () => {
-        const response = await APIClient.get('/api/periodicals/tracking?limit=1000');
+        const response = await APIClient.get(`/api/periodicals/tracking?limit=${API_LIMITS.TRACKING_LIST}`);
         return await response.json();
       },
       'Tracking',
@@ -3204,7 +3205,7 @@ window.showMergeTargetSelection = async function () {
   // Get the tracking data for selected items
   const data = await APIHelper.executeWithErrorHandling(
     async () => {
-      const response = await APIClient.get('/api/periodicals/tracking?limit=1000');
+      const response = await APIClient.get(`/api/periodicals/tracking?limit=${API_LIMITS.TRACKING_LIST}`);
       return await response.json();
     },
     'Tracking',

@@ -13,6 +13,7 @@ import {
   STATUS_MESSAGES as _STATUS_MESSAGES,
   CSS_CLASSES as _CSS_CLASSES,
   TIMEOUTS,
+  API_LIMITS,
 } from '../core/constants.js';
 import { ValidationError as _ValidationError } from '../core/errors.js';
 import { mediaWorker, Priority } from '../readers/media-worker-manager.js';
@@ -301,7 +302,7 @@ export class LibraryManager {
     const data = await APIHelper.executeWithErrorHandling(async () => {
       const { field, order } = this.sortManager.getSortParams();
       const response = await APIClient.authenticatedFetch(
-        `/api/periodicals?sort_by=${field}&sort_order=${order}&limit=10000`
+        `/api/periodicals?sort_by=${field}&sort_order=${order}&limit=${API_LIMITS.PERIODICAL_LIST}`
       );
       return await response.json();
     }, 'Library');
