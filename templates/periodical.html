@@ -315,11 +315,39 @@
           <button onclick="openBulkMoveModal()" class="btn-primary bulk-btn">
             🔀 Move to Tracking
           </button>
+          <button onclick="openBulkRegenerateModal()" class="btn-primary bulk-btn">
+            🔄 Regenerate Thumbnail & OCR
+          </button>
           <button onclick="openBulkDeleteModal()" class="btn-delete bulk-btn">
             🗑️ Delete
           </button>
           <button onclick="toggleBulkSelectMode()" class="btn-secondary bulk-btn">
             Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bulk Regenerate Thumbnail & OCR Modal -->
+    <div id="bulk-regenerate-modal" class="modal hidden">
+      <div class="modal-content delete-modal-content" style="max-width: 600px">
+        <h3>🔄 Regenerate Thumbnails & OCR</h3>
+        <p class="delete-modal-subtitle">
+          Regenerate cover thumbnails and queue OCR for
+          <strong id="bulk-regenerate-count">0</strong> selected issue(s)?
+        </p>
+
+        <div class="bg-surface-variant rounded-lg p-15 mb-20">
+          <p class="m-0">
+            This will extract a fresh cover image from each PDF and queue high-priority OCR jobs.
+            Existing thumbnails will be replaced.
+          </p>
+        </div>
+
+        <div class="flex gap-10 justify-end">
+          <button onclick="closeBulkRegenerateModal()" class="save-btn btn-cancel">Cancel</button>
+          <button onclick="confirmBulkRegenerate()" class="save-btn btn-primary" id="confirm-bulk-regenerate-btn">
+            Regenerate
           </button>
         </div>
       </div>

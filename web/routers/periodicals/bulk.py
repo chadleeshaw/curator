@@ -1,5 +1,5 @@
 """
-Bulk operations for periodicals - move, delete multiple issues at once.
+Bulk operations for periodicals - move, delete, regenerate thumbnails/OCR for multiple issues at once.
 """
 
 import logging
@@ -10,13 +10,18 @@ from fastapi import HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 
+from core.constants.files import PDF_COVER_QUALITY_HIGH
+from core.constants.ocr import PDF_COVER_DPI_OCR
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from core.utils.files import get_library_dir
 from core.utils.general import cleanup_empty_directories
 from core.utils.metadata_builder import is_periodical_special_edition
-from models.database import Periodical, PeriodicalTracking
+from core.utils.pdf import extract_cover_from_pdf
+from models.database import OCRJob, Periodical, PeriodicalTracking
 from services.file_operations import reorganize_periodical_files
+from services.ocr.queue import OCRQueueService
+from services.ocr.service import OCRService
 from web.utils.responses import success_response
 
 from . import _shared
@@ -38,6 +43,12 @@ class BulkDeleteRequest(BaseModel):
     periodical_ids: List[int] = Field(..., min_length=1, description="List of periodical IDs to delete")
     delete_files: bool = Field(default=False, description="Whether to delete files from disk")
     mark_as_bad: bool = Field(default=False, description="Mark issues as permanently failed")
+
+
+class BulkRegenerateRequest(BaseModel):
+    """Request body for bulk regenerate thumbnail & OCR operation."""
+
+    periodical_ids: List[int] = Field(..., min_length=1, description="List of periodical IDs to regenerate")
 
 
 @router.post("/periodicals/bulk/move-to-tracking")
@@ -137,6 +148,124 @@ async def bulk_move_to_tracking(request: BulkMoveRequest) -> Dict[str, Any]:
             moved_count=moved_count,
             failed_ids=failed_ids,
             target_tracking_id=request.target_tracking_id,
+        )
+
+    return await with_db_session(_shared._session_factory, operation)
+
+
+@router.post("/periodicals/bulk/regenerate-thumbnail-ocr")
+@handle_api_errors("Bulk regenerate thumbnail & OCR", logger)
+async def bulk_regenerate_thumbnail_ocr(request: BulkRegenerateRequest) -> Dict[str, Any]:
+    """
+    Regenerate cover thumbnails and queue OCR for multiple issues.
+
+    For each selected issue, extracts a fresh cover from the PDF (using the
+    stored cover page or page 1), invalidates the cached thumbnail, and
+    queues a high-priority OCR job.
+
+    Args:
+        request: BulkRegenerateRequest with periodical_ids
+    """
+
+    def operation(db):
+        ocr_available = OCRService.is_available()
+
+        regenerated_count = 0
+        ocr_queued_count = 0
+        failed_ids = []
+
+        for periodical_id in request.periodical_ids:
+            magazine = db.query(Periodical).filter(Periodical.id == periodical_id).first()
+            if not magazine:
+                failed_ids.append(periodical_id)
+                logger.warning(f"Periodical {periodical_id} not found during bulk regenerate")
+                continue
+
+            if not magazine.file_path:
+                failed_ids.append(periodical_id)
+                logger.warning(f"Periodical {periodical_id} has no file path")
+                continue
+
+            try:
+                pdf_path = _shared.resolve_file_path(magazine.file_path)
+            except FileNotFoundError:
+                failed_ids.append(periodical_id)
+                logger.warning(f"File not found for periodical {periodical_id}: {magazine.file_path}")
+                continue
+
+            # Determine cover directory
+            if _shared._library_base_dir:
+                cover_dir = _shared._library_base_dir / ".covers"
+            else:
+                cover_dir = pdf_path.parent.parent.parent / ".covers"
+
+            # Use stored cover page or default to 1
+            page_number = 1
+            if magazine.extra_metadata and isinstance(magazine.extra_metadata, dict):
+                page_number = magazine.extra_metadata.get("cover_page", 1)
+
+            # Invalidate old thumbnail
+            if magazine.cover_path:
+                old_cover = Path(magazine.cover_path)
+                old_thumbnail = old_cover.parent / f"{old_cover.stem}_thumb.jpg"
+                if old_thumbnail.exists():
+                    old_thumbnail.unlink()
+
+            # Extract cover from PDF
+            try:
+                if ocr_available:
+                    cover_path = extract_cover_from_pdf(
+                        pdf_path,
+                        cover_dir,
+                        dpi=PDF_COVER_DPI_OCR,
+                        quality=PDF_COVER_QUALITY_HIGH,
+                        page_number=page_number,
+                    )
+                else:
+                    cover_path = extract_cover_from_pdf(pdf_path, cover_dir, page_number=page_number)
+
+                if cover_path:
+                    magazine.cover_path = str(cover_path)
+                    # Clear uploaded flag since we regenerated from PDF
+                    if magazine.extra_metadata and isinstance(magazine.extra_metadata, dict):
+                        magazine.extra_metadata.pop("cover_uploaded", None)
+                    regenerated_count += 1
+                else:
+                    failed_ids.append(periodical_id)
+                    logger.warning(f"Failed to extract cover for periodical {periodical_id}")
+                    continue
+            except Exception as e:
+                failed_ids.append(periodical_id)
+                logger.error(f"Error extracting cover for periodical {periodical_id}: {e}")
+                continue
+
+            # Queue OCR job
+            if ocr_available:
+                job = OCRQueueService.queue_ocr_job(
+                    db=db,
+                    periodical_id=periodical_id,
+                    priority=OCRJob.PriorityEnum.HIGH.value,
+                    language=magazine.language,
+                )
+                if job:
+                    ocr_queued_count += 1
+
+        db.commit()
+
+        msg = f"Regenerated {regenerated_count} thumbnail(s)"
+        if ocr_available:
+            msg += f", queued {ocr_queued_count} OCR job(s)"
+        else:
+            msg += " (OCR not available)"
+        if failed_ids:
+            msg += f" ({len(failed_ids)} failed)"
+
+        logger.info(msg)
+        return success_response(
+            msg,
+            regenerated_count=regenerated_count,
+            ocr_queued_count=ocr_queued_count,
+            failed_ids=failed_ids,
         )
 
     return await with_db_session(_shared._session_factory, operation)

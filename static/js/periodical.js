@@ -1600,6 +1600,62 @@ async function confirmBulkMove() {
 }
 
 // ==========================================================================
+// Bulk Regenerate Thumbnail & OCR
+// ==========================================================================
+
+function openBulkRegenerateModal() {
+  const ids = getSelectedIds();
+  if (ids.length === 0) {
+    showNotification('No issues selected', 'error');
+    return;
+  }
+
+  const countEl = document.getElementById('bulk-regenerate-count');
+  countEl.textContent = ids.length;
+
+  const modal = document.getElementById('bulk-regenerate-modal');
+  modal.classList.remove(CSS_CLASSES.HIDDEN);
+}
+
+function closeBulkRegenerateModal() {
+  document.getElementById('bulk-regenerate-modal').classList.add(CSS_CLASSES.HIDDEN);
+}
+
+async function confirmBulkRegenerate() {
+  const ids = getSelectedIds();
+  if (ids.length === 0) return;
+
+  const confirmBtn = document.getElementById('confirm-bulk-regenerate-btn');
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = 'Regenerating...';
+
+  try {
+    const response = await APIHelper.executeWithErrorHandling(async () => {
+      return await APIClient.post('/api/periodicals/bulk/regenerate-thumbnail-ocr', {
+        periodical_ids: ids,
+      });
+    }, 'Periodical');
+
+    const result = await response.json();
+
+    showNotification(`✅ ${result.message}`, 'success');
+
+    closeBulkRegenerateModal();
+    toggleBulkSelectMode();
+
+    setTimeout(() => {
+      location.reload();
+    }, 1500);
+  } catch (error) {
+    console.error('[Periodical] Error in bulk regenerate:', error);
+    const message = error.toUserMessage ? error.toUserMessage() : error.message;
+    showNotification('Failed to regenerate: ' + message, 'error');
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = 'Regenerate';
+  }
+}
+
+// ==========================================================================
 // Bulk Delete
 // ==========================================================================
 
@@ -1693,6 +1749,9 @@ window.deselectAllIssues = deselectAllIssues;
 window.openBulkMoveModal = openBulkMoveModal;
 window.closeBulkMoveModal = closeBulkMoveModal;
 window.confirmBulkMove = confirmBulkMove;
+window.openBulkRegenerateModal = openBulkRegenerateModal;
+window.closeBulkRegenerateModal = closeBulkRegenerateModal;
+window.confirmBulkRegenerate = confirmBulkRegenerate;
 window.openBulkDeleteModal = openBulkDeleteModal;
 window.closeBulkDeleteModal = closeBulkDeleteModal;
 window.confirmBulkDelete = confirmBulkDelete;
