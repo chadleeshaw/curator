@@ -184,8 +184,6 @@ def _apply_scan_metadata_to_magazine(
 
     return updated
 
-    return updated
-
 
 def _ocr_worker(cover_path: str, language: Optional[str] = None) -> Dict[str, Any]:
     """
@@ -202,9 +200,19 @@ def _ocr_worker(cover_path: str, language: Optional[str] = None) -> Dict[str, An
         result = OCRService.analyze_cover(cover_path, language=language)
         return {"success": True, "metadata": result}
     except (RuntimeError, OSError, SystemError) as e:
-        # Catch CPU instruction errors (SIGILL manifests as these)
         import traceback
 
+        error_str = str(e).lower()
+
+        # Check for timeout errors from pytesseract
+        if "timeout" in error_str or "timed out" in error_str:
+            logger.warning(f"OCR timeout for {cover_path}: {e}")
+            return {
+                "success": False,
+                "error": "OCR timeout: Operation took too long",
+            }
+
+        # Catch CPU instruction errors (SIGILL manifests as RuntimeError/OSError/SystemError)
         error_msg = f"OCR worker runtime error for {cover_path}: {e} (possible CPU instruction incompatibility)"
         error_trace = traceback.format_exc()
         logger.error(f"{error_msg}\n{error_trace}")

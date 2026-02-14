@@ -86,6 +86,9 @@ AUTO_METADATA_INTERVAL = 604800
 FEED_SYNC_INTERVAL = 900
 """Interval for RSS feed sync task (15 minutes)"""
 
+FILE_REORGANIZER_INTERVAL = 300
+"""Interval for checking and processing periodicals flagged for file reorganization (5 minutes)"""
+
 FEED_SYNC_MATCH_BATCH_SIZE = 200
 """Maximum number of new RSS feed entries to match per auto-download run"""
 

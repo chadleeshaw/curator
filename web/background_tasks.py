@@ -359,3 +359,22 @@ async def auto_metadata_periodic_task(app_state: "AppState") -> None:
         )
     except Exception as e:
         logger.error(f"Auto-metadata error: {e}", exc_info=True)
+
+
+async def file_reorganizer_periodic_task(app_state: "AppState") -> None:
+    """Reorganize files for periodicals flagged with needs_reorganization."""
+    try:
+        from core.utils import run_in_thread
+
+        def _run_file_reorganizer():
+            return app_state.file_reorganizer_task.run()
+
+        stats = await run_in_thread(_run_file_reorganizer)
+        if stats.get("reorganized", 0) > 0 or stats.get("errors", 0) > 0:
+            logger.info(
+                f"File reorganizer: {stats.get('reorganized', 0)} reorganized, "
+                f"{stats.get('skipped', 0)} skipped, "
+                f"{stats.get('errors', 0)} errors"
+            )
+    except Exception as e:
+        logger.error(f"File reorganizer error: {e}", exc_info=True)

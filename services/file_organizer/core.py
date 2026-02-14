@@ -286,23 +286,19 @@ class FileOrganizer(ReorganizationMixin, CleanupMixin):
         """
         Build default directory structure.
 
-        Creates: {category}/{title}/{volume}/{year}/ or {category}/{title}/{year}/
+        Creates: {category}/{title}/{year}/
+        Volume number is included in the filename only, not the directory.
 
         Args:
             category_with_prefix: Category name with prefix
             safe_title: Sanitized title
-            volume: Volume number (optional)
+            volume: Volume number (unused - kept for API compatibility)
             year: Year
 
         Returns:
             Target directory path
         """
-        path_parts = [category_with_prefix, safe_title]
-
-        if volume:
-            path_parts.append(f"{VOLUME_PREFIX}{volume}")
-
-        path_parts.append(year)
+        path_parts = [category_with_prefix, safe_title, year]
 
         return self.library_dir / Path(*path_parts)
 

@@ -260,10 +260,10 @@ class TestHybridPatterns:
         assert result_path.exists()
 
         # Should use default year-based pattern when date is available
-        # Expected: _Articles/Scientific Journal/Vol42/2023/Scientific Journal - Vol42 - March2023.pdf
+        # Volume is in the filename, not the directory
+        # Expected: _Articles/Scientific Journal/2023/Scientific Journal - Vol42 - March2023.pdf
         assert "_Articles" in str(result_path)
         assert "Scientific Journal" in str(result_path)
-        assert "Vol42" in str(result_path)
         assert "2023" in str(result_path)
         assert result_path.name == "Scientific Journal - Vol42 - March2023.pdf"
 

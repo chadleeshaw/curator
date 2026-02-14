@@ -2,6 +2,7 @@
 Rate limiting middleware for FastAPI
 """
 
+import logging
 import time
 from collections import defaultdict
 from typing import Callable
@@ -9,6 +10,8 @@ from typing import Callable
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+
+logger = logging.getLogger(__name__)
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -192,11 +195,37 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 headers=headers,
             )
 
-        # Process request
-        response = await call_next(request)
+        # Process request with error handling for client disconnections
+        try:
+            response = await call_next(request)
 
-        # Add rate limit headers to response
-        for key, value in headers.items():
-            response.headers[key] = value
+            # Add rate limit headers to response
+            for key, value in headers.items():
+                response.headers[key] = value
 
-        return response
+            return response
+
+        except Exception as e:
+            # Handle client disconnection errors (h11 protocol errors)
+            # This can happen when a client times out or closes the connection
+            # while the server is still processing the request
+            error_name = type(e).__name__
+            error_module = type(e).__module__
+
+            # Check for h11 protocol errors (client disconnected)
+            if "h11" in error_module or "LocalProtocolError" in error_name:
+                logger.debug(f"Client disconnected during request to {request.url.path}: {e}")
+                # Re-raise to let uvicorn handle the disconnection
+                raise
+
+            # Check for anyio/asyncio cancellation (client closed connection)
+            if "Cancelled" in error_name or "cancel" in str(e).lower():
+                logger.debug(f"Request cancelled for {request.url.path}: {e}")
+                raise
+
+            # Log unexpected errors and re-raise
+            logger.error(
+                f"Unexpected error in middleware for {request.url.path}: {error_name}: {e}",
+                exc_info=True,
+            )
+            raise

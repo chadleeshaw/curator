@@ -41,6 +41,7 @@ from core.constants.ocr import (
     OCR_ISSUE_PATTERNS,
     OCR_MAX_PAGES,
     OCR_MAX_VOLUME,
+    OCR_TIMEOUT_SECONDS,
     OCR_YEAR_PATTERN,
     OCR_VOLUME_PATTERNS,
     OCR_SPECIAL_EDITION_INDICATORS,
@@ -458,9 +459,13 @@ class OCRService:
                 # Build Tesseract config with defaults (no access to config file in static method)
                 tesseract_config = f"--psm {OCR_TESSERACT_PSM} --oem {OCR_TESSERACT_OEM}"
 
-                # Get structured OCR data as a dict
+                # Get structured OCR data as a dict (with timeout to prevent hanging)
                 data = pytesseract.image_to_data(
-                    img, output_type=pytesseract.Output.DICT, lang=lang_code, config=tesseract_config
+                    img,
+                    output_type=pytesseract.Output.DICT,
+                    lang=lang_code,
+                    config=tesseract_config,
+                    timeout=OCR_TIMEOUT_SECONDS,
                 )
 
                 # Filter out low-confidence or empty detections
@@ -546,9 +551,13 @@ class OCRService:
             # Build Tesseract config with defaults (no access to ocr_config here)
             tesseract_config = f"--psm {OCR_TESSERACT_PSM} --oem {OCR_TESSERACT_OEM}"
 
-            # Get structured OCR data
+            # Get structured OCR data (with timeout to prevent hanging)
             data = pytesseract.image_to_data(
-                img, output_type=pytesseract.Output.DICT, lang=lang_code, config=tesseract_config
+                img,
+                output_type=pytesseract.Output.DICT,
+                lang=lang_code,
+                config=tesseract_config,
+                timeout=OCR_TIMEOUT_SECONDS,
             )
 
             # Filter and extract text
@@ -604,9 +613,13 @@ class OCRService:
             # Build Tesseract config with defaults (no access to ocr_config here)
             tesseract_config = f"--psm {OCR_TESSERACT_PSM} --oem {OCR_TESSERACT_OEM}"
 
-            # Get structured OCR data
+            # Get structured OCR data (with timeout to prevent hanging)
             data = pytesseract.image_to_data(
-                img, output_type=pytesseract.Output.DICT, lang=lang_code, config=tesseract_config
+                img,
+                output_type=pytesseract.Output.DICT,
+                lang=lang_code,
+                config=tesseract_config,
+                timeout=OCR_TIMEOUT_SECONDS,
             )
 
             # Filter and extract text + words

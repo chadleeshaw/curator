@@ -77,6 +77,9 @@ OCR_MAX_WORKERS = 1
 OCR_BATCH_SIZE = 5
 """Default maximum number of OCR jobs to process per batch"""
 
+OCR_TIMEOUT_SECONDS = 300
+"""Maximum time in seconds for a single OCR operation (default: 5 minutes)"""
+
 OCR_MAX_PAGES = 2
 """Maximum number of PDF pages to scan for OCR (default: 2 - cover may be on page 2)"""
 

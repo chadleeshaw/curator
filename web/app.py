@@ -33,6 +33,7 @@ from schedulers import (
     CoverCleanup,
     OCRProcessor,
     FolderCleanup,
+    FileReorganizer,
 )
 
 # Import all routers
@@ -119,6 +120,7 @@ class TaskState:
     cover_cleanup: Optional[CoverCleanup] = None
     ocr_processor: Optional[OCRProcessor] = None
     folder_cleanup: Optional[FolderCleanup] = None
+    file_reorganizer: Optional[FileReorganizer] = None
 
 
 # pylint: disable=too-many-instance-attributes,too-many-public-methods
@@ -410,6 +412,16 @@ class AppState:
     def folder_cleanup_task(self, value: FolderCleanup) -> None:
         """Backward compatibility: set tasks.folder_cleanup."""
         self.tasks.folder_cleanup = value
+
+    @property
+    def file_reorganizer_task(self) -> Optional[FileReorganizer]:
+        """Backward compatibility: access tasks.file_reorganizer."""
+        return self.tasks.file_reorganizer
+
+    @file_reorganizer_task.setter
+    def file_reorganizer_task(self, value: FileReorganizer) -> None:
+        """Backward compatibility: set tasks.file_reorganizer."""
+        self.tasks.file_reorganizer = value
 
     # -------------------------------------------------------------------------
     # Derived properties
@@ -709,6 +721,16 @@ def _initialize_background_tasks() -> None:
     )
     logger.info("Folder cleanup task initialized")
 
+    # File reorganizer (processes needs_reorganization flag)
+    app_state.file_reorganizer_task = FileReorganizer(
+        session_factory=app_state.session_factory,
+        library_base_dir=app_state.storage_config.get("library_dir", "./_Magazines"),
+        category_prefix=app_state.category_prefix,
+        organization_pattern=app_state.import_config.get("organization_pattern"),
+        batch_size=app_state.tasks_config.get("file_reorganizer_batch_size", 20),
+    )
+    logger.info("File reorganizer task initialized")
+
     # Task scheduler (started later in lifespan)
     app_state.task_scheduler = TaskScheduler()
 
@@ -721,6 +743,7 @@ def _schedule_periodic_tasks(
     ocr_processing_task,
     folder_cleanup_periodic_task,
     auto_metadata_periodic_task,
+    file_reorganizer_periodic_task,
 ) -> None:
     """Schedule all periodic background tasks."""
     scheduler = app_state.task_scheduler
@@ -778,6 +801,14 @@ def _schedule_periodic_tasks(
         auto_metadata_periodic_task,
         tasks_cfg.get("auto_metadata_interval", constants.AUTO_METADATA_INTERVAL),
         enabled=tasks_cfg.get("auto_metadata_enabled", True),
+    )
+
+    scheduler.schedule_periodic(
+        "file_reorganizer",
+        file_reorganizer_periodic_task,
+        tasks_cfg.get("file_reorganizer_interval", constants.FILE_REORGANIZER_INTERVAL),
+        run_immediately=False,
+        enabled=tasks_cfg.get("file_reorganizer_enabled", True),
     )
 
 
@@ -862,6 +893,7 @@ async def lifespan(app: FastAPI):
             cleanup_orphaned_covers_task,
             download_monitoring_task,
             feed_sync_task,
+            file_reorganizer_periodic_task,
             folder_cleanup_periodic_task,
             ocr_processing_task,
         )
@@ -888,6 +920,9 @@ async def lifespan(app: FastAPI):
         async def auto_metadata_wrapper():
             await auto_metadata_periodic_task(app_state)
 
+        async def file_reorganizer_wrapper():
+            await file_reorganizer_periodic_task(app_state)
+
         # Schedule all periodic tasks
         _schedule_periodic_tasks(
             feed_sync_wrapper,
@@ -897,6 +932,7 @@ async def lifespan(app: FastAPI):
             ocr_processing_wrapper,
             folder_cleanup_wrapper,
             auto_metadata_wrapper,
+            file_reorganizer_wrapper,
         )
 
         # Start scheduler in background
