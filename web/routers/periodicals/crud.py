@@ -60,13 +60,15 @@ class PeriodicalQueryBuilder:
     def _build_date_subquery(self):
         """Build subquery to find the most recent issue date for each group."""
         if self._date_subquery is None:
+            group_key_expr = self._build_group_key_expression()
+            lang_expr = self._build_language_expression()
             self._date_subquery = (
                 self.db.query(
-                    self._build_group_key_expression().label("group_key"),
-                    self._build_language_expression().label("language"),
+                    group_key_expr.label("group_key"),
+                    lang_expr.label("language"),
                     func.max(Periodical.issue_date).label("max_date"),
                 )
-                .group_by("group_key", "language")
+                .group_by(group_key_expr, lang_expr)
                 .subquery()
             )
         return self._date_subquery
@@ -89,7 +91,7 @@ class PeriodicalQueryBuilder:
                     & (lang_expr == date_subquery.c.language)
                     & (Periodical.issue_date == date_subquery.c.max_date),
                 )
-                .group_by("group_key", "language")
+                .group_by(group_key_expr, lang_expr)
                 .subquery()
             )
         return self._id_subquery
@@ -97,13 +99,15 @@ class PeriodicalQueryBuilder:
     def _build_count_subquery(self):
         """Build subquery to count total issues per group."""
         if self._count_subquery is None:
+            group_key_expr = self._build_group_key_expression()
+            lang_expr = self._build_language_expression()
             self._count_subquery = (
                 self.db.query(
-                    self._build_group_key_expression().label("group_key"),
-                    self._build_language_expression().label("language"),
+                    group_key_expr.label("group_key"),
+                    lang_expr.label("language"),
                     func.count(Periodical.id).label("issue_count"),  # pylint: disable=not-callable
                 )
-                .group_by("group_key", "language")
+                .group_by(group_key_expr, lang_expr)
                 .subquery()
             )
         return self._count_subquery

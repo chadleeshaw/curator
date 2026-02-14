@@ -44,6 +44,7 @@ from core.constants.patterns import (
     TITLE_PATTERN_ISSUE_NUMBER,
     TITLE_PATTERN_YEAR_NUMERIC_MONTH,
     TITLE_PATTERN_ISSUE_ONLY,
+    TITLE_SUFFIX_ISSUE_NUMBER,
     TITLE_PATTERN_LEADING_ISSUE,
     TITLE_PATTERN_SEASONAL,
     TITLE_PATTERN_SPACE_MONTH_ONLY,
@@ -1005,8 +1006,14 @@ class FilenameParser:
         title_clean = re.sub(r"^\d+\s*-\s*", "", title_part)
         title_clean = clean_title(title_clean)
 
-        # Build suffix into title if it's meaningful (not just a name/descriptor)
-        if suffix and not re.match(r"^[A-Z][a-z]+\s+[A-Z]", suffix):  # Skip "Bridgette B" style
+        # Check if suffix is an issue number (e.g., "No304", "No.304", "Issue 5", "#42")
+        issue_match = re.match(TITLE_SUFFIX_ISSUE_NUMBER, suffix, re.IGNORECASE) if suffix else None
+        if issue_match:
+            # Store as edition_number metadata, don't append to title
+            metadata["edition_number"] = int(issue_match.group(1))
+            logger.debug(f"Extracted issue number {metadata['edition_number']} from suffix '{suffix}'")
+        elif suffix and not re.match(r"^[A-Z][a-z]+\s+[A-Z]", suffix):  # Skip "Bridgette B" style
+            # Build suffix into title if it's meaningful (not just a name/descriptor)
             title_clean = f"{title_clean} {clean_title(suffix)}"
 
         metadata["title"] = title_clean

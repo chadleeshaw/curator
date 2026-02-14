@@ -386,6 +386,28 @@ class TestVolumeIssueOnlyPatterns:
             assert result["issue_date"] is expected_date, f"Failed for {filename}: got {result['issue_date']}"
             assert result["pattern"] == "volume_only", f"Failed for {filename}"
 
+    def test_volume_only_with_issue_suffix(self):
+        """Test that issue number suffixes on volume-only patterns are stored as edition_number, not in title."""
+        extractor = FilenameParser()
+
+        test_cases = [
+            ("Hobby Monthly - Vol304 - No304.pdf", "Hobby Monthly", 304, 304),
+            ("Hobby Monthly - Vol295 - No295.pdf", "Hobby Monthly", 295, 295),
+            ("Magazine Vol.260 - No.5.pdf", "Magazine", 260, 5),
+            ("Magazine Vol.10 - No12.pdf", "Magazine", 10, 12),
+            ("Collectors Digest - Vol.3 - Issue 42.pdf", "Collectors Digest", 3, 42),
+            ("Collectors Digest - Vol.3 - #99.pdf", "Collectors Digest", 3, 99),
+        ]
+
+        for filename, expected_title, expected_vol, expected_issue in test_cases:
+            result = extractor.extract_from_filename(Path(filename))
+            assert result["title"] == expected_title, f"Title failed for {filename}: got {result['title']}"
+            assert result["volume"] == expected_vol, f"Volume failed for {filename}: got {result['volume']}"
+            assert (
+                result.get("edition_number") == expected_issue
+            ), f"Edition number failed for {filename}: got {result.get('edition_number')}"
+            assert result["pattern"] == "volume_only", f"Pattern failed for {filename}"
+
     def test_issue_only_pattern(self):
         """Test parsing files with only issue number (no date)."""
         extractor = FilenameParser()

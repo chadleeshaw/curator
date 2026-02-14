@@ -48,7 +48,8 @@ TITLE_PATTERN_VOLUME_ONLY = r"^(.+?)[\.\s\-]+vol\.?[\.\s]*(\d{1,4})(?:[\.\s\-]+(
 
 TITLE_PATTERN_ISSUE_ONLY = r"^(.+?)[\.\s\-]+(?:no\.?|number|issue|#)[\.\s]*(\d{1,4})(?:[\.\s\-]+(.+))?$"
 """Pattern for Title No.XXX (no year): PC Gamer Issue 405"""
-
+TITLE_SUFFIX_ISSUE_NUMBER = r"^(?:no\.?|number|issue|#)\s*(\d{1,4})"
+"""Pattern to detect issue-number suffixes: No304, No.5, Issue 42, #99"""
 TITLE_PATTERN_LEADING_ISSUE = r"^(\d{1,4})\s*-\s*(.+?)(?:\s*-\s*vol\.?[\.\s]*(\d{1,4}))?(?:\s*-\s*(.+))?$"
 """Pattern for XXX - Title (leading issue number): 260 - Magazine - Vol.260 - Cover Model
 Groups: (1) issue number, (2) title, (3) volume if present, (4) suffix if present"""
