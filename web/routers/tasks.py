@@ -33,6 +33,7 @@ TASK_ENABLED_CONFIG_KEYS = {
     "ocr_processor": "ocr_processor_enabled",
     "folder_cleanup": "folder_cleanup_enabled",
     "auto_metadata": "auto_metadata_enabled",
+    "file_reorganizer": "file_reorganizer_enabled",
 }
 
 
@@ -228,6 +229,36 @@ async def get_tasks_status():
         )
     tasks.append(auto_metadata_info)
 
+    # File reorganizer task
+    file_reorganizer_info = {
+        "id": "file_reorganizer",
+        "name": "Auto-Reorganize",
+        "description": "Moves periodical files to their correct library location when new metadata is discovered by OCR or text scans",
+        "interval": 300,
+        "last_run": None,
+        "next_run": None,
+        "last_status": None,
+        "enabled": True,
+    }
+    if scheduler_status and "file_reorganizer" in scheduler_status.get("tasks", {}):
+        task_data = scheduler_status["tasks"]["file_reorganizer"]
+        last_run = task_data.get("last_run")
+        failure_count = task_data.get("failure_count", 0)
+        # Only set status if task has run at least once
+        status = None
+        if last_run:
+            status = "failed" if failure_count > 0 else "success"
+        file_reorganizer_info.update(
+            {
+                "interval": task_data.get("interval", 300),
+                "last_run": last_run,
+                "next_run": task_data.get("next_run"),
+                "last_status": status,
+                "enabled": task_data.get("enabled", True),
+            }
+        )
+    tasks.append(file_reorganizer_info)
+
     logger.debug(f"Tasks Status - Returning {len(tasks)} tasks to client")
 
     return success_response(
@@ -337,6 +368,21 @@ async def run_task_manually(task_id: str):
             except Exception as e:
                 logger.error(f"Error running cover cleanup: {e}", exc_info=True)
                 return error_response(f"Failed to run cover cleanup: {str(e)}")
+        else:
+            return error_response("Task scheduler not available")
+
+    elif task_id == "file_reorganizer":
+        # Manually trigger file reorganizer via scheduler
+        if _task_scheduler:
+            try:
+                await _task_scheduler.run_task_now("file_reorganizer")
+                return success_response(
+                    "File reorganizer executed successfully",
+                    task_name="Auto-Reorganize",
+                )
+            except Exception as e:
+                logger.error(f"Error running file reorganizer: {e}", exc_info=True)
+                return error_response(f"Failed to run file reorganizer: {str(e)}")
         else:
             return error_response("Task scheduler not available")
 

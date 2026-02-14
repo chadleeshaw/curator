@@ -2,6 +2,7 @@
 
 import logging
 import os
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Optional, Dict, Any
@@ -17,6 +18,42 @@ from models.database import OCRJob, Periodical
 from .service import OCRService
 
 logger = logging.getLogger(__name__)
+
+# Retry settings for SQLite lock contention
+_COMMIT_MAX_RETRIES = 3
+_COMMIT_BASE_DELAY = 1.0  # seconds
+
+
+def _safe_commit(db: Session, context: str = "") -> None:
+    """
+    Commit with retry logic for transient SQLite database locks.
+
+    SQLite only allows one writer at a time. If the busy_timeout is exceeded,
+    SQLAlchemy raises OperationalError ("database is locked"). This helper
+    retries the commit with exponential back-off so that transient contention
+    doesn't cause permanent failures.
+
+    Args:
+        db: Database session to commit
+        context: Human-readable label for log messages
+    """
+    from sqlalchemy.exc import OperationalError
+
+    for attempt in range(1, _COMMIT_MAX_RETRIES + 1):
+        try:
+            db.commit()
+            return
+        except OperationalError as exc:
+            if "database is locked" in str(exc) and attempt < _COMMIT_MAX_RETRIES:
+                delay = _COMMIT_BASE_DELAY * (2 ** (attempt - 1))
+                logger.warning(
+                    f"Database locked during {context or 'commit'} "
+                    f"(attempt {attempt}/{_COMMIT_MAX_RETRIES}), retrying in {delay:.1f}s"
+                )
+                db.rollback()
+                time.sleep(delay)
+            else:
+                raise
 
 
 def _apply_scan_metadata_to_magazine(
@@ -283,7 +320,7 @@ class OCRQueueService:
             language=language,
         )
         db.add(job)
-        db.commit()
+        _safe_commit(db, f"queue OCR job for magazine {periodical_id}")
         db.refresh(job)
 
         logger.info(f"Queued OCR job {job.id} for magazine {periodical_id} (priority={priority})")
@@ -321,7 +358,7 @@ class OCRQueueService:
             for job in stuck_jobs:
                 job.status = OCRJob.StatusEnum.PENDING
                 job.started_at = None
-            db.commit()
+            _safe_commit(db, "reset stuck OCR jobs")
 
         # Fetch pending jobs ordered by priority (highest first) and creation time
         pending_jobs = (
@@ -355,6 +392,7 @@ class OCRQueueService:
                 logger.warning(f"Magazine {job.periodical_id} not found for OCR job {job.id}")
                 job.status = OCRJob.StatusEnum.FAILED
                 job.last_error = "Magazine not found"
+                _safe_commit(db, f"mark job {job.id} failed (magazine not found)")
                 stats["failed"] += 1
                 continue
 
@@ -366,6 +404,7 @@ class OCRQueueService:
                     job.status = OCRJob.StatusEnum.COMPLETED
                     job.completed_at = datetime.now(UTC)
                     job.last_error = "Skipped - already has ocr_scan"
+                    _safe_commit(db, f"skip job {job.id} (already has ocr_scan)")
                     stats["skipped"] += 1
                     continue
 
@@ -378,6 +417,7 @@ class OCRQueueService:
                         job.status = OCRJob.StatusEnum.COMPLETED
                         job.completed_at = datetime.now(UTC)
                         job.last_error = "Skipped - text_scan has sufficient metadata"
+                        _safe_commit(db, f"skip job {job.id} (text_scan sufficient)")
                         stats["skipped"] += 1
                         continue
 
@@ -449,6 +489,7 @@ class OCRQueueService:
                 logger.warning(f"Could not generate OCR PNG for magazine {magazine.id}")
                 job.status = OCRJob.StatusEnum.FAILED
                 job.last_error = "Could not generate OCR PNG"
+                _safe_commit(db, f"mark job {job.id} failed (no OCR PNG)")
                 stats["failed"] += 1
                 continue
 
@@ -456,6 +497,7 @@ class OCRQueueService:
             job.status = OCRJob.StatusEnum.PROCESSING
             job.started_at = datetime.now(UTC)
             job.attempt_count += 1
+            _safe_commit(db, f"mark job {job.id} processing")
 
             job_data.append(
                 {
@@ -466,8 +508,6 @@ class OCRQueueService:
                     "png_generated": png_generated,
                 }
             )
-
-        db.commit()
 
         if not job_data:
             logger.info("No valid jobs to process")
@@ -621,7 +661,7 @@ class OCRQueueService:
                 stats["failed"] += 1
 
             stats["processed"] += 1
-            db.commit()  # Commit after each job
+            _safe_commit(db, f"OCR job {job_id} result")  # Commit after each job
 
         logger.info(
             f"OCR batch complete: {stats['processed']} processed, "
@@ -659,7 +699,7 @@ class OCRQueueService:
             for job in stuck_jobs:
                 job.status = OCRJob.StatusEnum.PENDING
                 job.started_at = None
-            db.commit()
+            _safe_commit(db, "reset stuck OCR jobs in queue status")
 
         pending_count = db.query(OCRJob).filter(OCRJob.status == OCRJob.StatusEnum.PENDING).count()
 
@@ -721,7 +761,7 @@ class OCRQueueService:
             .delete()
         )
 
-        db.commit()
+        _safe_commit(db, "cleanup old OCR jobs")
 
         if deleted > 0:
             logger.info(f"Cleaned up {deleted} old OCR jobs (older than {days} days)")
