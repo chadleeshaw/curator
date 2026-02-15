@@ -42,10 +42,10 @@ NEWSNAB_CATEGORY_MAP = {
 """
 Mapping of Curator category names to Newsnab category IDs for searching.
 
-Note: 6000 (XXX) is intentionally excluded from default searches.
-      Users can add it manually in search filters if needed.
-      8000 (Other) and 8010 (Other/Misc) are included because periodicals are sometimes categorized there.
-      8050 (Other/Hashed) is excluded as it's typically spam/obfuscated releases.
+These are merged with the user's configured categories at search time,
+so user-configured categories (e.g., 6000 for XXX) are always included.
+8000 (Other) and 8010 (Other/Misc) are included because periodicals are sometimes categorized there.
+8050 (Other/Hashed) is excluded as it's typically spam/obfuscated releases.
 """
 
 NEWSNAB_DEFAULT_MAX_REQUESTS_PER_HOUR = 100

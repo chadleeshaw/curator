@@ -447,8 +447,14 @@ class NewsnabProvider(SearchProvider):
             cat_ids = self.categories  # Default: all configured categories
 
             if category and category in self.category_map:
-                cat_ids = self.category_map[category]
-                logger.debug(f"Using category filter: {category} -> {cat_ids}")
+                # Merge category-mapped IDs with user's configured categories
+                # This ensures user-configured categories (e.g., 6000 for XXX magazines)
+                # are always searched, even when a category filter narrows the scope
+                mapped_cats = set(self.category_map[category].split(","))
+                configured_cats = set(self.categories.split(","))
+                merged = mapped_cats | configured_cats
+                cat_ids = ",".join(sorted(merged))
+                logger.debug(f"Using category filter: {category} -> {cat_ids} (mapped + configured)")
 
             url = f"{self.api_url}/api"
             params = {

@@ -286,7 +286,78 @@ class TestCollectionDescriptorStripping:
 
 
 # =============================================================================
-# Fix 5: Provider timeout in UI search
+# Fix 5: Newsnab category merge (user config + category map)
+# =============================================================================
+
+
+class TestNewsnabCategoryMerge:
+    """Test that _search_xml_api merges mapped categories with user-configured categories."""
+
+    def _make_provider(self, categories="6000,7000,8000"):
+        """Create a NewsnabProvider with given user categories."""
+        from providers.newsnab import NewsnabProvider
+
+        config = {
+            "api_url": "http://localhost:9696/1/api",
+            "api_key": "test-key",
+            "categories": categories,
+        }
+        return NewsnabProvider(config)
+
+    @staticmethod
+    def _empty_rss_response():
+        """Create a mock response with empty RSS XML."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.content = b'<?xml version="1.0"?><rss><channel></channel></rss>'
+        mock_response.text = '<?xml version="1.0"?><rss><channel></channel></rss>'
+        return mock_response
+
+    @patch("providers.newsnab.requests.get")
+    def test_category_filter_merges_with_user_config(self, mock_get):
+        """When category filter is 'Magazines', user categories should be merged in."""
+        mock_get.return_value = self._empty_rss_response()
+
+        provider = self._make_provider("6000,7000,8000")
+        provider._search_xml_api("test", "Magazines")
+
+        # Verify the request was made with merged categories
+        call_args = mock_get.call_args
+        cat_param = call_args[1]["params"]["cat"] if "params" in call_args[1] else call_args[0][1]["cat"]
+        cat_set = set(cat_param.split(","))
+
+        # Should include both mapped (7010,8000,8010) AND user-configured (6000,7000,8000)
+        assert "6000" in cat_set, "User-configured category 6000 should be preserved"
+        assert "7010" in cat_set, "Mapped category 7010 should be included"
+        assert "7000" in cat_set, "User-configured category 7000 should be preserved"
+
+    @patch("providers.newsnab.requests.get")
+    def test_no_category_filter_uses_user_config(self, mock_get):
+        """When no category filter, use user-configured categories as-is."""
+        mock_get.return_value = self._empty_rss_response()
+
+        provider = self._make_provider("6000,7000,8000")
+        provider._search_xml_api("test", None)
+
+        call_args = mock_get.call_args
+        cat_param = call_args[1]["params"]["cat"] if "params" in call_args[1] else call_args[0][1]["cat"]
+        assert cat_param == "6000,7000,8000"
+
+    @patch("providers.newsnab.requests.get")
+    def test_unknown_category_uses_user_config(self, mock_get):
+        """When category filter doesn't exist in map, uses user config."""
+        mock_get.return_value = self._empty_rss_response()
+
+        provider = self._make_provider("6000,7000,8000")
+        provider._search_xml_api("test", "NonExistentCategory")
+
+        call_args = mock_get.call_args
+        cat_param = call_args[1]["params"]["cat"] if "params" in call_args[1] else call_args[0][1]["cat"]
+        assert cat_param == "6000,7000,8000"
+
+
+# =============================================================================
+# Fix 6: Provider timeout in UI search
 # =============================================================================
 
 
