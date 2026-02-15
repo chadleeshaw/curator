@@ -134,7 +134,11 @@ class TestIaFilteringUtility:
         """IA collection archives should pass when filter_collections=False."""
         assert (
             filter_ia_result(
-                "My Archive Collection", "internet_archive", {"is_collection": True}, "Archive", filter_collections=False
+                "My Archive Collection",
+                "internet_archive",
+                {"is_collection": True},
+                "Archive",
+                filter_collections=False,
             )
             is True
         )
@@ -169,7 +173,11 @@ class TestIaFilterInUiSearch:
 
         results = [
             {"title": "Good Result", "provider": "newsnab", "metadata": {}},
-            {"title": "National Geographic Collection", "provider": "internet_archive", "metadata": {"is_collection": True}},
+            {
+                "title": "National Geographic Collection",
+                "provider": "internet_archive",
+                "metadata": {"is_collection": True},
+            },
             {"title": "National Geographic Jan 2024", "provider": "internet_archive", "metadata": {}},
         ]
         filtered = filter_ia_results(results, "National Geographic")
