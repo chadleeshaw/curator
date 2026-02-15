@@ -66,6 +66,7 @@ def filter_ia_result(
     result_provider: str,
     raw_metadata: Optional[Dict[str, Any]],
     search_query: Optional[str] = None,
+    filter_collections: bool = True,
 ) -> bool:
     """
     Check whether an IA search result should be kept.
@@ -79,6 +80,8 @@ def filter_ia_result(
         raw_metadata: Result's raw_metadata dict
         search_query: Original search query (for title-match verification).
                       If None, skips title-match check.
+        filter_collections: If True (default), filter out collection archives.
+                            Set to False for UI search where users can browse collections.
 
     Returns:
         True if the result should be kept, False if it should be filtered out
@@ -87,8 +90,8 @@ def filter_ia_result(
     if result_provider != "internet_archive":
         return True
 
-    # Filter out collection archives
-    if is_ia_collection(raw_metadata):
+    # Filter out collection archives (unless disabled for UI search)
+    if filter_collections and is_ia_collection(raw_metadata):
         logger.debug(f"Filtering IA collection archive: {result_title}")
         return False
 

@@ -61,6 +61,28 @@ MULTI_WORD_EDITION_VARIANTS = {
 """Multi-word edition variant indicators that distinguish different publications"""
 
 # ==============================================================================
+# Collection Descriptor Words
+# ==============================================================================
+
+COLLECTION_DESCRIPTOR_WORDS = {
+    "collection",
+    "collections",
+    "pack",
+    "bundle",
+    "archive",
+    "complete",
+    "full",
+    "entire",
+    "set",
+}
+"""Words that describe download type/bundling, not part of the periodical title.
+
+Users may search for 'Swank Magazine Collection' when they want a collection of
+Swank Magazine issues. These words express user intent but should be stripped from
+provider search queries since providers index by periodical title, not bundle type.
+"""
+
+# ==============================================================================
 # Common Periodical Words
 # ==============================================================================
 

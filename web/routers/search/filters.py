@@ -127,12 +127,14 @@ def filter_non_periodicals(results: List[Dict[str, Any]]) -> List[Dict[str, Any]
 
 def filter_ia_results(results: List[Dict[str, Any]], search_query: str) -> List[Dict[str, Any]]:
     """
-    Filter Internet Archive results to remove collection archives and poor title matches.
+    Filter Internet Archive results to remove poor title matches.
 
     IA search is broad — it returns items where the search term appears anywhere
     in metadata (description, creator, subject), not just the title. This filter
-    removes results that don't actually match the search query and collection
-    archives that bundle many issues together.
+    removes results that don't actually match the search query.
+
+    Collection archives are preserved so users can browse and download them
+    from the UI. The auto-download path filters collections separately.
 
     Non-IA results pass through unchanged.
 
@@ -158,6 +160,7 @@ def filter_ia_results(results: List[Dict[str, Any]], search_query: str) -> List[
             result_provider=provider,
             raw_metadata=metadata,
             search_query=search_query,
+            filter_collections=False,
         ):
             filtered.append(result)
         else:

@@ -5,20 +5,63 @@ Handles fetching results from direct provider searches.
 """
 
 import logging
+import re
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from typing import Any, Dict, List, Optional
 
 from core.constants.app import PROVIDER_SEARCH_TIMEOUT
 from core.constants.errors import ErrorMessages
+from core.constants.title import COLLECTION_DESCRIPTOR_WORDS
 
 from .dependencies import get_search_providers
 
 logger = logging.getLogger(__name__)
 
 
+def _strip_collection_descriptors(query: str) -> str:
+    """
+    Strip collection descriptor words from a search query.
+
+    Words like 'Collection', 'Pack', 'Bundle' express user intent
+    (they want a collection) but are not part of the periodical title.
+    Providers index by title, so these words narrow results incorrectly.
+
+    Args:
+        query: Raw search query
+
+    Returns:
+        Cleaned query with collection descriptors removed
+
+    Examples:
+        >>> _strip_collection_descriptors('Swank Magazine Collection')
+        'Swank Magazine'
+        >>> _strip_collection_descriptors('National Geographic Complete Collection')
+        'National Geographic'
+        >>> _strip_collection_descriptors('PC Gamer')
+        'PC Gamer'
+    """
+    words = query.strip().split()
+    cleaned = [w for w in words if w.lower() not in COLLECTION_DESCRIPTOR_WORDS]
+
+    # Only use cleaned version if we still have meaningful words left
+    if cleaned:
+        result = " ".join(cleaned)
+        # Collapse any double spaces from removed words
+        result = re.sub(r"\s+", " ", result).strip()
+        if result != query.strip():
+            logger.debug(f"Stripped collection descriptors from query: '{query}' -> '{result}'")
+        return result
+
+    return query.strip()
+
+
 def build_search_queries(query: str, tracking_id: Optional[int], db) -> List[str]:
     """
     Build search queries including aliases from tracking record.
+
+    Strips collection descriptor words (e.g., 'Collection', 'Pack', 'Bundle')
+    from the query since they express user intent but are not part of
+    periodical titles indexed by providers.
 
     Args:
         query: Base search query
@@ -28,7 +71,8 @@ def build_search_queries(query: str, tracking_id: Optional[int], db) -> List[str
     Returns:
         List of search queries (always includes original query)
     """
-    search_queries = [query.strip()]
+    cleaned_query = _strip_collection_descriptors(query)
+    search_queries = [cleaned_query]
 
     if tracking_id:
         from models.database import PeriodicalTracking

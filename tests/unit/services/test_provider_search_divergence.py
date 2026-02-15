@@ -127,8 +127,17 @@ class TestIaFilteringUtility:
         assert filter_ia_result("Random Title", "rss", {}, "Something Else") is True
 
     def test_filter_ia_result_collection_filtered(self):
-        """IA collection archives should be filtered out."""
+        """IA collection archives should be filtered out by default."""
         assert filter_ia_result("My Archive Collection", "internet_archive", {"is_collection": True}, "Test") is False
+
+    def test_filter_ia_result_collection_preserved_when_disabled(self):
+        """IA collection archives should pass when filter_collections=False."""
+        assert (
+            filter_ia_result(
+                "My Archive Collection", "internet_archive", {"is_collection": True}, "Archive", filter_collections=False
+            )
+            is True
+        )
 
     def test_filter_ia_result_poor_title_filtered(self):
         """IA results with poor title match should be filtered out."""
@@ -154,19 +163,20 @@ class TestIaFilterInUiSearch:
 
         assert callable(filter_ia_results)
 
-    def test_filter_ia_results_filters_collections(self):
-        """UI filter should remove IA collection archives."""
+    def test_filter_ia_results_preserves_collections(self):
+        """UI filter should preserve IA collection archives so users can browse them."""
         from web.routers.search.filters import filter_ia_results
 
         results = [
             {"title": "Good Result", "provider": "newsnab", "metadata": {}},
-            {"title": "My Collection", "provider": "internet_archive", "metadata": {"is_collection": True}},
+            {"title": "National Geographic Collection", "provider": "internet_archive", "metadata": {"is_collection": True}},
             {"title": "National Geographic Jan 2024", "provider": "internet_archive", "metadata": {}},
         ]
         filtered = filter_ia_results(results, "National Geographic")
-        assert len(filtered) == 2
+        assert len(filtered) == 3
         assert filtered[0]["title"] == "Good Result"
-        assert filtered[1]["title"] == "National Geographic Jan 2024"
+        assert filtered[1]["title"] == "National Geographic Collection"
+        assert filtered[2]["title"] == "National Geographic Jan 2024"
 
     def test_filter_ia_results_filters_poor_matches(self):
         """UI filter should remove IA results that don't match the query."""
@@ -211,7 +221,64 @@ class TestIaFilterInAutoDownload:
 
 
 # =============================================================================
-# Fix 3: Provider timeout in UI search
+# Fix 4: Collection descriptor stripping from search queries
+# =============================================================================
+
+
+class TestCollectionDescriptorStripping:
+    """Test that collection descriptor words are stripped from search queries."""
+
+    def test_strips_collection_word(self):
+        """'Swank Magazine Collection' should become 'Swank Magazine'."""
+        from web.routers.search.providers import _strip_collection_descriptors
+
+        assert _strip_collection_descriptors("Swank Magazine Collection") == "Swank Magazine"
+
+    def test_strips_multiple_descriptors(self):
+        """'National Geographic Complete Collection' should become 'National Geographic'."""
+        from web.routers.search.providers import _strip_collection_descriptors
+
+        assert _strip_collection_descriptors("National Geographic Complete Collection") == "National Geographic"
+
+    def test_strips_pack_and_bundle(self):
+        """Pack and Bundle descriptors should be stripped."""
+        from web.routers.search.providers import _strip_collection_descriptors
+
+        assert _strip_collection_descriptors("PC Gamer Pack 2024") == "PC Gamer 2024"
+        assert _strip_collection_descriptors("Wired Magazine Bundle") == "Wired Magazine"
+
+    def test_strips_archive_and_set(self):
+        """Archive and Set descriptors should be stripped."""
+        from web.routers.search.providers import _strip_collection_descriptors
+
+        assert _strip_collection_descriptors("Time Magazine Archive") == "Time Magazine"
+        assert _strip_collection_descriptors("Swank Full Set") == "Swank"
+
+    def test_preserves_normal_queries(self):
+        """Queries without collection descriptors should be unchanged."""
+        from web.routers.search.providers import _strip_collection_descriptors
+
+        assert _strip_collection_descriptors("PC Gamer") == "PC Gamer"
+        assert _strip_collection_descriptors("National Geographic") == "National Geographic"
+        assert _strip_collection_descriptors("Swank") == "Swank"
+
+    def test_all_descriptor_words_preserves_query(self):
+        """If all words are descriptors, preserve original to avoid empty search."""
+        from web.routers.search.providers import _strip_collection_descriptors
+
+        assert _strip_collection_descriptors("Complete Set") == "Complete Set"
+        assert _strip_collection_descriptors("Full Collection") == "Full Collection"
+
+    def test_case_insensitive(self):
+        """Descriptor stripping should be case-insensitive."""
+        from web.routers.search.providers import _strip_collection_descriptors
+
+        assert _strip_collection_descriptors("Swank COLLECTION") == "Swank"
+        assert _strip_collection_descriptors("Swank Collection") == "Swank"
+
+
+# =============================================================================
+# Fix 5: Provider timeout in UI search
 # =============================================================================
 
 
