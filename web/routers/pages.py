@@ -126,13 +126,31 @@ async def view_periodical_by_id(id: int = Query(...)):
 
             # Check if this is a special edition
             is_special = False
+            derived_checked = False
             if p.derived_metadata and isinstance(p.derived_metadata, dict):
                 special_bool = p.derived_metadata.get("is_special_edition")
-                if special_bool:
+                if special_bool is not None:
+                    derived_checked = True
                     if isinstance(special_bool, dict):
                         is_special = bool(special_bool.get("value"))
                     else:
                         is_special = bool(special_bool)
+
+            # Fallback to parsed_metadata scans only if derived_metadata didn't address the field
+            if not derived_checked and not is_special:
+                parsed = p.parsed_metadata or {}
+                if isinstance(parsed, dict):
+                    for scan_key in ("ocr_scan", "text_scan", "file_scan"):
+                        scan = parsed.get(scan_key)
+                        if isinstance(scan, dict):
+                            for field_name in ("special_edition", "is_special_edition"):
+                                val = scan.get(field_name)
+                                if val is not None:
+                                    is_special = bool(val)
+                                    derived_checked = True
+                                    break
+                        if derived_checked:
+                            break
 
             if is_special:
                 special_editions.append(periodical_data)
@@ -270,13 +288,15 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
 
             # Check if this is a special edition by checking derived_metadata first, then extra_metadata, then title
             is_special = False
+            derived_checked = False
             special_edition_value = None
 
             # Check derived_metadata first (new location)
             if p.derived_metadata and isinstance(p.derived_metadata, dict):
                 # Check boolean is_special_edition flag (primary indicator)
                 special_bool = p.derived_metadata.get("is_special_edition")
-                if special_bool:
+                if special_bool is not None:
+                    derived_checked = True
                     if isinstance(special_bool, dict):
                         is_special = bool(special_bool.get("value"))
                     else:
@@ -316,7 +336,8 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
                     periodical_data["special_edition_name"] = ""
 
             # Before title fallback, check if any scan explicitly determined NOT special edition
-            if not is_special:
+            # Skip all fallbacks if derived_metadata already has an explicit value (e.g., manual override)
+            if not is_special and not derived_checked:
                 scan_checked = False
                 parsed = p.parsed_metadata or {}
                 if isinstance(parsed, dict):

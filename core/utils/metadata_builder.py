@@ -440,12 +440,12 @@ def is_periodical_special_edition(periodical) -> bool:
     from core.utils.general import is_special_edition
 
     # Check derived_metadata first (unified field: "is_special_edition")
+    # If present (even if False), this is authoritative — no fallback needed
     derived = periodical.derived_metadata or {}
     entry = derived.get("is_special_edition")
     if entry is not None:
         value = entry.get("value") if isinstance(entry, dict) else entry
-        if value:
-            return True
+        return bool(value)
 
     # Check extra_metadata (legacy)
     extra = periodical.extra_metadata or {}

@@ -52,9 +52,12 @@ async def toggle_special_edition(magazine_id: int, is_special: bool) -> Dict[str
             logger.info(f"Marked issue as special edition: {magazine.title}")
             message = f"Marked '{magazine.title}' as a special edition"
         else:
-            # Unmark as special edition - remove both fields
-            if "is_special_edition" in magazine.derived_metadata:
-                del magazine.derived_metadata["is_special_edition"]
+            # Unmark as special edition - set to false (not delete!) so it overrides
+            # any parsed_metadata fallback (e.g., OCR detected "anniversary issue")
+            magazine.derived_metadata["is_special_edition"] = {
+                "value": False,
+                "source": "manual",
+            }
             if "special_edition_name" in magazine.derived_metadata:
                 del magazine.derived_metadata["special_edition_name"]
             # Also remove legacy field if present
