@@ -58,9 +58,7 @@ def _safe_commit(db: Session, context: str = "") -> bool:
             return True
         except StaleDataError:
             db.rollback()
-            logger.warning(
-                f"Stale data during {context or 'commit'} - row was concurrently deleted, skipping"
-            )
+            logger.warning(f"Stale data during {context or 'commit'} - row was concurrently deleted, skipping")
             return False
         except OperationalError as exc:
             if "database is locked" in str(exc) and attempt < _COMMIT_MAX_RETRIES:
@@ -73,6 +71,7 @@ def _safe_commit(db: Session, context: str = "") -> bool:
                 time.sleep(delay)
             else:
                 raise
+    return True  # pragma: no cover — unreachable; satisfies pylint R1710
 
 
 def _generate_png_in_process(pdf_path: str, png_path: str, dpi: int, max_dimension: int, result_queue) -> None:
