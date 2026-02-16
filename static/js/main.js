@@ -3,18 +3,18 @@
  * Initializes the application and coordinates all modules
  */
 
-import { AuthManager } from './core/auth.js?v=1767733177';
+import { AuthManager } from './core/auth.js';
 import { APIClient, APIHelper } from './core/api.js';
-import { UIUtils } from './core/ui-utils.js?v=1767733177';
-import { library } from './features/library.js?v=1767733177';
-import { tracking } from './features/tracking.js?v=1770583068';
-import { downloads } from './features/downloads.js?v=1767733177';
-import { ocrQueue } from './features/ocr-queue.js?v=1767733177';
-import { settings } from './features/settings.js?v=1767733177';
-import { tasks } from './features/tasks.js?v=1767733177';
-import { imports } from './features/imports.js?v=1767733177';
-import { stacks } from './features/stacks.js?v=1770652571';
-import { EventHandlers } from './event-handlers.js?v=1767733177';
+import { UIUtils } from './core/ui-utils.js';
+import { library } from './features/library.js';
+import { tracking } from './features/tracking.js';
+import { downloads } from './features/downloads.js';
+import { ocrQueue } from './features/ocr-queue.js';
+import { settings } from './features/settings.js';
+import { tasks } from './features/tasks.js';
+import { imports } from './features/imports.js';
+import { stacks } from './features/stacks.js';
+import { EventHandlers } from './event-handlers.js';
 import { CSS_CLASSES } from './core/constants.js';
 
 /**

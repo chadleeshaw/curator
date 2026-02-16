@@ -4,8 +4,8 @@
  * @module downloads
  */
 
-import { APIClient, APIHelper } from '../core/api.js?v=1767733177';
-import { UIUtils } from '../core/ui-utils.js?v=1767733177';
+import { APIClient, APIHelper } from '../core/api.js';
+import { UIUtils } from '../core/ui-utils.js';
 import {
   ELEMENT_IDS as _ELEMENT_IDS,
   STATUS_MESSAGES as _STATUS_MESSAGES,
