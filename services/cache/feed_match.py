@@ -122,6 +122,10 @@ class FeedMatchService:
         For each tracked periodical, builds a list of lowercase search terms
         including the title and any configured aliases.
 
+        Skips "Watch Only" periodicals (no download criteria set) to avoid
+        creating unnecessary DiscoveredIssue records that would be immediately
+        marked as "ignored" by the evaluation step.
+
         Args:
             tracking_records: List of PeriodicalTracking objects
 
@@ -131,6 +135,11 @@ class FeedMatchService:
         search_terms = []
 
         for tracking in tracking_records:
+            # Skip periodicals with no download criteria (Watch Only mode)
+            if not tracking.track_all_editions and not tracking.track_new_only:
+                if not tracking.selected_years or len(tracking.selected_years) == 0:
+                    continue
+
             terms = [tracking.title.lower()]
 
             # Add search aliases

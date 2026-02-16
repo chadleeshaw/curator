@@ -95,6 +95,11 @@ FILE_REORGANIZER_INTERVAL = 300
 FEED_SYNC_MATCH_BATCH_SIZE = 200
 """Maximum number of new RSS feed entries to match per auto-download run"""
 
+NEW_ISSUE_THRESHOLD_DAYS = 90
+"""Number of days to consider an issue as 'new' for track_new_only mode.
+Issues published within this many days of the current date are eligible for download.
+Covers monthly magazines (30 days) with buffer for quarterly publications and delays."""
+
 FEED_ENTRY_RETENTION_DAYS = 7
 """Number of days to retain RSS feed entries before expiring them"""
 

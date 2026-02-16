@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from core.parsers import Parser, utc_now
 from core.utils.date import dates_are_fuzzy_match
 from core.utils.fuzzy_matching import get_fuzzy_group_id
-from core.constants.app import MAX_DOWNLOAD_RETRIES_IA
+from core.constants.app import MAX_DOWNLOAD_RETRIES_IA, NEW_ISSUE_THRESHOLD_DAYS
 from models.database import DiscoveredIssue, Periodical, PeriodicalTracking
 
 logger = logging.getLogger(__name__)
@@ -607,15 +607,29 @@ class IssueDiscoveryService:
         if tracking.track_all_editions:
             return True
 
-        # Rule 2: track_new_only = True means only download future/current issues
+        # Rule 2: track_new_only = True means only download recent/current issues
         if tracking.track_new_only:
             if issue.issue_date:
-                now = utc_now()
-                # Download if issue date is current or future
-                return issue.issue_date >= now
+                # Use naive datetime for comparison (issue_date is stored as naive in DB)
+                now = datetime.now()
+                days_old = (now - issue.issue_date).days
+                # Consider issues within the threshold as "new"
+                # Future-dated issues (days_old < 0) are always considered new
+                is_new = days_old <= NEW_ISSUE_THRESHOLD_DAYS
+                if not is_new:
+                    logger.debug(
+                        f"Skipping old issue for track_new_only: {issue.title} "
+                        f"(issue_date: {issue.issue_date}, {days_old} days old)"
+                    )
+                return is_new
+            elif issue.year:
+                # If we have a year but no full date, check if it's the current year
+                current_year = datetime.now().year
+                return issue.year >= current_year
             else:
-                # If no date, assume it's new and download it
-                return True
+                # No date information at all - skip to avoid downloading old back issues
+                logger.debug(f"Skipping issue with no date for track_new_only: {issue.title}")
+                return False
 
         # Rule 3: selected_years - download issues from specific years
         if tracking.selected_years and issue.year:

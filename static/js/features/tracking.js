@@ -69,6 +69,8 @@ export class TrackingManager {
     this.lastSearchTitle = null;
     /** @type {Map} Stack search results for bulk download */
     this.stackSearchResults = new Map();
+    /** @type {Array} All stacks loaded from API (includes empty stacks) */
+    this.allStacks = [];
   }
 
   /**
@@ -737,6 +739,17 @@ export class TrackingManager {
       this.allTracked = tracked;
       this.periodicalsLoaded = true;
 
+      // Fetch all stacks so empty stacks still appear in the UI
+      try {
+        const stacksData = await APIHelper.executeWithErrorHandling(async () => {
+          const resp = await APIClient.authenticatedFetch('/api/stacks');
+          return await resp.json();
+        }, 'Stacks');
+        this.allStacks = stacksData.stacks ?? [];
+      } catch {
+        this.allStacks = [];
+      }
+
       // Load unique languages for language filter
       await this.populateLanguageDropdown();
 
@@ -813,6 +826,20 @@ export class TrackingManager {
         ungrouped.push({ trackingItem, index });
       }
     });
+
+    // Inject empty stacks that have no members in the filtered tracking list
+    for (const stack of this.allStacks) {
+      if (!stackGroups.has(stack.id)) {
+        stackGroups.set(stack.id, {
+          name: stack.name,
+          slug: stack.slug,
+          description: stack.description || '',
+          categories: stack.categories || [],
+          items: [],
+          firstIndex: -1,
+        });
+      }
+    }
 
     // Build a unified render list so stacks interleave with ungrouped items
     // based on the server-side sort order (position of first member)

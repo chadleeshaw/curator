@@ -337,13 +337,14 @@ class TestFeedSyncService:
 class TestFeedMatchService:
     """Tests for local feed entry matching against tracked periodicals."""
 
-    def _create_tracking(self, session, title, aliases=None, tracking_id=None):
+    def _create_tracking(self, session, title, aliases=None, tracking_id=None, track_all_editions=True):
         """Helper to create a PeriodicalTracking record."""
         tracking = PeriodicalTracking(
             olid="OL12345W",
             title=title,
             language="English",
             search_aliases=aliases,
+            track_all_editions=track_all_editions,
         )
         session.add(tracking)
         session.commit()
@@ -478,6 +479,25 @@ class TestFeedMatchService:
         # Should only match once (or not at all if neither matches)
         assert result["stats"]["matched"] + result["stats"]["skipped"] == 1
 
+    def test_watch_only_skipped_in_matching(self, feed_match_service, main_db_session):
+        """Test that Watch Only periodicals are skipped during feed matching."""
+        # Create a Watch Only tracking (no download criteria)
+        self._create_tracking(main_db_session, "Watch Only Magazine", track_all_editions=False)
+
+        # Create a Download All tracking
+        self._create_tracking(main_db_session, "Download All Magazine", track_all_editions=True)
+
+        entries = [
+            self._create_feed_entry("Watch Only Magazine - January 2025", "guid-001"),
+            self._create_feed_entry("Download All Magazine - January 2025", "guid-002"),
+        ]
+
+        result = feed_match_service.match_entries_against_tracking(entries, main_db_session)
+
+        # Only "Download All Magazine" should match; "Watch Only Magazine" should be skipped
+        assert result["stats"]["matched"] == 1
+        assert result["stats"]["skipped"] == 1
+
 
 # =============================================================================
 # Integration Tests
@@ -494,6 +514,7 @@ class TestFeedSyncMatchIntegration:
             olid="OL12345W",
             title="Popular Mechanics",
             language="English",
+            track_all_editions=True,
         )
         main_db_session.add(tracking)
         main_db_session.commit()
@@ -534,6 +555,7 @@ class TestFeedSyncMatchIntegration:
             olid="OL12345W",
             title="The Economist",
             language="English",
+            track_all_editions=True,
         )
         main_db_session.add(tracking)
         main_db_session.commit()
@@ -630,6 +652,7 @@ class TestResetSkippedEntries:
             olid="OL-pcgamer",
             title="PC Gamer",
             language="English",
+            track_all_editions=True,
         )
         main_db_session.add(tracking)
         main_db_session.commit()
@@ -655,6 +678,7 @@ class TestResetSkippedEntries:
             olid="OL-wired",
             title="Wired",
             language="English",
+            track_all_editions=True,
         )
         main_db_session.add(tracking)
         main_db_session.commit()
