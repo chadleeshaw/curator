@@ -20,6 +20,8 @@ export class StacksManager {
     this.stacksLoaded = false;
     /** @type {Object|null} Stack currently being edited/assigned */
     this.currentStack = null;
+    /** @type {Object|null} Stack pending deletion (separate from edit/assign state) */
+    this.pendingDeleteStack = null;
     /** @type {Array} All available items for assignment */
     this.availableItems = [];
     /** @type {Set} IDs selected for adding to stack */
@@ -340,7 +342,7 @@ export class StacksManager {
    * @param {Object} stack - Stack to delete
    */
   openDeleteStackModal(stack) {
-    this.currentStack = stack;
+    this.pendingDeleteStack = stack;
     const titleEl = document.getElementById('delete-stack-name');
     if (titleEl) titleEl.textContent = stack.name;
     const countEl = document.getElementById('delete-stack-count');
@@ -354,29 +356,37 @@ export class StacksManager {
    */
   closeDeleteStackModal() {
     UIUtils.closeModal('stack-delete-modal');
-    this.currentStack = null;
+    this.pendingDeleteStack = null;
   }
 
   /**
    * Confirm and execute stack deletion
    */
   async confirmDeleteStack() {
-    if (!this.currentStack) return;
+    if (!this.pendingDeleteStack) {
+      console.warn('[Stacks] No stack selected for deletion');
+      return;
+    }
 
-    const data = await APIHelper.executeWithErrorHandling(async () => {
-      const response = await APIClient.authenticatedFetch(
-        `/api/stacks/${this.currentStack.slug}`,
-        { method: 'DELETE' }
-      );
-      return await response.json();
-    }, 'Stacks');
+    try {
+      const data = await APIHelper.executeWithErrorHandling(async () => {
+        const response = await APIClient.authenticatedFetch(
+          `/api/stacks/${this.pendingDeleteStack.slug}`,
+          { method: 'DELETE' }
+        );
+        return await response.json();
+      }, 'Stacks');
 
-    if (data) {
-      UIUtils.closeModal('stack-delete-modal');
-      UIUtils.showToast(`Stack "${this.currentStack.name}" deleted`, 'success');
-      this.currentStack = null;
-      await this.loadStacks();
-      await this._notifyChange();
+      if (data) {
+        UIUtils.closeModal('stack-delete-modal');
+        UIUtils.showToast(`Stack "${this.pendingDeleteStack.name}" deleted`, 'success');
+        this.pendingDeleteStack = null;
+        await this.loadStacks();
+        await this._notifyChange();
+      }
+    } catch (error) {
+      console.error('[Stacks] Failed to delete stack:', error);
+      UIUtils.showToast('Failed to delete stack', 'error');
     }
   }
 
