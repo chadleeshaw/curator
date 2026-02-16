@@ -30,7 +30,7 @@ _COMMIT_MAX_RETRIES = DB_LOCK_RETRY_MAX
 _COMMIT_BASE_DELAY = DB_COMMIT_RETRY_DELAY
 
 
-def _safe_commit(db: Session, context: str = "") -> None:
+def _safe_commit(db: Session, context: str = "") -> bool:
     """
     Commit with retry logic for transient SQLite database locks.
 
@@ -39,16 +39,29 @@ def _safe_commit(db: Session, context: str = "") -> None:
     retries the commit with exponential back-off so that transient contention
     doesn't cause permanent failures.
 
+    Also handles StaleDataError gracefully when a row was concurrently deleted
+    by another session (e.g., periodical deletion, manual job cancellation).
+
     Args:
         db: Database session to commit
         context: Human-readable label for log messages
+
+    Returns:
+        True if commit succeeded, False if the row was concurrently deleted
     """
     from sqlalchemy.exc import OperationalError
+    from sqlalchemy.orm.exc import StaleDataError
 
     for attempt in range(1, _COMMIT_MAX_RETRIES + 1):
         try:
             db.commit()
-            return
+            return True
+        except StaleDataError:
+            db.rollback()
+            logger.warning(
+                f"Stale data during {context or 'commit'} - row was concurrently deleted, skipping"
+            )
+            return False
         except OperationalError as exc:
             if "database is locked" in str(exc) and attempt < _COMMIT_MAX_RETRIES:
                 delay = _COMMIT_BASE_DELAY * (2 ** (attempt - 1))
@@ -427,14 +440,28 @@ class OCRQueueService:
         # Prepare jobs for processing
         job_data = []
         for job in pending_jobs:
+            try:
+                # Access job.id early to detect stale/deleted objects from prior rollbacks
+                job_id = job.id
+                periodical_id = job.periodical_id
+            except Exception:
+                logger.warning("Skipping stale OCR job object (row was concurrently deleted)")
+                continue
+
             # Get magazine and cover path
-            magazine = db.query(Periodical).filter(Periodical.id == job.periodical_id).first()
+            magazine = db.query(Periodical).filter(Periodical.id == periodical_id).first()
 
             if not magazine:
-                logger.warning(f"Magazine {job.periodical_id} not found for OCR job {job.id}")
+                logger.warning(f"Magazine {periodical_id} not found for OCR job {job_id}")
+                # Re-verify job still exists before updating
+                job = db.query(OCRJob).filter(OCRJob.id == job_id).first()
+                if not job:
+                    logger.warning(f"OCR job {job_id} also deleted, skipping")
+                    stats["failed"] += 1
+                    continue
                 job.status = OCRJob.StatusEnum.FAILED
                 job.last_error = "Magazine not found"
-                _safe_commit(db, f"mark job {job.id} failed (magazine not found)")
+                _safe_commit(db, f"mark job {job_id} failed (magazine not found)")
                 stats["failed"] += 1
                 continue
 
@@ -536,10 +563,24 @@ class OCRQueueService:
 
             if not cover_path:
                 logger.warning(f"Could not generate OCR PNG for magazine {magazine.id}")
+                # Re-verify job still exists before updating (may have been deleted concurrently)
+                db.expire(job)
+                job = db.query(OCRJob).filter(OCRJob.id == job.id).first()
+                if not job:
+                    logger.warning("OCR job disappeared during PNG generation, skipping")
+                    stats["failed"] += 1
+                    continue
                 job.status = OCRJob.StatusEnum.FAILED
                 job.last_error = "Could not generate OCR PNG"
                 _safe_commit(db, f"mark job {job.id} failed (no OCR PNG)")
                 stats["failed"] += 1
+                continue
+
+            # Re-verify job still exists before marking as processing
+            db.expire(job)
+            job = db.query(OCRJob).filter(OCRJob.id == job.id).first()
+            if not job:
+                logger.warning("OCR job disappeared before processing, skipping")
                 continue
 
             # Mark as processing
