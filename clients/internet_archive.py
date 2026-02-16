@@ -40,6 +40,7 @@ from core.constants.internet_archive import (
 )
 from core.constants.files import SUPPORTED_FILE_EXTENSIONS
 from core.interfaces import DownloadClient
+from core.utils.internet_archive import safe_ia_call
 
 logger = logging.getLogger(__name__)
 
@@ -427,7 +428,8 @@ class InternetArchiveClient(DownloadClient):
             logger.info(f"[{self.name}] Starting download for {job.identifier}")
 
             # Get item metadata to determine download strategy
-            item = get_item(job.identifier)
+            with safe_ia_call():
+                item = get_item(job.identifier)
             metadata = item.item_metadata
 
             # Determine best download strategy (direct file vs compress URL)
@@ -719,7 +721,8 @@ class InternetArchiveClient(DownloadClient):
             test_file.unlink()
 
             # Test IA API connectivity
-            item = get_item("principia_mathematica")  # Well-known item that should always exist
+            with safe_ia_call():
+                item = get_item("principia_mathematica")  # Well-known item that should always exist
             if item and item.identifier:
                 return {
                     "success": True,

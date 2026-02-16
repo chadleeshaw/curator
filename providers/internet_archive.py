@@ -26,6 +26,7 @@ from core.constants.internet_archive import (
     IA_SEARCH_FIELDS,
 )
 from core.interfaces import SearchProvider, SearchResult
+from core.utils.internet_archive import safe_ia_call
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,8 @@ class InternetArchiveProvider(SearchProvider):
         """
         if self.username and self.password:
             try:
-                config_path = ia_configure(self.username, self.password)
+                with safe_ia_call():
+                    config_path = ia_configure(self.username, self.password)
                 logger.info(f"[{self.name}] Configured IA authentication for {self.username}")
                 logger.debug(f"[{self.name}] IA config written to: {config_path}")
             except Exception as e:
@@ -355,12 +357,13 @@ class InternetArchiveProvider(SearchProvider):
 
             # Execute search
             # Note: rows is passed via params dict in newer internetarchive versions
-            search_results = search_items(
-                ia_query,
-                fields=IA_SEARCH_FIELDS,
-                sorts=[self.sort],
-                params={"rows": self.max_results},
-            )
+            with safe_ia_call():
+                search_results = search_items(
+                    ia_query,
+                    fields=IA_SEARCH_FIELDS,
+                    sorts=[self.sort],
+                    params={"rows": self.max_results},
+                )
 
             # Process results
             results = self._process_search_results(search_results, query)
@@ -376,12 +379,13 @@ class InternetArchiveProvider(SearchProvider):
                 ia_query_broad = self._build_search_query(query, category, include_collections=False, aliases=aliases)
                 logger.debug(f"[{self.name}] Broad search query: {ia_query_broad}")
 
-                search_results_broad = search_items(
-                    ia_query_broad,
-                    fields=IA_SEARCH_FIELDS,
-                    sorts=[self.sort],
-                    params={"rows": self.max_results},
-                )
+                with safe_ia_call():
+                    search_results_broad = search_items(
+                        ia_query_broad,
+                        fields=IA_SEARCH_FIELDS,
+                        sorts=[self.sort],
+                        params={"rows": self.max_results},
+                    )
                 results = self._process_search_results(search_results_broad, query)
 
                 if results:
@@ -512,7 +516,8 @@ class InternetArchiveProvider(SearchProvider):
             self._apply_request_delay()
             self._track_request()
 
-            item = get_item(identifier)
+            with safe_ia_call():
+                item = get_item(identifier)
             metadata = item.item_metadata
 
             # Find best file to download
@@ -547,10 +552,11 @@ class InternetArchiveProvider(SearchProvider):
         """
         try:
             # Try a simple search to verify connectivity
-            test_results = search_items(
-                "mediatype:texts",
-                params={"rows": 1},
-            )
+            with safe_ia_call():
+                test_results = search_items(
+                    "mediatype:texts",
+                    params={"rows": 1},
+                )
 
             # Consume one result to verify the search works
             for _ in test_results:
