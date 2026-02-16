@@ -7,21 +7,27 @@
 .bulk-select-btn {
   padding: 8px 14px;
   border: 1px solid var(--border-color);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--text-primary);
-  font-size: 14px;
-  font-weight: 500;
+  border-radius: var(--radius-md);
+  background: var(--surface-variant);
+  color: var(--text-secondary);
+  font-size: 18px;
+  line-height: 1;
   cursor: pointer;
+  align-self: center;
   transition:
     background-color var(--transition-fast),
+    color var(--transition-fast),
     border-color var(--transition-fast);
-  margin-right: 8px;
+}
+
+.bulk-select-btn .btn-label {
+  display: none;
 }
 
 .bulk-select-btn:hover {
-  background: var(--surface-variant);
+  background: var(--primary-color);
   border-color: var(--primary-color);
+  color: white;
 }
 
 .bulk-select-btn.active {
@@ -864,8 +870,17 @@ body.dark-mode #status-message.status-error {
   }
 
   .bulk-select-btn {
-    padding: 6px 10px;
-    font-size: 12px;
-    margin-right: 4px;
+    width: 48px !important;
+    height: 48px !important;
+    min-width: 48px !important;
+    min-height: 48px !important;
+    padding: 0 !important;
+    font-size: 20px !important;
+    flex-shrink: 0 !important;
+    border-radius: 10px !important;
+    border: 2px solid var(--border-color) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
   }
 }

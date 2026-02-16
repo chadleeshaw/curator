@@ -1411,12 +1411,12 @@ function toggleBulkSelectMode() {
   if (bulkSelectMode) {
     container.classList.add('bulk-select-mode');
     toggleBtn.classList.add('active');
-    toggleBtn.textContent = '☑ Selecting...';
+    toggleBtn.innerHTML = '<span class="bulk-select-icon">☑</span><span class="btn-label"> Selecting...</span>';
     actionBar.classList.remove(CSS_CLASSES.HIDDEN);
   } else {
     container.classList.remove('bulk-select-mode');
     toggleBtn.classList.remove('active');
-    toggleBtn.textContent = '☑ Select';
+    toggleBtn.innerHTML = '<span class="bulk-select-icon">☑</span><span class="btn-label"> Select</span>';
     actionBar.classList.add(CSS_CLASSES.HIDDEN);
   }
 
