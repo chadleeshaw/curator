@@ -38,6 +38,7 @@ from .library import (
     get_library_matches,
     mark_failed_downloads,
 )
+from .enrichment import enrich_results_with_parsed_metadata
 from .providers import (
     build_search_queries,
     fetch_from_providers,
@@ -260,7 +261,12 @@ async def search_periodical_providers(
         # Step 10: Get library matches
         library_matches = get_library_matches(query, library_items, filter_language, filter_country)
 
-        # Step 11: Build and return response (sorts results internally)
+        # Step 11: Enrich results with backend-parsed title metadata
+        # so frontend doesn't need to duplicate title-parsing logic
+        enrich_results_with_parsed_metadata(deduplicated_results)
+        enrich_results_with_parsed_metadata(library_matches)
+
+        # Step 12: Build and return response (sorts results internally)
         return build_search_response(query, library_matches, deduplicated_results, cached_results, provider_errors)
 
     return await with_db_session(session_factory, operation)

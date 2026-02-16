@@ -77,9 +77,15 @@ COLLECTION_DESCRIPTOR_WORDS = {
 }
 """Words that describe download type/bundling, not part of the periodical title.
 
-Users may search for 'Swank Magazine Collection' when they want a collection of
-Swank Magazine issues. These words express user intent but should be stripped from
+Users may search for 'Hobby Magazine Collection' when they want a collection of
+Hobby Magazine issues. These words express user intent but should be stripped from
 provider search queries since providers index by periodical title, not bundle type.
+"""
+
+COLLECTION_SET_NUMBER_PATTERN = r"(?:Set|Collection|Pack|Part)[\s._#-]*(\d+)"
+"""Regex for extracting a numeric identifier from collection/set/pack titles.
+
+Examples: 'Set #5' → 5, 'Collection 3' → 3, 'Pack.12' → 12
 """
 
 # ==============================================================================

@@ -1684,14 +1684,31 @@ export class TrackingManager {
   }
 
   /**
-   * Parse and organize issues by year
+   * Parse and organize issues by year.
+   *
+   * Uses backend-provided ``parsed_title`` when available (preferred) so that
+   * title-parsing logic lives in one place (Python parsers).  Falls back to
+   * the local ``parseIssueTitle()`` for results that lack the field.
    */
   parseAndCurateIssues(results) {
     const _issues = [];
     const issueMap = new Map();
 
     results.forEach((result) => {
-      const parsed = this.parseIssueTitle(result.title);
+      // Prefer backend-parsed metadata; fall back to local parsing
+      let parsed = result.parsed_title
+        ? {
+            year: result.parsed_title.year ?? 0,
+            month: result.parsed_title.month ?? 0,
+            issue: result.parsed_title.issue ?? 0,
+            volume: result.parsed_title.volume ?? 0,
+            season: result.parsed_title.season ?? null,
+            isCollection: result.parsed_title.is_collection ?? false,
+            size: result.parsed_title.size ?? 0,
+            files: result.parsed_title.files ?? 0,
+          }
+        : this.parseIssueTitle(result.title);
+
       if (!parsed) {
         console.warn('[Tracking] Could not parse title:', result.title);
       }
@@ -1702,7 +1719,8 @@ export class TrackingManager {
         }
 
         // If month/issue not found in title, try to extract from publication_date
-        if (parsed.month === 0 && result.publication_date) {
+        // (but NOT for collections — they group under year 0)
+        if (parsed.month === 0 && !parsed.isCollection && result.publication_date) {
           try {
             const pubDate = new Date(result.publication_date);
             if (!isNaN(pubDate.getTime())) {
@@ -2127,6 +2145,8 @@ export class TrackingManager {
         // Priority 0: Collection/Set (if isCollection flag is set)
         if (issue.isCollection && issue.issue > 0) {
           displayLabel = `Set #${issue.issue}`;
+        } else if (issue.isCollection) {
+          displayLabel = 'Collection';
         }
         // Priority 1: Season (if present)
         else if (issue.season) {
@@ -2284,6 +2304,14 @@ export class TrackingManager {
             ? `<div class="issue-age-badge ${ageColorClass}" title="NZB posted ${newestAge} ago - newer is better for Usenet retention">⏱️ ${newestAge}</div>`
             : '';
 
+        // Size badge — show file size (and file count for collections)
+        let sizeBadge = '';
+        const sizeStr = formatFileSize(issue.size);
+        if (sizeStr) {
+          const filesStr = issue.files > 1 ? ` · ${issue.files} files` : '';
+          sizeBadge = `<div style="font-size: 10px; margin-top: 4px; color: var(--text-secondary);" title="Download size">💾 ${sizeStr}${filesStr}</div>`;
+        }
+
         let cardHtml = `<div style="
           padding: 12px;
           background: ${backgroundColor};
@@ -2332,6 +2360,7 @@ export class TrackingManager {
             background: rgba(255,255,255,0.7);
           ">${statusIcon} ${statusText}</div>
           <div style="font-weight: 600; font-size: 14px;">${displayLabel}</div>
+          ${sizeBadge}
           ${ageBadge}
           ${providerDisplay}
           ${variantsBadge}
@@ -2625,6 +2654,24 @@ function formatRelativeAge(date) {
   }
 }
 
+/**
+ * Format a file size in bytes to a human-readable string (KB, MB, GB).
+ *
+ * @param {number} bytes - Size in bytes
+ * @returns {string} Formatted size or empty string if 0/falsy
+ */
+function formatFileSize(bytes) {
+  if (!bytes || bytes <= 0) return '';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let i = 0;
+  let size = bytes;
+  while (size >= 1024 && i < units.length - 1) {
+    size /= 1024;
+    i++;
+  }
+  return `${size < 10 ? size.toFixed(1) : Math.round(size)} ${units[i]}`;
+}
+
 // Select and download issue with language variant selection
 window.selectIssueWithVariants = function (issueKey, alreadyDownloaded, hasFailed) {
   const variants = window.issueVariants[issueKey];
@@ -2690,6 +2737,16 @@ window.selectIssueWithVariants = function (issueKey, alreadyDownloaded, hasFaile
     const age = formatRelativeAge(variant.publication_date);
     const ageBadge = age ? `<span class="variant-age">${age} old</span>` : '';
 
+    // Size badge from raw_metadata or parsed_title
+    const variantSize =
+      (variant.raw_metadata && variant.raw_metadata.size) ||
+      (variant.parsed_title && variant.parsed_title.size) ||
+      0;
+    const variantSizeStr = formatFileSize(variantSize);
+    const sizeBadge = variantSizeStr
+      ? `<span class="variant-age" style="background: var(--surface-variant);">💾 ${variantSizeStr}</span>`
+      : '';
+
     // Provider info
     const providerInfo = variant.provider
       ? `<span class="variant-provider">${variant.provider}</span>`
@@ -2708,6 +2765,7 @@ window.selectIssueWithVariants = function (issueKey, alreadyDownloaded, hasFaile
       <div class="variant-label">
         <span class="variant-number">#${index + 1}</span>
         ${ageBadge}
+        ${sizeBadge}
         ${providerInfo}
         ${statusBadges}
       </div>

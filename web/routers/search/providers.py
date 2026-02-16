@@ -33,8 +33,8 @@ def _strip_collection_descriptors(query: str) -> str:
         Cleaned query with collection descriptors removed
 
     Examples:
-        >>> _strip_collection_descriptors('Swank Magazine Collection')
-        'Swank Magazine'
+        >>> _strip_collection_descriptors('Hobby Magazine Collection')
+        'Hobby Magazine'
         >>> _strip_collection_descriptors('National Geographic Complete Collection')
         'National Geographic'
         >>> _strip_collection_descriptors('PC Gamer')

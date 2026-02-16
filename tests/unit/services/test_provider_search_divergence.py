@@ -237,10 +237,10 @@ class TestCollectionDescriptorStripping:
     """Test that collection descriptor words are stripped from search queries."""
 
     def test_strips_collection_word(self):
-        """'Swank Magazine Collection' should become 'Swank Magazine'."""
+        """'Hobby Magazine Collection' should become 'Hobby Magazine'."""
         from web.routers.search.providers import _strip_collection_descriptors
 
-        assert _strip_collection_descriptors("Swank Magazine Collection") == "Swank Magazine"
+        assert _strip_collection_descriptors("Hobby Magazine Collection") == "Hobby Magazine"
 
     def test_strips_multiple_descriptors(self):
         """'National Geographic Complete Collection' should become 'National Geographic'."""
@@ -260,7 +260,7 @@ class TestCollectionDescriptorStripping:
         from web.routers.search.providers import _strip_collection_descriptors
 
         assert _strip_collection_descriptors("Time Magazine Archive") == "Time Magazine"
-        assert _strip_collection_descriptors("Swank Full Set") == "Swank"
+        assert _strip_collection_descriptors("Hobby Full Set") == "Hobby"
 
     def test_preserves_normal_queries(self):
         """Queries without collection descriptors should be unchanged."""
@@ -268,7 +268,7 @@ class TestCollectionDescriptorStripping:
 
         assert _strip_collection_descriptors("PC Gamer") == "PC Gamer"
         assert _strip_collection_descriptors("National Geographic") == "National Geographic"
-        assert _strip_collection_descriptors("Swank") == "Swank"
+        assert _strip_collection_descriptors("Hobby") == "Hobby"
 
     def test_all_descriptor_words_preserves_query(self):
         """If all words are descriptors, preserve original to avoid empty search."""
@@ -281,8 +281,8 @@ class TestCollectionDescriptorStripping:
         """Descriptor stripping should be case-insensitive."""
         from web.routers.search.providers import _strip_collection_descriptors
 
-        assert _strip_collection_descriptors("Swank COLLECTION") == "Swank"
-        assert _strip_collection_descriptors("Swank Collection") == "Swank"
+        assert _strip_collection_descriptors("Hobby COLLECTION") == "Hobby"
+        assert _strip_collection_descriptors("Hobby Collection") == "Hobby"
 
 
 # =============================================================================

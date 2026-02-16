@@ -19,6 +19,7 @@ from core.constants.providers import (
     NEWSNAB_DEFAULT_MAX_REQUESTS_PER_HOUR,
     NEWSNAB_DEFAULT_RATE_LIMIT_WAIT,
     NEWSNAB_DEFAULT_REQUEST_DELAY,
+    NEWSNAB_DEFAULT_SEARCH_LIMIT,
     NEWSNAB_REQUEST_TIMEOUT,
     NEWSNAB_RSS_MAX_RESULTS,
     SECONDS_PER_DAY,
@@ -71,6 +72,9 @@ class NewsnabProvider(SearchProvider):
 
         # RSS mode configuration (used by FeedSyncService for cache-first auto-download)
         self.rss_max_results = config.get("rss_max_results", NEWSNAB_RSS_MAX_RESULTS)
+
+        # Search result limit per API query
+        self.search_limit = config.get("search_limit", NEWSNAB_DEFAULT_SEARCH_LIMIT)
 
         if not self.api_key:
             raise ValueError("Newsnab provider requires api_key")
@@ -295,12 +299,31 @@ class NewsnabProvider(SearchProvider):
             if pubdate_elem is not None and pubdate_elem.text:
                 upload_date = self._parse_upload_date(pubdate_elem.text)
 
-            # Extract category from newznab:attr elements
+            # Extract metadata from newznab:attr elements (category, size, files)
             category_id = None
+            nzb_size = None
+            nzb_files = None
             for attr in item.findall(".//{http://www.newznab.com/DTD/2010/feeds/attributes/}attr"):
-                if attr.get("name") == "category":
+                attr_name = attr.get("name")
+                if attr_name == "category":
                     category_id = attr.get("value")
-                    break
+                elif attr_name == "size":
+                    try:
+                        nzb_size = int(attr.get("value", 0))
+                    except (ValueError, TypeError):
+                        pass
+                elif attr_name == "files":
+                    try:
+                        nzb_files = int(attr.get("value", 0))
+                    except (ValueError, TypeError):
+                        pass
+
+            # Fallback: get size from enclosure length attribute if not in attrs
+            if nzb_size is None and enclosure_elem is not None:
+                try:
+                    nzb_size = int(enclosure_elem.get("length", 0)) or None
+                except (ValueError, TypeError):
+                    pass
 
             raw_metadata = {
                 "indexer": item.findtext("indexer", ""),
@@ -309,6 +332,10 @@ class NewsnabProvider(SearchProvider):
                 raw_metadata["upload_date"] = upload_date.isoformat()
             if category_id:
                 raw_metadata["category"] = category_id
+            if nzb_size:
+                raw_metadata["size"] = nzb_size
+            if nzb_files:
+                raw_metadata["files"] = nzb_files
 
             # Include GUID for deduplication (RSS mode)
             if include_guid:
@@ -462,6 +489,7 @@ class NewsnabProvider(SearchProvider):
                 "t": "search",
                 "q": query,
                 "cat": cat_ids,
+                "limit": self.search_limit,
             }
 
             logger.debug(f"Newsnab searching: query='{query}', categories={cat_ids}, url={url}")

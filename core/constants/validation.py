@@ -4,11 +4,14 @@ Validation constants for periodical detection and filtering.
 Used to distinguish periodicals from books, collections, and other non-periodical content.
 """
 
+import re
+
 from core.constants.category import (
     ACCEPTED_NEWSNAB_CATEGORIES,
     REJECTED_NEWSNAB_CATEGORIES,
 )
-from core.constants.date import get_month_year_patterns, get_season_year_patterns
+from core.constants.date import get_month_year_patterns, get_season_regex_pattern, get_season_year_patterns
+from core.constants.title import COLLECTION_SET_NUMBER_PATTERN
 
 # ==============================================================================
 # Newsnab Category Codes
@@ -78,6 +81,25 @@ def get_periodical_patterns(languages: list[str] | None = None) -> list[str]:
 
 # For backwards compatibility - default to all languages
 PERIODICAL_PATTERNS = get_periodical_patterns()
+
+
+# ==============================================================================
+# Compiled Collection & Season Detection Patterns
+# ==============================================================================
+
+_COLLECTION_KEYWORDS = ("collection", "pack", "bundle", "complete", "full", "entire")
+
+COLLECTION_DETECTION_PATTERNS = [
+    re.compile(p, re.IGNORECASE) for p in PERIODICAL_PATTERNS_STATIC if any(kw in p for kw in _COLLECTION_KEYWORDS)
+]
+"""Compiled regexes from PERIODICAL_PATTERNS_STATIC that identify collection/pack/bundle titles."""
+
+COLLECTION_SET_NUMBER_COMPILED = re.compile(COLLECTION_SET_NUMBER_PATTERN, re.IGNORECASE)
+"""Compiled version of COLLECTION_SET_NUMBER_PATTERN for direct use."""
+
+SEASON_DETECTION_PATTERN = re.compile(rf"\b({get_season_regex_pattern()})\b", re.IGNORECASE)
+"""Compiled multilingual season detection regex (e.g. Spring, Summer, primavera, hiver …)."""
+
 
 # Patterns that indicate content is NOT a periodical (anti-patterns)
 # These are checked FIRST to quickly filter out movies, TV shows, audiobooks, etc.

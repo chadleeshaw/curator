@@ -204,6 +204,15 @@ SEASON_MONTHS = {
 }
 """Season name to set of months that belong to that season"""
 
+SEASON_CANONICAL_NAMES = {
+    "autumn": "Fall",
+    "fall": "Fall",
+    "spring": "Spring",
+    "summer": "Summer",
+    "winter": "Winter",
+}
+"""Mapping of season name variants to canonical English display label."""
+
 
 # ==============================================================================
 # Date Validation
