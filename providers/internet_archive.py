@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Sequence
 from internetarchive import search_items, get_item, configure as ia_configure
 
 from core.constants.internet_archive import (
+    IA_BROAD_SEARCH_THRESHOLD,
     IA_CATEGORY_COLLECTION_MAP,
     IA_DEFAULT_MEDIATYPE,
     IA_DEFAULT_ROWS,
@@ -368,10 +369,13 @@ class InternetArchiveProvider(SearchProvider):
             # Process results
             results = self._process_search_results(search_results, query)
 
-            # If no results found and we have collection filters, try broader search
-            if not results and self.collections:
+            # If few/no results from collection-filtered search, try broader search
+            # Many periodicals exist outside the default collections (e.g., PC Magazine
+            # has 215 items but only 5 in configured collections)
+            if len(results) < IA_BROAD_SEARCH_THRESHOLD and self.collections:
                 logger.info(
-                    f"[{self.name}] No results in configured collections for '{query}', " f"trying broader search..."
+                    f"[{self.name}] Only {len(results)} results in configured collections for '{query}', "
+                    f"trying broader search (threshold={IA_BROAD_SEARCH_THRESHOLD})..."
                 )
                 self._apply_request_delay()
                 self._track_request()
@@ -386,10 +390,17 @@ class InternetArchiveProvider(SearchProvider):
                         sorts=[self.sort],
                         params={"rows": self.max_results},
                     )
-                results = self._process_search_results(search_results_broad, query)
+                broad_results = self._process_search_results(search_results_broad, query)
 
-                if results:
-                    logger.info(f"[{self.name}] Found {len(results)} results in broader search for '{query}'")
+                if broad_results:
+                    # Merge: add broad results not already in collection results
+                    existing_urls = {r.url for r in results}
+                    new_from_broad = [r for r in broad_results if r.url not in existing_urls]
+                    results.extend(new_from_broad)
+                    logger.info(
+                        f"[{self.name}] Broad search added {len(new_from_broad)} new results "
+                        f"(total: {len(results)}) for '{query}'"
+                    )
 
         except Exception as e:
             logger.error(f"[{self.name}] Search error for '{query}': {e}", exc_info=True)

@@ -37,8 +37,9 @@ search_providers:
       - ZIP
       - GZIP
 
-    # Max results per search
-    max_results: 100
+    # Max results per search (default: 500)
+    # Higher values ensure comprehensive coverage of large collections.
+    max_results: 500
 
     # Rate limiting (archive.org is generally permissive)
     request_delay: 1.0 # Seconds between requests
@@ -65,10 +66,10 @@ search_providers:
     # 6000 = Adult, 8000 = Other (varies by indexer)
     categories: '7000,7010,7020,7030'
 
-    # Maximum results per API search query (default: 100)
+    # Maximum results per API search query (default: 250)
     # Many indexers default to 25-50 results without an explicit limit.
     # Increase this to find older releases and collection items.
-    search_limit: 100
+    search_limit: 250
 
     # Rate limiting settings (to avoid provider bans)
     # NOTE: With provider cache enabled (see cache section below), these limits become

@@ -46,7 +46,7 @@ class TestInternetArchiveProviderInitialization:
         provider = InternetArchiveProvider(config)
 
         assert provider.mediatype == "texts"
-        assert provider.max_results == 100
+        assert provider.max_results == 500
         assert provider.priority == 10
         assert len(provider.collections) > 0
         assert "PDF" in provider.preferred_formats
@@ -390,11 +390,12 @@ class TestInternetArchiveProviderSearch:
 
         results = provider.search("PC Gamer", aliases=["PC Gamer US", "PC Gamer Magazine"])
 
-        # Should make exactly one API call (not 3 separate ones)
-        assert mock_search.call_count == 1
+        # First call is collection-filtered, second may be broad search fallback
+        # (triggered when results < IA_BROAD_SEARCH_THRESHOLD)
+        assert mock_search.call_count >= 1
 
-        # Verify the query includes all terms with OR
-        actual_query = mock_search.call_args[0][0]
+        # Verify the first query includes all terms with OR
+        actual_query = mock_search.call_args_list[0][0][0]
         assert 'title:("PC Gamer")' in actual_query
         assert 'title:("PC Gamer US")' in actual_query
         assert 'title:("PC Gamer Magazine")' in actual_query

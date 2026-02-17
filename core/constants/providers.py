@@ -66,7 +66,7 @@ NEWSNAB_DEFAULT_RATE_LIMIT_WAIT = 300
 NEWSNAB_RSS_MAX_RESULTS = 100
 """Maximum number of RSS results to fetch (used by FeedSyncService for cache-first auto-download)"""
 
-NEWSNAB_DEFAULT_SEARCH_LIMIT = 100
+NEWSNAB_DEFAULT_SEARCH_LIMIT = 250
 """Default maximum number of results to request per Newsnab API search query.
 
 Many indexers default to returning only 25-50 results without an explicit limit.

@@ -7,8 +7,13 @@ for searching and downloading periodicals.
 
 # Default search parameters
 IA_DEFAULT_MEDIATYPE = "texts"
-IA_DEFAULT_ROWS = 100
+IA_DEFAULT_ROWS = 500
 IA_DEFAULT_SORT = "date desc"
+
+# Minimum results from collection-filtered search before trying broader search
+# If collection-filtered search returns fewer than this, also run a broad search
+# to catch items in unconfigured collections
+IA_BROAD_SEARCH_THRESHOLD = 50
 
 # Collections commonly containing periodicals
 # These are searched by default when no collections are specified
