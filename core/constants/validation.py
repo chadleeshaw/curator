@@ -138,8 +138,11 @@ ANTI_PERIODICAL_PATTERNS = [
     r"\b(5\.1|7\.1|2\.0|stereo|multi[\-\s]?audio|dual[\-\s]?audio)\b",
     # ============================================================================
     # Video File Extensions (when appearing in NZB titles)
+    # Matches both mid-title (.mp4.nzb, .mp4-GRP) and end-of-string (.mp4)
+    # Also matches as bare words after dot-to-space normalization (e.g., "mp4")
     # ============================================================================
-    r"\.(mp4|avi|mkv|mov|wmv|flv|m4v|mpg|mpeg|m2ts|ts|vob|iso|img)[\s\-\.\[]",
+    r"\.(mp4|avi|mkv|mov|wmv|flv|m4v|mpg|mpeg|m2ts|ts|vob|iso|img)([\s\-\.\[]|$)",
+    r"\b(mp4|avi|mkv|mov|wmv|flv|m4v|mpg|mpeg|m2ts|vob)\b",  # bare word after normalization
     # ============================================================================
     # TV Show Indicators
     # ============================================================================

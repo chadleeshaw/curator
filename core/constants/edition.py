@@ -3,6 +3,30 @@ Edition and variant constants for distinguishing different publication types
 """
 
 # ==============================================================================
+# Ambiguous ISO Country Codes
+# ==============================================================================
+
+AMBIGUOUS_ISO_CODES = {
+    "AT",  # Austria - common English word "at"
+    "BE",  # Belgium - common English word "be"
+    "IN",  # India - common English word "in"
+    "IS",  # Iceland - common English word "is"
+    "IT",  # Italy - common English word "it"
+    "ME",  # Montenegro - common English word "me"
+    "MY",  # Malaysia - common English word "my"
+    "NO",  # Norway - common English word "no"
+    "OR",  # (not ISO but sometimes used) - common English word "or"
+    "SO",  # Somalia - common English word "so"
+    "TO",  # Tonga - common English word "to"
+}
+"""
+ISO country codes that are also common English words.
+
+These are skipped during edition variant detection to avoid false positives
+like "IT Professional" being classified as an Italian edition.
+"""
+
+# ==============================================================================
 # Regional Edition Indicators
 # ==============================================================================
 

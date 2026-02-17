@@ -42,9 +42,12 @@ NEWSNAB_CATEGORY_MAP = {
 """
 Mapping of Curator category names to Newsnab category IDs for searching.
 
-These are merged with the user's configured categories at search time,
-so user-configured categories (e.g., 6000 for XXX) are always included.
-8000 (Other) and 8010 (Other/Misc) are included because periodicals are sometimes categorized there.
+When a category filter is applied, ONLY these mapped IDs are searched
+(not merged with the user's full configured categories). This ensures
+the filter actually narrows results.
+
+8000 (Other) and 8010 (Other/Misc) are included because periodicals
+are sometimes categorized there.
 8050 (Other/Hashed) is excluded as it's typically spam/obfuscated releases.
 """
 

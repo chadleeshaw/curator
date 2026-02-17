@@ -57,6 +57,7 @@ from .country import (
     LANGUAGE_TO_COUNTRY,
 )
 from .edition import (
+    AMBIGUOUS_ISO_CODES,
     EDITION_VARIANT_INDICATORS,
     REGIONAL_EDITION_INDICATORS,
 )
@@ -237,6 +238,7 @@ __all__ = [
     "ISO_COUNTRIES",
     "LANGUAGE_TO_COUNTRY",
     # Edition constants
+    "AMBIGUOUS_ISO_CODES",
     "EDITION_VARIANT_INDICATORS",
     "REGIONAL_EDITION_INDICATORS",
     # Title parsing constants

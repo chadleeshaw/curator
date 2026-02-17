@@ -9,6 +9,7 @@ from fuzzywuzzy import fuzz
 
 from core.constants.country import ISO_COUNTRIES
 from core.constants.edition import (
+    AMBIGUOUS_ISO_CODES,
     REGIONAL_EDITION_INDICATORS,
     EDITION_VARIANT_INDICATORS,
 )
@@ -558,8 +559,9 @@ class TitleMatcher:
                     continue
 
             # Check if it's a country code (US, UK, DE, FR, etc.)
+            # Skip ambiguous codes that are common English words (IT, IN, AT, etc.)
             clean_word_upper = clean_word.upper()
-            if clean_word_upper in ISO_COUNTRIES:
+            if clean_word_upper in ISO_COUNTRIES and clean_word_upper not in AMBIGUOUS_ISO_CODES:
                 return clean_word
 
             # Check if it's a regional name (france, germany, etc.)

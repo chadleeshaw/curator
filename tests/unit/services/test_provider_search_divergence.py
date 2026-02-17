@@ -314,22 +314,24 @@ class TestNewsnabCategoryMerge:
         return mock_response
 
     @patch("providers.newsnab.requests.get")
-    def test_category_filter_merges_with_user_config(self, mock_get):
-        """When category filter is 'Magazines', user categories should be merged in."""
+    def test_category_filter_uses_only_mapped_categories(self, mock_get):
+        """When category filter is 'Magazines', only mapped categories should be used (not merged with user config)."""
         mock_get.return_value = self._empty_rss_response()
 
         provider = self._make_provider("6000,7000,8000")
         provider._search_xml_api("test", "Magazines")
 
-        # Verify the request was made with merged categories
+        # Verify the request was made with only mapped categories
         call_args = mock_get.call_args
         cat_param = call_args[1]["params"]["cat"] if "params" in call_args[1] else call_args[0][1]["cat"]
         cat_set = set(cat_param.split(","))
 
-        # Should include both mapped (7010,8000,8010) AND user-configured (6000,7000,8000)
-        assert "6000" in cat_set, "User-configured category 6000 should be preserved"
+        # Should include ONLY mapped categories (7010,8000,8010), NOT user-configured extras
         assert "7010" in cat_set, "Mapped category 7010 should be included"
-        assert "7000" in cat_set, "User-configured category 7000 should be preserved"
+        assert "8000" in cat_set, "Mapped category 8000 should be included"
+        assert "8010" in cat_set, "Mapped category 8010 should be included"
+        assert "6000" not in cat_set, "User-only category 6000 should NOT leak through filter"
+        assert "7000" not in cat_set, "User-only category 7000 should NOT leak through filter"
 
     @patch("providers.newsnab.requests.get")
     def test_no_category_filter_uses_user_config(self, mock_get):
