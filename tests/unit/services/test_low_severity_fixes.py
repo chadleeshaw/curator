@@ -14,11 +14,9 @@ Validates that the following fixes work correctly:
 """
 
 import sys
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
@@ -114,7 +112,7 @@ class TestNewsnabDynamicYears:
         # Access the method to check its source
         import inspect
 
-        source = inspect.getsource(provider._search_xml_api_rss_fallback)
+        source = inspect.getsource(provider._search_xml_api_rss_fallback)  # pylint: disable=protected-access
 
         # Should NOT contain hardcoded years
         assert '"2024"' not in source

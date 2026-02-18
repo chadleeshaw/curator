@@ -1,6 +1,7 @@
 """
 Test suite for search router endpoints
 """
+# pylint: disable=redefined-outer-name  # pytest fixture injection pattern
 
 import tempfile
 from pathlib import Path
@@ -50,7 +51,7 @@ def mock_providers():
 @pytest.fixture
 def test_app(test_db, mock_providers):
     """Create test FastAPI app with search router"""
-    engine, session_factory = test_db
+    _engine, session_factory = test_db
     mock_title_matcher = MagicMock()
     search.set_dependencies(
         search_providers=mock_providers,
