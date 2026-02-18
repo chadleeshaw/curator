@@ -49,8 +49,8 @@ class SubmissionService:
         Returns:
             The created DownloadSubmission record
         """
-        # Create fuzzy match group for deduplication
-        fuzzy_group = get_fuzzy_group_id(search_result["title"])
+        # Get fuzzy match group (reuse if already calculated)
+        fuzzy_group = search_result.get("fuzzy_match_group_id") or get_fuzzy_group_id(search_result["title"])
 
         submission = DownloadSubmission(
             tracking_id=tracking_id,

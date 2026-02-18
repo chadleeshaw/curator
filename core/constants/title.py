@@ -231,10 +231,13 @@ TITLE_SKIP_WORDS = {
     "of",
     "magazine",
     "mag",
+    "comic",
+    "edition",
 }
 """
-Common filler words to skip when generating title abbreviations.
+Common filler words to skip when generating title abbreviations and fuzzy matching.
 
-Used when creating short abbreviations from multi-word titles (e.g., "National Geographic" -> "ng").
-These words don't contribute meaningful information to abbreviations.
+Used when creating short abbreviations from multi-word titles (e.g., "National Geographic" -> "ng")
+and when normalizing titles for fuzzy matching/deduplication.
+These words don't contribute meaningful information to abbreviations or unique title identity.
 """

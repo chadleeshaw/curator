@@ -41,7 +41,7 @@ class DeduplicationService:
         Returns:
             Tuple of (is_duplicate, existing_submission_record)
         """
-        # Create group ID for this result
+        # Calculate group ID from title (no dict available here, only string)
         fuzzy_group = get_fuzzy_group_id(result_title)
 
         # Check for similar results already submitted

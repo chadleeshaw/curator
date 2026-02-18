@@ -1355,7 +1355,7 @@ class DownloadManager:
 
         discovered_issue = None
         if parsed:
-            fuzzy_group = get_fuzzy_group_id(parsed.cleaned_title, parsed.publication_date)
+            fuzzy_group = get_fuzzy_group_id(parsed.cleaned_title)
             discovered_issue = (
                 session.query(DiscoveredIssue)
                 .filter(

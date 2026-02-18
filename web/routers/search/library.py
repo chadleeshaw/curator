@@ -134,7 +134,8 @@ def mark_failed_downloads(
     failed_fuzzy_groups = {d.fuzzy_match_group for d in failed_downloads if d.fuzzy_match_group}
 
     for result in results:
-        fuzzy_group = get_fuzzy_group_id(result["title"])
+        # Reuse fuzzy_match_group_id if already calculated (from SearchService or cache)
+        fuzzy_group = result.get("fuzzy_match_group_id") or get_fuzzy_group_id(result["title"])
         if fuzzy_group in failed_fuzzy_groups:
             result["status"] = "failed"
             result["status_badge"] = "Failed Before"

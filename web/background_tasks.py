@@ -192,11 +192,16 @@ def _process_periodical_searches(app_state: "AppState", db_session) -> None:
             # Cache-aware optimization: Skip API searches if cache matching found results recently
             # This prevents redundant API calls when the feed cache is already working
             if periodical.last_cache_match and cache_skip_threshold_hours > 0:
-                # Normalize to naive UTC to avoid offset-naive vs offset-aware TypeError
-                # (SQLite may return naive datetimes even for timezone-aware columns)
-                now_naive = now.replace(tzinfo=None)
-                cache_match_naive = periodical.last_cache_match.replace(tzinfo=None)
-                time_since_cache_match = now_naive - cache_match_naive
+                # Ensure both datetimes are timezone-aware for comparison
+                # SQLite may return naive datetimes, so add UTC timezone if missing
+                from datetime import timezone
+
+                cache_match = periodical.last_cache_match
+                if cache_match.tzinfo is None:
+                    # Assume naive datetime from SQLite is UTC
+                    cache_match = cache_match.replace(tzinfo=timezone.utc)
+
+                time_since_cache_match = now - cache_match
                 hours_since_cache_match = time_since_cache_match.total_seconds() / 3600
 
                 if hours_since_cache_match < cache_skip_threshold_hours:

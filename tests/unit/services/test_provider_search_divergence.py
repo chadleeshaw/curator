@@ -54,16 +54,17 @@ class TestConsolidatedFuzzyGroupId:
         assert lib_mod.get_fuzzy_group_id is get_fuzzy_group_id
 
     def test_canonical_version_handles_publication_date(self):
-        """The canonical version supports optional publication_date for date-scoped grouping."""
+        """The canonical version accepts publication_date but ignores it (deprecated)."""
         # Without date
         group_no_date = get_fuzzy_group_id("National Geographic")
         assert isinstance(group_no_date, str)
         assert len(group_no_date) > 0
 
-        # With date — should include date component
+        # With date — should produce SAME group (date is deprecated)
+        # This supports items with volume/issue numbers but no dates
         group_with_date = get_fuzzy_group_id("National Geographic", datetime(2024, 1, 15))
-        assert "2024-01" in group_with_date
-        assert group_no_date != group_with_date
+        assert group_no_date == group_with_date
+        assert "2024-01" not in group_with_date  # Date should NOT be in fuzzy group
 
     def test_canonical_version_removes_noise_words(self):
         """Canonical version strips noise words like 'the', 'magazine'."""

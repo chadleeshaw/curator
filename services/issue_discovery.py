@@ -173,7 +173,7 @@ class IssueDiscoveryService:
 
                 # Generate fuzzy match group for deduplication
                 # This normalizes the title to group similar results together
-                fuzzy_group = get_fuzzy_group_id(parsed.cleaned_title, parsed.publication_date)
+                fuzzy_group = get_fuzzy_group_id(parsed.cleaned_title)
 
                 # Check if we've already discovered this issue
                 existing = (
@@ -808,7 +808,7 @@ class IssueDiscoveryService:
         if issue.fuzzy_match_group:
             for mag in existing:
                 if mag.issue_date:
-                    lib_group = get_fuzzy_group_id(mag.title, mag.issue_date)
+                    lib_group = get_fuzzy_group_id(mag.title)
                     if lib_group == issue.fuzzy_match_group:
                         logger.debug(
                             f"Fuzzy group match found: library '{mag.title}' matches {issue.fuzzy_match_group}"

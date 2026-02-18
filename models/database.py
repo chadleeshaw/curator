@@ -12,6 +12,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    UniqueConstraint,
 )
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -208,6 +209,16 @@ class SearchResult(Base):
     """Search results from providers before downloading"""
 
     __tablename__ = "search_results"
+
+    __table_args__ = (
+        # Prevent duplicate cache entries (race condition protection)
+        # Same fuzzy group + query should not be inserted multiple times
+        UniqueConstraint(
+            "fuzzy_match_group_id",
+            "query",
+            name="uq_search_cache_group_query",
+        ),
+    )
 
     id = Column(Integer, primary_key=True)
     provider = Column(String(100), nullable=False, index=True)  # e.g., "newsnab", "rss"
