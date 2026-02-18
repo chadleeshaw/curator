@@ -118,18 +118,38 @@ class DownloadManager:
         """Check if all search providers are currently rate limited."""
         return self.search_service.all_providers_rate_limited
 
-    def _get_client_for_provider(self, provider: str) -> DownloadClient:
+    def _get_client_for_provider(self, provider: str, url: Optional[str] = None) -> DownloadClient:
         """
         Get the appropriate download client for a provider.
+        
+        Uses URL-based fallback detection if provider routing fails.
+        This handles legacy data where provider field may be incorrect.
 
         Args:
             provider: Provider type (e.g., 'internet_archive', 'newsnab')
+            url: Optional download URL for fallback provider detection
 
         Returns:
             DownloadClient instance for this provider
         """
         # Look up which client type to use for this provider
         client_type = self.provider_client_map.get(provider, "default")
+
+        # If routing failed (using default) and URL provided, try URL-based detection
+        if client_type == "default" and url:
+            # Check if this is an Internet Archive URL
+            if "archive.org" in url or url.startswith("ia:"):
+                # Try to use IA client if available
+                if "internet_archive" in self.download_clients:
+                    logger.debug(
+                        f"Provider '{provider}' not in routing map, but URL indicates "
+                        f"Internet Archive - using IA client"
+                    )
+                    client_type = "internet_archive"
+                else:
+                    logger.warning(
+                        f"Archive.org URL detected but no IA client configured: {url}"
+                    )
 
         # Get the client, falling back to default if not available
         client = self.download_clients.get(client_type)
@@ -832,7 +852,7 @@ class DownloadManager:
         title = search_result["title"]
         provider = search_result.get("provider", "unknown")
         download_category = self._get_download_category(tracking_id, session)
-        client = self._get_client_for_provider(provider)
+        client = self._get_client_for_provider(provider, search_result.get("url"))
 
         try:
             logger.debug(
@@ -987,7 +1007,7 @@ class DownloadManager:
 
             # Get the appropriate client for this provider
             provider = issue.latest_provider or "unknown"
-            client = self._get_client_for_provider(provider)
+            client = self._get_client_for_provider(provider, issue.latest_url)
 
             logger.info(
                 f"Submitting discovered issue to {client.name}: {issue.title} "
