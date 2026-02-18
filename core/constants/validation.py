@@ -138,11 +138,12 @@ ANTI_PERIODICAL_PATTERNS = [
     r"\b(5\.1|7\.1|2\.0|stereo|multi[\-\s]?audio|dual[\-\s]?audio)\b",
     # ============================================================================
     # Video File Extensions (when appearing in NZB titles)
-    # Matches both mid-title (.mp4.nzb, .mp4-GRP) and end-of-string (.mp4)
-    # Also matches as bare words after dot-to-space normalization (e.g., "mp4")
+    # Pattern 1: Matches .mp4 with dot prefix (e.g., ".mp4", ".mp4.nzb", ".mp4-GRP")
+    # Pattern 2: Matches video extensions at word boundaries (e.g., "mp4", "MP4GROUP", "avi-release")
+    # Both patterns work after normalization (dots/underscores/dashes → spaces)
     # ============================================================================
     r"\.(mp4|avi|mkv|mov|wmv|flv|m4v|mpg|mpeg|m2ts|ts|vob|iso|img)([\s\-\.\[]|$)",
-    r"\b(mp4|avi|mkv|mov|wmv|flv|m4v|mpg|mpeg|m2ts|vob)\b",  # bare word after normalization
+    r"\b(mp4|avi|mkv|mov|wmv|flv|m4v|mpg|mpeg|m2ts|vob)",  # video extension prefix (catches MP4GROUP, etc.)
     # ============================================================================
     # TV Show Indicators
     # ============================================================================
