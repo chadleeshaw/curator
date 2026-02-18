@@ -465,3 +465,72 @@ class TestVolumeIssueOnlyPatterns:
         assert result["pattern"] != "volume_only"
         assert result["issue_date"] is not None
         assert result["issue_date"].month == 1
+
+
+class TestIssueMonthYearPatterns:
+    """Test extraction of Issue-Month-Year patterns (periodicals don't have days)."""
+
+    def test_month_dot_issue_dot_year(self):
+        """Test Month.Issue.Year format (e.g., October.25.2013)"""
+        parser = FilenameParser()
+        result = parser.extract_from_nzb_title("Nuts-October.25.2013.UK")
+        assert result["title"] == "Nuts"
+        assert result["month"] == 10
+        assert result["month_name"] == "October"
+        assert result["issue"] == 25
+        assert result["year"] == 2013
+
+    def test_issue_space_month_dash_year(self):
+        """Test 'Issue Month-Year' format (e.g., 13 December-2013)"""
+        parser = FilenameParser()
+        result = parser.extract_from_nzb_title("Nuts UK 13 December-2013")
+        assert result["title"] == "Nuts"
+        assert result["month"] == 12
+        assert result["month_name"] == "December"
+        assert result["issue"] == 13
+        assert result["year"] == 2013
+
+    def test_month_year_without_issue(self):
+        """Test Month Year format without issue number"""
+        parser = FilenameParser()
+        result = parser.extract_from_nzb_title("Nuts UK January 2013")
+        assert result["title"] == "Nuts"
+        assert result["month"] == 1
+        assert result["month_name"] == "January"
+        assert result["issue"] is None
+        assert result["year"] == 2013
+
+    def test_different_months_not_grouped(self):
+        """Ensure different months produce different grouping keys"""
+        parser = FilenameParser()
+
+        result1 = parser.extract_from_nzb_title("Nuts-October.25.2013.UK")
+        result2 = parser.extract_from_nzb_title("Nuts UK 13 December-2013")
+        result3 = parser.extract_from_nzb_title("Nuts UK January 2013")
+
+        # All should have different months
+        assert result1["month"] == 10
+        assert result2["month"] == 12
+        assert result3["month"] == 1
+
+        # All should have same year
+        assert result1["year"] == 2013
+        assert result2["year"] == 2013
+        assert result3["year"] == 2013
+
+        # They should NOT group together (different months)
+        key1 = f"{result1['year']}-{result1['month']}-{result1['issue']}"
+        key2 = f"{result2['year']}-{result2['month']}-{result2['issue']}"
+        key3 = f"{result3['year']}-{result3['month']}-{result3['issue']}"
+
+        assert key1 != key2
+        assert key2 != key3
+        assert key1 != key3
+
+    def test_month_dash_year_pattern(self):
+        """Test that Month-Year with dash separator works"""
+        parser = FilenameParser()
+        result = parser.extract_from_nzb_title("Magazine December-2023")
+        assert result["month"] == 12
+        assert result["month_name"] == "December"
+        assert result["year"] == 2023

@@ -117,6 +117,7 @@ class FilenameParser:
         # These patterns would be destroyed by dot-to-space conversion
         numeric_month_data = self._extract_numeric_multi_month(nzb_title)
         iso_date_data = self._extract_iso_date(nzb_title)
+        month_issue_year_data = self._extract_month_issue_year(nzb_title)
 
         # Normalize delimiters: dots, underscores → spaces (but keep dashes)
         remaining_text = self._normalize_delimiters(nzb_title)
@@ -132,7 +133,9 @@ class FilenameParser:
         remaining_text = self._extract_release_metadata(nzb_title, remaining_text, metadata)
 
         # Extract dates from various formats
-        remaining_text = self._extract_dates(remaining_text, metadata, numeric_month_data, iso_date_data)
+        remaining_text = self._extract_dates(
+            remaining_text, metadata, numeric_month_data, iso_date_data, month_issue_year_data
+        )
 
         # Extract volume and issue numbers (AFTER dates to avoid conflicts)
         remaining_text = self._extract_volume_issue(remaining_text, metadata)
@@ -233,6 +236,36 @@ class FilenameParser:
             }
         return None
 
+    def _extract_month_issue_year(self, nzb_title: str) -> Optional[Dict[str, Any]]:
+        """
+        Extract Month.Issue.Year format from ORIGINAL text (before dot normalization).
+        Handles formats like 'October.25.2013' which becomes 'October 25 2013' after normalization.
+        """
+        from core.parsers.date import parse_month
+
+        # Pattern: MonthName.Number.Year
+        pattern = r"\b([A-Za-z]+)\.?(\d{1,3})\.?(\d{4})\b"
+        match = re.search(pattern, nzb_title, re.IGNORECASE)
+        if not match:
+            return None
+
+        month_str = match.group(1)
+        issue_num = int(match.group(2))
+        year = int(match.group(3))
+        month_num = parse_month(month_str)
+
+        if month_num and MIN_VALID_YEAR <= year <= MAX_VALID_YEAR and 1 <= issue_num <= 999:
+            logger.debug(f"Pre-detected Month.Issue.Year: {month_str} (Issue {issue_num}), {year}")
+            return {
+                "year": year,
+                "month": month_num,
+                "month_name": NUMBER_TO_MONTH.get(month_num),
+                "issue": issue_num,
+                "issue_date": datetime(year, month_num, 1, tzinfo=UTC),
+                "match_text": match.group(),
+            }
+        return None
+
     def _normalize_delimiters(self, nzb_title: str) -> str:
         """Normalize delimiters: dots, underscores → spaces (but keep dashes)."""
         return nzb_title.replace(".", " ").replace("_", " ")
@@ -302,6 +335,7 @@ class FilenameParser:
         metadata: Dict[str, Any],
         numeric_month_data: Optional[Dict[str, Any]],
         iso_date_data: Optional[Dict[str, Any]],
+        month_issue_year_data: Optional[Dict[str, Any]],
     ) -> str:
         """
         Extract dates from various formats.
@@ -310,6 +344,21 @@ class FilenameParser:
         # Format 0a: Use pre-detected numeric multi-month if found
         if numeric_month_data:
             remaining_text = self._apply_numeric_multi_month(remaining_text, metadata, numeric_month_data)
+            return remaining_text
+
+        # Format 0b: Use pre-detected Month.Issue.Year if found
+        if month_issue_year_data:
+            metadata["year"] = month_issue_year_data["year"]
+            metadata["month"] = month_issue_year_data["month"]
+            metadata["month_name"] = month_issue_year_data["month_name"]
+            metadata["issue"] = month_issue_year_data["issue"]
+            metadata["issue_date"] = month_issue_year_data["issue_date"]
+            # Remove the matched text from remaining_text
+            remaining_text = remaining_text.replace(month_issue_year_data["match_text"].replace(".", " "), "", 1)
+            remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
+            logger.debug(
+                f"Used pre-detected Month.Issue.Year: {month_issue_year_data['month_name']} Issue {month_issue_year_data['issue']}, {month_issue_year_data['year']}"
+            )
             return remaining_text
 
         # Format 1: Numeric multi-month in remaining text
@@ -540,6 +589,17 @@ class FilenameParser:
             metadata["issue"] = int(issue_num)
             remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
             remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
+
+        # If no issue found yet, check for bare trailing numbers (likely issue numbers)
+        # This handles cases like "Magazine 13 December 2023" where 13 is the issue number
+        # Only do this if we successfully extracted a month (to avoid false positives)
+        if metadata.get("issue") is None and metadata.get("month") is not None:
+            match = re.search(r"\b(\d{1,3})\s*$", remaining_text)
+            if match:
+                metadata["issue"] = int(match.group(1))
+                remaining_text = remaining_text[: match.start()]
+                remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
+                logger.debug(f"Extracted bare trailing issue number: {metadata['issue']}")
 
         return remaining_text
 
