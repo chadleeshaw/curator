@@ -99,7 +99,7 @@ class FileImporter:
     def __del__(self):
         """Cleanup thread pool executor on deletion"""
         if hasattr(self, "_ocr_executor"):
-            self._ocr_executor.shutdown(wait=False)
+            self._ocr_executor.shutdown(wait=True, cancel_futures=True)
 
     def _create_import_marker(self, folder: Path) -> bool:
         """
@@ -569,7 +569,7 @@ class FileImporter:
         """
         if target_tracking:
             magazine.tracking_id = target_tracking.id
-            target_tracking.last_metadata_update = datetime.now()
+            target_tracking.last_metadata_update = datetime.now(UTC)
 
             # Synchronize language between tracking and periodical
             if target_tracking.language:
@@ -609,7 +609,7 @@ class FileImporter:
                 track_new_only=track_new_only,
                 selected_editions={},
                 selected_years=[],
-                last_metadata_update=datetime.now(),
+                last_metadata_update=datetime.now(UTC),
             )
             session.add(new_tracking)
             session.flush()
@@ -1147,6 +1147,17 @@ class FileImporter:
             }
             organized_path = self.organizer.organize(file_path, metadata, category, organization_pattern)
 
+            # Security: Validate organized path is within library directory
+            if organized_path:
+                try:
+                    organized_path.resolve().relative_to(self.library_base_dir.resolve())
+                except ValueError:
+                    logger.error(
+                        f"Security: Organized path '{organized_path}' is outside library directory '{self.library_base_dir}'. "
+                        f"Possible path traversal attempt in organization pattern or metadata."
+                    )
+                    organized_path = None
+
         # Extract cover AFTER organization so the cover filename is derived from
         # the organized path (which already has uniqueness via timestamps).
         # This prevents different periodicals with similar names from overwriting
@@ -1232,7 +1243,7 @@ class FileImporter:
 
         magazine = Periodical(
             title=organization_title,
-            issue_date=parsed.issue_date or datetime.now(),
+            issue_date=parsed.issue_date or datetime.now(UTC),
             language=parsed.language or DEFAULT_LANGUAGE,
             file_path=organized_path_str,
             cover_path=str(cover_path) if cover_path else None,
@@ -1495,7 +1506,13 @@ class FileImporter:
         except Exception as e:
             session.rollback()
             logger.error(f"Error importing file {file_path}: {e}", exc_info=True)
-            return {"skip_reason": "parse_error"}
+            # Cleanup resources on failure
+            if not skip_organize and file_path.exists():
+                try:
+                    self._cleanup_download_file(file_path, defer_folder_deletion=True)
+                except Exception as cleanup_error:
+                    logger.warning(f"Failed to cleanup file after import error: {cleanup_error}")
+            return {"skip_reason": "parse_error", "error": str(e)}
 
     def _import_file_worker(
         self,
