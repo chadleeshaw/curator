@@ -10,7 +10,6 @@ against collection archives and irrelevant matches.
 """
 
 import logging
-import re
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
@@ -33,71 +32,33 @@ def is_ia_collection(raw_metadata: Optional[Dict[str, Any]]) -> bool:
 
 def ia_title_matches_query(result_title: str, search_query: str, min_match_ratio: float = 0.5) -> bool:
     """
-    Verify a search result's title actually matches the search query.
+    Verify an IA result's title actually matches the search query.
 
-    Uses word-boundary matching and adaptive thresholds to filter out
-    irrelevant results like industrial standards ("Hexagon Nuts and Bolts")
-    when searching for magazine names ("Nuts UK").
-
-    BUGS FIXED:
-    - Bug #1: Now uses word boundaries to avoid substring matches
-      (e.g., "nuts" no longer matches "donuts", "peanuts")
-    - Bug #2: Adaptive threshold - requires 100% match for short queries
-      (1-2 terms) to prevent broad matches like gardening books
-    - Bug #3: Now checks 2+ character terms to include magazine names
-      like "PC", "GQ", "OK"
+    IA returns items where the search term appears anywhere in metadata
+    (description, creator, subject, etc.), not just the title. This
+    function requires that a minimum fraction of significant search terms
+    appear in the result title.
 
     Args:
-        result_title: The title of the search result
+        result_title: The title of the IA result
         search_query: The original search query
         min_match_ratio: Minimum fraction of significant search terms
                          that must appear in the title (default: 0.5 = 50%)
-                         NOTE: Overridden for short queries (1-2 terms require 100%)
 
     Returns:
         True if the title is a reasonable match for the query
     """
-    # Normalize title: replace underscores, dots, hyphens with spaces for word boundary matching
-    # Before: "Time_Magazine" is one word, "magazine" doesn't match
-    # After: "Time Magazine" allows "magazine" to match
-    normalized_title = re.sub(r"[_.\-]", " ", result_title.lower())
+    result_title_lower = result_title.lower()
     search_terms = search_query.lower().split()
 
-    # Check terms with 2+ characters (includes "PC", "GQ", "OK" but skips "a", "of", "the")
-    # BUG FIX: Changed from 3+ to 2+ to include magazine abbreviations
-    significant_terms = [t for t in search_terms if len(t) >= 2]
+    # Only check terms with 3+ characters (skip "the", "of", etc.)
+    significant_terms = [t for t in search_terms if len(t) >= 3]
     if not significant_terms:
         return True  # No significant terms to check
 
-    # BUG FIX: Use word boundaries to match whole words only
-    # Before: "nuts" matched "donuts", "peanuts", "coconuts"
-    # After: "nuts" only matches whole word "nuts"
-    matching_terms = 0
-    for term in significant_terms:
-        # Escape special regex chars and match whole words
-        pattern = rf"\b{re.escape(term)}\b"
-        if re.search(pattern, normalized_title):
-            matching_terms += 1
-
+    matching_terms = sum(1 for t in significant_terms if t in result_title_lower)
     match_ratio = matching_terms / len(significant_terms)
-
-    # BUG FIX: Adaptive threshold based on query length
-    # Short queries (1-2 terms) require ALL terms to match (100%)
-    # to avoid broad matches like "Cold-Hardy Fruits and Nuts" for "Nuts UK"
-    if len(significant_terms) <= 2:
-        required_ratio = 1.0  # 100% match required
-        logger.debug(
-            f"Short query '{search_query}' ({len(significant_terms)} terms) "
-            f"requires 100% match: {matching_terms}/{len(significant_terms)} matched in '{result_title}'"
-        )
-    else:
-        required_ratio = min_match_ratio  # Use provided ratio (default 50%)
-        logger.debug(
-            f"Long query '{search_query}' ({len(significant_terms)} terms) "
-            f"requires {required_ratio * 100}% match: {matching_terms}/{len(significant_terms)} matched in '{result_title}'"
-        )
-
-    return match_ratio >= required_ratio
+    return match_ratio >= min_match_ratio
 
 
 def filter_ia_result(

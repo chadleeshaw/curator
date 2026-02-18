@@ -13,7 +13,7 @@ from core.constants.country import LANGUAGE_TO_COUNTRY
 from core.constants.periodical import AUDIENCE_PERIODICAL_INDICATORS
 from core.constants.language import LANGUAGE_KEYWORDS
 from core.parsers.country import detect_country
-from core.utils.ia_filtering import filter_ia_result
+from core.utils.ia_filtering import filter_ia_result, ia_title_matches_query
 from services.issue_discovery import IssueDiscoveryService
 
 from .dependencies import get_title_matcher
@@ -38,7 +38,7 @@ def filter_periodical_variants(results: List[Dict[str, Any]], query: str) -> Lis
         query: Original search query
 
     Returns:
-        Filtered list with only results matching query periodical variant
+        Filtered list with only results matching query periodical varian
     """
     if not results:
         return results
@@ -107,7 +107,7 @@ def filter_non_periodicals(results: List[Dict[str, Any]]) -> List[Dict[str, Any]
         results: List of search result dictionaries
 
     Returns:
-        Filtered list with only periodical content
+        Filtered list with only periodical conten
     """
     if not results:
         return results
@@ -140,47 +140,60 @@ def filter_non_periodicals(results: List[Dict[str, Any]]) -> List[Dict[str, Any]
 
 def filter_ia_results(results: List[Dict[str, Any]], search_query: str) -> List[Dict[str, Any]]:
     """
-    Filter Internet Archive results to remove poor title matches.
+    Filter search results from ALL providers to remove poor title matches.
 
-    IA search is broad — it returns items where the search term appears anywhere
-    in metadata (description, creator, subject), not just the title. This filter
-    removes results that don't actually match the search query.
+    BUG FIX: Previously only filtered IA results, but Newsnab also returns
+    broad keyword matches. Now applies title-match filtering to ALL providers.
 
-    Collection archives are preserved so users can browse and download them
-    from the UI. The auto-download path filters collections separately.
-
-    Non-IA results pass through unchanged.
+    Examples of bugs this fixes:
+    - Searching "Nuts UK" no longer returns "Hexagon Head Bolts, Screws and Nuts"
+    - Searching "PC Gamer" won't return "PC Hardware Guide"
+    - Word boundaries prevent "nuts" from matching "donuts", "peanuts"
 
     Args:
         results: List of search result dictionaries
         search_query: The original search query for title-match verification
 
     Returns:
-        Filtered list with only relevant IA results (plus all non-IA results)
+        Filtered list with only results that match the search query
     """
     if not results:
         return results
 
     filtered = []
-    ia_filtered_count = 0
+    filtered_count = 0
 
     for result in results:
         provider = result.get("provider", "")
         metadata = result.get("metadata", {})
+        result_title = result.get("title", "")
 
-        if filter_ia_result(
-            result_title=result.get("title", ""),
-            result_provider=provider,
-            raw_metadata=metadata,
-            search_query=search_query,
-            filter_collections=False,
-        ):
-            filtered.append(result)
+        # Apply IA-specific filters (collections, etc.)
+        if provider == "internet_archive":
+            if filter_ia_result(
+                result_title=result_title,
+                result_provider=provider,
+                raw_metadata=metadata,
+                search_query=search_query,
+                filter_collections=False,
+            ):
+                filtered.append(result)
+            else:
+                filtered_count += 1
         else:
-            ia_filtered_count += 1
+            # Apply title-match filtering to ALL non-IA providers (Newsnab, etc.)
+            # BUG FIX: This was missing - Newsnab results were not being filtered
+            if ia_title_matches_query(result_title, search_query):
+                filtered.append(result)
+            else:
+                logger.debug(
+                    f"[FILTER] Removed {provider} result with poor title match: "
+                    f"'{result_title}' (searching for '{search_query}')"
+                )
+                filtered_count += 1
 
-    if ia_filtered_count > 0:
-        logger.debug(f"[FILTER] Removed {ia_filtered_count} irrelevant Internet Archive results")
+    if filtered_count > 0:
+        logger.debug(f"[FILTER] Removed {filtered_count} irrelevant search results")
 
     return filtered
 

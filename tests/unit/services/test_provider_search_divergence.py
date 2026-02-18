@@ -106,20 +106,31 @@ class TestIaFilteringUtility:
         """Title not matching search terms should fail."""
         assert ia_title_matches_query("Cooking Recipes Vol 5", "National Geographic") is False
 
-    def test_ia_title_matches_query_partial_match(self):
-        """50% match should pass (default threshold)."""
-        # "National" matches but "Geographic" doesn't
-        assert ia_title_matches_query("National Review January 2024", "National Geographic") is True
-        # match_ratio = 1/2 = 0.5 >= 0.5
+    def test_ia_title_matches_query_partial_match_long_query(self):
+        """50% match passes for queries with 3+ terms (uses default threshold)."""
+        # 3-term query: "National Geographic Traveller"
+        # "National Geographic" matches (2/3 = 66% >= 50%)
+        assert ia_title_matches_query("National Geographic January 2024", "National Geographic Traveller") is True
 
-    def test_ia_title_matches_query_short_terms_ignored(self):
-        """Short terms (<3 chars) should be ignored in matching."""
-        # "PC" is too short to count, "Gamer" should be the only significant term
+    def test_ia_title_matches_query_partial_match_short_query_fails(self):
+        """Partial matches fail for short queries (1-2 terms require 100% match)."""
+        # 2-term query: "National Geographic"
+        # "National Review" only has 1/2 terms (50% < 100% required) → fails
+        assert ia_title_matches_query("National Review January 2024", "National Geographic") is False
+
+    def test_ia_title_matches_query_short_terms_now_included(self):
+        """Terms with 2+ chars are now checked (includes magazine abbreviations like PC, GQ)."""
+        # BUG FIX: Changed from 3+ to 2+ chars
+        # Both "PC" and "Gamer" must match (100% for 2-term query)
         assert ia_title_matches_query("PC Gamer Issue 400", "PC Gamer") is True
+        # Magazine abbreviations like GQ, OK should now work
+        assert ia_title_matches_query("GQ Magazine UK", "GQ") is True
 
     def test_ia_title_matches_query_no_significant_terms(self):
-        """If all terms are too short, should pass (nothing to check)."""
-        assert ia_title_matches_query("Something Else", "PC") is True
+        """If all terms are too short (<2 chars), should pass (nothing to check)."""
+        # Single-letter terms are ignored
+        assert ia_title_matches_query("Something Else", "a") is True
+        assert ia_title_matches_query("Something Else", "x y z") is True
 
     def test_filter_ia_result_non_ia_always_passes(self):
         """Non-IA results should always pass regardless of content."""
@@ -182,11 +193,13 @@ class TestIaFilterInUiSearch:
         assert callable(filter_ia_results)
 
     def test_filter_ia_results_preserves_collections(self):
-        """UI filter should preserve IA collection archives so users can browse them."""
+        """UI filter should preserve IA collection archives and filter by title match."""
         from web.routers.search.filters import filter_ia_results
 
         results = [
-            {"title": "Good Result", "provider": "newsnab", "metadata": {}},
+            # BUG FIX: Now filters ALL providers by title match, not just IA
+            # "Good Result" doesn't match "National Geographic" so it gets filtered
+            {"title": "National Geographic Traveler", "provider": "newsnab", "metadata": {}},
             {
                 "title": "National Geographic Collection",
                 "provider": "internet_archive",
@@ -200,7 +213,7 @@ class TestIaFilterInUiSearch:
         ]
         filtered = filter_ia_results(results, "National Geographic")
         assert len(filtered) == 3
-        assert filtered[0]["title"] == "Good Result"
+        assert filtered[0]["title"] == "National Geographic Traveler"
         assert filtered[1]["title"] == "National Geographic Collection"
         assert filtered[2]["title"] == "National Geographic Jan 2024"
 
@@ -224,16 +237,20 @@ class TestIaFilterInUiSearch:
         assert len(filtered) == 1
         assert filtered[0]["title"] == "National Geographic Jan 2024"
 
-    def test_filter_ia_results_preserves_non_ia(self):
-        """Non-IA results should never be filtered."""
+    def test_filter_ia_results_filters_all_providers_by_title_match(self):
+        """BUG FIX: All providers (not just IA) are now filtered by title match."""
         from web.routers.search.filters import filter_ia_results
 
         results = [
+            # These don't match "National Geographic" so they get filtered
             {"title": "Completely Unrelated", "provider": "newsnab", "metadata": {}},
             {"title": "Also Unrelated", "provider": "rss", "metadata": {}},
+            # This matches so it's kept
+            {"title": "National Geographic UK", "provider": "newsnab", "metadata": {}},
         ]
         filtered = filter_ia_results(results, "National Geographic")
-        assert len(filtered) == 2
+        assert len(filtered) == 1
+        assert filtered[0]["title"] == "National Geographic UK"
 
     def test_filter_ia_results_imported_in_endpoints(self):
         """endpoints.py should import filter_ia_results from filters."""
