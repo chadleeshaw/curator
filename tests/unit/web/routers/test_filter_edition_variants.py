@@ -5,7 +5,7 @@ Key terminology:
 - "Editions" = individual issue numbers/volumes (Issue 1, Issue 2, Vol 3, etc.)
 - "Variants" = the same issue available from multiple providers (deduplication targets)
 - "Periodical variants" = geographically/demographically distinct periodicals
-  (e.g. "Nuts UK" vs "Nuts US", "National Geographic" vs "National Geographic Kids")
+  (e.g. "Wired UK" vs "Wired US", "National Geographic" vs "National Geographic Kids")
 """
 
 import sys
@@ -86,8 +86,8 @@ class TestRegionalQueryVariantFiltering:
     Tests for the main fix: when the query has a regional (country/geography) variant,
     results without any variant should NOT be filtered out.
 
-    Regression: searching 'Nuts UK' was removing 509 results like 'Nuts Issue 45'
-    that were returned via the 'Nuts' alias. These are real issues of Nuts UK,
+    Regression: searching 'Wired UK' was removing 509 results like 'Wired Issue 45'
+    that were returned via the 'Wired' alias. These are real issues of Wired UK,
     just indexed without the regional suffix — not a different periodical.
     """
 
@@ -95,24 +95,24 @@ class TestRegionalQueryVariantFiltering:
         """Core fix: result with no regional suffix is kept when query has regional variant."""
         from web.routers.search.filters import filter_periodical_variants
 
-        results = [_make_result("Nuts Issue 45")]
-        filtered = filter_periodical_variants(results, "Nuts UK")
+        results = [_make_result("Wired Issue 45")]
+        filtered = filter_periodical_variants(results, "Wired UK")
         assert len(filtered) == 1, "Issues without regional suffix should be kept for regional-variant queries"
 
     def test_regional_query_keeps_matching_variant_result(self):
         """Result with the same regional variant as the query is kept."""
         from web.routers.search.filters import filter_periodical_variants
 
-        results = [_make_result("Nuts UK Issue 45")]
-        filtered = filter_periodical_variants(results, "Nuts UK")
+        results = [_make_result("Wired UK Issue 45")]
+        filtered = filter_periodical_variants(results, "Wired UK")
         assert len(filtered) == 1
 
     def test_regional_query_filters_conflicting_regional_variant(self):
         """Result with a different regional variant is filtered out."""
         from web.routers.search.filters import filter_periodical_variants
 
-        results = [_make_result("Nuts US Issue 45")]
-        filtered = filter_periodical_variants(results, "Nuts UK")
+        results = [_make_result("Wired US Issue 45")]
+        filtered = filter_periodical_variants(results, "Wired UK")
         assert len(filtered) == 0
 
     def test_us_regional_query_keeps_no_variant_result(self):
@@ -131,16 +131,16 @@ class TestRegionalQueryVariantFiltering:
         from web.routers.search.filters import filter_periodical_variants
 
         results = [
-            _make_result("Nuts UK Issue 45"),  # same regional variant → keep
-            _make_result("Nuts Issue 45"),  # no variant → keep (the fix)
-            _make_result("Nuts US Issue 45"),  # different regional variant → filter
+            _make_result("Wired UK Issue 45"),  # same regional variant → keep
+            _make_result("Wired Issue 45"),  # no variant → keep (the fix)
+            _make_result("Wired US Issue 45"),  # different regional variant → filter
         ]
-        filtered = filter_periodical_variants(results, "Nuts UK")
+        filtered = filter_periodical_variants(results, "Wired UK")
         assert len(filtered) == 2
         titles = [r["title"] for r in filtered]
-        assert "Nuts UK Issue 45" in titles
-        assert "Nuts Issue 45" in titles
-        assert "Nuts US Issue 45" not in titles
+        assert "Wired UK Issue 45" in titles
+        assert "Wired Issue 45" in titles
+        assert "Wired US Issue 45" not in titles
 
 
 class TestNonRegionalQueryVariantFiltering:

@@ -410,7 +410,7 @@ Key terminology:
 - "Editions" = individual issue numbers/volumes (Issue 1, Issue 2, Vol 3, etc.)
 - "Variants" = the same issue available from multiple providers (deduplication targets)
 - "Publication variants" = geographically/demographically distinct publications
-  (e.g. "Nuts UK" vs "Nuts US", "National Geographic" vs "National Geographic Kids")
+  (e.g. "Wired UK" vs "Wired US", "National Geographic" vs "National Geographic Kids")
 """
 ```
 

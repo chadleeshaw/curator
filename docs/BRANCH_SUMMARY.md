@@ -16,7 +16,7 @@ This branch fixes a critical search filter bug related to the redefinition of "e
 
 ### The Bug
 
-When searching for "Nuts UK" (a regional periodical), the filter was incorrectly removing 509 valid search results like "Nuts Issue 45" that were returned via the "Nuts" alias. 
+When searching for "Wired UK" (a regional periodical), the filter was incorrectly removing 509 valid search results like "Wired Issue 45" that were returned via the "Wired" alias. 
 
 **Root Cause**: The filter treated results without a regional suffix as a "different periodical" and filtered them out, even though they were the same periodical just indexed without the regional indicator.
 
@@ -43,10 +43,10 @@ Updated `filter_edition_variants()` to distinguish between **regional** and **au
 
 **Example**:
 ```python
-# Search: "Nuts UK"
-# ✅ KEEP: "Nuts UK Issue 45" (exact match)
-# ✅ KEEP: "Nuts Issue 45" (same periodical, no regional suffix)
-# ❌ FILTER: "Nuts US Issue 45" (different periodical)
+# Search: "Wired UK"
+# ✅ KEEP: "Wired UK Issue 45" (exact match)
+# ✅ KEEP: "Wired Issue 45" (same periodical, no regional suffix)
+# ❌ FILTER: "Wired US Issue 45" (different periodical)
 ```
 
 ### 2. Terminology Documentation
@@ -115,13 +115,13 @@ All tests passing ✅
 
 ### Before Fix
 
-- ❌ Searching "Nuts UK" returned 0 results (509 valid results filtered out)
+- ❌ Searching "Wired UK" returned 0 results (509 valid results filtered out)
 - ❌ Regional periodicals missed issues indexed without country suffix
 - ❌ Confusing terminology caused maintenance issues
 
 ### After Fix
 
-- ✅ Searching "Nuts UK" returns 509 valid results
+- ✅ Searching "Wired UK" returns 509 valid results
 - ✅ Regional periodicals correctly include alias results
 - ✅ Clear terminology documented for future development
 - ✅ 186 test cases ensure filter logic stays correct

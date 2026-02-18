@@ -473,8 +473,8 @@ class TestIssueMonthYearPatterns:
     def test_month_dot_issue_dot_year(self):
         """Test Month.Issue.Year format (e.g., October.25.2013)"""
         parser = FilenameParser()
-        result = parser.extract_from_nzb_title("Nuts-October.25.2013.UK")
-        assert result["title"] == "Nuts"
+        result = parser.extract_from_nzb_title("Wired-October.25.2013.UK")
+        assert result["title"] == "Wired"
         assert result["month"] == 10
         assert result["month_name"] == "October"
         assert result["issue"] == 25
@@ -483,8 +483,8 @@ class TestIssueMonthYearPatterns:
     def test_issue_space_month_dash_year(self):
         """Test 'Issue Month-Year' format (e.g., 13 December-2013)"""
         parser = FilenameParser()
-        result = parser.extract_from_nzb_title("Nuts UK 13 December-2013")
-        assert result["title"] == "Nuts"
+        result = parser.extract_from_nzb_title("Wired UK 13 December-2013")
+        assert result["title"] == "Wired"
         assert result["month"] == 12
         assert result["month_name"] == "December"
         assert result["issue"] == 13
@@ -493,8 +493,8 @@ class TestIssueMonthYearPatterns:
     def test_month_year_without_issue(self):
         """Test Month Year format without issue number"""
         parser = FilenameParser()
-        result = parser.extract_from_nzb_title("Nuts UK January 2013")
-        assert result["title"] == "Nuts"
+        result = parser.extract_from_nzb_title("Wired UK January 2013")
+        assert result["title"] == "Wired"
         assert result["month"] == 1
         assert result["month_name"] == "January"
         assert result["issue"] is None
@@ -504,9 +504,9 @@ class TestIssueMonthYearPatterns:
         """Ensure different months produce different grouping keys"""
         parser = FilenameParser()
 
-        result1 = parser.extract_from_nzb_title("Nuts-October.25.2013.UK")
-        result2 = parser.extract_from_nzb_title("Nuts UK 13 December-2013")
-        result3 = parser.extract_from_nzb_title("Nuts UK January 2013")
+        result1 = parser.extract_from_nzb_title("Wired-October.25.2013.UK")
+        result2 = parser.extract_from_nzb_title("Wired UK 13 December-2013")
+        result3 = parser.extract_from_nzb_title("Wired UK January 2013")
 
         # All should have different months
         assert result1["month"] == 10

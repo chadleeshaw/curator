@@ -73,7 +73,7 @@ def filter_periodical_variants(results: List[Dict[str, Any]], query: str) -> Lis
         # - Both have no variant → keep (e.g., "National Geographic" query, "National Geographic" result)
         # - Both have the same variant → keep (e.g., "PC Gamer US" query, "PC Gamer US" result)
         # - Query has regional variant, result has no variant → keep
-        #   Rationale: when searching "Nuts UK" with alias "Nuts", results like "Nuts Issue 45"
+        #   Rationale: when searching "Wired UK" with alias "Wired", results like "Wired Issue 45"
         #   are the same periodical just indexed without the regional suffix. Filtering these
         #   would silently drop valid issues found via the alias.
         # - Query has no variant, result has non-regional variant → filter (different periodical)
