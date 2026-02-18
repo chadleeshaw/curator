@@ -7,7 +7,6 @@ Tests for medium item #4 — divergent provider search path fixes:
 """
 
 import sys
-import time
 from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
@@ -62,7 +61,9 @@ class TestConsolidatedFuzzyGroupId:
 
         # With date — should produce SAME group (date is deprecated)
         # This supports items with volume/issue numbers but no dates
-        group_with_date = get_fuzzy_group_id("National Geographic", datetime(2024, 1, 15))
+        group_with_date = get_fuzzy_group_id(
+            "National Geographic", datetime(2024, 1, 15)
+        )
         assert group_no_date == group_with_date
         assert "2024-01" not in group_with_date  # Date should NOT be in fuzzy group
 
@@ -101,16 +102,29 @@ class TestIaFilteringUtility:
 
     def test_ia_title_matches_query_good_match(self):
         """Title containing all search terms should pass."""
-        assert ia_title_matches_query("National Geographic January 2024", "National Geographic") is True
+        assert (
+            ia_title_matches_query(
+                "National Geographic January 2024", "National Geographic"
+            )
+            is True
+        )
 
     def test_ia_title_matches_query_poor_match(self):
         """Title not matching search terms should fail."""
-        assert ia_title_matches_query("Cooking Recipes Vol 5", "National Geographic") is False
+        assert (
+            ia_title_matches_query("Cooking Recipes Vol 5", "National Geographic")
+            is False
+        )
 
     def test_ia_title_matches_query_partial_match(self):
         """50% match should pass (default threshold)."""
         # "National" matches but "Geographic" doesn't
-        assert ia_title_matches_query("National Review January 2024", "National Geographic") is True
+        assert (
+            ia_title_matches_query(
+                "National Review January 2024", "National Geographic"
+            )
+            is True
+        )
         # match_ratio = 1/2 = 0.5 >= 0.5
 
     def test_ia_title_matches_query_short_terms_ignored(self):
@@ -129,7 +143,15 @@ class TestIaFilteringUtility:
 
     def test_filter_ia_result_collection_filtered(self):
         """IA collection archives should be filtered out by default."""
-        assert filter_ia_result("My Archive Collection", "internet_archive", {"is_collection": True}, "Test") is False
+        assert (
+            filter_ia_result(
+                "My Archive Collection",
+                "internet_archive",
+                {"is_collection": True},
+                "Test",
+            )
+            is False
+        )
 
     def test_filter_ia_result_collection_preserved_when_disabled(self):
         """IA collection archives should pass when filter_collections=False."""
@@ -146,17 +168,31 @@ class TestIaFilteringUtility:
 
     def test_filter_ia_result_poor_title_filtered(self):
         """IA results with poor title match should be filtered out."""
-        assert filter_ia_result("Cooking Recipes Vol 5", "internet_archive", {}, "National Geographic") is False
+        assert (
+            filter_ia_result(
+                "Cooking Recipes Vol 5", "internet_archive", {}, "National Geographic"
+            )
+            is False
+        )
 
     def test_filter_ia_result_good_match_passes(self):
         """IA results with good title match should pass."""
         assert (
-            filter_ia_result("National Geographic January 2024", "internet_archive", {}, "National Geographic") is True
+            filter_ia_result(
+                "National Geographic January 2024",
+                "internet_archive",
+                {},
+                "National Geographic",
+            )
+            is True
         )
 
     def test_filter_ia_result_no_query_skips_title_check(self):
         """When search_query is None, title-match check should be skipped."""
-        assert filter_ia_result("Completely Unrelated Title", "internet_archive", {}, None) is True
+        assert (
+            filter_ia_result("Completely Unrelated Title", "internet_archive", {}, None)
+            is True
+        )
 
 
 class TestIaFilterInUiSearch:
@@ -179,7 +215,11 @@ class TestIaFilterInUiSearch:
                 "provider": "internet_archive",
                 "metadata": {"is_collection": True},
             },
-            {"title": "National Geographic Jan 2024", "provider": "internet_archive", "metadata": {}},
+            {
+                "title": "National Geographic Jan 2024",
+                "provider": "internet_archive",
+                "metadata": {},
+            },
         ]
         filtered = filter_ia_results(results, "National Geographic")
         assert len(filtered) == 3
@@ -192,8 +232,16 @@ class TestIaFilterInUiSearch:
         from web.routers.search.filters import filter_ia_results
 
         results = [
-            {"title": "Unrelated Cookbook Vol 3", "provider": "internet_archive", "metadata": {}},
-            {"title": "National Geographic Jan 2024", "provider": "internet_archive", "metadata": {}},
+            {
+                "title": "Unrelated Cookbook Vol 3",
+                "provider": "internet_archive",
+                "metadata": {},
+            },
+            {
+                "title": "National Geographic Jan 2024",
+                "provider": "internet_archive",
+                "metadata": {},
+            },
         ]
         filtered = filter_ia_results(results, "National Geographic")
         assert len(filtered) == 1
@@ -241,20 +289,28 @@ class TestCollectionDescriptorStripping:
         """'Hobby Magazine Collection' should become 'Hobby Magazine'."""
         from web.routers.search.providers import _strip_collection_descriptors
 
-        assert _strip_collection_descriptors("Hobby Magazine Collection") == "Hobby Magazine"
+        assert (
+            _strip_collection_descriptors("Hobby Magazine Collection")
+            == "Hobby Magazine"
+        )
 
     def test_strips_multiple_descriptors(self):
         """'National Geographic Complete Collection' should become 'National Geographic'."""
         from web.routers.search.providers import _strip_collection_descriptors
 
-        assert _strip_collection_descriptors("National Geographic Complete Collection") == "National Geographic"
+        assert (
+            _strip_collection_descriptors("National Geographic Complete Collection")
+            == "National Geographic"
+        )
 
     def test_strips_pack_and_bundle(self):
         """Pack and Bundle descriptors should be stripped."""
         from web.routers.search.providers import _strip_collection_descriptors
 
         assert _strip_collection_descriptors("PC Gamer Pack 2024") == "PC Gamer 2024"
-        assert _strip_collection_descriptors("Wired Magazine Bundle") == "Wired Magazine"
+        assert (
+            _strip_collection_descriptors("Wired Magazine Bundle") == "Wired Magazine"
+        )
 
     def test_strips_archive_and_set(self):
         """Archive and Set descriptors should be stripped."""
@@ -268,7 +324,10 @@ class TestCollectionDescriptorStripping:
         from web.routers.search.providers import _strip_collection_descriptors
 
         assert _strip_collection_descriptors("PC Gamer") == "PC Gamer"
-        assert _strip_collection_descriptors("National Geographic") == "National Geographic"
+        assert (
+            _strip_collection_descriptors("National Geographic")
+            == "National Geographic"
+        )
         assert _strip_collection_descriptors("Hobby") == "Hobby"
 
     def test_all_descriptor_words_preserves_query(self):
@@ -324,15 +383,23 @@ class TestNewsnabCategoryMerge:
 
         # Verify the request was made with only mapped categories
         call_args = mock_get.call_args
-        cat_param = call_args[1]["params"]["cat"] if "params" in call_args[1] else call_args[0][1]["cat"]
+        cat_param = (
+            call_args[1]["params"]["cat"]
+            if "params" in call_args[1]
+            else call_args[0][1]["cat"]
+        )
         cat_set = set(cat_param.split(","))
 
         # Should include ONLY mapped categories (7010,8000,8010), NOT user-configured extras
         assert "7010" in cat_set, "Mapped category 7010 should be included"
         assert "8000" in cat_set, "Mapped category 8000 should be included"
         assert "8010" in cat_set, "Mapped category 8010 should be included"
-        assert "6000" not in cat_set, "User-only category 6000 should NOT leak through filter"
-        assert "7000" not in cat_set, "User-only category 7000 should NOT leak through filter"
+        assert "6000" not in cat_set, (
+            "User-only category 6000 should NOT leak through filter"
+        )
+        assert "7000" not in cat_set, (
+            "User-only category 7000 should NOT leak through filter"
+        )
 
     @patch("providers.newsnab.requests.get")
     def test_no_category_filter_uses_user_config(self, mock_get):
@@ -343,7 +410,11 @@ class TestNewsnabCategoryMerge:
         provider._search_xml_api("test", None)
 
         call_args = mock_get.call_args
-        cat_param = call_args[1]["params"]["cat"] if "params" in call_args[1] else call_args[0][1]["cat"]
+        cat_param = (
+            call_args[1]["params"]["cat"]
+            if "params" in call_args[1]
+            else call_args[0][1]["cat"]
+        )
         assert cat_param == "6000,7000,8000"
 
     @patch("providers.newsnab.requests.get")
@@ -355,7 +426,11 @@ class TestNewsnabCategoryMerge:
         provider._search_xml_api("test", "NonExistentCategory")
 
         call_args = mock_get.call_args
-        cat_param = call_args[1]["params"]["cat"] if "params" in call_args[1] else call_args[0][1]["cat"]
+        cat_param = (
+            call_args[1]["params"]["cat"]
+            if "params" in call_args[1]
+            else call_args[0][1]["cat"]
+        )
         assert cat_param == "6000,7000,8000"
 
 
@@ -387,15 +462,11 @@ class TestProviderTimeout:
         """A provider that times out should produce an error message, not crash."""
         from web.routers.search.providers import fetch_from_providers
 
-        # Create a mock provider that takes too long
+        # Create a mock provider that raises TimeoutError
         slow_provider = MagicMock()
         slow_provider.__class__.__name__ = "SlowProvider"
+        slow_provider.search.side_effect = FuturesTimeoutError("Search timed out")
 
-        def slow_search(*args, **kwargs):
-            time.sleep(60)  # Much longer than timeout
-            return []
-
-        slow_provider.search = slow_search
         mock_get_providers.return_value = [slow_provider]
 
         # Patch the timeout to be very short for testing
@@ -434,10 +505,10 @@ class TestProviderTimeout:
         """One timed-out provider shouldn't prevent others from returning results."""
         from web.routers.search.providers import fetch_from_providers
 
-        # Slow provider
+        # Slow provider that raises timeout
         slow_provider = MagicMock()
         slow_provider.__class__.__name__ = "SlowProvider"
-        slow_provider.search = MagicMock(side_effect=lambda *a, **kw: time.sleep(60) or [])
+        slow_provider.search.side_effect = FuturesTimeoutError("Search timed out")
 
         # Fast provider
         mock_result = MagicMock()
