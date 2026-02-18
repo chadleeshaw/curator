@@ -148,7 +148,12 @@ class FeedSyncService:
                         logger.warning(f"[FeedSync] Error processing entry from '{provider.name}': {e}")
                         stats["errors"] += 1
 
-                session.commit()
+                try:
+                    session.commit()
+                except Exception as e:
+                    session.rollback()
+                    logger.error(f"[FeedSync] Failed to commit feed entries for '{provider.name}': {e}")
+                    raise
 
                 if stats["new"] > 0:
                     logger.info(

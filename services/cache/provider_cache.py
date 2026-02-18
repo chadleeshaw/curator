@@ -12,6 +12,7 @@ from typing import Dict, Optional
 
 import requests
 from sqlalchemy import create_engine, func, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 from core.constants.cache import DEFAULT_MAX_NZB_FETCHES_PER_HOUR
@@ -138,29 +139,40 @@ class NzbCacheService:
 
             # Fetch from provider and cache
             logger.info(f"Fetching NZB from provider: {download_url[:80]}")
+            response = requests.get(download_url, timeout=30)
+            response.raise_for_status()
+            nzb_content = response.text
+
+            if not nzb_content or "<nzb" not in nzb_content.lower():
+                logger.warning(f"Response does not appear to be valid NZB XML (length: {len(nzb_content or '')})")
+
+            # Cache it (even if invalid — prevents repeated fetches)
+            entry = NzbCache(
+                download_url=download_url,
+                nzb_content=nzb_content,
+                cached_at=utc_now(),
+            )
+            session.add(entry)
+
             try:
-                response = requests.get(download_url, timeout=30)
-                response.raise_for_status()
-                nzb_content = response.text
-
-                if not nzb_content or "<nzb" not in nzb_content.lower():
-                    logger.warning(f"Response does not appear to be valid NZB XML (length: {len(nzb_content or '')})")
-
-                # Cache it (even if invalid — prevents repeated fetches)
-                entry = NzbCache(
-                    download_url=download_url,
-                    nzb_content=nzb_content,
-                    cached_at=utc_now(),
-                )
-                session.add(entry)
                 session.commit()
-
                 logger.info(f"Cached NZB content ({len(nzb_content)} bytes)")
-                return nzb_content
+            except IntegrityError:
+                # Race condition: another request cached the same URL concurrently
+                # This is expected with concurrent downloads, rollback and fetch from cache
+                session.rollback()
+                logger.debug(f"NZB already cached by concurrent request: {download_url[:80]}")
+                cached = session.query(NzbCache).filter(NzbCache.download_url == download_url).first()
+                if cached:
+                    return cached.nzb_content
+                # Fallback: return the content we fetched (rare case)
+                logger.warning("Concurrent cache race but entry not found, returning fetched content")
 
-            except requests.exceptions.RequestException as e:
-                logger.error(f"Failed to fetch NZB from {download_url[:80]}: {e}", exc_info=True)
-                return None
+            return nzb_content
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to fetch NZB from {download_url[:80]}: {e}", exc_info=True)
+            return None
 
         finally:
             session.close()

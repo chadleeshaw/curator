@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
+from core.parsers import utc_now
 from core.utils.fuzzy_matching import get_fuzzy_group_id
 from models.database import DownloadSubmission, SearchResult
 
@@ -75,7 +76,7 @@ def get_cached_search_results(
     Returns:
         List of cached SearchResult models
     """
-    cutoff_date = datetime.now(UTC) - timedelta(days=cache_ttl_days)
+    cutoff_date = utc_now() - timedelta(days=cache_ttl_days)
 
     cached_query = (
         db_session.query(SearchResult)
