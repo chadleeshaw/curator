@@ -4,7 +4,7 @@ Tests for filter_edition_variants in web/routers/search/filters.py.
 Key terminology:
 - "Editions" = individual issue numbers/volumes (Issue 1, Issue 2, Vol 3, etc.)
 - "Variants" = the same issue available from multiple providers (deduplication targets)
-- "Publication variants" = geographically/demographically distinct publications
+- "Periodical variants" = geographically/demographically distinct periodicals
   (e.g. "Nuts UK" vs "Nuts US", "National Geographic" vs "National Geographic Kids")
 """
 
@@ -84,7 +84,7 @@ class TestRegionalQueryVariantFiltering:
 
     Regression: searching 'Nuts UK' was removing 509 results like 'Nuts Issue 45'
     that were returned via the 'Nuts' alias. These are real issues of Nuts UK,
-    just indexed without the regional suffix — not a different publication.
+    just indexed without the regional suffix — not a different periodical.
     """
 
     def test_regional_query_keeps_no_variant_result(self):

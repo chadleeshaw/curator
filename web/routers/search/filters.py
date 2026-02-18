@@ -1,7 +1,7 @@
 """
 Search result filtering functions.
 
-Handles filtering of search results by language, country, edition variants,
+Handles filtering of search results by language, country, periodical variants,
 and non-periodical content.
 """
 
@@ -23,15 +23,15 @@ logger = logging.getLogger(__name__)
 
 def filter_edition_variants(results: List[Dict[str, Any]], query: str) -> List[Dict[str, Any]]:
     """
-    Filter out edition variants that don't match the query.
+    Filter out periodical variants that don't match the query.
 
     If searching for "National Geographic", this filters OUT:
-    - "National Geographic Little Kids" (different publication)
-    - "National Geographic Traveller" (different publication)
+    - "National Geographic Little Kids" (different periodical)
+    - "National Geographic Traveller" (different periodical)
 
     But KEEPS:
     - "National Geographic" (matches query)
-    - "National Geographic December 2024" (same publication, just with date)
+    - "National Geographic December 2024" (same periodical, just with date)
 
     Args:
         results: List of search result dictionaries
@@ -74,10 +74,10 @@ def filter_edition_variants(results: List[Dict[str, Any]], query: str) -> List[D
         # - Both have the same variant → keep (e.g., "PC Gamer US" query, "PC Gamer US" result)
         # - Query has regional variant, result has no variant → keep
         #   Rationale: when searching "Nuts UK" with alias "Nuts", results like "Nuts Issue 45"
-        #   are the same publication just indexed without the regional suffix. Filtering these
+        #   are the same periodical just indexed without the regional suffix. Filtering these
         #   would silently drop valid issues found via the alias.
-        # - Query has no variant, result has non-regional variant → filter (different publication)
-        # - Query has regional variant, result has different variant → filter (different edition)
+        # - Query has no variant, result has non-regional variant → filter (different periodical)
+        # - Query has regional variant, result has different variant → filter (different periodical)
         keep = (
             (query_variant is None and result_variant is None)
             or (query_variant is not None and result_variant is not None and query_variant == result_variant)
