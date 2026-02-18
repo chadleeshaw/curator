@@ -90,6 +90,45 @@ def _has_periodical_modifier(title: str, query_term: str) -> tuple[bool, Optiona
     return False, None
 
 
+def _build_word_boundary_pattern(term: str) -> str:
+    """
+    Create a regex pattern with smart word boundaries for matching terms.
+
+    Handles special characters correctly:
+    - "magazine" -> uses \b on both sides (normal word)
+    - "c++" -> uses \b at start, lookahead at end (ends with special char)
+
+    This fixes the issue where "c++ Magazine" searches failed because \b doesn't
+    work after non-word characters like +.
+
+    Args:
+        term: Search term (already lowercased)
+
+    Returns:
+        Regex pattern string with appropriate word boundaries
+    """
+    escaped = re.escape(term)
+
+    # Check if term starts/ends with word character (alphanumeric or underscore)
+    starts_with_word = bool(re.match(r"^\w", term))
+    ends_with_word = bool(re.search(r"\w$", term))
+
+    if starts_with_word and ends_with_word:
+        # Normal word like "magazine" - use boundaries on both sides
+        return rf"\b{escaped}\b"
+    elif starts_with_word and not ends_with_word:
+        # Word ending with special char like "40+" or "c++"
+        # Use boundary at start, lookahead for space/non-word/end at finish
+        return rf"\b{escaped}(?=\s|[^\w]|$)"
+    elif not starts_with_word and ends_with_word:
+        # Word starting with special char (rare, e.g., ".net", "+plus")
+        # Can't use lookbehind (variable width), so just match the term with end boundary
+        return rf"{escaped}\b"
+    else:
+        # All special chars (very rare)
+        return escaped
+
+
 def ia_title_matches_query(result_title: str, search_query: str, min_match_ratio: float = 0.5) -> bool:
     """
     Verify a search result's title actually matches the search query.
@@ -122,7 +161,9 @@ def ia_title_matches_query(result_title: str, search_query: str, min_match_ratio
     # Before: "Time_Magazine" is one word, "magazine" doesn't match
     # After: "Time Magazine" allows "magazine" to match
     normalized_title = re.sub(r"[_.\-]", " ", result_title.lower())
-    search_terms = search_query.lower().split()
+    # Normalize query the same way as title (replace _, ., - with spaces)
+    normalized_query = re.sub(r"[_.\-]", " ", search_query.lower())
+    search_terms = normalized_query.split()
 
     # Check terms with 2+ characters (includes "PC", "GQ", "OK" but skips "a", "of", "the")
     # BUG FIX: Changed from 3+ to 2+ to include magazine abbreviations
@@ -136,7 +177,8 @@ def ia_title_matches_query(result_title: str, search_query: str, min_match_ratio
     matching_terms = 0
     for term in significant_terms:
         # Escape special regex chars and match whole words
-        pattern = rf"\b{re.escape(term)}\b"
+        # Use smart word boundaries to handle special chars like + in "40+"
+        pattern = _build_word_boundary_pattern(term)
         if re.search(pattern, normalized_title):
             matching_terms += 1
 
