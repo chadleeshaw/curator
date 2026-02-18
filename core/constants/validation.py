@@ -188,11 +188,69 @@ ANTI_PERIODICAL_PATTERNS = [
     # Book/Novel Series Indicators
     # ============================================================================
     r"\bbooks?\s+\d+\b",  # "Book 1", "Books 2" - novel series numbering
+    r"\[[^\]]*[a-z][^\]]*\s+\d{2}\]",  # "[Series Name 06]" - book series in brackets
     # ============================================================================
     # Collection Range Indicators (packs, not single issues)
     # ============================================================================
     r"\b(volumes?|issues?|books?|parts?)\s+\d+\s*[-–]\s*\d+",  # "Volumes 1-5", "Issues 10-20"
 ]
+
+
+# ==============================================================================
+# Title Matching Constants for Search Quality
+# ==============================================================================
+
+# Words that indicate a DIFFERENT periodical (not just metadata)
+# Used by search filtering to distinguish between related but different publications
+# Examples:
+#   - "Wired Times" is different from "Wired"
+#   - "Wired Weekly" is different from "Wired"
+#   - "PC Review" is different from "PC Magazine"
+PERIODICAL_MODIFIERS = {
+    "times",
+    "weekly",
+    "daily",
+    "monthly",
+    "quarterly",
+    "review",
+    "journal",
+    "tribune",
+    "herald",
+    "post",
+    "chronicle",
+    "gazette",
+    "news",
+    "observer",
+    "digest",
+    "report",
+    "bulletin",
+    "express",
+    "standard",
+    "independent",
+    "guardian",
+    "telegraph",
+}
+
+# Words that are just METADATA about the periodical (not part of its name)
+# These words don't indicate a different publication
+# Examples:
+#   - "Wired Magazine" is the same as "Wired"
+#   - "PC - Issue 23" is the same as "PC"
+METADATA_WORDS = {
+    "magazine",
+    "mag",
+    "issue",
+    "vol",
+    "volume",
+    "number",
+    "no",
+    "edition",
+    "special",
+    "annual",
+    "yearbook",
+    "publication",
+    "periodical",
+}
 
 
 # ==============================================================================

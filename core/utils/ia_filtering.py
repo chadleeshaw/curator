@@ -13,6 +13,8 @@ import logging
 import re
 from typing import Any, Dict, Optional
 
+from core.constants.validation import METADATA_WORDS, PERIODICAL_MODIFIERS
+
 logger = logging.getLogger(__name__)
 
 
@@ -31,6 +33,63 @@ def is_ia_collection(raw_metadata: Optional[Dict[str, Any]]) -> bool:
     return bool(raw_metadata.get("is_collection"))
 
 
+def _has_periodical_modifier(title: str, query_term: str) -> tuple[bool, Optional[str]]:
+    """
+    Check if title has modifying words after the query term that indicate
+    a DIFFERENT periodical (not just a variant).
+
+    Examples:
+        "Wired Times" has modifier "times" → different periodical
+        "Wired Magazine" has no modifier (magazine is metadata) → same periodical
+        "Wired UK" has no modifier (UK is regional variant) → same periodical
+
+    Args:
+        title: Normalized title (lowercase, spaces instead of dots/dashes)
+        query_term: The search term to look for
+
+    Returns:
+        Tuple of (has_modifier, modifier_word)
+    """
+    words = title.split()
+    query_lower = query_term.lower()
+
+    # Find where query term appears
+    try:
+        query_idx = words.index(query_lower)
+    except ValueError:
+        # Query term not found as whole word
+        return False, None
+
+    # Check next 2-3 words after the query term
+    for i in range(query_idx + 1, min(query_idx + 3, len(words))):
+        if i >= len(words):
+            break
+
+        word = words[i]
+
+        # Skip metadata words
+        if word in METADATA_WORDS:
+            continue
+
+        # Skip numbers and dates
+        if re.match(r"^\d+$", word):  # Pure numbers
+            continue
+        if re.match(r"^\d{4}$", word):  # Years
+            continue
+        if re.match(r"^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)", word):  # Months
+            continue
+
+        # Skip very short words (likely acronyms/variants like "UK", "US")
+        if len(word) <= 2:
+            continue
+
+        # Check if it's a known periodical modifier
+        if word in PERIODICAL_MODIFIERS:
+            return True, word
+
+    return False, None
+
+
 def ia_title_matches_query(result_title: str, search_query: str, min_match_ratio: float = 0.5) -> bool:
     """
     Verify a search result's title actually matches the search query.
@@ -46,6 +105,8 @@ def ia_title_matches_query(result_title: str, search_query: str, min_match_ratio
       (1-2 terms) to prevent broad matches like gardening books
     - Bug #3: Now checks 2+ character terms to include magazine names
       like "PC", "GQ", "OK"
+    - Bug #4: Single-term queries check for periodical modifiers
+      (e.g., "Wired" doesn't match "Wired Times")
 
     Args:
         result_title: The title of the search result
@@ -97,7 +158,22 @@ def ia_title_matches_query(result_title: str, search_query: str, min_match_ratio
             f"requires {required_ratio * 100}% match: {matching_terms}/{len(significant_terms)} matched in '{result_title}'"
         )
 
-    return match_ratio >= required_ratio
+    # First check: do the search terms appear in the title?
+    if match_ratio < required_ratio:
+        return False
+
+    # BUG FIX #4: For single-term queries, check for periodical modifiers
+    # "Wired" should NOT match "Wired Times" (different periodical)
+    if len(significant_terms) == 1:
+        has_modifier, modifier = _has_periodical_modifier(normalized_title, significant_terms[0])
+        if has_modifier:
+            logger.debug(
+                f"Single-term query '{search_query}' rejected '{result_title}' "
+                f"due to periodical modifier '{modifier}'"
+            )
+            return False
+
+    return True
 
 
 def filter_ia_result(
