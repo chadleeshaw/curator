@@ -140,7 +140,10 @@ jobs:
       - name: Trigger Portainer Webhook
         if: github.ref == 'refs/heads/main'
         run: |
-          curl -X POST ${{ secrets.PORTAINER_WEBHOOK_URL }}
+          curl -X POST \
+            -H "CF-Access-Client-Id: ${{ secrets.CF_CLIENT_ID }}" \
+            -H "CF-Access-Client-Secret: ${{ secrets.CF_CLIENT_SECRET }}" \
+            ${{ secrets.PORTAINER_WEBHOOK_URL }}
         continue-on-error: true
 
   release:
