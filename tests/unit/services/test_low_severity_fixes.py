@@ -5,7 +5,7 @@ Validates that the following fixes work correctly:
 1. submission_service.update_submission_for_retry uses 'last_error' (not 'error_message')
 2. build_search_response uses utc_now() instead of deprecated datetime.utcnow()
 3. Newsnab RSS fallback uses dynamic year generation
-4. _extract_edition_variant renamed to public extract_edition_variant
+4. _extract_periodical_variant renamed to public extract_periodical_variant
 5. Queue processor removed phantom 'skipped_count'
 6. Deduplication service uses utc_now() instead of datetime.now()
 7. Inline __import__ replaced with proper imports in cache models
@@ -14,11 +14,9 @@ Validates that the following fixes work correctly:
 """
 
 import sys
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
@@ -114,7 +112,7 @@ class TestNewsnabDynamicYears:
         # Access the method to check its source
         import inspect
 
-        source = inspect.getsource(provider._search_xml_api_rss_fallback)
+        source = inspect.getsource(provider._search_xml_api_rss_fallback)  # pylint: disable=protected-access
 
         # Should NOT contain hardcoded years
         assert '"2024"' not in source
@@ -124,14 +122,14 @@ class TestNewsnabDynamicYears:
 
 
 class TestPublicExtractEditionVariant:
-    """Verify _extract_edition_variant is now public (extract_edition_variant)."""
+    """Verify _extract_periodical_variant is now public (extract_periodical_variant)."""
 
     def test_method_is_public(self):
-        """TitleMatcher should have public extract_edition_variant method."""
+        """TitleMatcher should have public extract_periodical_variant method."""
         from core.parsers import TitleMatcher
 
         matcher = TitleMatcher(threshold=80)
-        assert hasattr(matcher, "extract_edition_variant")
+        assert hasattr(matcher, "extract_periodical_variant")
 
     def test_public_method_works(self):
         """Public method should work identically to the old private one."""
@@ -139,9 +137,9 @@ class TestPublicExtractEditionVariant:
 
         matcher = TitleMatcher(threshold=80)
 
-        assert matcher.extract_edition_variant("PC Gamer US") == "us"
-        assert matcher.extract_edition_variant("National Geographic Kids") == "kids"
-        assert matcher.extract_edition_variant("National Geographic") is None
+        assert matcher.extract_periodical_variant("PC Gamer US") == "us"
+        assert matcher.extract_periodical_variant("National Geographic Kids") == "kids"
+        assert matcher.extract_periodical_variant("National Geographic") is None
 
     def test_callers_use_public_method(self):
         """External callers should use the public method name."""
@@ -149,9 +147,9 @@ class TestPublicExtractEditionVariant:
 
         from web.routers.search import filters
 
-        source = inspect.getsource(filters.filter_edition_variants)
-        assert "_extract_edition_variant" not in source
-        assert "extract_edition_variant" in source
+        source = inspect.getsource(filters.filter_periodical_variants)
+        assert "_extract_periodical_variant" not in source
+        assert "extract_periodical_variant" in source
 
 
 class TestQueueProcessorNoSkippedCount:

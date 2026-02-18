@@ -290,3 +290,7 @@ MIT License - See [LICENSE](LICENSE) file for details.
 - 📚 [Documentation](https://github.com/chadleeshaw/curator/wiki)
 - 🐛 [Report Issues](https://github.com/chadleeshaw/curator/issues)
 - 💬 [Discussions](https://github.com/chadleeshaw/curator/discussions)
+
+## Documentation
+
+- [Terminology Guide](docs/TERMINOLOGY.md) - Definitions of core concepts (periodicals, issues, variants, editions)

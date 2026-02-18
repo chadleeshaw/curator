@@ -28,7 +28,7 @@ from .dependencies import (
 )
 from .filters import (
     filter_by_language_and_country,
-    filter_edition_variants,
+    filter_periodical_variants,
     filter_ia_results,
     filter_non_periodicals,
 )
@@ -232,9 +232,9 @@ async def search_periodical_providers(
         filtered_results = filter_by_language_and_country(all_results, filter_language, filter_country)
         language_country_filtered = results_before_lang - len(filtered_results)
 
-        results_before_edition = len(filtered_results)
-        filtered_results = filter_edition_variants(filtered_results, query)
-        edition_filtered = results_before_edition - len(filtered_results)
+        results_before_pub_variant = len(filtered_results)
+        filtered_results = filter_periodical_variants(filtered_results, query)
+        periodical_variants_filtered = results_before_pub_variant - len(filtered_results)
 
         # Step 7: Load library items (scoped by tracking_id)
         library_items = db.query(Periodical).all()
@@ -251,7 +251,7 @@ async def search_periodical_providers(
             f"Search summary for '{query}': {len(deduplicated_results)} results | "
             f"Filters: language={filter_language}, country={filter_country} | "
             f"Removed: {non_periodical_filtered} non-periodicals, {ia_filtered} IA irrelevant, "
-            f"{language_country_filtered} language/country, {edition_filtered} editions | "
+            f"{language_country_filtered} language/country, {periodical_variants_filtered} periodical variants | "
             f"{library_matched} matched to library"
         )
 
@@ -273,17 +273,17 @@ async def search_periodical_providers(
 
 
 @router.get(
-    "/periodicals/editions/{magazine_title}",
-    summary="Get periodical editions",
-    description="Retrieve all available editions/issues of a specific periodical by searching configured providers.",
+    "/periodicals/issues/{magazine_title}",
+    summary="Get periodical issues",
+    description="Retrieve all available issues of a specific periodical by searching configured providers.",
     responses={
         200: {
-            "description": "Editions retrieved successfully",
+            "description": "Issues retrieved successfully",
             "content": {
                 "application/json": {
                     "example": {
                         "periodical": "Wired",
-                        "editions": [{"title": "Wired - Jan 2024", "url": "http://..."}],
+                        "issues": [{"title": "Wired - Jan 2024", "url": "http://..."}],
                         "total": 1,
                     }
                 }
@@ -296,10 +296,10 @@ async def search_periodical_providers(
         },
     },
 )
-@handle_api_errors("Get periodical editions", logger)
-async def get_periodical_editions(magazine_title: str) -> Dict[str, Any]:
+@handle_api_errors("Get periodical issues", logger)
+async def get_periodical_issues(magazine_title: str) -> Dict[str, Any]:
     """
-    Get all editions/publications of a specific periodical by searching providers.
+    Get all available issues of a specific periodical by searching providers.
 
     Args:
         magazine_title: Periodical title (e.g., 'PC Gamer')
@@ -316,7 +316,7 @@ async def get_periodical_editions(magazine_title: str) -> Dict[str, Any]:
         logger.error(ErrorMessages.SEARCH_PROVIDERS_UNAVAILABLE)
         raise HTTPException(status_code=503, detail=ErrorMessages.SEARCH_PROVIDERS_UNAVAILABLE)
 
-    # Search across search providers for specific editions
+    # Search across search providers for specific issues
     results = []
 
     for provider in search_providers:
@@ -329,4 +329,4 @@ async def get_periodical_editions(magazine_title: str) -> Dict[str, Any]:
     if results:
         return success_response(None, results=results)
     else:
-        raise HTTPException(status_code=404, detail=f"Could not find editions for {magazine_title}")
+        raise HTTPException(status_code=404, detail=f"Could not find issues for {magazine_title}")

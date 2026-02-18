@@ -2,6 +2,8 @@
 Test suite for search router endpoints
 """
 
+# pylint: disable=redefined-outer-name  # pytest fixture injection pattern
+
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -50,7 +52,7 @@ def mock_providers():
 @pytest.fixture
 def test_app(test_db, mock_providers):
     """Create test FastAPI app with search router"""
-    engine, session_factory = test_db
+    _engine, session_factory = test_db
     mock_title_matcher = MagicMock()
     search.set_dependencies(
         search_providers=mock_providers,
@@ -136,19 +138,19 @@ class TestSearchPeriodicalProviders:
 
 
 class TestGetPeriodicalEditions:
-    """Test GET /api/periodicals/editions/{magazine_title} endpoint"""
+    """Test GET /api/periodicals/issues/{magazine_title} endpoint"""
 
-    def test_get_periodical_editions_success(self, test_client):
-        """Test getting periodical editions"""
-        response = test_client.get("/api/periodicals/editions/National+Geographic")
+    def test_get_periodical_issues_success(self, test_client):
+        """Test getting periodical issues"""
+        response = test_client.get("/api/periodicals/issues/National+Geographic")
         assert response.status_code == 200
         data = response.json()
         # API returns 'results' not 'editions'
         assert "results" in data
         assert isinstance(data["results"], list)
 
-    def test_get_periodical_editions_missing_title(self, test_client):
-        """Test getting editions without title parameter"""
+    def test_get_periodical_issues_missing_title(self, test_client):
+        """Test getting issues without title parameter"""
         # GET endpoint requires title in path, so 404 is expected
-        response = test_client.get("/api/periodicals/editions/")
+        response = test_client.get("/api/periodicals/issues/")
         assert response.status_code in [404, 422]

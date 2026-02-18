@@ -50,7 +50,7 @@ def get_month_year_pattern(languages: list[str] | None = None) -> str:
         >>> # Returns pattern matching "January 2024", "Enero 2024", etc.
     """
     month_pattern = get_month_regex_pattern(languages)
-    return rf"\b({month_pattern})[\s]+(\d{{4}})\b"
+    return rf"\b({month_pattern})[\s.-]+(\d{{4}})\b"
 
 
 def get_abbr_month_year_pattern(languages: list[str] | None = None) -> str:

@@ -18,6 +18,7 @@ from core.constants.files import (
     VOLUME_PREFIX,
     ISSUE_PREFIX,
     ORGANIZED_FILENAME_SEPARATOR,
+    SUPPORTED_FILE_EXTENSIONS,
 )
 from core.constants.language import DEFAULT_LANGUAGE
 from core.constants.title import MAX_COUNTRY_REMOVAL_PASSES
@@ -453,6 +454,14 @@ class FileOrganizer(ReorganizationMixin, CleanupMixin):
             # Preserve file extension (PDF, EPUB, CBZ, or CBR)
             # Strip trailing quotes from extension (for files like 'Magazine.pdf')
             extension = pdf_path.suffix.lower().rstrip("'")
+
+            # Validate file extension is supported
+            if extension not in SUPPORTED_FILE_EXTENSIONS:
+                logger.warning(
+                    f"Skipping file with unsupported extension '{extension}': {pdf_path}. "
+                    f"Supported extensions: {', '.join(sorted(SUPPORTED_FILE_EXTENSIONS))}"
+                )
+                return None
 
             # Build filename with preserved extension
             filename = self._build_filename(

@@ -8,10 +8,10 @@ from typing import Dict, List, Tuple, Optional
 from fuzzywuzzy import fuzz
 
 from core.constants.country import ISO_COUNTRIES
-from core.constants.edition import (
+from core.constants.periodical import (
     AMBIGUOUS_ISO_CODES,
-    REGIONAL_EDITION_INDICATORS,
-    EDITION_VARIANT_INDICATORS,
+    REGIONAL_PERIODICAL_INDICATORS,
+    AUDIENCE_PERIODICAL_INDICATORS,
 )
 from core.constants.title import (
     DEFAULT_FUZZY_MATCH_THRESHOLD,
@@ -21,7 +21,7 @@ from core.constants.title import (
     MAX_DATE_PENALTY,
     MIN_BASE_TITLE_WORDS,
     MULTI_WORD_REGIONAL_INDICATORS,
-    MULTI_WORD_EDITION_VARIANTS,
+    MULTI_WORD_PERIODICAL_VARIANTS,
     COMMON_PERIODICAL_WORDS,
     COUNTRY_CODE_NORMALIZATIONS,
     KNOWN_PERIODICAL_TITLES,
@@ -503,46 +503,46 @@ class TitleMatcher:
 
         return volume, issue
 
-    def extract_edition_variant(self, title: str) -> Optional[str]:
+    def extract_periodical_variant(self, title: str) -> Optional[str]:
         """
-        Extract edition variant indicator from title.
+        Extract periodical variant indicator from title.
 
         This identifies if the title contains a variant indicator that distinguishes it
-        as a DIFFERENT publication (not just a special issue).
+        as a DIFFERENT periodical (not just a special issue).
 
         This includes:
-        - Age-specific editions: "Kids", "Little Kids", "Junior", "Teen"
-        - Professional editions: "Pro", "Professional", "Business"
-        - Regional editions: "US", "UK", "DE", "France", "Germany"
-        - Format editions: "Digital", "Online", "Print"
+        - Age-specific periodicals: "Kids", "Little Kids", "Junior", "Teen"
+        - Professional periodicals: "Pro", "Professional", "Business"
+        - Regional periodicals: "US", "UK", "DE", "France", "Germany"
+        - Format periodicals: "Digital", "Online", "Print"
 
-        IMPORTANT: This is NOT for special editions/issues of the same publication!
-        - "National Geographic Little Kids" vs "National Geographic" → DIFFERENT publications
-        - "PC Gamer US" vs "PC Gamer UK" → DIFFERENT publications
-        - "Time - Person of the Year" vs "Time" → SAME publication (special issue)
+        IMPORTANT: This is NOT for special issues of the same publication!
+        - "National Geographic Little Kids" vs "National Geographic" → DIFFERENT periodicals
+        - "PC Gamer US" vs "PC Gamer UK" → DIFFERENT periodicals
+        - "Time - Person of the Year" vs "Time" → SAME periodical (special issue)
 
         Args:
             title: Title string to parse
 
         Returns:
-            Edition variant string if found, None otherwise
+            Periodical variant string if found, None otherwise
 
         Examples:
-            >>> _extract_edition_variant("National Geographic Little Kids")
+            >>> _extract_periodical_variant("National Geographic Little Kids")
             "little kids"
-            >>> _extract_edition_variant("PC Gamer US")
+            >>> _extract_periodical_variant("PC Gamer US")
             "us"
-            >>> _extract_edition_variant("PC Gamer UK")
+            >>> _extract_periodical_variant("PC Gamer UK")
             "uk"
-            >>> _extract_edition_variant("Forbes Professional")
+            >>> _extract_periodical_variant("Forbes Professional")
             "professional"
-            >>> _extract_edition_variant("Time Person Of The Year")
-            None  # "Person Of The Year" is a special issue, not an edition variant
+            >>> _extract_periodical_variant("Time Person Of The Year")
+            None  # "Person Of The Year" is a special issue, not a periodical variant
         """
         title_lower = title.lower()
 
         # Check for multi-word variants first (e.g., "little kids", "young adult")
-        for variant in MULTI_WORD_EDITION_VARIANTS:
+        for variant in MULTI_WORD_PERIODICAL_VARIANTS:
             if variant in title_lower:
                 return variant
 
@@ -552,7 +552,7 @@ class TitleMatcher:
             # Clean punctuation from word
             clean_word = word.strip(".,;:!?()[]{}\"'")
 
-            # Skip if this looks like "No 123" or "Vol 5" (issue/volume numbers, not editions)
+            # Skip if this looks like "No 123" or "Vol 5" (issue/volume numbers, not periodical variants)
             if i + 1 < len(words):
                 next_word = words[i + 1].strip(".,;:!?()[]{}\"'")
                 if clean_word in ["no", "vol", "volume", "issue", "v"] and next_word.isdigit():
@@ -565,14 +565,14 @@ class TitleMatcher:
                 return clean_word
 
             # Check if it's a regional name (france, germany, etc.)
-            if clean_word in REGIONAL_EDITION_INDICATORS:
+            if clean_word in REGIONAL_PERIODICAL_INDICATORS:
                 return clean_word
 
         # Check for single-word edition variants
         for word in words:
             # Clean punctuation from word
             clean_word = word.strip(".,;:!?()[]{}\"'")
-            if clean_word in EDITION_VARIANT_INDICATORS:
+            if clean_word in AUDIENCE_PERIODICAL_INDICATORS:
                 return clean_word
 
         return None
@@ -615,21 +615,23 @@ class TitleMatcher:
         if not is_title_match:
             return (False, 0)
 
-        # Step 1.5: Check for edition variant mismatch
-        # If one title has an edition variant and the other doesn't (or has a different one),
-        # they're different publications despite similar base names
-        provider_edition = self.extract_edition_variant(provider_title)
-        library_edition = self.extract_edition_variant(library_title)
+        # Step 1.5: Check for periodical variant mismatch
+        # If one title has a periodical variant and the other doesn't (or has a different one),
+        # they're different periodicals despite similar base names
+        provider_variant = self.extract_periodical_variant(provider_title)
+        library_variant = self.extract_periodical_variant(library_title)
 
-        # If both have edition variants, they must match
-        if provider_edition is not None and library_edition is not None:
-            if provider_edition != library_edition:
-                logger.debug(f"Edition variant mismatch: provider '{provider_edition}' vs library '{library_edition}'")
+        # If both have periodical variants, they must match
+        if provider_variant is not None and library_variant is not None:
+            if provider_variant != library_variant:
+                logger.debug(
+                    f"Periodical variant mismatch: provider '{provider_variant}' vs library '{library_variant}'"
+                )
                 return (False, 0)
-        # If only one has an edition variant, they're different publications
-        elif provider_edition is not None or library_edition is not None:
+        # If only one has a periodical variant, they're different periodicals
+        elif provider_variant is not None or library_variant is not None:
             logger.debug(
-                f"Edition variant presence mismatch: provider '{provider_edition}' vs library '{library_edition}'"
+                f"Periodical variant presence mismatch: provider '{provider_variant}' vs library '{library_variant}'"
             )
             return (False, 0)
 

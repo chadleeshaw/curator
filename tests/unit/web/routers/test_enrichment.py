@@ -25,7 +25,7 @@ class TestDetectCollection:
         assert _detect_collection("Best.Cars.Magazine.Collection") is True
 
     def test_magazine_pack(self):
-        assert _detect_collection("Playboy Magazine Pack") is True
+        assert _detect_collection("Wired Magazine Pack") is True
 
     def test_magazine_bundle(self):
         assert _detect_collection("Wired Magazine Bundle") is True

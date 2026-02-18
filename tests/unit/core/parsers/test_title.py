@@ -99,7 +99,7 @@ def test_matches_library_item_fuzzy_title():
     )
 
     # Note: "United States Edition" contains "united" and "states" which are in
-    # REGIONAL_EDITION_INDICATORS, so this will be detected as having a variant.
+    # REGIONAL_PERIODICAL_INDICATORS, so this will be detected as having a variant.
     # The "US" in library_title is also a regional indicator.
     # These are different regional indicators, so they won't match.
     assert is_match is False
@@ -236,45 +236,45 @@ def test_extract_issue_volume_from_title():
         assert issue == expected_issue, f"Issue mismatch for '{title}': expected {expected_issue}, got {issue}"
 
 
-def test_extract_edition_variant_kids():
+def test_extract_periodical_variant_kids():
     """Should extract 'kids' edition variant"""
     matcher = TitleMatcher(threshold=80)
-    variant = matcher.extract_edition_variant("National Geographic Kids")
+    variant = matcher.extract_periodical_variant("National Geographic Kids")
     assert variant == "kids"
 
 
-def test_extract_edition_variant_little_kids():
+def test_extract_periodical_variant_little_kids():
     """Should extract 'little kids' multi-word variant"""
     matcher = TitleMatcher(threshold=80)
-    variant = matcher.extract_edition_variant("National Geographic Little Kids")
+    variant = matcher.extract_periodical_variant("National Geographic Little Kids")
     assert variant == "little kids"
 
 
-def test_extract_edition_variant_professional():
+def test_extract_periodical_variant_professional():
     """Should extract 'professional' edition variant"""
     matcher = TitleMatcher(threshold=80)
-    variant = matcher.extract_edition_variant("Forbes Professional")
+    variant = matcher.extract_periodical_variant("Forbes Professional")
     assert variant == "professional"
 
 
-def test_extract_edition_variant_regional_us():
+def test_extract_periodical_variant_regional_us():
     """Should extract 'us' regional edition variant"""
     matcher = TitleMatcher(threshold=80)
-    variant = matcher.extract_edition_variant("PC Gamer US")
+    variant = matcher.extract_periodical_variant("PC Gamer US")
     assert variant == "us"
 
 
-def test_extract_edition_variant_regional_uk():
+def test_extract_periodical_variant_regional_uk():
     """Should extract 'uk' regional edition variant"""
     matcher = TitleMatcher(threshold=80)
-    variant = matcher.extract_edition_variant("PC Gamer UK")
+    variant = matcher.extract_periodical_variant("PC Gamer UK")
     assert variant == "uk"
 
 
-def test_extract_edition_variant_none():
+def test_extract_periodical_variant_none():
     """Should return None when no edition variant present"""
     matcher = TitleMatcher(threshold=80)
-    variant = matcher.extract_edition_variant("National Geographic")
+    variant = matcher.extract_periodical_variant("National Geographic")
     assert variant is None
 
 
@@ -366,7 +366,7 @@ def test_special_edition_not_detected_as_variant():
     ]
 
     for title in test_cases:
-        variant = matcher.extract_edition_variant(title)
+        variant = matcher.extract_periodical_variant(title)
         assert variant is None, f"'{title}' should not have edition variant, got: {variant}"
 
 
@@ -392,7 +392,7 @@ def test_context_aware_no_detection():
     matcher = TitleMatcher(threshold=80)
 
     # "No" followed by number is issue numbering, not country code
-    variant = matcher.extract_edition_variant("Time Magazine Vol 5 No 10")
+    variant = matcher.extract_periodical_variant("Time Magazine Vol 5 No 10")
     assert variant is None, f"'No 10' should not detect 'no' as Norway, got: {variant}"
 
 
@@ -401,5 +401,5 @@ def test_format_indicator_not_detected():
     matcher = TitleMatcher(threshold=80)
 
     # "Digital" at end is format metadata, not edition variant
-    variant = matcher.extract_edition_variant("Wired Magazine 2024 Digital")
+    variant = matcher.extract_periodical_variant("Wired Magazine 2024 Digital")
     assert variant is None, f"'Digital' at end should not be variant, got: {variant}"

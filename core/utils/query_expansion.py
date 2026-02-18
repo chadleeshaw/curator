@@ -9,10 +9,10 @@ vs "Kids Travel", "PC Gamer US" vs "PC Gamer United States").
 import logging
 from typing import List, Set
 
-from core.constants.edition import (
-    EDITION_VARIANT_INDICATORS,
-    NORTH_AMERICAN_EDITION_INDICATORS,
-    OTHER_REGIONAL_EDITION_INDICATORS,
+from core.constants.periodical import (
+    AUDIENCE_PERIODICAL_INDICATORS,
+    NORTH_AMERICAN_PERIODICAL_INDICATORS,
+    OTHER_REGIONAL_PERIODICAL_INDICATORS,
 )
 from core.constants.title import COMMON_PERIODICAL_WORDS
 
@@ -29,7 +29,7 @@ def _contains_protected_country(words: List[str]) -> bool:
     Returns:
         True if any word is a protected country indicator
     """
-    return any(w.lower() in OTHER_REGIONAL_EDITION_INDICATORS for w in words)
+    return any(w.lower() in OTHER_REGIONAL_PERIODICAL_INDICATORS for w in words)
 
 
 def _is_too_generic(words: List[str]) -> bool:
@@ -53,8 +53,8 @@ def _is_too_generic(words: List[str]) -> bool:
     for word in all_words_lower:
         if (
             word not in COMMON_PERIODICAL_WORDS
-            and word not in OTHER_REGIONAL_EDITION_INDICATORS
-            and word not in NORTH_AMERICAN_EDITION_INDICATORS
+            and word not in OTHER_REGIONAL_PERIODICAL_INDICATORS
+            and word not in NORTH_AMERICAN_PERIODICAL_INDICATORS
         ):
             # Found a meaningful word - not too generic
             return False
@@ -142,12 +142,12 @@ def generate_query_variants(query: str, max_variants: int = 5) -> List[str]:
     # Also generate variant without North American regional indicators
     # International editions (Russia, Germany, France, etc.) preserve their country
     # because it's part of their identity
-    regional_filtered = [w for w in words if w.lower() not in NORTH_AMERICAN_EDITION_INDICATORS]
+    regional_filtered = [w for w in words if w.lower() not in NORTH_AMERICAN_PERIODICAL_INDICATORS]
     if regional_filtered and len(regional_filtered) != len(words):
         variants.add(" ".join(regional_filtered))
 
     # Priority 4: Remove edition variants
-    edition_filtered = [w for w in words if w.lower() not in EDITION_VARIANT_INDICATORS]
+    edition_filtered = [w for w in words if w.lower() not in AUDIENCE_PERIODICAL_INDICATORS]
     if edition_filtered and len(edition_filtered) != len(words):
         variants.add(" ".join(edition_filtered))
 
@@ -202,7 +202,7 @@ def generate_query_variants(query: str, max_variants: int = 5) -> List[str]:
                 variants.add(abbreviated)
 
                 # Also create variant with initials only (no North American regional indicators)
-                remaining_words = [w for w in words[1:] if w.lower() not in NORTH_AMERICAN_EDITION_INDICATORS]
+                remaining_words = [w for w in words[1:] if w.lower() not in NORTH_AMERICAN_PERIODICAL_INDICATORS]
                 if remaining_words:
                     variants.add(f"{initials} {' '.join(remaining_words)}")
                 else:
@@ -222,8 +222,8 @@ def generate_query_variants(query: str, max_variants: int = 5) -> List[str]:
 
         # Check if this is a variant without regional indicators
         # (original had US/USA but this variant doesn't)
-        had_regional = any(w.lower() in NORTH_AMERICAN_EDITION_INDICATORS for w in words)
-        has_regional = any(w.lower() in NORTH_AMERICAN_EDITION_INDICATORS for w in v.split())
+        had_regional = any(w.lower() in NORTH_AMERICAN_PERIODICAL_INDICATORS for w in words)
+        has_regional = any(w.lower() in NORTH_AMERICAN_PERIODICAL_INDICATORS for w in v.split())
         is_regional_removed = 1 if had_regional and not has_regional else 0
 
         return (-is_original, -is_last_words, -is_regional_removed, -len(v))

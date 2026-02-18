@@ -191,20 +191,20 @@ class TestSyncIssueDateFromDerived:
         assert result == datetime(2024, 1, 1, tzinfo=UTC)
 
     def test_no_year(self):
-        """No year → None"""
+        """No year → sentinel date (1900-01-01)"""
         derived = {
             "month": {"value": 3, "source": "file_scan", "confidence": 0.85},
         }
         result = sync_issue_date_from_derived(derived)
-        assert result is None
+        assert result == datetime(1900, 1, 1, tzinfo=UTC)
 
     def test_none_derived(self):
-        """None derived_metadata → None"""
-        assert sync_issue_date_from_derived(None) is None
+        """None derived_metadata → sentinel date"""
+        assert sync_issue_date_from_derived(None) == datetime(1900, 1, 1, tzinfo=UTC)
 
     def test_empty_derived(self):
-        """Empty derived_metadata → None"""
-        assert sync_issue_date_from_derived({}) is None
+        """Empty derived_metadata → sentinel date"""
+        assert sync_issue_date_from_derived({}) == datetime(1900, 1, 1, tzinfo=UTC)
 
     def test_string_month_abbreviated(self):
         """Abbreviated string month names work in sync"""

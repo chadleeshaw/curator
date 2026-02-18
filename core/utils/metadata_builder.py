@@ -6,6 +6,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Dict, Any, Optional
 from core.constants.ocr import OCR_MAX_VOLUME
+from core.constants.date import UNKNOWN_ISSUE_DATE_YEAR
 from core.parsers.models import ParsedMetadata
 
 logger = logging.getLogger(__name__)
@@ -326,7 +327,7 @@ def build_extra_metadata(
 
 def sync_issue_date_from_derived(
     derived_metadata: Optional[Dict[str, Any]],
-) -> Optional[datetime]:
+) -> datetime:
     """
     Calculate issue_date from derived_metadata.
 
@@ -337,12 +338,12 @@ def sync_issue_date_from_derived(
         derived_metadata: Derived metadata with year/month from best source
 
     Returns:
-        datetime object for issue_date, or None if no date info available
+        datetime object for issue_date, or sentinel date (1900-01-01) if no date info available
 
     Logic:
         - If year + month available: datetime(year, month, 1)
         - If only year available: datetime(year, 1, 1)
-        - If no year: None (periodical uses volume/issue for identification)
+        - If no year: datetime(UNKNOWN_ISSUE_DATE_YEAR, 1, 1) - sentinel for volume/issue-only periodicals
 
     Example:
         >>> derived = {
@@ -353,16 +354,16 @@ def sync_issue_date_from_derived(
         datetime(2024, 3, 1)
     """
     if not derived_metadata:
-        return None
+        return datetime(UNKNOWN_ISSUE_DATE_YEAR, 1, 1, tzinfo=UTC)
 
     # Extract year from derived metadata
     year_data = derived_metadata.get("year")
     if not year_data:
-        return None
+        return datetime(UNKNOWN_ISSUE_DATE_YEAR, 1, 1, tzinfo=UTC)
 
     year = year_data.get("value")
     if not year or not isinstance(year, int):
-        return None
+        return datetime(UNKNOWN_ISSUE_DATE_YEAR, 1, 1, tzinfo=UTC)
 
     # Extract month from derived metadata
     month_data = derived_metadata.get("month")
@@ -387,8 +388,8 @@ def sync_issue_date_from_derived(
             # Only year available - default to January
             return datetime(year, 1, 1, tzinfo=UTC)
     except (ValueError, OverflowError):
-        # Invalid date values
-        return None
+        # Invalid date values - return sentinel
+        return datetime(UNKNOWN_ISSUE_DATE_YEAR, 1, 1, tzinfo=UTC)
 
 
 def get_derived_field(periodical, field: str, fallback_extra: bool = True) -> Any:

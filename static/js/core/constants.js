@@ -351,3 +351,11 @@ export const DEFAULTS = {
   ENABLE_TEXT_SCAN: true,
   ENABLE_OCR: true,
 };
+
+// ============================================================================
+// Date Constants
+// ============================================================================
+
+export const DATE_CONSTANTS = {
+  UNKNOWN_ISSUE_DATE_YEAR: 1900, // Sentinel year for periodicals without detectable dates
+};

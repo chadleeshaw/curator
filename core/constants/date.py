@@ -227,6 +227,13 @@ MAX_VALID_YEAR = 2100
 DUPLICATE_DATE_THRESHOLD_DAYS = 5
 """Days threshold for considering publications as duplicates"""
 
+UNKNOWN_ISSUE_DATE_YEAR = 1900
+"""
+Sentinel year for periodicals without detectable publication dates.
+Used when only volume/issue numbers are available.
+Allows proper sorting by volume/issue instead of mixing with dated periodicals.
+"""
+
 
 # ==============================================================================
 # Multilingual Month Mappings
