@@ -8,7 +8,7 @@ Tests for medium severity architecture fixes:
 import sys
 import threading
 import time
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
@@ -17,6 +17,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+from core.parsers.date import utc_now
 
 from core.interfaces import DownloadClient
 from models.cache import CacheBase, NzbCache, RssFeedEntry
@@ -106,8 +107,8 @@ class TestSharedCacheEngine:
                 title="Test Entry",
                 url="http://example.com/test",
                 status="new",
-                first_seen=datetime.utcnow(),
-                last_seen=datetime.utcnow(),
+                first_seen=utc_now(),
+                last_seen=utc_now(),
             )
             session.add(entry)
             session.commit()
@@ -165,7 +166,7 @@ class TestSearchResultCleanup:
                 query="test",
                 title="Old Result",
                 url="http://example.com/old",
-                created_at=datetime.utcnow() - timedelta(days=60),
+                created_at=utc_now() - timedelta(days=60),
             )
             # Insert a recent search result (5 days ago)
             recent_result = SearchResult(
@@ -173,13 +174,13 @@ class TestSearchResultCleanup:
                 query="test",
                 title="Recent Result",
                 url="http://example.com/recent",
-                created_at=datetime.utcnow() - timedelta(days=5),
+                created_at=utc_now() - timedelta(days=5),
             )
             session.add_all([old_result, recent_result])
             session.commit()
 
             # Apply cleanup with 30-day retention
-            cutoff = datetime.utcnow() - timedelta(days=30)
+            cutoff = utc_now() - timedelta(days=30)
             deleted = (
                 session.query(SearchResult).filter(SearchResult.created_at < cutoff).delete(synchronize_session=False)
             )
