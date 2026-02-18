@@ -121,7 +121,7 @@ class DownloadManager:
     def _get_client_for_provider(self, provider: str, url: Optional[str] = None) -> DownloadClient:
         """
         Get the appropriate download client for a provider.
-        
+
         Uses URL-based fallback detection if provider routing fails.
         This handles legacy data where provider field may be incorrect.
 
@@ -147,9 +147,7 @@ class DownloadManager:
                     )
                     client_type = "internet_archive"
                 else:
-                    logger.warning(
-                        f"Archive.org URL detected but no IA client configured: {url}"
-                    )
+                    logger.warning(f"Archive.org URL detected but no IA client configured: {url}")
 
         # Get the client, falling back to default if not available
         client = self.download_clients.get(client_type)
