@@ -6,7 +6,7 @@ For integration tests with real execution, see tests/integration/schedulers/
 """
 
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -81,8 +81,6 @@ class TestSchedulePeriodic:
 
     def test_run_immediately_sets_next_run_to_now(self):
         """Test run_immediately flag sets next_run to current time."""
-        from datetime import datetime, timedelta
-
         scheduler = TaskScheduler()
         task_func = AsyncMock()
 
@@ -96,8 +94,6 @@ class TestSchedulePeriodic:
 
     def test_run_not_immediately_sets_next_run_to_future(self):
         """Test run_immediately=False sets next_run to future time."""
-        from datetime import datetime, timedelta
-
         scheduler = TaskScheduler()
         task_func = AsyncMock()
 
