@@ -173,7 +173,7 @@ class IssueDiscoveryService:
 
                 # Generate fuzzy match group for deduplication
                 # This normalizes the title to group similar results together
-                fuzzy_group = get_fuzzy_group_id(parsed.cleaned_title)
+                fuzzy_group = get_fuzzy_group_id(parsed.original_title)
 
                 # Check if we've already discovered this issue
                 existing = (

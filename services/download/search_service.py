@@ -37,6 +37,19 @@ class SearchService:
         self.parser = Parser()
         self.title_matcher = TitleMatcher(threshold=fuzzy_threshold)
 
+    @property
+    def all_providers_rate_limited(self) -> bool:
+        """
+        Check if all search providers are currently rate limited.
+
+        Returns:
+            True if all providers are rate limited (or no providers), False if at least one is available
+        """
+        if not self.search_providers:
+            return False
+
+        return all(provider.is_rate_limited for provider in self.search_providers)
+
     def search_periodical_issues(
         self,
         periodical_title: str,
