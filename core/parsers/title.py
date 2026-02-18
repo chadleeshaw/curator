@@ -8,10 +8,10 @@ from typing import Dict, List, Tuple, Optional
 from fuzzywuzzy import fuzz
 
 from core.constants.country import ISO_COUNTRIES
-from core.constants.edition import (
+from core.constants.periodical import (
     AMBIGUOUS_ISO_CODES,
-    REGIONAL_EDITION_INDICATORS,
-    EDITION_VARIANT_INDICATORS,
+    REGIONAL_PERIODICAL_INDICATORS,
+    AUDIENCE_PERIODICAL_INDICATORS,
 )
 from core.constants.title import (
     DEFAULT_FUZZY_MATCH_THRESHOLD,
@@ -21,7 +21,7 @@ from core.constants.title import (
     MAX_DATE_PENALTY,
     MIN_BASE_TITLE_WORDS,
     MULTI_WORD_REGIONAL_INDICATORS,
-    MULTI_WORD_EDITION_VARIANTS,
+    MULTI_WORD_PERIODICAL_VARIANTS,
     COMMON_PERIODICAL_WORDS,
     COUNTRY_CODE_NORMALIZATIONS,
     KNOWN_PERIODICAL_TITLES,
@@ -542,7 +542,7 @@ class TitleMatcher:
         title_lower = title.lower()
 
         # Check for multi-word variants first (e.g., "little kids", "young adult")
-        for variant in MULTI_WORD_EDITION_VARIANTS:
+        for variant in MULTI_WORD_PERIODICAL_VARIANTS:
             if variant in title_lower:
                 return variant
 
@@ -565,14 +565,14 @@ class TitleMatcher:
                 return clean_word
 
             # Check if it's a regional name (france, germany, etc.)
-            if clean_word in REGIONAL_EDITION_INDICATORS:
+            if clean_word in REGIONAL_PERIODICAL_INDICATORS:
                 return clean_word
 
         # Check for single-word edition variants
         for word in words:
             # Clean punctuation from word
             clean_word = word.strip(".,;:!?()[]{}\"'")
-            if clean_word in EDITION_VARIANT_INDICATORS:
+            if clean_word in AUDIENCE_PERIODICAL_INDICATORS:
                 return clean_word
 
         return None

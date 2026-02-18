@@ -99,7 +99,7 @@ def test_matches_library_item_fuzzy_title():
     )
 
     # Note: "United States Edition" contains "united" and "states" which are in
-    # REGIONAL_EDITION_INDICATORS, so this will be detected as having a variant.
+    # REGIONAL_PERIODICAL_INDICATORS, so this will be detected as having a variant.
     # The "US" in library_title is also a regional indicator.
     # These are different regional indicators, so they won't match.
     assert is_match is False

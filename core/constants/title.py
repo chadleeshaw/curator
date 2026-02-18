@@ -51,14 +51,14 @@ MULTI_WORD_REGIONAL_INDICATORS = {
 """Two-word regional indicators that should be treated as part of the base title"""
 
 # ==============================================================================
-# Multi-word Edition Variants
+# Multi-word Periodical Variants
 # ==============================================================================
 
-MULTI_WORD_EDITION_VARIANTS = {
+MULTI_WORD_PERIODICAL_VARIANTS = {
     "little kids",
     "young adult",
 }
-"""Multi-word edition variant indicators that distinguish different publications"""
+"""Multi-word periodical variant indicators that distinguish different publications"""
 
 # ==============================================================================
 # Collection Descriptor Words

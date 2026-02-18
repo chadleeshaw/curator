@@ -10,7 +10,7 @@ import re
 from typing import Any, Dict, List, Optional
 
 from core.constants.country import LANGUAGE_TO_COUNTRY
-from core.constants.edition import EDITION_VARIANT_INDICATORS
+from core.constants.periodical import AUDIENCE_PERIODICAL_INDICATORS
 from core.constants.language import LANGUAGE_KEYWORDS
 from core.parsers.country import detect_country
 from core.utils.ia_filtering import filter_ia_result
@@ -57,9 +57,9 @@ def filter_periodical_variants(results: List[Dict[str, Any]], query: str) -> Lis
 
     # Determine if the query's variant is regional (country/geography-based: "uk", "us", "france", etc.)
     # vs. non-regional (audience/specialization-based: "kids", "pro", "expert", etc.).
-    # Regional variants: any variant NOT in EDITION_VARIANT_INDICATORS
-    # Non-regional variants: "kids", "pro", "expert", "traveller", etc. (in EDITION_VARIANT_INDICATORS)
-    query_is_regional = query_variant is not None and query_variant not in EDITION_VARIANT_INDICATORS
+    # Regional variants: any variant NOT in AUDIENCE_PERIODICAL_INDICATORS
+    # Non-regional variants: "kids", "pro", "expert", "traveller", etc. (in AUDIENCE_PERIODICAL_INDICATORS)
+    query_is_regional = query_variant is not None and query_variant not in AUDIENCE_PERIODICAL_INDICATORS
 
     for result in results:
         raw_title = result.get("title", "")

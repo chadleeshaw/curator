@@ -1,5 +1,5 @@
 """
-Edition and variant constants for distinguishing different publication types
+Periodical variant constants for distinguishing different publication types
 """
 
 # ==============================================================================
@@ -22,15 +22,15 @@ AMBIGUOUS_ISO_CODES = {
 """
 ISO country codes that are also common English words.
 
-These are skipped during edition variant detection to avoid false positives
+These are skipped during periodical variant detection to avoid false positives
 like "IT Professional" being classified as an Italian edition.
 """
 
 # ==============================================================================
-# Regional Edition Indicators
+# Regional Periodical Indicators
 # ==============================================================================
 
-NORTH_AMERICAN_EDITION_INDICATORS = {
+NORTH_AMERICAN_PERIODICAL_INDICATORS = {
     # US-specific indicators - these can be safely removed from queries
     # because US magazines typically don't include the country in their
     # official name (e.g., "Time" not "Time US")
@@ -38,9 +38,9 @@ NORTH_AMERICAN_EDITION_INDICATORS = {
     "us",
     "america",
 }
-"""US edition indicators that can be removed during query expansion"""
+"""US periodical indicators that can be removed during query expansion"""
 
-OTHER_REGIONAL_EDITION_INDICATORS = {
+OTHER_REGIONAL_PERIODICAL_INDICATORS = {
     # Directions
     "africa",
     "south",
@@ -124,23 +124,23 @@ OTHER_REGIONAL_EDITION_INDICATORS = {
     "israel",
 }
 """
-Regional/country names for non-North American editions.
+Regional/country names for non-North American periodicals.
 
-These should be PRESERVED during query expansion because international editions
+These should be PRESERVED during query expansion because international periodicals
 actually include the country name as part of their identity (e.g., "Vogue France"
 is different from "Vogue US").
 """
 
-REGIONAL_EDITION_INDICATORS = NORTH_AMERICAN_EDITION_INDICATORS | OTHER_REGIONAL_EDITION_INDICATORS
-"""Combined set of all regional/country edition indicators (for backward compatibility)"""
+REGIONAL_PERIODICAL_INDICATORS = NORTH_AMERICAN_PERIODICAL_INDICATORS | OTHER_REGIONAL_PERIODICAL_INDICATORS
+"""Combined set of all regional/country periodical indicators"""
 
 
 # ==============================================================================
-# Edition Variant Indicators
+# Audience Periodical Indicators
 # ==============================================================================
 
-EDITION_VARIANT_INDICATORS = {
-    # Age-specific editions (DIFFERENT publications)
+AUDIENCE_PERIODICAL_INDICATORS = {
+    # Age-specific periodicals (DIFFERENT publications)
     "kids",
     "little kids",
     "junior",
@@ -148,7 +148,7 @@ EDITION_VARIANT_INDICATORS = {
     "teen",
     "young adult",
     "youth",
-    # Professional/Specialized editions (DIFFERENT publications)
+    # Professional/Specialized periodicals (DIFFERENT publications)
     "professional",
     "pro",
     # NOTE: "business" removed - too generic, often appears in publication names
@@ -164,15 +164,15 @@ EDITION_VARIANT_INDICATORS = {
     "explorer",
 }
 """
-Edition variant indicators that distinguish DIFFERENT publications with similar base names.
+Audience periodical indicators that distinguish DIFFERENT publications with similar base names.
 
-NOTE: These are NOT special editions (which are special issues of the same publication).
+NOTE: These are NOT special issues (which are special issues of the same periodical).
 Format indicators like "digital", "online", "print" are excluded as they're usually metadata,
 not different publications.
 
 Examples:
-  - "National Geographic Little Kids" ≠ "National Geographic" (DIFFERENT publications)
-  - "PC Gamer Pro" ≠ "PC Gamer" (DIFFERENT publications)
-  - "Time - Person of the Year" = "Time" (SAME publication, special issue)
-  - "Magazine Digital" = "Magazine" (SAME publication, format metadata)
+  - "National Geographic Little Kids" ≠ "National Geographic" (DIFFERENT periodicals)
+  - "PC Gamer Pro" ≠ "PC Gamer" (DIFFERENT periodicals)
+  - "Time - Person of the Year" = "Time" (SAME periodical, special issue)
+  - "Magazine Digital" = "Magazine" (SAME periodical, format metadata)
 """

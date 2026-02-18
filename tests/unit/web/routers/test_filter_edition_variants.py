@@ -18,9 +18,9 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 
 # Import only lightweight constants — no PIL/fitz/database deps
-from core.constants.edition import AMBIGUOUS_ISO_CODES, EDITION_VARIANT_INDICATORS, REGIONAL_EDITION_INDICATORS
+from core.constants.periodical import AMBIGUOUS_ISO_CODES, AUDIENCE_PERIODICAL_INDICATORS, REGIONAL_PERIODICAL_INDICATORS
 from core.constants.country import ISO_COUNTRIES
-from core.constants.title import MULTI_WORD_EDITION_VARIANTS
+from core.constants.title import MULTI_WORD_PERIODICAL_VARIANTS
 
 
 def _extract_periodical_variant(title: str) -> Optional[str]:
@@ -32,7 +32,7 @@ def _extract_periodical_variant(title: str) -> Optional[str]:
     title_lower = title.lower()
 
     # Check multi-word variants first (e.g., "little kids", "young adult")
-    for variant in MULTI_WORD_EDITION_VARIANTS:
+    for variant in MULTI_WORD_PERIODICAL_VARIANTS:
         if variant in title_lower:
             return variant
 
@@ -50,12 +50,12 @@ def _extract_periodical_variant(title: str) -> Optional[str]:
         if clean_word_upper in ISO_COUNTRIES and clean_word_upper not in AMBIGUOUS_ISO_CODES:
             return clean_word
 
-        if clean_word in REGIONAL_EDITION_INDICATORS:
+        if clean_word in REGIONAL_PERIODICAL_INDICATORS:
             return clean_word
 
     for word in words:
         clean_word = word.strip(".,;:!?()[]{}\"'")
-        if clean_word in EDITION_VARIANT_INDICATORS:
+        if clean_word in AUDIENCE_PERIODICAL_INDICATORS:
             return clean_word
 
     return None

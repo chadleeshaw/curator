@@ -9,10 +9,10 @@ vs "Kids Travel", "PC Gamer US" vs "PC Gamer United States").
 import logging
 from typing import List, Set
 
-from core.constants.edition import (
-    EDITION_VARIANT_INDICATORS,
+from core.constants.periodical import (
+    AUDIENCE_PERIODICAL_INDICATORS,
     NORTH_AMERICAN_EDITION_INDICATORS,
-    OTHER_REGIONAL_EDITION_INDICATORS,
+    OTHER_REGIONAL_PERIODICAL_INDICATORS,
 )
 from core.constants.title import COMMON_PERIODICAL_WORDS
 
@@ -29,7 +29,7 @@ def _contains_protected_country(words: List[str]) -> bool:
     Returns:
         True if any word is a protected country indicator
     """
-    return any(w.lower() in OTHER_REGIONAL_EDITION_INDICATORS for w in words)
+    return any(w.lower() in OTHER_REGIONAL_PERIODICAL_INDICATORS for w in words)
 
 
 def _is_too_generic(words: List[str]) -> bool:
@@ -53,7 +53,7 @@ def _is_too_generic(words: List[str]) -> bool:
     for word in all_words_lower:
         if (
             word not in COMMON_PERIODICAL_WORDS
-            and word not in OTHER_REGIONAL_EDITION_INDICATORS
+            and word not in OTHER_REGIONAL_PERIODICAL_INDICATORS
             and word not in NORTH_AMERICAN_EDITION_INDICATORS
         ):
             # Found a meaningful word - not too generic
@@ -147,7 +147,7 @@ def generate_query_variants(query: str, max_variants: int = 5) -> List[str]:
         variants.add(" ".join(regional_filtered))
 
     # Priority 4: Remove edition variants
-    edition_filtered = [w for w in words if w.lower() not in EDITION_VARIANT_INDICATORS]
+    edition_filtered = [w for w in words if w.lower() not in AUDIENCE_PERIODICAL_INDICATORS]
     if edition_filtered and len(edition_filtered) != len(words):
         variants.add(" ".join(edition_filtered))
 
