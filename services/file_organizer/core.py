@@ -6,10 +6,10 @@ Handles both simple and pattern-based organization with metadata extraction.
 """
 
 import logging
+from datetime import datetime
 import os
 import re
 import shutil
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -21,7 +21,7 @@ from core.constants.files import (
 )
 from core.constants.language import DEFAULT_LANGUAGE
 from core.constants.title import MAX_COUNTRY_REMOVAL_PASSES
-from core.parsers import sanitize_filename, detect_country
+from core.parsers import sanitize_filename, detect_country, utc_now
 from services.importer.matcher import TrackingMatcher
 from services.cover_extractor import CoverExtractor
 
@@ -376,7 +376,7 @@ class FileOrganizer(ReorganizationMixin, CleanupMixin):
         target_path = target_dir / filename
 
         if target_path.exists():
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = utc_now().strftime("%Y%m%d_%H%M%S")
             name_parts = filename.rsplit(".", 1)
             if len(name_parts) == 2:
                 filename = f"{name_parts[0]} ({timestamp}).{name_parts[1]}"

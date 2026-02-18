@@ -1,10 +1,10 @@
 """Background task for reorganizing periodical files flagged with needs_reorganization."""
 
 import logging
-from datetime import datetime
 from typing import Any, Dict
 
 from sqlalchemy.orm import Session, sessionmaker
+from core.parsers import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -181,7 +181,7 @@ class FileReorganizer:
 
         # Record what happened
         magazine.extra_metadata["last_reorganization"] = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": utc_now().isoformat(),
             "reason": magazine.extra_metadata.pop("reorganization_reason", "unknown"),
             "status": result.get("status", "unknown"),
         }
@@ -249,7 +249,7 @@ class FileReorganizer:
             self.stats["total_reorganized"] += reorganized
             self.stats["total_skipped"] += skipped
             self.stats["total_errors"] += errors
-            self.stats["last_run_time"] = datetime.now().isoformat()
+            self.stats["last_run_time"] = utc_now().isoformat()
 
             stats = {
                 "processed": len(flagged),

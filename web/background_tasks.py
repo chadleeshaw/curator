@@ -9,7 +9,7 @@ performs a specific maintenance or processing operation.
 import asyncio
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import timedelta, timezone
 from typing import TYPE_CHECKING
 
 from core.parsers import utc_now
@@ -194,7 +194,6 @@ def _process_periodical_searches(app_state: "AppState", db_session) -> None:
             if periodical.last_cache_match and cache_skip_threshold_hours > 0:
                 # Ensure both datetimes are timezone-aware for comparison
                 # SQLite may return naive datetimes, so add UTC timezone if missing
-                from datetime import timezone
 
                 cache_match = periodical.last_cache_match
                 if cache_match.tzinfo is None:
@@ -300,7 +299,7 @@ async def download_monitoring_task(app_state: "AppState") -> None:
 
     try:
         interval = app_state.tasks_config.get("download_monitor_interval", constants.DOWNLOAD_MONITOR_INTERVAL)
-        app_state.download_monitor_task.next_run_time = datetime.now() + timedelta(seconds=interval)
+        app_state.download_monitor_task.next_run_time = utc_now() + timedelta(seconds=interval)
         await app_state.download_monitor_task.run()
     except Exception as e:
         logger.error(f"Download monitoring error: {e}", exc_info=True)
@@ -315,7 +314,7 @@ async def ocr_processing_task(app_state: "AppState") -> None:
     """Process queued OCR jobs with process pool."""
     try:
         interval = app_state.tasks_config.get("ocr_processor_interval", constants.OCR_PROCESSOR_INTERVAL)
-        app_state.ocr_processor_task.next_run_time = datetime.now() + timedelta(seconds=interval)
+        app_state.ocr_processor_task.next_run_time = utc_now() + timedelta(seconds=interval)
 
         stats = await app_state.ocr_processor_task.run()
         if stats.get("processed", 0) > 0:

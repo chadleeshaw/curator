@@ -6,6 +6,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Callable, Optional
+from core.parsers import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,7 @@ class TaskScheduler:
             run_immediately: If True, run task immediately on first scheduler cycle (default: False)
             enabled: If False, task is registered but will not run on schedule (default: True)
         """
-        next_run = datetime.now() if run_immediately else datetime.now() + timedelta(seconds=interval_seconds)
+        next_run = utc_now() if run_immediately else utc_now() + timedelta(seconds=interval_seconds)
 
         self.tasks[name] = {
             "func": task_func,
@@ -67,7 +68,7 @@ class TaskScheduler:
 
         try:
             while self.running:
-                now = datetime.now()
+                now = utc_now()
                 next_wakeup: Optional[datetime] = None
 
                 for task_name, task_info in self.tasks.items():
@@ -129,7 +130,7 @@ class TaskScheduler:
 
                 # Dynamic sleep: sleep until next task is due (with max 60s)
                 if next_wakeup:
-                    sleep_seconds = max(0, (next_wakeup - datetime.now()).total_seconds())
+                    sleep_seconds = max(0, (next_wakeup - utc_now()).total_seconds())
                     sleep_seconds = min(sleep_seconds, 60)  # Cap at 60 seconds
                 else:
                     sleep_seconds = 1  # Default fallback
@@ -144,9 +145,9 @@ class TaskScheduler:
             if self.active_tasks:
                 logger.info(f"Waiting for {len(self.active_tasks)} active tasks: {self.active_tasks}")
                 timeout = 30  # 30 second timeout
-                start_time = datetime.now()
+                start_time = utc_now()
 
-                while self.active_tasks and (datetime.now() - start_time).total_seconds() < timeout:
+                while self.active_tasks and (utc_now() - start_time).total_seconds() < timeout:
                     await asyncio.sleep(0.5)
 
                 if self.active_tasks:
@@ -228,6 +229,6 @@ class TaskScheduler:
 
         # If re-enabling, schedule next run from now
         if enabled:
-            self.tasks[task_name]["next_run"] = datetime.now() + timedelta(seconds=self.tasks[task_name]["interval"])
+            self.tasks[task_name]["next_run"] = utc_now() + timedelta(seconds=self.tasks[task_name]["interval"])
 
         return True

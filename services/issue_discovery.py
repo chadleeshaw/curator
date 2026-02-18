@@ -611,8 +611,12 @@ class IssueDiscoveryService:
         if tracking.track_new_only:
             if issue.issue_date:
                 # Use naive datetime for comparison (issue_date is stored as naive in DB)
-                now = datetime.now()
-                days_old = (now - issue.issue_date).days
+                # Normalize both to naive datetimes for comparison
+                now = utc_now().replace(tzinfo=None)
+                issue_date_naive = (
+                    issue.issue_date.replace(tzinfo=None) if issue.issue_date.tzinfo else issue.issue_date
+                )
+                days_old = (now - issue_date_naive).days
                 # Consider issues within the threshold as "new"
                 # Future-dated issues (days_old < 0) are always considered new
                 is_new = days_old <= NEW_ISSUE_THRESHOLD_DAYS
@@ -624,7 +628,7 @@ class IssueDiscoveryService:
                 return is_new
             elif issue.year:
                 # If we have a year but no full date, check if it's the current year
-                current_year = datetime.now().year
+                current_year = utc_now().year
                 return issue.year >= current_year
             else:
                 # No date information at all - skip to avoid downloading old back issues
@@ -663,8 +667,10 @@ class IssueDiscoveryService:
         # Factor 1: Recency (max +30)
         if issue.issue_date:
             # Use naive datetime for comparison (issue_date is stored as naive in DB)
-            now = datetime.now()
-            days_old = (now - issue.issue_date).days
+            # Normalize both to naive datetimes for comparison
+            now = utc_now().replace(tzinfo=None)
+            issue_date_naive = issue.issue_date.replace(tzinfo=None) if issue.issue_date.tzinfo else issue.issue_date
+            days_old = (now - issue_date_naive).days
 
             if days_old < 7:
                 priority += 30  # Very recent

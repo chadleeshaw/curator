@@ -770,5 +770,5 @@ class InternetArchiveClient(DownloadClient):
 
     def shutdown(self):
         """Shutdown the thread pool executor"""
-        self._executor.shutdown(wait=False)
+        self._executor.shutdown(wait=True, cancel_futures=True)
         logger.info(f"[{self.name}] Shutdown complete")

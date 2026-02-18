@@ -5,7 +5,6 @@ Monitors download client progress and scans download folder for files to organiz
 
 import asyncio
 import logging
-from datetime import datetime
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -94,7 +93,7 @@ class DownloadMonitor:
         """Synchronous implementation of the monitoring task."""
         session = self.session_factory()
         try:
-            self.last_run_time = datetime.now()
+            self.last_run_time = utc_now()
             self.stats["total_runs"] += 1
             logger.debug(f"[DownloadMonitor] Monitor run #{self.stats['total_runs']} started")
 
@@ -103,7 +102,7 @@ class DownloadMonitor:
             client_processed, client_failed = self._monitor_download_client(session)
             self.stats["client_downloads_processed"] += client_processed
             self.stats["client_downloads_failed"] += client_failed
-            self.stats["last_client_check"] = datetime.now()
+            self.stats["last_client_check"] = utc_now()
 
             # Part 1.5: Process queued downloads
             logger.debug("[DownloadMonitor] Processing download queue...")
@@ -118,7 +117,7 @@ class DownloadMonitor:
             logger.debug("[DownloadMonitor] Scanning downloads folder...")
             folder_imported = self._scan_downloads_folder(session)
             self.stats["folder_files_imported"] += folder_imported
-            self.stats["last_folder_scan"] = datetime.now()
+            self.stats["last_folder_scan"] = utc_now()
 
             # Part 3: Retry failed imports where the file still exists on disk
             logger.debug("[DownloadMonitor] Checking for retryable import failures...")
@@ -131,7 +130,7 @@ class DownloadMonitor:
             # Use the active_count from queue processing above
             try:
                 if folder_imported == 0 and queue_result.get("active_count", 0) > 0:
-                    now = datetime.now()
+                    now = utc_now()
                     should_warn = (
                         self.last_config_warning_time is None
                         or (now - self.last_config_warning_time).total_seconds() > 1800  # 30 minutes
@@ -512,7 +511,7 @@ class DownloadMonitor:
         Returns:
             Updated submission if recovery succeeded, None if should skip processing
         """
-        age_hours = (datetime.now() - submission.updated_at).total_seconds() / 3600 if submission.updated_at else 0
+        age_hours = (utc_now() - submission.updated_at).total_seconds() / 3600 if submission.updated_at else 0
 
         logger.warning(
             f"[DownloadMonitor] Orphaned completed submission detected:\n"

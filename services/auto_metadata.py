@@ -12,7 +12,6 @@ Can be run manually or scheduled as a background task.
 """
 
 import logging
-from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional
 
@@ -27,6 +26,7 @@ from core.utils.metadata_builder import (
 from core.utils.files import resolve_periodical_file_path
 from core.parsers.parser import Parser
 from models.database import Periodical, OCRJob
+from core.parsers import utc_now
 from services.text_scan_service import TextScanService
 from services.ocr.queue import OCRQueueService
 
@@ -390,7 +390,7 @@ class AutoMetadataService:
             job = OCRJob(
                 periodical_id=periodical.id,
                 status=OCRJob.StatusEnum.PENDING,
-                created_at=datetime.now(),
+                created_at=utc_now(),
             )
             session.add(job)
             logger.debug(f"Queued OCR scan for periodical {periodical.id}")

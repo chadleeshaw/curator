@@ -14,6 +14,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
+
+from core.parsers import utc_now
 from schedulers import TaskScheduler
 
 
@@ -84,9 +86,9 @@ class TestSchedulePeriodic:
         scheduler = TaskScheduler()
         task_func = AsyncMock()
 
-        before = datetime.now()
+        before = utc_now()
         scheduler.schedule_periodic("test_task", task_func, 60, run_immediately=True)
-        after = datetime.now()
+        after = utc_now()
 
         # next_run should be set to now (not future)
         next_run = scheduler.tasks["test_task"]["next_run"]
@@ -97,7 +99,7 @@ class TestSchedulePeriodic:
         scheduler = TaskScheduler()
         task_func = AsyncMock()
 
-        before = datetime.now()
+        before = utc_now()
         scheduler.schedule_periodic("test_task", task_func, 60, run_immediately=False)
 
         # next_run should be in the future (about 60 seconds from now)

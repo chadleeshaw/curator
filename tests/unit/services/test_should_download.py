@@ -16,6 +16,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
+
+from core.parsers import utc_now
 from core.constants.app import NEW_ISSUE_THRESHOLD_DAYS
 from models.database import DiscoveredIssue, PeriodicalTracking
 from services.issue_discovery import IssueDiscoveryService
@@ -44,8 +46,8 @@ class TestShouldDownloadWatchOnly:
         issue = MagicMock(spec=DiscoveredIssue)
         issue.title = "Test Magazine January 2026"
         issue.country = "US"
-        issue.issue_date = datetime.now() - timedelta(days=5)
-        issue.year = datetime.now().year
+        issue.issue_date = utc_now() - timedelta(days=5)
+        issue.year = utc_now().year
 
         assert service._should_download(issue, tracking_watch_only) is False
 
@@ -93,8 +95,8 @@ class TestShouldDownloadAll:
         issue = MagicMock(spec=DiscoveredIssue)
         issue.title = "Test Magazine January 2026"
         issue.country = "US"
-        issue.issue_date = datetime.now() - timedelta(days=5)
-        issue.year = datetime.now().year
+        issue.issue_date = utc_now() - timedelta(days=5)
+        issue.year = utc_now().year
 
         assert service._should_download(issue, tracking_all) is True
 
@@ -123,8 +125,8 @@ class TestShouldDownloadAll:
         issue = MagicMock(spec=DiscoveredIssue)
         issue.title = "Test Magazine UK Edition"
         issue.country = "UK"
-        issue.issue_date = datetime.now()
-        issue.year = datetime.now().year
+        issue.issue_date = utc_now()
+        issue.year = utc_now().year
 
         assert service._should_download(issue, tracking_all) is False
 
@@ -152,8 +154,8 @@ class TestShouldDownloadNewOnly:
         issue = MagicMock(spec=DiscoveredIssue)
         issue.title = "Test Magazine February 2026"
         issue.country = "US"
-        issue.issue_date = datetime.now() - timedelta(days=15)
-        issue.year = datetime.now().year
+        issue.issue_date = utc_now() - timedelta(days=15)
+        issue.year = utc_now().year
 
         assert service._should_download(issue, tracking_new_only) is True
 
@@ -162,8 +164,8 @@ class TestShouldDownloadNewOnly:
         issue = MagicMock(spec=DiscoveredIssue)
         issue.title = "Test Magazine"
         issue.country = "US"
-        issue.issue_date = datetime.now() - timedelta(days=NEW_ISSUE_THRESHOLD_DAYS)
-        issue.year = datetime.now().year
+        issue.issue_date = utc_now() - timedelta(days=NEW_ISSUE_THRESHOLD_DAYS)
+        issue.year = utc_now().year
 
         assert service._should_download(issue, tracking_new_only) is True
 
@@ -172,8 +174,8 @@ class TestShouldDownloadNewOnly:
         issue = MagicMock(spec=DiscoveredIssue)
         issue.title = "Test Magazine"
         issue.country = "US"
-        issue.issue_date = datetime.now() - timedelta(days=NEW_ISSUE_THRESHOLD_DAYS + 1)
-        issue.year = datetime.now().year - 1
+        issue.issue_date = utc_now() - timedelta(days=NEW_ISSUE_THRESHOLD_DAYS + 1)
+        issue.year = utc_now().year - 1
 
         assert service._should_download(issue, tracking_new_only) is False
 
@@ -192,8 +194,8 @@ class TestShouldDownloadNewOnly:
         issue = MagicMock(spec=DiscoveredIssue)
         issue.title = "Test Magazine March 2026"
         issue.country = "US"
-        issue.issue_date = datetime.now() + timedelta(days=30)
-        issue.year = datetime.now().year
+        issue.issue_date = utc_now() + timedelta(days=30)
+        issue.year = utc_now().year
 
         assert service._should_download(issue, tracking_new_only) is True
 
@@ -203,7 +205,7 @@ class TestShouldDownloadNewOnly:
         issue.title = "Test Magazine 2026"
         issue.country = "US"
         issue.issue_date = None
-        issue.year = datetime.now().year
+        issue.year = utc_now().year
 
         assert service._should_download(issue, tracking_new_only) is True
 
@@ -232,8 +234,8 @@ class TestShouldDownloadNewOnly:
         issue = MagicMock(spec=DiscoveredIssue)
         issue.title = "Test Magazine UK February 2026"
         issue.country = "UK"
-        issue.issue_date = datetime.now() - timedelta(days=5)
-        issue.year = datetime.now().year
+        issue.issue_date = utc_now() - timedelta(days=5)
+        issue.year = utc_now().year
 
         assert service._should_download(issue, tracking_new_only) is False
 

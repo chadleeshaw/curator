@@ -8,12 +8,11 @@ This module provides shared utilities for reorganizing periodical files
 import logging
 import shutil
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
 
 from core.constants import DEFAULT_CATEGORY
-from core.parsers import sanitize_filename
+from core.parsers import sanitize_filename, utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +107,7 @@ def reorganize_periodical_files(
 
         # Handle filename conflicts by appending timestamp with counter
         if new_pdf_path.exists() and new_pdf_path != old_pdf_path:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = utc_now().strftime("%Y%m%d_%H%M%S")
             filename_base_with_ts = f"{safe_title} - {month}{year} ({timestamp})"
             new_pdf_path = target_dir / f"{filename_base_with_ts}{file_ext}"
 
