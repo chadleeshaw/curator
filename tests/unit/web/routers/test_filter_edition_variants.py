@@ -18,7 +18,11 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 
 # Import only lightweight constants — no PIL/fitz/database deps
-from core.constants.periodical import AMBIGUOUS_ISO_CODES, AUDIENCE_PERIODICAL_INDICATORS, REGIONAL_PERIODICAL_INDICATORS
+from core.constants.periodical import (
+    AMBIGUOUS_ISO_CODES,
+    AUDIENCE_PERIODICAL_INDICATORS,
+    REGIONAL_PERIODICAL_INDICATORS,
+)
 from core.constants.country import ISO_COUNTRIES
 from core.constants.title import MULTI_WORD_PERIODICAL_VARIANTS
 

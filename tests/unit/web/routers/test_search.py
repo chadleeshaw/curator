@@ -1,6 +1,7 @@
 """
 Test suite for search router endpoints
 """
+
 # pylint: disable=redefined-outer-name  # pytest fixture injection pattern
 
 import tempfile
@@ -153,4 +154,3 @@ class TestGetPeriodicalEditions:
         # GET endpoint requires title in path, so 404 is expected
         response = test_client.get("/api/periodicals/issues/")
         assert response.status_code in [404, 422]
-

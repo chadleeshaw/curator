@@ -624,7 +624,9 @@ class TitleMatcher:
         # If both have periodical variants, they must match
         if provider_variant is not None and library_variant is not None:
             if provider_variant != library_variant:
-                logger.debug(f"Periodical variant mismatch: provider '{provider_variant}' vs library '{library_variant}'")
+                logger.debug(
+                    f"Periodical variant mismatch: provider '{provider_variant}' vs library '{library_variant}'"
+                )
                 return (False, 0)
         # If only one has a periodical variant, they're different periodicals
         elif provider_variant is not None or library_variant is not None:
