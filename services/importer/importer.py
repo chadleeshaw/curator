@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from core.constants.app import DEFAULT_FUZZY_THRESHOLD
 from core.constants.category import CATEGORY_KEYWORDS
-from core.constants.date import DUPLICATE_DATE_THRESHOLD_DAYS
+from core.constants.date import DUPLICATE_DATE_THRESHOLD_DAYS, UNKNOWN_ISSUE_DATE_YEAR
 from core.constants.errors import ErrorCodes
 from core.constants.files import IMPORT_MARKER_FILE, SUPPORTED_FILE_EXTENSIONS
 from core.constants.language import DEFAULT_LANGUAGE
@@ -1243,7 +1243,7 @@ class FileImporter:
 
         magazine = Periodical(
             title=organization_title,
-            issue_date=parsed.issue_date or datetime.now(UTC),
+            issue_date=parsed.issue_date or datetime(UNKNOWN_ISSUE_DATE_YEAR, 1, 1, tzinfo=UTC),
             language=parsed.language or DEFAULT_LANGUAGE,
             file_path=organized_path_str,
             cover_path=str(cover_path) if cover_path else None,
