@@ -137,20 +137,20 @@ class TestSearchPeriodicalProviders:
 
 
 class TestGetPeriodicalEditions:
-    """Test GET /api/periodicals/editions/{magazine_title} endpoint"""
+    """Test GET /api/periodicals/issues/{magazine_title} endpoint"""
 
-    def test_get_periodical_editions_success(self, test_client):
-        """Test getting periodical editions"""
-        response = test_client.get("/api/periodicals/editions/National+Geographic")
+    def test_get_periodical_issues_success(self, test_client):
+        """Test getting periodical issues"""
+        response = test_client.get("/api/periodicals/issues/National+Geographic")
         assert response.status_code == 200
         data = response.json()
         # API returns 'results' not 'editions'
         assert "results" in data
         assert isinstance(data["results"], list)
 
-    def test_get_periodical_editions_missing_title(self, test_client):
-        """Test getting editions without title parameter"""
+    def test_get_periodical_issues_missing_title(self, test_client):
+        """Test getting issues without title parameter"""
         # GET endpoint requires title in path, so 404 is expected
-        response = test_client.get("/api/periodicals/editions/")
+        response = test_client.get("/api/periodicals/issues/")
         assert response.status_code in [404, 422]
 

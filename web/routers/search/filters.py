@@ -21,7 +21,7 @@ from .dependencies import get_title_matcher
 logger = logging.getLogger(__name__)
 
 
-def filter_edition_variants(results: List[Dict[str, Any]], query: str) -> List[Dict[str, Any]]:
+def filter_periodical_variants(results: List[Dict[str, Any]], query: str) -> List[Dict[str, Any]]:
     """
     Filter out periodical variants that don't match the query.
 
@@ -51,7 +51,7 @@ def filter_edition_variants(results: List[Dict[str, Any]], query: str) -> List[D
     filtered = []
 
     # Extract edition variant from query
-    query_variant = title_matcher.extract_edition_variant(query)
+    query_variant = title_matcher.extract_periodical_variant(query)
     logger.debug(f"Filtering publication variants: Query '{query}' has variant: {query_variant}")
     logger.debug(f"Examining {len(results)} results...")
 
@@ -67,7 +67,7 @@ def filter_edition_variants(results: List[Dict[str, Any]], query: str) -> List[D
         # Lightly normalize the title (dots -> spaces) but preserve dates, issue numbers, country codes
         # Don't use clean_release_title() as it removes too much metadata
         normalized_title = raw_title.replace(".", " ").replace("_", " ")
-        result_variant = title_matcher.extract_edition_variant(normalized_title)
+        result_variant = title_matcher.extract_periodical_variant(normalized_title)
 
         # Keep result if publication variants are compatible:
         # - Both have no variant → keep (e.g., "National Geographic" query, "National Geographic" result)

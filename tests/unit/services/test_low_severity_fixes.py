@@ -147,7 +147,7 @@ class TestPublicExtractEditionVariant:
 
         from web.routers.search import filters
 
-        source = inspect.getsource(filters.filter_edition_variants)
+        source = inspect.getsource(filters.filter_periodical_variants)
         assert "_extract_edition_variant" not in source
         assert "extract_edition_variant" in source
 

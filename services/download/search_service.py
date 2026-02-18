@@ -137,8 +137,8 @@ class SearchService:
                         normalized_search = search_title.replace(".", " ").replace("_", " ")
                         normalized_result = parsed.title.replace(".", " ").replace("_", " ")
 
-                        search_variant = self.title_matcher.extract_edition_variant(normalized_search)
-                        result_variant = self.title_matcher.extract_edition_variant(normalized_result)
+                        search_variant = self.title_matcher.extract_periodical_variant(normalized_search)
+                        result_variant = self.title_matcher.extract_periodical_variant(normalized_result)
 
                         # Skip results with mismatched edition variants
                         if not (

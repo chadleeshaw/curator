@@ -1,5 +1,5 @@
 """
-Tests for filter_edition_variants in web/routers/search/filters.py.
+Tests for filter_periodical_variants in web/routers/search/filters.py.
 
 Key terminology:
 - "Editions" = individual issue numbers/volumes (Issue 1, Issue 2, Vol 3, etc.)
@@ -23,9 +23,9 @@ from core.constants.country import ISO_COUNTRIES
 from core.constants.title import MULTI_WORD_EDITION_VARIANTS
 
 
-def _extract_edition_variant(title: str) -> Optional[str]:
+def _extract_periodical_variant(title: str) -> Optional[str]:
     """
-    Standalone re-implementation of TitleMatcher.extract_edition_variant using
+    Standalone re-implementation of TitleMatcher.extract_periodical_variant using
     the same constants, so tests don't need to import the full TitleMatcher
     (which pulls in PIL/fitz through core/parsers/__init__.py).
     """
@@ -68,7 +68,7 @@ def inject_title_matcher():
     This avoids importing the full TitleMatcher class which pulls in PIL, fitz, etc.
     """
     mock_matcher = MagicMock()
-    mock_matcher.extract_edition_variant.side_effect = _extract_edition_variant
+    mock_matcher.extract_periodical_variant.side_effect = _extract_periodical_variant
     with patch("web.routers.search.filters.get_title_matcher", return_value=mock_matcher):
         yield
 
@@ -89,34 +89,34 @@ class TestRegionalQueryVariantFiltering:
 
     def test_regional_query_keeps_no_variant_result(self):
         """Core fix: result with no regional suffix is kept when query has regional variant."""
-        from web.routers.search.filters import filter_edition_variants
+        from web.routers.search.filters import filter_periodical_variants
 
         results = [_make_result("Nuts Issue 45")]
-        filtered = filter_edition_variants(results, "Nuts UK")
+        filtered = filter_periodical_variants(results, "Nuts UK")
         assert len(filtered) == 1, "Issues without regional suffix should be kept for regional-variant queries"
 
     def test_regional_query_keeps_matching_variant_result(self):
         """Result with the same regional variant as the query is kept."""
-        from web.routers.search.filters import filter_edition_variants
+        from web.routers.search.filters import filter_periodical_variants
 
         results = [_make_result("Nuts UK Issue 45")]
-        filtered = filter_edition_variants(results, "Nuts UK")
+        filtered = filter_periodical_variants(results, "Nuts UK")
         assert len(filtered) == 1
 
     def test_regional_query_filters_conflicting_regional_variant(self):
         """Result with a different regional variant is filtered out."""
-        from web.routers.search.filters import filter_edition_variants
+        from web.routers.search.filters import filter_periodical_variants
 
         results = [_make_result("Nuts US Issue 45")]
-        filtered = filter_edition_variants(results, "Nuts UK")
+        filtered = filter_periodical_variants(results, "Nuts UK")
         assert len(filtered) == 0
 
     def test_us_regional_query_keeps_no_variant_result(self):
         """'US' regional variant query also keeps results without any variant."""
-        from web.routers.search.filters import filter_edition_variants
+        from web.routers.search.filters import filter_periodical_variants
 
         results = [_make_result("PC Gamer Issue 5")]
-        filtered = filter_edition_variants(results, "PC Gamer US")
+        filtered = filter_periodical_variants(results, "PC Gamer US")
         assert len(filtered) == 1
 
     def test_mixed_results_only_conflicting_variants_filtered(self):
@@ -124,14 +124,14 @@ class TestRegionalQueryVariantFiltering:
         With a regional query, only results with a conflicting variant are removed.
         Results with no variant or the matching variant are both kept.
         """
-        from web.routers.search.filters import filter_edition_variants
+        from web.routers.search.filters import filter_periodical_variants
 
         results = [
             _make_result("Nuts UK Issue 45"),  # same regional variant → keep
             _make_result("Nuts Issue 45"),  # no variant → keep (the fix)
             _make_result("Nuts US Issue 45"),  # different regional variant → filter
         ]
-        filtered = filter_edition_variants(results, "Nuts UK")
+        filtered = filter_periodical_variants(results, "Nuts UK")
         assert len(filtered) == 2
         titles = [r["title"] for r in filtered]
         assert "Nuts UK Issue 45" in titles
@@ -147,40 +147,40 @@ class TestNonRegionalQueryVariantFiltering:
 
     def test_no_variant_query_filters_non_regional_variant_result(self):
         """When query has no variant, results with non-regional variants (kids, pro) are filtered."""
-        from web.routers.search.filters import filter_edition_variants
+        from web.routers.search.filters import filter_periodical_variants
 
         results = [_make_result("National Geographic Kids")]
-        filtered = filter_edition_variants(results, "National Geographic")
+        filtered = filter_periodical_variants(results, "National Geographic")
         assert len(filtered) == 0
 
     def test_no_variant_query_filters_regional_variant_result(self):
         """When query has no variant, results with a regional variant are filtered."""
-        from web.routers.search.filters import filter_edition_variants
+        from web.routers.search.filters import filter_periodical_variants
 
         results = [_make_result("National Geographic UK")]
-        filtered = filter_edition_variants(results, "National Geographic")
+        filtered = filter_periodical_variants(results, "National Geographic")
         assert len(filtered) == 0
 
     def test_non_regional_query_variant_filters_no_variant_result(self):
         """When query has a non-regional variant (Pro, Kids), no-variant results are filtered."""
-        from web.routers.search.filters import filter_edition_variants
+        from web.routers.search.filters import filter_periodical_variants
 
         results = [_make_result("PC Gamer Issue 5")]
-        filtered = filter_edition_variants(results, "PC Gamer Pro")
+        filtered = filter_periodical_variants(results, "PC Gamer Pro")
         assert len(filtered) == 0
 
     def test_both_no_variant_kept(self):
         """When both query and result have no variant, result is kept."""
-        from web.routers.search.filters import filter_edition_variants
+        from web.routers.search.filters import filter_periodical_variants
 
         results = [_make_result("National Geographic March 2024")]
-        filtered = filter_edition_variants(results, "National Geographic")
+        filtered = filter_periodical_variants(results, "National Geographic")
         assert len(filtered) == 1
 
     def test_same_non_regional_variant_kept(self):
         """When both query and result have the same non-regional variant, result is kept."""
-        from web.routers.search.filters import filter_edition_variants
+        from web.routers.search.filters import filter_periodical_variants
 
         results = [_make_result("National Geographic Kids March 2024")]
-        filtered = filter_edition_variants(results, "National Geographic Kids")
+        filtered = filter_periodical_variants(results, "National Geographic Kids")
         assert len(filtered) == 1
