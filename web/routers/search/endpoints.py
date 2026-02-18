@@ -234,7 +234,7 @@ async def search_periodical_providers(
 
         results_before_pub_variant = len(filtered_results)
         filtered_results = filter_periodical_variants(filtered_results, query)
-        edition_filtered = results_before_pub_variant - len(filtered_results)
+        periodical_variants_filtered = results_before_pub_variant - len(filtered_results)
 
         # Step 7: Load library items (scoped by tracking_id)
         library_items = db.query(Periodical).all()
@@ -251,7 +251,7 @@ async def search_periodical_providers(
             f"Search summary for '{query}': {len(deduplicated_results)} results | "
             f"Filters: language={filter_language}, country={filter_country} | "
             f"Removed: {non_periodical_filtered} non-periodicals, {ia_filtered} IA irrelevant, "
-            f"{language_country_filtered} language/country, {edition_filtered} pub variants | "
+            f"{language_country_filtered} language/country, {periodical_variants_filtered} periodical variants | "
             f"{library_matched} matched to library"
         )
 
@@ -278,12 +278,12 @@ async def search_periodical_providers(
     description="Retrieve all available issues of a specific periodical by searching configured providers.",
     responses={
         200: {
-            "description": "Editions retrieved successfully",
+            "description": "Issues retrieved successfully",
             "content": {
                 "application/json": {
                     "example": {
                         "periodical": "Wired",
-                        "editions": [{"title": "Wired - Jan 2024", "url": "http://..."}],
+                        "issues": [{"title": "Wired - Jan 2024", "url": "http://..."}],
                         "total": 1,
                     }
                 }

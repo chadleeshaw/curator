@@ -38,14 +38,14 @@ def filter_periodical_variants(results: List[Dict[str, Any]], query: str) -> Lis
         query: Original search query
 
     Returns:
-        Filtered list with only results matching query edition
+        Filtered list with only results matching query periodical variant
     """
     if not results:
         return results
 
     title_matcher = get_title_matcher()
     if not title_matcher:
-        logger.warning("TitleMatcher not available, skipping edition variant filter")
+        logger.warning("TitleMatcher not available, skipping periodical variant filter")
         return results
 
     filtered = []

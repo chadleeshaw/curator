@@ -1783,7 +1783,7 @@ export class TrackingManager {
             variants: [result], // Store all variants
           });
         } else {
-          // Add to variants if it's a different language edition
+          // Add download variant if it's a different language version
           const existing = issueMap.get(key);
           existing.variants.push(result);
 
