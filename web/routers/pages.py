@@ -122,6 +122,7 @@ async def view_periodical_by_id(id: int = Query(...)):
                 "file_path": p.file_path,
                 "extra_metadata": p.extra_metadata or {},
                 "derived_metadata": p.derived_metadata or {},
+                "created_at": (p.created_at.isoformat() if p.created_at else None),
             }
 
             # Check if this is a special edition
@@ -201,6 +202,8 @@ async def view_periodical_by_id(id: int = Query(...)):
                     "issue_date": p["issue_date"],
                     "cover_url": f"/api/periodicals/{p['id']}/cover",
                     "file_path": p["file_path"],
+                    "derived_metadata": p.get("derived_metadata", {}),
+                    "created_at": p.get("created_at"),
                 }
             )
 
@@ -284,6 +287,7 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
                 "file_path": p.file_path,
                 "extra_metadata": p.extra_metadata or {},
                 "derived_metadata": p.derived_metadata or {},
+                "created_at": (p.created_at.isoformat() if p.created_at else None),
             }
 
             # Check if this is a special edition by checking derived_metadata first, then extra_metadata, then title
@@ -417,6 +421,9 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
                     "title": p["title"],
                     "issue_date": p["issue_date"],
                     "cover_url": f"/api/periodicals/{p['id']}/cover",
+                    "file_path": p.get("file_path"),
+                    "derived_metadata": p.get("derived_metadata", {}),
+                    "created_at": p.get("created_at"),
                 }
             )
         years_data.append({"year": year, "issues": year_issues})
