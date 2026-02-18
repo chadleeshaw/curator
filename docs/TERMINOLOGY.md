@@ -37,8 +37,7 @@ The magazine/periodical publishing domain has **overloaded terminology** where w
 
 **In Code**:
 ```python
-# Identified by REGIONAL_PERIODICAL_INDICATORS
-# Current: REGIONAL_EDITION_INDICATORS (to be renamed)
+# Identified by REGIONAL_EDITION_INDICATORS
 "uk", "us", "france", "germany", "australia"
 ```
 
@@ -61,8 +60,7 @@ country = Column(String(50), nullable=True, index=True)
 
 **In Code**:
 ```python
-# Identified by AUDIENCE_PERIODICAL_INDICATORS  
-# Current: EDITION_VARIANT_INDICATORS (to be renamed)
+# Identified by EDITION_VARIANT_INDICATORS
 "kids", "little kids", "pro", "professional", "traveller"
 ```
 
@@ -187,41 +185,31 @@ The word "edition" has **THREE different meanings** in the periodical domain:
 
 ---
 
-## Code Terminology Standards
+## Filter Logic Explained
 
-### Current State (This Branch)
+### Regional Periodical Filtering
 
-The filter fix correctly handles the concepts but uses legacy terminology:
+When searching for "Wired UK":
 
-```python
-# Functions (current names)
-def extract_edition_variant(title) -> Optional[str]:
-    """Extracts regional/audience indicators: 'uk', 'kids', 'pro'"""
+1. **Query variant**: "uk" (regional indicator)
+2. **Results**:
+   - "Wired UK Issue 45" → variant="uk" → ✅ **KEEP** (exact match)
+   - "Wired Issue 45" → variant=None → ✅ **KEEP** (alias without region)
+   - "Wired US Issue 45" → variant="us" → ❌ **FILTER** (different periodical)
 
-def filter_edition_variants(results, query):
-    """Filters out different regional/audience periodicals"""
+**Rationale**: Providers often index "Wired UK" as just "Wired", so we must keep results without regional suffix to avoid missing valid issues found via aliases.
 
-# Constants (current names)  
-REGIONAL_EDITION_INDICATORS = {"uk", "us", "france", ...}
-EDITION_VARIANT_INDICATORS = {"kids", "pro", "traveller", ...}
-```
+### Audience Periodical Filtering
 
-### Recommended Naming (Future Refactor)
+When searching for "National Geographic":
 
-For clarity, these should eventually be renamed to use "periodical" terminology:
+1. **Query variant**: None
+2. **Results**:
+   - "National Geographic Dec 2024" → variant=None → ✅ **KEEP** (exact match)
+   - "National Geographic Kids Dec 2024" → variant="kids" → ❌ **FILTER** (different periodical)
+   - "Nat Geo Traveller Dec 2024" → variant="traveller" → ❌ **FILTER** (different periodical)
 
-```python
-# Functions (proposed names)
-def extract_periodical_variant(title) -> Optional[str]:
-    """Extracts regional/audience indicators that distinguish different periodicals"""
-
-def filter_periodical_variants(results, query):
-    """Filters out different regional/audience periodicals"""
-
-# Constants (proposed names)
-REGIONAL_PERIODICAL_INDICATORS = {"uk", "us", "france", ...}
-AUDIENCE_PERIODICAL_INDICATORS = {"kids", "pro", "traveller", ...}
-```
+**Rationale**: Audience variants (Kids, Pro, Traveller) are always explicit - they won't be indexed without the suffix, so strict filtering is safe.
 
 ---
 
@@ -305,34 +293,6 @@ discovered_issue = DiscoveredIssue(
 
 ---
 
-## Filter Logic Explained
-
-### Regional Periodical Filtering
-
-When searching for "Wired UK":
-
-1. **Query variant**: "uk" (regional indicator)
-2. **Results**:
-   - "Wired UK Issue 45" → variant="uk" → ✅ **KEEP** (exact match)
-   - "Wired Issue 45" → variant=None → ✅ **KEEP** (alias without region)
-   - "Wired US Issue 45" → variant="us" → ❌ **FILTER** (different periodical)
-
-**Rationale**: Providers often index "Wired UK" as just "Wired", so we must keep results without regional suffix to avoid missing valid issues found via aliases.
-
-### Audience Periodical Filtering
-
-When searching for "National Geographic":
-
-1. **Query variant**: None
-2. **Results**:
-   - "National Geographic Dec 2024" → variant=None → ✅ **KEEP** (exact match)
-   - "National Geographic Kids Dec 2024" → variant="kids" → ❌ **FILTER** (different periodical)
-   - "Nat Geo Traveller Dec 2024" → variant="traveller" → ❌ **FILTER** (different periodical)
-
-**Rationale**: Audience variants (Kids, Pro, Traveller) are always explicit - they won't be indexed without the suffix, so strict filtering is safe.
-
----
-
 ## Database Schema
 
 ### Periodical (Downloaded Issue File)
@@ -400,57 +360,9 @@ class DiscoveredIssue(Base):
 
 ---
 
-## Test Terminology
-
-From `tests/unit/web/routers/test_filter_edition_variants.py`:
-
-```python
-"""
-Key terminology:
-- "Editions" = individual issue numbers/volumes (Issue 1, Issue 2, Vol 3, etc.)
-- "Variants" = the same issue available from multiple providers (deduplication targets)
-- "Publication variants" = geographically/demographically distinct publications
-  (e.g. "Wired UK" vs "Wired US", "National Geographic" vs "National Geographic Kids")
-"""
-```
-
-**Note**: Tests use "publication variants" - should eventually be "periodical variants" for consistency.
-
----
-
-## Future Refactoring Plan
-
-### Phase 1: Documentation (Non-Breaking) ✅
-- [x] Create `docs/TERMINOLOGY.md` (this file)
-- [ ] Update docstrings to use "periodical" terminology
-- [ ] Update database column comments
-- [ ] Add terminology guide to README
-
-### Phase 2: Function Renames (Breaking Changes)
-- [ ] `extract_edition_variant()` → `extract_periodical_variant()`
-- [ ] `filter_edition_variants()` → `filter_periodical_variants()`
-- [ ] `get_periodical_editions()` → `get_periodical_issues()`
-
-### Phase 3: Constant Reorganization
-- [ ] Rename `core/constants/edition.py` → `core/constants/periodical.py`
-- [ ] `REGIONAL_EDITION_INDICATORS` → `REGIONAL_PERIODICAL_INDICATORS`
-- [ ] `EDITION_VARIANT_INDICATORS` → `AUDIENCE_PERIODICAL_INDICATORS`
-
-### Phase 4: UI/API Documentation
-- [ ] Update OpenAPI endpoint descriptions
-- [ ] Update UI tooltips and help text
-- [ ] Add glossary section to user documentation
-
----
-
 ## References
 
-- **Filter fix commit**: `f2585ad` - Correctly handles regional periodical filtering
+- **Filter implementation**: `web/routers/search/filters.py`
 - **Test documentation**: `tests/unit/web/routers/test_filter_edition_variants.py`
 - **Constants**: `core/constants/edition.py`
 - **Parser logic**: `core/parsers/title.py`
-
----
-
-**Last Updated**: 2026-02-18  
-**Branch**: `claude/fix-editions-variants-search-kvNtT`
