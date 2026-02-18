@@ -232,9 +232,9 @@ async def search_periodical_providers(
         filtered_results = filter_by_language_and_country(all_results, filter_language, filter_country)
         language_country_filtered = results_before_lang - len(filtered_results)
 
-        results_before_edition = len(filtered_results)
+        results_before_pub_variant = len(filtered_results)
         filtered_results = filter_edition_variants(filtered_results, query)
-        edition_filtered = results_before_edition - len(filtered_results)
+        edition_filtered = results_before_pub_variant - len(filtered_results)
 
         # Step 7: Load library items (scoped by tracking_id)
         library_items = db.query(Periodical).all()
@@ -251,7 +251,7 @@ async def search_periodical_providers(
             f"Search summary for '{query}': {len(deduplicated_results)} results | "
             f"Filters: language={filter_language}, country={filter_country} | "
             f"Removed: {non_periodical_filtered} non-periodicals, {ia_filtered} IA irrelevant, "
-            f"{language_country_filtered} language/country, {edition_filtered} editions | "
+            f"{language_country_filtered} language/country, {edition_filtered} pub variants | "
             f"{library_matched} matched to library"
         )
 

@@ -10,6 +10,7 @@ import re
 from typing import Any, Dict, List, Optional
 
 from core.constants.country import LANGUAGE_TO_COUNTRY
+from core.constants.edition import EDITION_VARIANT_INDICATORS
 from core.constants.language import LANGUAGE_KEYWORDS
 from core.parsers.country import detect_country
 from core.utils.ia_filtering import filter_ia_result
@@ -51,8 +52,14 @@ def filter_edition_variants(results: List[Dict[str, Any]], query: str) -> List[D
 
     # Extract edition variant from query
     query_variant = title_matcher.extract_edition_variant(query)
-    logger.debug(f"Filtering edition variants: Query '{query}' has variant: {query_variant}")
+    logger.debug(f"Filtering publication variants: Query '{query}' has variant: {query_variant}")
     logger.debug(f"Examining {len(results)} results...")
+
+    # Determine if the query's variant is regional (country/geography-based: "uk", "us", "france", etc.)
+    # vs. non-regional (audience/specialization-based: "kids", "pro", "expert", etc.).
+    # Regional variants: any variant NOT in EDITION_VARIANT_INDICATORS
+    # Non-regional variants: "kids", "pro", "expert", "traveller", etc. (in EDITION_VARIANT_INDICATORS)
+    query_is_regional = query_variant is not None and query_variant not in EDITION_VARIANT_INDICATORS
 
     for result in results:
         raw_title = result.get("title", "")
@@ -62,16 +69,22 @@ def filter_edition_variants(results: List[Dict[str, Any]], query: str) -> List[D
         normalized_title = raw_title.replace(".", " ").replace("_", " ")
         result_variant = title_matcher.extract_edition_variant(normalized_title)
 
-        # Keep result if edition variants match
-        # - Both have no variant: keep (e.g., "National Geographic" query, "National Geographic" result)
-        # - Both have same variant: keep (e.g., "PC Gamer US" query, "PC Gamer US" result)
-        # - One has variant, other doesn't: filter out (e.g., "National Geographic" query, "National Geographic Kids" result)
-        # - Both have different variants: filter out (e.g., "PC Gamer US" query, "PC Gamer UK" result)
+        # Keep result if publication variants are compatible:
+        # - Both have no variant → keep (e.g., "National Geographic" query, "National Geographic" result)
+        # - Both have the same variant → keep (e.g., "PC Gamer US" query, "PC Gamer US" result)
+        # - Query has regional variant, result has no variant → keep
+        #   Rationale: when searching "Nuts UK" with alias "Nuts", results like "Nuts Issue 45"
+        #   are the same publication just indexed without the regional suffix. Filtering these
+        #   would silently drop valid issues found via the alias.
+        # - Query has no variant, result has non-regional variant → filter (different publication)
+        # - Query has regional variant, result has different variant → filter (different edition)
+        keep = (
+            (query_variant is None and result_variant is None)
+            or (query_variant is not None and result_variant is not None and query_variant == result_variant)
+            or (query_is_regional and result_variant is None)
+        )
 
-        # Compare variants (None == None is OK, any mismatch is filtered)
-        if (query_variant is None and result_variant is None) or (
-            query_variant is not None and result_variant is not None and query_variant == result_variant
-        ):
+        if keep:
             filtered.append(result)
             logger.debug(f"  KEEP: '{raw_title}' -> '{normalized_title}' (variant: {result_variant})")
         else:

@@ -152,3 +152,4 @@ class TestGetPeriodicalEditions:
         # GET endpoint requires title in path, so 404 is expected
         response = test_client.get("/api/periodicals/editions/")
         assert response.status_code in [404, 422]
+
