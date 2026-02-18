@@ -45,10 +45,10 @@ class TestInternetArchiveProviderInitialization:
 
         provider = InternetArchiveProvider(config)
 
-        assert provider.mediatype == "texts"
+        # mediatype is always "texts" (hardcoded in query builder, not an attribute)
         assert provider.max_results == 500
         assert provider.priority == 10
-        assert len(provider.collections) > 0
+        assert provider.collections == []  # Default is empty list (search all texts)
         assert "PDF" in provider.preferred_formats
 
     def test_init_with_custom_collections(self):
@@ -142,7 +142,13 @@ class TestInternetArchiveProviderSearchQuery:
         config = {
             "type": "internet_archive",
             "name": "Test IA",
-            "collections": ["magazines", "periodicals", "comics", "americana", "pulpmagazinearchive"],
+            "collections": [
+                "magazines",
+                "periodicals",
+                "comics",
+                "americana",
+                "pulpmagazinearchive",
+            ],
         }
         provider = InternetArchiveProvider(config)
 
@@ -330,7 +336,10 @@ class TestInternetArchiveProviderSearch:
                     "description": "Technology magazine",
                     "collection": ["magazines"],
                     "mediatype": "texts",
-                    "format": ["Text PDF", "JPEG Thumb"],  # Required for format filtering
+                    "format": [
+                        "Text PDF",
+                        "JPEG Thumb",
+                    ],  # Required for format filtering
                 }
             ]
         )
@@ -385,7 +394,11 @@ class TestInternetArchiveProviderSearch:
             ]
         )
 
-        config = {"type": "internet_archive", "name": "Test IA", "collections": ["magazines"]}
+        config = {
+            "type": "internet_archive",
+            "name": "Test IA",
+            "collections": ["magazines"],
+        }
         provider = InternetArchiveProvider(config)
 
         results = provider.search("PC Gamer", aliases=["PC Gamer US", "PC Gamer Magazine"])

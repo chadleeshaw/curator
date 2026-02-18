@@ -11,12 +11,9 @@ from typing import Any, Dict, List, Optional, Sequence
 from internetarchive import search_items, get_item, configure as ia_configure
 
 from core.constants.internet_archive import (
-    IA_BROAD_SEARCH_THRESHOLD,
     IA_CATEGORY_COLLECTION_MAP,
-    IA_DEFAULT_MEDIATYPE,
     IA_DEFAULT_ROWS,
     IA_DEFAULT_SORT,
-    IA_PERIODICAL_COLLECTIONS,
     IA_PREFERRED_FORMATS,
     IA_COLLECTION_FORMATS,
     IA_COLLECTION_KEYWORDS,
@@ -40,8 +37,7 @@ class InternetArchiveProvider(SearchProvider):
         self.type = IA_PROVIDER_TYPE
 
         # Configuration
-        self.collections = config.get("collections", IA_PERIODICAL_COLLECTIONS)
-        self.mediatype = config.get("mediatype", IA_DEFAULT_MEDIATYPE)
+        self.collections = config.get("collections", [])
         self.preferred_formats = config.get("file_formats", IA_PREFERRED_FORMATS)
         self.max_results = config.get("max_results", IA_DEFAULT_ROWS)
         self.sort = config.get("sort", IA_DEFAULT_SORT)
@@ -155,23 +151,25 @@ class InternetArchiveProvider(SearchProvider):
             if len(title_terms) == 1:
                 parts.append(title_terms[0])
             else:
-                parts.append(f'({" OR ".join(title_terms)})')
+                parts.append(f"({' OR '.join(title_terms)})")
 
-        # Add mediatype filter
-        parts.append(f"mediatype:{self.mediatype}")
+        # Add mediatype filter (always "texts" for periodicals)
+        parts.append("mediatype:texts")
 
         # Add collection filter if collections specified and requested
-        if include_collections and self.collections:
-            # If category specified, narrow to category-specific collections
-            if category and category in IA_CATEGORY_COLLECTION_MAP:
-                category_collections = [c for c in IA_CATEGORY_COLLECTION_MAP[category] if c in self.collections]
-                # Fall back to all configured collections if no overlap
-                collections = category_collections if category_collections else self.collections
-            else:
-                collections = self.collections
-            collection_query = " OR ".join([f"collection:{c}" for c in collections])
-            parts.append(f"({collection_query})")
+        if include_collections:
+            collections_to_use = self.collections
 
+            if collections_to_use:
+                # If category specified, narrow to category-specific collections
+                if category and category in IA_CATEGORY_COLLECTION_MAP:
+                    category_collections = [c for c in IA_CATEGORY_COLLECTION_MAP[category] if c in collections_to_use]
+                    # Fall back to all collections if no overlap
+                    collections = category_collections if category_collections else collections_to_use
+                else:
+                    collections = collections_to_use
+                collection_query = " OR ".join([f"collection:{c}" for c in collections])
+                parts.append(f"({collection_query})")
         return " AND ".join(parts)
 
     def _parse_date(self, date_str: Optional[str]) -> Optional[datetime]:
@@ -315,13 +313,16 @@ class InternetArchiveProvider(SearchProvider):
         return None
 
     def search(
-        self, query: str, category: Optional[str] = None, aliases: Optional[Sequence[str]] = None
+        self,
+        query: str,
+        category: Optional[str] = None,
+        aliases: Optional[Sequence[str]] = None,
     ) -> List[SearchResult]:
         """
-        Search Internet Archive for periodicals.
+        Search Internet Archive for periodicals using a 2-tier strategy:
 
-        First tries RSS feeds (if caching enabled) to avoid API rate limiting.
-        Falls back to API search if RSS doesn't yield results.
+        1. If collections configured: Search those collections
+        2. If zero results (or no collections): Search all texts without collection filter
 
         Combines query + aliases into a single IA search using OR on the title field,
         so all terms are searched in one API call instead of N separate calls.
@@ -336,52 +337,42 @@ class InternetArchiveProvider(SearchProvider):
         """
         results = []
 
-        # Determine which collections to search
-        search_collections = self.collections
-        if category and category in IA_CATEGORY_COLLECTION_MAP:
-            category_collections = [c for c in IA_CATEGORY_COLLECTION_MAP[category] if c in self.collections]
-            if category_collections:
-                search_collections = category_collections
-
         # Search via API
         if self._check_rate_limit():
             logger.warning(f"[{self.name}] Skipping API search for '{query}' - rate limited")
             return []
 
         try:
-            self._apply_request_delay()
-            self._track_request()
+            # Tier 1: Search configured collections (if any)
+            if self.collections:
+                self._apply_request_delay()
+                self._track_request()
 
-            # Build search query with collection filter and aliases
-            ia_query = self._build_search_query(query, category, include_collections=True, aliases=aliases)
-            logger.debug(f"[{self.name}] Searching IA with query: {ia_query}")
+                ia_query = self._build_search_query(query, category, include_collections=True, aliases=aliases)
+                logger.debug(f"[{self.name}] Searching configured collections with query: {ia_query}")
 
-            # Execute search
-            # Note: rows is passed via params dict in newer internetarchive versions
-            with safe_ia_call():
-                search_results = search_items(
-                    ia_query,
-                    fields=IA_SEARCH_FIELDS,
-                    sorts=[self.sort],
-                    params={"rows": self.max_results},
-                )
+                with safe_ia_call():
+                    search_results = search_items(
+                        ia_query,
+                        fields=IA_SEARCH_FIELDS,
+                        sorts=[self.sort],
+                        params={"rows": self.max_results},
+                    )
 
-            # Process results
-            results = self._process_search_results(search_results, query)
+                results = self._process_search_results(search_results, query)
+                logger.info(f"[{self.name}] Collection search found {len(results)} results for '{query}'")
 
-            # If few/no results from collection-filtered search, try broader search
-            # Many periodicals exist outside the default collections (e.g., PC Magazine
-            # has 215 items but only 5 in configured collections)
-            if len(results) < IA_BROAD_SEARCH_THRESHOLD and self.collections:
+            # Tier 2: If zero results, search all texts without collection filter
+            if len(results) == 0:
                 logger.info(
-                    f"[{self.name}] Only {len(results)} results in configured collections for '{query}', "
-                    f"trying broader search (threshold={IA_BROAD_SEARCH_THRESHOLD})..."
+                    f"[{self.name}] {'No collections configured' if not self.collections else 'Zero results in collections'} for '{query}', "
+                    f"searching all texts..."
                 )
                 self._apply_request_delay()
                 self._track_request()
 
                 ia_query_broad = self._build_search_query(query, category, include_collections=False, aliases=aliases)
-                logger.debug(f"[{self.name}] Broad search query: {ia_query_broad}")
+                logger.debug(f"[{self.name}] General search query: {ia_query_broad}")
 
                 with safe_ia_call():
                     search_results_broad = search_items(
@@ -390,17 +381,8 @@ class InternetArchiveProvider(SearchProvider):
                         sorts=[self.sort],
                         params={"rows": self.max_results},
                     )
-                broad_results = self._process_search_results(search_results_broad, query)
-
-                if broad_results:
-                    # Merge: add broad results not already in collection results
-                    existing_urls = {r.url for r in results}
-                    new_from_broad = [r for r in broad_results if r.url not in existing_urls]
-                    results.extend(new_from_broad)
-                    logger.info(
-                        f"[{self.name}] Broad search added {len(new_from_broad)} new results "
-                        f"(total: {len(results)}) for '{query}'"
-                    )
+                results = self._process_search_results(search_results_broad, query)
+                logger.info(f"[{self.name}] General search found {len(results)} results for '{query}'")
 
         except Exception as e:
             logger.error(f"[{self.name}] Search error for '{query}': {e}", exc_info=True)
