@@ -285,18 +285,21 @@ async def run_task_manually(task_id: str):
 
     elif task_id == "auto_download":
         # Manually trigger auto-download task via scheduler
-        if _task_scheduler:
-            try:
-                await _task_scheduler.run_task_now("auto_download")
-                return success_response(
-                    "Auto-download task executed successfully",
-                    task_name="Auto-Download",
-                )
-            except Exception as e:
-                logger.error(f"Error running auto-download task: {e}", exc_info=True)
-                return error_response(f"Failed to run auto-download task: {str(e)}")
-        else:
+        if not _task_scheduler:
+            logger.warning("Auto-download task triggered but task scheduler not available")
             return error_response("Task scheduler not available")
+
+        try:
+            logger.info("Manually triggering auto-download task via scheduler")
+            await _task_scheduler.run_task_now("auto_download")
+            logger.info("Auto-download task completed successfully")
+            return success_response(
+                "Auto-download task executed successfully",
+                task_name="Auto-Download",
+            )
+        except Exception as e:
+            logger.error(f"Error running auto-download task: {e}", exc_info=True)
+            return error_response(f"Failed to run auto-download task: {str(e)}")
 
     elif task_id == "folder_cleanup":
         if _folder_cleanup_task:
