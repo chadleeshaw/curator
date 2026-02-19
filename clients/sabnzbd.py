@@ -105,7 +105,7 @@ class SABnzbdClient(DownloadClient):
 
             response = self._api_call("add", params)
 
-            if response.get("status") is True:
+            if response.get("status"):
                 job_id = response.get("nzo_ids", [None])[0]
                 logger.info(f"Submitted to SABnzbd: {title or nzb_url} -> {job_id}")
                 return job_id
@@ -163,7 +163,7 @@ class SABnzbdClient(DownloadClient):
             response.raise_for_status()
             result = response.json()
 
-            if result.get("status") is True:
+            if result.get("status"):
                 job_id = result.get("nzo_ids", [None])[0]
                 logger.info(f"Submitted NZB content to SABnzbd: {title} -> {job_id}")
                 return job_id
