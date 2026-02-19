@@ -1,4 +1,4 @@
-"""Background OCR queue service for sequential processing."""
+"""Background OCR queue service — sequential OCR with parallel PNG generation."""
 
 import logging
 import multiprocessing
@@ -276,6 +276,78 @@ def _apply_scan_metadata_to_magazine(
     return updated
 
 
+def _generate_pngs_parallel(png_jobs: list) -> Dict[int, bool]:
+    """
+    Generate OCR PNGs for multiple magazines in parallel using separate child processes.
+
+    Each entry in png_jobs must be a dict with keys:
+        magazine_id  (int)   – used as the result key
+        pdf_path     (str)
+        png_path     (str)
+        dpi          (int)
+        max_dimension (int)
+
+    All processes are started at the same time and then collected, so the wall-time
+    is dominated by the slowest single PDF rather than the sum of all PDFs.
+
+    Returns:
+        Dict mapping magazine_id → True (success) / False (failed/timed-out)
+    """
+    if not png_jobs:
+        return {}
+
+    # Start all processes simultaneously
+    running = []
+    for job in png_jobs:
+        result_queue = _mp_ctx.Queue()
+        proc = _mp_ctx.Process(
+            target=_generate_png_in_process,
+            args=(
+                job["pdf_path"],
+                job["png_path"],
+                job["dpi"],
+                job["max_dimension"],
+                result_queue,
+            ),
+            daemon=True,
+        )
+        proc.start()
+        running.append((job["magazine_id"], job["png_path"], proc, result_queue))
+        logger.debug(f"Started PNG generation process (pid={proc.pid}) for magazine {job['magazine_id']}")
+
+    logger.info(f"Started {len(running)} PNG generation processes in parallel")
+
+    # Collect results — wait up to PNG_GENERATION_TIMEOUT for each, measured from
+    # when all processes were already running, so overlapping waits are free.
+    import time as _time
+
+    deadline = _time.monotonic() + PNG_GENERATION_TIMEOUT
+    results: Dict[int, bool] = {}
+
+    for magazine_id, png_path, proc, result_queue in running:
+        remaining = max(deadline - _time.monotonic(), 0)
+        proc.join(timeout=remaining)
+
+        if proc.is_alive():
+            proc.kill()
+            proc.join(timeout=2)
+            logger.warning(f"PNG generation timed out for magazine {magazine_id} - PDF may be corrupted")
+            results[magazine_id] = False
+        elif not result_queue.empty():
+            result = result_queue.get_nowait()
+            if result.get("success"):
+                logger.debug(f"Generated OCR PNG: {png_path}")
+                results[magazine_id] = True
+            else:
+                logger.warning(f"Failed to generate OCR PNG for magazine {magazine_id}: {result.get('error')}")
+                results[magazine_id] = False
+        else:
+            logger.warning(f"PNG generation process exited without result for magazine {magazine_id}")
+            results[magazine_id] = False
+
+    return results
+
+
 def _ocr_worker(cover_path: str, language: Optional[str] = None) -> Dict[str, Any]:
     """
     Worker function that processes OCR synchronously.
@@ -436,23 +508,27 @@ class OCRQueueService:
         config_loader = ConfigLoader()
         config_loader.get_metadata()
 
-        # Prepare jobs for processing
-        job_data = []
+        # ---------------------------------------------------------------------------
+        # Pass 1 — DB checks, skip detection, determine PNG paths.
+        # No PNG generation yet; just collect candidates and the PNGs we need to build.
+        # ---------------------------------------------------------------------------
+        from core.constants.ocr import PDF_COVER_DPI_OCR, OCR_IMAGE_MAX_DIMENSION
+
+        candidates = []  # jobs that passed all skip checks and have a valid pdf_path
+        pending_pngs = []  # subset of candidates whose PNG does not yet exist on disk
+
         for job in pending_jobs:
             try:
-                # Access job.id early to detect stale/deleted objects from prior rollbacks
                 job_id = job.id
                 periodical_id = job.periodical_id
             except Exception:
                 logger.warning("Skipping stale OCR job object (row was concurrently deleted)")
                 continue
 
-            # Get magazine and cover path
             magazine = db.query(Periodical).filter(Periodical.id == periodical_id).first()
 
             if not magazine:
                 logger.warning(f"Magazine {periodical_id} not found for OCR job {job_id}")
-                # Re-verify job still exists before updating
                 job = db.query(OCRJob).filter(OCRJob.id == job_id).first()
                 if not job:
                     logger.warning(f"OCR job {job_id} also deleted, skipping")
@@ -464,9 +540,8 @@ class OCRQueueService:
                 stats["failed"] += 1
                 continue
 
-            # Check if text_scan already has sufficient data (may have been run after job was queued)
+            # Skip if OCR or sufficient text_scan already done
             if magazine.parsed_metadata:
-                # Skip if OCR was already done
                 if magazine.parsed_metadata.get("ocr_scan"):
                     logger.info(f"Skipping OCR for {magazine.title} - already has ocr_scan")
                     job.status = OCRJob.StatusEnum.COMPLETED
@@ -478,7 +553,6 @@ class OCRQueueService:
 
                 text_scan = magazine.parsed_metadata.get("text_scan", {})
                 if text_scan.get("has_sufficient_metadata", False):
-                    # Check needs_date_scan flag - if set and text_scan didn't find year, still need OCR
                     needs_date_scan = magazine.extra_metadata and magazine.extra_metadata.get("needs_date_scan", False)
                     if not needs_date_scan or text_scan.get("year"):
                         logger.info(f"Skipping OCR for {magazine.title} - text_scan already has sufficient metadata")
@@ -489,80 +563,72 @@ class OCRQueueService:
                         stats["skipped"] += 1
                         continue
 
-            # Generate OCR PNG if it doesn't exist
-            cover_path = None
-            png_generated = False
-
+            # Determine PNG path (no generation yet)
+            png_path = None
             if magazine.file_path and Path(magazine.file_path).exists():
                 pdf_path = Path(magazine.file_path)
-
-                # Only process PDF files for OCR
                 if pdf_path.suffix.lower() == ".pdf":
-                    # Determine PNG path
                     if magazine.cover_path:
                         cover_dir = Path(magazine.cover_path).parent
                         ocr_covers_dir = cover_dir.parent / ".ocr_covers"
                     else:
-                        # Fallback to data directory
                         ocr_covers_dir = pdf_path.parent.parent / ".ocr_covers"
-
                     ocr_covers_dir.mkdir(parents=True, exist_ok=True)
                     png_path = ocr_covers_dir / f"{magazine.id}_ocr.png"
 
-                    # Generate PNG if it doesn't exist
                     if not png_path.exists():
-                        logger.info(f"Generating OCR PNG for magazine {magazine.id}")
-                        try:
-                            from core.constants.ocr import (
-                                PDF_COVER_DPI_OCR,
-                                OCR_IMAGE_MAX_DIMENSION,
-                            )
-
-                            # Run in a child process so we can hard-kill poppler
-                            # if it hangs on a corrupted PDF
-                            result_queue = _mp_ctx.Queue()
-                            proc = _mp_ctx.Process(
-                                target=_generate_png_in_process,
-                                args=(
-                                    str(pdf_path),
-                                    str(png_path),
-                                    PDF_COVER_DPI_OCR,
-                                    OCR_IMAGE_MAX_DIMENSION,
-                                    result_queue,
-                                ),
-                                daemon=True,
-                            )
-                            proc.start()
-                            proc.join(timeout=PNG_GENERATION_TIMEOUT)
-
-                            if proc.is_alive():
-                                proc.kill()
-                                proc.join(timeout=2)
-                                logger.warning(
-                                    f"PNG generation timed out after {PNG_GENERATION_TIMEOUT}s "
-                                    f"for magazine {magazine.id} - PDF may be corrupted"
-                                )
-                            elif not result_queue.empty():
-                                result = result_queue.get_nowait()
-                                if result.get("success"):
-                                    png_generated = True
-                                    logger.debug(f"Generated OCR PNG: {png_path}")
-                                else:
-                                    logger.warning(f"Failed to generate OCR PNG from {pdf_path}: {result.get('error')}")
-                            else:
-                                logger.warning(f"PNG generation process exited without result for {pdf_path}")
-                        except Exception as e:
-                            logger.error(f"Error generating OCR PNG for magazine {magazine.id}: {e}")
-
-                    if png_path.exists():
-                        cover_path = str(png_path)
-                        logger.debug(f"Using OCR PNG: {png_path}")
+                        pending_pngs.append(
+                            {
+                                "magazine_id": magazine.id,
+                                "pdf_path": str(pdf_path),
+                                "png_path": str(png_path),
+                                "dpi": PDF_COVER_DPI_OCR,
+                                "max_dimension": OCR_IMAGE_MAX_DIMENSION,
+                            }
+                        )
+                        logger.info(f"Queuing PNG generation for magazine {magazine.id}")
                 else:
                     logger.warning(f"Magazine {magazine.id} is not a PDF, skipping OCR")
 
+            candidates.append(
+                {
+                    "job": job,
+                    "magazine": magazine,
+                    "png_path": png_path,
+                }
+            )
+
+        # ---------------------------------------------------------------------------
+        # Parallel PNG generation — all child processes run simultaneously so the
+        # wall-time is the slowest single PDF, not the sum of all PDFs.
+        # ---------------------------------------------------------------------------
+        if pending_pngs:
+            logger.info(f"Generating {len(pending_pngs)} OCR PNGs in parallel")
+            png_results = _generate_pngs_parallel(pending_pngs)
+        else:
+            png_results = {}
+
+        # ---------------------------------------------------------------------------
+        # Pass 2 — handle PNG results, mark jobs PROCESSING, build job_data.
+        # ---------------------------------------------------------------------------
+        job_data = []
+        for candidate in candidates:
+            job = candidate["job"]
+            magazine = candidate["magazine"]
+            png_path = candidate["png_path"]
+
+            cover_path = None
+            png_generated = False
+
+            if png_path is not None:
+                if png_path.exists():
+                    cover_path = str(png_path)
+                    # Flag as newly generated only if we launched a process for it
+                    png_generated = png_results.get(magazine.id, False)
+                    logger.debug(f"Using OCR PNG: {png_path}")
+
             if not cover_path:
                 logger.warning(f"Could not generate OCR PNG for magazine {magazine.id}")
-                # Re-verify job still exists before updating (may have been deleted concurrently)
                 db.expire(job)
                 job = db.query(OCRJob).filter(OCRJob.id == job.id).first()
                 if not job:
@@ -693,7 +759,12 @@ class OCRQueueService:
                     # Flag the JSON fields as modified so SQLAlchemy persists them
                     from core.utils.db import mark_json_modified
 
-                    mark_json_modified(magazine, "parsed_metadata", "derived_metadata", "extra_metadata")
+                    mark_json_modified(
+                        magazine,
+                        "parsed_metadata",
+                        "derived_metadata",
+                        "extra_metadata",
+                    )
 
                     # Clean up OCR PNG file immediately after successful processing
                     try:

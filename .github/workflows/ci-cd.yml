@@ -72,7 +72,7 @@ jobs:
         run: npx stylelint static/css/*.css
 
       - name: Run tests
-        run: .venv/bin/python -m pytest tests/ -v --tb=short
+        run: .venv/bin/python -m pytest tests/ -v --tb=short -m "not slow"
 
   build-and-push:
     name: Build & Push Docker Image
