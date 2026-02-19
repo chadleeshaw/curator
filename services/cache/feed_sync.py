@@ -123,6 +123,9 @@ class FeedSyncService:
                             existing.last_seen = now
                             if result.url:
                                 existing.url = result.url
+                            # Update provider_type if not set (for backwards compatibility)
+                            if not existing.provider_type:
+                                existing.provider_type = provider.type
                             stats["updated"] += 1
                         else:
                             # New entry
@@ -132,6 +135,7 @@ class FeedSyncService:
                             entry = RssFeedEntry(
                                 guid=guid,
                                 provider_name=provider.name,
+                                provider_type=provider.type,
                                 title=result.title,
                                 url=result.url or "",
                                 published_date=result.publication_date,

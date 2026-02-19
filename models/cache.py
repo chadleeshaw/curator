@@ -65,7 +65,8 @@ class RssFeedEntry(CacheBase):
 
     # Identity — GUID is the unique key per provider
     guid = Column(String(512), nullable=False, index=True)
-    provider_name = Column(String(255), nullable=False, index=True)
+    provider_name = Column(String(255), nullable=False, index=True)  # Display name (e.g., "IA")
+    provider_type = Column(String(100), nullable=True, index=True)  # Routing type (e.g., "internet_archive")
 
     # Content from RSS feed
     title = Column(String(512), nullable=False, index=True)

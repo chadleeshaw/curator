@@ -170,10 +170,13 @@ class FeedMatchService:
         if entry.category:
             raw_metadata["category"] = entry.category
 
+        # Use provider_type for routing (e.g., "internet_archive"), fall back to provider_name for legacy entries
+        provider = entry.provider_type if entry.provider_type else entry.provider_name
+
         return {
             "title": entry.title,
             "url": entry.url,
-            "provider": entry.provider_name,
+            "provider": provider,
             "pubdate": entry.published_date.isoformat() if entry.published_date else None,
             "guid": entry.guid,
             "raw_metadata": raw_metadata,
