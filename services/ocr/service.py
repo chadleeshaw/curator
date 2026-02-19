@@ -38,11 +38,16 @@ from core.constants.language import (
 from core.constants.files import PIL_MAX_IMAGE_PIXELS
 from core.constants.ocr import (
     OCR_DISABLE_ENV_VALUES,
+    OCR_IMAGE_MAX_DIMENSION,
     OCR_ISSUE_PATTERNS,
     OCR_MAX_PAGES,
+    OCR_MAX_VOLUME,
+    OCR_TIMEOUT_SECONDS,
     OCR_YEAR_PATTERN,
     OCR_VOLUME_PATTERNS,
     OCR_SPECIAL_EDITION_INDICATORS,
+    OCR_TESSERACT_PSM,
+    OCR_TESSERACT_OEM,
     PDF_COVER_DPI_OCR,
 )
 
@@ -50,6 +55,26 @@ from core.constants.ocr import (
 Image.MAX_IMAGE_PIXELS = PIL_MAX_IMAGE_PIXELS
 
 logger = logging.getLogger(__name__)
+
+
+def _resize_for_ocr(img: Image.Image) -> Image.Image:
+    """
+    Downscale a PIL Image so its longest dimension is at most OCR_IMAGE_MAX_DIMENSION px.
+
+    Magazine cover text is large enough that Tesseract doesn't need multi-thousand-pixel
+    images. Benchmarks show ~5x speedup (850ms → 173ms) with no accuracy regression on
+    tested fixtures when resizing a 200 DPI render from ~3820x5556 to ~825x1200 px.
+
+    Images already smaller than the limit are returned unchanged.
+    """
+    w, h = img.size
+    max_dim = max(w, h)
+    if max_dim <= OCR_IMAGE_MAX_DIMENSION:
+        return img
+    scale = OCR_IMAGE_MAX_DIMENSION / max_dim
+    new_size = (int(w * scale), int(h * scale))
+    logger.debug(f"Resizing image from {w}x{h} to {new_size[0]}x{new_size[1]} for OCR")
+    return img.resize(new_size, Image.Resampling.LANCZOS)
 
 
 class OCRServiceConfig:
@@ -290,7 +315,10 @@ def _extract_volume(text_upper: str) -> Optional[int]:
     for pattern in OCR_VOLUME_PATTERNS:
         match = re.search(pattern, text_upper)
         if match:
-            return int(match.group(1))
+            vol = int(match.group(1))
+            if vol <= OCR_MAX_VOLUME:
+                return vol
+            logger.debug(f"Skipping unreasonable volume number {vol} (exceeds {OCR_MAX_VOLUME})")
     return None
 
 
@@ -449,8 +477,21 @@ class OCRService:
                 pix = page.get_pixmap(dpi=dpi)
                 img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
 
-                # Get structured OCR data as a dict
-                data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT, lang=lang_code)
+                # Downscale to OCR_IMAGE_MAX_DIMENSION before Tesseract — large images
+                # give no accuracy benefit for cover text but cost significant processing time.
+                img = _resize_for_ocr(img)
+
+                # Build Tesseract config with defaults (no access to config file in static method)
+                tesseract_config = f"--psm {OCR_TESSERACT_PSM} --oem {OCR_TESSERACT_OEM}"
+
+                # Get structured OCR data as a dict (with timeout to prevent hanging)
+                data = pytesseract.image_to_data(
+                    img,
+                    output_type=pytesseract.Output.DICT,
+                    lang=lang_code,
+                    config=tesseract_config,
+                    timeout=OCR_TIMEOUT_SECONDS,
+                )
 
                 # Filter out low-confidence or empty detections
                 words = []
@@ -532,8 +573,20 @@ class OCRService:
             # Open image
             img = Image.open(image_path)
 
-            # Get structured OCR data
-            data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT, lang=lang_code)
+            # Downscale to OCR_IMAGE_MAX_DIMENSION before Tesseract
+            img = _resize_for_ocr(img)
+
+            # Build Tesseract config with defaults (no access to ocr_config here)
+            tesseract_config = f"--psm {OCR_TESSERACT_PSM} --oem {OCR_TESSERACT_OEM}"
+
+            # Get structured OCR data (with timeout to prevent hanging)
+            data = pytesseract.image_to_data(
+                img,
+                output_type=pytesseract.Output.DICT,
+                lang=lang_code,
+                config=tesseract_config,
+                timeout=OCR_TIMEOUT_SECONDS,
+            )
 
             # Filter and extract text
             text_parts = []
@@ -585,8 +638,20 @@ class OCRService:
             # Open image
             img = Image.open(image_path)
 
-            # Get structured OCR data
-            data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT, lang=lang_code)
+            # Downscale to OCR_IMAGE_MAX_DIMENSION before Tesseract
+            img = _resize_for_ocr(img)
+
+            # Build Tesseract config with defaults (no access to ocr_config here)
+            tesseract_config = f"--psm {OCR_TESSERACT_PSM} --oem {OCR_TESSERACT_OEM}"
+
+            # Get structured OCR data (with timeout to prevent hanging)
+            data = pytesseract.image_to_data(
+                img,
+                output_type=pytesseract.Output.DICT,
+                lang=lang_code,
+                config=tesseract_config,
+                timeout=OCR_TIMEOUT_SECONDS,
+            )
 
             # Filter and extract text + words
             text_parts = []

@@ -12,6 +12,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    UniqueConstraint,
 )
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -36,8 +37,8 @@ class Credentials(Base):
     username = Column(String(255), nullable=False, unique=True, index=True)
     password_hash = Column(String(255), nullable=False)
     api_token = Column(String(255), nullable=True, unique=True, index=True)  # For API access
-    created_at = Column(DateTime, default=utcnow)
-    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     def set_password(self, password: str) -> None:
         """Hash and set the password"""
@@ -74,7 +75,7 @@ class Periodical(Base):
     title = Column(String(255), nullable=False, index=True)
     language = Column(String(50), nullable=True, default=DEFAULT_LANGUAGE, index=True)  # Language of the edition
     category = Column(String(100), nullable=True, default=DEFAULT_CATEGORY, index=True)  # Content category
-    issue_date = Column(DateTime, nullable=False, index=True)
+    issue_date = Column(DateTime(timezone=True), nullable=False, index=True)
     file_path = Column(String(512), nullable=False, unique=True)
     cover_path = Column(String(512), nullable=True)
     content_hash = Column(String(64), nullable=True, index=True)  # SHA256 hash of file content for deduplication
@@ -84,8 +85,8 @@ class Periodical(Base):
     derived_metadata = Column(JSON, nullable=True)  # Final merged metadata with source attribution
     extra_metadata = Column(JSON, nullable=True)  # Import/provenance info only (imported_from, import_date, etc.)
 
-    created_at = Column(DateTime, default=utcnow, index=True)
-    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+    created_at = Column(DateTime(timezone=True), default=utcnow, index=True)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
     tracking_id = Column(
         Integer, ForeignKey("periodical_tracking.id"), nullable=True, index=True
     )  # Link to tracking record
@@ -140,26 +141,34 @@ class PeriodicalTracking(Base):
     organization_pattern = Column(
         String(255), nullable=True
     )  # Optional organization pattern override for this periodical
+    search_aliases = Column(
+        String(512), nullable=True
+    )  # Comma-separated alternative search names (instead of auto-expand)
 
     # Metadata
     periodical_metadata = Column(JSON, nullable=True)  # Full metadata from Open Library
-    last_metadata_update = Column(DateTime, nullable=True)
+    last_metadata_update = Column(DateTime(timezone=True), nullable=True)
 
     # Search scheduling (for adaptive search)
-    last_searched = Column(DateTime, nullable=True, index=True)  # When we last searched for this
+    last_searched = Column(DateTime(timezone=True), nullable=True, index=True)  # When we last searched for this
     search_count = Column(Integer, default=0)  # Total searches performed
     search_interval_hours = Column(Integer, default=6)  # How often to search (adaptive)
+
+    # Cache-first optimization
+    last_cache_match = Column(
+        DateTime(timezone=True), nullable=True, index=True
+    )  # When cache matching last found results
 
     # Discovery statistics
     total_issues_discovered = Column(Integer, default=0)  # Total unique issues found
     last_discovery_count = Column(Integer, default=0)  # New issues found in last search
-    last_discovery_date = Column(DateTime, nullable=True)  # When we last found new issues
+    last_discovery_date = Column(DateTime(timezone=True), nullable=True)  # When we last found new issues
 
     # Search efficiency tracking
     searches_without_new_issues = Column(Integer, default=0)  # Consecutive searches finding nothing new
 
-    created_at = Column(DateTime, default=utcnow, index=True)
-    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+    created_at = Column(DateTime(timezone=True), default=utcnow, index=True)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize PeriodicalTracking to dictionary for API responses"""
@@ -179,12 +188,14 @@ class PeriodicalTracking(Base):
             "category": self.category,
             "download_category": self.download_category,
             "organization_pattern": self.organization_pattern,
+            "search_aliases": self.search_aliases,
             "periodical_metadata": self.periodical_metadata,
             "last_metadata_update": self.last_metadata_update.isoformat() if self.last_metadata_update else None,
             # Search scheduling fields
             "last_searched": self.last_searched.isoformat() if self.last_searched else None,
             "search_count": self.search_count,
             "search_interval_hours": self.search_interval_hours,
+            "last_cache_match": self.last_cache_match.isoformat() if self.last_cache_match else None,
             "total_issues_discovered": self.total_issues_discovered,
             "last_discovery_count": self.last_discovery_count,
             "last_discovery_date": self.last_discovery_date.isoformat() if self.last_discovery_date else None,
@@ -199,15 +210,25 @@ class SearchResult(Base):
 
     __tablename__ = "search_results"
 
+    __table_args__ = (
+        # Prevent duplicate cache entries (race condition protection)
+        # Same fuzzy group + query should not be inserted multiple times
+        UniqueConstraint(
+            "fuzzy_match_group_id",
+            "query",
+            name="uq_search_cache_group_query",
+        ),
+    )
+
     id = Column(Integer, primary_key=True)
     provider = Column(String(100), nullable=False, index=True)  # e.g., "newsnab", "rss"
     query = Column(String(255), nullable=False, index=True)
     title = Column(String(255), nullable=False, index=True)
     url = Column(String(512), nullable=False)
-    publication_date = Column(DateTime, nullable=True)
+    publication_date = Column(DateTime(timezone=True), nullable=True)
     raw_metadata = Column(JSON, nullable=True)  # Provider-specific fields as JSON
     fuzzy_match_group_id = Column(String(255), nullable=True, index=True)  # Grouping for deduplication
-    created_at = Column(DateTime, default=utcnow, index=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow, index=True)
     periodical_id = Column(Integer, ForeignKey("periodicals.id"), nullable=True)  # Links to downloaded periodical
 
     def to_dict(self) -> Dict[str, Any]:
@@ -254,8 +275,8 @@ class DownloadSubmission(Base):
     last_error = Column(String(512), nullable=True)  # Last error message
     extra_status = Column(String(512), nullable=True)  # Additional status info (e.g., rate limiting)
     file_path = Column(String(512), nullable=True)  # Path where file was downloaded
-    created_at = Column(DateTime, default=utcnow, index=True)
-    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+    created_at = Column(DateTime(timezone=True), default=utcnow, index=True)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize DownloadSubmission to dictionary for API responses"""
@@ -296,8 +317,8 @@ class Download(Base):
     client_name = Column(String(100), nullable=False)  # Which client handled this
     periodical_id = Column(Integer, ForeignKey("periodicals.id"), nullable=True)
     search_result_id = Column(Integer, ForeignKey("search_results.id"), nullable=True)
-    created_at = Column(DateTime, default=utcnow, index=True)
-    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+    created_at = Column(DateTime(timezone=True), default=utcnow, index=True)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize Download to dictionary for API responses"""
@@ -339,10 +360,10 @@ class OCRJob(Base):
     last_error = Column(String(512), nullable=True)  # Last error message
     ocr_metadata = Column(JSON, nullable=True)  # Extracted OCR metadata
     processing_time_seconds = Column(Integer, nullable=True)  # Time taken to process
-    created_at = Column(DateTime, default=utcnow, index=True)
-    started_at = Column(DateTime, nullable=True)  # When processing started
-    completed_at = Column(DateTime, nullable=True)  # When processing completed
-    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+    created_at = Column(DateTime(timezone=True), default=utcnow, index=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)  # When processing started
+    completed_at = Column(DateTime(timezone=True), nullable=True)  # When processing completed
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize OCRJob to dictionary for API responses"""
@@ -383,7 +404,7 @@ class DiscoveredIssue(Base):
     fuzzy_match_group = Column(String(255), nullable=False, index=True)  # For deduplication
 
     # Issue metadata (parsed from title, may be incomplete)
-    issue_date = Column(DateTime, nullable=True, index=True)
+    issue_date = Column(DateTime(timezone=True), nullable=True, index=True)
     issue_number = Column(String(50), nullable=True)
     year = Column(Integer, nullable=True, index=True)
     month = Column(Integer, nullable=True, index=True)
@@ -391,8 +412,8 @@ class DiscoveredIssue(Base):
     country = Column(String(50), nullable=True, index=True)  # Country/region edition (e.g., "US", "UK", "AU")
 
     # Discovery tracking
-    first_seen = Column(DateTime, default=utcnow, index=True)
-    last_seen = Column(DateTime, default=utcnow, index=True)
+    first_seen = Column(DateTime(timezone=True), default=utcnow, index=True)
+    last_seen = Column(DateTime(timezone=True), default=utcnow, index=True)
     times_seen = Column(Integer, default=1)  # How many times we've seen this in searches
 
     # Download state machine
@@ -412,6 +433,7 @@ class DiscoveredIssue(Base):
     # Search result tracking (we may see same issue from multiple providers)
     latest_url = Column(String(512), nullable=True)  # Most recent NZB/download URL
     latest_provider = Column(String(100), nullable=True)  # Most recent provider
+    latest_pubdate = Column(DateTime(timezone=True), nullable=True, index=True)  # When NZB was posted (for retention)
     search_result_ids = Column(JSON, default=list)  # List of SearchResult.id we've seen
 
     # Download tracking
@@ -422,14 +444,14 @@ class DiscoveredIssue(Base):
     # Failure tracking
     attempt_count = Column(Integer, default=0)
     max_retries = Column(Integer, default=1)  # Configurable per-issue
-    last_attempt = Column(DateTime, nullable=True)
+    last_attempt = Column(DateTime(timezone=True), nullable=True)
     last_error = Column(String(512), nullable=True)
 
     # Additional metadata
     extra_metadata = Column(JSON, nullable=True)
 
-    created_at = Column(DateTime, default=utcnow, index=True)
-    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+    created_at = Column(DateTime(timezone=True), default=utcnow, index=True)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dictionary for API responses"""
@@ -452,6 +474,7 @@ class DiscoveredIssue(Base):
             "download_priority": self.download_priority,
             "latest_url": self.latest_url,
             "latest_provider": self.latest_provider,
+            "latest_pubdate": self.latest_pubdate.isoformat() if self.latest_pubdate else None,
             "search_result_ids": self.search_result_ids,
             "current_submission_id": self.current_submission_id,
             "submission_ids": self.submission_ids,
@@ -466,6 +489,64 @@ class DiscoveredIssue(Base):
         }
 
 
+class Stack(Base):
+    """User-created grouping of periodicals and tracking items"""
+
+    __tablename__ = "stacks"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255), nullable=False, unique=True, index=True)
+    slug = Column(String(255), nullable=False, unique=True, index=True)
+    description = Column(String(1024), nullable=True)
+    categories = Column(JSON, nullable=True)
+    cover_override_path = Column(String(512), nullable=True)  # Custom cover image path
+    sort_order = Column(Integer, nullable=False, default=0)  # For manual ordering
+    created_at = Column(DateTime(timezone=True), default=utcnow, index=True)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize Stack to dictionary for API responses"""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "slug": self.slug,
+            "description": self.description,
+            "categories": self.categories or [],
+            "cover_override_path": self.cover_override_path,
+            "sort_order": self.sort_order,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class StackMembership(Base):
+    """Associates periodicals or tracking items with a stack (one stack per item)"""
+
+    __tablename__ = "stack_memberships"
+
+    id = Column(Integer, primary_key=True)
+    stack_id = Column(Integer, ForeignKey("stacks.id"), nullable=False, index=True)
+    periodical_tracking_id = Column(
+        Integer,
+        ForeignKey("periodical_tracking.id"),
+        nullable=True,
+        unique=True,
+        index=True,
+    )
+    periodical_id = Column(Integer, ForeignKey("periodicals.id"), nullable=True, unique=True, index=True)
+    added_at = Column(DateTime(timezone=True), default=utcnow)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize StackMembership to dictionary for API responses"""
+        return {
+            "id": self.id,
+            "stack_id": self.stack_id,
+            "periodical_tracking_id": self.periodical_tracking_id,
+            "periodical_id": self.periodical_id,
+            "added_at": self.added_at.isoformat() if self.added_at else None,
+        }
+
+
 class ReadingProgress(Base):
     """Track reading progress for periodicals across different formats"""
 
@@ -477,9 +558,9 @@ class ReadingProgress(Base):
     current_chapter = Column(Integer, nullable=True)  # For EPUBs (0-indexed)
     total_pages = Column(Integer, nullable=True)  # Total pages/chapters
     progress_percent = Column(Integer, nullable=True)  # 0-100
-    last_read_at = Column(DateTime, default=utcnow, index=True)
-    created_at = Column(DateTime, default=utcnow)
-    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+    last_read_at = Column(DateTime(timezone=True), default=utcnow, index=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize ReadingProgress to dictionary for API responses"""

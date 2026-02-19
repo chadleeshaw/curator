@@ -29,6 +29,7 @@ VALID_CONFIG_KEYS = {
     "search_providers",
     "metadata_providers",
     "download_client",
+    "download_clients",
     "storage",
     "cache",
     "matching",

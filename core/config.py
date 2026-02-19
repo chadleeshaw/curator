@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 CONFIG_KEY_SEARCH_PROVIDERS = "search_providers"
 CONFIG_KEY_METADATA_PROVIDERS = "metadata_providers"
 CONFIG_KEY_DOWNLOAD_CLIENT = "download_client"
+CONFIG_KEY_DOWNLOAD_CLIENTS = "download_clients"
 CONFIG_KEY_STORAGE = "storage"
 CONFIG_KEY_CACHE = "cache"
 CONFIG_KEY_MATCHING = "matching"
@@ -291,6 +292,15 @@ class ConfigLoader:
             raise ValueError("No download client configured")
         return client
 
+    def get_download_clients(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Get additional download clients configuration.
+
+        Returns dict mapping client type to its configuration.
+        Used for multi-client support (e.g., Internet Archive + SABnzbd).
+        """
+        return self.config.get(CONFIG_KEY_DOWNLOAD_CLIENTS, {})
+
     def get_storage(self) -> Dict[str, Any]:
         """
         Get storage configuration with environment variable overrides and validation.
@@ -321,43 +331,21 @@ class ConfigLoader:
         Returns:
             Dictionary with cache settings:
             - enabled: Whether cache is enabled (default: True)
-            - retention_days: Days to retain cached releases (default: 90)
-            - sync: Sync settings (interval, limits)
+            - max_nzb_fetches_per_hour: Rate limit for NZB fetches
         """
-        from core.constants.cache import (
-            CACHE_RETENTION_DAYS,
-            DEFAULT_SYNC_INTERVAL_SECONDS,
-            INITIAL_SYNC_LIMIT,
-            INCREMENTAL_SYNC_LIMIT,
-        )
+        from core.constants.cache import DEFAULT_MAX_NZB_FETCHES_PER_HOUR
 
         cache_config = self.config.get(CONFIG_KEY_CACHE, {})
 
-        # Return config with defaults
         return {
             "enabled": cache_config.get("enabled", True),
-            "retention_days": cache_config.get("retention_days", CACHE_RETENTION_DAYS),
-            "sync": {
-                "interval_seconds": cache_config.get("sync", {}).get("interval_seconds", DEFAULT_SYNC_INTERVAL_SECONDS),
-                "initial_sync_limit": cache_config.get("sync", {}).get("initial_sync_limit", INITIAL_SYNC_LIMIT),
-                "incremental_sync_limit": cache_config.get("sync", {}).get(
-                    "incremental_sync_limit", INCREMENTAL_SYNC_LIMIT
-                ),
-            },
+            "max_nzb_fetches_per_hour": cache_config.get("max_nzb_fetches_per_hour", DEFAULT_MAX_NZB_FETCHES_PER_HOUR),
         }
 
     def get_matching(self) -> Dict[str, Any]:
         """Get matching configuration"""
         from core.constants.app import DEFAULT_FUZZY_THRESHOLD
         from core.constants.date import DUPLICATE_DATE_THRESHOLD_DAYS
-
-        return self.config.get(
-            CONFIG_KEY_MATCHING,
-            {
-                "fuzzy_threshold": DEFAULT_FUZZY_THRESHOLD,
-                "duplicate_date_threshold_days": DUPLICATE_DATE_THRESHOLD_DAYS,
-            },
-        )
 
         return self.config.get(
             CONFIG_KEY_MATCHING,

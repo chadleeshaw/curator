@@ -55,6 +55,9 @@ ISSUE_PREFIX = "No"
 ORGANIZED_FILENAME_SEPARATOR = " - "
 """Separator used in organized filenames between components"""
 
+IMPORT_MARKER_FILE = ".importing"
+"""Marker file name used to indicate import is in progress for a folder"""
+
 
 # ==============================================================================
 # File Extensions and Types
@@ -109,8 +112,34 @@ BLACKLISTED_FILE_EXTENSIONS = {
 
 
 # ==============================================================================
+# Temporary/Incomplete Download Patterns
+# ==============================================================================
+
+INCOMPLETE_DOWNLOAD_PATTERNS = {
+    "_unpack_",  # SABnzbd unpacking prefix
+    "_UNPACK_",  # SABnzbd unpacking prefix (uppercase)
+    ".!qb",  # qBittorrent incomplete extension
+    ".part",  # Firefox/Chrome partial downloads
+    ".crdownload",  # Chrome download in progress
+    ".tmp",  # Generic temporary files
+}
+"""Set of patterns indicating incomplete/temporary downloads that should be skipped during import"""
+
+
+# ==============================================================================
 # File Hashing
 # ==============================================================================
 
 DEFAULT_HASH_CHUNK_SIZE = 8192
 """Default chunk size in bytes for reading files during hashing (8KB)"""
+
+
+# ==============================================================================
+# File Extension Detection
+# ==============================================================================
+
+MAX_FILE_EXTENSION_LENGTH = 4
+"""Maximum length for file extensions when detecting extensions in filenames"""
+
+YEAR_STRING_LENGTH = 4
+"""Length of a year string (YYYY format)"""

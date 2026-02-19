@@ -34,11 +34,11 @@ class SearchScheduler:
 
     def __init__(
         self,
-        max_periodicals_per_run: int = 2,
-        rapid_interval_hours: int = 1,
-        normal_interval_hours: int = 6,
-        slow_interval_hours: int = 24,
-        very_slow_interval_hours: int = 168,  # 7 days
+        max_periodicals_per_run: int = 10,
+        rapid_interval_hours: float = 0.5,  # 30 minutes when finding new issues
+        normal_interval_hours: float = 2,  # 2 hours default
+        slow_interval_hours: float = 12,  # 12 hours after some empty searches
+        very_slow_interval_hours: float = 48,  # 2 days after many empty searches
         empty_search_threshold: int = 3,  # Slow down after N empty searches
     ):
         """
@@ -77,23 +77,27 @@ class SearchScheduler:
         now = utc_now()
         candidates = []
 
+        # Only search periodicals that have download criteria set.
+        # "Watch Only" items (track_all=False, track_new=False, no selected_years)
+        # will never download anything, so searching wastes API rate limit budget.
+        # selected_years is a JSON column that may be NULL or [] so we filter in Python.
+
         # Priority 1: Never searched before
-        never_searched = (
-            session.query(PeriodicalTracking)
-            .filter(PeriodicalTracking.last_searched.is_(None))
-            .limit(self.max_periodicals_per_run)
-            .all()
-        )
+        never_searched = session.query(PeriodicalTracking).filter(PeriodicalTracking.last_searched.is_(None)).all()
+
+        # Filter to only downloadable periodicals (track_all, track_new, or selected_years)
+        never_searched = [p for p in never_searched if self._has_download_criteria(p)]
 
         if never_searched:
-            logger.debug(f"Found {len(never_searched)} periodicals never searched before")
-            candidates.extend(never_searched)
+            logger.debug(f"Found {len(never_searched)} downloadable periodicals never searched before")
+            candidates.extend(never_searched[: self.max_periodicals_per_run])
 
         # If we have enough, return
         if len(candidates) >= self.max_periodicals_per_run:
             return candidates[: self.max_periodicals_per_run]
 
         # Priority 2: Overdue for search
+        remaining = self.max_periodicals_per_run - len(candidates)
         overdue = (
             session.query(PeriodicalTracking)
             .filter(
@@ -105,17 +109,41 @@ class SearchScheduler:
                 )
             )
             .order_by(PeriodicalTracking.last_searched.asc())  # Oldest first
-            .limit(self.max_periodicals_per_run - len(candidates))
             .all()
         )
 
+        # Filter to only downloadable periodicals
+        overdue = [p for p in overdue if self._has_download_criteria(p)][:remaining]
+
         if overdue:
-            logger.debug(f"Found {len(overdue)} periodicals overdue for search")
+            logger.debug(f"Found {len(overdue)} downloadable periodicals overdue for search")
             candidates.extend(overdue)
 
         logger.debug(f"Selected {len(candidates)} periodicals to search: " f"{[p.title for p in candidates]}")
 
         return candidates[: self.max_periodicals_per_run]
+
+    @staticmethod
+    def _has_download_criteria(tracking: PeriodicalTracking) -> bool:
+        """Check if a tracked periodical has any download criteria set.
+
+        Periodicals in "Watch Only" mode (no download flags or year selections)
+        should not be searched during auto-download since they would never
+        download anything, wasting API rate limit budget.
+
+        Args:
+            tracking: PeriodicalTracking record to check
+
+        Returns:
+            True if the periodical has criteria that could trigger downloads
+        """
+        if tracking.track_all_editions:
+            return True
+        if tracking.track_new_only:
+            return True
+        if tracking.selected_years and len(tracking.selected_years) > 0:
+            return True
+        return False
 
     def update_search_stats(
         self,
@@ -275,9 +303,43 @@ class SearchScheduler:
 
         return True
 
+    def reset_all_search_intervals(self, session: Session) -> Dict[str, int]:
+        """
+        Reset all tracked periodicals to normal search interval.
+
+        Useful after filter changes or to recover from overly slowed-down intervals.
+
+        Args:
+            session: Database session
+
+        Returns:
+            Dict with stats: {reset: count, already_normal: count}
+        """
+        stats = {"reset": 0, "already_normal": 0}
+
+        periodicals = session.query(PeriodicalTracking).all()
+
+        for tracking in periodicals:
+            if tracking.search_interval_hours != self.normal_interval_hours:
+                old_interval = tracking.search_interval_hours
+                tracking.search_interval_hours = self.normal_interval_hours
+                tracking.searches_without_new_issues = 0
+                stats["reset"] += 1
+                logger.debug(f"Reset interval for '{tracking.title}': {old_interval}h -> {self.normal_interval_hours}h")
+            else:
+                stats["already_normal"] += 1
+
+        session.commit()
+        logger.info(
+            f"Reset all search intervals: {stats['reset']} reset to normal, "
+            f"{stats['already_normal']} already at normal interval"
+        )
+
+        return stats
+
     # Private helper methods
 
-    def _calculate_new_interval(self, searches_without_new_issues: int) -> int:
+    def _calculate_new_interval(self, searches_without_new_issues: int) -> float:
         """
         Calculate new search interval based on consecutive empty searches.
 

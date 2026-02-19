@@ -17,7 +17,9 @@ from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from core.parsers import Parser, utc_now
+from core.utils.date import dates_are_fuzzy_match
 from core.utils.fuzzy_matching import get_fuzzy_group_id
+from core.constants.app import MAX_DOWNLOAD_RETRIES_IA, NEW_ISSUE_THRESHOLD_DAYS
 from models.database import DiscoveredIssue, Periodical, PeriodicalTracking
 
 logger = logging.getLogger(__name__)
@@ -106,9 +108,35 @@ class IssueDiscoveryService:
                     stats["rejected_non_periodical"] += 1
                     continue
 
+                # Skip IA collection archives (they contain many issues, not single issues)
+                raw_metadata = result.get("raw_metadata", {})
+                if raw_metadata.get("is_collection"):
+                    logger.debug(f"Skipping IA collection archive: {title}")
+                    stats["rejected_non_periodical"] += 1
+                    continue
+
+                # For IA results, verify title actually matches the periodical we're tracking
+                # IA returns items where search term appears anywhere in metadata, not just title
+                provider = result.get("provider", "")
+                if provider == "internet_archive":
+                    result_title_lower = title.lower()
+                    search_terms = tracking.title.lower().split()
+                    # Require significant search terms (3+ chars) to be in the title
+                    significant_terms = [t for t in search_terms if len(t) >= 3]
+                    if significant_terms:
+                        matching_terms = sum(1 for t in significant_terms if t in result_title_lower)
+                        match_ratio = matching_terms / len(significant_terms)
+                        if match_ratio < 0.5:
+                            logger.debug(
+                                f"Skipping IA result with poor title match: '{title}' "
+                                f"(tracking '{tracking.title}', match ratio: {match_ratio:.1%})"
+                            )
+                            stats["rejected_non_periodical"] += 1
+                            continue
+
                 url = result.get("url", "")
                 provider = result.get("provider", "")
-                pubdate_str = result.get("pubdate")
+                pubdate_str = result.get("pubdate") or result.get("publication_date")
 
                 # Parse pubdate string to datetime if provided
                 pubdate = None
@@ -145,7 +173,7 @@ class IssueDiscoveryService:
 
                 # Generate fuzzy match group for deduplication
                 # This normalizes the title to group similar results together
-                fuzzy_group = get_fuzzy_group_id(parsed.cleaned_title, parsed.publication_date)
+                fuzzy_group = get_fuzzy_group_id(parsed.original_title)
 
                 # Check if we've already discovered this issue
                 existing = (
@@ -164,9 +192,29 @@ class IssueDiscoveryService:
                     existing.last_seen = now
                     existing.times_seen += 1
 
-                    # Update with latest metadata (may be from different provider)
-                    existing.latest_url = result.get("url")
-                    existing.latest_provider = parsed.provider
+                    # Prefer newer NZBs for better Usenet retention
+                    # Only update URL/provider if new result is newer (or existing has no pubdate)
+                    new_pubdate = pubdate
+                    should_update_url = False
+
+                    if new_pubdate:
+                        if existing.latest_pubdate is None:
+                            # No existing pubdate, always use the new one
+                            should_update_url = True
+                        elif new_pubdate > existing.latest_pubdate:
+                            # New result is newer, prefer it
+                            should_update_url = True
+                            logger.debug(
+                                f"Preferring newer NZB for {fuzzy_group}: " f"{new_pubdate} > {existing.latest_pubdate}"
+                            )
+                    elif existing.latest_pubdate is None:
+                        # Neither has pubdate, just update (backwards compatible)
+                        should_update_url = True
+
+                    if should_update_url:
+                        existing.latest_url = result.get("url")
+                        existing.latest_provider = parsed.provider
+                        existing.latest_pubdate = new_pubdate
 
                     # Add search result ID if available
                     if "search_result_id" in result and result["search_result_id"]:
@@ -183,7 +231,7 @@ class IssueDiscoveryService:
                         normalized_title=parsed.cleaned_title.lower(),
                         fuzzy_match_group=fuzzy_group,
                         issue_date=parsed.publication_date,
-                        issue_number=None,  # Not easily extractable from search results
+                        issue_number=parsed.raw_metadata.get("issue"),
                         year=parsed.publication_date.year if parsed.publication_date else None,
                         month=parsed.publication_date.month if parsed.publication_date else None,
                         language=parsed.language,
@@ -195,12 +243,16 @@ class IssueDiscoveryService:
                         download_priority=50,  # Default middle priority
                         latest_url=result.get("url"),
                         latest_provider=parsed.provider,
+                        latest_pubdate=pubdate,  # Store NZB post date for retention preference
                         search_result_ids=(
                             [result["search_result_id"]]
                             if "search_result_id" in result and result["search_result_id"]
                             else []
                         ),
-                        max_retries=self.default_max_retries,
+                        # IA downloads get more retries since failures are usually transient (server busy)
+                        max_retries=(
+                            MAX_DOWNLOAD_RETRIES_IA if provider == "internet_archive" else self.default_max_retries
+                        ),
                         extra_metadata={
                             "raw_title": title,
                             "base_title": parsed.base_title,
@@ -455,14 +507,6 @@ class IssueDiscoveryService:
         logger.debug(f"[VALIDATION] ✓ ACCEPTED: {title}")
         return True
 
-        # Layer 2: File size heuristics (if available)
-        if not self._validate_file_size(search_result):
-            logger.debug(f"[VALIDATION] Rejecting '{title}': Suspicious file size")
-            return False
-
-        logger.debug(f"[VALIDATION] ✓ ACCEPTED: {title}")
-        return True
-
     def _has_periodical_patterns(self, title: str) -> bool:
         """
         Check if title contains patterns typical of periodicals.
@@ -536,43 +580,6 @@ class IssueDiscoveryService:
 
         return False
 
-    def _validate_file_size(self, search_result: Dict[str, Any]) -> bool:
-        """
-        Validate file size is within typical periodical range.
-
-        Typical ranges:
-        - Magazines (PDF): 10MB - 500MB
-        - Comics (CBZ/CBR): 50MB - 500MB
-        - Suspiciously small: <5MB (likely article/ebook)
-        - Suspiciously large: >1000MB (likely collection/pack)
-
-        Args:
-            search_result: Search result dictionary
-
-        Returns:
-            True if size is reasonable for periodical (or unknown)
-        """
-        from core.constants.validation import FILE_SIZE_MIN_MB, FILE_SIZE_MAX_MB
-
-        size_bytes = search_result.get("size", 0)
-        if size_bytes == 0:
-            # Unknown size - allow (can't validate)
-            return True
-
-        size_mb = size_bytes / (1024 * 1024)
-
-        # Suspiciously small (likely book/article)
-        if size_mb < FILE_SIZE_MIN_MB:
-            logger.debug(f"Suspicious: Very small file ({size_mb:.1f}MB), likely not a periodical")
-            return False
-
-        # Suspiciously large (likely collection/pack)
-        if size_mb > FILE_SIZE_MAX_MB:
-            logger.debug(f"Suspicious: Very large file ({size_mb:.1f}MB), likely a collection")
-            return False
-
-        return True
-
     def _should_download(self, issue: DiscoveredIssue, tracking: PeriodicalTracking) -> bool:
         """
         Determine if an issue should be downloaded based on tracking rules.
@@ -600,15 +607,33 @@ class IssueDiscoveryService:
         if tracking.track_all_editions:
             return True
 
-        # Rule 2: track_new_only = True means only download future/current issues
+        # Rule 2: track_new_only = True means only download recent/current issues
         if tracking.track_new_only:
             if issue.issue_date:
-                now = utc_now()
-                # Download if issue date is current or future
-                return issue.issue_date >= now
+                # Use naive datetime for comparison (issue_date is stored as naive in DB)
+                # Normalize both to naive datetimes for comparison
+                now = utc_now().replace(tzinfo=None)
+                issue_date_naive = (
+                    issue.issue_date.replace(tzinfo=None) if issue.issue_date.tzinfo else issue.issue_date
+                )
+                days_old = (now - issue_date_naive).days
+                # Consider issues within the threshold as "new"
+                # Future-dated issues (days_old < 0) are always considered new
+                is_new = days_old <= NEW_ISSUE_THRESHOLD_DAYS
+                if not is_new:
+                    logger.debug(
+                        f"Skipping old issue for track_new_only: {issue.title} "
+                        f"(issue_date: {issue.issue_date}, {days_old} days old)"
+                    )
+                return is_new
+            elif issue.year:
+                # If we have a year but no full date, check if it's the current year
+                current_year = utc_now().year
+                return issue.year >= current_year
             else:
-                # If no date, assume it's new and download it
-                return True
+                # No date information at all - skip to avoid downloading old back issues
+                logger.debug(f"Skipping issue with no date for track_new_only: {issue.title}")
+                return False
 
         # Rule 3: selected_years - download issues from specific years
         if tracking.selected_years and issue.year:
@@ -642,8 +667,10 @@ class IssueDiscoveryService:
         # Factor 1: Recency (max +30)
         if issue.issue_date:
             # Use naive datetime for comparison (issue_date is stored as naive in DB)
-            now = datetime.now()
-            days_old = (now - issue.issue_date).days
+            # Normalize both to naive datetimes for comparison
+            now = utc_now().replace(tzinfo=None)
+            issue_date_naive = issue.issue_date.replace(tzinfo=None) if issue.issue_date.tzinfo else issue.issue_date
+            days_old = (now - issue_date_naive).days
 
             if days_old < 7:
                 priority += 30  # Very recent
@@ -746,6 +773,11 @@ class IssueDiscoveryService:
         """
         Check if an issue is already in the library.
 
+        Uses two matching strategies:
+        1. Fuzzy date matching (primary) - handles date defaulting and season spanning
+        2. Fuzzy group ID matching (fallback) - handles missing dates by comparing
+           normalized title+date identifiers against library items
+
         Args:
             issue: DiscoveredIssue to check
             tracking: PeriodicalTracking for context
@@ -754,15 +786,6 @@ class IssueDiscoveryService:
         Returns:
             Magazine ID if issue already exists in library, None otherwise
         """
-        # Check by fuzzy match - look for similar titles and dates
-        if not issue.issue_date:
-            # Without a date, we can't reliably determine if we have it
-            return None
-
-        # Normalize dates to just the date part (ignore time) for comparison
-        issue_date_only = issue.issue_date.date()
-
-        # Query for magazines with similar title and same date
         existing = (
             session.query(Periodical)
             .filter(
@@ -773,9 +796,29 @@ class IssueDiscoveryService:
             .all()
         )
 
-        # Check if any existing magazine matches the date (ignoring time)
-        for mag in existing:
-            if mag.issue_date and mag.issue_date.date() == issue_date_only:
-                return mag.id
+        if not existing:
+            return None
+
+        # Primary: fuzzy date matching (when issue has a date)
+        if issue.issue_date:
+            issue_date_only = issue.issue_date.date()
+            for mag in existing:
+                if mag.issue_date and dates_are_fuzzy_match(mag.issue_date.date(), issue_date_only):
+                    logger.debug(
+                        f"Fuzzy date match found: library {mag.issue_date.date()} matches search {issue_date_only}"
+                    )
+                    return mag.id
+
+        # Fallback: match by fuzzy group ID against library items
+        # This catches cases where date parsing failed but the issue is clearly the same
+        if issue.fuzzy_match_group:
+            for mag in existing:
+                if mag.issue_date:
+                    lib_group = get_fuzzy_group_id(mag.title)
+                    if lib_group == issue.fuzzy_match_group:
+                        logger.debug(
+                            f"Fuzzy group match found: library '{mag.title}' matches {issue.fuzzy_match_group}"
+                        )
+                        return mag.id
 
         return None

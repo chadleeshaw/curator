@@ -16,17 +16,58 @@
     <link rel="stylesheet" href="/static/css/periodical.css" />
   </head>
   <body>
+    <!-- Breadcrumb (outside container for sticky positioning) -->
+    <nav id="breadcrumb" class="breadcrumb detail-breadcrumb">
+      <a href="/#library">Library</a>
+      <span class="separator">/</span>
+      <span class="current">{{PERIODICAL_TITLE}}</span>
+    </nav>
+
     <div
       class="container"
       id="periodical-container"
       data-years="{{YEARS_DATA}}"
       data-special-editions="{{SPECIAL_EDITIONS_DATA}}"
     >
-      <button onclick="goBack()" class="back-button">← Back to Library</button>
-
-      <div class="periodical-header">
-        <h1 id="periodical-title">{{PERIODICAL_TITLE}}</h1>
-        <p>Published Issues by Year</p>
+      <div class="periodical-header collapsible-header">
+        <div class="header-content-row">
+          <div>
+            <h1 id="periodical-title">
+              <span class="header-icon">📖</span><span>{{PERIODICAL_TITLE}}</span>
+            </h1>
+            <p id="periodical-subtitle">Published Issues by Year</p>
+          </div>
+          <div class="sort-controls">
+            <button
+              id="bulk-select-toggle"
+              class="bulk-select-btn"
+              onclick="toggleBulkSelectMode()"
+              title="Select multiple issues for bulk operations"
+            >
+              <span class="bulk-select-icon">☑</span><span class="btn-label"> Select</span>
+            </button>
+            <label for="periodical-sort-select">Sort:</label>
+            <select
+              id="periodical-sort-select"
+              onchange="setPeriodicalSort(this.value)"
+              aria-label="Sort issues by"
+            >
+              <option value="issue_date">Issue Date</option>
+              <option value="title">Title</option>
+              <option value="volume">Volume</option>
+              <option value="added_date">Added Date</option>
+            </select>
+            <button
+              id="periodical-sort-toggle"
+              class="sort-toggle-btn"
+              onclick="togglePeriodicalSortOrder()"
+              aria-label="Toggle sort order"
+              title="Toggle ascending/descending"
+            >
+              ↑
+            </button>
+          </div>
+        </div>
       </div>
 
       <div id="issues-container"></div>
@@ -105,17 +146,7 @@
             <div id="edit-language-container" class="form-field">
               <label class="form-label">Language</label>
               <select id="edit-language" class="form-input">
-                <option value="English">English</option>
-                <option value="German">German</option>
-                <option value="French">French</option>
-                <option value="Spanish">Spanish</option>
-                <option value="Italian">Italian</option>
-                <option value="Portuguese">Portuguese</option>
-                <option value="Dutch">Dutch</option>
-                <option value="Polish">Polish</option>
-                <option value="Russian">Russian</option>
-                <option value="Japanese">Japanese</option>
-                <option value="Chinese">Chinese</option>
+                <!-- Languages populated dynamically from API -->
               </select>
               <small class="form-hint">📌 Controlled by tracking record</small>
             </div>
@@ -196,6 +227,27 @@
                 >📄 Specify which PDF page to use as cover (default: 1)</small
               >
             </div>
+            <div class="form-field">
+              <label class="form-label">Upload Custom Cover</label>
+              <div class="cover-upload-container">
+                <input
+                  type="file"
+                  id="edit-cover-file"
+                  accept="image/jpeg,image/png,image/webp"
+                  class="form-input-file"
+                  onchange="previewCoverUpload(this)"
+                />
+                <div id="cover-upload-preview" class="cover-upload-preview hidden">
+                  <img id="cover-preview-img" alt="Cover preview" />
+                  <button type="button" onclick="clearCoverUpload()" class="btn-remove-preview">
+                    ✕
+                  </button>
+                </div>
+              </div>
+              <small class="form-hint"
+                >🖼️ Optional: Upload a custom cover image (JPG, PNG, WebP)</small
+              >
+            </div>
           </div>
         </div>
         <div class="metadata-footer">
@@ -212,6 +264,9 @@
             </button>
             <button onclick="openMoveIssueModal()" class="btn-secondary full-width">
               🔀 Move to Different Tracking
+            </button>
+            <button onclick="regenerateThumbnailOcr()" class="btn-secondary full-width">
+              🔄 Regenerate Thumbnail &amp; OCR
             </button>
           </div>
           <div id="metadata-edit-buttons" class="hidden metadata-edit-buttons">
@@ -244,6 +299,140 @@
               Move Issue
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bulk Action Bar (floating bottom) -->
+    <div id="bulk-action-bar" class="bulk-action-bar hidden">
+      <div class="bulk-action-content">
+        <div class="bulk-action-info">
+          <span id="bulk-selected-count">0</span> issue(s) selected
+          <button onclick="selectAllIssues()" class="bulk-link-btn">Select All</button>
+          <button onclick="deselectAllIssues()" class="bulk-link-btn">Deselect All</button>
+        </div>
+        <div class="bulk-action-buttons">
+          <button onclick="openBulkMoveModal()" class="btn-primary bulk-btn">
+            🔀 Move to Tracking
+          </button>
+          <button onclick="openBulkRegenerateModal()" class="btn-primary bulk-btn">
+            🔄 Regenerate Thumbnail & OCR
+          </button>
+          <button onclick="openBulkDeleteModal()" class="btn-delete bulk-btn">
+            🗑️ Delete
+          </button>
+          <button onclick="toggleBulkSelectMode()" class="btn-secondary bulk-btn">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bulk Regenerate Thumbnail & OCR Modal -->
+    <div id="bulk-regenerate-modal" class="modal hidden">
+      <div class="modal-content delete-modal-content" style="max-width: 600px">
+        <h3>🔄 Regenerate Thumbnails & OCR</h3>
+        <p class="delete-modal-subtitle">
+          Regenerate cover thumbnails and queue OCR for
+          <strong id="bulk-regenerate-count">0</strong> selected issue(s)?
+        </p>
+
+        <div class="bg-surface-variant rounded-lg p-15 mb-20">
+          <p class="m-0">
+            This will extract a fresh cover image from each PDF and queue high-priority OCR jobs.
+            Existing thumbnails will be replaced.
+          </p>
+        </div>
+
+        <div class="flex gap-10 justify-end">
+          <button onclick="closeBulkRegenerateModal()" class="save-btn btn-cancel">Cancel</button>
+          <button onclick="confirmBulkRegenerate()" class="save-btn btn-primary" id="confirm-bulk-regenerate-btn">
+            Regenerate
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bulk Move Modal -->
+    <div id="bulk-move-modal" class="modal hidden">
+      <div class="modal-content move-modal-content">
+        <h3>🔀 Move Issues to Different Tracking</h3>
+        <p class="modal-description">
+          Move <strong id="bulk-move-count">0</strong> selected issue(s) to a different tracking record.
+        </p>
+        <div id="bulk-move-loading" class="modal-loading">
+          <div class="loading-spinner"></div>
+          <p>Loading tracking options...</p>
+        </div>
+        <div id="bulk-move-options" class="hidden">
+          <select id="bulk-target-tracking-select" class="form-select">
+            <option value="">Select a tracking record...</option>
+          </select>
+          <div class="modal-actions">
+            <button onclick="closeBulkMoveModal()" class="btn-secondary">Cancel</button>
+            <button onclick="confirmBulkMove()" class="btn-primary" id="confirm-bulk-move-btn" disabled>
+              Move Issues
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bulk Delete Modal -->
+    <div id="bulk-delete-modal" class="modal hidden">
+      <div class="modal-content delete-modal-content">
+        <h3 class="delete-modal-title">Delete Issues</h3>
+        <p class="delete-modal-subtitle">
+          Are you sure you want to delete <strong id="bulk-delete-count">0</strong> selected issue(s)?
+        </p>
+
+        <div class="bg-warning rounded-lg p-15 mb-20">
+          <strong>⚠️ Warning:</strong> This action cannot be undone.
+        </div>
+
+        <div class="bg-surface-variant rounded-lg p-15 mb-20">
+          <p class="m-0 mb-10 font-bold text-primary">What would you like to do?</p>
+          <div class="flex gap-10 flex-col">
+            <label class="delete-option-label">
+              <input
+                type="radio"
+                name="bulk-delete-option"
+                value="db-only"
+                checked
+                class="radio-input"
+              />
+              <span
+                ><strong>Remove from library only</strong><br /><small
+                  >Files remain on disk</small
+                ></span
+              >
+            </label>
+            <label class="delete-option-label">
+              <input type="radio" name="bulk-delete-option" value="delete-files" class="radio-input" />
+              <span
+                ><strong>Delete from library AND disk</strong><br /><small
+                  >Files will be permanently deleted</small
+                ></span
+              >
+            </label>
+          </div>
+
+          <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border)">
+            <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer">
+              <input type="checkbox" id="bulk-mark-as-bad" style="margin-top: 3px" />
+              <span style="flex: 1">
+                <strong>Prevent auto-download</strong><br />
+                <small style="color: var(--text-secondary)"
+                  >Marks these issues as permanently failed to prevent automatic re-download</small
+                >
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <div class="flex gap-10 justify-end">
+          <button onclick="closeBulkDeleteModal()" class="save-btn btn-cancel">Cancel</button>
+          <button onclick="confirmBulkDelete()" class="save-btn btn-delete">Delete Issues</button>
         </div>
       </div>
     </div>

@@ -1,5 +1,8 @@
 """
 Tests for automatic metadata enhancement from text scan and OCR results.
+
+All scan-derived fields (year, month, volume, issue_number, special_edition)
+are stored in derived_metadata with {value, source, confidence} structure.
 """
 
 from datetime import datetime
@@ -10,6 +13,19 @@ from services.ocr.queue import _apply_scan_metadata_to_magazine
 from models.database import Periodical
 
 
+def _dval(magazine, field):
+    """Helper to extract value from derived_metadata structured entry."""
+    entry = (magazine.derived_metadata or {}).get(field)
+    if isinstance(entry, dict) and "value" in entry:
+        return entry["value"]
+    return entry
+
+
+def _derived_entry(value, source="filename", confidence=1.0):
+    """Helper to create a derived_metadata structured entry for test fixtures."""
+    return {"value": value, "source": source, "confidence": confidence}
+
+
 def test_apply_year_from_scan():
     """Test applying year from scan when not present in metadata"""
     magazine = Periodical(
@@ -18,7 +34,7 @@ def test_apply_year_from_scan():
         language="English",
         issue_date=datetime(2000, 1, 1),
         file_path="/test/path.pdf",
-        extra_metadata={},  # No year set
+        extra_metadata={},
     )
 
     scan_metadata = {"year": 2024, "month": 6, "issue_number": 42}
@@ -26,9 +42,9 @@ def test_apply_year_from_scan():
     updated = _apply_scan_metadata_to_magazine(magazine, scan_metadata)
 
     assert updated is True
-    assert magazine.extra_metadata["year"] == 2024
-    assert magazine.extra_metadata["month"] == "June"
-    assert magazine.extra_metadata["issue_number"] == 42
+    assert _dval(magazine, "year") == 2024
+    assert _dval(magazine, "month") == 6
+    assert _dval(magazine, "issue_number") == 42
 
 
 def test_apply_volume_from_scan():
@@ -47,9 +63,9 @@ def test_apply_volume_from_scan():
     updated = _apply_scan_metadata_to_magazine(magazine, scan_metadata)
 
     assert updated is True
-    assert magazine.extra_metadata["volume"] == 32
-    assert magazine.extra_metadata["issue_number"] == 5
-    assert magazine.extra_metadata["year"] == 2023
+    assert _dval(magazine, "volume") == 32
+    assert _dval(magazine, "issue_number") == 5
+    assert _dval(magazine, "year") == 2023
 
 
 def test_dont_overwrite_existing_year():
@@ -60,26 +76,27 @@ def test_dont_overwrite_existing_year():
         language="English",
         issue_date=datetime(2023, 3, 1),
         file_path="/test/path.pdf",
-        extra_metadata={
-            "year": 2023,
-            "month": "March",
-        },  # Already has year from filename
+        extra_metadata={},
+        derived_metadata={
+            "year": _derived_entry(2023),
+            "month": _derived_entry(3),
+        },
     )
 
     # OCR provides different year but with low confidence (below 70% threshold)
     scan_metadata = {
         "year": 2022,
-        "year_confidence": 50,  # Below 70% general threshold and 80% year-specific threshold
+        "year_confidence": 50,
         "month": 12,
-        "month_confidence": 50,  # Below 60% month-specific threshold
+        "month_confidence": 50,
     }
 
     updated = _apply_scan_metadata_to_magazine(magazine, scan_metadata)
 
-    # Should NOT update because OCR confidence too low, falls back to filename values
+    # Should NOT update because OCR confidence too low, falls back to filename values (same as existing)
     assert updated is False
-    assert magazine.extra_metadata["year"] == 2023  # Original preserved
-    assert magazine.extra_metadata["month"] == "March"  # Original preserved
+    assert _dval(magazine, "year") == 2023  # Original preserved
+    assert _dval(magazine, "month") == 3  # Original preserved
 
 
 def test_dont_overwrite_existing_issue_number():
@@ -90,23 +107,26 @@ def test_dont_overwrite_existing_issue_number():
         language="English",
         issue_date=datetime(2024, 1, 1),
         file_path="/test/path.pdf",
-        extra_metadata={"issue_number": 405},  # Already has issue number
+        extra_metadata={},
+        derived_metadata={
+            "issue_number": _derived_entry(405),
+        },
     )
 
     # OCR provides different issue number but with low confidence
     scan_metadata = {
         "issue_number": 404,
-        "issue_number_confidence": 65,  # Below default 70% threshold
+        "issue_number_confidence": 65,
         "year": 2024,
-        "year_confidence": 85,  # Above threshold - will be used
+        "year_confidence": 85,
     }
 
     updated = _apply_scan_metadata_to_magazine(magazine, scan_metadata)
 
     # Should only update year (high confidence), not issue_number (low confidence)
     assert updated is True
-    assert magazine.extra_metadata["issue_number"] == 405  # Original preserved (OCR rejected)
-    assert magazine.extra_metadata["year"] == 2024  # OCR value applied (high confidence)
+    assert _dval(magazine, "issue_number") == 405  # Original preserved (OCR rejected)
+    assert _dval(magazine, "year") == 2024  # OCR value applied (high confidence)
 
 
 def test_apply_special_edition_flag():
@@ -125,9 +145,9 @@ def test_apply_special_edition_flag():
     updated = _apply_scan_metadata_to_magazine(magazine, scan_metadata)
 
     assert updated is True
-    assert magazine.extra_metadata["special_edition"] is True
-    assert magazine.extra_metadata["year"] == 2024
-    assert magazine.extra_metadata["month"] == "December"
+    assert _dval(magazine, "special_edition") is True
+    assert _dval(magazine, "year") == 2024
+    assert _dval(magazine, "month") == 12
 
 
 def test_partial_metadata_enhancement():
@@ -138,23 +158,26 @@ def test_partial_metadata_enhancement():
         language="English",
         issue_date=datetime(2024, 1, 1),
         file_path="/test/path.pdf",
-        extra_metadata={"year": 2024},  # Has year but not month/volume
+        extra_metadata={},
+        derived_metadata={
+            "year": _derived_entry(2024),
+        },
     )
 
     scan_metadata = {
         "year": 2024,  # Same year
-        "month": 8,  # Missing in magazine
-        "volume": 15,  # Missing in magazine
-        "issue_number": 3,  # Missing in magazine
+        "month": 8,
+        "volume": 15,
+        "issue_number": 3,
     }
 
     updated = _apply_scan_metadata_to_magazine(magazine, scan_metadata)
 
     assert updated is True
-    assert magazine.extra_metadata["year"] == 2024  # Unchanged
-    assert magazine.extra_metadata["month"] == "August"  # Added
-    assert magazine.extra_metadata["volume"] == 15  # Added
-    assert magazine.extra_metadata["issue_number"] == 3  # Added
+    assert _dval(magazine, "year") == 2024  # Unchanged
+    assert _dval(magazine, "month") == 8  # Added
+    assert _dval(magazine, "volume") == 15  # Added
+    assert _dval(magazine, "issue_number") == 3  # Added
 
 
 def test_no_update_when_all_fields_present():
@@ -165,34 +188,35 @@ def test_no_update_when_all_fields_present():
         language="English",
         issue_date=datetime(2024, 5, 1),
         file_path="/test/path.pdf",
-        extra_metadata={
-            "year": 2024,
-            "month": "May",
-            "volume": 10,
-            "issue_number": 123,
+        extra_metadata={},
+        derived_metadata={
+            "year": _derived_entry(2024),
+            "month": _derived_entry(5),
+            "volume": _derived_entry(10),
+            "issue_number": _derived_entry(123),
         },
     )
 
     # OCR provides different values but all with low confidence (below thresholds)
     scan_metadata = {
         "year": 2023,
-        "year_confidence": 50,  # Below 80% year threshold
+        "year_confidence": 50,
         "month": 4,
-        "month_confidence": 50,  # Below 60% month threshold
+        "month_confidence": 50,
         "volume": 9,
-        "volume_confidence": 50,  # Below 75% volume threshold
+        "volume_confidence": 50,
         "issue_number": 122,
-        "issue_number_confidence": 50,  # Below 75% issue_number threshold
+        "issue_number_confidence": 50,
     }
 
     updated = _apply_scan_metadata_to_magazine(magazine, scan_metadata)
 
-    # Nothing should be updated (all OCR values rejected due to low confidence)
+    # Nothing should be updated (all OCR values rejected, filename values match existing)
     assert updated is False
-    assert magazine.extra_metadata["year"] == 2024
-    assert magazine.extra_metadata["month"] == "May"
-    assert magazine.extra_metadata["volume"] == 10
-    assert magazine.extra_metadata["issue_number"] == 123
+    assert _dval(magazine, "year") == 2024
+    assert _dval(magazine, "month") == 5
+    assert _dval(magazine, "volume") == 10
+    assert _dval(magazine, "issue_number") == 123
 
 
 def test_empty_scan_metadata():
@@ -211,7 +235,7 @@ def test_empty_scan_metadata():
     updated = _apply_scan_metadata_to_magazine(magazine, scan_metadata)
 
     assert updated is False
-    assert magazine.extra_metadata == {}
+    assert magazine.derived_metadata is None
 
 
 def test_none_scan_metadata():
@@ -232,13 +256,12 @@ def test_none_scan_metadata():
 
 def test_update_issue_date_when_year_found():
     """Test that issue_date is updated when year is applied from scan"""
-    # Create magazine with placeholder date (same as created_at)
     created_time = datetime(2024, 1, 15, 10, 30, 0)
     magazine = Periodical(
         id=10,
         title="Date Update Test",
         language="English",
-        issue_date=created_time,  # Placeholder date
+        issue_date=created_time,
         file_path="/test/path.pdf",
         extra_metadata={},
         created_at=created_time,
@@ -249,28 +272,17 @@ def test_update_issue_date_when_year_found():
     updated = _apply_scan_metadata_to_magazine(magazine, scan_metadata)
 
     assert updated is True
-    assert magazine.extra_metadata["year"] == 2023
-    assert magazine.extra_metadata["month"] == "July"
-    # issue_date should be updated since it was a placeholder
+    assert _dval(magazine, "year") == 2023
+    assert _dval(magazine, "month") == 7
     assert magazine.issue_date.year == 2023
     assert magazine.issue_date.month == 7
 
 
-def test_month_conversion_to_name():
-    """Test that month numbers are correctly converted to month names"""
-    magazine = Periodical(
-        id=11,
-        title="Month Test",
-        language="English",
-        issue_date=datetime(2024, 1, 1),
-        file_path="/test/path.pdf",
-        extra_metadata={},
-    )
+def test_month_stored_as_int():
+    """Test that month numbers are stored as integers in derived_metadata"""
+    test_months = [(1, 1), (6, 6), (12, 12)]
 
-    # Test various months
-    test_months = [(1, "January"), (6, "June"), (12, "December")]
-
-    for month_num, expected_name in test_months:
+    for month_num, expected_int in test_months:
         mag = Periodical(
             id=11,
             title="Month Test",
@@ -283,7 +295,26 @@ def test_month_conversion_to_name():
         scan_metadata = {"month": month_num}
         _apply_scan_metadata_to_magazine(mag, scan_metadata)
 
-        assert mag.extra_metadata.get("month") == expected_name
+        assert _dval(mag, "month") == expected_int
+
+
+def test_month_name_string_normalized_to_int():
+    """Test that month name strings are normalized to integers"""
+    magazine = Periodical(
+        id=12,
+        title="Month Name Test",
+        language="English",
+        issue_date=datetime(2024, 1, 1),
+        file_path="/test/path.pdf",
+        extra_metadata={},
+    )
+
+    scan_metadata = {"month": "June", "month_confidence": 90}
+
+    updated = _apply_scan_metadata_to_magazine(magazine, scan_metadata)
+
+    assert updated is True
+    assert _dval(magazine, "month") == 6  # Normalized to int
 
 
 if __name__ == "__main__":
@@ -297,5 +328,6 @@ if __name__ == "__main__":
     test_empty_scan_metadata()
     test_none_scan_metadata()
     test_update_issue_date_when_year_found()
-    test_month_conversion_to_name()
-    print("✓ All metadata enhancement tests passed!")
+    test_month_stored_as_int()
+    test_month_name_string_normalized_to_int()
+    print("All metadata enhancement tests passed!")

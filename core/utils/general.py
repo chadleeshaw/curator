@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from core.constants.files import BLACKLISTED_FILE_EXTENSIONS
+from core.constants.files import BLACKLISTED_FILE_EXTENSIONS, INCOMPLETE_DOWNLOAD_PATTERNS, SUPPORTED_FILE_EXTENSIONS
 from core.constants.title import SPECIAL_EDITION_KEYWORDS
 
 logger = logging.getLogger(__name__)
@@ -165,14 +165,35 @@ def hash_file_in_chunks(file_path: str, algorithm=hashlib.sha256, chunk_size: in
         >>> hash_file_in_chunks('large_file.iso', chunk_size=65536)  # 64KB chunks
         'f4e3d2c1b0a9...'
     """
-    file_hash = algorithm()
     try:
+        file_hash = algorithm()
+        path = Path(file_path)
+
+        # Diagnostic checks for common failure scenarios
+        if not path.exists():
+            logger.error(f"Cannot hash file - does not exist: {file_path}")
+            return None
+
+        if not path.is_file():
+            logger.error(f"Cannot hash file - not a regular file: {file_path}")
+            return None
+
+        if not os.access(file_path, os.R_OK):
+            logger.error(f"Cannot hash file - no read permission: {file_path}")
+            return None
+
         with open(file_path, "rb") as f:
             while chunk := f.read(chunk_size):
                 file_hash.update(chunk)
         return file_hash.hexdigest()
-    except IOError as e:
-        logger.error(f"Error hashing file {file_path}: {e}")
+    except PermissionError as e:
+        logger.error(f"Permission denied hashing file {file_path}: {e}")
+        return None
+    except OSError as e:
+        logger.error(f"OS error hashing file {file_path}: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error hashing file {file_path}: {type(e).__name__}: {e}")
         return None
 
 
@@ -204,38 +225,73 @@ def is_special_edition(title: str) -> bool:
     return any(keyword in title_lower for keyword in SPECIAL_EDITION_KEYWORDS)
 
 
-def find_pdf_epub_files(directory: Path, recursive: bool = True) -> list[Path]:
+def find_supported_files(directory: Path, recursive: bool = True) -> list[Path]:
     """
-    Search for PDF, EPUB, CBZ, and CBR files in a directory, filtering out blacklisted extensions.
+    Search for all supported periodical files (PDF, EPUB, CBZ, CBR) in a directory, filtering out
+    blacklisted extensions and incomplete/temporary downloads.
+
+    Skips files that are:
+    - In blacklisted extensions
+    - In folders with incomplete download patterns (_unpack_, _UNPACK_, etc.)
+    - Have incomplete download extensions (.part, .crdownload, .tmp, etc.)
 
     Args:
         directory: Directory to search
         recursive: If True, search recursively with glob("**/*.ext"), else use glob("*.ext")
 
     Returns:
-        List of Path objects for all PDF, EPUB, CBZ, and CBR files found (excluding blacklisted files)
+        List of Path objects for all supported files found (excluding blacklisted/incomplete files)
 
     Examples:
-        >>> files = find_pdf_epub_files(Path("/downloads"))
+        >>> files = find_supported_files(Path("/downloads"))
         >>> pdf_only = [f for f in files if f.suffix == '.pdf']
     """
     if not directory.exists():
         return []
 
-    pattern = "**/*" if recursive else "*"
-    pdf_files = list(directory.glob(f"{pattern}.pdf"))
-    epub_files = list(directory.glob(f"{pattern}.epub"))
-    cbz_files = list(directory.glob(f"{pattern}.cbz"))
-    cbr_files = list(directory.glob(f"{pattern}.cbr"))
+    # Find files with both lowercase and uppercase extensions (case-insensitive)
+    # Also handle files with single quotes surrounding the filename (e.g., 'Magazine.pdf')
+    all_files = []
+    for ext in SUPPORTED_FILE_EXTENSIONS:
+        ext_lower = ext.lower()
+        ext_upper = ext.upper()
 
-    all_files = pdf_files + epub_files + cbz_files + cbr_files
+        if recursive:
+            # Normal files: **/*.pdf
+            all_files.extend(directory.glob(f"**/*{ext_lower}"))
+            all_files.extend(directory.glob(f"**/*{ext_upper}"))
+            # Files with quotes at any depth: **/'*.pdf'
+            all_files.extend(directory.glob(f"**/'*{ext_lower}'"))
+            all_files.extend(directory.glob(f"**/'*{ext_upper}'"))
+        else:
+            # Normal files: *.pdf
+            all_files.extend(directory.glob(f"*{ext_lower}"))
+            all_files.extend(directory.glob(f"*{ext_upper}"))
+            # Files with quotes: '*.pdf'
+            all_files.extend(directory.glob(f"'*{ext_lower}'"))
+            all_files.extend(directory.glob(f"'*{ext_upper}'"))
 
-    # Filter out any files with blacklisted extensions and log them
+    # Filter out blacklisted extensions and incomplete downloads
     filtered_files = []
     for file in all_files:
+        # Skip directories that match file extensions (e.g., 'Magazine.pdf' folder)
+        if not file.is_file():
+            logger.debug(f"Skipping non-regular file (directory or symlink): {file.name}")
+            continue
+
+        # Skip blacklisted extensions
         if file.suffix.lower() in BLACKLISTED_FILE_EXTENSIONS:
             logger.warning(f"Skipping blacklisted file extension '{file.suffix}': {file.name}")
-        else:
-            filtered_files.append(file)
+            continue
+
+        # Skip files in incomplete download folders or with incomplete extensions
+        file_path_str = str(file).lower()
+        is_incomplete = any(pattern.lower() in file_path_str for pattern in INCOMPLETE_DOWNLOAD_PATTERNS)
+
+        if is_incomplete:
+            logger.debug(f"Skipping incomplete/temporary download: {file.name}")
+            continue
+
+        filtered_files.append(file)
 
     return filtered_files

@@ -122,6 +122,18 @@ class TestParseMultiMonth:
         assert month_num == 6
         assert "June" in display and "July" in display
 
+    def test_parse_multi_month_underscore(self):
+        """Test parsing multi-month periods with underscore separator."""
+        month_num, display = parse_multi_month("February_March")
+        assert month_num == 2
+        assert display == "February/March"
+
+    def test_parse_multi_month_underscore_abbreviations(self):
+        """Test parsing abbreviated multi-month periods with underscore."""
+        month_num, display = parse_multi_month("Oct_Nov")
+        assert month_num == 10
+        assert display == "October/November"
+
     def test_parse_single_month(self):
         """Test that single months work correctly."""
         month_num, display = parse_multi_month("December")
@@ -226,6 +238,39 @@ class TestMetadataExtractorMultiMonth:
         assert result["month_name"] == "Aug/Sep"  # Normalized to slash
         assert result["issue_date"].month == 8
 
+    def test_extract_multi_month_underscore(self):
+        """Test extracting metadata from underscore-separated multi-month filename."""
+        extractor = FilenameParser()
+        pdf_path = Path("/test/Magazine Letters - February_March 2019.pdf")
+
+        result = extractor.extract_from_filename(pdf_path)
+
+        assert result["title"] == "Magazine Letters"
+        assert result["year"] == 2019
+        assert result["month_name"] == "February/March"
+        assert result["issue_date"].year == 2019
+        assert result["issue_date"].month == 2
+        assert result["pattern"] == "multi_month"
+
+    def test_extract_multi_month_underscore_various(self):
+        """Test underscore-separated multi-month with various month pairs."""
+        extractor = FilenameParser()
+
+        cases = [
+            ("April_May 2019", 2019, 4, "April/May"),
+            ("June_July 2018", 2018, 6, "June/July"),
+            ("August_September 2020", 2020, 8, "August/September"),
+            ("October_November 2019", 2019, 10, "October/November"),
+        ]
+        for months_year, exp_year, exp_month, exp_name in cases:
+            pdf_path = Path(f"/test/Magazine - {months_year}.pdf")
+            result = extractor.extract_from_filename(pdf_path)
+
+            assert result["year"] == exp_year, f"Failed for {months_year}"
+            assert result["issue_date"].month == exp_month, f"Failed for {months_year}"
+            assert result["month_name"] == exp_name, f"Failed for {months_year}"
+            assert result["pattern"] == "multi_month", f"Failed for {months_year}"
+
     def test_standard_single_month_still_works(self):
         """Test that standard single-month parsing still works."""
         extractor = FilenameParser()
@@ -313,3 +358,250 @@ class TestMetadataExtractorMultiMonth:
         # Normalized to slash format
         assert result["month_name"] == "Autumn/Winter"
         assert result["issue_date"].month == 9  # Uses Autumn (same as Fall)
+
+
+# ==============================================================================
+# Test volume/issue only patterns (no date)
+# ==============================================================================
+
+
+class TestVolumeIssueOnlyPatterns:
+    """Test volume/issue patterns without dates."""
+
+    def test_volume_only_pattern(self):
+        """Test parsing files with only volume number (no date)."""
+        extractor = FilenameParser()
+
+        test_cases = [
+            ("Magazine Vol.260.pdf", "Magazine", 260, None),
+            ("Magazine - Vol.260.pdf", "Magazine", 260, None),
+            ("Magazine Vol 260.pdf", "Magazine", 260, None),
+            ("Tech Review Vol.42.pdf", "Tech Review", 42, None),
+        ]
+
+        for filename, expected_title, expected_vol, expected_date in test_cases:
+            result = extractor.extract_from_filename(Path(filename))
+            assert result["title"] == expected_title, f"Failed for {filename}"
+            assert result["volume"] == expected_vol, f"Failed for {filename}"
+            assert result["issue_date"] is expected_date, f"Failed for {filename}: got {result['issue_date']}"
+            assert result["pattern"] == "volume_only", f"Failed for {filename}"
+
+    def test_volume_only_with_issue_suffix(self):
+        """Test that issue number suffixes on volume-only patterns are stored as edition_number, not in title."""
+        extractor = FilenameParser()
+
+        test_cases = [
+            ("Hobby Monthly - Vol304 - No304.pdf", "Hobby Monthly", 304, 304),
+            ("Hobby Monthly - Vol295 - No295.pdf", "Hobby Monthly", 295, 295),
+            ("Magazine Vol.260 - No.5.pdf", "Magazine", 260, 5),
+            ("Magazine Vol.10 - No12.pdf", "Magazine", 10, 12),
+            ("Collectors Digest - Vol.3 - Issue 42.pdf", "Collectors Digest", 3, 42),
+            ("Collectors Digest - Vol.3 - #99.pdf", "Collectors Digest", 3, 99),
+        ]
+
+        for filename, expected_title, expected_vol, expected_issue in test_cases:
+            result = extractor.extract_from_filename(Path(filename))
+            assert result["title"] == expected_title, f"Title failed for {filename}: got {result['title']}"
+            assert result["volume"] == expected_vol, f"Volume failed for {filename}: got {result['volume']}"
+            assert (
+                result.get("edition_number") == expected_issue
+            ), f"Edition number failed for {filename}: got {result.get('edition_number')}"
+            assert result["pattern"] == "volume_only", f"Pattern failed for {filename}"
+
+    def test_issue_only_pattern(self):
+        """Test parsing files with only issue number (no date)."""
+        extractor = FilenameParser()
+
+        test_cases = [
+            ("PC Gamer Issue 405.pdf", "PC Gamer", 405),
+            ("Magazine No.123.pdf", "Magazine", 123),
+            ("Magazine #99.pdf", "Magazine", 99),
+            ("Comics Issue 1.pdf", "Comics", 1),
+        ]
+
+        for filename, expected_title, expected_issue in test_cases:
+            result = extractor.extract_from_filename(Path(filename))
+            assert result["title"] == expected_title, f"Failed for {filename}"
+            assert result["edition_number"] == expected_issue, f"Failed for {filename}"
+            assert result["issue_date"] is None, f"Failed for {filename}: got {result['issue_date']}"
+            assert result["pattern"] == "issue_only", f"Failed for {filename}"
+
+    def test_leading_issue_pattern(self):
+        """Test parsing files with leading issue number."""
+        extractor = FilenameParser()
+
+        # Case 1: Issue number, title, volume, and suffix
+        result = extractor.extract_from_filename(Path("260 - Magazine - Vol.260 - Cover Model.pdf"))
+        assert result["title"] == "Magazine"
+        assert result["edition_number"] == 260
+        assert result.get("volume") == 260
+        assert result["issue_date"] is None
+        assert result["pattern"] == "leading_issue"
+
+        # Case 2: Just issue number and title
+        result = extractor.extract_from_filename(Path("123 - Some Title.pdf"))
+        assert result["title"] == "Some Title"
+        assert result["edition_number"] == 123
+        assert result.get("volume") is None
+        assert result["issue_date"] is None
+
+        # Case 3: Issue number, title, and different volume
+        result = extractor.extract_from_filename(Path("001 - Title - Vol.5 - Extra Info.pdf"))
+        assert result["title"] == "Title"
+        assert result["edition_number"] == 1
+        assert result.get("volume") == 5
+
+    def test_patterns_with_dates_not_matched_by_volume_only(self):
+        """Test that files with dates are matched by date patterns, not volume-only."""
+        extractor = FilenameParser()
+
+        # These should be matched by date patterns
+        result = extractor.extract_from_filename(Path("Magazine Jan2024.pdf"))
+        assert result["pattern"] != "volume_only"
+        assert result["issue_date"] is not None
+        assert result["issue_date"].year == 2024
+
+        result = extractor.extract_from_filename(Path("Magazine - January 2024.pdf"))
+        assert result["pattern"] != "volume_only"
+        assert result["issue_date"] is not None
+        assert result["issue_date"].month == 1
+
+
+class TestIssueMonthYearPatterns:
+    """Test extraction of Issue-Month-Year patterns (periodicals don't have days)."""
+
+    def test_month_dot_issue_dot_year(self):
+        """Test Month.Issue.Year format (e.g., October.25.2013)"""
+        parser = FilenameParser()
+        result = parser.extract_from_nzb_title("Wired-October.25.2013.UK")
+        assert result["title"] == "Wired"
+        assert result["month"] == 10
+        assert result["month_name"] == "October"
+        assert result["issue"] == 25
+        assert result["year"] == 2013
+
+    def test_issue_space_month_dash_year(self):
+        """Test 'Issue Month-Year' format (e.g., 13 December-2013)"""
+        parser = FilenameParser()
+        result = parser.extract_from_nzb_title("Wired UK 13 December-2013")
+        assert result["title"] == "Wired"
+        assert result["month"] == 12
+        assert result["month_name"] == "December"
+        assert result["issue"] == 13
+        assert result["year"] == 2013
+
+    def test_month_year_without_issue(self):
+        """Test Month Year format without issue number"""
+        parser = FilenameParser()
+        result = parser.extract_from_nzb_title("Wired UK January 2013")
+        assert result["title"] == "Wired"
+        assert result["month"] == 1
+        assert result["month_name"] == "January"
+        assert result["issue"] is None
+        assert result["year"] == 2013
+
+    def test_different_months_not_grouped(self):
+        """Ensure different months produce different grouping keys"""
+        parser = FilenameParser()
+
+        result1 = parser.extract_from_nzb_title("Wired-October.25.2013.UK")
+        result2 = parser.extract_from_nzb_title("Wired UK 13 December-2013")
+        result3 = parser.extract_from_nzb_title("Wired UK January 2013")
+
+        # All should have different months
+        assert result1["month"] == 10
+        assert result2["month"] == 12
+        assert result3["month"] == 1
+
+        # All should have same year
+        assert result1["year"] == 2013
+        assert result2["year"] == 2013
+        assert result3["year"] == 2013
+
+        # They should NOT group together (different months)
+        key1 = f"{result1['year']}-{result1['month']}-{result1['issue']}"
+        key2 = f"{result2['year']}-{result2['month']}-{result2['issue']}"
+        key3 = f"{result3['year']}-{result3['month']}-{result3['issue']}"
+
+        assert key1 != key2
+        assert key2 != key3
+        assert key1 != key3
+
+    def test_month_dash_year_pattern(self):
+        """Test that Month-Year with dash separator works"""
+        parser = FilenameParser()
+        result = parser.extract_from_nzb_title("Magazine December-2023")
+        assert result["month"] == 12
+        assert result["month_name"] == "December"
+        assert result["year"] == 2023
+
+
+class TestISODateAndDisjointMonthParserFixes:
+    """
+    Regression tests for two parser bugs fixed in the deduplication chain:
+
+    Bug 1 — ISO year-month ("2025-08") was misread as issue=8 instead of month=8.
+    Bug 2 — Month name not adjacent to year ("August #8 2025") defaulted to month=1
+             instead of correctly extracting month=8.
+    """
+
+    # ── Bug 1: ISO date removal ─────────────────────────────────────────────
+
+    def test_iso_date_dash_gives_month_not_issue(self):
+        """'Wired Africa 2025-08' → month=8, issue=None (not issue=8)."""
+        parser = FilenameParser()
+        result = parser.extract_from_nzb_title("Wired Africa 2025-08")
+        assert result["month"] == 8, "Month should be 8 (August), not issue number"
+        assert result["year"] == 2025
+        assert result["issue"] is None, "ISO year-month should not populate issue"
+
+    def test_iso_date_dot_gives_month_not_issue(self):
+        """'Wired Africa 2025.08' → month=8, issue=None."""
+        parser = FilenameParser()
+        result = parser.extract_from_nzb_title("Wired Africa 2025.08")
+        assert result["month"] == 8
+        assert result["year"] == 2025
+        assert result["issue"] is None
+
+    # ── Bug 2: Disjoint month name (not adjacent to year) ───────────────────
+
+    def test_month_name_separated_from_year_by_issue(self):
+        """'Wired Africa August #8 2025' → month=8, issue=8 (not month=1)."""
+        parser = FilenameParser()
+        result = parser.extract_from_nzb_title("Wired Africa August #8 2025")
+        assert result["month"] == 8, "Month should be 8 (August), not 1 (January)"
+        assert result["month_name"] == "August"
+        assert result["year"] == 2025
+        assert result["issue"] == 8
+
+    def test_month_name_separated_from_year_no_issue_marker(self):
+        """'Wired Africa August 8 2025' → month=8 extracted from disjoint name."""
+        parser = FilenameParser()
+        result = parser.extract_from_nzb_title("Wired Africa August 8 2025")
+        assert result["month"] == 8, "Month should be 8 (August), not 1 (January)"
+        assert result["year"] == 2025
+
+    # ── Regressions: must not break existing behaviour ───────────────────────
+
+    def test_year_only_still_defaults_to_january(self):
+        """Pure year-only title with no month name must still default to month=1."""
+        parser = FilenameParser()
+        result = parser.extract_from_nzb_title("Magazine Title 2024")
+        assert result["month"] == 1, "Year-only title should default month to 1"
+        assert result["year"] == 2024
+
+    def test_adjacent_month_year_still_works(self):
+        """'Esquire USA - August 2021' must still parse month=8 (unchanged behaviour)."""
+        parser = FilenameParser()
+        result = parser.extract_from_nzb_title("Esquire USA - August 2021")
+        assert result["month"] == 8
+        assert result["month_name"] == "August"
+        assert result["year"] == 2021
+
+    def test_year_with_volume_issue_no_month(self):
+        """'TIME.V202.N25.2023' must still parse issue=25, month=1."""
+        parser = FilenameParser()
+        result = parser.extract_from_nzb_title("TIME.V202.N25.2023")
+        assert result["month"] == 1
+        assert result["issue"] == 25
+        assert result["year"] == 2023

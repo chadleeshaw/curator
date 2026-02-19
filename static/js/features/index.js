@@ -11,3 +11,4 @@ export { settings } from './settings.js';
 export { tasks } from './tasks.js';
 export { imports } from './imports.js';
 export { config } from './config.js';
+export { stacks } from './stacks.js';

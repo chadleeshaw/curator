@@ -51,14 +51,42 @@ MULTI_WORD_REGIONAL_INDICATORS = {
 """Two-word regional indicators that should be treated as part of the base title"""
 
 # ==============================================================================
-# Multi-word Edition Variants
+# Multi-word Periodical Variants
 # ==============================================================================
 
-MULTI_WORD_EDITION_VARIANTS = {
+MULTI_WORD_PERIODICAL_VARIANTS = {
     "little kids",
     "young adult",
 }
-"""Multi-word edition variant indicators that distinguish different publications"""
+"""Multi-word periodical variant indicators that distinguish different publications"""
+
+# ==============================================================================
+# Collection Descriptor Words
+# ==============================================================================
+
+COLLECTION_DESCRIPTOR_WORDS = {
+    "collection",
+    "collections",
+    "pack",
+    "bundle",
+    "archive",
+    "complete",
+    "full",
+    "entire",
+    "set",
+}
+"""Words that describe download type/bundling, not part of the periodical title.
+
+Users may search for 'Hobby Magazine Collection' when they want a collection of
+Hobby Magazine issues. These words express user intent but should be stripped from
+provider search queries since providers index by periodical title, not bundle type.
+"""
+
+COLLECTION_SET_NUMBER_PATTERN = r"(?:Set|Collection|Pack|Part)[\s._#-]*(\d+)"
+"""Regex for extracting a numeric identifier from collection/set/pack titles.
+
+Examples: 'Set #5' → 5, 'Collection 3' → 3, 'Pack.12' → 12
+"""
 
 # ==============================================================================
 # Common Periodical Words
@@ -86,6 +114,18 @@ COMMON_PERIODICAL_WORDS = {
     "international",
     "world",
     "today",
+    # Conjunctions and prepositions that indicate title continuation (not special edition splits)
+    "&",
+    "and",
+    "or",
+    "the",
+    "of",
+    "for",
+    "in",
+    "on",
+    "at",
+    "to",
+    "with",
 }
 """Words commonly found in periodical titles that are part of the base name, not special edition identifiers"""
 
@@ -129,20 +169,75 @@ KNOWN_PERIODICAL_TITLES = {
 # ==============================================================================
 
 SPECIAL_EDITION_KEYWORDS = [
-    "special",
-    "annual",
-    "collector",
-    "collectors",
-    "holiday",
-    "christmas",
+    "special edition",
+    "annual edition",
+    "annual report",
+    " annual ",  # Space-bounded to catch "Time Annual 2024" but not "The Annual Review"
+    "collector edition",
+    "collectors edition",
+    "collector's edition",
+    "collectors issue",
+    "holiday special",
+    "holiday edition",
+    "holiday issue",
+    "christmas special",
+    "christmas edition",
     "summer special",
     "winter special",
     "spring special",
     "fall special",
-    "collector's edition",
-    "commemorative",
-    "anniversary",
+    "commemorative edition",
+    "commemorative issue",
+    "anniversary edition",
+    "anniversary issue",
+    "anniversary special",
+    "swimsuit annual",  # SI Swimsuit Annual
     "yearbook",
     "best of",
+    " special ",  # Space-bounded to avoid matching titles with "special" in the name
 ]
-"""Keywords that indicate a special edition release"""
+"""Keywords/phrases that indicate a special edition release.
+
+Note: Multi-word phrases are preferred over single words to reduce false positives.
+Space-bounded single words (e.g., ' special ', ' annual ') help avoid matching when
+the word is part of the magazine's actual title rather than a special edition indicator.
+The space-bounded ' annual ' will match "Time Annual 2024" but not "The Annual Review"
+or "biannual".
+"""
+
+
+# ==============================================================================
+# Title Cleaning
+# ==============================================================================
+
+MAX_COUNTRY_REMOVAL_PASSES = 3
+"""Maximum passes to remove country codes from titles.
+
+Titles occasionally have multiple country identifiers (e.g., "Magazine US USA United States").
+Three passes handles the observed maximum while preventing infinite loops on malformed data.
+"""
+
+
+# ==============================================================================
+# Title Abbreviation
+# ==============================================================================
+
+TITLE_SKIP_WORDS = {
+    "the",
+    "a",
+    "an",
+    "and",
+    "or",
+    "of",
+    "magazine",
+    "mag",
+    "comic",
+    "edition",
+}
+"""
+Common filler words to skip when generating title abbreviations and fuzzy matching.
+
+Used when creating short abbreviations from multi-word titles (e.g., "National Geographic" -> "ng")
+and when normalizing titles for fuzzy matching/deduplication.
+These words don't contribute meaningful information to abbreviations or unique title identity.
+"""

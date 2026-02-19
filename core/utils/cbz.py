@@ -22,6 +22,28 @@ Image.MAX_IMAGE_PIXELS = PIL_MAX_IMAGE_PIXELS
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
 
 
+def _convert_to_rgb(img: Image.Image) -> Image.Image:
+    """
+    Convert RGBA/LA/P mode images to RGB for JPEG output.
+
+    Handles transparency by compositing onto a white background.
+
+    Args:
+        img: PIL Image in any mode
+
+    Returns:
+        PIL Image in RGB mode
+    """
+    if img.mode in ("RGBA", "LA", "P"):
+        background = Image.new("RGB", img.size, (255, 255, 255))
+        if img.mode == "P":
+            img = img.convert("RGBA")
+        mask = img.split()[-1] if img.mode in ("RGBA", "LA") else None
+        background.paste(img, mask=mask)
+        return background
+    return img
+
+
 def validate_cbz(cbz_path: Path) -> bool:
     """
     Validate that a file is a readable CBZ (ZIP) archive.
@@ -125,6 +147,8 @@ def extract_cover_from_cbz(cbz_path: Path, output_dir: Path, quality: int = EPUB
             return None
 
         output_dir.mkdir(parents=True, exist_ok=True)
+        # Use the source filename stem directly - the caller is responsible
+        # for providing a path with a unique name (e.g., after organization)
         cover_path = output_dir / f"{cbz_path.stem}.jpg"
 
         with zipfile.ZipFile(cbz_path, "r") as zip_file:
@@ -142,12 +166,7 @@ def extract_cover_from_cbz(cbz_path: Path, output_dir: Path, quality: int = EPUB
             img = Image.open(BytesIO(image_data))
 
             # Convert RGBA/LA/P to RGB for JPEG
-            if img.mode in ("RGBA", "LA", "P"):
-                background = Image.new("RGB", img.size, (255, 255, 255))
-                if img.mode == "P":
-                    img = img.convert("RGBA")
-                background.paste(img, mask=img.split()[-1] if img.mode in ("RGBA", "LA") else None)
-                img = background
+            img = _convert_to_rgb(img)
 
             img.save(str(cover_path), "JPEG", quality=quality)
             logger.info(f"Extracted CBZ cover: {cover_path}")
@@ -178,6 +197,8 @@ def extract_cover_from_cbr(cbr_path: Path, output_dir: Path, quality: int = EPUB
             return None
 
         output_dir.mkdir(parents=True, exist_ok=True)
+        # Use the source filename stem directly - the caller is responsible
+        # for providing a path with a unique name (e.g., after organization)
         cover_path = output_dir / f"{cbr_path.stem}.jpg"
 
         with rarfile.RarFile(cbr_path, "r") as rar_file:
@@ -195,12 +216,7 @@ def extract_cover_from_cbr(cbr_path: Path, output_dir: Path, quality: int = EPUB
             img = Image.open(BytesIO(image_data))
 
             # Convert RGBA/LA/P to RGB for JPEG
-            if img.mode in ("RGBA", "LA", "P"):
-                background = Image.new("RGB", img.size, (255, 255, 255))
-                if img.mode == "P":
-                    img = img.convert("RGBA")
-                background.paste(img, mask=img.split()[-1] if img.mode in ("RGBA", "LA") else None)
-                img = background
+            img = _convert_to_rgb(img)
 
             img.save(str(cover_path), "JPEG", quality=quality)
             logger.info(f"Extracted CBR cover: {cover_path}")

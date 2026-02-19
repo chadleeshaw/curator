@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 import pytest
 
 from services.file_organizer import FileOrganizer
+from services.file_organizer.models import FilenameComponents
 
 
 class TestOrganizationPatterns:
@@ -158,11 +159,11 @@ class TestVolumeBasedOrganization:
         result_path = Path(result)
         assert result_path.exists()
 
-        # Should use flat structure with "Unknown" fallback
-        # Expected: _Magazines/Unknown Periodical/Unknown Periodical - Unknown.pdf
+        # Should use flat structure without "Unknown" suffix
+        # Expected: _Magazines/Unknown Periodical/Unknown Periodical.pdf
         assert "_Magazines" in str(result_path)
         assert "Unknown Periodical" in str(result_path)
-        assert result_path.name == "Unknown Periodical - Unknown.pdf"
+        assert result_path.name == "Unknown Periodical.pdf"
 
 
 class TestFilenameBuilding:
@@ -175,33 +176,52 @@ class TestFilenameBuilding:
 
     def test_build_filename_with_all_components(self, organizer):
         """Test filename with volume, issue, and date"""
-        filename = organizer._build_filename("Wired", 5, 12, "December", "2024", ".pdf")
+        filename = organizer._build_filename(
+            FilenameComponents(
+                title="Wired",
+                volume=5,
+                issue_number=12,
+                month="December",
+                year="2024",
+                extension=".pdf",
+            )
+        )
         assert filename == "Wired - Vol5 - No12 - December2024.pdf"
 
     def test_build_filename_volume_only(self, organizer):
         """Test filename with only volume (no issue or date)"""
-        filename = organizer._build_filename("Science", 385, None, None, None, ".pdf")
+        filename = organizer._build_filename(FilenameComponents(title="Science", volume=385, extension=".pdf"))
         assert filename == "Science - Vol385.pdf"
 
     def test_build_filename_issue_only(self, organizer):
         """Test filename with only issue number (no volume or date)"""
-        filename = organizer._build_filename("Comic", None, 123, None, None, ".pdf")
+        filename = organizer._build_filename(FilenameComponents(title="Comic", issue_number=123, extension=".pdf"))
         assert filename == "Comic - No123.pdf"
 
     def test_build_filename_date_only(self, organizer):
         """Test filename with only date (no volume or issue)"""
-        filename = organizer._build_filename("Magazine", None, None, "January", "2024", ".pdf")
+        filename = organizer._build_filename(
+            FilenameComponents(title="Magazine", month="January", year="2024", extension=".pdf")
+        )
         assert filename == "Magazine - January2024.pdf"
 
     def test_build_filename_volume_and_date(self, organizer):
         """Test filename with volume and date but no issue"""
-        filename = organizer._build_filename("Journal", 42, None, "March", "2023", ".epub")
+        filename = organizer._build_filename(
+            FilenameComponents(
+                title="Journal",
+                volume=42,
+                month="March",
+                year="2023",
+                extension=".epub",
+            )
+        )
         assert filename == "Journal - Vol42 - March2023.epub"
 
     def test_build_filename_no_metadata(self, organizer):
-        """Test filename with no metadata uses 'Unknown' fallback"""
-        filename = organizer._build_filename("Unknown", None, None, None, None, ".pdf")
-        assert filename == "Unknown - Unknown.pdf"
+        """Test filename with no metadata - just uses title"""
+        filename = organizer._build_filename(FilenameComponents(title="Unknown", extension=".pdf"))
+        assert filename == "Unknown.pdf"
 
 
 class TestHybridPatterns:
@@ -240,10 +260,10 @@ class TestHybridPatterns:
         assert result_path.exists()
 
         # Should use default year-based pattern when date is available
-        # Expected: _Articles/Scientific Journal/Vol42/2023/Scientific Journal - Vol42 - March2023.pdf
+        # Volume is in the filename, not the directory
+        # Expected: _Articles/Scientific Journal/2023/Scientific Journal - Vol42 - March2023.pdf
         assert "_Articles" in str(result_path)
         assert "Scientific Journal" in str(result_path)
-        assert "Vol42" in str(result_path)
         assert "2023" in str(result_path)
         assert result_path.name == "Scientific Journal - Vol42 - March2023.pdf"
 

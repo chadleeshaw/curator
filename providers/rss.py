@@ -1,7 +1,7 @@
 import logging
 import time
-from datetime import datetime
-from typing import List, Optional
+from datetime import UTC, datetime
+from typing import List, Optional, Sequence
 
 import feedparser
 
@@ -40,15 +40,17 @@ class RSSProvider(SearchProvider):
             f"(cache_ttl={self.cache_ttl}s, caching={'enabled' if self.enable_cache else 'disabled'})"
         )
 
-    def search(self, query: str, category: str = None) -> List[SearchResult]:
+    def search(self, query: str, category: str = None, aliases: Optional[Sequence[str]] = None) -> List[SearchResult]:
         """
         Search RSS feed for matching periodical titles.
 
         Uses cached feed if available and fresh, otherwise fetches and caches.
+        Matches against query and any aliases.
 
         Args:
             query: Periodical title to search for (used to filter feed)
             category: Optional category filter (not used for RSS feeds)
+            aliases: Optional alternative search terms to match against
 
         Returns:
             List of SearchResult objects
@@ -66,20 +68,24 @@ class RSSProvider(SearchProvider):
             if feed.bozo:
                 logger.warning(f"RSS Feed parsing issue: {feed.bozo_exception}")
 
-            query_lower = query.lower()
+            # Build list of search terms (query + aliases)
+            search_terms = [query.lower()]
+            if aliases:
+                search_terms.extend(a.strip().lower() for a in aliases if a.strip())
 
             for entry in feed.entries:
                 title = entry.get("title", "")
 
-                # Basic filtering: only include entries matching query
-                if query_lower not in title.lower():
+                # Filter: include entries matching any search term
+                title_lower = title.lower()
+                if not any(term in title_lower for term in search_terms):
                     continue
 
                 # Parse publication date if available
                 pub_date = None
                 if hasattr(entry, "published_parsed") and entry.published_parsed:
                     try:
-                        pub_date = datetime(*entry.published_parsed[:6])
+                        pub_date = datetime(*entry.published_parsed[:6], tzinfo=UTC)
                     except (TypeError, ValueError) as e:
                         logger.debug(f"Failed to parse publication date: {e}")
 

@@ -3,17 +3,18 @@
  * Initializes the application and coordinates all modules
  */
 
-import { AuthManager } from './core/auth.js?v=1767733177';
+import { AuthManager } from './core/auth.js';
 import { APIClient, APIHelper } from './core/api.js';
-import { UIUtils } from './core/ui-utils.js?v=1767733177';
-import { library } from './features/library.js?v=1767733177';
-import { tracking } from './features/tracking.js?v=1767733177';
-import { downloads } from './features/downloads.js?v=1767733177';
-import { ocrQueue } from './features/ocr-queue.js?v=1767733177';
-import { settings } from './features/settings.js?v=1767733177';
-import { tasks } from './features/tasks.js?v=1767733177';
-import { imports } from './features/imports.js?v=1767733177';
-import { EventHandlers } from './event-handlers.js?v=1767733177';
+import { UIUtils } from './core/ui-utils.js';
+import { library } from './features/library.js';
+import { tracking } from './features/tracking.js';
+import { downloads } from './features/downloads.js';
+import { ocrQueue } from './features/ocr-queue.js';
+import { settings } from './features/settings.js';
+import { tasks } from './features/tasks.js';
+import { imports } from './features/imports.js';
+import { stacks } from './features/stacks.js';
+import { EventHandlers } from './event-handlers.js';
 import { CSS_CLASSES } from './core/constants.js';
 
 /**
@@ -71,25 +72,26 @@ document.addEventListener('DOMContentLoaded', async () => {
   tracking.loadTrackedPeriodicals();
   settings.loadSettings();
 
+  // Wire up stacks change callback to refresh tracking list
+  stacks.onChange(() => tracking.loadTrackedPeriodicals());
+
   // Load initial header stats
   updateHeaderStats();
 
   // Close delete modal when clicking outside of it
+  // Track mousedown target to prevent text selection drag from closing modal
   const modal = document.getElementById('delete-modal');
   if (modal) {
+    let mouseDownTarget = null;
+    modal.addEventListener('mousedown', (event) => {
+      mouseDownTarget = event.target;
+    });
     modal.addEventListener('click', (event) => {
-      if (event.target === modal) {
+      if (event.target === modal && mouseDownTarget === modal) {
         library.closeDeleteModal();
       }
+      mouseDownTarget = null;
     });
-
-    // Prevent modal content clicks from propagating to modal background
-    const modalContent = modal.querySelector('.modal-content');
-    if (modalContent) {
-      modalContent.addEventListener('click', (event) => {
-        event.stopPropagation();
-      });
-    }
   }
 
   console.log('[Main] Application initialized successfully');
@@ -103,7 +105,9 @@ window.addEventListener('hashchange', () => {
     downloads.stopAutoRefresh();
     ocrQueue.stopAutoRefresh();
 
-    const tabName = UIUtils.showTab(hash, null);
+    // Redirect legacy stacks hash to tracking
+    const resolvedHash = hash === 'stacks' ? 'tracking' : hash;
+    const tabName = UIUtils.showTab(resolvedHash, null);
 
     // Load data for the tab if needed
     if (tabName === 'library') {
@@ -145,6 +149,9 @@ function initQueueSwitcher() {
 function showQueueView(queueType) {
   // Save current queue view to localStorage
   localStorage.setItem('lastQueueView', queueType);
+
+  // Update breadcrumb with queue sub-view
+  UIUtils.updateBreadcrumb('queue', queueType);
 
   // Update button active states
   document.querySelectorAll('.queue-switch-btn').forEach((btn) => {
@@ -222,6 +229,16 @@ window.showQueueView = showQueueView;
 window.updateQueueBadges = updateQueueBadges;
 window.updateHeaderStats = updateHeaderStats;
 
+// Stacks global functions (used by inline onclick handlers in index.html)
+window.openCreateStackModal = () => stacks.openCreateStackModal();
+window.closeStackCreateModal = () => UIUtils.closeModal('stack-create-modal');
+window.closeDeleteStackModal = () => stacks.closeDeleteStackModal();
+window.confirmDeleteStack = () => stacks.confirmDeleteStack();
+window.closeStackAssignModal = () => {
+  UIUtils.closeModal('stack-assign-modal');
+  stacks._notifyChange();
+};
+
 // Settings tab switcher
 window.showSettingsTab = (tabName, event) => {
   // Remove active class from all settings tab buttons
@@ -245,6 +262,9 @@ window.showSettingsTab = (tabName, event) => {
 
   // Save the current tab to localStorage
   localStorage.setItem('curator-settings-tab', tabName);
+
+  // Update breadcrumb with settings sub-tab
+  UIUtils.updateBreadcrumb('settings', tabName);
 };
 
 // Restore last active settings tab on page load
@@ -314,6 +334,7 @@ window.__modules = {
   settings,
   tasks,
   imports,
+  stacks,
   AuthManager,
   UIUtils,
 };

@@ -6,10 +6,12 @@ import copy
 import logging
 import os
 import sys
+import time
 from typing import Any, Dict
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
+from core.constants.app import RESTART_SHUTDOWN_DELAY
 from core.utils.error_handling import handle_api_errors
 from web.utils.responses import error_response, status_response, success_response
 
@@ -82,6 +84,61 @@ def _deep_merge(base: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
+def _resolve_masked_provider_key(provider_config: Dict[str, Any]) -> Dict[str, Any]:
+    """Resolve masked API key (***) from saved config for provider testing.
+
+    When the UI displays provider API keys as '***', test requests may send
+    the masked value. This resolves the real key from the saved config by
+    matching the provider's API URL.
+
+    Args:
+        provider_config: Provider config that may contain a masked api_key
+
+    Returns:
+        Provider config with real api_key if it was masked
+    """
+    if provider_config.get("api_key") != "***" or not _config_loader:
+        return provider_config
+
+    # Look up real key from saved config by matching api_url
+    resolved = provider_config.copy()
+    saved_config = _config_loader.get_all_config()
+    test_url = provider_config.get("api_url", "")
+
+    for saved_provider in saved_config.get("search_providers", []):
+        if saved_provider.get("api_url") == test_url and saved_provider.get("api_key"):
+            resolved["api_key"] = saved_provider["api_key"]
+            logger.debug(f"Resolved masked API key for provider: {test_url}")
+            break
+    else:
+        logger.warning(f"Could not resolve masked API key for provider URL: {test_url}")
+
+    return resolved
+
+
+def _resolve_masked_client_key(client_config: Dict[str, Any]) -> Dict[str, Any]:
+    """Resolve masked API key (***) from saved config for download client testing.
+
+    Args:
+        client_config: Client config that may contain a masked api_key
+
+    Returns:
+        Client config with real api_key if it was masked
+    """
+    if client_config.get("api_key") != "***" or not _config_loader:
+        return client_config
+
+    resolved = client_config.copy()
+    saved_config = _config_loader.get_all_config()
+    saved_client = saved_config.get("download_client", {})
+
+    if saved_client.get("api_key"):
+        resolved["api_key"] = saved_client["api_key"]
+        logger.debug("Resolved masked API key for download client")
+
+    return resolved
+
+
 @router.get("")
 @handle_api_errors("Get config", logger)
 async def get_config():
@@ -117,9 +174,7 @@ async def update_config(config_update: Dict[str, Any], background_tasks: Backgro
 
     # Schedule restart in background
     def restart_process():
-        import time
-
-        time.sleep(1)  # Give time for response to be sent
+        time.sleep(RESTART_SHUTDOWN_DELAY)  # Give time for response to be sent
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
     background_tasks.add_task(restart_process)
@@ -189,9 +244,7 @@ async def restart_application(background_tasks: BackgroundTasks):
     logger.info("Restart request received - restarting application")
 
     def restart_process():
-        import time
-
-        time.sleep(1)  # Give time for response to be sent
+        time.sleep(RESTART_SHUTDOWN_DELAY)  # Give time for response to be sent
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
     background_tasks.add_task(restart_process)
@@ -216,11 +269,19 @@ async def test_provider_connection(provider_config: Dict[str, Any]):
         if not provider_type:
             raise HTTPException(status_code=400, detail="Provider type is required")
 
+        # Resolve masked API key from saved config
+        provider_config = _resolve_masked_provider_key(provider_config)
+
         # Import provider classes
         if provider_type == "newsnab":
             from providers.newsnab import NewsnabProvider
 
             provider = NewsnabProvider(provider_config)
+            result = provider.test_connection()
+        elif provider_type == "internet_archive":
+            from providers.internet_archive import InternetArchiveProvider
+
+            provider = InternetArchiveProvider(provider_config)
             result = provider.test_connection()
         elif provider_type == "rss":
             return success_response("RSS providers don't require authentication")
@@ -254,6 +315,9 @@ async def test_download_client_connection(client_config: Dict[str, Any]):
         if not client_type:
             raise HTTPException(status_code=400, detail="Download client type is required")
 
+        # Resolve masked API key from saved config
+        client_config = _resolve_masked_client_key(client_config)
+
         # Import client classes
         if client_type == "sabnzbd":
             from clients.sabnzbd import SABnzbdClient
@@ -264,6 +328,11 @@ async def test_download_client_connection(client_config: Dict[str, Any]):
             from clients.nzbget import NZBGetClient
 
             client = NZBGetClient(client_config)
+            result = client.test_connection()
+        elif client_type == "internet_archive":
+            from clients.internet_archive import InternetArchiveClient
+
+            client = InternetArchiveClient(client_config)
             result = client.test_connection()
         else:
             raise HTTPException(status_code=400, detail=f"Unknown download client type: {client_type}")

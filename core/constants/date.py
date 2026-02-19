@@ -194,6 +194,25 @@ NUMBER_TO_MONTH_ABBR = {
 }
 """Month number to abbreviated English month name mapping"""
 
+# Season month ranges for fuzzy matching
+# Each season spans 3 months
+SEASON_MONTHS = {
+    "winter": {12, 1, 2},  # December, January, February
+    "spring": {3, 4, 5},  # March, April, May
+    "summer": {6, 7, 8},  # June, July, August
+    "fall": {9, 10, 11},  # September, October, November
+}
+"""Season name to set of months that belong to that season"""
+
+SEASON_CANONICAL_NAMES = {
+    "autumn": "Fall",
+    "fall": "Fall",
+    "spring": "Spring",
+    "summer": "Summer",
+    "winter": "Winter",
+}
+"""Mapping of season name variants to canonical English display label."""
+
 
 # ==============================================================================
 # Date Validation
@@ -207,6 +226,13 @@ MAX_VALID_YEAR = 2100
 
 DUPLICATE_DATE_THRESHOLD_DAYS = 5
 """Days threshold for considering publications as duplicates"""
+
+UNKNOWN_ISSUE_DATE_YEAR = 1900
+"""
+Sentinel year for periodicals without detectable publication dates.
+Used when only volume/issue numbers are available.
+Allows proper sorting by volume/issue instead of mixing with dated periodicals.
+"""
 
 
 # ==============================================================================

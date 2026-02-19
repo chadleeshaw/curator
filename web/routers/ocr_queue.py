@@ -42,7 +42,8 @@ async def get_ocr_queue(status: Optional[str] = None):
         raise HTTPException(status_code=500, detail="Database not initialized")
 
     def operation(db):
-        query = db.query(OCRJob).join(Periodical, OCRJob.periodical_id == Periodical.id)
+        # Use outerjoin so OCR jobs with deleted periodicals still appear
+        query = db.query(OCRJob).outerjoin(Periodical, OCRJob.periodical_id == Periodical.id)
 
         # Filter by status if provided
         if status:
@@ -59,22 +60,27 @@ async def get_ocr_queue(status: Optional[str] = None):
         result = []
         for job in jobs:
             magazine = db.query(Periodical).filter(Periodical.id == job.periodical_id).first()
-            if not magazine:
-                continue
 
-            # Format issue date for display
-            issue_display = ""
-            if magazine.issue_date:
-                issue_display = magazine.issue_date.strftime("%b %Y")
+            # Handle orphaned jobs where periodical was deleted
+            if magazine:
+                issue_display = magazine.issue_date.strftime("%b %Y") if magazine.issue_date else ""
+                magazine_title = magazine.title
+                magazine_year = magazine.issue_date.year if magazine.issue_date else None
+                tracking_id = magazine.tracking_id
+            else:
+                issue_display = ""
+                magazine_title = f"[Deleted Periodical #{job.periodical_id}]"
+                magazine_year = None
+                tracking_id = None
 
             result.append(
                 {
                     "id": job.id,
                     "magazine_id": job.periodical_id,
-                    "magazine_title": magazine.title,
+                    "magazine_title": magazine_title,
                     "magazine_issue": issue_display,
-                    "magazine_year": (magazine.issue_date.year if magazine.issue_date else None),
-                    "tracking_id": magazine.tracking_id,
+                    "magazine_year": magazine_year,
+                    "tracking_id": tracking_id,
                     "tracking_title": None,  # Will be populated below
                     "status": job.status.value,
                     "priority": job.priority,
@@ -236,6 +242,21 @@ async def clear_pending_ocr_jobs():
         return {"message": f"Cleared {count} pending OCR jobs", "count": count}
 
     return await with_db_session(_session_factory, operation)
+
+
+@router.delete("/queue/pending")
+@handle_api_errors("Clear pending OCR jobs", logger)
+async def clear_pending_ocr_jobs_by_status():
+    """
+    Clear all pending OCR jobs from the queue (explicit /pending path).
+
+    This is an alias for DELETE /queue to support the frontend's
+    status-based endpoint pattern (e.g., /queue/pending, /queue/failed).
+
+    Returns:
+        Number of jobs cleared
+    """
+    return await clear_pending_ocr_jobs()
 
 
 @router.delete("/queue/completed")

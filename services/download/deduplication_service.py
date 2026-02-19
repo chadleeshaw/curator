@@ -4,7 +4,7 @@ Prevents multiple downloads of the same content.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Optional, Tuple
 
 from sqlalchemy.orm import Session
@@ -41,7 +41,7 @@ class DeduplicationService:
         Returns:
             Tuple of (is_duplicate, existing_submission_record)
         """
-        # Create group ID for this result
+        # Calculate group ID from title (no dict available here, only string)
         fuzzy_group = get_fuzzy_group_id(result_title)
 
         # Check for similar results already submitted
@@ -66,8 +66,8 @@ class DeduplicationService:
 
         if existing:
             # Check if within time window
-            # Use timezone-naive datetime for comparison since DB stores naive datetimes
-            cutoff = datetime.now() - timedelta(hours=window_hours)
+            # Use timezone-naive cutoff since SQLite stores naive UTC datetimes
+            cutoff = utc_now().replace(tzinfo=None) - timedelta(hours=window_hours)
             if existing.created_at > cutoff:
                 logger.debug(
                     f"Duplicate found: '{result_title}' matches existing submission "

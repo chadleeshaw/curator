@@ -4,9 +4,11 @@ Shared utilities for normalizing titles and creating group IDs.
 """
 
 import logging
+import re
 from datetime import datetime
 from typing import Optional
 
+from core.constants.title import TITLE_SKIP_WORDS
 from core.parsers import normalize_month_name
 
 logger = logging.getLogger(__name__)
@@ -19,45 +21,57 @@ def get_fuzzy_group_id(title: str, publication_date: Optional[datetime] = None) 
     Normalizes the title to group similar search results/issues together.
     This prevents duplicate downloads of the same content from different providers.
 
+    IMPORTANT: The fuzzy_group_id should be based on title ONLY to support
+    items without publication dates (e.g., volume/issue numbers only).
+    Publication dates should be stored separately and used for additional
+    filtering when available.
+
     Args:
         title: Title to normalize
-        publication_date: Optional publication date to include in group ID
+        publication_date: DEPRECATED - kept for backward compatibility but should
+                         not be used. Pass None or omit this parameter.
 
     Returns:
-        Normalized string for grouping
+        Normalized string for grouping (title-based only)
 
     Examples:
         >>> get_fuzzy_group_id("National Geographic Magazine")
-        'national-geographic-magazine'
-        >>> get_fuzzy_group_id("The Economist", datetime(2024, 1, 15))
-        'economist_2024-01'
+        'national-geographic'
+        >>> get_fuzzy_group_id("The National Geographic")
+        'national-geographic'
+        >>> get_fuzzy_group_id("Wired, The Magazine")
+        'wired'
+        >>> get_fuzzy_group_id("Wired Vol 30 No 1")
+        'wired-vol-30-no-1'
     """
+    # DEPRECATED: publication_date parameter should not be used
+    if publication_date is not None:
+        logger.warning(
+            "get_fuzzy_group_id() called with publication_date - this is deprecated. "
+            "Store publication_date separately for filtering."
+        )
+
     # Convert to lowercase and strip whitespace
     normalized = title.lower().strip()
 
-    # Remove common noise words that don't affect identity
-    noise_words = ["the", "magazine", "comic", "edition"]
-    for word in noise_words:
-        normalized = normalized.replace(f" {word} ", " ")
-
-    # Remove special characters and extra punctuation
-    # Replace dashes, underscores, dots with spaces first
-    for char in ["-", "_", "."]:
+    # Remove all punctuation FIRST (replace with spaces)
+    # This prevents commas/periods from sticking to words
+    for char in [",", ";", ":", "-", "_", ".", "!", "?", "(", ")", "[", "]", "{", "}"]:
         normalized = normalized.replace(char, " ")
 
-    # Normalize common month abbreviations to full names for better matching
-    words = []
-    for word in normalized.split():
-        words.append(normalize_month_name(word))
+    # Split into words (removes extra whitespace automatically)
+    words = normalized.split()
 
-    # Remove extra whitespace and rejoin
-    normalized = " ".join(words)
+    # Remove leading "the" if present (TITLE_SKIP_WORDS already includes "the")
+    if words and words[0] == "the":
+        words = words[1:]
 
-    # Add date component if available for more precise grouping
-    if publication_date:
-        date_str = publication_date.strftime("%Y-%m")
-        # Use underscore to separate title from date
-        return f"{normalized}_{date_str}"
+    # Remove noise words from TITLE_SKIP_WORDS constant
+    # Includes: the, a, an, and, or, of, magazine, mag, comic, edition
+    words = [word for word in words if word not in TITLE_SKIP_WORDS]
 
-    # Replace spaces with hyphens for consistency
-    return normalized.replace(" ", "-")
+    # Normalize month names for better matching
+    words = [normalize_month_name(word) for word in words]
+
+    # Join with hyphens
+    return "-".join(words) if words else ""

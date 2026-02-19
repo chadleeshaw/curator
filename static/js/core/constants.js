@@ -332,6 +332,15 @@ export const STORAGE_KEYS = {
 };
 
 // ============================================================================
+// API Query Limits
+// ============================================================================
+
+export const API_LIMITS = {
+  TRACKING_LIST: 1000, // Max tracked periodicals to fetch
+  PERIODICAL_LIST: 10000, // Max library periodicals to fetch
+};
+
+// ============================================================================
 // Default Values
 // ============================================================================
 
@@ -341,4 +350,12 @@ export const DEFAULTS = {
   CLEANUP_HOURS: 24,
   ENABLE_TEXT_SCAN: true,
   ENABLE_OCR: true,
+};
+
+// ============================================================================
+// Date Constants
+// ============================================================================
+
+export const DATE_CONSTANTS = {
+  UNKNOWN_ISSUE_DATE_YEAR: 1900, // Sentinel year for periodicals without detectable dates
 };

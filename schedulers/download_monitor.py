@@ -5,13 +5,16 @@ Monitors download client progress and scans download folder for files to organiz
 
 import asyncio
 import logging
-from datetime import datetime
 from pathlib import Path
 from typing import Callable, Optional
 
 from sqlalchemy.orm import Session, sessionmaker
 
 from core.constants.app import DOWNLOAD_FILE_SEARCH_DEPTH
+from core.constants.app import MAX_IMPORT_RETRIES
+from core.constants.files import INCOMPLETE_DOWNLOAD_PATTERNS
+from core.parsers import utc_now
+from core.utils import find_supported_files
 from services.importer.sidecar import create_sidecar_file
 from models.database import DownloadSubmission, PeriodicalTracking, DiscoveredIssue
 from services import DownloadManager
@@ -36,6 +39,7 @@ class DownloadMonitor:
         session_factory: sessionmaker,
         downloads_dir: str,
         *,
+        remote_path: Optional[str] = None,
         import_callback: Optional[Callable] = None,
     ):
         """
@@ -46,12 +50,16 @@ class DownloadMonitor:
             file_importer: FileImporter instance for processing completed downloads
             session_factory: SQLAlchemy session factory
             downloads_dir: Path to downloads folder to scan
+            remote_path: Path prefix as seen by the download client (e.g., "/downloads/").
+                When set, client paths starting with this prefix are remapped to downloads_dir.
+                Useful when the client runs in a different container with different mount points.
             import_callback: Optional callback to run after importing (e.g., for file processing)
         """
         self.download_manager = download_manager
         self.file_importer = file_importer
         self.session_factory = session_factory
         self.downloads_dir = Path(downloads_dir)
+        self.remote_path = remote_path.rstrip("/") + "/" if remote_path else None
         self.import_callback = import_callback
         self.last_run_time = None
         self.next_run_time = None
@@ -85,7 +93,7 @@ class DownloadMonitor:
         """Synchronous implementation of the monitoring task."""
         session = self.session_factory()
         try:
-            self.last_run_time = datetime.now()
+            self.last_run_time = utc_now()
             self.stats["total_runs"] += 1
             logger.debug(f"[DownloadMonitor] Monitor run #{self.stats['total_runs']} started")
 
@@ -94,7 +102,7 @@ class DownloadMonitor:
             client_processed, client_failed = self._monitor_download_client(session)
             self.stats["client_downloads_processed"] += client_processed
             self.stats["client_downloads_failed"] += client_failed
-            self.stats["last_client_check"] = datetime.now()
+            self.stats["last_client_check"] = utc_now()
 
             # Part 1.5: Process queued downloads
             logger.debug("[DownloadMonitor] Processing download queue...")
@@ -109,14 +117,20 @@ class DownloadMonitor:
             logger.debug("[DownloadMonitor] Scanning downloads folder...")
             folder_imported = self._scan_downloads_folder(session)
             self.stats["folder_files_imported"] += folder_imported
-            self.stats["last_folder_scan"] = datetime.now()
+            self.stats["last_folder_scan"] = utc_now()
+
+            # Part 3: Retry failed imports where the file still exists on disk
+            logger.debug("[DownloadMonitor] Checking for retryable import failures...")
+            import_retried = self._retry_failed_imports(session)
+            if import_retried > 0:
+                logger.info(f"[DownloadMonitor] Retried {import_retried} previously failed imports")
 
             # Warn if no files found but there are active downloads (potential config mismatch)
             # Rate limit to once every 30 minutes to avoid log spam
             # Use the active_count from queue processing above
             try:
                 if folder_imported == 0 and queue_result.get("active_count", 0) > 0:
-                    now = datetime.now()
+                    now = utc_now()
                     should_warn = (
                         self.last_config_warning_time is None
                         or (now - self.last_config_warning_time).total_seconds() > 1800  # 30 minutes
@@ -152,23 +166,27 @@ class DownloadMonitor:
         finally:
             session.close()
 
-    def _find_pdf_epub_files(self, directory: Path) -> list[Path]:
+    def _remap_client_path(self, file_path: str) -> str:
         """
-        Find all PDF and EPUB files in a directory recursively.
+        Remap a download client path to the local filesystem.
+
+        When the download client runs in a different container, its paths
+        (e.g., "/downloads/Books/file.pdf") don't match Curator's mount
+        (e.g., "/app/local/downloads/Books/file.pdf"). This method replaces
+        the client's remote_path prefix with the local downloads_dir.
 
         Args:
-            directory: Directory to search
+            file_path: File path as reported by the download client
 
         Returns:
-            List of Path objects for PDF/EPUB/CBZ/CBR files found
+            Remapped path string, or original if no remapping applies
         """
-        files = []
-        if directory.exists() and directory.is_dir():
-            files.extend(directory.glob("**/*.pdf"))
-            files.extend(directory.glob("**/*.epub"))
-            files.extend(directory.glob("**/*.cbz"))
-            files.extend(directory.glob("**/*.cbr"))
-        return files
+        if self.remote_path and file_path.startswith(self.remote_path):
+            relative = file_path[len(self.remote_path) :]
+            remapped = str(self.downloads_dir / relative)
+            logger.debug(f"Remapped client path: {file_path} -> {remapped}")
+            return remapped
+        return file_path
 
     def _find_file_in_downloads(self, file_path: str, max_depth: int = DOWNLOAD_FILE_SEARCH_DEPTH) -> Optional[Path]:
         """
@@ -185,6 +203,9 @@ class DownloadMonitor:
         if not file_path:
             return None
 
+        # Remap client path if remote_path is configured
+        file_path = self._remap_client_path(file_path)
+
         file_path_obj = Path(file_path)
         filename = file_path_obj.name
 
@@ -194,7 +215,7 @@ class DownloadMonitor:
                 return file_path_obj
             # If it's a directory, search for PDF/EPUB files inside it
             if file_path_obj.is_dir():
-                found_files = self._find_pdf_epub_files(file_path_obj)
+                found_files = find_supported_files(file_path_obj, recursive=True)
                 if found_files:
                     return found_files[0]
 
@@ -209,7 +230,7 @@ class DownloadMonitor:
                         return candidate
                     # If it's a directory, search for PDF/EPUB files inside it
                     if candidate.is_dir():
-                        found_files = self._find_pdf_epub_files(candidate)
+                        found_files = find_supported_files(candidate, recursive=True)
                         if found_files:
                             return found_files[0]
             else:
@@ -221,7 +242,7 @@ class DownloadMonitor:
                             return candidate
                         # If it's a directory, search for PDF/EPUB files inside it
                         if candidate.is_dir():
-                            found_files = self._find_pdf_epub_files(candidate)
+                            found_files = find_supported_files(candidate, recursive=True)
                             if found_files:
                                 return found_files[0]
 
@@ -276,11 +297,16 @@ class DownloadMonitor:
                 return 0
 
             # Check for PDFs, EPUBs, CBZs, and CBRs recursively
-            all_files = self._find_pdf_epub_files(self.downloads_dir)
-            pdf_files = [f for f in all_files if f.suffix.lower() == ".pdf"]
-            epub_files = [f for f in all_files if f.suffix.lower() == ".epub"]
-            cbz_files = [f for f in all_files if f.suffix.lower() == ".cbz"]
-            cbr_files = [f for f in all_files if f.suffix.lower() == ".cbr"]
+            all_files = find_supported_files(self.downloads_dir, recursive=True)
+
+            # Filter out incomplete/temporary downloads (e.g., .part, _UNPACK_, .crdownload)
+            all_files = [f for f in all_files if not any(pattern in f.name for pattern in INCOMPLETE_DOWNLOAD_PATTERNS)]
+
+            # Strip trailing quotes from suffix (for files like 'Magazine.pdf')
+            pdf_files = [f for f in all_files if f.suffix.lower().rstrip("'") == ".pdf"]
+            epub_files = [f for f in all_files if f.suffix.lower().rstrip("'") == ".epub"]
+            cbz_files = [f for f in all_files if f.suffix.lower().rstrip("'") == ".cbz"]
+            cbr_files = [f for f in all_files if f.suffix.lower().rstrip("'") == ".cbr"]
             file_count = len(all_files)
 
             if file_count > 0:
@@ -295,6 +321,9 @@ class DownloadMonitor:
 
                 if imported_count > 0:
                     logger.info(f"[DownloadMonitor] Successfully imported {imported_count} files from folder")
+                    # Clean up any completed submissions from the download client
+                    # that correspond to files we just imported via folder scan
+                    self._cleanup_stale_completed_submissions(session)
 
                 if data.get("failed", 0) > 0:
                     errors = results.get("errors", [])
@@ -309,6 +338,89 @@ class DownloadMonitor:
             logger.error(f"Error scanning downloads folder: {e}", exc_info=True)
 
         return imported_count
+
+    def _retry_failed_imports(self, session: Session) -> int:
+        """
+        Retry imports for FAILED submissions where the file still exists on disk.
+
+        Picks up submissions that failed during import (not download failures)
+        and re-attempts the import up to MAX_IMPORT_RETRIES times. This handles
+        transient failures like disk full, temporary permission issues, or
+        intermittent parsing errors.
+
+        Args:
+            session: Database session
+
+        Returns:
+            Number of imports successfully retried
+        """
+        retried_count = 0
+
+        try:
+            # Find FAILED submissions where the error indicates an import failure
+            # and attempt_count is below the retry threshold
+            failed_imports = (
+                session.query(DownloadSubmission)
+                .filter(
+                    DownloadSubmission.status == DownloadSubmission.StatusEnum.FAILED,
+                    DownloadSubmission.file_path.isnot(None),
+                    DownloadSubmission.attempt_count < MAX_IMPORT_RETRIES,
+                    DownloadSubmission.last_error.like("%Import%"),
+                )
+                .all()
+            )
+
+            if not failed_imports:
+                return 0
+
+            logger.debug(f"[DownloadMonitor] Found {len(failed_imports)} failed imports eligible for retry")
+
+            for submission in failed_imports:
+                file_path = self._find_file_in_downloads(submission.file_path)
+
+                if not file_path:
+                    # File no longer on disk — mark as permanently failed so it stops being retried
+                    submission.attempt_count = MAX_IMPORT_RETRIES
+                    submission.last_error = "Import file no longer exists on disk"
+                    session.commit()
+                    logger.debug(f"[DownloadMonitor] Import retry skipped: file gone for submission {submission.id}")
+                    continue
+
+                logger.info(
+                    f"[DownloadMonitor] Retrying import for submission {submission.id}: "
+                    f"{file_path.name} (attempt {submission.attempt_count + 1}/{MAX_IMPORT_RETRIES})"
+                )
+
+                submission.attempt_count += 1
+
+                if self._process_single_file(file_path, submission, session):
+                    retried_count += 1
+                    self._sync_discovered_issue_status(submission, "completed", None, session)
+                    self.download_manager.mark_processed(submission.id, session)
+
+                    if self._should_delete_from_client(submission.tracking_id, session):
+                        self._delete_from_client(submission.job_id, "completed (import retry)", submission.client_name)
+
+                    logger.info(f"[DownloadMonitor] Import retry succeeded: {file_path.name}")
+                else:
+                    if submission.attempt_count >= MAX_IMPORT_RETRIES:
+                        submission.last_error = (
+                            f"Import/processing permanently failed after {MAX_IMPORT_RETRIES} attempts"
+                        )
+                        logger.warning(
+                            f"[DownloadMonitor] Import retry exhausted for submission {submission.id}: "
+                            f"{file_path.name} ({MAX_IMPORT_RETRIES} attempts)"
+                        )
+                    else:
+                        submission.last_error = (
+                            f"Import/processing failed (attempt {submission.attempt_count}/{MAX_IMPORT_RETRIES})"
+                        )
+                    session.commit()
+
+        except Exception as e:
+            logger.error(f"[DownloadMonitor] Error in import retry: {e}", exc_info=True)
+
+        return retried_count
 
     def _update_pending_downloads(self, session: Session) -> int:
         """
@@ -331,7 +443,14 @@ class DownloadMonitor:
 
         for submission in pending:
             if not submission.job_id:
-                logger.debug(f"[DownloadMonitor] Skipping submission {submission.id} - no job_id")
+                logger.warning(
+                    f"[DownloadMonitor] Marking submission {submission.id} as failed - " f"no job_id (stuck in pending)"
+                )
+                submission.status = DownloadSubmission.StatusEnum.FAILED
+                submission.last_error = "No job ID - download client never accepted this submission"
+                submission.updated_at = utc_now()
+                session.commit()
+                failed_count += 1
                 continue
 
             try:
@@ -365,30 +484,9 @@ class DownloadMonitor:
                     ):
                         failed_count += 1
 
-                        # Check if we should delete from client after failure
-                        should_delete = True  # Default: always delete failed downloads
-                        if submission.tracking_id:
-                            tracking = (
-                                session.query(PeriodicalTracking)
-                                .filter(PeriodicalTracking.id == submission.tracking_id)
-                                .first()
-                            )
-                            # Only override default if tracking explicitly disables deletion
-                            if tracking:
-                                should_delete = tracking.delete_from_client_on_completion
-
-                        if should_delete:
-                            try:
-                                if self.download_manager.download_client.delete(submission.job_id):
-                                    logger.info(
-                                        f"[DownloadMonitor] Deleted failed job {submission.job_id} "
-                                        f"from download client"
-                                    )
-                            except Exception as e:
-                                logger.error(
-                                    f"Error deleting from client: {e}",
-                                    exc_info=True,
-                                )
+                        # Delete failed downloads from client if tracking settings allow
+                        if self._should_delete_from_client(submission.tracking_id, session):
+                            self._delete_from_client(submission.job_id, "failed", submission.client_name)
             except Exception as e:
                 logger.error(
                     f"Error updating status for job {submission.job_id}: {e}",
@@ -396,6 +494,175 @@ class DownloadMonitor:
                 )
 
         return failed_count
+
+    def _handle_orphaned_submission(
+        self, submission: DownloadSubmission, session: Session
+    ) -> Optional[DownloadSubmission]:
+        """
+        Handle a completed submission that has no file_path.
+
+        These "orphaned" submissions occur when the download client marks a job as
+        completed but doesn't provide a storage location (e.g., SABnzbd history purged).
+
+        Args:
+            submission: The orphaned submission
+            session: Database session
+
+        Returns:
+            Updated submission if recovery succeeded, None if should skip processing
+        """
+        age_hours = (utc_now() - submission.updated_at).total_seconds() / 3600 if submission.updated_at else 0
+
+        logger.warning(
+            f"[DownloadMonitor] Orphaned completed submission detected:\n"
+            f"  ID: {submission.id}\n"
+            f"  Title: {submission.result_title}\n"
+            f"  Job ID: {submission.job_id}\n"
+            f"  Status: {submission.status.value}\n"
+            f"  Created: {submission.created_at}\n"
+            f"  Updated: {submission.updated_at} ({age_hours:.1f} hours ago)\n"
+            f"  Attempt Count: {submission.attempt_count}\n"
+            f"  Last Error: {submission.last_error}\n"
+            f"  Reason: Download client marked job as completed but file_path is NULL.\n"
+            f"  This typically happens when SABnzbd history was purged or storage field was empty."
+        )
+
+        # Auto-recovery: Mark as SKIPPED if older than 24 hours
+        if age_hours > 24:
+            logger.info(
+                f"[DownloadMonitor] Marking submission {submission.id} as SKIPPED "
+                f"(age: {age_hours:.1f} hours > 24 hours threshold)"
+            )
+            submission.status = DownloadSubmission.StatusEnum.SKIPPED
+            submission.last_error = (
+                f"Orphaned: Completed without file_path after {age_hours:.1f} hours. "
+                "Likely SABnzbd history purged or storage field empty."
+            )
+            session.commit()
+            return None
+
+        # For recent submissions, attempt recovery from client
+        logger.info(
+            f"[DownloadMonitor] Attempting recovery for submission {submission.id} "
+            f"(age: {age_hours:.1f} hours < 24 hours threshold)"
+        )
+
+        if not submission.job_id:
+            return None
+
+        try:
+            logger.debug(f"[DownloadMonitor] Checking client for job {submission.job_id}")
+            updated_submission = self.download_manager.update_submission_status(submission.job_id, session)
+
+            if updated_submission and updated_submission.file_path:
+                logger.info(f"[DownloadMonitor] Recovery successful! Found file_path: {updated_submission.file_path}")
+                return updated_submission
+
+            logger.warning(
+                f"[DownloadMonitor] Recovery failed - client has no file_path for job {submission.job_id}. "
+                f"Marking as FAILED for manual review."
+            )
+            submission.status = DownloadSubmission.StatusEnum.FAILED
+            submission.last_error = (
+                "Orphaned: Completed without file_path. Client returned no storage location. "
+                "Job may have been deleted from client or storage was empty."
+            )
+            submission.attempt_count += 1
+            session.commit()
+            return None
+
+        except Exception as e:
+            logger.error(
+                f"[DownloadMonitor] Error during recovery attempt for submission {submission.id}: {e}",
+                exc_info=True,
+            )
+            submission.status = DownloadSubmission.StatusEnum.FAILED
+            submission.last_error = f"Recovery attempt failed: {str(e)}"
+            submission.attempt_count += 1
+            session.commit()
+            return None
+
+    def _should_delete_from_client(self, tracking_id: Optional[int], session: Session) -> bool:
+        """
+        Determine if a completed/failed download should be deleted from the client.
+
+        Args:
+            tracking_id: ID of the associated tracking record
+            session: Database session
+
+        Returns:
+            True if the download should be deleted from client
+        """
+        # Default: always delete
+        if not tracking_id:
+            return True
+
+        tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
+        if not tracking:
+            return True
+
+        return tracking.delete_from_client_on_completion
+
+    def _delete_from_client(self, job_id: str, reason: str, client_name: Optional[str] = None) -> None:
+        """
+        Delete a job from the download client.
+
+        Args:
+            job_id: The download client job ID
+            reason: Reason for deletion (for logging)
+            client_name: Name of the client that handled the download (uses correct client)
+        """
+        try:
+            # Use the correct client based on client_name, not just the default
+            client = self.download_manager._get_client_by_name(client_name)
+            if client.delete(job_id):
+                logger.info(f"[DownloadMonitor] Deleted {reason} job {job_id} from {client.name}")
+        except Exception as e:
+            logger.error(f"Error deleting from client: {e}", exc_info=True)
+
+    def _cleanup_stale_completed_submissions(self, session: Session) -> None:
+        """
+        Clean up completed download submissions whose files have already been imported.
+
+        After folder-scan imports, some completed submissions may still be lingering
+        in the download client because they were imported via folder scan rather than
+        the client-based path. This finds those submissions and deletes them from the client.
+        """
+        try:
+            # Find completed submissions that still have file_path set
+            # (these weren't processed via the client path)
+            stale_submissions = (
+                session.query(DownloadSubmission)
+                .filter(
+                    DownloadSubmission.status == DownloadSubmission.StatusEnum.COMPLETED,
+                    DownloadSubmission.file_path.isnot(None),
+                )
+                .all()
+            )
+
+            if not stale_submissions:
+                return
+
+            for submission in stale_submissions:
+                # Check if the file still exists in downloads - if gone, it was imported
+                file_path = self._find_file_in_downloads(submission.file_path)
+                if file_path is None:
+                    logger.info(
+                        f"[DownloadMonitor] Completed submission {submission.id} ({submission.result_title}) "
+                        f"file no longer in downloads - marking processed and cleaning up client"
+                    )
+                    # Mark as processed
+                    self.download_manager.mark_processed(submission.id, session)
+
+                    # Sync DiscoveredIssue status
+                    self._sync_discovered_issue_status(submission, "completed", None, session)
+
+                    # Delete from client
+                    if submission.job_id and self._should_delete_from_client(submission.tracking_id, session):
+                        self._delete_from_client(submission.job_id, "completed (folder import)", submission.client_name)
+
+        except Exception as e:
+            logger.error(f"[DownloadMonitor] Error cleaning up stale submissions: {e}", exc_info=True)
 
     def _process_completed_downloads(self, session: Session) -> int:
         """
@@ -420,84 +687,62 @@ class DownloadMonitor:
             logger.debug(f"[DownloadMonitor] Processing submission {submission.id}: {submission.result_title}")
 
             if not submission.file_path:
-                # Enhanced diagnostic logging for orphaned completed submissions
-                age_hours = (
-                    (datetime.now() - submission.updated_at).total_seconds() / 3600 if submission.updated_at else 0
-                )
-                logger.warning(
-                    f"[DownloadMonitor] Orphaned completed submission detected:\n"
-                    f"  ID: {submission.id}\n"
-                    f"  Title: {submission.result_title}\n"
-                    f"  Job ID: {submission.job_id}\n"
-                    f"  Status: {submission.status.value}\n"
-                    f"  Created: {submission.created_at}\n"
-                    f"  Updated: {submission.updated_at} ({age_hours:.1f} hours ago)\n"
-                    f"  Attempt Count: {submission.attempt_count}\n"
-                    f"  Last Error: {submission.last_error}\n"
-                    f"  Reason: Download client marked job as completed but file_path is NULL.\n"
-                    f"  This typically happens when SABnzbd history was purged or storage field was empty."
-                )
-
-                # Auto-recovery: Mark as SKIPPED if older than 24 hours, otherwise retry
-                if age_hours > 24:
-                    logger.info(
-                        f"[DownloadMonitor] Marking submission {submission.id} as SKIPPED "
-                        f"(age: {age_hours:.1f} hours > 24 hours threshold)"
-                    )
-                    submission.status = DownloadSubmission.StatusEnum.SKIPPED
-                    submission.last_error = (
-                        f"Orphaned: Completed without file_path after {age_hours:.1f} hours. "
-                        "Likely SABnzbd history purged or storage field empty."
-                    )
-                    session.commit()
+                recovered = self._handle_orphaned_submission(submission, session)
+                if recovered:
+                    submission = recovered
                 else:
-                    # For recent submissions, check if job still exists in client
-                    logger.info(
-                        f"[DownloadMonitor] Attempting recovery for submission {submission.id} "
-                        f"(age: {age_hours:.1f} hours < 24 hours threshold)"
-                    )
-                    try:
-                        # Try to get fresh status from client
-                        if submission.job_id:
-                            logger.debug(f"[DownloadMonitor] Checking client for job {submission.job_id}")
-                            updated_submission = self.download_manager.update_submission_status(
-                                submission.job_id, session
-                            )
-                            if updated_submission and updated_submission.file_path:
-                                logger.info(
-                                    f"[DownloadMonitor] Recovery successful! "
-                                    f"Found file_path: {updated_submission.file_path}"
-                                )
-                                # Continue processing with updated submission
-                                submission = updated_submission
-                            else:
-                                logger.warning(
-                                    f"[DownloadMonitor] Recovery failed - client has no file_path for job {submission.job_id}. "
-                                    f"Marking as FAILED for manual review."
-                                )
-                                submission.status = DownloadSubmission.StatusEnum.FAILED
-                                submission.last_error = (
-                                    "Orphaned: Completed without file_path. Client returned no storage location. "
-                                    "Job may have been deleted from client or storage was empty."
-                                )
-                                submission.attempt_count += 1
-                                session.commit()
-                                continue
-                    except Exception as e:
-                        logger.error(
-                            f"[DownloadMonitor] Error during recovery attempt for submission {submission.id}: {e}",
-                            exc_info=True,
-                        )
-                        submission.status = DownloadSubmission.StatusEnum.FAILED
-                        submission.last_error = f"Recovery attempt failed: {str(e)}"
-                        submission.attempt_count += 1
-                        session.commit()
-                        continue
-
-                # If we still don't have a file_path after recovery attempt, skip
-                if not submission.file_path:
                     continue
 
+            # Check for comma-separated file paths (Internet Archive collection items)
+            # IA collections store multiple extracted file paths as comma-separated string
+            if "," in submission.file_path:
+                file_paths_str = submission.file_path.split(",")
+                logger.info(
+                    f"[DownloadMonitor] Processing IA collection with {len(file_paths_str)} files "
+                    f"for submission {submission.id}"
+                )
+                collection_success_count = 0
+
+                for file_path_str in file_paths_str:
+                    file_path_str = file_path_str.strip()
+                    if not file_path_str:
+                        continue
+
+                    file_path = self._find_file_in_downloads(file_path_str)
+                    if not file_path:
+                        logger.warning(
+                            f"[DownloadMonitor] Collection file not found: {file_path_str} "
+                            f"(searched in: {self.downloads_dir})"
+                        )
+                        continue
+
+                    # Process each collection file with tracking context
+                    if self._process_single_file(file_path, submission, session):
+                        collection_success_count += 1
+
+                if collection_success_count > 0:
+                    logger.info(
+                        f"[DownloadMonitor] Successfully imported {collection_success_count}/{len(file_paths_str)} "
+                        f"files from IA collection for submission {submission.id}"
+                    )
+                    processed_count += collection_success_count
+
+                    # Sync status and mark processed after all collection files are done
+                    self._sync_discovered_issue_status(submission, "completed", None, session)
+                    self.download_manager.mark_processed(submission.id, session)
+
+                    if self._should_delete_from_client(submission.tracking_id, session):
+                        self._delete_from_client(submission.job_id, "completed", submission.client_name)
+                else:
+                    logger.warning(f"[DownloadMonitor] All collection files failed for submission {submission.id}")
+                    submission.status = DownloadSubmission.StatusEnum.FAILED
+                    submission.last_error = "All collection files failed to import"
+                    session.commit()
+                    self._sync_discovered_issue_status(submission, "failed", None, session)
+
+                continue
+
+            # Single file processing (non-collection)
             # Map the client path to Curator's download directory
             # The client returns a path like "/downloads/Books/Magazine.Name" which is the client's view
             # We need to look for it in our configured downloads_dir
@@ -516,91 +761,99 @@ class DownloadMonitor:
 
             logger.debug(f"[DownloadMonitor] Found file at: {file_path}")
 
-            # Create sidecar metadata file if we have tracking info
-            # This preserves the tracking association even if the filename is ambiguous
-            if submission.tracking_id:
-                try:
-                    tracking = session.query(PeriodicalTracking).filter_by(id=submission.tracking_id).first()
-                    if tracking:
-                        create_sidecar_file(
-                            file_path,
-                            tracking_id=tracking.id,
-                            tracking_title=tracking.title,
-                            submission_id=submission.id,
-                            category=tracking.category,
-                            language=tracking.language,
-                            country=tracking.country,
-                        )
-                except Exception as e:
-                    logger.warning(f"Failed to create sidecar file for {file_path.name}: {e}")
+            if self._process_single_file(file_path, submission, session):
+                processed_count += 1
 
-            try:
-                logger.debug(f"[DownloadMonitor] Importing file from client download: {file_path}")
+                # Sync DiscoveredIssue status (NEW: Issue Discovery & Tracking)
+                self._sync_discovered_issue_status(submission, "completed", None, session)
 
-                # Use file importer to process the file, passing the tracking_id from the submission
-                # This ensures the file is linked to the tracking that requested it
-                result = self.file_importer.import_pdf(file_path, session, tracking_id=submission.tracking_id)
+                # Mark submission as processed
+                self.download_manager.mark_processed(submission.id, session)
 
-                if result:
-                    logger.info(f"[DownloadMonitor] Successfully imported from client: {file_path.name}")
-                    processed_count += 1
-
-                    # Sync DiscoveredIssue status (NEW: Issue Discovery & Tracking)
-                    self._sync_discovered_issue_status(submission, "completed", result.get("periodical_id"), session)
-
-                    # Mark submission as processed
-                    self.download_manager.mark_processed(submission.id, session)
-
-                    # Check if we should delete from client after successful completion
-                    should_delete = True  # Default: always delete completed downloads
-                    if submission.tracking_id:
-                        tracking = (
-                            session.query(PeriodicalTracking)
-                            .filter(PeriodicalTracking.id == submission.tracking_id)
-                            .first()
-                        )
-                        # Only override default if tracking explicitly disables deletion
-                        if tracking:
-                            should_delete = tracking.delete_from_client_on_completion
-
-                    if should_delete:
-                        try:
-                            if self.download_manager.download_client.delete(submission.job_id):
-                                logger.info(
-                                    f"[DownloadMonitor] Deleted completed job {submission.job_id} "
-                                    f"from download client"
-                                )
-                        except Exception as e:
-                            logger.error(f"Error deleting from client: {e}", exc_info=True)
-
-                    # Call optional callback (e.g., for database updates)
-                    if self.import_callback:
-                        try:
-                            self.import_callback(file_path, result, submission, session)
-                        except Exception as e:
-                            logger.error(f"Error in import callback: {e}", exc_info=True)
-                else:
-                    logger.warning(f"Import failed for: {file_path}")
-                    submission.status = DownloadSubmission.StatusEnum.FAILED
-                    submission.last_error = "Import/processing failed"
-                    session.commit()
-
-                    # Sync DiscoveredIssue status (NEW: Issue Discovery & Tracking)
-                    self._sync_discovered_issue_status(submission, "failed", None, session)
-
-            except Exception as e:
-                logger.error(
-                    f"Error processing completed download {submission.id}: {e}",
-                    exc_info=True,
-                )
+                # Delete from client if tracking settings allow
+                if self._should_delete_from_client(submission.tracking_id, session):
+                    self._delete_from_client(submission.job_id, "completed", submission.client_name)
+            else:
                 submission.status = DownloadSubmission.StatusEnum.FAILED
-                submission.last_error = str(e)
+                submission.last_error = "Import/processing failed"
                 session.commit()
 
                 # Sync DiscoveredIssue status (NEW: Issue Discovery & Tracking)
                 self._sync_discovered_issue_status(submission, "failed", None, session)
 
         return processed_count
+
+    def _process_single_file(
+        self,
+        file_path: Path,
+        submission: DownloadSubmission,
+        session: Session,
+    ) -> bool:
+        """
+        Process a single file: create sidecar and import.
+
+        This handles both regular downloads and individual files from IA collections.
+        Creates a sidecar file to preserve the tracking association, then imports the file.
+
+        Args:
+            file_path: Path to the file to process
+            submission: The download submission record
+            session: Database session
+
+        Returns:
+            True if import succeeded, False otherwise
+        """
+        # Create sidecar metadata file if we have tracking info
+        # This preserves the tracking association even if the filename is ambiguous
+        # Critical for IA collection items where filenames may not contain the periodical title
+        if submission.tracking_id:
+            try:
+                tracking = session.query(PeriodicalTracking).filter_by(id=submission.tracking_id).first()
+                if tracking:
+                    create_sidecar_file(
+                        file_path,
+                        tracking_id=tracking.id,
+                        tracking_title=tracking.title,
+                        submission_id=submission.id,
+                        category=tracking.category,
+                        language=tracking.language,
+                        country=tracking.country,
+                    )
+                    logger.debug(
+                        f"[DownloadMonitor] Created sidecar for {file_path.name} -> "
+                        f"tracking '{tracking.title}' (ID: {tracking.id})"
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to create sidecar file for {file_path.name}: {e}")
+
+        try:
+            logger.debug(f"[DownloadMonitor] Importing file from client download: {file_path}")
+
+            # Use file importer to process the file, passing the tracking_id from the submission
+            # This ensures the file is linked to the tracking that requested it
+            result = self.file_importer.import_supported_files(file_path, session, tracking_id=submission.tracking_id)
+
+            if result and result.get("periodical_id"):
+                logger.info(f"[DownloadMonitor] Successfully imported from client: {file_path.name}")
+
+                # Call optional callback (e.g., for database updates)
+                if self.import_callback:
+                    try:
+                        self.import_callback(file_path, result, submission, session)
+                    except Exception as e:
+                        logger.error(f"Error in import callback: {e}", exc_info=True)
+
+                return True
+            else:
+                logger.warning(f"Import failed for: {file_path}")
+                return False
+
+        except Exception as e:
+            logger.error(
+                f"Error processing file {file_path}: {e}",
+                exc_info=True,
+            )
+            return False
 
     def _sync_discovered_issue_status(
         self,

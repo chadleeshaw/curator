@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{STACK_NAME}} - Curator</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🪙</text></svg>"
+    />
+    <link rel="stylesheet" href="/static/css/base.css" />
+    <link rel="stylesheet" href="/static/css/themes.css" />
+    <link rel="stylesheet" href="/static/css/layout.css" />
+    <link rel="stylesheet" href="/static/css/components.css" />
+    <link rel="stylesheet" href="/static/css/pages.css" />
+    <link rel="stylesheet" href="/static/css/periodical.css" />
+    <link rel="stylesheet" href="/static/css/stacks.css" />
+  </head>
+  <body>
+    <!-- Breadcrumb (outside container for sticky positioning) -->
+    <nav class="breadcrumb detail-breadcrumb">
+      <a href="/#library">Library</a>
+      <span class="separator">/</span>
+      <span class="current">{{STACK_NAME}}</span>
+    </nav>
+
+    <div
+      class="container"
+      id="stack-container"
+      data-slug="{{STACK_SLUG}}"
+      data-members="{{MEMBERS_DATA}}"
+    >
+      <div class="stack-page-header collapsible-header">
+        <div class="header-content-row">
+          <div class="header-title-area">
+            <h1 id="stack-title"><span class="header-icon">📚</span>{{STACK_NAME}}</h1>
+            <p id="stack-description" class="stack-page-subtitle">{{STACK_DESCRIPTION}}</p>
+            <p id="stack-sort-subtitle" class="stack-page-subtitle stack-sort-subtitle"></p>
+            <div class="stack-page-meta">
+              <span id="stack-member-count" class="stack-page-count"></span>
+              <button
+                id="stack-search-btn"
+                class="stack-page-search-btn"
+                onclick="searchStack()"
+                title="Search all tracked items for new issues"
+              >
+                🔍 Search for Issues
+              </button>
+            </div>
+          </div>
+          <div class="sort-controls">
+            <label for="stack-sort-select">Sort:</label>
+            <select
+              id="stack-sort-select"
+              onchange="setStackSort(this.value)"
+              aria-label="Sort stack members by"
+            >
+              <option value="title">Title</option>
+              <option value="category">Category</option>
+              <option value="library_count">Number of Issues</option>
+              <option value="latest_issue">Latest Issue</option>
+            </select>
+            <button
+              id="stack-sort-toggle"
+              class="sort-toggle-btn"
+              onclick="toggleStackSortOrder()"
+              aria-label="Toggle sort order"
+              title="Toggle ascending/descending"
+            >
+              ↑
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Search progress panel (hidden by default) -->
+      <div id="stack-search-panel" class="stack-search-panel hidden">
+        <div class="stack-search-panel-header">
+          <h3 id="stack-search-title">Searching...</h3>
+          <button onclick="closeSearchPanel()" class="stack-search-close" title="Close">
+            &times;
+          </button>
+        </div>
+        <div id="stack-search-progress" class="stack-search-progress"></div>
+        <div id="stack-search-summary" class="stack-search-summary hidden"></div>
+      </div>
+
+      <div id="stack-periodicals-grid" class="periodical-grid"></div>
+      <div id="stack-empty-state" class="hidden">
+        <div class="empty-state">
+          <div class="empty-state-icon">📚</div>
+          <h3>No Items in This Stack</h3>
+          <p>Add periodicals to this stack from the Stacks management tab.</p>
+          <button onclick="goBack()" class="btn-primary" style="margin-top: 16px">
+            ← Back to Library
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module">
+      import { initStackDetail } from '/static/js/features/stacks-detail.js';
+      initStackDetail();
+    </script>
+  </body>
+</html>

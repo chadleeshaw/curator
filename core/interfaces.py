@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 
 @dataclass
@@ -28,17 +28,28 @@ class SearchProvider(ABC):
         self.type = config.get("type", "unknown")
 
     @abstractmethod
-    def search(self, query: str, category: str = None) -> List[SearchResult]:
+    def search(self, query: str, category: str = None, aliases: Optional[Sequence[str]] = None) -> List[SearchResult]:
         """
         Search for periodicals matching query.
 
         Args:
             query: Periodical title or search term
             category: Optional category filter (e.g., "Magazines", "Comics")
+            aliases: Optional alternative search terms (e.g., search aliases from tracking)
 
         Returns:
             List of SearchResult objects
         """
+
+    @property
+    def is_rate_limited(self) -> bool:
+        """
+        Check if this provider is currently rate limited.
+
+        Returns:
+            True if rate limited (searches will return empty), False otherwise
+        """
+        return False
 
     def get_provider_info(self) -> Dict[str, Any]:
         """Get metadata about this provider"""
@@ -70,6 +81,23 @@ class DownloadClient(ABC):
         Returns:
             Job ID returned by the client
         """
+
+    def submit_content(self, nzb_content: str, title: str = None, category: str = None) -> Optional[str]:
+        """
+        Submit NZB content directly to download client (avoids provider URL fetch).
+
+        Override in subclasses to support direct NZB content upload.
+        Default implementation falls back to None (caller should use submit() with URL).
+
+        Args:
+            nzb_content: Raw NZB XML content as string
+            title: Optional title for the job
+            category: Optional category for download client
+
+        Returns:
+            Job ID returned by the client, or None if not supported
+        """
+        return None
 
     @abstractmethod
     def get_status(self, job_id: str) -> Dict[str, Any]:

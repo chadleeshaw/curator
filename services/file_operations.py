@@ -8,12 +8,11 @@ This module provides shared utilities for reorganizing periodical files
 import logging
 import shutil
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
 
 from core.constants import DEFAULT_CATEGORY
-from core.parsers import sanitize_filename
+from core.parsers import sanitize_filename, utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +66,8 @@ def reorganize_periodical_files(
             print(f"Moved to: {result.new_pdf_path}")
     """
     try:
+        from core.utils.files import strip_duplicate_suffixes
+
         old_pdf_path = Path(periodical.file_path)
         old_cover_path = Path(periodical.cover_path) if periodical.cover_path else None
 
@@ -78,24 +79,46 @@ def reorganize_periodical_files(
         )
         issue_date = periodical.issue_date
 
+        if not issue_date:
+            return FileReorganizationResult(
+                success=False,
+                new_pdf_path=None,
+                new_cover_path=None,
+                error=f"Cannot reorganize periodical {periodical.id}: missing issue_date",
+            )
+
         # Build new path structure
-        safe_title = sanitize_filename(new_title)
+        # Strip any accumulated timestamp/counter suffixes before sanitizing
+        clean_title = strip_duplicate_suffixes(new_title)
+        safe_title = sanitize_filename(clean_title)
         month = issue_date.strftime("%B")
         year = issue_date.strftime("%Y")
         filename_base = f"{safe_title} - {month}{year}"
+
+        # Preserve the original file extension instead of assuming .pdf
+        file_ext = old_pdf_path.suffix if old_pdf_path.suffix else ".pdf"
 
         category_with_prefix = f"{category_prefix}{category}"
         target_dir = library_base_dir / category_with_prefix / safe_title / year
         target_dir.mkdir(parents=True, exist_ok=True)
 
-        new_pdf_path = target_dir / f"{filename_base}.pdf"
+        new_pdf_path = target_dir / f"{filename_base}{file_ext}"
         new_cover_path = target_dir / f"{filename_base}.jpg" if old_cover_path else None
 
-        # Handle filename conflicts by appending timestamp
+        # Handle filename conflicts by appending timestamp with counter
         if new_pdf_path.exists() and new_pdf_path != old_pdf_path:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = utc_now().strftime("%Y%m%d_%H%M%S")
             filename_base_with_ts = f"{safe_title} - {month}{year} ({timestamp})"
-            new_pdf_path = target_dir / f"{filename_base_with_ts}.pdf"
+            new_pdf_path = target_dir / f"{filename_base_with_ts}{file_ext}"
+
+            # If the timestamped path also exists (multiple moves in the same second),
+            # append an incrementing counter until we find a unique path
+            counter = 1
+            while new_pdf_path.exists() and new_pdf_path != old_pdf_path:
+                filename_base_with_ts = f"{safe_title} - {month}{year} ({timestamp}_{counter})"
+                new_pdf_path = target_dir / f"{filename_base_with_ts}{file_ext}"
+                counter += 1
+
             if old_cover_path:
                 new_cover_path = target_dir / f"{filename_base_with_ts}.jpg"
 
@@ -139,7 +162,7 @@ def reorganize_periodical_files(
             files_moved=files_moved,
         )
 
-    except Exception as e:
+    except (OSError, shutil.Error) as e:
         logger.error(f"Error reorganizing periodical files: {e}", exc_info=True)
         return FileReorganizationResult(success=False, new_pdf_path=None, new_cover_path=None, error=str(e))
 
@@ -193,6 +216,6 @@ def move_files_with_cleanup(
 
         return True, None
 
-    except Exception as e:
+    except (OSError, shutil.Error) as e:
         logger.error(f"Error moving files: {e}", exc_info=True)
         return False, str(e)

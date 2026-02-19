@@ -4,8 +4,8 @@
  * @module downloads
  */
 
-import { APIClient, APIHelper } from '../core/api.js?v=1767733177';
-import { UIUtils } from '../core/ui-utils.js?v=1767733177';
+import { APIClient, APIHelper } from '../core/api.js';
+import { UIUtils } from '../core/ui-utils.js';
 import {
   ELEMENT_IDS as _ELEMENT_IDS,
   STATUS_MESSAGES as _STATUS_MESSAGES,
@@ -50,14 +50,20 @@ export class DownloadsManager {
     this.refreshInterval = null;
     /** @type {boolean} Whether to include permanently failed issues in display */
     this.showPermanentlyFailed = true;
-    /** @type {number} Maximum download retry attempts */
+    /** @type {number} Maximum download retry attempts (NZB) */
     this.maxRetries = 3; // Default value, will be loaded from API
+    /** @type {number} Maximum download retry attempts (Internet Archive) */
+    this.maxRetriesIA = 5; // Default value, will be loaded from API
     /** @type {DiscoveredIssue[]|null} Current items in modal */
     this.currentModalItems = null;
     /** @type {string|null} Current periodical in modal */
     this.currentModalPeriodical = null;
     /** @type {string} Current filter in modal */
     this.currentModalFilter = 'all';
+    /** @type {string} Current sort field in modal (title, status, date) */
+    this.currentModalSort = 'date';
+    /** @type {boolean} Current sort order in modal (true = ascending, false = descending) */
+    this.currentModalSortAsc = false;
     /** @type {string} Current filter for queue view (all, queued, pending, downloading, completed, failed, skipped) */
     this.currentFilter = 'all';
     /** @type {string} Current sort field for queue view (title, status, priority, created_at) */
@@ -85,6 +91,9 @@ export class DownloadsManager {
       }, 'Downloads');
       if (data.success && data.max_download_retries) {
         this.maxRetries = data.max_download_retries;
+      }
+      if (data.success && data.max_download_retries_ia) {
+        this.maxRetriesIA = data.max_download_retries_ia;
       }
     } catch (error) {
       console.warn('[Downloads] Failed to load constants, using defaults:', error);
@@ -499,41 +508,62 @@ export class DownloadsManager {
       headerRow.onclick = () => this.openManageQueueModal(periodical, items);
 
       const statusCounts = this.getStatusCounts(items);
-      const statusBadges = Object.entries(statusCounts)
-        .filter(([, count]) => count > 0)
-        .map(([status, count]) => {
-          const color = this.getStatusColor(status);
-          return `<span style="background: ${color}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.85em; margin-right: 5px;">${count} ${status}</span>`;
-        })
-        .join('');
-
-      // Check for rate limiting and get longest wait time
       const waitInfo = this.getLongestWaitTime(items);
-      const waitTimeNote = waitInfo
-        ? `<div style="font-size: 0.8em; color: var(--status-failed); margin-top: 4px; font-weight: 600; display: flex; align-items: center; gap: 5px;">
-             <span style="font-size: 1.2em;">⏱️</span>
-             <span>Longest wait: ${this.formatWaitTime(waitInfo.waitTime)}</span>
-             ${waitInfo.count > 1 ? `<span style="font-size: 0.85em; color: var(--text-secondary); font-weight: normal;">(${waitInfo.count} rate limited)</span>` : ''}
-           </div>`
-        : '';
+      const rateLimitedCount = waitInfo ? waitInfo.count : 0;
+
+      // Build status indicators for the Status column (active/dynamic states)
+      const downloadingItems = items.filter(item => item.status === 'downloading' && item.progress != null);
+      let statusIndicators = '';
+      if (downloadingItems.length > 0) {
+        const avgProgress = Math.round(downloadingItems.reduce((sum, item) => sum + item.progress, 0) / downloadingItems.length);
+        statusIndicators += `<span style="background: linear-gradient(90deg, var(--status-downloading), var(--accent-color)); color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.85em; margin-right: 5px; white-space: nowrap;">${downloadingItems.length > 1 ? downloadingItems.length + ' ' : ''}⏳ ${avgProgress}%</span>`;
+      }
+      if (rateLimitedCount > 0) {
+        const waitLabel = waitInfo.waitTime ? `WAIT ${this.formatWaitTime(waitInfo.waitTime)}` : 'WAIT';
+        statusIndicators += `<span style="background: var(--status-pending); color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.85em; font-weight: 600;">⏸ ${rateLimitedCount} ${waitLabel}</span>`;
+      }
+
+      // Build uniform summary bubbles (fixed order, always shown)
+      const summaryStatuses = ['queued', 'pending', 'completed', 'failed', 'skipped'];
+      const summaryBubbles = summaryStatuses.map(status => {
+        const count = statusCounts[status] || 0;
+        const color = this.getStatusColor(status);
+        const padded = String(count).padStart(2, '0');
+        return `<span class="status-bubble" data-status="${status}" style="background: ${color}; color: white; min-width: 26px; display: inline-block; text-align: center; padding: 2px 6px; border-radius: 10px; font-size: 0.8em; cursor: pointer; font-weight: 600; font-variant-numeric: tabular-nums; opacity: ${count === 0 ? '0.3' : '1'};" title="${count} ${status}">${padded}</span>`;
+      }).join('');
 
       headerRow.innerHTML = `
-        <td colspan="2" style="padding: 12px; font-weight: bold;">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
-              <span style="font-size: 1.1em;">\uD83D\uDCF0 ${periodical}</span>
-              <span style="margin-left: 15px; font-size: 0.9em; color: var(--text-secondary);">${items.length} issues</span>
-            </div>
-            <div style="display: flex; flex-direction: column; gap: 5px; align-items: flex-end;">
-              <div style="display: flex; gap: 10px; align-items: center;">
-                ${statusBadges}
-                <span style="font-size: 1.2em; color: var(--text-secondary);">\u2192</span>
-              </div>
-              ${waitTimeNote}
+        <td style="padding: 12px; font-weight: bold;">
+          <div>
+            <span style="font-size: 1.1em;">\uD83D\uDCF0 ${periodical}</span>
+            <span style="margin-left: 15px; font-size: 0.9em; color: var(--text-secondary);">${items.length} issues</span>
+          </div>
+          <div class="mobile-summary" style="display: none; margin-top: 6px;">
+            <div style="display: inline-flex; gap: 4px; align-items: center;">
+              ${summaryBubbles}
+              <span style="font-size: 1.2em; color: var(--text-secondary); margin-left: 4px;">\u2192</span>
             </div>
           </div>
         </td>
+        <td class="queue-status-col" style="padding: 12px; text-align: center; white-space: nowrap;">
+          ${statusIndicators}
+        </td>
+        <td class="queue-summary-col" style="padding: 12px; text-align: right; white-space: nowrap;">
+          <div style="display: inline-flex; gap: 4px; align-items: center;">
+            ${summaryBubbles}
+            <span style="font-size: 1.2em; color: var(--text-secondary); margin-left: 4px;">\u2192</span>
+          </div>
+        </td>
       `;
+
+      // Add click handlers for individual status bubbles
+      headerRow.querySelectorAll('.status-bubble').forEach(bubble => {
+        bubble.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.openManageQueueModal(periodical, items, bubble.dataset.status);
+        });
+      });
+
       tbody.appendChild(headerRow);
     });
   }
@@ -634,15 +664,11 @@ export class DownloadsManager {
    * @returns {string} CSS color value
    */
   getStatusColor(status) {
-    const colors = {
-      pending: '#6c757d',
-      downloading: '#0d6efd',
-      processing: '#0dcaf0',
-      completed: '#198754',
-      failed: '#dc3545',
-      paused: '#ffc107',
-    };
-    return colors[status] ?? '#6c757d';
+    const root = document.documentElement;
+    const cssVar = getComputedStyle(root).getPropertyValue(`--status-${status}`).trim();
+    if (cssVar) return cssVar;
+    // Fallback for unmapped statuses
+    return getComputedStyle(root).getPropertyValue('--status-pending').trim() || '#6c757d';
   }
 
   /**
@@ -655,15 +681,18 @@ export class DownloadsManager {
     const { status, submission_id: submissionId } = item;
     let buttons = '';
 
+    // Details button - always shown
+    buttons += `<button onclick="event.stopPropagation(); downloads.showItemDetails(${submissionId})" style="padding: 5px 10px; font-size: 0.8em; border: 1px solid var(--border-color); background: var(--surface); color: var(--text-secondary); border-radius: 6px; cursor: pointer;" title="View details">Details</button>`;
+
     if (status === 'failed') {
-      buttons += `<button onclick="downloads.retryDownload(${submissionId})" class="btn-secondary" style="padding: 4px 8px; margin-right: 5px;">\uD83D\uDD04 Retry</button>`;
+      buttons += `<button onclick="event.stopPropagation(); downloads.retryDownload(${submissionId})" style="padding: 5px 10px; font-size: 0.8em; border: 1px solid var(--status-downloading); background: transparent; color: var(--status-downloading); border-radius: 6px; cursor: pointer;" title="Retry download">Retry</button>`;
     }
 
     if (status !== 'completed') {
-      buttons += `<button onclick="downloads.deleteQueueItem(${submissionId})" class="btn-secondary" style="background: var(--status-failed); padding: 4px 8px;">Remove</button>`;
+      buttons += `<button class="modal-delete-btn" onclick="event.stopPropagation(); downloads.deleteQueueItem(${submissionId})" style="padding: 5px 10px; font-size: 0.8em; border: 1px solid var(--status-failed); background: transparent; color: var(--status-failed); border-radius: 6px; cursor: pointer;" title="Remove from queue">Delete</button>`;
     }
 
-    return buttons || '-';
+    return buttons;
   }
 
   /**
@@ -673,10 +702,10 @@ export class DownloadsManager {
    * @param {DownloadItem[]} items - Array of download items
    * @returns {void}
    */
-  openManageQueueModal(periodical, items) {
+  openManageQueueModal(periodical, items, filter = 'all') {
     this.currentModalItems = items;
     this.currentModalPeriodical = periodical;
-    this.currentModalFilter = 'all';
+    this.currentModalFilter = filter;
 
     this.renderManageQueueModal();
   }
@@ -719,7 +748,7 @@ export class DownloadsManager {
          </div>`
       : '';
 
-    const filterButtons = ['all', 'pending', 'downloading', 'completed', 'failed', 'skipped']
+    const filterButtons = ['all', 'queued', 'pending', 'downloading', 'completed', 'failed', 'skipped']
       .map((f) => {
         const count = f === 'all' ? items.length : (statusCounts[f] ?? 0);
         const active = filter === f ? 'active' : '';
@@ -731,13 +760,33 @@ export class DownloadsManager {
     if (filteredItems.length === 0) {
       tableRows = `
         <tr>
-          <td colspan="3" style="padding: 40px; text-align: center; color: var(--text-secondary);">
+          <td colspan="4" style="padding: 40px; text-align: center; color: var(--text-secondary);">
             No ${filter === 'all' ? '' : filter} items found
           </td>
         </tr>
       `;
     } else {
-      tableRows = filteredItems
+      // Sort filtered items
+      const sortField = this.currentModalSort;
+      const sortAsc = this.currentModalSortAsc;
+      const sorted = [...filteredItems].sort((a, b) => {
+        let cmp = 0;
+        switch (sortField) {
+          case 'title':
+            cmp = (a.title || '').localeCompare(b.title || '');
+            break;
+          case 'status':
+            cmp = (a.status || '').localeCompare(b.status || '');
+            break;
+          case 'date':
+          default:
+            cmp = new Date(a.updated_at || a.created_at || 0) - new Date(b.updated_at || b.created_at || 0);
+            break;
+        }
+        return sortAsc ? cmp : -cmp;
+      });
+
+      tableRows = sorted
         .map((item) => {
           const {
             title,
@@ -749,6 +798,20 @@ export class DownloadsManager {
           } = item;
           const statusColor = this.getStatusColor(status);
 
+          // Format relative time
+          const timestamp = item.updated_at || createdAt;
+          let timeAgo = '';
+          if (timestamp) {
+            const diff = Date.now() - new Date(timestamp).getTime();
+            const mins = Math.floor(diff / 60000);
+            const hours = Math.floor(diff / 3600000);
+            const days = Math.floor(diff / 86400000);
+            if (mins < 1) timeAgo = 'just now';
+            else if (mins < 60) timeAgo = `${mins}m ago`;
+            else if (hours < 24) timeAgo = `${hours}h ago`;
+            else timeAgo = `${days}d ago`;
+          }
+
           // Add clarity if title equals magazine name
           let displayTitle = title;
           if (title === magazine || title === periodical) {
@@ -757,25 +820,44 @@ export class DownloadsManager {
           }
 
           // Build status info with error or extra_status
-          let statusInfo = `<span style="background: ${statusColor}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.85em;">${status}</span>`;
-
-          // Show error message for failed items
-          if (status === 'failed' && error) {
-            statusInfo += `<div style="font-size: 0.75em; color: var(--status-failed); margin-top: 4px; font-style: italic;">❌ ${error}</div>`;
+          let statusInfo = '';
+          if (status === 'pending' && item.extra_status) {
+            const waitTime = this.parseWaitTime(item.extra_status);
+            const waitLabel = waitTime ? `WAIT ${waitTime} sec` : 'WAIT';
+            statusInfo = `<span style="background: var(--status-pending); color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.85em; font-weight: 600;">⏸ ${waitLabel}</span>`;
+          } else {
+            statusInfo = `<span style="background: ${statusColor}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 0.85em;">${status}</span>`;
           }
-          // Show extra_status for rate limiting or other info
-          else if (item.extra_status) {
-            statusInfo += `<div style="font-size: 0.75em; color: var(--text-secondary); margin-top: 4px; font-style: italic;">⏱️ ${item.extra_status}</div>`;
+
+          // Show progress bar for active downloads
+          if (status === 'downloading' && item.progress != null) {
+            const progress = Math.min(100, Math.max(0, item.progress));
+            const timeLeft = item.time_left || '';
+            const size = item.size || '';
+            statusInfo += `
+              <div style="margin-top: 6px;">
+                <div style="background: var(--surface-variant); border-radius: 8px; height: 20px; overflow: hidden; border: 1px solid var(--border-color);">
+                  <div style="background: linear-gradient(90deg, var(--status-downloading), var(--accent-color)); height: 100%; width: ${progress}%; transition: width 0.3s ease; display: flex; align-items: center; justify-content: center;">
+                    <span style="color: white; font-size: 0.7em; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">${progress}%</span>
+                  </div>
+                </div>
+                ${timeLeft || size ? `<div style="font-size: 0.7em; color: var(--text-secondary); margin-top: 2px;">${size ? size + ' ' : ''}${timeLeft ? '• ' + timeLeft : ''}</div>` : ''}
+              </div>`;
           }
 
           return `
-          <tr>
-            <td style="padding: 10px; border-bottom: 1px solid var(--border-color);">${displayTitle}</td>
-            <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
+          <tr style="background: var(--surface-variant); border-radius: 6px;">
+            <td style="padding: 14px; border-bottom: 1px solid var(--border-color);">${displayTitle}</td>
+            <td style="padding: 14px; border-bottom: 1px solid var(--border-color); text-align: center; white-space: nowrap;">
               ${statusInfo}
             </td>
-            <td style="padding: 10px; border-bottom: 1px solid var(--border-color); text-align: center;">
-              ${this.getQueueActionButtons(item)}
+            <td style="padding: 14px; border-bottom: 1px solid var(--border-color); text-align: center; white-space: nowrap; font-size: 0.8em; color: var(--text-secondary);">
+              ${timeAgo}
+            </td>
+            <td style="padding: 14px; border-bottom: 1px solid var(--border-color); text-align: right; white-space: nowrap;">
+              <div style="display: inline-flex; gap: 6px; align-items: center;">
+                ${this.getQueueActionButtons(item)}
+              </div>
             </td>
           </tr>
         `;
@@ -786,20 +868,21 @@ export class DownloadsManager {
     const html = `
       <div class="modal-header">
         <h3>Manage Downloads: ${periodical}</h3>
-        <p style="color: var(--text-secondary); margin-top: 10px;">${items.length} issues - ${statusList}</p>
+        <p style="color: var(--text-secondary); margin-top: 8px; font-size: 0.95em;">${items.length} issues - ${statusList}</p>
         ${waitTimeAlert}
         <div id="modal-queue-status" class="hidden" style="margin-top: 10px;"></div>
-        <div style="display: flex; gap: 5px; margin-top: 15px; flex-wrap: wrap;">
+        <div style="display: flex; gap: 8px; margin-top: 15px; flex-wrap: wrap;">
           ${filterButtons}
         </div>
       </div>
-      <div class="modal-body" style="max-height: 400px; overflow-y: auto; margin: 20px 0;">
-        <table style="width: 100%; border-collapse: collapse;">
+      <div class="modal-body" style="margin: 20px 0;">
+        <table style="width: 100%; border-collapse: separate; border-spacing: 0 4px; min-width: 700px;">
           <thead style="position: sticky; top: 0; background: var(--surface); z-index: 1;">
             <tr>
-              <th style="text-align: left; padding: 10px; border-bottom: 2px solid var(--border-color);">Issue</th>
-              <th style="text-align: center; padding: 10px; border-bottom: 2px solid var(--border-color);">Status</th>
-              <th style="text-align: center; padding: 10px; border-bottom: 2px solid var(--border-color);">Actions</th>
+              <th onclick="downloads.sortModalQueue('title')" style="text-align: left; padding: 12px 14px; border-bottom: 2px solid var(--border-color); cursor: pointer; user-select: none;">Issue ${this.currentModalSort === 'title' ? (this.currentModalSortAsc ? '↑' : '↓') : ''}</th>
+              <th onclick="downloads.sortModalQueue('status')" style="text-align: center; padding: 12px 14px; border-bottom: 2px solid var(--border-color); min-width: 160px; cursor: pointer; user-select: none;">Status ${this.currentModalSort === 'status' ? (this.currentModalSortAsc ? '↑' : '↓') : ''}</th>
+              <th onclick="downloads.sortModalQueue('date')" style="text-align: center; padding: 12px 14px; border-bottom: 2px solid var(--border-color); min-width: 80px; cursor: pointer; user-select: none;">Date ${this.currentModalSort === 'date' ? (this.currentModalSortAsc ? '↑' : '↓') : ''}</th>
+              <th style="text-align: right; padding: 12px 14px; border-bottom: 2px solid var(--border-color); min-width: 200px;">Actions</th>
             </tr>
           </thead>
           <tbody>${tableRows}</tbody>
@@ -829,6 +912,22 @@ export class DownloadsManager {
    */
   filterModalQueue(status) {
     this.currentModalFilter = status;
+    this.renderManageQueueModal();
+  }
+
+  /**
+   * Sort modal queue by column
+   *
+   * @param {string} field - The field to sort by ('title', 'status', 'date')
+   * @returns {void}
+   */
+  sortModalQueue(field) {
+    if (this.currentModalSort === field) {
+      this.currentModalSortAsc = !this.currentModalSortAsc;
+    } else {
+      this.currentModalSort = field;
+      this.currentModalSortAsc = field === 'title'; // Default: title asc, others desc
+    }
     this.renderManageQueueModal();
   }
 
@@ -905,7 +1004,7 @@ export class DownloadsManager {
         <p style="color: var(--text-secondary); margin-top: 10px;">${failedCount} recent failures, ${permanentlyFailedCount} permanently failed</p>
         <div id="modal-failed-status" class="hidden" style="margin-top: 10px;"></div>
       </div>
-      <div class="modal-body" style="max-height: 400px; overflow-y: auto; margin: 20px 0;">
+      <div class="modal-body" style="margin: 20px 0;">
         <table style="width: 100%; border-collapse: collapse;">
           <thead style="position: sticky; top: 0; background: var(--surface); z-index: 1;">
             <tr>
@@ -1121,6 +1220,95 @@ export class DownloadsManager {
    * @param {number} submissionId - The submission ID to retry
    * @returns {Promise<void>}
    */
+  showItemInfo(message, type = 'info') {
+    const decoded = message.replace(/&#39;/g, "'").replace(/&quot;/g, '"');
+    const statusEl = document.getElementById('modal-queue-status');
+    // Toggle off if already showing this same message
+    if (statusEl && !statusEl.classList.contains('hidden') && statusEl.textContent.includes(decoded)) {
+      UIUtils.hideStatus('modal-queue-status');
+      return;
+    }
+    UIUtils.showStatus('modal-queue-status', decoded, type === 'error' ? 'error' : 'info');
+  }
+
+  /**
+   * Show details modal for a download item
+   *
+   * @param {number} submissionId - The submission ID
+   * @returns {void}
+   */
+  showItemDetails(submissionId) {
+    const item = (this.currentModalItems || []).find(i => i.submission_id === submissionId);
+    if (!item) return;
+
+    const statusColor = this.getStatusColor(item.status);
+    const created = item.created_at ? new Date(item.created_at).toLocaleString() : '-';
+    const updated = item.updated_at ? new Date(item.updated_at).toLocaleString() : '-';
+
+    const rows = [
+      ['Title', item.title || '-'],
+      ['Periodical', item.magazine || '-'],
+      ['Status', `<span style="background: ${statusColor}; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.85em;">${item.status}</span>`],
+      ['Submission ID', `#${item.submission_id}`],
+      ['Job ID', item.job_id || '-'],
+      ['Client', item.client_name || '-'],
+      ['Attempts', item.attempts ?? '-'],
+      ['Created', created],
+      ['Updated', updated],
+    ];
+
+    if (item.url) {
+      rows.push(['Source URL', `<span style="word-break: break-all; font-size: 0.85em;">${item.url}</span>`]);
+    }
+    if (item.extra_status) {
+      rows.push(['Extra Status', `<span style="color: var(--status-pending);">${item.extra_status}</span>`]);
+    }
+    if (item.error) {
+      rows.push(['Error', `<span style="color: var(--status-failed); word-break: break-word;">${item.error}</span>`]);
+    }
+
+    const tableHtml = rows.map(([label, value]) =>
+      `<tr>
+        <td style="padding: 8px 12px; border-bottom: 1px solid var(--border-color); font-weight: 600; white-space: nowrap; vertical-align: top; width: 130px;">${label}</td>
+        <td style="padding: 8px 12px; border-bottom: 1px solid var(--border-color);">${value}</td>
+      </tr>`
+    ).join('');
+
+    const html = `
+      <div class="modal-header">
+        <h3>Download Details</h3>
+        <p style="color: var(--text-secondary); margin-top: 6px; font-size: 0.9em;">${item.title || 'Unknown'}</p>
+      </div>
+      <div class="modal-body" style="margin: 20px 0;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <tbody>${tableHtml}</tbody>
+        </table>
+      </div>
+      <div class="modal-footer" style="display: flex; gap: 10px; justify-content: flex-end; padding-top: 20px; border-top: 1px solid var(--border-color);">
+        <button onclick="downloads.closeItemDetails()" class="btn-secondary">Close</button>
+      </div>
+    `;
+
+    let modal = document.getElementById('download-details-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'download-details-modal';
+      modal.className = 'modal';
+      modal.innerHTML = '<div class="modal-content" style="max-width: 600px;"></div>';
+      document.body.appendChild(modal);
+    }
+    modal.querySelector('.modal-content').innerHTML = html;
+    modal.classList.remove(CSS_CLASSES.HIDDEN);
+  }
+
+  /**
+   * Close the download details modal
+   * @returns {void}
+   */
+  closeItemDetails() {
+    document.getElementById('download-details-modal')?.classList.add(CSS_CLASSES.HIDDEN);
+  }
+
   async retryDownload(submissionId) {
     const confirmed = await UIUtils.confirm(
       'Retry Download',

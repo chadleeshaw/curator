@@ -4,15 +4,12 @@ Task management routes
 
 import logging
 import os
-from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
 from fastapi import APIRouter
 
 from core.utils.error_handling import handle_api_errors
-from models.database import Periodical
 from core.utils import run_in_thread
-from core.utils.db import with_db_session
 from web.utils.responses import success_response, error_response
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
@@ -26,6 +23,18 @@ _folder_cleanup_task = None
 _file_importer = None
 _storage_config = None
 _task_scheduler = None
+_config_loader = None
+
+# Map task IDs to their config enabled keys
+TASK_ENABLED_CONFIG_KEYS = {
+    "auto_download": "auto_download_enabled",
+    "download_monitor": "download_monitor_enabled",
+    "cleanup_orphaned_covers": "cleanup_covers_enabled",
+    "ocr_processor": "ocr_processor_enabled",
+    "folder_cleanup": "folder_cleanup_enabled",
+    "auto_metadata": "auto_metadata_enabled",
+    "file_reorganizer": "file_reorganizer_enabled",
+}
 
 
 def set_dependencies(
@@ -36,9 +45,10 @@ def set_dependencies(
     ocr_processor_task: Optional[Any] = None,
     task_scheduler: Optional[Any] = None,
     folder_cleanup_task: Optional[Any] = None,
+    config_loader: Optional[Any] = None,
 ) -> None:  # pylint: disable=too-many-positional-arguments
     """Set dependencies from main app"""
-    global _session_factory, _download_monitor_task, _file_importer, _storage_config, _ocr_processor_task, _task_scheduler, _folder_cleanup_task
+    global _session_factory, _download_monitor_task, _file_importer, _storage_config, _ocr_processor_task, _task_scheduler, _folder_cleanup_task, _config_loader
     _session_factory = session_factory
     _download_monitor_task = download_monitor_task
     _file_importer = file_importer
@@ -46,6 +56,7 @@ def set_dependencies(
     _ocr_processor_task = ocr_processor_task
     _task_scheduler = task_scheduler
     _folder_cleanup_task = folder_cleanup_task
+    _config_loader = config_loader
 
 
 @router.get("/status")
@@ -61,12 +72,14 @@ async def get_tasks_status():
         dm_stats = getattr(_download_monitor_task, "stats", {})
         logger.debug(f"Tasks Status - Download Monitor: last_run={dm_last_run}, status={dm_status}")
 
-        # Get interval from scheduler
+        # Get interval and enabled from scheduler
         dm_interval = 30
+        dm_enabled = True
         if _task_scheduler:
             scheduler_status = _task_scheduler.get_status()
             if "download_monitor" in scheduler_status.get("tasks", {}):
                 dm_interval = scheduler_status["tasks"]["download_monitor"]["interval"]
+                dm_enabled = scheduler_status["tasks"]["download_monitor"].get("enabled", True)
 
         tasks.append(
             {
@@ -77,6 +90,7 @@ async def get_tasks_status():
                 "last_run": dm_last_run,
                 "next_run": getattr(_download_monitor_task, "next_run_time", None),
                 "last_status": dm_status,
+                "enabled": dm_enabled,
                 "stats": {
                     "total_runs": dm_stats.get("total_runs", 0),
                     "client_downloads_processed": dm_stats.get("client_downloads_processed", 0),
@@ -104,6 +118,7 @@ async def get_tasks_status():
         "last_run": None,
         "next_run": None,
         "last_status": None,
+        "enabled": True,
     }
     if scheduler_status and "auto_download" in scheduler_status.get("tasks", {}):
         task_data = scheduler_status["tasks"]["auto_download"]
@@ -119,6 +134,7 @@ async def get_tasks_status():
                 "last_run": last_run,
                 "next_run": task_data.get("next_run"),
                 "last_status": status,
+                "enabled": task_data.get("enabled", True),
             }
         )
     tasks.append(auto_download_info)
@@ -132,6 +148,7 @@ async def get_tasks_status():
         "last_run": None,
         "next_run": None,
         "last_status": None,
+        "enabled": True,
     }
     if scheduler_status and "cleanup_orphaned_covers" in scheduler_status.get("tasks", {}):
         task_data = scheduler_status["tasks"]["cleanup_orphaned_covers"]
@@ -147,6 +164,7 @@ async def get_tasks_status():
                 "last_run": last_run,
                 "next_run": task_data.get("next_run"),
                 "last_status": status,
+                "enabled": task_data.get("enabled", True),
             }
         )
     tasks.append(cleanup_covers_info)
@@ -160,6 +178,7 @@ async def get_tasks_status():
         "last_run": None,
         "next_run": None,
         "last_status": None,
+        "enabled": True,
     }
     if scheduler_status and "folder_cleanup" in scheduler_status.get("tasks", {}):
         task_data = scheduler_status["tasks"]["folder_cleanup"]
@@ -175,6 +194,7 @@ async def get_tasks_status():
                 "last_run": last_run,
                 "next_run": task_data.get("next_run"),
                 "last_status": status,
+                "enabled": task_data.get("enabled", True),
             }
         )
     tasks.append(folder_cleanup_info)
@@ -188,6 +208,7 @@ async def get_tasks_status():
         "last_run": None,
         "next_run": None,
         "last_status": None,
+        "enabled": True,
     }
     if scheduler_status and "auto_metadata" in scheduler_status.get("tasks", {}):
         task_data = scheduler_status["tasks"]["auto_metadata"]
@@ -203,37 +224,40 @@ async def get_tasks_status():
                 "last_run": last_run,
                 "next_run": task_data.get("next_run"),
                 "last_status": status,
+                "enabled": task_data.get("enabled", True),
             }
         )
     tasks.append(auto_metadata_info)
 
-    # Auto-cache task (provider cache sync)
-    auto_cache_info = {
-        "id": "provider_cache_sync",
-        "name": "Auto-Cache",
-        "description": "Automatically syncs the provider cache with latest releases from search providers",
-        "interval": 1800,  # 30 minutes default
+    # File reorganizer task
+    file_reorganizer_info = {
+        "id": "file_reorganizer",
+        "name": "Auto-Reorganize",
+        "description": "Moves periodical files to their correct library location when new metadata is discovered by OCR or text scans",
+        "interval": 300,
         "last_run": None,
         "next_run": None,
         "last_status": None,
+        "enabled": True,
     }
-    if scheduler_status and "provider_cache_sync" in scheduler_status.get("tasks", {}):
-        task_data = scheduler_status["tasks"]["provider_cache_sync"]
+    if scheduler_status and "file_reorganizer" in scheduler_status.get("tasks", {}):
+        task_data = scheduler_status["tasks"]["file_reorganizer"]
         last_run = task_data.get("last_run")
         failure_count = task_data.get("failure_count", 0)
         # Only set status if task has run at least once
         status = None
         if last_run:
             status = "failed" if failure_count > 0 else "success"
-        auto_cache_info.update(
+        file_reorganizer_info.update(
             {
-                "interval": task_data.get("interval", 1800),
+                "interval": task_data.get("interval", 300),
                 "last_run": last_run,
                 "next_run": task_data.get("next_run"),
                 "last_status": status,
+                "enabled": task_data.get("enabled", True),
             }
         )
-    tasks.append(auto_cache_info)
+    tasks.append(file_reorganizer_info)
 
     logger.debug(f"Tasks Status - Returning {len(tasks)} tasks to client")
 
@@ -261,18 +285,21 @@ async def run_task_manually(task_id: str):
 
     elif task_id == "auto_download":
         # Manually trigger auto-download task via scheduler
-        if _task_scheduler:
-            try:
-                await _task_scheduler.run_task_now("auto_download")
-                return success_response(
-                    "Auto-download task executed successfully",
-                    task_name="Auto-Download",
-                )
-            except Exception as e:
-                logger.error(f"Error running auto-download task: {e}", exc_info=True)
-                return error_response(f"Failed to run auto-download task: {str(e)}")
-        else:
+        if not _task_scheduler:
+            logger.warning("Auto-download task triggered but task scheduler not available")
             return error_response("Task scheduler not available")
+
+        try:
+            logger.info("Manually triggering auto-download task via scheduler")
+            await _task_scheduler.run_task_now("auto_download")
+            logger.info("Auto-download task completed successfully")
+            return success_response(
+                "Auto-download task executed successfully",
+                task_name="Auto-Download",
+            )
+        except Exception as e:
+            logger.error(f"Error running auto-download task: {e}", exc_info=True)
+            return error_response(f"Failed to run auto-download task: {str(e)}")
 
     elif task_id == "folder_cleanup":
         if _folder_cleanup_task:
@@ -332,92 +359,80 @@ async def run_task_manually(task_id: str):
             stats=stats,
         )
 
-    elif task_id == "provider_cache_sync":
-        # Manually trigger provider cache sync via scheduler
+    elif task_id == "cleanup_orphaned_covers":
+        # Manually trigger cover cleanup via scheduler
         if _task_scheduler:
             try:
-                await _task_scheduler.run_task_now("provider_cache_sync")
+                await _task_scheduler.run_task_now("cleanup_orphaned_covers")
                 return success_response(
-                    "Provider cache sync executed successfully",
-                    task_name="Auto-Cache",
+                    "Cover cleanup executed successfully",
+                    task_name="Auto-Thumbnail",
                 )
             except Exception as e:
-                logger.error(f"Error running provider cache sync: {e}", exc_info=True)
-                return error_response(f"Failed to run provider cache sync: {str(e)}")
+                logger.error(f"Error running cover cleanup: {e}", exc_info=True)
+                return error_response(f"Failed to run cover cleanup: {str(e)}")
         else:
             return error_response("Task scheduler not available")
 
-    elif task_id == "cleanup_orphaned_covers":
-        # Manually trigger cover cleanup and generation (run in thread to avoid blocking)
-        logger.info("Starting cover cleanup task (manual trigger)")
-
-        def operation(db):
-            # Get all periodicals
-            all_periodicals = db.query(Periodical).all()
-            periodicals_with_covers = [m for m in all_periodicals if m.cover_path and Path(m.cover_path).exists()]
-            periodicals_without_covers = [
-                m for m in all_periodicals if m.file_path and (not m.cover_path or not Path(m.cover_path).exists())
-            ]
-
-            db_cover_paths = {str(Path(m.cover_path).resolve()) for m in periodicals_with_covers}
-
-            # Find all cover files on disk
-            covers_dir = Path(_storage_config.get("library_base_dir", "./local/data")) / ".covers"
-            covers_dir.mkdir(parents=True, exist_ok=True)
-
-            # Part 1: Delete orphaned covers
-            deleted_count = 0
-            if covers_dir.exists():
-                # Get absolute paths of all cover files on disk
-                cover_files = set(str(f.resolve()) for f in covers_dir.glob("*.jpg"))
-                orphaned_covers = cover_files - db_cover_paths
-
-                for orphan_path in orphaned_covers:
-                    try:
-                        Path(orphan_path).unlink()
-                        deleted_count += 1
-                    except Exception as e:
-                        logger.error(f"Error deleting orphaned cover {orphan_path}: {e}")
-
-            # Part 2: Generate missing covers
-            generated_count = 0
-            for magazine in periodicals_without_covers:
-                pdf_path = Path(magazine.file_path)
-                if not pdf_path.exists():
-                    continue
-
-                # Extract cover from PDF
-                cover_path = _file_importer._extract_cover(pdf_path)
-                if cover_path:
-                    magazine.cover_path = str(cover_path)
-                    generated_count += 1
-
-            if generated_count > 0:
-                db.commit()
-
-            # Build result message
-            messages = []
-            if deleted_count > 0:
-                messages.append(f"Deleted {deleted_count} orphaned cover file{'s' if deleted_count != 1 else ''}")
-            if generated_count > 0:
-                messages.append(f"Generated {generated_count} missing cover{'s' if generated_count != 1 else ''}")
-
-            if messages:
-                message = "Cleanup executed. " + ", ".join(messages) + "."
-            else:
-                message = "No orphaned covers found and all periodicals have covers."
-
-            return {
-                "deleted": deleted_count,
-                "generated": generated_count,
-                "message": message,
-            }
-
-        result = await with_db_session(_session_factory, operation)
-        return success_response(
-            result["message"],
-            task_name="Auto-Thumbnail",
-        )
+    elif task_id == "file_reorganizer":
+        # Manually trigger file reorganizer via scheduler
+        if _task_scheduler:
+            try:
+                await _task_scheduler.run_task_now("file_reorganizer")
+                return success_response(
+                    "File reorganizer executed successfully",
+                    task_name="Auto-Reorganize",
+                )
+            except Exception as e:
+                logger.error(f"Error running file reorganizer: {e}", exc_info=True)
+                return error_response(f"Failed to run file reorganizer: {str(e)}")
+        else:
+            return error_response("Task scheduler not available")
 
     else:
         return error_response(f"Unknown task: {task_id}")
+
+
+@router.post("/{task_id}/toggle")
+@handle_api_errors("Toggle task enabled state", logger)
+async def toggle_task(task_id: str):
+    """Toggle a task's enabled/disabled state.
+
+    Updates both the in-memory scheduler state and persists to config file.
+    Disabled tasks will not run on schedule but can still be triggered manually.
+    """
+    if not _task_scheduler:
+        return error_response("Task scheduler not available")
+
+    # Check task exists in scheduler
+    scheduler_status = _task_scheduler.get_status()
+    if task_id not in scheduler_status.get("tasks", {}):
+        return error_response(f"Unknown task: {task_id}")
+
+    # Toggle the current state
+    current_enabled = scheduler_status["tasks"][task_id].get("enabled", True)
+    new_enabled = not current_enabled
+
+    # Update scheduler in-memory state
+    _task_scheduler.set_task_enabled(task_id, new_enabled)
+
+    # Persist to config file
+    if _config_loader:
+        try:
+            config_key = TASK_ENABLED_CONFIG_KEYS.get(task_id)
+            if config_key:
+                all_config = _config_loader.get_all_config()
+                if "tasks" not in all_config:
+                    all_config["tasks"] = {}
+                all_config["tasks"][config_key] = new_enabled
+                _config_loader.save_config(all_config)
+                logger.info(f"Persisted task toggle: {task_id} -> {new_enabled}")
+        except Exception:
+            logger.warning(f"Failed to persist task toggle for {task_id} to config file")
+
+    state = "enabled" if new_enabled else "disabled"
+    return success_response(
+        f"Task {task_id} {state}",
+        task_id=task_id,
+        enabled=new_enabled,
+    )

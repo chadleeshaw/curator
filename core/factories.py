@@ -12,11 +12,20 @@ class ProviderFactory:
     PROVIDERS = {
         "newsnab": "providers.newsnab:NewsnabProvider",
         "rss": "providers.rss:RSSProvider",
+        "internet_archive": "providers.internet_archive:InternetArchiveProvider",
     }
 
     @staticmethod
     def create(provider_config: Dict[str, Any]) -> SearchProvider:
-        """Create provider instance from config"""
+        """
+        Create provider instance from config.
+
+        Args:
+            provider_config: Provider configuration dict
+
+        Returns:
+            SearchProvider instance
+        """
         provider_type = provider_config.get("type")
 
         if provider_type not in ProviderFactory.PROVIDERS:
@@ -34,6 +43,8 @@ class ClientFactory:
 
     CLIENTS = {
         "sabnzbd": "clients.sabnzbd:SABnzbdClient",
+        "nzbget": "clients.nzbget:NZBGetClient",
+        "internet_archive": "clients.internet_archive:InternetArchiveClient",
     }
 
     @staticmethod

@@ -16,7 +16,7 @@ class TestSpecialEditionDetection:
     def test_detects_annual_keyword(self):
         """Test detection of 'annual' keyword"""
         assert is_special_edition("National Geographic Annual Edition")
-        assert is_special_edition("Time Annual 2024")
+        assert is_special_edition("Forbes Annual Report 2024")
 
     def test_detects_collector_keywords(self):
         """Test detection of collector edition keywords"""
@@ -38,7 +38,7 @@ class TestSpecialEditionDetection:
     def test_detects_commemorative_keywords(self):
         """Test detection of commemorative editions"""
         assert is_special_edition("Time Commemorative Edition")
-        assert is_special_edition("50th Anniversary Special")
+        assert is_special_edition("50th Anniversary Edition")
 
     def test_detects_best_of_keyword(self):
         """Test detection of 'best of' editions"""

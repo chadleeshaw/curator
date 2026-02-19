@@ -9,11 +9,12 @@ from typing import Any, Dict, Optional, Tuple
 from fastapi import HTTPException
 
 from core.constants.errors import ErrorMessages
-from core.utils.db import with_db_session
+from core.utils.db import check_file_path_conflict, with_db_session
 from core.utils.error_handling import handle_api_errors
 from core.utils.files import get_library_dir, get_category_prefix
 from core.utils.general import cleanup_empty_directories, is_special_edition
-from models.database import PeriodicalTracking
+from core.utils.metadata_builder import is_periodical_special_edition
+from models.database import PeriodicalTracking, StackMembership
 from services.file_operations import reorganize_periodical_files
 from web.schemas import APIError
 from web.utils.responses import success_response
@@ -23,6 +24,35 @@ from . import _shared
 # Access global state via _shared module to get current values
 router = _shared.router
 logger = _shared.logger
+
+
+def _get_unique_filename(base_path: str, db) -> str:
+    """
+    Generate a unique filename by appending (2), (3), etc. if the path already exists.
+
+    Args:
+        base_path: The original file path that has a conflict
+        db: Database session to check for existing paths
+
+    Returns:
+        A unique file path that doesn't exist in the database
+    """
+    from models.database import Periodical
+
+    path = Path(base_path)
+    stem = path.stem  # filename without extension
+    suffix = path.suffix  # .pdf, .cbz, etc.
+    parent = path.parent
+
+    counter = 2
+    with db.no_autoflush:
+        while True:
+            # Check if this path exists in the database
+            test_path = str(parent / f"{stem} ({counter}){suffix}")
+            existing = db.query(Periodical).filter_by(file_path=test_path).first()
+            if not existing:
+                return test_path
+            counter += 1
 
 
 def _reorganize_periodical_files(
@@ -133,13 +163,7 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
 
                 # Only update title if this is NOT a special edition
                 # Special editions need to keep their distinct title to be grouped separately
-                is_special = False
-                if periodical.extra_metadata and isinstance(periodical.extra_metadata, dict):
-                    is_special = periodical.extra_metadata.get("special_edition") is not None
-
-                # Also check title using the is_special_edition function
-                if not is_special:
-                    is_special = is_special_edition(periodical.title)
+                is_special = is_periodical_special_edition(periodical)
 
                 # Only normalize title and reorganize files for regular editions
                 if not is_special:
@@ -162,24 +186,39 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
                     # Update database paths if reorganization succeeded
                     if new_pdf_path:
                         # Check if target path already exists in database (UNIQUE constraint check)
-                        existing_record = db.query(Periodical).filter_by(file_path=new_pdf_path).first()
-                        if existing_record and existing_record.id != periodical.id:
-                            logger.error(
-                                f"Cannot update periodical {periodical.id}: Target path {new_pdf_path} "
-                                f"already exists in database for periodical {existing_record.id}. "
-                                f"This is a data integrity issue that needs manual resolution."
+                        if check_file_path_conflict(db, new_pdf_path, periodical.id):
+                            # Path conflict detected - rename to make it unique
+                            unique_pdf_path = _get_unique_filename(new_pdf_path, db)
+                            logger.warning(
+                                f"Path conflict for periodical {periodical.id}: {new_pdf_path} "
+                                f"already exists. Renaming to: {unique_pdf_path}"
                             )
-                            # Roll back the file move since we can't update the database
+
+                            # Rename the physical file
                             try:
-                                old_pdf_path = Path(periodical.file_path)
-                                if Path(new_pdf_path).exists() and not old_pdf_path.exists():
-                                    shutil.move(new_pdf_path, str(old_pdf_path))
-                                    logger.info(f"Rolled back file move: {new_pdf_path} -> {old_pdf_path}")
-                            except Exception as rollback_error:
-                                logger.error(
-                                    f"Failed to rollback file move for periodical {periodical.id}: {rollback_error}"
-                                )
-                        else:
+                                if Path(new_pdf_path).exists():
+                                    shutil.move(new_pdf_path, unique_pdf_path)
+                                    logger.info(f"Renamed file: {new_pdf_path} -> {unique_pdf_path}")
+
+                                    # Also rename cover if it exists
+                                    if new_cover_path and Path(new_cover_path).exists():
+                                        cover_path = Path(new_cover_path)
+                                        unique_cover_path = str(
+                                            cover_path.parent / f"{Path(unique_pdf_path).stem}{cover_path.suffix}"
+                                        )
+                                        shutil.move(new_cover_path, unique_cover_path)
+                                        logger.info(f"Renamed cover: {new_cover_path} -> {unique_cover_path}")
+                                        new_cover_path = unique_cover_path
+
+                                    # Update to use the unique path
+                                    new_pdf_path = unique_pdf_path
+                            except Exception as rename_error:
+                                logger.error(f"Failed to rename conflicting files: {rename_error}")
+                                # If rename fails, keep original paths
+                                new_pdf_path = None
+
+                        if new_pdf_path:
+                            # Update the paths
                             periodical.file_path = new_pdf_path
                             if new_cover_path:
                                 periodical.cover_path = new_cover_path
@@ -187,13 +226,22 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
                             logger.info(
                                 f"Reorganized files for: {periodical.title} ({periodical.issue_date.strftime('%b %Y')})"
                             )
+
+                            # Update title after file operations
+                            periodical.title = target.title
+
+                            # Flush to commit this periodical's changes before processing next one
+                            # This ensures the path is in the database for duplicate checking
+                            db.flush()
                     else:
                         logger.warning(
                             f"Failed to reorganize files for periodical ID {periodical.id}, keeping original paths"
                         )
-
-                    # Update title after file operations
-                    periodical.title = target.title
+                        # Still update title even if file reorganization failed
+                        periodical.title = target.title
+                else:
+                    # For special editions, only update tracking_id, keep original title
+                    logger.info(f"Skipping title normalization for special edition: {periodical.title}")
 
                 periodicals_moved += 1
 
@@ -202,6 +250,23 @@ async def merge_tracking(target_id: int, source_ids: Dict[str, list[int]]) -> Di
             for submission in submissions:
                 submission.tracking_id = target.id
                 submissions_moved += 1
+
+            # Transfer stack membership from source to target (if target doesn't already have one)
+            source_membership = (
+                db.query(StackMembership).filter(StackMembership.periodical_tracking_id == source.id).first()
+            )
+            if source_membership:
+                target_membership = (
+                    db.query(StackMembership).filter(StackMembership.periodical_tracking_id == target.id).first()
+                )
+                if target_membership:
+                    # Target already in a stack — just remove the source membership
+                    db.delete(source_membership)
+                    logger.info(f"Removed stack membership for merged source tracking: {source.title}")
+                else:
+                    # Transfer source's stack membership to target
+                    source_membership.periodical_tracking_id = target.id
+                    logger.info(f"Transferred stack membership from '{source.title}' to '{target.title}'")
 
             # Delete source tracking record
             db.delete(source)

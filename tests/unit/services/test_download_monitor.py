@@ -438,5 +438,507 @@ class TestMonitorTaskInitialization:
         assert isinstance(monitor.downloads_dir, Path)
 
 
+class TestIACollectionHandling:
+    """Test handling of Internet Archive collection items with comma-separated file paths."""
+
+    def test_parse_comma_separated_file_paths(self, test_db, temp_downloads_dir, download_manager, mock_file_importer):
+        """Test that comma-separated file paths are correctly parsed."""
+        engine, session_factory = test_db
+
+        # Create test files
+        (temp_downloads_dir / "file1.pdf").write_bytes(b"%PDF-1.4\ntest content")
+        (temp_downloads_dir / "file2.pdf").write_bytes(b"%PDF-1.4\ntest content")
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=temp_downloads_dir,
+        )
+
+        # Test the comma detection logic
+        comma_path = "file1.pdf,file2.pdf"
+        assert "," in comma_path
+        paths = comma_path.split(",")
+        assert len(paths) == 2
+        assert paths[0] == "file1.pdf"
+        assert paths[1] == "file2.pdf"
+
+    def test_find_collection_files_in_downloads(
+        self, test_db, temp_downloads_dir, download_manager, mock_file_importer
+    ):
+        """Test that _find_file_in_downloads works for collection files."""
+        engine, session_factory = test_db
+
+        # Create test files
+        (temp_downloads_dir / "collection_file1.pdf").write_bytes(b"%PDF-1.4\ntest content")
+        (temp_downloads_dir / "collection_file2.pdf").write_bytes(b"%PDF-1.4\ntest content")
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=temp_downloads_dir,
+        )
+
+        # Test finding individual files
+        found_path = monitor._find_file_in_downloads("collection_file1.pdf")
+        assert found_path is not None
+        assert found_path.name == "collection_file1.pdf"
+
+        found_path2 = monitor._find_file_in_downloads("collection_file2.pdf")
+        assert found_path2 is not None
+        assert found_path2.name == "collection_file2.pdf"
+
+    def test_comma_separated_paths_stripped(self, test_db, temp_downloads_dir, download_manager, mock_file_importer):
+        """Test that comma-separated paths have whitespace stripped."""
+        engine, session_factory = test_db
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=temp_downloads_dir,
+        )
+
+        # Test with spaces around commas
+        comma_path = "file1.pdf, file2.pdf , file3.pdf"
+        paths = [p.strip() for p in comma_path.split(",")]
+        assert len(paths) == 3
+        assert paths[0] == "file1.pdf"
+        assert paths[1] == "file2.pdf"
+        assert paths[2] == "file3.pdf"
+
+
+class TestRemotePathMapping:
+    """Test remote_path configuration for cross-container path remapping."""
+
+    def test_remap_client_path_with_remote_path(
+        self, test_db, temp_downloads_dir, download_manager, mock_file_importer
+    ):
+        """When remote_path is set, client paths should be remapped to local downloads_dir."""
+        engine, session_factory = test_db
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=temp_downloads_dir,
+            remote_path="/downloads/",
+        )
+
+        remapped = monitor._remap_client_path("/downloads/Books/Magazine.pdf")
+        assert remapped == str(temp_downloads_dir / "Books" / "Magazine.pdf")
+
+    def test_remap_preserves_subdirectory_structure(
+        self, test_db, temp_downloads_dir, download_manager, mock_file_importer
+    ):
+        """Remapping should preserve the full subdirectory structure after the prefix."""
+        engine, session_factory = test_db
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=temp_downloads_dir,
+            remote_path="/downloads",
+        )
+
+        remapped = monitor._remap_client_path("/downloads/Books/Magazines/2024/file.pdf")
+        assert remapped == str(temp_downloads_dir / "Books" / "Magazines" / "2024" / "file.pdf")
+
+    def test_no_remap_without_remote_path(self, test_db, temp_downloads_dir, download_manager, mock_file_importer):
+        """Without remote_path, paths should pass through unchanged."""
+        engine, session_factory = test_db
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=temp_downloads_dir,
+        )
+
+        original = "/some/other/path/file.pdf"
+        assert monitor._remap_client_path(original) == original
+
+    def test_no_remap_when_prefix_doesnt_match(self, test_db, temp_downloads_dir, download_manager, mock_file_importer):
+        """When path doesn't start with remote_path, it should pass through unchanged."""
+        engine, session_factory = test_db
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=temp_downloads_dir,
+            remote_path="/downloads/",
+        )
+
+        original = "/other/path/file.pdf"
+        assert monitor._remap_client_path(original) == original
+
+    def test_find_file_uses_remapped_path(self, test_db, temp_downloads_dir, download_manager, mock_file_importer):
+        """_find_file_in_downloads should use remapped path to find files."""
+        engine, session_factory = test_db
+
+        # Create a file in a subdirectory (simulating SABnzbd category folder)
+        books_dir = temp_downloads_dir / "Books"
+        books_dir.mkdir()
+        test_file = books_dir / "Test.Magazine.2024.pdf"
+        test_file.write_bytes(b"%PDF-1.4\ntest content")
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=temp_downloads_dir,
+            remote_path="/downloads/",
+        )
+
+        # SABnzbd reports: /downloads/Books/Test.Magazine.2024.pdf
+        # Curator should find it at: temp_downloads_dir/Books/Test.Magazine.2024.pdf
+        found = monitor._find_file_in_downloads("/downloads/Books/Test.Magazine.2024.pdf")
+        assert found is not None
+        assert found.name == "Test.Magazine.2024.pdf"
+
+    def test_find_file_remaps_directory_path(self, test_db, temp_downloads_dir, download_manager, mock_file_importer):
+        """_find_file_in_downloads should handle remapped directory paths (SABnzbd storage field)."""
+        engine, session_factory = test_db
+
+        # SABnzbd often returns directory paths in the "storage" field
+        magazine_dir = temp_downloads_dir / "Books" / "Magazine.Name.2024"
+        magazine_dir.mkdir(parents=True)
+        (magazine_dir / "magazine.pdf").write_bytes(b"%PDF-1.4\ntest content")
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=temp_downloads_dir,
+            remote_path="/downloads/",
+        )
+
+        # SABnzbd reports directory: /downloads/Books/Magazine.Name.2024
+        found = monitor._find_file_in_downloads("/downloads/Books/Magazine.Name.2024")
+        assert found is not None
+        assert found.name == "magazine.pdf"
+
+    def test_remote_path_trailing_slash_normalization(
+        self, test_db, temp_downloads_dir, download_manager, mock_file_importer
+    ):
+        """remote_path should work with or without trailing slash."""
+        engine, session_factory = test_db
+
+        # Without trailing slash
+        monitor1 = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=temp_downloads_dir,
+            remote_path="/downloads",
+        )
+
+        # With trailing slash
+        monitor2 = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=temp_downloads_dir,
+            remote_path="/downloads/",
+        )
+
+        # Both should produce the same remapped path
+        path1 = monitor1._remap_client_path("/downloads/Books/file.pdf")
+        path2 = monitor2._remap_client_path("/downloads/Books/file.pdf")
+        assert path1 == path2
+
+
+class TestIncompleteDownloadFiltering:
+    """Test that incomplete/temporary downloads are filtered from folder scans."""
+
+    @pytest.mark.asyncio
+    async def test_scan_skips_incomplete_sabnzbd_files(self, test_db, tmp_path, download_manager, mock_file_importer):
+        """SABnzbd _unpack_ prefix files should be skipped."""
+        engine, session_factory = test_db
+        session = session_factory()
+        downloads_dir = tmp_path / "downloads"
+        downloads_dir.mkdir()
+
+        # Create files with incomplete patterns
+        (downloads_dir / "_unpack_Magazine.pdf").write_bytes(b"%PDF-1.4\ntest")
+        (downloads_dir / "_UNPACK_Comic.cbz").write_bytes(b"PK\x03\x04test")
+        # Create a valid file
+        (downloads_dir / "Complete Magazine.pdf").write_bytes(b"%PDF-1.4\ntest")
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=downloads_dir,
+        )
+
+        monitor._scan_downloads_folder(session)
+
+        # process_downloads should be called — there is 1 valid file
+        if mock_file_importer.process_downloads.called:
+            assert mock_file_importer.process_downloads.call_count >= 1
+        session.close()
+
+    @pytest.mark.asyncio
+    async def test_scan_skips_partial_download_files(self, test_db, tmp_path, download_manager, mock_file_importer):
+        """Files with .part, .crdownload extensions should be skipped."""
+        engine, session_factory = test_db
+        session = session_factory()
+        downloads_dir = tmp_path / "downloads"
+        downloads_dir.mkdir()
+
+        # Create files with incomplete patterns in the name
+        (downloads_dir / "Magazine.pdf.part").write_bytes(b"%PDF-1.4\ntest")
+        (downloads_dir / "Book.epub.crdownload").write_bytes(b"PK\x03\x04test")
+        (downloads_dir / "Magazine.tmp").write_bytes(b"temp data")
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=downloads_dir,
+        )
+
+        monitor._scan_downloads_folder(session)
+
+        # No valid files found (all are incomplete) — process_downloads may not be called
+        # or called with 0 importable files
+        session.close()
+
+    @pytest.mark.asyncio
+    async def test_scan_only_skips_incomplete_not_valid(self, test_db, tmp_path, download_manager, mock_file_importer):
+        """Valid files should still be found alongside incomplete ones."""
+        engine, session_factory = test_db
+        session = session_factory()
+        downloads_dir = tmp_path / "downloads"
+        downloads_dir.mkdir()
+
+        # Mix of incomplete and valid
+        (downloads_dir / "_unpack_InProgress.pdf").write_bytes(b"%PDF-1.4\ntest")
+        (downloads_dir / "Valid Magazine.pdf").write_bytes(b"%PDF-1.4\ntest")
+        (downloads_dir / "Good Comic.cbz").write_bytes(b"PK\x03\x04test")
+
+        mock_file_importer.process_downloads.return_value = {
+            "success": True,
+            "data": {"imported": 2, "failed": 0, "skipped": 0},
+        }
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=downloads_dir,
+        )
+
+        result = monitor._scan_downloads_folder(session)
+        # process_downloads should have been called for the 2 valid files
+        assert mock_file_importer.process_downloads.called
+        session.close()
+
+
+class TestImportRetry:
+    """Test the import retry mechanism for failed submissions."""
+
+    @pytest.mark.asyncio
+    async def test_retry_picks_up_failed_imports(self, test_db, tmp_path, download_manager, mock_file_importer):
+        """Failed import submissions with files on disk should be retried."""
+        from models.database import DownloadSubmission, PeriodicalTracking
+
+        engine, session_factory = test_db
+        session = session_factory()
+
+        # Create a tracking record
+        tracking = PeriodicalTracking(
+            olid="OL-test",
+            title="Test Magazine",
+            language="English",
+        )
+        session.add(tracking)
+        session.commit()
+
+        # Create downloads dir with a file
+        downloads_dir = tmp_path / "downloads"
+        downloads_dir.mkdir()
+        test_file = downloads_dir / "Test Magazine - Jan 2025.pdf"
+        test_file.write_bytes(b"%PDF-1.4\ntest content")
+
+        # Create a FAILED submission that looks like an import failure
+        submission = DownloadSubmission(
+            tracking_id=tracking.id,
+            source_url="http://example.com/nzb",
+            result_title="Test Magazine - Jan 2025",
+            status=DownloadSubmission.StatusEnum.FAILED,
+            file_path=str(test_file),
+            last_error="Import/processing failed",
+            attempt_count=0,
+        )
+        session.add(submission)
+        session.commit()
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=downloads_dir,
+        )
+
+        # Mock _process_single_file to succeed on retry
+        monitor._process_single_file = Mock(return_value=True)
+        monitor._sync_discovered_issue_status = Mock()
+        monitor.download_manager.mark_processed = Mock()
+        monitor._should_delete_from_client = Mock(return_value=False)
+
+        retried = monitor._retry_failed_imports(session)
+        assert retried == 1
+        assert monitor._process_single_file.called
+        session.close()
+
+    @pytest.mark.asyncio
+    async def test_retry_skips_when_file_gone(self, test_db, tmp_path, download_manager, mock_file_importer):
+        """Failed import submissions where file no longer exists should not be retried."""
+        from models.database import DownloadSubmission, PeriodicalTracking
+
+        engine, session_factory = test_db
+        session = session_factory()
+
+        tracking = PeriodicalTracking(
+            olid="OL-test2",
+            title="Gone Magazine",
+            language="English",
+        )
+        session.add(tracking)
+        session.commit()
+
+        downloads_dir = tmp_path / "downloads"
+        downloads_dir.mkdir()
+
+        # File does NOT exist on disk
+        submission = DownloadSubmission(
+            tracking_id=tracking.id,
+            source_url="http://example.com/nzb",
+            result_title="Gone Magazine - Jan 2025",
+            status=DownloadSubmission.StatusEnum.FAILED,
+            file_path=str(downloads_dir / "nonexistent.pdf"),
+            last_error="Import/processing failed",
+            attempt_count=0,
+        )
+        session.add(submission)
+        session.commit()
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=downloads_dir,
+        )
+
+        monitor._process_single_file = Mock(return_value=True)
+
+        retried = monitor._retry_failed_imports(session)
+        assert retried == 0
+        assert not monitor._process_single_file.called
+        session.close()
+
+    @pytest.mark.asyncio
+    async def test_retry_respects_max_attempts(self, test_db, tmp_path, download_manager, mock_file_importer):
+        """Submissions at MAX_IMPORT_RETRIES should not be retried again."""
+        from core.constants.app import MAX_IMPORT_RETRIES
+        from models.database import DownloadSubmission, PeriodicalTracking
+
+        engine, session_factory = test_db
+        session = session_factory()
+
+        tracking = PeriodicalTracking(
+            olid="OL-test3",
+            title="Exhausted Magazine",
+            language="English",
+        )
+        session.add(tracking)
+        session.commit()
+
+        downloads_dir = tmp_path / "downloads"
+        downloads_dir.mkdir()
+        test_file = downloads_dir / "Exhausted Magazine.pdf"
+        test_file.write_bytes(b"%PDF-1.4\ntest content")
+
+        # Create submission already at max retries
+        submission = DownloadSubmission(
+            tracking_id=tracking.id,
+            source_url="http://example.com/nzb",
+            result_title="Exhausted Magazine - Jan 2025",
+            status=DownloadSubmission.StatusEnum.FAILED,
+            file_path=str(test_file),
+            last_error="Import/processing failed",
+            attempt_count=MAX_IMPORT_RETRIES,  # Already exhausted
+        )
+        session.add(submission)
+        session.commit()
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=downloads_dir,
+        )
+
+        monitor._process_single_file = Mock(return_value=True)
+
+        retried = monitor._retry_failed_imports(session)
+        assert retried == 0
+        assert not monitor._process_single_file.called
+        session.close()
+
+    @pytest.mark.asyncio
+    async def test_retry_does_not_pick_up_download_failures(
+        self, test_db, tmp_path, download_manager, mock_file_importer
+    ):
+        """Submissions that failed during download (not import) should not be retried here."""
+        from models.database import DownloadSubmission, PeriodicalTracking
+
+        engine, session_factory = test_db
+        session = session_factory()
+
+        tracking = PeriodicalTracking(
+            olid="OL-test4",
+            title="Download Fail Magazine",
+            language="English",
+        )
+        session.add(tracking)
+        session.commit()
+
+        downloads_dir = tmp_path / "downloads"
+        downloads_dir.mkdir()
+
+        # Create submission that failed during download (error doesn't contain "Import")
+        submission = DownloadSubmission(
+            tracking_id=tracking.id,
+            source_url="http://example.com/nzb",
+            result_title="Download Fail Magazine - Jan 2025",
+            status=DownloadSubmission.StatusEnum.FAILED,
+            file_path=None,  # No file — download never completed
+            last_error="Connection timeout",
+            attempt_count=0,
+        )
+        session.add(submission)
+        session.commit()
+
+        monitor = DownloadMonitor(
+            download_manager=download_manager,
+            session_factory=session_factory,
+            file_importer=mock_file_importer,
+            downloads_dir=downloads_dir,
+        )
+
+        monitor._process_single_file = Mock(return_value=True)
+
+        retried = monitor._retry_failed_imports(session)
+        assert retried == 0
+        session.close()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

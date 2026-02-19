@@ -31,14 +31,37 @@ MAX_PAGE_SIZE = 100
 MAX_DOWNLOAD_RETRIES = 1
 """Maximum number of retry attempts for failed downloads"""
 
+MAX_DOWNLOAD_RETRIES_IA = 5
+"""Maximum retries for Internet Archive downloads (failures usually transient)"""
+
+MAX_IMPORT_RETRIES = 3
+"""Maximum number of retry attempts for failed file imports (file exists but import failed)"""
+
 MAX_DOWNLOADS = 10
-"""Maximum number of concurrent downloads allowed system-wide"""
+"""Maximum number of concurrent downloads allowed system-wide""" ""
 
 DOWNLOAD_FILE_SEARCH_DEPTH = 2
 """Maximum directory depth to search for downloaded files"""
 
 PROVIDER_SEARCH_TIMEOUT = 30
 """Timeout in seconds for provider search operations"""
+
+
+# ==============================================================================
+# Database Configuration
+# ==============================================================================
+
+DB_LOCK_TIMEOUT = 30.0
+"""Timeout in seconds to wait for database locks before raising error"""
+
+DB_LOCK_RETRY_MAX = 3
+"""Maximum number of retries for database lock errors"""
+
+DB_LOCK_RETRY_DELAY = 0.1
+"""Initial delay in seconds between database lock retries (exponential backoff)"""
+
+DB_COMMIT_RETRY_DELAY = 1.0
+"""Initial delay in seconds between commit retries on database lock (exponential backoff, longer than query retries)"""
 
 
 # ==============================================================================
@@ -63,8 +86,45 @@ OCR_PROCESSOR_INTERVAL = 10
 AUTO_METADATA_INTERVAL = 604800
 """Interval for automatic metadata backfill and sync (7 days / 1 week)"""
 
+FEED_SYNC_INTERVAL = 900
+"""Interval for RSS feed sync task (15 minutes)"""
+
+FILE_REORGANIZER_INTERVAL = 300
+"""Interval for checking and processing periodicals flagged for file reorganization (5 minutes)"""
+
+FEED_SYNC_MATCH_BATCH_SIZE = 200
+"""Maximum number of new RSS feed entries to match per auto-download run"""
+
+NEW_ISSUE_THRESHOLD_DAYS = 90
+"""Number of days to consider an issue as 'new' for track_new_only mode.
+Issues published within this many days of the current date are eligible for download.
+Covers monthly magazines (30 days) with buffer for quarterly publications and delays."""
+
+FEED_ENTRY_RETENTION_DAYS = 7
+"""Number of days to retain RSS feed entries before expiring them"""
+
+CACHE_AWARE_SEARCH_SKIP_HOURS = 1
+"""Skip API searches for periodicals with cache matches within this many hours (0 = disabled)"""
+
+SEARCH_RESULT_RETENTION_DAYS = 30
+"""Number of days to retain search results in the main database before cleanup"""
+
 TASK_SCHEDULER_CHECK_INTERVAL = 60
 """Interval for task scheduler checking (1 minute)"""
+
+
+# ==============================================================================
+# HTTP Timeouts
+# ==============================================================================
+
+HTTP_REQUEST_TIMEOUT = 10
+"""Default timeout in seconds for HTTP requests to download clients and providers"""
+
+VERSION_CHECK_TIMEOUT = 5
+"""Timeout in seconds for checking application version updates"""
+
+RESTART_SHUTDOWN_DELAY = 1
+"""Delay in seconds before restarting/shutting down to allow response to be sent"""
 
 
 # ==============================================================================

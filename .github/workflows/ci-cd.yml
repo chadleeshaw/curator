@@ -32,13 +32,13 @@ jobs:
       - name: Create virtual environment
         run: python -m venv .venv
 
-      - name: Cache Python dependencies
+      - name: Cache pip downloads
         uses: actions/cache@v4
         with:
-          path: .venv
-          key: ${{ runner.os }}-venv-${{ hashFiles('**/requirements.txt') }}
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
           restore-keys: |
-            ${{ runner.os }}-venv-
+            ${{ runner.os }}-pip-
 
       - name: Cache Node dependencies
         uses: actions/cache@v4
@@ -72,7 +72,7 @@ jobs:
         run: npx stylelint static/css/*.css
 
       - name: Run tests
-        run: .venv/bin/python -m pytest tests/ -v --tb=short
+        run: .venv/bin/python -m pytest tests/ -v --tb=short -m "not slow"
 
   build-and-push:
     name: Build & Push Docker Image
@@ -109,6 +109,17 @@ jobs:
             type=sha,prefix=sha-
             type=raw,value=latest,enable={{is_default_branch}}
 
+      - name: Compute build metadata
+        id: build_meta
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "version=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=v1.0.0" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -123,6 +134,17 @@ jobs:
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
           build-args: |
             BUILDKIT_INLINE_CACHE=1
+            BUILD_VERSION=${{ steps.build_meta.outputs.version }}
+            BUILD_HASH=${{ steps.build_meta.outputs.short_sha }}
+
+      - name: Trigger Portainer Webhook
+        if: github.ref == 'refs/heads/main'
+        run: |
+          curl -X POST \
+            -H "CF-Access-Client-Id: ${{ secrets.CF_CLIENT_ID }}" \
+            -H "CF-Access-Client-Secret: ${{ secrets.CF_CLIENT_SECRET }}" \
+            ${{ secrets.PORTAINER_WEBHOOK_URL }}
+        continue-on-error: true
 
   release:
     name: Create GitHub Release

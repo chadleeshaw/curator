@@ -8,9 +8,10 @@ from typing import Dict, List, Tuple, Optional
 from fuzzywuzzy import fuzz
 
 from core.constants.country import ISO_COUNTRIES
-from core.constants.edition import (
-    REGIONAL_EDITION_INDICATORS,
-    EDITION_VARIANT_INDICATORS,
+from core.constants.periodical import (
+    AMBIGUOUS_ISO_CODES,
+    REGIONAL_PERIODICAL_INDICATORS,
+    AUDIENCE_PERIODICAL_INDICATORS,
 )
 from core.constants.title import (
     DEFAULT_FUZZY_MATCH_THRESHOLD,
@@ -20,10 +21,11 @@ from core.constants.title import (
     MAX_DATE_PENALTY,
     MIN_BASE_TITLE_WORDS,
     MULTI_WORD_REGIONAL_INDICATORS,
-    MULTI_WORD_EDITION_VARIANTS,
+    MULTI_WORD_PERIODICAL_VARIANTS,
     COMMON_PERIODICAL_WORDS,
     COUNTRY_CODE_NORMALIZATIONS,
     KNOWN_PERIODICAL_TITLES,
+    SPECIAL_EDITION_KEYWORDS,
 )
 from core.parsers.language import LANGUAGE_INDICATORS
 
@@ -402,6 +404,10 @@ class TitleMatcher:
         """
         Extract the base periodical title and detect if it's a special edition.
 
+        Uses explicit pattern matching and keyword-based detection only.
+        Does NOT use generic trailing-word heuristics, which produce false positives
+        for multi-word publication titles.
+
         Args:
             title: Standardized title
 
@@ -411,9 +417,7 @@ class TitleMatcher:
         Examples:
             >>> extract_base_title("National Geographic")
             ("National Geographic", False, "")
-            >>> extract_base_title("Sports Illustrated Swimsuit Kate Upton")
-            ("Sports Illustrated Swimsuit", True, "Kate Upton")
-            >>> extract_base_title("Time Magazine Person Of The Year")
+            >>> extract_base_title("Time Special Edition Person Of The Year")
             ("Time", True, "Person Of The Year")
         """
         # Pattern 1: Explicit "Special Edition" pattern with specific name
@@ -433,62 +437,22 @@ class TitleMatcher:
             base_title = match.group(1).strip()
             return (base_title, True, "Special Edition")
 
-        # Pattern 2: Generic detection of titles with identifying suffixes
-        # Strategy: Look for 2+ words at the end that appear to be proper names
-        # or edition identifiers (like person names or descriptive phrases)
-        #
-        # Check if title ends with regional indicators - these are part of the base title
-        words = title.split()
-        if len(words) >= 2:
-            last_word = words[-1].lower()
-            # Common two-word regional indicators
-            if len(words) >= 2 and " ".join(words[-2:]).lower() in MULTI_WORD_REGIONAL_INDICATORS:
-                # This is a regional edition, not a special edition
-                return (title, False, "")
-            # Single-word country names at the end
-            elif last_word in REGIONAL_EDITION_INDICATORS:
-                return (title, False, "")
+        # Pattern 2: Keyword-based detection using SPECIAL_EDITION_KEYWORDS
+        # Only flag as special edition if an explicit keyword is found in the title
+        title_lower = title.lower()
+        for keyword in SPECIAL_EDITION_KEYWORDS:
+            if keyword in title_lower:
+                # Found a keyword — extract it as the special edition indicator
+                # Try to split at the keyword position to get a base title
+                keyword_pos = title_lower.find(keyword)
+                base_part = title[:keyword_pos].strip()
+                # Strip separators (dash, colon) from the end of the base part
+                base_part = re.sub(r"[\s\-–—:]+$", "", base_part)
 
-        # Common periodical words that are part of the base title:
-        common_periodical_words = COMMON_PERIODICAL_WORDS
-
-        # Need at least 3 words: "Base" + "Special" + "Name"
-        if len(words) >= 3:
-            # Scan from the end to find where special identifiers start
-            # Special identifiers are 2+ consecutive words that are NOT common periodical words
-            # BUT: Always keep at least 2 words as the base title (never split 3-word titles)
-            # For longer titles (5+ words), we can be more aggressive
-            min_base_words = MIN_BASE_TITLE_WORDS
-
-            special_start_idx = None
-            consecutive_non_common = 0
-
-            # Scan backwards, but don't go past min_base_words
-            for i in range(len(words) - 1, min_base_words - 1, -1):
-                word_lower = words[i].lower()
-
-                # Skip numbers (years, issue numbers)
-                if re.match(r"^\d+$", word_lower):
-                    continue
-
-                # If this is a common periodical word, stop counting
-                if word_lower in common_periodical_words:
-                    break
-
-                consecutive_non_common += 1
-                special_start_idx = i
-
-            # If we found 2+ special words at the end, split the title
-            # But only if we'd have at least min_base_words remaining
-            if consecutive_non_common >= 2 and special_start_idx is not None:
-                base_words = words[:special_start_idx]
-                special_words = words[special_start_idx:]
-
-                # Make sure we have a reasonable base title left
-                if len(base_words) >= min_base_words:
-                    base_title = " ".join(base_words)
-                    special_name = " ".join(special_words)
-                    return (base_title, True, special_name)
+                if base_part:
+                    # Use the keyword match and everything after as the special name
+                    special_part = title[keyword_pos:].strip()
+                    return (base_part, True, special_part)
 
         return (title, False, "")
 
@@ -539,46 +503,46 @@ class TitleMatcher:
 
         return volume, issue
 
-    def _extract_edition_variant(self, title: str) -> Optional[str]:
+    def extract_periodical_variant(self, title: str) -> Optional[str]:
         """
-        Extract edition variant indicator from title.
+        Extract periodical variant indicator from title.
 
         This identifies if the title contains a variant indicator that distinguishes it
-        as a DIFFERENT publication (not just a special issue).
+        as a DIFFERENT periodical (not just a special issue).
 
         This includes:
-        - Age-specific editions: "Kids", "Little Kids", "Junior", "Teen"
-        - Professional editions: "Pro", "Professional", "Business"
-        - Regional editions: "US", "UK", "DE", "France", "Germany"
-        - Format editions: "Digital", "Online", "Print"
+        - Age-specific periodicals: "Kids", "Little Kids", "Junior", "Teen"
+        - Professional periodicals: "Pro", "Professional", "Business"
+        - Regional periodicals: "US", "UK", "DE", "France", "Germany"
+        - Format periodicals: "Digital", "Online", "Print"
 
-        IMPORTANT: This is NOT for special editions/issues of the same publication!
-        - "National Geographic Little Kids" vs "National Geographic" → DIFFERENT publications
-        - "PC Gamer US" vs "PC Gamer UK" → DIFFERENT publications
-        - "Time - Person of the Year" vs "Time" → SAME publication (special issue)
+        IMPORTANT: This is NOT for special issues of the same publication!
+        - "National Geographic Little Kids" vs "National Geographic" → DIFFERENT periodicals
+        - "PC Gamer US" vs "PC Gamer UK" → DIFFERENT periodicals
+        - "Time - Person of the Year" vs "Time" → SAME periodical (special issue)
 
         Args:
             title: Title string to parse
 
         Returns:
-            Edition variant string if found, None otherwise
+            Periodical variant string if found, None otherwise
 
         Examples:
-            >>> _extract_edition_variant("National Geographic Little Kids")
+            >>> _extract_periodical_variant("National Geographic Little Kids")
             "little kids"
-            >>> _extract_edition_variant("PC Gamer US")
+            >>> _extract_periodical_variant("PC Gamer US")
             "us"
-            >>> _extract_edition_variant("PC Gamer UK")
+            >>> _extract_periodical_variant("PC Gamer UK")
             "uk"
-            >>> _extract_edition_variant("Forbes Professional")
+            >>> _extract_periodical_variant("Forbes Professional")
             "professional"
-            >>> _extract_edition_variant("Time Person Of The Year")
-            None  # "Person Of The Year" is a special issue, not an edition variant
+            >>> _extract_periodical_variant("Time Person Of The Year")
+            None  # "Person Of The Year" is a special issue, not a periodical variant
         """
         title_lower = title.lower()
 
         # Check for multi-word variants first (e.g., "little kids", "young adult")
-        for variant in MULTI_WORD_EDITION_VARIANTS:
+        for variant in MULTI_WORD_PERIODICAL_VARIANTS:
             if variant in title_lower:
                 return variant
 
@@ -588,26 +552,27 @@ class TitleMatcher:
             # Clean punctuation from word
             clean_word = word.strip(".,;:!?()[]{}\"'")
 
-            # Skip if this looks like "No 123" or "Vol 5" (issue/volume numbers, not editions)
+            # Skip if this looks like "No 123" or "Vol 5" (issue/volume numbers, not periodical variants)
             if i + 1 < len(words):
                 next_word = words[i + 1].strip(".,;:!?()[]{}\"'")
                 if clean_word in ["no", "vol", "volume", "issue", "v"] and next_word.isdigit():
                     continue
 
             # Check if it's a country code (US, UK, DE, FR, etc.)
+            # Skip ambiguous codes that are common English words (IT, IN, AT, etc.)
             clean_word_upper = clean_word.upper()
-            if clean_word_upper in ISO_COUNTRIES:
+            if clean_word_upper in ISO_COUNTRIES and clean_word_upper not in AMBIGUOUS_ISO_CODES:
                 return clean_word
 
             # Check if it's a regional name (france, germany, etc.)
-            if clean_word in REGIONAL_EDITION_INDICATORS:
+            if clean_word in REGIONAL_PERIODICAL_INDICATORS:
                 return clean_word
 
         # Check for single-word edition variants
         for word in words:
             # Clean punctuation from word
             clean_word = word.strip(".,;:!?()[]{}\"'")
-            if clean_word in EDITION_VARIANT_INDICATORS:
+            if clean_word in AUDIENCE_PERIODICAL_INDICATORS:
                 return clean_word
 
         return None
@@ -650,21 +615,23 @@ class TitleMatcher:
         if not is_title_match:
             return (False, 0)
 
-        # Step 1.5: Check for edition variant mismatch
-        # If one title has an edition variant and the other doesn't (or has a different one),
-        # they're different publications despite similar base names
-        provider_edition = self._extract_edition_variant(provider_title)
-        library_edition = self._extract_edition_variant(library_title)
+        # Step 1.5: Check for periodical variant mismatch
+        # If one title has a periodical variant and the other doesn't (or has a different one),
+        # they're different periodicals despite similar base names
+        provider_variant = self.extract_periodical_variant(provider_title)
+        library_variant = self.extract_periodical_variant(library_title)
 
-        # If both have edition variants, they must match
-        if provider_edition is not None and library_edition is not None:
-            if provider_edition != library_edition:
-                logger.debug(f"Edition variant mismatch: provider '{provider_edition}' vs library '{library_edition}'")
+        # If both have periodical variants, they must match
+        if provider_variant is not None and library_variant is not None:
+            if provider_variant != library_variant:
+                logger.debug(
+                    f"Periodical variant mismatch: provider '{provider_variant}' vs library '{library_variant}'"
+                )
                 return (False, 0)
-        # If only one has an edition variant, they're different publications
-        elif provider_edition is not None or library_edition is not None:
+        # If only one has a periodical variant, they're different periodicals
+        elif provider_variant is not None or library_variant is not None:
             logger.debug(
-                f"Edition variant presence mismatch: provider '{provider_edition}' vs library '{library_edition}'"
+                f"Periodical variant presence mismatch: provider '{provider_variant}' vs library '{library_variant}'"
             )
             return (False, 0)
 
@@ -696,6 +663,12 @@ class TitleMatcher:
             # Otherwise rely on title match only
             logger.debug(f"No date or volume/issue for '{provider_title}', using title-only match")
             return (True, title_score)
+
+        # Normalize both dates to naive (remove timezone info) for comparison
+        if provider_date.tzinfo is not None:
+            provider_date = provider_date.replace(tzinfo=None)
+        if library_date.tzinfo is not None:
+            library_date = library_date.replace(tzinfo=None)
 
         # Check if dates are within same month ± tolerance
         date_diff_days = abs((provider_date - library_date).days)

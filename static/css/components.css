@@ -419,6 +419,83 @@
   letter-spacing: 0.5px;
 }
 
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin-bottom: 20px;
+  font-size: 0.9em;
+}
+
+.breadcrumb a,
+.breadcrumb .current {
+  white-space: nowrap;
+}
+
+.breadcrumb a {
+  color: var(--primary-color);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.breadcrumb a:hover {
+  text-decoration: underline;
+}
+
+.breadcrumb .separator {
+  color: var(--text-disabled);
+}
+
+.breadcrumb .current {
+  color: var(--text-secondary);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 600px) {
+  .breadcrumb {
+    font-size: 0.8em;
+  }
+}
+
+/* Language overlay on cover image */
+.language-overlay {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.75);
+  color: white;
+  padding: 3px 8px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  z-index: 10;
+  backdrop-filter: blur(4px);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+/* Stack badge overlay on cover image (shown during search) */
+.stack-badge-overlay {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  z-index: 10;
+  backdrop-filter: blur(4px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .info-card {
   background: var(--surface);
   padding: 15px;
@@ -654,6 +731,7 @@
   flex-direction: row;
   align-items: center;
   justify-self: end;
+  grid-column: 3;
 }
 
 .btn-icon {
@@ -692,6 +770,23 @@
 .btn-icon.btn-danger:hover {
   background: #dc3545;
   border-color: #dc3545;
+}
+
+.btn-danger-text {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm, 4px);
+  transition: color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.btn-danger-text:hover {
+  color: #dc3545;
+  background: rgba(220, 53, 69, 0.1);
 }
 
 /* Empty State */
@@ -790,6 +885,42 @@
   position: relative;
 }
 
+/* Flexbox layout for modals with header/body/footer structure.
+   Keeps header and footer pinned; only the body scrolls. */
+#manage-queue-modal .modal-content,
+#manage-failed-modal .modal-content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#manage-queue-modal-content,
+#manage-failed-modal-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+#manage-queue-modal .modal-header,
+#manage-failed-modal .modal-header {
+  flex-shrink: 0;
+}
+
+#manage-queue-modal .modal-body,
+#manage-failed-modal .modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin: 10px 0;
+}
+
+#manage-queue-modal .modal-footer,
+#manage-failed-modal .modal-footer {
+  flex-shrink: 0;
+}
+
 .close {
   position: absolute;
   right: 20px;
@@ -883,27 +1014,27 @@
 }
 
 .status-completed {
-  background: rgba(76, 175, 80, 0.2);
+  background: rgba(25, 135, 84, 0.2);
   color: var(--status-completed);
 }
 
 .status-downloading {
-  background: rgba(33, 150, 243, 0.2);
+  background: rgba(13, 110, 253, 0.2);
   color: var(--status-downloading);
 }
 
 .status-pending {
-  background: rgba(255, 152, 0, 0.2);
+  background: rgba(108, 117, 125, 0.2);
   color: var(--status-pending);
 }
 
 .status-failed {
-  background: rgba(244, 67, 54, 0.2);
+  background: rgba(220, 53, 69, 0.2);
   color: var(--status-failed);
 }
 
 .status-skipped {
-  background: rgba(158, 158, 158, 0.2);
+  background: rgba(111, 66, 193, 0.2);
   color: var(--status-skipped);
 }
 
@@ -1535,6 +1666,27 @@
   margin-left: 20px;
 }
 
+/* Provider badges for search results */
+.provider-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75em;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.ia-badge {
+  background: #e8f4fc;
+  color: #428bca;
+}
+
+.collection-badge {
+  background: #fff3cd;
+  color: #856404;
+  margin-right: 5px;
+}
+
 /* ==========================================================================
    Input Highlight Effects (Added for JS Refactoring - Phase 3)
    ========================================================================== */
@@ -1639,6 +1791,70 @@
   font-size: 16px;
   margin-bottom: 6px;
   color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.variant-number {
+  font-weight: 700;
+  color: var(--primary-color);
+}
+
+.variant-age {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--surface-hover);
+  color: var(--text-secondary);
+}
+
+.variant-provider {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(var(--primary-rgb), 0.1);
+  color: var(--primary-color);
+}
+
+/* ==========================================================================
+   Issue Age Badges (NZB Retention Indicator)
+   ========================================================================== */
+
+.issue-age-badge {
+  font-size: 10px;
+  font-weight: 600;
+  margin-top: 4px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  display: inline-block;
+}
+
+/* Fresh: < 7 days - excellent retention */
+.age-fresh {
+  background: rgba(40, 167, 69, 0.2);
+  color: #155724;
+}
+
+/* Good: 7-30 days - good retention */
+.age-good {
+  background: rgba(156, 204, 101, 0.3);
+  color: #3d6b1f;
+}
+
+/* Moderate: 30-90 days - may have some missing articles */
+.age-moderate {
+  background: rgba(255, 193, 7, 0.3);
+  color: #856404;
+}
+
+/* Old: > 90 days - higher risk of incomplete download */
+.age-old {
+  background: rgba(220, 53, 69, 0.2);
+  color: #721c24;
 }
 
 .variant-title {
@@ -1914,4 +2130,55 @@
 
 [data-status='in_library'] {
   cursor: default;
+}
+
+/* ============================================================================
+   Task Toggle Switch
+   ============================================================================ */
+
+.task-toggle {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.task-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.task-toggle-slider {
+  position: absolute;
+  inset: 0;
+  background-color: var(--text-hint, #999);
+  border-radius: 20px;
+  transition: background-color 0.2s ease;
+}
+
+.task-toggle-slider::before {
+  content: '';
+  position: absolute;
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+}
+
+.task-toggle input:checked + .task-toggle-slider {
+  background-color: var(--accent, #4a9eff);
+}
+
+.task-toggle input:checked + .task-toggle-slider::before {
+  transform: translateX(16px);
+}
+
+.task-toggle:hover .task-toggle-slider {
+  opacity: 0.85;
 }

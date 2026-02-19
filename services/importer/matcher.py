@@ -10,6 +10,8 @@ from dataclasses import dataclass
 
 from fuzzywuzzy import fuzz
 
+from core.constants.title import TITLE_SKIP_WORDS
+
 logger = logging.getLogger(__name__)
 
 
@@ -21,6 +23,7 @@ WEIGHT_TITLE_FUZZY_MEDIUM = 60
 WEIGHT_LANGUAGE_MATCH = 20
 WEIGHT_COUNTRY_MATCH = 15
 WEIGHT_CATEGORY_MATCH = 10
+WEIGHT_COUNTRY_MISMATCH_PENALTY = -30
 
 # Thresholds
 MIN_SCORE_FOR_MATCH = 70  # Minimum score to consider it a match
@@ -164,8 +167,7 @@ class TrackingMatcher:
         words = normalized.lower().split()
 
         # Skip common filler words
-        skip_words = {"the", "a", "an", "and", "or", "of", "magazine", "mag"}
-        significant_words = [w for w in words if w not in skip_words and w.strip()]
+        significant_words = [w for w in words if w not in TITLE_SKIP_WORDS and w.strip()]
 
         # Take first letter of each significant word
         abbreviation = "".join(word[0] for word in significant_words if word)
@@ -186,6 +188,10 @@ class TrackingMatcher:
         # Normalize both titles
         norm_parsed = self.normalize_title(parsed_title).lower()
         norm_tracking = self.normalize_title(tracking_title).lower()
+
+        # Empty title validation - prevent matching on empty strings
+        if not norm_parsed or not norm_tracking:
+            return (0, "empty_title")
 
         # Exact match
         if norm_parsed == norm_tracking:
@@ -283,10 +289,11 @@ class TrackingMatcher:
                     breakdown["country"] = WEIGHT_COUNTRY_MATCH
                     total_score += WEIGHT_COUNTRY_MATCH
                 else:
-                    # Explicit country mismatch - regional editions should be separate trackings
-                    # Set score to 0 to prevent matching entirely
+                    # Country mismatch - apply penalty instead of blocking
+                    # This allows exact title matches with wrong metadata to still match
+                    # while preventing cross-regional matches (fuzzy titles won't reach threshold)
                     breakdown["country"] = "mismatch"
-                    total_score = 0
+                    total_score += WEIGHT_COUNTRY_MISMATCH_PENALTY
             else:
                 # One or both not specified, neutral
                 breakdown["country"] = 0

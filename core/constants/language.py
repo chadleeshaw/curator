@@ -24,6 +24,7 @@ SUPPORTED_LANGUAGES = [
     "Dutch",
     "Polish",
     "Russian",
+    "Slovak",
     "Ukrainian",
     "Japanese",
     "Chinese",
@@ -46,6 +47,7 @@ LANGUAGE_CODE_MAP = {
     "nl": "Dutch",
     "pl": "Polish",
     "ru": "Russian",
+    "sk": "Slovak",
     "ja": "Japanese",
     "zh": "Chinese",
     "cn": "Chinese",
@@ -77,6 +79,8 @@ LANGUAGE_TO_PADDLEOCR = {
     "ja": "japan",
     "korean": "korean",
     "ko": "korean",
+    "slovak": "en",
+    "sk": "en",
     "arabic": "ar",
     "ar": "ar",
     "latin": "latin",
@@ -98,9 +102,35 @@ LANGUAGE_KEYWORDS = {
     "Dutch": ["Dutch", "Nederlands", "nederlands", "Holland", "NL"],
     "Polish": ["Polish", "Polski", "Polska", "PL"],
     "Russian": ["Russian", "Русский", "RU"],
+    "Slovak": ["Slovak", "Slovenčina", "Slovensky", "SK"],
     "Ukrainian": ["Ukrainian", "Українська", "UA"],
     "Japanese": ["Japanese", "日本語", "Japan", "JP"],
     "Chinese": ["Chinese", "中文", "China", "CN", "ZH"],
     "Korean": ["Korean", "한국어", "Korea", "KR"],
 }
 """Keywords used to detect language from periodical titles"""
+
+
+# ==============================================================================
+# English Language Indicators
+# ==============================================================================
+
+ENGLISH_INDICATORS = [
+    "english",
+    " en ",
+    " en-",
+    "-en ",
+    "usa",
+    " uk ",
+    " uk-",
+    "-uk ",
+    " us ",
+    " us-",
+    "-us ",
+]
+"""
+Language and region indicators for English editions.
+
+Used to detect English-language periodicals from search results and filenames.
+Space-bounded indicators (e.g., ' en ') prevent false matches with words containing 'en'.
+"""

@@ -69,7 +69,13 @@ export class APIClient {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.detail ?? errorData.message ?? `HTTP ${response.status}`;
+        let errorMessage = errorData.detail ?? errorData.message ?? `HTTP ${response.status}`;
+        // Pydantic 422 errors return detail as an array of validation objects
+        if (Array.isArray(errorMessage)) {
+          errorMessage = errorMessage.map((e) => e.msg || JSON.stringify(e)).join('; ');
+        } else if (typeof errorMessage === 'object') {
+          errorMessage = JSON.stringify(errorMessage);
+        }
         throw new APIError(errorMessage, response.status, url, errorData);
       }
 

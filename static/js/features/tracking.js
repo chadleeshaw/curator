@@ -16,10 +16,15 @@ import {
   NUMBER_TO_MONTH,
   MONTH_NAMES_LOWER,
   MONTH_ABBR_LOWER,
+  API_LIMITS,
 } from '../core/constants.js';
+import { escapeHtml } from '../readers/reader-utils.js';
+import { stacks } from './stacks.js';
 
 /** @type {string[]} Supported languages loaded from backend */
 let SUPPORTED_LANGUAGES = [];
+/** @type {string[]} Content categories loaded from backend */
+let CATEGORIES = [];
 /** @type {Object.<string, string>} ISO country codes to names */
 let ISO_COUNTRIES = {};
 /** @type {Object.<string, string>} Language to default country mapping */
@@ -56,6 +61,16 @@ export class TrackingManager {
     this.allTracked = [];
     /** @type {boolean} Whether periodicals have been loaded at least once */
     this.periodicalsLoaded = false;
+    /** @type {string} Current source filter for search results ('all', 'newsnab', 'internet_archive', 'rss') */
+    this.sourceFilter = 'all';
+    /** @type {Object|null} Last curated issues for re-rendering with filters */
+    this.lastCuratedIssues = null;
+    /** @type {string|null} Last search title for re-rendering */
+    this.lastSearchTitle = null;
+    /** @type {Map} Stack search results for bulk download */
+    this.stackSearchResults = new Map();
+    /** @type {Array} All stacks loaded from API (includes empty stacks) */
+    this.allStacks = [];
   }
 
   /**
@@ -86,6 +101,7 @@ export class TrackingManager {
       );
       if (data.success) {
         SUPPORTED_LANGUAGES = data.languages ?? [];
+        CATEGORIES = data.categories ?? [];
         ISO_COUNTRIES = data.countries ?? {};
         LANGUAGE_TO_COUNTRY = data.language_to_country ?? {};
         COUNTRY_INDICATORS = data.country_indicators ?? {};
@@ -97,48 +113,61 @@ export class TrackingManager {
   }
 
   /**
-   * Load categories from API and populate dropdown
+   * Load categories from constants and populate all category dropdowns
    *
-   * @returns {Promise<void>}
-   */
-  async loadCategories() {
-    try {
-      const response = await APIClient.get('/api/constants/categories');
-      const data = await response.json();
-
-      if (data.success && data.categories) {
-        this.populateCategoryDropdown(data.categories);
-      }
-    } catch (error) {
-      console.error('[Tracking] Failed to load categories:', error);
-    }
-  }
-
-  /**
-   * Populate the category filter dropdown with categories
-   *
-   * @param {string[]} categories - Array of category names
    * @returns {void}
    */
-  populateCategoryDropdown(categories) {
-    const dropdown = document.getElementById('tracking-category-filter');
-    if (!dropdown) return;
+  loadCategories() {
+    if (CATEGORIES.length === 0) return;
 
-    // Keep the "All" option
-    dropdown.innerHTML = '<option value="all">All</option>';
-
-    // Add each category as an option
-    categories.forEach((category) => {
-      const option = document.createElement('option');
-      option.value = category;
-      option.textContent = category;
-      dropdown.appendChild(option);
-    });
-    
-    // Restore saved filter value
-    if (this.filterManager.categoryFilter) {
-      dropdown.value = this.filterManager.categoryFilter;
+    // Populate the filter dropdown
+    const filterDropdown = document.getElementById('tracking-category-filter');
+    if (filterDropdown) {
+      filterDropdown.innerHTML = '<option value="all">All</option>';
+      CATEGORIES.forEach((category) => {
+        const option = document.createElement('option');
+        option.value = category;
+        option.textContent = category;
+        filterDropdown.appendChild(option);
+      });
+      if (this.filterManager.categoryFilter) {
+        filterDropdown.value = this.filterManager.categoryFilter;
+      }
     }
+
+    // Populate form category dropdowns (edit, new, import)
+    const formDropdowns = [
+      { id: 'edit-tracking-category', defaultLabel: 'Auto-detect from title', defaultValue: '' },
+      { id: 'new-tracking-category', defaultLabel: 'Auto-detect from title', defaultValue: '' },
+      { id: 'import-category', defaultLabel: 'Auto-detect from title', defaultValue: 'auto' },
+    ];
+
+    formDropdowns.forEach(({ id, defaultLabel, defaultValue }) => {
+      const dropdown = document.getElementById(id);
+      if (!dropdown) return;
+
+      const currentValue = dropdown.value;
+      dropdown.innerHTML = '';
+
+      // Add default option
+      const defaultOption = document.createElement('option');
+      defaultOption.value = defaultValue;
+      defaultOption.textContent = defaultLabel;
+      dropdown.appendChild(defaultOption);
+
+      // Add each category
+      CATEGORIES.forEach((category) => {
+        const option = document.createElement('option');
+        option.value = category;
+        option.textContent = category;
+        dropdown.appendChild(option);
+      });
+
+      // Restore previous value if valid
+      if (currentValue) {
+        dropdown.value = currentValue;
+      }
+    });
   }
 
   /**
@@ -150,7 +179,7 @@ export class TrackingManager {
     try {
       // FilterManager handles loading from localStorage
       this.filterManager.loadState();
-      
+
       // Update UI elements
       this.filterManager.updateUI(
         'tracking-category-filter',
@@ -185,7 +214,7 @@ export class TrackingManager {
     try {
       // FilterManager handles saving to localStorage
       this.filterManager.saveState();
-      
+
       // Also save sort settings
       const filters = {
         category: this.filterManager.categoryFilter,
@@ -233,7 +262,7 @@ export class TrackingManager {
           const option = document.createElement('option');
           option.value = lang;
           option.textContent = lang;
-          if (lang === 'English' && languageSelect.id !== 'search-filter-language') {
+          if (lang === 'English') {
             option.selected = true;
           }
           languageSelect.appendChild(option);
@@ -365,30 +394,58 @@ export class TrackingManager {
     const uniquePeriodicals = {};
 
     results.forEach((result) => {
+      // For Internet Archive items, use the full title as-is (each item is unique)
+      // and get file count from metadata
+      const isInternetArchive = result.provider?.toLowerCase() === 'internet_archive';
+
       // Extract clean title from the result title/filename
       let cleanTitle = result.title;
 
-      // Extract periodical name from filename (e.g., "PC.Gamer.US.No.405..." -> "PC Gamer US")
-      const match = result.title.match(/^([A-Za-z0-9\.\s]+?)(?:\.No\.|\.Issue\.|\.E|\.201|\.202)/i);
-      if (match) {
-        cleanTitle = match[1].replace(/\./g, ' ').trim();
+      if (!isInternetArchive) {
+        // Extract periodical name from filename (e.g., "PC.Gamer.US.No.405..." -> "PC Gamer US")
+        const match = result.title.match(
+          /^([A-Za-z0-9\.\s]+?)(?:\.No\.|\.Issue\.|\.E|\.201|\.202)/i
+        );
+        if (match) {
+          cleanTitle = match[1].replace(/\./g, ' ').trim();
+        }
       }
 
-      // Normalize title for deduplication
-      const normalizedKey = cleanTitle.toLowerCase().replace(/\s+/g, ' ').trim();
+      // Normalize title for deduplication (for non-IA items)
+      // For IA items, use identifier to keep them separate
+      const normalizedKey = isInternetArchive
+        ? result.metadata?.identifier || result.title
+        : cleanTitle.toLowerCase().replace(/\s+/g, ' ').trim();
 
       if (!uniquePeriodicals[normalizedKey]) {
+        // Get file count from IA metadata if available
+        const iaItemCount = result.metadata?.item_count;
+        // Check if this is a collection archive (bundles of multiple issues)
+        const isCollection = result.metadata?.is_collection || false;
+
         uniquePeriodicals[normalizedKey] = {
           displayTitle: cleanTitle,
-          count: 0,
+          count: iaItemCount || 0,
           firstResult: result,
+          isInternetArchive: isInternetArchive,
+          hasItemCount: iaItemCount != null && iaItemCount > 0,
+          isCollection: isCollection,
         };
       }
-      uniquePeriodicals[normalizedKey].count++;
+      // Only increment count for non-IA items (grouping search results)
+      if (!isInternetArchive) {
+        uniquePeriodicals[normalizedKey].count++;
+      }
     });
 
-    // Convert to array and sort by count (most common first)
-    const periodicalsList = Object.values(uniquePeriodicals).sort((a, b) => b.count - a.count);
+    // Convert to array and sort: collections first, then by count (most common first)
+    const periodicalsList = Object.values(uniquePeriodicals).sort((a, b) => {
+      // Collections always come first
+      if (a.isCollection && !b.isCollection) return -1;
+      if (!a.isCollection && b.isCollection) return 1;
+      // Then sort by count
+      return b.count - a.count;
+    });
 
     container.innerHTML = '<h4>Select a Periodical Edition:</h4><div class="search-results"></div>';
     const resultsContainer = container.querySelector('.search-results');
@@ -400,12 +457,36 @@ export class TrackingManager {
       const div = document.createElement('div');
       div.className = CSS_CLASSES.RESULT_ITEM;
 
+      // For IA items, show file count or indicate it needs to be fetched
+      let countDisplay;
+      if (periodical.isInternetArchive) {
+        if (periodical.hasItemCount) {
+          countDisplay = `<strong>Files:</strong> ${periodical.count}`;
+        } else {
+          countDisplay =
+            '<strong>Files:</strong> <span class="ia-file-count" data-identifier="' +
+            (result.metadata?.identifier || '') +
+            '">Loading...</span>';
+        }
+      } else {
+        countDisplay = `<strong>Available Issues:</strong> ${periodical.count}`;
+      }
+
+      // Show provider badge for IA items
+      const providerBadge = periodical.isInternetArchive
+        ? '<span class="provider-badge ia-badge">🏛️ Internet Archive</span>'
+        : '';
+
+      // Show collection badge for collection archives
+      const collectionBadge = periodical.isCollection
+        ? '<span class="provider-badge collection-badge">📦 Collection</span>'
+        : '';
+
       div.innerHTML = `
         <div class="result-info">
           <h5 class="result-title">${periodical.displayTitle}</h5>
-          <p class="result-detail">
-            <strong>Available Issues:</strong> ${periodical.count}
-          </p>
+          ${collectionBadge}${providerBadge}
+          <p class="result-detail">${countDisplay}</p>
           ${publisher ? `<p class="result-detail"><strong>Publisher:</strong> ${publisher}</p>` : ''}
         </div>
         <div class="result-select">→</div>
@@ -420,6 +501,43 @@ export class TrackingManager {
 
       resultsContainer.appendChild(div);
     });
+
+    // Fetch file counts for IA items that don't have them
+    this.fetchIAFileCounts();
+  }
+
+  /**
+   * Fetch file counts for Internet Archive items that are missing them
+   */
+  async fetchIAFileCounts() {
+    const fileCountElements = document.querySelectorAll('.ia-file-count');
+    if (fileCountElements.length === 0) return;
+
+    for (const element of fileCountElements) {
+      const identifier = element.dataset.identifier;
+      if (!identifier) {
+        element.textContent = '1+';
+        continue;
+      }
+
+      try {
+        // Fetch metadata from IA to get file count
+        const response = await fetch(`https://archive.org/metadata/${identifier}`);
+        if (response.ok) {
+          const metadata = await response.json();
+          const files = metadata.files || [];
+          // Count PDF files (Text PDF, Image Container PDF, etc.)
+          const pdfCount = files.filter(
+            (f) => f.format && (f.format.toLowerCase().includes('pdf') || f.format === 'Text PDF')
+          ).length;
+          element.textContent = pdfCount > 0 ? pdfCount : '1+';
+        } else {
+          element.textContent = '1+';
+        }
+      } catch {
+        element.textContent = '1+';
+      }
+    }
   }
 
   /**
@@ -516,7 +634,7 @@ export class TrackingManager {
     // Show a success message and scroll to the form
     UIUtils.showStatus(
       ELEMENT_IDS.TRACKING_STATUS,
-      `✓ Selected: ${result.title}. Review the fields below and click "Start Tracking".`,
+      `Selected: ${result.title}. Review the fields below and click "Start Tracking".`,
       'success'
     );
 
@@ -610,7 +728,7 @@ export class TrackingManager {
       const { field, order } = this.sortManager.getSortParams();
       const data = await APIHelper.executeWithErrorHandling(async () => {
         const response = await APIClient.authenticatedFetch(
-          `/api/periodicals/tracking?sort_by=${field}&sort_order=${order}`
+          `/api/periodicals/tracking?sort_by=${field}&sort_order=${order}&limit=${API_LIMITS.TRACKING_LIST}`
         );
         return await response.json();
       }, 'Tracking');
@@ -620,6 +738,17 @@ export class TrackingManager {
       // Store all tracked periodicals unfiltered
       this.allTracked = tracked;
       this.periodicalsLoaded = true;
+
+      // Fetch all stacks so empty stacks still appear in the UI
+      try {
+        const stacksData = await APIHelper.executeWithErrorHandling(async () => {
+          const resp = await APIClient.authenticatedFetch('/api/stacks');
+          return await resp.json();
+        }, 'Stacks');
+        this.allStacks = stacksData.stacks ?? [];
+      } catch {
+        this.allStacks = [];
+      }
 
       // Load unique languages for language filter
       await this.populateLanguageDropdown();
@@ -666,19 +795,193 @@ export class TrackingManager {
           <div class="empty-state-icon">📚</div>
           <h3>No Tracked Periodicals Found</h3>
           <p>No periodicals found${filterDesc}.</p>
-          ${!this.filterManager.hasActiveFilters() ? 
-            '<button onclick="openTrackNewPeriodicalModal()" class="btn-primary" style="margin-top: 16px;">📌 Track Your First Periodical</button>' : 
-            '<button onclick="clearTrackingFilters()" class="btn-secondary" style="margin-top: 16px;">✕ Clear Filters</button>'}
+          ${
+            !this.filterManager.hasActiveFilters()
+              ? '<button onclick="openTrackNewPeriodicalModal()" class="btn-primary" style="margin-top: 16px;">📌 Track Your First Periodical</button>'
+              : '<button onclick="clearTrackingFilters()" class="btn-secondary" style="margin-top: 16px;">✕ Clear Filters</button>'
+          }
         </div>
       `;
       return;
     }
 
-    filtered.forEach((trackingItem) => {
-      container.appendChild(this.createTrackedCard(trackingItem));
+    // Group items by stack while tracking first-seen position for sort interleaving
+    const stackGroups = new Map(); // stack_id -> { name, slug, items: [], firstIndex }
+    const ungrouped = []; // { trackingItem, index }
+
+    filtered.forEach((trackingItem, index) => {
+      if (trackingItem.stack_id && trackingItem.stack_name) {
+        if (!stackGroups.has(trackingItem.stack_id)) {
+          stackGroups.set(trackingItem.stack_id, {
+            name: trackingItem.stack_name,
+            slug: trackingItem.stack_slug,
+            description: trackingItem.stack_description || '',
+            categories: trackingItem.stack_categories || [],
+            items: [],
+            firstIndex: index,
+          });
+        }
+        stackGroups.get(trackingItem.stack_id).items.push(trackingItem);
+      } else {
+        ungrouped.push({ trackingItem, index });
+      }
     });
 
-    console.log(`[Tracking] Rendered ${filtered.length} of ${this.allTracked.length} tracked periodicals`);
+    // Inject empty stacks that have no members in the filtered tracking list
+    for (const stack of this.allStacks) {
+      if (!stackGroups.has(stack.id)) {
+        stackGroups.set(stack.id, {
+          name: stack.name,
+          slug: stack.slug,
+          description: stack.description || '',
+          categories: stack.categories || [],
+          items: [],
+          firstIndex: -1,
+        });
+      }
+    }
+
+    // Build a unified render list so stacks interleave with ungrouped items
+    // based on the server-side sort order (position of first member)
+    const renderItems = [];
+
+    stackGroups.forEach((group, stackId) => {
+      renderItems.push({ type: 'stack', stackId, group, sortIndex: group.firstIndex });
+    });
+
+    ungrouped.forEach(({ trackingItem, index }) => {
+      renderItems.push({ type: 'item', trackingItem, sortIndex: index });
+    });
+
+    // Sort: stacks at top only when sorting by title, otherwise interleave by sort order
+    const stacksOnTop = this.sortManager.field === 'title';
+    renderItems.sort((a, b) => {
+      if (stacksOnTop && a.type !== b.type) return a.type === 'stack' ? -1 : 1;
+      return a.sortIndex - b.sortIndex;
+    });
+
+    // Render in unified sorted order
+    renderItems.forEach((entry) => {
+      if (entry.type === 'stack') {
+        const { stackId, group } = entry;
+        const { name, slug, description, categories, items } = group;
+
+        const groupEl = document.createElement('div');
+        groupEl.className = 'stack-group';
+
+        // Collapsible header
+        const header = document.createElement('div');
+        header.className = 'stack-group-header';
+
+        // Check localStorage for collapsed state (default: collapsed)
+        const collapseKey = `stack-collapse-${stackId}`;
+        const isExpanded = localStorage.getItem(collapseKey) === 'expanded';
+        if (isExpanded) header.classList.add('expanded');
+
+        const totalIssues = items.reduce((sum, item) => sum + (item.library_count || 0), 0);
+        const totalFailed = items.reduce((sum, item) => sum + (item.failed_count || 0), 0);
+
+        const failedHtml =
+          totalFailed > 0
+            ? `<span class="stack-stat-failed">\u26a0\ufe0f ${totalFailed} failed</span>`
+            : '';
+
+        const descHtml = description
+          ? `<span class="stack-group-desc"> — ${description}</span>`
+          : '';
+
+        const categoryBadges = (categories || [])
+          .map((c) => `<span class="stack-category-badge">${c}</span>`)
+          .join('');
+
+        header.innerHTML = `
+          <button class="stack-toggle-btn" aria-label="Toggle stack">
+            <span class="stack-toggle-icon">${isExpanded ? '\u2212' : '+'}</span>
+          </button>
+          <div class="stack-group-info">
+            <div class="stack-group-title-row">
+              <span class="stack-group-name">${name}</span>${descHtml}
+              ${categoryBadges ? `<span class="stack-category-badges">${categoryBadges}</span>` : ''}
+            </div>
+            <div class="stack-group-meta">
+              <span class="meta-item">\ud83d\udcc1 ${items.length} periodical${items.length !== 1 ? 's' : ''}</span>
+              <span class="meta-item">\ud83d\udcda ${totalIssues} issue${totalIssues !== 1 ? 's' : ''}</span>
+              ${failedHtml}
+            </div>
+          </div>
+          <div class="tracked-card-buttons">
+            <button class="btn-icon stack-edit-btn" title="Edit stack">\u270f\ufe0f</button>
+            <button class="btn-icon stack-assign-btn" title="Manage members">\ud83d\udccb</button>
+            <button class="btn-icon stack-search-btn" title="Search for issues">\ud83d\udd0d</button>
+            <button class="btn-icon btn-danger stack-delete-btn" title="Delete stack">\ud83d\uddd1\ufe0f</button>
+          </div>
+        `;
+
+        // Header click toggles collapse (but not on action buttons)
+        header.onclick = (e) => {
+          if (e.target.closest('.tracked-card-buttons')) return;
+          if (e.target.closest('.stack-toggle-btn')) {
+            header.classList.toggle('expanded');
+            const nowExpanded = header.classList.contains('expanded');
+            header.querySelector('.stack-toggle-icon').textContent = nowExpanded ? '\u2212' : '+';
+            localStorage.setItem(collapseKey, nowExpanded ? 'expanded' : 'collapsed');
+            return;
+          }
+          header.classList.toggle('expanded');
+          const nowExpanded = header.classList.contains('expanded');
+          header.querySelector('.stack-toggle-icon').textContent = nowExpanded ? '\u2212' : '+';
+          localStorage.setItem(collapseKey, nowExpanded ? 'expanded' : 'collapsed');
+        };
+
+        // Action button click handlers
+        const stackData = {
+          id: stackId,
+          name,
+          slug,
+          description,
+          categories,
+          member_count: items.length,
+        };
+
+        header.querySelector('.stack-edit-btn').addEventListener('click', (e) => {
+          e.stopPropagation();
+          stacks.openEditStackModal(stackData);
+        });
+
+        header.querySelector('.stack-assign-btn').addEventListener('click', (e) => {
+          e.stopPropagation();
+          stacks.openAssignModal(stackData);
+        });
+
+        header.querySelector('.stack-search-btn').addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.searchStackItems(name, items);
+        });
+
+        header.querySelector('.stack-delete-btn').addEventListener('click', (e) => {
+          e.stopPropagation();
+          stacks.openDeleteStackModal(stackData);
+        });
+
+        groupEl.appendChild(header);
+
+        // Items container
+        const itemsContainer = document.createElement('div');
+        itemsContainer.className = 'stack-group-items';
+        items.forEach((trackingItem) => {
+          itemsContainer.appendChild(this.createTrackedCard(trackingItem));
+        });
+        groupEl.appendChild(itemsContainer);
+
+        container.appendChild(groupEl);
+      } else {
+        container.appendChild(this.createTrackedCard(entry.trackingItem));
+      }
+    });
+
+    console.log(
+      `[Tracking] Rendered ${stackGroups.size} stack groups + ${ungrouped.length} ungrouped (${filtered.length} total)`
+    );
   }
 
   /**
@@ -813,7 +1116,7 @@ export class TrackingManager {
         : '';
     const failedStats =
       failedCount > 0
-        ? `<span class="failed-count" style="color: var(--status-pending); cursor: pointer;" data-tracking-id="${id}" title="Click to view failed downloads">\u26A0\uFE0F ${failedCount} failed</span>`
+        ? `<span class="failed-count" style="color: var(--text-secondary); cursor: pointer;" data-tracking-id="${id}" title="Click to view failed downloads">\u26A0\uFE0F ${failedCount} failed</span>`
         : '';
 
     const checkboxHtml = this.mergeMode
@@ -824,7 +1127,7 @@ export class TrackingManager {
       ${checkboxHtml}
       <div class="tracked-card-main">
         <div class="tracked-card-header">
-          <h5>${title}</h5>
+          <h5>${escapeHtml(title)}</h5>
           ${trackingBadge}
         </div>
         <div class="tracked-card-meta">
@@ -1014,6 +1317,7 @@ export class TrackingManager {
         document.getElementById('edit-tracking-country').value = t.country || '';
         document.getElementById('edit-tracking-download-category').value =
           t.download_category || '';
+        document.getElementById('edit-tracking-search-aliases').value = t.search_aliases || '';
 
         // Set tracking mode
         let mode = 'none';
@@ -1072,6 +1376,261 @@ export class TrackingManager {
   }
 
   /**
+   * Search all items in a stack sequentially, showing progress in the search modal
+   */
+  async searchStackItems(stackName, items) {
+    const issuesContent = document.getElementById('search-issues-content');
+    document.getElementById(ELEMENT_IDS.SEARCH_ISSUES_MODAL).classList.remove(CSS_CLASSES.HIDDEN);
+
+    // Reset download state for this search session
+    this.stackSearchResults = new Map();
+
+    // Build progress UI
+    issuesContent.innerHTML = `
+      <div class="search-summary">
+        <h3>Searching stack: "${stackName}"</h3>
+        <p style="color: var(--text-secondary); margin-top: 4px;">Searching ${items.length} tracked item${items.length !== 1 ? 's' : ''}...</p>
+      </div>
+      <div id="stack-search-rows" style="max-height: 70vh; overflow-y: auto;"></div>
+      <div id="stack-search-done" class="hidden" style="margin-top: 16px;"></div>`;
+
+    const rowsContainer = document.getElementById('stack-search-rows');
+    items.forEach((item, i) => {
+      const row = document.createElement('div');
+      row.className = 'stack-search-row';
+      row.id = `stack-sr-${i}`;
+      row.innerHTML = `
+        <div class="stack-search-row-status" id="stack-sr-status-${i}">\u23f3</div>
+        <div class="stack-search-row-title">${item.title}${item.language && item.language !== 'English' ? ` <span class="language-badge" style="font-size:9px;padding:1px 6px;margin:0">${item.language}</span>` : ''}</div>
+        <div class="stack-search-row-actions" id="stack-sr-actions-${i}"></div>
+        <div class="stack-search-row-result" id="stack-sr-result-${i}">Waiting...</div>`;
+      rowsContainer.appendChild(row);
+    });
+
+    let totalAvailable = 0;
+    let totalInLibrary = 0;
+    let totalErrors = 0;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const statusEl = document.getElementById(`stack-sr-status-${i}`);
+      const resultEl = document.getElementById(`stack-sr-result-${i}`);
+      const actionsEl = document.getElementById(`stack-sr-actions-${i}`);
+      const rowEl = document.getElementById(`stack-sr-${i}`);
+
+      statusEl.textContent = '\ud83d\udd04';
+      resultEl.textContent = 'Searching...';
+      rowEl.classList.add('searching');
+
+      try {
+        const params = new URLSearchParams();
+        params.append('query', item.title);
+        params.append('tracking_id', item.id);
+        if (item.language) params.append('language', item.language);
+        if (item.country) params.append('country', item.country);
+        if (item.category) params.append('category', item.category);
+
+        const response = await APIClient.authenticatedFetch(
+          `/api/periodicals/search-providers?${params.toString()}`,
+          { method: 'POST' }
+        );
+        const data = await response.json();
+        rowEl.classList.remove('searching');
+
+        if (data.found && data.results) {
+          const inLib = data.results.filter(
+            (r) => r.status === 'in_library' || r.already_downloaded
+          ).length;
+          const availableIssues = data.results.filter(
+            (r) => r.status !== 'in_library' && !r.already_downloaded && !r.download_failed
+          );
+          const available = availableIssues.length;
+          totalAvailable += available;
+          totalInLibrary += inLib;
+
+          if (available > 0) {
+            // Store for bulk download
+            this.stackSearchResults.set(i, {
+              trackingId: item.id,
+              availableIssues: availableIssues
+                .map((r) => ({
+                  title: r.title,
+                  url: r.url || r.download_url || r.nzb_url || r.link,
+                  provider: r.provider || 'newsnab',
+                }))
+                .filter((issue) => issue.url),
+            });
+
+            statusEl.textContent = '\ud83d\udce5';
+            resultEl.innerHTML = `<strong>${available}</strong> available, ${inLib} in library`;
+            actionsEl.innerHTML = `<button class="stack-search-dl-btn" onclick="downloadStackSearchMember(${i})" title="Download ${available} issues">\u2b07 ${available}</button>`;
+            rowEl.classList.add('has-results');
+          } else {
+            statusEl.textContent = '\u2705';
+            resultEl.textContent = `${inLib} in library, nothing new`;
+            rowEl.classList.add('complete');
+          }
+        } else {
+          statusEl.textContent = '\u2796';
+          resultEl.textContent = 'No results';
+          rowEl.classList.add('complete');
+        }
+      } catch (err) {
+        console.error(`Stack search error for ${item.title}:`, err);
+        statusEl.textContent = '\u274c';
+        resultEl.textContent = 'Error';
+        rowEl.classList.remove('searching');
+        rowEl.classList.add('error');
+        totalErrors++;
+      }
+    }
+
+    // Show summary
+    const doneEl = document.getElementById('stack-search-done');
+    doneEl.classList.remove(CSS_CLASSES.HIDDEN);
+    let summaryHtml =
+      '<div class="stack-search-stats" style="display:flex;gap:16px;flex-wrap:wrap;font-size:14px;color:var(--text-secondary);">';
+    if (totalAvailable > 0) {
+      summaryHtml += `<span style="color:#22c55e;">\ud83d\udce5 <strong>${totalAvailable}</strong> new issue${totalAvailable !== 1 ? 's' : ''} available</span>`;
+    } else {
+      summaryHtml += '<span>\u2705 All up to date</span>';
+    }
+    summaryHtml += `<span>\ud83d\udcda <strong>${totalInLibrary}</strong> already in library</span>`;
+    if (totalErrors > 0) {
+      summaryHtml += `<span style="color:var(--error-color);">\u274c ${totalErrors} error${totalErrors !== 1 ? 's' : ''}</span>`;
+    }
+    summaryHtml += '</div>';
+    if (totalAvailable > 0) {
+      summaryHtml += `<div style="margin-top:10px;"><button class="stack-search-dl-all-btn" onclick="downloadAllStackSearchIssues()" id="stack-sr-dl-all">\u2b07 Download All ${totalAvailable} Issues</button></div>`;
+    }
+    doneEl.innerHTML = summaryHtml;
+  }
+
+  /**
+   * Download available issues for a single member from stack search results
+   *
+   * @param {number} memberIdx - Index of the member in the search results
+   * @returns {Promise<void>}
+   */
+  async downloadStackSearchMember(memberIdx) {
+    const entry = this.stackSearchResults.get(memberIdx);
+    if (!entry || entry.availableIssues.length === 0) return;
+
+    const btn = document.querySelector(`#stack-sr-actions-${memberIdx} .stack-search-dl-btn`);
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '\u23f3';
+    }
+
+    try {
+      const response = await APIClient.authenticatedFetch('/api/downloads/batch-issues', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tracking_id: entry.trackingId,
+          issues: entry.availableIssues,
+        }),
+      });
+      const data = await response.json();
+
+      const parts = [];
+      if (data.submitted > 0) parts.push(`${data.submitted} sent`);
+      if (data.queued > 0) parts.push(`${data.queued} queued`);
+      if (data.skipped > 0) parts.push(`${data.skipped} skipped`);
+      if (data.failed > 0) parts.push(`${data.failed} failed`);
+
+      if (btn) {
+        const hasErrors = data.failed > 0;
+        btn.textContent = hasErrors ? '\u26a0\ufe0f' : '\u2705';
+        btn.title = parts.join(', ');
+        btn.classList.add(hasErrors ? 'dl-warning' : 'dl-done');
+      }
+
+      this.stackSearchResults.delete(memberIdx);
+    } catch (err) {
+      console.error(`Download error for stack member ${memberIdx}:`, err);
+      if (btn) {
+        btn.textContent = '\u274c';
+        btn.title = err.message;
+        btn.disabled = false;
+      }
+    }
+  }
+
+  /**
+   * Download all available issues across all members from stack search results
+   *
+   * @returns {Promise<void>}
+   */
+  async downloadAllStackSearchIssues() {
+    const dlAllBtn = document.getElementById('stack-sr-dl-all');
+    if (dlAllBtn) {
+      dlAllBtn.disabled = true;
+      dlAllBtn.textContent = '\u23f3 Downloading...';
+    }
+
+    let totalSubmitted = 0;
+    let totalQueued = 0;
+    let totalSkipped = 0;
+    let totalFailed = 0;
+
+    const entries = [...this.stackSearchResults.entries()];
+    for (const [idx, entry] of entries) {
+      const btn = document.querySelector(`#stack-sr-actions-${idx} .stack-search-dl-btn`);
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = '\u23f3';
+      }
+
+      try {
+        const response = await APIClient.authenticatedFetch('/api/downloads/batch-issues', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tracking_id: entry.trackingId,
+            issues: entry.availableIssues,
+          }),
+        });
+        const data = await response.json();
+
+        totalSubmitted += data.submitted || 0;
+        totalQueued += data.queued || 0;
+        totalSkipped += data.skipped || 0;
+        totalFailed += data.failed || 0;
+
+        if (btn) {
+          const hasErrors = data.failed > 0;
+          btn.textContent = hasErrors ? '\u26a0\ufe0f' : '\u2705';
+          btn.classList.add(hasErrors ? 'dl-warning' : 'dl-done');
+        }
+
+        this.stackSearchResults.delete(idx);
+      } catch (err) {
+        console.error(`Download error for stack member:`, err);
+        totalFailed += entry.availableIssues.length;
+        if (btn) {
+          btn.textContent = '\u274c';
+          btn.disabled = false;
+        }
+      }
+    }
+
+    if (dlAllBtn) {
+      const parts = [];
+      if (totalSubmitted > 0) parts.push(`${totalSubmitted} sent`);
+      if (totalQueued > 0) parts.push(`${totalQueued} queued`);
+      if (totalSkipped > 0) parts.push(`${totalSkipped} skipped`);
+      if (totalFailed > 0) parts.push(`${totalFailed} failed`);
+
+      const hasErrors = totalFailed > 0;
+      dlAllBtn.textContent = hasErrors
+        ? `\u26a0\ufe0f ${parts.join(', ')}`
+        : `\u2705 ${parts.join(', ')}`;
+      dlAllBtn.classList.add(hasErrors ? 'dl-warning' : 'dl-done');
+    }
+  }
+
+  /**
    * Search for issues of a tracked periodical
    */
   async searchForIssues(trackingId, title, language = null, country = null, category = null) {
@@ -1107,14 +1666,14 @@ export class TrackingManager {
       if (data.found && data.results.length > 0) {
         // Parse and curate results first to get deduplicated issues
         const curatedIssues = this.parseAndCurateIssues(data.results);
-        
+
         // Calculate accurate counts from deduplicated issues
         let libraryCount = 0;
         let availableCount = 0;
         let totalCount = 0;
-        
-        Object.values(curatedIssues).forEach(yearGroup => {
-          yearGroup.forEach(issue => {
+
+        Object.values(curatedIssues).forEach((yearGroup) => {
+          yearGroup.forEach((issue) => {
             totalCount++;
             if (issue.status === 'in_library') {
               libraryCount++;
@@ -1123,13 +1682,18 @@ export class TrackingManager {
             }
           });
         });
-        
+
         // Store summary stats for display
         this.libraryCount = libraryCount;
         this.availableCount = availableCount;
         this.totalCount = totalCount;
         this.fromCache = data.from_cache || false;
         this.cacheAgeDays = data.cache_age_days || 0;
+
+        // Store for re-rendering with filters
+        this.lastCuratedIssues = curatedIssues;
+        this.lastSearchTitle = title;
+        this.sourceFilter = 'all';
 
         this.displayCuratedIssues(curatedIssues, title);
       } else {
@@ -1147,20 +1711,43 @@ export class TrackingManager {
   }
 
   /**
-   * Parse and organize issues by year
+   * Parse and organize issues by year.
+   *
+   * Uses backend-provided ``parsed_title`` when available (preferred) so that
+   * title-parsing logic lives in one place (Python parsers).  Falls back to
+   * the local ``parseIssueTitle()`` for results that lack the field.
    */
   parseAndCurateIssues(results) {
     const _issues = [];
     const issueMap = new Map();
 
     results.forEach((result) => {
-      const parsed = this.parseIssueTitle(result.title);
+      // Prefer backend-parsed metadata; fall back to local parsing
+      let parsed = result.parsed_title
+        ? {
+            year: result.parsed_title.year ?? 0,
+            month: result.parsed_title.month ?? 0,
+            issue: result.parsed_title.issue ?? 0,
+            volume: result.parsed_title.volume ?? 0,
+            season: result.parsed_title.season ?? null,
+            isCollection: result.parsed_title.is_collection ?? false,
+            size: result.parsed_title.size ?? 0,
+            files: result.parsed_title.files ?? 0,
+          }
+        : this.parseIssueTitle(result.title);
+
       if (!parsed) {
         console.warn('[Tracking] Could not parse title:', result.title);
       }
       if (parsed) {
+        // Use volume from raw_metadata (backend parser) if title parsing missed it
+        if (!parsed.volume && result.raw_metadata && result.raw_metadata.volume) {
+          parsed.volume = result.raw_metadata.volume;
+        }
+
         // If month/issue not found in title, try to extract from publication_date
-        if (parsed.month === 0 && result.publication_date) {
+        // (but NOT for collections — they group under year 0)
+        if (parsed.month === 0 && !parsed.isCollection && result.publication_date) {
           try {
             const pubDate = new Date(result.publication_date);
             if (!isNaN(pubDate.getTime())) {
@@ -1171,9 +1758,13 @@ export class TrackingManager {
           }
         }
 
-        // Create unique key based on year, month, issue, and season
-        // Don't include title hash to allow proper deduplication across library/providers
-        const key = `${parsed.year}-${parsed.month}-${parsed.issue}-${parsed.season || ''}`;
+        // Create unique key based on year, month, issue, season, and volume.
+        // When month is known (> 0), exclude issue from the key — for monthly magazines the
+        // cumulative issue number (e.g. "#8") is cosmetic and should not prevent deduplication
+        // of library items and provider results that refer to the same calendar issue.
+        const vol = parsed.volume || 0;
+        const issueKey = (parsed.month > 0) ? 0 : (parsed.issue || 0);
+        const key = `${parsed.year}-${parsed.month}-${issueKey}-${parsed.season || ''}-v${vol}`;
 
         if (!issueMap.has(key)) {
           // Extract language variant from title if present
@@ -1196,7 +1787,7 @@ export class TrackingManager {
             variants: [result], // Store all variants
           });
         } else {
-          // Add to variants if it's a different language edition
+          // Add download variant if it's a different language version
           const existing = issueMap.get(key);
           existing.variants.push(result);
 
@@ -1220,14 +1811,15 @@ export class TrackingManager {
       }
     });
 
-    // Sort by year desc, month desc, issue desc
+    // Sort by year desc, volume desc, month desc, issue desc
     const sortedIssues = Array.from(issueMap.values()).sort((a, b) => {
       if (b.year !== a.year) return b.year - a.year;
+      if ((b.volume || 0) !== (a.volume || 0)) return (b.volume || 0) - (a.volume || 0);
       if (b.month !== a.month) return b.month - a.month;
       return b.issue - a.issue;
     });
 
-    // Group by year
+    // Group by year (volume-only items go under year 0)
     const grouped = {};
     sortedIssues.forEach((issue) => {
       if (!grouped[issue.year]) {
@@ -1240,6 +1832,56 @@ export class TrackingManager {
   }
 
   /**
+   * Format provider name as a styled badge
+   * @param {string} provider - Provider type/name
+   * @returns {string} HTML for provider badge
+   */
+  formatProviderBadge(provider) {
+    if (!provider) return '';
+
+    const providerLower = provider.toLowerCase();
+
+    // Provider-specific styling
+    const providerStyles = {
+      internet_archive: {
+        icon: '🏛️',
+        label: 'Internet Archive',
+        color: '#428bca',
+        bgColor: '#e8f4fc',
+      },
+      newsnab: {
+        icon: '📰',
+        label: 'Newsnab',
+        color: '#5cb85c',
+        bgColor: '#e8f5e9',
+      },
+      rss: {
+        icon: '📡',
+        label: 'RSS',
+        color: '#f0ad4e',
+        bgColor: '#fff8e1',
+      },
+    };
+
+    const style = providerStyles[providerLower] || {
+      icon: '🔗',
+      label: provider,
+      color: '#6c757d',
+      bgColor: '#f5f5f5',
+    };
+
+    return `<span style="
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: ${style.bgColor};
+      color: ${style.color};
+      font-weight: 500;
+      font-size: 9px;
+    ">${style.icon} ${style.label}</span>`;
+  }
+
+  /**
    * Parse issue title to extract year, month, issue number, season
    */
   parseIssueTitle(title) {
@@ -1247,6 +1889,7 @@ export class TrackingManager {
     let issue = null;
     let month = null;
     let season = null;
+    let volume = null;
 
     // First, try to extract season
     const seasonMatch = title.match(/\b(Spring|Summer|Fall|Autumn|Winter)\b/i);
@@ -1321,8 +1964,47 @@ export class TrackingManager {
       }
     }
 
+    // Try to extract volume number
+    const volExtract = title.match(/\b(?:vol\.?|volume|v)[\s]*(\d+)\b/i);
+    if (volExtract) {
+      volume = parseInt(volExtract[1]);
+    }
+
     if (year) {
-      return { year, issue: issue || 0, month: month || 0, season: season || null };
+      return {
+        year,
+        issue: issue || 0,
+        month: month || 0,
+        season: season || null,
+        volume: volume || 0,
+      };
+    }
+
+    // Fallback: Handle volume-only titles (e.g., "Magazine v12", "Title Vol.5")
+    if (!year) {
+      const volMatch = title.match(/\b(?:vol\.?|volume|v)[\s]*(\d+)\b/i);
+      if (volMatch) {
+        volume = parseInt(volMatch[1]);
+        // Also try to extract issue number
+        const issueMatch = title.match(/(?:issue|no\.?|#)\s*(\d+)/i);
+        if (issueMatch) {
+          issue = parseInt(issueMatch[1]);
+        }
+        return { year: 0, issue: issue || 0, month: 0, season: null, volume };
+      }
+
+      // Try to extract number from set/collection/pack
+      const setMatch = title.match(/(?:Set|Collection|Pack|Part)[\s._-]*(\d+)/i);
+      if (setMatch) {
+        const setNumber = parseInt(setMatch[1]);
+        return { year: 0, issue: setNumber, month: 0, season: null, isCollection: true, volume: 0 };
+      }
+
+      // Handle collections without numbers (e.g., "Full Collection", "Complete Collection")
+      const collectionMatch = title.match(/\b(Full|Complete|Entire)\s+(Collection|Archive|Run)\b/i);
+      if (collectionMatch) {
+        return { year: 0, issue: 0, month: 0, season: null, isCollection: true, volume: 0 };
+      }
     }
 
     return null;
@@ -1386,46 +2068,146 @@ export class TrackingManager {
     // Store available issues for bulk download
     this.availableIssues = [];
 
+    // Collect unique providers from available items for filter buttons
+    const allProviders = new Set();
+    Object.values(groupedByYear).forEach((yearGroup) => {
+      yearGroup.forEach((issue) => {
+        if (issue.status !== 'in_library' && issue.variants) {
+          issue.variants.forEach((v) => {
+            if (v.provider && v.provider !== 'Library') {
+              allProviders.add(v.provider.toLowerCase());
+            }
+          });
+        }
+      });
+    });
+
+    // Provider display config
+    const providerLabels = {
+      newsnab: { icon: '📰', label: 'Newsnab' },
+      internet_archive: { icon: '🏛️', label: 'Internet Archive' },
+      rss: { icon: '📡', label: 'RSS' },
+    };
+
+    // Build source filter buttons (only show if more than one provider)
+    let sourceFilterHtml = '';
+    if (allProviders.size > 1) {
+      const filterBtns = [
+        `<button onclick="filterSearchBySource('all')" class="sort-btn${this.sourceFilter === 'all' ? ' active' : ''}">All</button>`,
+      ];
+      allProviders.forEach((provider) => {
+        const cfg = providerLabels[provider] || { icon: '🔗', label: provider };
+        filterBtns.push(
+          `<button onclick="filterSearchBySource('${provider}')" class="sort-btn${this.sourceFilter === provider ? ' active' : ''}">${cfg.icon} ${cfg.label}</button>`
+        );
+      });
+      sourceFilterHtml = `
+        <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; align-items: center;">
+          <span style="font-size: 0.85em; color: var(--text-secondary); margin-right: 4px;">Source:</span>
+          ${filterBtns.join('')}
+        </div>`;
+    }
+
+    // Calculate filtered counts
+    let filteredLibraryCount = 0;
+    let filteredAvailableCount = 0;
+    let filteredTotalCount = 0;
+
+    Object.values(groupedByYear).forEach((yearGroup) => {
+      yearGroup.forEach((issue) => {
+        // Check if issue passes the source filter
+        const passesFilter =
+          this.sourceFilter === 'all' || this.issueMatchesSourceFilter(issue, this.sourceFilter);
+        if (!passesFilter) return;
+
+        filteredTotalCount++;
+        if (issue.status === 'in_library') {
+          filteredLibraryCount++;
+        } else if (issue.status === 'available') {
+          filteredAvailableCount++;
+        }
+      });
+    });
+
     let html = `
       <div class="search-summary">
         <h3>Search Results for "${title}"${cacheInfo}</h3>
         <div class="summary-stats">
-          <span class="stat">📚 <strong>${this.libraryCount || 0}</strong> in library</span>
-          <span class="stat${this.availableCount > 0 ? ' clickable-stat' : ''}" ${this.availableCount > 0 ? 'onclick="downloadAllAvailable()" title="Click to download all available issues"' : ''}>📥 <strong>${this.availableCount || 0}</strong> available</span>
-          <span class="stat">🎯 <strong>${this.totalCount || 0}</strong> total</span>
+          <span class="stat">📚 <strong>${filteredLibraryCount}</strong> in library</span>
+          <span class="stat${filteredAvailableCount > 0 ? ' clickable-stat' : ''}" ${filteredAvailableCount > 0 ? 'onclick="downloadAllAvailable()" title="Click to download all available issues"' : ''}>📥 <strong>${filteredAvailableCount}</strong> available</span>
+          <span class="stat">🎯 <strong>${filteredTotalCount}</strong> total</span>
         </div>
+        ${sourceFilterHtml}
       </div>
       <div style="max-height: 70vh; overflow-y: auto;">`;
 
     const years = Object.keys(groupedByYear).sort((a, b) => b - a);
 
     years.forEach((year) => {
-      const issues = groupedByYear[year];
+      const allIssues = groupedByYear[year];
+
+      // Filter issues by source
+      const issues =
+        this.sourceFilter === 'all'
+          ? allIssues
+          : allIssues.filter((issue) => this.issueMatchesSourceFilter(issue, this.sourceFilter));
+
+      if (issues.length === 0) return; // Skip empty year groups after filtering
+
+      // Display label for year groups
+      let yearLabel;
+      if (year === '0') {
+        const hasVolumes = issues.some((i) => i.volume > 0 && !i.isCollection);
+        const hasCollections = issues.some((i) => i.isCollection);
+        if (hasVolumes && hasCollections) yearLabel = '📦 Volumes & Collections';
+        else if (hasVolumes) yearLabel = '📦 Volumes';
+        else yearLabel = '📦 Collections';
+      } else {
+        yearLabel = `📅 ${year}`;
+      }
       html += `<div style="margin-bottom: 20px;">
-        <h4 style="color: var(--primary-color); margin-bottom: 10px;">📅 ${year}</h4>
+        <h4 style="color: var(--primary-color); margin-bottom: 10px;">${yearLabel}</h4>
         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px;">`;
 
       issues.forEach((issue) => {
         // Create display label based on available information
         let displayLabel;
 
+        // Priority 0: Collection/Set (if isCollection flag is set)
+        if (issue.isCollection && issue.issue > 0) {
+          displayLabel = `Set #${issue.issue}`;
+        } else if (issue.isCollection) {
+          displayLabel = 'Collection';
+        }
         // Priority 1: Season (if present)
-        if (issue.season) {
+        else if (issue.season) {
           displayLabel = issue.season;
         }
-        // Priority 2: Month and Issue
+        // Priority 2: Volume with issue (e.g., "Vol 5 #12")
+        else if (issue.volume > 0 && issue.issue > 0) {
+          displayLabel = `Vol ${issue.volume} #${issue.issue}`;
+        }
+        // Priority 3: Volume with month (e.g., "Vol 5 Jan")
+        else if (issue.volume > 0 && issue.month > 0) {
+          displayLabel = `Vol ${issue.volume} ${NUMBER_TO_MONTH[issue.month]}`;
+        }
+        // Priority 4: Volume only (e.g., "Vol 12")
+        else if (issue.volume > 0) {
+          displayLabel = `Vol ${issue.volume}`;
+        }
+        // Priority 5: Month and Issue
         else if (issue.month > 0 && issue.issue > 0) {
           displayLabel = `${NUMBER_TO_MONTH[issue.month]} #${issue.issue}`;
         }
-        // Priority 3: Month only
+        // Priority 6: Month only
         else if (issue.month > 0) {
           displayLabel = NUMBER_TO_MONTH[issue.month];
         }
-        // Priority 4: Issue number only
+        // Priority 7: Issue number only
         else if (issue.issue > 0) {
           displayLabel = `#${issue.issue}`;
         }
-        // Fallback: Just show year (shouldn't happen often now)
+        // Fallback: Just show year
         else {
           displayLabel = `${issue.year}`;
         }
@@ -1434,6 +2216,45 @@ export class TrackingManager {
         const status = issue.status || 'available'; // 'in_library', 'available', 'failed'
         const isLibraryItem = status === 'in_library';
         const hasFailed = status === 'failed';
+
+        // Calculate age of newest NZB for availability indication
+        // Skip age badge for Internet Archive items (they're permanently archived, age doesn't affect availability)
+        let newestAge = '';
+        let ageColorClass = '';
+        if (!isLibraryItem && issue.variants && issue.variants.length > 0) {
+          // Check if all variants are from Internet Archive - skip age badge if so
+          const allFromInternetArchive = issue.variants.every(
+            (v) => v.provider && v.provider.toLowerCase() === 'internet_archive'
+          );
+
+          if (!allFromInternetArchive) {
+            // Find the newest publication_date among non-IA variants
+            const variantsWithDates = issue.variants.filter(
+              (v) => v.publication_date && v.provider?.toLowerCase() !== 'internet_archive'
+            );
+            if (variantsWithDates.length > 0) {
+              const newestVariant = variantsWithDates.reduce((newest, v) => {
+                const vDate = new Date(v.publication_date);
+                const nDate = new Date(newest.publication_date);
+                return vDate > nDate ? v : newest;
+              });
+              newestAge = formatRelativeAge(newestVariant.publication_date);
+
+              // Color code by age: green < 7 days, yellow 7-30 days, orange 30-90 days, red > 90 days
+              const ageDate = new Date(newestVariant.publication_date);
+              const ageDays = Math.floor((new Date() - ageDate) / (1000 * 60 * 60 * 24));
+              if (ageDays <= 7) {
+                ageColorClass = 'age-fresh'; // Green - excellent retention
+              } else if (ageDays <= 30) {
+                ageColorClass = 'age-good'; // Yellow-green - good retention
+              } else if (ageDays <= 90) {
+                ageColorClass = 'age-moderate'; // Orange - moderate retention
+              } else {
+                ageColorClass = 'age-old'; // Red - may have retention issues
+              }
+            }
+          }
+        }
 
         // Status-based styling with color-coded left borders
         let backgroundColor, borderColor, opacity, textColor, statusIcon, statusText;
@@ -1461,24 +2282,73 @@ export class TrackingManager {
           statusText = 'Available';
         }
 
-        const providerDisplay = !isLibraryItem
-          ? `<div style="font-size: 10px; color: var(--text-secondary); margin-top: 6px;">${issue.provider || ''}</div>`
-          : '';
+        let providerDisplay = '';
+        if (isLibraryItem) {
+          // Show provider badges for non-library sources only
+          const providers = [
+            ...new Set(
+              (issue.variants || [])
+                .map((v) => v.provider)
+                .filter(Boolean)
+                .map((p) => p.toLowerCase())
+                .filter((p) => p !== 'library')
+            ),
+          ];
+          if (providers.length > 0) {
+            providerDisplay = `<div style="font-size: 10px; margin-top: 6px;">${providers.map((p) => this.formatProviderBadge(p)).join(' ')}</div>`;
+          }
+        } else {
+          providerDisplay = `<div style="font-size: 10px; margin-top: 6px;">${this.formatProviderBadge(issue.provider)}</div>`;
+        }
+
+        // Filter variants by source when a filter is active
+        const filteredVariants =
+          this.sourceFilter !== 'all' && issue.variants
+            ? issue.variants.filter(
+                (v) => v.provider && v.provider.toLowerCase() === this.sourceFilter
+              )
+            : issue.variants || [];
+        const displayVariants =
+          filteredVariants.length > 0 ? filteredVariants : issue.variants || [];
 
         // Show language variants badge if multiple variants exist
-        const hasMultipleVariants = issue.variants && issue.variants.length > 1;
+        // For library items, only count downloadable (provider) variants
+        const providerVariantCount = isLibraryItem
+          ? displayVariants.filter(
+              (v) => v.status !== 'in_library' && v.from_provider !== false && v.url
+            ).length
+          : displayVariants.length;
+        const hasMultipleVariants = isLibraryItem
+          ? providerVariantCount > 0
+          : displayVariants.length > 1;
         const variantsBadge = hasMultipleVariants
-          ? `<div style="font-size: 10px; margin-top: 6px; color: var(--primary-color); font-weight: 600;">🌍 ${issue.variants.length} variants</div>`
-          : issue.language
-            ? `<div style="font-size: 10px; margin-top: 6px; color: var(--text-secondary);">${issue.language}</div>`
+          ? `<div style="font-size: 10px; margin-top: 6px; color: var(--primary-color); font-weight: 600;">📥 ${providerVariantCount} variant${providerVariantCount !== 1 ? 's' : ''}</div>`
+          : isLibraryItem
+            ? ''
+            : issue.language
+              ? `<div style="font-size: 10px; margin-top: 6px; color: var(--text-secondary);">${issue.language}</div>`
+              : '';
+
+        // Age badge for available/failed issues (not library items)
+        const ageBadge =
+          newestAge && !isLibraryItem
+            ? `<div class="issue-age-badge ${ageColorClass}" title="NZB posted ${newestAge} ago - newer is better for Usenet retention">⏱️ ${newestAge}</div>`
             : '';
+
+        // Size badge — show file size (and file count for collections)
+        let sizeBadge = '';
+        const sizeStr = formatFileSize(issue.size);
+        if (sizeStr) {
+          const filesStr = issue.files > 1 ? ` · ${issue.files} files` : '';
+          sizeBadge = `<div style="font-size: 10px; margin-top: 4px; color: var(--text-secondary);" title="Download size">💾 ${sizeStr}${filesStr}</div>`;
+        }
 
         let cardHtml = `<div style="
           padding: 12px;
           background: ${backgroundColor};
           border-radius: 8px;
           text-align: center;
-          cursor: ${isLibraryItem ? 'default' : 'pointer'};
+          cursor: pointer;
           transition: all 0.2s;
           border-left: 4px solid ${borderColor};
           opacity: ${opacity};
@@ -1486,21 +2356,26 @@ export class TrackingManager {
           box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         "`;
 
-        // Store variants globally and add click handler for all non-library items
-        if (!isLibraryItem && issue.variants && issue.variants.length > 0) {
-          const issueKey = `${issue.year}-${issue.month}-${issue.issue}`;
-          window.issueVariants = window.issueVariants || {};
-          window.issueVariants[issueKey] = issue.variants;
+        // Store variants globally for click handlers
+        const issueKey = `${issue.year}-${issue.month}-${issue.issue}`;
+        window.issueVariants = window.issueVariants || {};
+        window.issueVariants[issueKey] = displayVariants;
+
+        if (isLibraryItem) {
+          // Library items: show detail modal with original title and replacement options
+          cardHtml += ` onclick='showLibraryItemDetail("${issueKey}")'`;
+        } else if (displayVariants.length > 0) {
           cardHtml += ` onclick='selectIssueWithVariants("${issueKey}", ${issue.already_downloaded || false}, ${issue.download_failed || false})'`;
-          
+
           // Store available issues for bulk download
-          // Find first variant that hasn't failed
-          if (status === 'available' && issue.variants.length > 0) {
-            const firstNonFailedVariant = issue.variants.find(v => !v.download_failed) || issue.variants[0];
+          if (status === 'available' && displayVariants.length > 0) {
+            let candidates = displayVariants.filter((v) => !v.download_failed);
+            if (candidates.length === 0) candidates = displayVariants;
+
             this.availableIssues.push({
-              title: firstNonFailedVariant.title,
-              url: firstNonFailedVariant.url,
-              provider: firstNonFailedVariant.provider
+              title: candidates[0].title,
+              url: candidates[0].url,
+              provider: candidates[0].provider,
             });
           }
         }
@@ -1516,6 +2391,8 @@ export class TrackingManager {
             background: rgba(255,255,255,0.7);
           ">${statusIcon} ${statusText}</div>
           <div style="font-weight: 600; font-size: 14px;">${displayLabel}</div>
+          ${sizeBadge}
+          ${ageBadge}
           ${providerDisplay}
           ${variantsBadge}
         </div>`;
@@ -1528,6 +2405,32 @@ export class TrackingManager {
 
     html += `</div>`;
     issuesContent.innerHTML = html;
+  }
+
+  /**
+   * Check if an issue matches the given source filter.
+   * Library items always pass (they show regardless of source filter).
+   * Available/failed items pass if any variant matches the provider.
+   *
+   * @param {Object} issue - Curated issue object
+   * @param {string} source - Provider key (e.g., 'newsnab', 'internet_archive')
+   * @returns {boolean} Whether the issue should be shown
+   */
+  issueMatchesSourceFilter(issue, source) {
+    if (!issue.variants || issue.variants.length === 0) return false;
+    return issue.variants.some((v) => v.provider && v.provider.toLowerCase() === source);
+  }
+
+  /**
+   * Apply source filter and re-render search results
+   *
+   * @param {string} source - Provider key or 'all'
+   */
+  filterSearchBySource(source) {
+    this.sourceFilter = source;
+    if (this.lastCuratedIssues && this.lastSearchTitle) {
+      this.displayCuratedIssues(this.lastCuratedIssues, this.lastSearchTitle);
+    }
   }
 
   /**
@@ -1587,14 +2490,42 @@ export class TrackingManager {
 
     const searchError = document.getElementById('tracking-search-error');
     if (searchError) searchError.classList.add(CSS_CLASSES.HIDDEN);
+
+    const stackSelect = document.getElementById('new-tracking-stack');
+    if (stackSelect) stackSelect.value = '';
   }
 
   /**
    * Open track new periodical modal
    */
-  openTrackNewPeriodicalModal() {
+  async openTrackNewPeriodicalModal() {
     this.resetTracking();
     document.getElementById('track-new-periodical-modal').classList.remove(CSS_CLASSES.HIDDEN);
+    this.loadStacksDropdown();
+  }
+
+  /**
+   * Load available stacks into the new tracking modal dropdown
+   */
+  async loadStacksDropdown() {
+    const select = document.getElementById('new-tracking-stack');
+    if (!select) return;
+    select.innerHTML = '<option value="">No stack</option>';
+    try {
+      const response = await APIClient.authenticatedFetch('/api/stacks');
+      const data = await response.json();
+      const stacks = data.stacks || [];
+      if (stacks.length) {
+        stacks.forEach((stack) => {
+          const option = document.createElement('option');
+          option.value = stack.slug;
+          option.textContent = stack.name;
+          select.appendChild(option);
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load stacks for dropdown:', err);
+    }
   }
 
   /**
@@ -1639,6 +2570,7 @@ window.saveEditedTracking = async function () {
   const country = document.getElementById('edit-tracking-country').value;
   const mode = document.getElementById('edit-tracking-mode').value;
   const keepHistory = document.getElementById('edit-delete-from-client').checked;
+  const searchAliases = document.getElementById('edit-tracking-search-aliases').value.trim();
 
   // Get organization pattern from dropdown or custom input
   const patternSelect = document.getElementById('edit-tracking-pattern-select');
@@ -1674,6 +2606,7 @@ window.saveEditedTracking = async function () {
           track_new_only: mode === 'new',
           delete_from_client_on_completion: !keepHistory, // Inverted: checked = keep, unchecked = auto-remove
           organization_pattern: organizationPattern, // Send null if empty to use global default
+          search_aliases: searchAliases || null, // Comma-separated alternative search names
         });
         return await response.json();
       },
@@ -1722,6 +2655,54 @@ window.saveEditedTracking = async function () {
   }
 };
 
+/**
+ * Format a date as relative age (e.g., "2 days", "3 weeks", "1 month")
+ * @param {string|Date} date - The date to format
+ * @returns {string} Relative age string or empty if invalid
+ */
+function formatRelativeAge(date) {
+  if (!date) return '';
+  try {
+    const uploadDate = new Date(date);
+    if (isNaN(uploadDate.getTime())) return '';
+
+    const now = new Date();
+    const diffMs = now - uploadDate;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) return 'future';
+    if (diffDays === 0) return 'today';
+    if (diffDays === 1) return '1 day';
+    if (diffDays < 7) return `${diffDays} days`;
+    if (diffDays < 14) return '1 week';
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks`;
+    if (diffDays < 60) return '1 month';
+    if (diffDays < 365) return `${Math.floor(diffDays / 30)} months`;
+    if (diffDays < 730) return '1 year';
+    return `${Math.floor(diffDays / 365)} years`;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Format a file size in bytes to a human-readable string (KB, MB, GB).
+ *
+ * @param {number} bytes - Size in bytes
+ * @returns {string} Formatted size or empty string if 0/falsy
+ */
+function formatFileSize(bytes) {
+  if (!bytes || bytes <= 0) return '';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let i = 0;
+  let size = bytes;
+  while (size >= 1024 && i < units.length - 1) {
+    size /= 1024;
+    i++;
+  }
+  return `${size < 10 ? size.toFixed(1) : Math.round(size)} ${units[i]}`;
+}
+
 // Select and download issue with language variant selection
 window.selectIssueWithVariants = function (issueKey, alreadyDownloaded, hasFailed) {
   const variants = window.issueVariants[issueKey];
@@ -1744,11 +2725,18 @@ window.selectIssueWithVariants = function (issueKey, alreadyDownloaded, hasFaile
     return;
   }
 
+  // Sort variants by publication_date (newest first) for better Usenet availability
+  const sortedVariants = [...variants].sort((a, b) => {
+    const dateA = a.publication_date ? new Date(a.publication_date) : new Date(0);
+    const dateB = b.publication_date ? new Date(b.publication_date) : new Date(0);
+    return dateB - dateA; // Newest first
+  });
+
   // Multiple variants - show selection modal
-  const hasLibraryItem = alreadyDownloaded || variants.some((v) => v.already_downloaded);
+  const hasLibraryItem = alreadyDownloaded || sortedVariants.some((v) => v.already_downloaded);
   const modalDescription = hasLibraryItem
     ? 'Your downloaded variant is marked below. You can re-download from a different NZB source if needed:'
-    : 'Multiple NZB variants available for this issue:';
+    : 'Multiple NZB variants available for this issue (sorted by age, newest first):';
 
   const modalHTML = `
     <div id="language-variant-modal" class="modal" style="display: flex;">
@@ -1764,17 +2752,36 @@ window.selectIssueWithVariants = function (issueKey, alreadyDownloaded, hasFaile
   document.body.insertAdjacentHTML('beforeend', modalHTML);
 
   const optionsDiv = document.getElementById('variant-options');
-  variants.forEach((variant, index) => {
-    // Simple variant numbering since these are different NZB sources for the same file
-    const displayLabel = `Variant ${index + 1}`;
-
+  sortedVariants.forEach((variant, index) => {
     const isDownloaded = variant.already_downloaded || alreadyDownloaded;
     const downloadFailed = variant.download_failed || hasFailed || false;
-    const statusBadge = isDownloaded
-      ? ' <span class="variant-in-library">✓ In Library</span>'
-      : downloadFailed
-        ? ' <span class="variant-failed">✗ Failed</span>'
-        : '';
+
+    // Build status badges
+    let statusBadges = '';
+    if (isDownloaded) {
+      statusBadges += ' <span class="variant-in-library">✓ In Library</span>';
+    } else if (downloadFailed) {
+      statusBadges += ' <span class="variant-failed">✗ Failed</span>';
+    }
+
+    // Add age badge if we have publication_date
+    const age = formatRelativeAge(variant.publication_date);
+    const ageBadge = age ? `<span class="variant-age">${age} old</span>` : '';
+
+    // Size badge from raw_metadata or parsed_title
+    const variantSize =
+      (variant.raw_metadata && variant.raw_metadata.size) ||
+      (variant.parsed_title && variant.parsed_title.size) ||
+      0;
+    const variantSizeStr = formatFileSize(variantSize);
+    const sizeBadge = variantSizeStr
+      ? `<span class="variant-age" style="background: var(--surface-variant);">💾 ${variantSizeStr}</span>`
+      : '';
+
+    // Provider info
+    const providerInfo = variant.provider
+      ? `<span class="variant-provider">${variant.provider}</span>`
+      : '';
 
     const btn = document.createElement('button');
     // Different styling for re-download vs new download vs failed
@@ -1786,7 +2793,13 @@ window.selectIssueWithVariants = function (issueKey, alreadyDownloaded, hasFaile
       btn.className = 'btn-variant btn-variant-new';
     }
     btn.innerHTML = `
-      <div class="variant-label">${displayLabel}${statusBadge}</div>
+      <div class="variant-label">
+        <span class="variant-number">#${index + 1}</span>
+        ${ageBadge}
+        ${sizeBadge}
+        ${providerInfo}
+        ${statusBadges}
+      </div>
       <div class="variant-title">${variant.title}</div>
     `;
     btn.onclick = () => {
@@ -1806,6 +2819,336 @@ window.selectIssueWithVariants = function (issueKey, alreadyDownloaded, hasFaile
 window.closeLangVariantModal = function () {
   const modal = document.getElementById('language-variant-modal');
   if (modal) modal.remove();
+};
+
+/**
+ * Show detail modal for a library item with original import info and replacement options
+ *
+ * @param {string} issueKey - The issue key (year-month-issue)
+ */
+window.showLibraryItemDetail = function (issueKey) {
+  const variants = window.issueVariants[issueKey];
+  if (!variants || variants.length === 0) return;
+
+  // Separate library copies from downloadable provider variants
+  const libraryCopies = variants.filter(
+    (v) => v.status === 'in_library' || v.from_provider === false
+  );
+  const downloadableVariants = variants.filter(
+    (v) => v.status !== 'in_library' && v.from_provider !== false && v.url
+  );
+
+  // Build detail section for each library copy
+  let detailHtml = '';
+  libraryCopies.forEach((copy, index) => {
+    const metadata = copy.metadata || {};
+    const importedFrom = metadata.imported_from || 'Unknown';
+    const importDate = metadata.import_date
+      ? new Date(metadata.import_date).toLocaleDateString()
+      : '';
+    const filePath = copy.file_path || '';
+    const fileName = filePath ? filePath.split('/').pop() : '';
+
+    // Add separator between copies
+    if (index > 0) {
+      detailHtml += `<div style="border-top: 1px solid var(--border-color); margin: 12px 0;"></div>`;
+    }
+
+    // Copy header if multiple
+    if (libraryCopies.length > 1) {
+      detailHtml += `
+      <div style="font-size: 0.8em; color: var(--primary-color); font-weight: 600; margin-bottom: 8px;">Copy ${index + 1}</div>`;
+    }
+
+    detailHtml += `
+    <div style="margin-bottom: 16px;">
+      <div style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 4px;">Original Filename</div>
+      <div style="padding: 10px 12px; background: var(--surface-variant); border-radius: 6px; font-family: monospace; font-size: 0.9em; word-break: break-all;">${importedFrom}</div>
+    </div>`;
+
+    if (filePath) {
+      detailHtml += `
+      <div style="margin-bottom: 16px;">
+        <div style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 4px;">Current Path</div>
+        <div style="padding: 10px 12px; background: var(--surface-variant); border-radius: 6px; font-family: monospace; font-size: 0.85em; word-break: break-all;">${filePath}</div>
+      </div>`;
+    }
+
+    if (importDate) {
+      detailHtml += `
+      <div style="margin-bottom: 8px;">
+        <div style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 4px;">Imported</div>
+        <div style="font-size: 0.9em;">${importDate}</div>
+      </div>`;
+    }
+
+    // Delete button for each copy
+    const copyId = copy.library_item_id;
+    if (copyId) {
+      detailHtml += `
+      <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+        <button class="save-btn btn-cancel" style="font-size: 0.8em; padding: 4px 12px;"
+          onclick="moveLibraryCopy(${copyId}, '${issueKey}')">📦 Move to Tracking</button>
+        <button class="save-btn btn-delete" style="font-size: 0.8em; padding: 4px 12px;"
+          onclick="deleteLibraryCopy(${copyId}, '${issueKey}')">🗑️ Remove from Library</button>
+      </div>`;
+    }
+  });
+
+  // Build replacement options if available
+  let replacementHtml = '';
+  if (downloadableVariants.length > 0) {
+    const sorted = [...downloadableVariants].sort((a, b) => {
+      const dateA = a.publication_date ? new Date(a.publication_date) : new Date(0);
+      const dateB = b.publication_date ? new Date(b.publication_date) : new Date(0);
+      return dateB - dateA;
+    });
+
+    replacementHtml = `
+    <div style="border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 8px;">
+      <div style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 10px;">
+        Replace with a different version (${sorted.length} available):
+      </div>
+      <div id="library-replacement-options" style="display: flex; flex-direction: column; gap: 8px;"></div>
+    </div>`;
+  } else {
+    replacementHtml = `
+    <div style="border-top: 1px solid var(--border-color); padding-top: 12px; margin-top: 8px;">
+      <div style="font-size: 0.85em; color: var(--text-secondary); font-style: italic;">No replacement downloads available from providers.</div>
+    </div>`;
+  }
+
+  const modalHTML = `
+    <div id="library-detail-modal" class="modal" style="display: flex;">
+      <div class="modal-content" style="max-width: 550px;">
+        <span class="close" onclick="closeLibraryDetailModal()">&times;</span>
+        <h2 style="margin-bottom: 16px;">📚 Library Item</h2>
+        ${detailHtml}
+        ${replacementHtml}
+      </div>
+    </div>
+  `;
+
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+  // Click outside to close (with text-selection protection)
+  const modal = document.getElementById('library-detail-modal');
+  let mouseDownOnBackdrop = false;
+  modal.addEventListener('mousedown', (e) => {
+    mouseDownOnBackdrop = e.target === modal;
+  });
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal && mouseDownOnBackdrop) {
+      window.closeLibraryDetailModal();
+    }
+    mouseDownOnBackdrop = false;
+  });
+
+  // Add replacement option buttons
+  if (downloadableVariants.length > 0) {
+    const optionsDiv = document.getElementById('library-replacement-options');
+    const sorted = [...downloadableVariants].sort((a, b) => {
+      const dateA = a.publication_date ? new Date(a.publication_date) : new Date(0);
+      const dateB = b.publication_date ? new Date(b.publication_date) : new Date(0);
+      return dateB - dateA;
+    });
+
+    sorted.forEach((variant, index) => {
+      const age = formatRelativeAge(variant.publication_date);
+      const ageBadge = age ? `<span class="variant-age">${age} old</span>` : '';
+      const providerInfo = variant.provider
+        ? `<span class="variant-provider">${variant.provider}</span>`
+        : '';
+
+      const btn = document.createElement('button');
+      btn.className = 'btn-variant btn-variant-new';
+      btn.innerHTML = `
+        <div class="variant-label">
+          <span class="variant-number">#${index + 1}</span>
+          ${ageBadge}
+          ${providerInfo}
+        </div>
+        <div class="variant-title">${variant.title}</div>
+      `;
+      btn.onclick = () => {
+        window.closeLibraryDetailModal();
+        window.selectIssue(variant.title, variant.provider, variant.url, true, false);
+      };
+      optionsDiv.appendChild(btn);
+    });
+  }
+};
+
+window.closeLibraryDetailModal = function () {
+  const modal = document.getElementById('library-detail-modal');
+  if (modal) modal.remove();
+};
+
+/**
+ * Delete a library copy from the database with confirmation
+ *
+ * @param {number} periodicalId - The periodical database ID
+ * @param {string} issueKey - The issue key to refresh the modal after deletion
+ */
+window.deleteLibraryCopy = async function (periodicalId, issueKey) {
+  const confirmed = await UIUtils.confirm(
+    'Remove from Library',
+    '<p>Remove this copy from your library?</p>' +
+      '<p style="color: var(--text-secondary); font-size: 0.9em;">The file will be kept on disk but the database record will be removed.</p>'
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const response = await APIClient.authenticatedFetch(
+      `/api/periodicals/${periodicalId}?delete_files=false&remove_tracking=false&delete_all_issues=false`,
+      { method: 'DELETE' }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail ?? 'Failed to remove');
+    }
+
+    const result = await response.json();
+    UIUtils.showStatus(
+      ELEMENT_IDS.TRACKING_STATUS,
+      result.message || 'Removed from library',
+      'success'
+    );
+    setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), 5000);
+
+    // Close modal and refresh search results
+    window.closeLibraryDetailModal();
+    if (window.trackingManager) {
+      window.trackingManager.searchPeriodicalMetadata();
+    }
+  } catch (error) {
+    console.error('[Library] Failed to delete copy:', error);
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, `Error: ${error.message}`, 'error');
+  }
+};
+
+/**
+ * Move a library copy to a different tracking record
+ *
+ * @param {number} periodicalId - The periodical database ID
+ * @param {string} issueKey - The issue key to refresh after move
+ */
+window.moveLibraryCopy = async function (periodicalId, issueKey) {
+  // Close the library detail modal first to avoid z-index issues
+  window.closeLibraryDetailModal();
+
+  try {
+    // Fetch all tracking records
+    const response = await APIClient.get(`/api/periodicals/tracking?limit=${API_LIMITS.TRACKING_LIST}`);
+    const data = await response.json();
+    const trackingRecords = data.tracked_magazines || [];
+
+    if (trackingRecords.length === 0) {
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'No tracking records found', 'error');
+      return;
+    }
+
+    // Build options HTML
+    const optionsHtml = trackingRecords
+      .sort((a, b) => a.title.localeCompare(b.title))
+      .map(
+        (t) =>
+          `<option value="${t.id}">${t.title} (${t.category || 'Auto-detect'} - ${t.language || 'English'})</option>`
+      )
+      .join('');
+
+    const modalHTML = `
+      <div id="move-library-copy-modal" class="modal" style="display: flex;">
+        <div class="modal-content" style="max-width: 500px;">
+          <span class="close" onclick="closeMoveLibraryCopyModal()">&times;</span>
+          <h2 style="margin-bottom: 16px;">📦 Move to Tracking</h2>
+          <p style="color: var(--text-secondary); margin-bottom: 12px; font-size: 0.9em;">
+            Select the tracking record to move this issue to. The file will be renamed and reorganized automatically.
+          </p>
+          <select id="move-copy-target-tracking" class="w-full" style="margin-bottom: 16px;">
+            <option value="">Select a tracking record...</option>
+            ${optionsHtml}
+          </select>
+          <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <button class="save-btn btn-cancel" onclick="closeMoveLibraryCopyModal()">Cancel</button>
+            <button id="confirm-move-copy-btn" class="save-btn btn-primary" disabled
+              onclick="confirmMoveLibraryCopy(${periodicalId}, '${issueKey}')">Move</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+    // Enable/disable button based on selection
+    document.getElementById('move-copy-target-tracking').onchange = function () {
+      document.getElementById('confirm-move-copy-btn').disabled = !this.value;
+    };
+
+    // Click outside to close
+    const modal = document.getElementById('move-library-copy-modal');
+    let mouseDownOnBackdrop = false;
+    modal.addEventListener('mousedown', (e) => {
+      mouseDownOnBackdrop = e.target === modal;
+    });
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal && mouseDownOnBackdrop) {
+        window.closeMoveLibraryCopyModal();
+      }
+      mouseDownOnBackdrop = false;
+    });
+  } catch (error) {
+    console.error('[Library] Failed to load tracking records:', error);
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, `Error: ${error.message}`, 'error');
+  }
+};
+
+window.closeMoveLibraryCopyModal = function () {
+  const modal = document.getElementById('move-library-copy-modal');
+  if (modal) modal.remove();
+};
+
+/**
+ * Confirm moving a library copy to the selected tracking record
+ *
+ * @param {number} periodicalId - The periodical database ID
+ * @param {string} issueKey - The issue key to refresh after move
+ */
+window.confirmMoveLibraryCopy = async function (periodicalId, issueKey) {
+  const targetId = document.getElementById('move-copy-target-tracking')?.value;
+  if (!targetId) return;
+
+  const btn = document.getElementById('confirm-move-copy-btn');
+  btn.disabled = true;
+  btn.textContent = 'Moving...';
+
+  try {
+    const response = await APIClient.post(
+      `/api/periodicals/${periodicalId}/move-to-tracking?target_tracking_id=${targetId}`
+    );
+    const result = await response.json();
+
+    UIUtils.showStatus(
+      ELEMENT_IDS.TRACKING_STATUS,
+      result.message || 'Issue moved successfully',
+      'success'
+    );
+    setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), 5000);
+
+    window.closeMoveLibraryCopyModal();
+
+    // Refresh search results
+    if (window.trackingManager) {
+      window.trackingManager.searchPeriodicalMetadata();
+    }
+  } catch (error) {
+    console.error('[Library] Failed to move copy:', error);
+    btn.disabled = false;
+    btn.textContent = 'Move';
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, `Error: ${error.message}`, 'error');
+  }
 };
 
 // Select and download issue
@@ -1850,7 +3193,7 @@ window.openMergeModal = async function () {
   try {
     const data = await APIHelper.executeWithErrorHandling(
       async () => {
-        const response = await APIClient.get('/api/periodicals/tracking?limit=1000');
+        const response = await APIClient.get(`/api/periodicals/tracking?limit=${API_LIMITS.TRACKING_LIST}`);
         return await response.json();
       },
       'Tracking',
@@ -1951,7 +3294,7 @@ window.showMergeTargetSelection = async function () {
   // Get the tracking data for selected items
   const data = await APIHelper.executeWithErrorHandling(
     async () => {
-      const response = await APIClient.get('/api/periodicals/tracking?limit=1000');
+      const response = await APIClient.get(`/api/periodicals/tracking?limit=${API_LIMITS.TRACKING_LIST}`);
       return await response.json();
     },
     'Tracking',
@@ -2049,6 +3392,14 @@ window.confirmMerge = async function () {
   }
 };
 
+// Filter search results by source provider
+window.filterSearchBySource = function (source) {
+  const tracking = window.trackingManager;
+  if (tracking) {
+    tracking.filterSearchBySource(source);
+  }
+};
+
 // Download all available issues
 window.downloadAllAvailable = async function () {
   try {
@@ -2065,41 +3416,48 @@ window.downloadAllAvailable = async function () {
     }
 
     const count = tracking.availableIssues.length;
+    const sourceNote =
+      tracking.sourceFilter && tracking.sourceFilter !== 'all'
+        ? ` from <strong>${tracking.sourceFilter === 'internet_archive' ? 'Internet Archive' : tracking.sourceFilter.charAt(0).toUpperCase() + tracking.sourceFilter.slice(1)}</strong>`
+        : '';
     const confirmed = await UIUtils.confirm(
       'Download All Available Issues',
-      `Are you sure you want to download all <strong>${count}</strong> available issues?`
+      `Are you sure you want to download all <strong>${count}</strong> available issues${sourceNote}?`
     );
     if (!confirmed) return;
 
     UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, `Downloading ${count} issues...`, 'info');
 
-    let successCount = 0;
-    let errorCount = 0;
-
-    // Download each issue sequentially to avoid overwhelming the server
-    for (const issue of tracking.availableIssues) {
-      try {
-        const response = await APIClient.post('/api/downloads/single-issue', {
-          tracking_id: trackingId,
+    try {
+      // Use batch endpoint to submit all issues in a single request
+      const response = await APIClient.post('/api/downloads/batch-issues', {
+        tracking_id: trackingId,
+        issues: tracking.availableIssues.map((issue) => ({
           title: issue.title,
           url: issue.url,
           provider: issue.provider,
-        });
-        const data = await response.json();
-        
-        if (data.status === 'queued' || data.job_id) {
-          successCount++;
-        } else {
-          errorCount++;
-        }
-      } catch (err) {
-        console.error(`Failed to download ${issue.title}:`, err);
-        errorCount++;
-      }
+        })),
+      });
+      const data = await response.json();
+
+      const parts = [];
+      if (data.submitted > 0) parts.push(`${data.submitted} submitted`);
+      if (data.queued > 0) parts.push(`${data.queued} queued`);
+      if (data.skipped > 0) parts.push(`${data.skipped} skipped`);
+      if (data.failed > 0) parts.push(`${data.failed} failed`);
+      const message = parts.join(', ') || 'No issues to download';
+
+      const hasErrors = data.failed > 0;
+      UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, message, hasErrors ? 'warning' : 'success');
+    } catch (err) {
+      console.error('Batch download error:', err);
+      UIUtils.showStatus(
+        ELEMENT_IDS.TRACKING_STATUS,
+        `Error: ${err.toUserMessage ? err.toUserMessage() : err.message}`,
+        'error'
+      );
     }
 
-    const message = `Submitted ${successCount} downloads${errorCount > 0 ? `, ${errorCount} failed` : ''}`;
-    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, message, errorCount > 0 ? 'warning' : 'success');
     setTimeout(() => UIUtils.hideStatus(ELEMENT_IDS.TRACKING_STATUS), TIMEOUTS.AUTO_HIDE_LONG);
   } catch (err) {
     console.error('Bulk download error:', err);
@@ -2133,11 +3491,11 @@ window.downloadIssue = async function (title, url, provider) {
     // Handle different submission statuses
     let message;
     if (data.status === 'queued') {
-      message = '✓ Download queued (will be submitted when slot available)';
+      message = 'Download queued (will be submitted when slot available)';
     } else if (data.job_id) {
-      message = `✓ Download submitted! Job ID: ${data.job_id}`;
+      message = `Download submitted! Job ID: ${data.job_id}`;
     } else {
-      message = `✓ Download ${data.status}`;
+      message = `Download ${data.status}`;
     }
 
     UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, message, 'success');
@@ -2234,6 +3592,20 @@ window.saveNewTracking = async () => {
         ELEMENT_IDS.TRACKING_STATUS
       );
 
+      // Add to stack if one was selected
+      const selectedStack = document.getElementById('new-tracking-stack')?.value;
+      if (selectedStack) {
+        try {
+          await APIClient.authenticatedFetch(`/api/stacks/${selectedStack}/members`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tracking_ids: [data.tracking_id] }),
+          });
+        } catch (stackErr) {
+          console.error('Failed to add to stack:', stackErr);
+        }
+      }
+
       UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Tracking started successfully', 'success');
       tracking.closeTrackNewPeriodicalModal();
       tracking.loadTrackedPeriodicals();
@@ -2316,7 +3688,7 @@ async function reorganizeTrackingFiles(trackingId, _title) {
 window.setTrackingFilter = function (type, value) {
   if (tracking && tracking.filterManager) {
     tracking.filterManager.setFilter(type, value);
-    
+
     // Update dropdown UI
     if (type === 'category') {
       const dropdown = document.getElementById('tracking-category-filter');
@@ -2325,7 +3697,7 @@ window.setTrackingFilter = function (type, value) {
       const dropdown = document.getElementById('tracking-language-filter');
       if (dropdown) dropdown.value = value;
     }
-    
+
     // If periodicals haven't been loaded yet, load them now
     if (!tracking.periodicalsLoaded) {
       tracking.loadTrackedPeriodicals();
@@ -2372,7 +3744,10 @@ window.clearTrackingFilters = function () {
     tracking.filterManager.updateUI(
       'tracking-category-filter',
       'tracking-language-filter',
-      'tracking-search-bar'
+      'tracking-search-input'
     );
   }
 };
+
+window.downloadStackSearchMember = (idx) => tracking.downloadStackSearchMember(idx);
+window.downloadAllStackSearchIssues = () => tracking.downloadAllStackSearchIssues();

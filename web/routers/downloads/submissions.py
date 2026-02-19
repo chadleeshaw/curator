@@ -13,6 +13,7 @@ from models.database import DownloadSubmission, PeriodicalTracking
 from web.schemas import (
     APIError,
     DownloadAllIssuesRequest,
+    DownloadBatchIssuesRequest,
     DownloadSingleIssueRequest,
     DownloadSubmissionResponse,
 )
@@ -155,6 +156,105 @@ async def download_single_issue(
             url=request.url,
             status=submission.status.value,
             message=f"Download submitted: {request.title}",
+        )
+
+    return await with_db_session(_shared._session_factory, operation)
+
+
+@_shared.router.post(
+    "/batch-issues",
+    summary="Download multiple issues in a single request",
+    description="Submit multiple issues for download in one batch. "
+    "Issues that exceed the concurrent download limit will be queued automatically.",
+    responses={
+        200: {
+            "description": "Batch download results",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": True,
+                        "submitted": 5,
+                        "queued": 10,
+                        "skipped": 2,
+                        "failed": 1,
+                        "results": [],
+                    }
+                }
+            },
+        },
+        404: {"description": "Tracking record not found", "model": APIError},
+        503: {
+            "description": ErrorMessages.DOWNLOAD_MANAGER_UNAVAILABLE,
+            "model": APIError,
+        },
+    },
+)
+@handle_api_errors("Batch download issues", _shared.logger)
+async def download_batch_issues(
+    request: DownloadBatchIssuesRequest,
+) -> Dict[str, Any]:
+    """Download multiple issues in a single batch request"""
+    if not _shared._download_manager:
+        raise HTTPException(status_code=503, detail=ErrorMessages.DOWNLOAD_MANAGER_UNAVAILABLE)
+
+    def operation(db):
+        tracking = db.query(PeriodicalTracking).filter(PeriodicalTracking.id == request.tracking_id).first()
+        if not tracking:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Tracking record not found: {request.tracking_id}",
+            )
+
+        submitted = 0
+        queued = 0
+        skipped = 0
+        failed = 0
+        results = []
+
+        for issue in request.issues:
+            search_result = {
+                "title": issue.title,
+                "url": issue.url,
+                "provider": issue.provider or "manual",
+                "publication_date": (
+                    datetime.fromisoformat(issue.publication_date) if issue.publication_date else None
+                ),
+                "raw_metadata": {},
+            }
+
+            try:
+                submission = _shared._download_manager.download_single_issue(request.tracking_id, search_result, db)
+
+                if submission:
+                    status = submission.status.value
+                    if submission.status == DownloadSubmission.StatusEnum.PENDING:
+                        submitted += 1
+                    elif submission.status == DownloadSubmission.StatusEnum.QUEUED:
+                        queued += 1
+                    elif submission.status == DownloadSubmission.StatusEnum.SKIPPED:
+                        skipped += 1
+                    else:
+                        failed += 1
+                    results.append({"title": issue.title, "status": status})
+                else:
+                    # None means an error (already downloading, permanently failed, etc.)
+                    failed += 1
+                    results.append({"title": issue.title, "status": "failed"})
+
+            except Exception as e:
+                _shared.logger.error(f"Failed to submit {issue.title}: {e}")
+                failed += 1
+                results.append({"title": issue.title, "status": "failed", "error": str(e)})
+
+        return success_response(
+            message=(f"Batch download: {submitted} submitted, {queued} queued, " f"{skipped} skipped, {failed} failed"),
+            tracking_id=request.tracking_id,
+            magazine=tracking.title,
+            submitted=submitted,
+            queued=queued,
+            skipped=skipped,
+            failed=failed,
+            results=results,
         )
 
     return await with_db_session(_shared._session_factory, operation)

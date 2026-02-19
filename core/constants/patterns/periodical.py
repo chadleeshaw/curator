@@ -28,12 +28,16 @@ PERIODICAL_PATTERN_VOLUME_ISSUE_COMBINED = r"\bv\d+\s+(i|n|no\.?)\d+\b"
 PERIODICAL_PATTERN_WEEKLY_DATE = r"\b\d{4}[\.\s]\d{2}[\.\s]\d{2}\b"
 """Pattern for weekly date formats: 2024.01.20, 2024 01 20 (The Economist style)"""
 
+# Magazine collection patterns - these indicate multi-issue bundles (valuable!)
+PERIODICAL_PATTERN_COLLECTION = r"\b(complete|full|entire)\s+(collection|run|archive)\b"
+"""Pattern for magazine collection archives: Full Collection, Complete Run"""
+
 # ==============================================================================
 # ANTI-PERIODICAL PATTERNS (Book/Collection Indicators)
 # ==============================================================================
 
-ANTI_PERIODICAL_PATTERN_COMPLETE_COLLECTION = r"\b(complete|full|entire)\s+(collection|series)\b"
-"""Pattern for complete collection indicators"""
+# Note: "complete collection", "full collection" are now POSITIVE indicators above
+# since magazine collections are valuable, especially from Internet Archive.
 
 ANTI_PERIODICAL_PATTERN_ANTHOLOGY = r"\banthology\b"
 """Pattern for anthology indicators"""

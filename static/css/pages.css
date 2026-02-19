@@ -684,7 +684,7 @@
   border-radius: 8px;
   border: 1px solid var(--border);
   text-align: center;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .queue-stat-number {
@@ -1080,11 +1080,23 @@
   }
 
   /* Hide less important columns on mobile */
-  .queue-table th:nth-child(3),
-  .queue-table td:nth-child(3),
-  .queue-table th:nth-child(4),
-  .queue-table td:nth-child(4) {
+  /* Main queue table: hide Summary column (col 3), show inline mobile summary instead */
+  .queue-table .queue-summary-col,
+  .queue-table thead th:nth-child(3) {
     display: none;
+  }
+
+  /* Show mobile-inline summary bubbles beneath periodical name */
+  .queue-table .mobile-summary {
+    display: block !important;
+  }
+
+  /* Make summary bubbles smaller on mobile */
+  .queue-table .status-bubble {
+    min-width: 22px !important;
+    padding: 1px 4px !important;
+    font-size: 0.7em !important;
+    border-radius: 8px !important;
   }
 
   /* Make first column (title) wrap */
@@ -1104,6 +1116,55 @@
     font-size: 11px;
     padding: 4px 8px;
     margin: 2px;
+  }
+
+  /* Modal action buttons - stack vertically on mobile */
+  .modal-content table td:last-child {
+    white-space: normal;
+  }
+
+  .modal-content table td:last-child div {
+    display: flex !important;
+    flex-direction: column;
+    gap: 3px !important;
+    align-items: stretch;
+  }
+
+  .modal-content table td:last-child button {
+    padding: 4px 8px !important;
+    font-size: 0.75em !important;
+    width: 100%;
+    text-align: center;
+    box-sizing: border-box;
+  }
+
+  /* Modal filter buttons - grid layout on mobile */
+  .modal-content .modal-header > div {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px !important;
+  }
+
+  .modal-content .modal-header > div .sort-btn {
+    padding: 6px 4px !important;
+    font-size: 0.7em !important;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  /* Modal filter buttons compact */
+  .modal-content .sort-btn {
+    padding: 4px 8px !important;
+    font-size: 0.75em !important;
+  }
+
+  /* Modal footer buttons stack */
+  .modal-content .modal-footer {
+    flex-wrap: wrap;
+  }
+
+  .modal-content .modal-footer button {
+    font-size: 0.85em;
   }
 
   /* Queue empty state */
@@ -1272,22 +1333,23 @@
     display: flex !important;
     flex-wrap: nowrap !important;
     width: auto !important;
-    justify-content: center !important;
-    gap: 4px !important;
-    margin-top: 10px;
-    padding: 6px !important;
-    background: var(--surface-variant) !important;
-    border-radius: 8px !important;
-    border: 1px solid var(--border-color) !important;
+    justify-content: flex-start !important;
+    gap: 6px !important;
+    margin-top: 8px;
+    padding: 0 !important;
+    background: transparent !important;
+    border-radius: 0 !important;
+    border: none !important;
+    border-top: 1px solid var(--border-color) !important;
+    padding-top: 10px !important;
   }
 
   .btn-icon {
-    flex: 1 !important;
     min-width: 44px !important;
-    width: auto !important;
+    width: 44px !important;
     height: 44px !important;
-    font-size: 20px !important;
-    padding: 10px 4px !important;
+    font-size: 18px !important;
+    padding: 8px !important;
     border-radius: 10px !important;
   }
 
@@ -1462,14 +1524,31 @@
     margin-bottom: 15px !important;
   }
 
+  /* Shared header row — stack vertically on mobile */
+  .header-content-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+    text-align: center !important;
+  }
+
+  .header-title-area {
+    text-align: center !important;
+  }
+
+  .header-content-row .sort-controls {
+    justify-content: center !important;
+  }
+
   .periodical-header {
-    padding: 30px 16px !important;
+    padding: 20px 16px !important;
     margin-bottom: 20px !important;
   }
 
   .periodical-header h1 {
-    font-size: 1.8em !important;
+    font-size: 1.4em !important;
     line-height: 1.2;
+    justify-content: center !important;
   }
 
   .periodical-header p {
@@ -1824,8 +1903,13 @@
     width: 100% !important;
   }
 
+  .tracking-controls-row > div > button:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
   .tracking-controls-row button,
   .tracking-controls-row .btn-primary {
+    margin-left: 0 !important;
     padding: 12px 8px !important;
     font-size: 12px !important;
     border-radius: 10px !important;

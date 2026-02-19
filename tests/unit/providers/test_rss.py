@@ -10,7 +10,7 @@ Test Coverage:
 - Result mapping to SearchResult objects
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, Mock, patch
 from time import struct_time
 
@@ -198,7 +198,7 @@ class TestRSSProviderSearch:
         results = provider.search("Magazine")
 
         assert len(results) == 1
-        assert results[0].publication_date == datetime(2024, 1, 15, 14, 30, 45)
+        assert results[0].publication_date == datetime(2024, 1, 15, 14, 30, 45, tzinfo=UTC)
 
     @patch("providers.rss.feedparser.parse")
     def test_search_handles_missing_publication_date(self, mock_parse):

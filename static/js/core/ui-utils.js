@@ -61,6 +61,17 @@ export class UIUtils {
       });
     }
 
+    // Update the main breadcrumb (with sub-tab if applicable)
+    if (tabName === 'settings') {
+      const savedSettingsTab = localStorage.getItem('curator-settings-tab') || 'providers';
+      UIUtils.updateBreadcrumb(tabName, savedSettingsTab);
+    } else if (tabName === 'queue') {
+      const savedQueueView = localStorage.getItem('lastQueueView') || 'download';
+      UIUtils.updateBreadcrumb(tabName, savedQueueView);
+    } else {
+      UIUtils.updateBreadcrumb(tabName);
+    }
+
     // If switching to settings tab, restore the last active settings sub-tab
     if (tabName === 'settings' && window.restoreSettingsTab) {
       // Use setTimeout to ensure DOM is ready
@@ -68,6 +79,70 @@ export class UIUtils {
     }
 
     return tabName;
+  }
+
+  /**
+   * Update the main-page breadcrumb to reflect the active tab
+   *
+   * @param {string} tabName - The active tab name (e.g. 'library', 'tracking')
+   */
+  static updateBreadcrumb(tabName, subTab) {
+    const TAB_LABELS = {
+      library: 'Library',
+      tracking: 'Tracking',
+      stacks: 'Stacks',
+      tasks: 'Tasks',
+      queue: 'Queue',
+      settings: 'Settings',
+    };
+
+    const SETTINGS_LABELS = {
+      providers: 'Providers',
+      storage: 'Storage',
+      matching: 'Matching',
+      tasks: 'Downloads',
+      'pdf-ocr': 'PDF/OCR',
+      appearance: 'Appearance',
+      account: 'Account',
+      advanced: 'Advanced',
+    };
+
+    const QUEUE_LABELS = {
+      download: 'Downloads',
+      ocr: 'OCR Processing',
+    };
+
+    const bc = document.getElementById('main-breadcrumb');
+    if (!bc) return;
+
+    const label = TAB_LABELS[tabName] || tabName;
+    let html = '';
+
+    if (tabName === 'library') {
+      html = `<span class="current">${label}</span>`;
+    } else {
+      html =
+        `<a href="#library" onclick="showTab('library', event)">Library</a>` +
+        ` <span class="separator">/</span>`;
+
+      if (subTab && tabName === 'settings') {
+        const subLabel = SETTINGS_LABELS[subTab] || subTab;
+        html +=
+          ` <a href="#settings" onclick="showTab('settings', event)">${label}</a>` +
+          ` <span class="separator">/</span>` +
+          ` <span class="current">${subLabel}</span>`;
+      } else if (subTab && tabName === 'queue') {
+        const subLabel = QUEUE_LABELS[subTab] || subTab;
+        html +=
+          ` <a href="#queue" onclick="showTab('queue', event)">${label}</a>` +
+          ` <span class="separator">/</span>` +
+          ` <span class="current">${subLabel}</span>`;
+      } else {
+        html += ` <span class="current">${label}</span>`;
+      }
+    }
+
+    bc.innerHTML = html;
   }
 
   /**
@@ -208,6 +283,25 @@ export class UIUtils {
   }
 
   /**
+   * Convert a string to title case (capitalize first letter of each word)
+   *
+   * @param {string} str - The string to convert
+   * @returns {string} The title-cased string
+   *
+   * @example
+   * UIUtils.toTitleCase('hello world'); // 'Hello World'
+   * UIUtils.toTitleCase('nat geo mines'); // 'Nat Geo Mines'
+   */
+  static toTitleCase(str) {
+    if (!str) return '';
+    return str
+      .toLowerCase()
+      .split(' ')
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  }
+
+  /**
    * Show a toast notification (temporary popup message)
    *
    * @param {string} message - The message to display
@@ -337,12 +431,17 @@ export class UIUtils {
         resolve(false);
       };
 
-      // Close on background click
+      // Close on background click (track mousedown to prevent text selection closing modal)
+      let confirmMouseDown = null;
+      modal.onmousedown = (e) => {
+        confirmMouseDown = e.target;
+      };
       modal.onclick = (e) => {
-        if (e.target === modal) {
+        if (e.target === modal && confirmMouseDown === modal) {
           cleanup();
           resolve(false);
         }
+        confirmMouseDown = null;
       };
     });
   }
@@ -495,7 +594,7 @@ export class SortManager {
   }
 
   /**
-   * Set the sort field and reset order to ascending
+   * Set the sort field while preserving the current sort order
    *
    * @param {string} field - The field to sort by
    * @param {string} buttonSelector - CSS selector for sort buttons to update
@@ -506,7 +605,7 @@ export class SortManager {
    */
   setField(field, buttonSelector) {
     this.field = field;
-    this.order = 'asc';
+    // Don't reset order - preserve user's asc/desc preference
     this.updateButtons(buttonSelector);
     this.onChange?.();
   }
@@ -833,6 +932,36 @@ export class FilterManager {
 
 // Expose functions globally for onclick handlers
 window.showTab = (tabName, event) => UIUtils.showTab(tabName, event);
+
+/* ---------- Scroll-collapse header ---------- */
+(function initHeaderCollapse() {
+  const COLLAPSE_AT = 80; // collapse when scrolled past this
+  const EXPAND_AT = 10; // only expand when nearly at top
+  let collapsed = false;
+
+  const onScroll = () => {
+    const y = window.scrollY;
+
+    if (!collapsed && y > COLLAPSE_AT) {
+      // Only collapse if the page is tall enough to stay scrollable
+      // without the header (~250px for header + nav)
+      const headerHeight = document.querySelector('header')?.offsetHeight || 0;
+      const navHeight = document.querySelector('nav:not(.breadcrumb)')?.offsetHeight || 0;
+      const savedSpace = headerHeight + navHeight + 40; // margins
+      const remainingHeight = document.documentElement.scrollHeight - savedSpace;
+
+      if (remainingHeight > window.innerHeight + COLLAPSE_AT) {
+        collapsed = true;
+        document.body.classList.add('header-collapsed');
+      }
+    } else if (collapsed && y <= EXPAND_AT) {
+      collapsed = false;
+      document.body.classList.remove('header-collapsed');
+    }
+  };
+
+  window.addEventListener('scroll', onScroll, { passive: true });
+})();
 
 /**
  * Scroll to a specific section within the settings page

@@ -17,9 +17,18 @@ from .crud import (
     get_cache_stats,
     get_periodicals_count,
 )
+
+# Bulk routes must be registered before covers and files to avoid path parameter
+# conflicts (/api/periodicals/bulk/... vs /api/periodicals/{periodical_id}/...)
+from .bulk import (
+    bulk_move_to_tracking,
+    bulk_regenerate_thumbnail_ocr,
+    bulk_delete,
+)
 from .covers import (
     get_cover,
     regenerate_cover,
+    regenerate_thumbnail_ocr,
 )
 from .metadata import (
     toggle_special_edition,
@@ -50,12 +59,17 @@ __all__ = [
     # Cover operations
     "get_cover",
     "regenerate_cover",
+    "regenerate_thumbnail_ocr",
     # Metadata operations
     "toggle_special_edition",
     "update_periodical",
     # File operations
     "get_pdf",
     "move_issue_to_tracking",
+    # Bulk operations
+    "bulk_move_to_tracking",
+    "bulk_regenerate_thumbnail_ocr",
+    "bulk_delete",
     # Progress operations
     "get_progress",
     "update_progress",

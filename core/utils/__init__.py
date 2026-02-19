@@ -24,7 +24,7 @@ from .epub import extract_cover_from_epub, extract_text_from_epub
 # General utilities
 from .general import (
     cleanup_empty_directories,
-    find_pdf_epub_files,
+    find_supported_files,
     generate_olid,
     hash_file_in_chunks,
     is_special_edition,
@@ -45,6 +45,12 @@ from .thumbnail import (
 # Text processing utilities
 from .text import clean_title, normalize_text
 
+# Date utilities
+from .date import dates_are_fuzzy_match, get_season_for_month
+
+# Rate limiting utilities
+from .rate_limiter import ProviderRateLimiter
+
 # Note: parse_month and parse_multi_month moved to core.parsers.date
 
 __all__ = [
@@ -57,18 +63,23 @@ __all__ = [
     "validate_cbr",
     # Database utilities
     "get_db_session",
+    # Date utilities
+    "dates_are_fuzzy_match",
+    "get_season_for_month",
     # EPUB utilities
     "extract_cover_from_epub",
     "extract_text_from_epub",
     # General utilities
     "cleanup_empty_directories",
-    "find_pdf_epub_files",
+    "find_supported_files",
     "generate_olid",
     "hash_file_in_chunks",
     "is_special_edition",
     # PDF utilities
     "extract_cover_from_pdf",
     "validate_pdf",
+    # Rate limiting utilities
+    "ProviderRateLimiter",
     # Text processing utilities
     "clean_title",
     "normalize_text",

@@ -475,9 +475,13 @@ export class PageReader {
 
     const prevBtn = document.getElementById('prev-btn');
     const nextBtn = document.getElementById('next-btn');
+    const headerPrevBtn = document.getElementById('header-prev-btn');
+    const headerNextBtn = document.getElementById('header-next-btn');
 
     if (prevBtn) prevBtn.disabled = this.currentPageIndex === 0;
     if (nextBtn) nextBtn.disabled = this.currentPageIndex === this.metadata.pages.length - 1;
+    if (headerPrevBtn) headerPrevBtn.disabled = this.currentPageIndex === 0;
+    if (headerNextBtn) headerNextBtn.disabled = this.currentPageIndex === this.metadata.pages.length - 1;
   }
 
   /**

@@ -82,6 +82,8 @@ def extract_cover_from_epub(epub_path: Path, output_dir: Path, quality: int = EP
         from ebooklib import epub
 
         output_dir.mkdir(parents=True, exist_ok=True)
+        # Use the source filename stem directly - the caller is responsible
+        # for providing a path with a unique name (e.g., after organization)
         cover_path = output_dir / f"{epub_path.stem}.jpg"
 
         # Read the EPUB file

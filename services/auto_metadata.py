@@ -12,7 +12,6 @@ Can be run manually or scheduled as a background task.
 """
 
 import logging
-from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional
 
@@ -27,6 +26,7 @@ from core.utils.metadata_builder import (
 from core.utils.files import resolve_periodical_file_path
 from core.parsers.parser import Parser
 from models.database import Periodical, OCRJob
+from core.parsers import utc_now
 from services.text_scan_service import TextScanService
 from services.ocr.queue import OCRQueueService
 
@@ -214,6 +214,11 @@ class AutoMetadataService:
                     parsed = self.parser.parse_file(file_path)
                     file_scan = build_file_scan(parsed)
 
+                    # Supplement with metadata from original imported filename if available.
+                    # Files are often renamed during import (e.g., "354 - Magazine354 - Vol.354.pdf"
+                    # becomes "Magazine (20260205_235255).pdf"), losing volume/issue info.
+                    self._supplement_from_original_filename(file_scan, periodical)
+
                     # Update parsed_metadata
                     if not periodical.parsed_metadata:
                         periodical.parsed_metadata = {}
@@ -245,6 +250,54 @@ class AutoMetadataService:
             return True
 
         return False
+
+    def _supplement_from_original_filename(self, file_scan: Dict[str, Any], periodical: Periodical) -> None:
+        """
+        Supplement file_scan with metadata from the original imported filename.
+
+        Files are often renamed during import (e.g., "354 - Magazine354 - Vol.354.pdf"
+        becomes "Magazine (20260205_235255).pdf"). The original filename may contain
+        volume, issue number, or other metadata that the renamed file lacks.
+
+        Only supplements fields that are missing from the current file_scan.
+
+        Args:
+            file_scan: Current file_scan dict to supplement (modified in place)
+            periodical: Periodical with extra_metadata containing imported_from
+        """
+        extra = periodical.extra_metadata or {}
+        original_filename = extra.get("imported_from")
+        if not original_filename:
+            return
+
+        # Don't re-parse if current filename matches the original
+        current_filename = file_scan.get("filename", "")
+        if current_filename == original_filename:
+            return
+
+        try:
+            original_parsed = self.parser.parse_filename_string(original_filename)
+        except Exception:
+            logger.debug(f"Failed to parse original filename '{original_filename}' for periodical {periodical.id}")
+            return
+
+        # Fields to supplement from original filename (only if missing in current file_scan)
+        supplementable_fields = {
+            "volume": original_parsed.volume,
+            "issue_number": original_parsed.issue_number,
+        }
+
+        supplemented = []
+        for field, value in supplementable_fields.items():
+            if value is not None and field not in file_scan:
+                file_scan[field] = value
+                supplemented.append(f"{field}={value}")
+
+        if supplemented:
+            logger.info(
+                f"Supplemented file_scan from original filename '{original_filename}' "
+                f"for periodical {periodical.id}: {', '.join(supplemented)}"
+            )
 
     def _sync_issue_date(self, periodical: Periodical) -> bool:
         """
@@ -281,8 +334,26 @@ class AutoMetadataService:
         if periodical.parsed_metadata and periodical.parsed_metadata.get("ocr_scan"):
             return False
 
-        # Skip if no cover path
-        if not periodical.cover_path:
+        # Check if this periodical needs a date scan (flagged during import)
+        # These get priority - we need to try harder to find their date/volume
+        needs_date_scan = periodical.extra_metadata and periodical.extra_metadata.get("needs_date_scan", False)
+
+        # Skip if text scan already found sufficient metadata
+        # Text-based PDFs (True PDF, Text PDF) already have extractable text, no need for OCR
+        # UNLESS we still need a date scan and text scan didn't find the date
+        if periodical.parsed_metadata:
+            text_scan = periodical.parsed_metadata.get("text_scan", {})
+            if text_scan.get("has_sufficient_metadata", False):
+                # If needs_date_scan, check if text scan actually found a date
+                if needs_date_scan and not text_scan.get("year"):
+                    logger.debug(
+                        f"Periodical {periodical.id} needs date scan and text scan didn't find year - will queue OCR"
+                    )
+                else:
+                    return False
+
+        # Skip if no cover path (unless needs_date_scan - try anyway with file path)
+        if not periodical.cover_path and not needs_date_scan:
             return False
 
         # Only queue PDFs for OCR (EPUBs and comics don't need OCR)
@@ -319,7 +390,7 @@ class AutoMetadataService:
             job = OCRJob(
                 periodical_id=periodical.id,
                 status=OCRJob.StatusEnum.PENDING,
-                created_at=datetime.now(),
+                created_at=utc_now(),
             )
             session.add(job)
             logger.debug(f"Queued OCR scan for periodical {periodical.id}")

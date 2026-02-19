@@ -126,12 +126,15 @@
   --info-900: #1e3a8a;
   --info-color: var(--info-500);
 
-  /* Legacy status colors */
-  --status-completed: var(--success-500);
-  --status-downloading: var(--info-500);
-  --status-pending: var(--warning-500);
-  --status-failed: var(--error-500);
-  --status-skipped: #9e9e9e;
+  /* Status colors */
+  --status-queued: #fd7e14;
+  --status-pending: #6c757d;
+  --status-downloading: #0d6efd;
+  --status-completed: #198754;
+  --status-failed: #dc3545;
+  --status-skipped: #6f42c1;
+  --status-paused: #ffc107;
+  --status-processing: #0dcaf0;
 
   /* Input Colors */
   --input-bg: #ffffff;

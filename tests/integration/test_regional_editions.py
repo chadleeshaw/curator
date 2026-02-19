@@ -24,11 +24,11 @@ class MockTracking:
 
 def test_esquire_south_africa_separate_from_us():
     """
-    Test that Esquire South Africa doesn't match Esquire US tracking.
+    Test that Esquire South Africa (with regional indicator in title) doesn't match Esquire US.
 
-    This was a real bug where "Esquire South Africa - January2011.pdf"
-    was being matched to Esquire US tracking (tracking_id: 2) instead of
-    creating its own tracking entry.
+    Note: If the title is just "Esquire" with country=ZA in metadata, it WILL match
+    Esquire US tracking (penalty-based matching allows this for metadata errors).
+    But if the title is "Esquire South Africa", it won't match due to title difference.
     """
     matcher = TrackingMatcher()
 
@@ -37,17 +37,16 @@ def test_esquire_south_africa_separate_from_us():
         MockTracking(2, "Esquire", "English", "US", CATEGORY_MAGAZINE),
     ]
 
-    # Try to match Esquire South Africa
-    # With country mismatch blocking, this should NOT match
+    # Try to match "Esquire South Africa" (regional indicator in title)
     result = matcher.find_best_match(
-        parsed_title="Esquire",
+        parsed_title="Esquire South Africa",  # Regional indicator in title
         tracking_records=tracking_records,
         parsed_language="English",
         parsed_country="ZA",  # South Africa
         parsed_category=CATEGORY_MAGAZINE,
     )
 
-    # Should not match due to country mismatch
+    # Should not match due to title difference (fuzzy ~70 + penalty -30 = ~40)
     assert result is None or not result.is_match, (
         "Esquire South Africa should not match Esquire US tracking. "
         "Regional editions should get separate tracking entries."
@@ -81,22 +80,23 @@ def test_esquire_south_africa_matches_its_own_tracking():
 
 
 def test_wired_uk_separate_from_us():
-    """Test that Wired UK doesn't match Wired US"""
+    """Test that Wired UK (with UK in title) doesn't match Wired US"""
     matcher = TrackingMatcher()
 
     tracking_records = [
         MockTracking(1, "Wired", "English", "US", CATEGORY_MAGAZINE),
     ]
 
-    # Wired UK should NOT match Wired US
+    # "Wired UK" (with regional indicator in title) should NOT match Wired US
     result = matcher.find_best_match(
-        parsed_title="Wired",
+        parsed_title="Wired UK",  # Regional indicator in title
         tracking_records=tracking_records,
         parsed_language="English",
         parsed_country="GB",  # UK
         parsed_category=CATEGORY_MAGAZINE,
     )
 
+    # Should not match due to title difference
     assert result is None or not result.is_match
 
 
@@ -141,6 +141,34 @@ def test_no_country_specified_can_still_match():
 
     assert result is not None
     assert result.is_match
+
+
+def test_exact_title_wrong_metadata_country_does_match():
+    """
+    Test that exact title match with wrong country metadata DOES match (penalty-based).
+
+    This is the bug fix - when a file has the exact same title as tracking,
+    but metadata says different country, it should still match (metadata might be wrong).
+    """
+    matcher = TrackingMatcher()
+
+    tracking_records = [
+        MockTracking(1, "Wired", "English", "US", CATEGORY_MAGAZINE),
+    ]
+
+    # "Wired" (no regional indicator) with metadata country=GB should match
+    result = matcher.find_best_match(
+        parsed_title="Wired",  # Same title, no regional indicator
+        tracking_records=tracking_records,
+        parsed_language="English",
+        parsed_country="GB",  # Different country in metadata
+        parsed_category=CATEGORY_MAGAZINE,
+    )
+
+    # Should match despite country mismatch (100 + 20 + 10 - 30 = 100)
+    assert result is not None
+    assert result.is_match
+    assert result.score == 100
 
 
 if __name__ == "__main__":

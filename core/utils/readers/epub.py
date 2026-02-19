@@ -19,7 +19,6 @@ EXCLUDE_PATTERNS = [
     "blank",
     "license",
     "gutenberg",
-    "legal",
     "colophon",
 ]
 

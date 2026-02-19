@@ -12,10 +12,16 @@
     <link rel="stylesheet" href="/static/css/themes.css?v=1769743008" />
     <link rel="stylesheet" href="/static/css/layout.css?v=1769743008" />
     <link rel="stylesheet" href="/static/css/components.css?v=1769743008" />
-    <link rel="stylesheet" href="/static/css/pages.css?v=1769743008" />
-    <script type="module" src="/static/js/main.js?v=1769743008"></script>
+    <link rel="stylesheet" href="/static/css/pages.css?v=1769743013" />
+    <link rel="stylesheet" href="/static/css/stacks.css?v=1770652571" />
+    <script type="module" src="/static/js/main.js?v=1770652571"></script>
   </head>
   <body>
+    <!-- Breadcrumb Bar (outside container for reliable sticky) -->
+    <nav id="main-breadcrumb" class="breadcrumb">
+      <span class="current">Library</span>
+    </nav>
+
     <div class="container">
       <header>
         <div class="header-logout">
@@ -37,11 +43,21 @@
       </header>
 
       <nav>
-        <button class="nav-btn" onclick="showTab('library', event)"><span class="nav-icon">📚</span><span class="nav-text">Library</span></button>
-        <button class="nav-btn" onclick="showTab('tracking', event)"><span class="nav-icon">📌</span><span class="nav-text">Track</span></button>
-        <button class="nav-btn" onclick="showTab('tasks', event)"><span class="nav-icon">⚙️</span><span class="nav-text">Tasks</span></button>
-        <button class="nav-btn" onclick="showTab('queue', event)"><span class="nav-icon">📥</span><span class="nav-text">Queue</span></button>
-        <button class="nav-btn" onclick="showTab('settings', event)"><span class="nav-icon">🔧</span><span class="nav-text">Settings</span></button>
+        <button class="nav-btn" onclick="showTab('library', event)">
+          <span class="nav-icon">📚</span><span class="nav-text">Library</span>
+        </button>
+        <button class="nav-btn" onclick="showTab('tracking', event)">
+          <span class="nav-icon">📌</span><span class="nav-text">Track</span>
+        </button>
+        <button class="nav-btn" onclick="showTab('tasks', event)">
+          <span class="nav-icon">⚙️</span><span class="nav-text">Tasks</span>
+        </button>
+        <button class="nav-btn" onclick="showTab('queue', event)">
+          <span class="nav-icon">📥</span><span class="nav-text">Queue</span>
+        </button>
+        <button class="nav-btn" onclick="showTab('settings', event)">
+          <span class="nav-icon">🔧</span><span class="nav-text">Settings</span>
+        </button>
       </nav>
 
       <!-- Library Tab -->
@@ -56,7 +72,7 @@
               <label
                 for="library-sort-select"
                 style="color: var(--text-secondary); font-size: 0.9em; font-weight: 500"
-                >Sort by:</label
+                >Sort:</label
               >
               <select
                 id="library-sort-select"
@@ -224,7 +240,7 @@
                 <label
                   for="tracking-sort-select"
                   style="color: var(--text-secondary); font-size: 0.9em; font-weight: 500"
-                  >Sort by:</label
+                  >Sort:</label
                 >
                 <select
                   id="tracking-sort-select"
@@ -250,6 +266,8 @@
                   <option value="title">Title</option>
                   <option value="category">Category</option>
                   <option value="created_at">Added Date</option>
+                  <option value="latest_issue">Latest Issue</option>
+                  <option value="library_count">Number of Issues</option>
                   <option value="tracking_mode">Tracking Mode</option>
                   <option value="language">Language</option>
                 </select>
@@ -364,13 +382,12 @@
 
             <!-- Action Buttons -->
             <div class="tracking-controls-row mb-40">
-              <div style="display: flex; gap: 10px; flex-wrap: wrap">
+              <div style="display: flex; gap: 10px; flex-wrap: wrap; width: 100%; align-items: center">
                 <button onclick="openTrackNewPeriodicalModal()" class="btn-primary">
                   📌 Track New Periodical
                 </button>
-                <button onclick="openMergeModal()" class="btn-primary">
-                  🔀 Merge Tracking
-                </button>
+                <button onclick="openMergeModal()" class="btn-primary">🔀 Merge Tracking</button>
+                <button onclick="openCreateStackModal()" class="btn-primary" style="margin-left: auto">📂 Create Stack</button>
               </div>
             </div>
 
@@ -403,7 +420,11 @@
         <div class="tasks-container">
           <!-- Queue Switcher Buttons -->
           <div class="queue-switcher">
-            <button id="switch-download-queue" class="queue-switch-btn active" data-queue="download">
+            <button
+              id="switch-download-queue"
+              class="queue-switch-btn active"
+              data-queue="download"
+            >
               📥 Downloads <span id="download-queue-badge" class="queue-badge">0</span>
             </button>
             <button id="switch-ocr-queue" class="queue-switch-btn" data-queue="ocr">
@@ -423,7 +444,7 @@
               </div>
               <div class="queue-header-controls">
                 <div class="sort-controls">
-                  <label for="download-sort-select">Sort by:</label>
+                  <label for="download-sort-select">Sort:</label>
                   <select id="download-sort-select" onchange="setDownloadSort(this.value)">
                     <option value="title">Title</option>
                     <option value="status">Status</option>
@@ -435,7 +456,9 @@
                     class="sort-toggle-btn"
                     onclick="toggleDownloadSortOrder()"
                     title="Toggle sort order"
-                  >↑</button>
+                  >
+                    ↑
+                  </button>
                 </div>
                 <div class="filter-row">
                   <label for="download-status-filter">Status:</label>
@@ -450,10 +473,16 @@
                   </select>
                   <button
                     class="btn-danger btn-sm"
-                    onclick="window.downloads.clearByStatus(document.getElementById('download-status-filter').value)"
+                    onclick="
+                      window.downloads.clearByStatus(
+                        document.getElementById('download-status-filter').value
+                      )
+                    "
                     title="Clear downloads with selected status"
-                    style="margin-left: 5px;"
-                  >🗑️</button>
+                    style="margin-left: 5px"
+                  >
+                    🗑️
+                  </button>
                 </div>
               </div>
             </div>
@@ -566,6 +595,17 @@
                     </th>
                     <th
                       style="
+                        text-align: center;
+                        padding: 12px;
+                        color: var(--text-secondary);
+                        font-weight: 500;
+                        font-size: 0.9em;
+                      "
+                    >
+                      Status
+                    </th>
+                    <th
+                      style="
                         text-align: right;
                         padding: 12px;
                         color: var(--text-secondary);
@@ -596,7 +636,7 @@
               </div>
               <div class="queue-header-controls">
                 <div class="sort-controls">
-                  <label for="ocr-sort-select">Sort by:</label>
+                  <label for="ocr-sort-select">Sort:</label>
                   <select id="ocr-sort-select" onchange="setOCRSort(this.value)">
                     <option value="title">Title</option>
                     <option value="status">Status</option>
@@ -608,7 +648,9 @@
                     class="sort-toggle-btn"
                     onclick="toggleOCRSortOrder()"
                     title="Toggle sort order"
-                  >↑</button>
+                  >
+                    ↑
+                  </button>
                 </div>
                 <div class="filter-row">
                   <label for="ocr-status-filter">Status:</label>
@@ -621,10 +663,16 @@
                   </select>
                   <button
                     class="btn-danger btn-sm"
-                    onclick="window.ocrQueue.clearByStatus(document.getElementById('ocr-status-filter').value)"
+                    onclick="
+                      window.ocrQueue.clearByStatus(
+                        document.getElementById('ocr-status-filter').value
+                      )
+                    "
                     title="Clear OCR jobs with selected status"
-                    style="margin-left: 5px;"
-                  >🗑️</button>
+                    style="margin-left: 5px"
+                  >
+                    🗑️
+                  </button>
                 </div>
               </div>
             </div>
@@ -677,6 +725,17 @@
                       "
                     >
                       Periodical
+                    </th>
+                    <th
+                      style="
+                        text-align: center;
+                        padding: 12px;
+                        color: var(--text-secondary);
+                        font-weight: 500;
+                        font-size: 0.9em;
+                      "
+                    >
+                      Status
                     </th>
                     <th
                       style="
@@ -750,9 +809,13 @@
               <div id="search-providers-message" class="hidden"></div>
             </div>
 
-            <!-- Download Client Settings -->
+            <!-- NZB Download Client Settings -->
             <div id="download-client-section" class="settings-section">
-              <h3>Download Client</h3>
+              <h3>NZB Download Client</h3>
+              <p class="text-sm text-hint mb-15">
+                Used for Newsnab and RSS provider downloads. Select SABnzbd or NZBGet as your Usenet
+                download client.
+              </p>
               <div class="settings-field">
                 <label for="download-client-type">Type:</label>
                 <select id="download-client-type">
@@ -780,6 +843,26 @@
                   placeholder="Enter your API key"
                 />
               </div>
+              <div class="settings-field">
+                <label for="download-client-default-category">Default Category:</label>
+                <input
+                  type="text"
+                  id="download-client-default-category"
+                  placeholder="e.g., books"
+                />
+              </div>
+              <div class="settings-field">
+                <label for="download-client-remote-path">Remote Path:</label>
+                <input
+                  type="text"
+                  id="download-client-remote-path"
+                  placeholder="e.g., /downloads/"
+                />
+                <p class="text-sm text-hint mt-8">
+                  Path prefix as seen by the download client. Set when the client runs in a
+                  different container with different mount points.
+                </p>
+              </div>
               <div style="display: flex; gap: 10px">
                 <button onclick="testDownloadClientConnection()" class="save-btn btn-secondary">
                   Test Connection
@@ -789,6 +872,39 @@
                 </button>
               </div>
               <div id="download-client-message" class="hidden"></div>
+            </div>
+
+            <!-- Internet Archive Download Client Settings -->
+            <div id="ia-client-section" class="settings-section">
+              <h3>Internet Archive (HTTP)</h3>
+              <p class="text-sm text-hint mb-15">
+                Downloads from Internet Archive use a built-in HTTP client — no external software
+                needed. These settings are applied automatically when an Internet Archive search
+                provider is configured above.
+              </p>
+              <div class="settings-field">
+                <label for="ia-client-downloads-dir">Downloads Directory:</label>
+                <input type="text" id="ia-client-downloads-dir" placeholder="./local/downloads" />
+              </div>
+              <div class="settings-field">
+                <label for="ia-client-max-concurrent">Max Concurrent Downloads:</label>
+                <input
+                  type="number"
+                  id="ia-client-max-concurrent"
+                  placeholder="3"
+                  min="1"
+                  max="10"
+                />
+              </div>
+              <div style="display: flex; gap: 10px">
+                <button onclick="testIAClientConnection()" class="save-btn btn-secondary">
+                  Test Connection
+                </button>
+                <button onclick="saveIAClientSettings()" class="save-btn">
+                  Save Internet Archive
+                </button>
+              </div>
+              <div id="ia-client-message" class="hidden"></div>
             </div>
           </div>
 
@@ -882,6 +998,26 @@
                 </label>
                 <p class="text-sm text-hint mt-8">
                   Use OCR on cover images for text extraction (slower, runs in background queue).
+                </p>
+              </div>
+              <div class="settings-field">
+                <label>
+                  <input type="checkbox" id="import-auto-cleanup-downloads" />
+                  Auto-Cleanup Downloads Folder
+                </label>
+                <p class="text-sm text-hint mt-8">
+                  Automatically remove folders without importable files from downloads folder.
+                  Disable if downloads are being removed before processing.
+                </p>
+              </div>
+              <div class="settings-field">
+                <label>
+                  <input type="checkbox" id="import-auto-cleanup-library" />
+                  Auto-Cleanup Library Folder
+                </label>
+                <p class="text-sm text-hint mt-8">
+                  Automatically remove empty folders from library after file reorganization.
+                  Generally safe to keep enabled.
                 </p>
               </div>
               <p class="text-base text-muted mt-10">
@@ -1579,6 +1715,8 @@
               <button onclick="saveThemeSettings()" class="save-btn">Save Theme Settings</button>
               <div id="theme-message" class="hidden"></div>
             </div>
+
+
           </div>
 
           <!-- Account & Security Settings Tab -->
@@ -1688,7 +1826,9 @@
             <!-- Application Control -->
             <div id="application-control-section" class="settings-section">
               <h3>Application Control</h3>
-              <p class="text-base text-muted mb-15">Restart the application to apply configuration changes</p>
+              <p class="text-base text-muted mb-15">
+                Restart the application to apply configuration changes
+              </p>
 
               <div class="settings-field">
                 <label>Restart Application:</label>
@@ -1733,93 +1873,24 @@
 
             <!-- Cache Management -->
             <div id="cache-section" class="settings-section">
-              <h3>Cache Management</h3>
+              <h3>NZB Cache</h3>
               <p class="text-base text-muted mb-15">
-                Manage search cache to reduce API calls and improve performance
+                Caches NZB file content to avoid repeated provider hits on retries
               </p>
 
               <div class="settings-field">
                 <label>
                   <input type="checkbox" id="cache-enabled" />
-                  <span>Enable Search Cache</span>
+                  <span>Enable NZB Content Caching</span>
                 </label>
                 <p class="text-sm text-hint mt-5">
-                  Cache search results locally to reduce API calls and improve search performance
-                  (95%+ reduction in provider requests)
+                  When enabled, NZB files are fetched once and cached locally. Download retries use
+                  cached content without hitting the provider again.
                 </p>
-              </div>
-
-              <div class="settings-field">
-                <label for="cache-retention">Cache Retention (days):</label>
-                <p class="text-sm text-hint mb-10">
-                  How long to keep cached releases before they expire
-                </p>
-                <input
-                  type="number"
-                  id="cache-retention"
-                  min="1"
-                  max="365"
-                  placeholder="90"
-                  style="width: 150px"
-                />
-              </div>
-
-              <div class="settings-field">
-                <label for="cache-sync-interval">Sync Interval (minutes):</label>
-                <p class="text-sm text-hint mb-10">
-                  How often to sync latest releases from providers (recommended: 30-60 minutes)
-                </p>
-                <input
-                  type="number"
-                  id="cache-sync-interval"
-                  min="5"
-                  max="1440"
-                  placeholder="30"
-                  style="width: 150px"
-                />
-              </div>
-
-              <div class="settings-field">
-                <label>Cache Statistics:</label>
-                <div
-                  id="cache-stats-display"
-                  style="
-                    background: var(--card-bg);
-                    border: 1px solid var(--border-color);
-                    border-radius: 8px;
-                    padding: 15px;
-                    margin-top: 10px;
-                  "
-                >
-                  <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px">
-                    <div>
-                      <div class="text-sm text-hint">Total Releases</div>
-                      <div id="cache-total-releases" class="text-lg" style="margin-top: 5px">-</div>
-                    </div>
-                    <div>
-                      <div class="text-sm text-hint">Last Sync</div>
-                      <div id="cache-last-sync" class="text-lg" style="margin-top: 5px">-</div>
-                    </div>
-                  </div>
-                  <div style="margin-top: 15px; text-align: center">
-                    <a
-                      href="javascript:void(0)"
-                      onclick="loadCacheStats()"
-                      style="color: var(--primary-color); text-decoration: none; font-size: 14px"
-                    >
-                      🔄 Refresh Stats
-                    </a>
-                  </div>
-                </div>
               </div>
 
               <div style="margin-top: 30px">
-                <button
-                  onclick="saveCacheSettings()"
-                  class="save-btn"
-                >
-                  Save Cache Settings
-                </button>
+                <button onclick="saveCacheSettings()" class="save-btn">Save Cache Settings</button>
               </div>
 
               <hr style="margin: 30px 0; border: none; border-top: 1px solid var(--border-color)" />
@@ -1830,11 +1901,9 @@
               </div>
 
               <div class="settings-field">
-                <label>Purge Search Cache:</label>
+                <label>Purge NZB Cache:</label>
                 <p class="text-sm text-hint mb-10">
-                  Clear all cached search results. Next searches will fetch fresh data from
-                  providers.
-                  <span id="cache-stats-text" class="text-hint"></span>
+                  Clear all cached NZB content. Future downloads will re-fetch from providers.
                 </p>
                 <button
                   onclick="openPurgeCacheModal()"
@@ -1866,38 +1935,97 @@
         <form id="add-provider-form" class="p-20">
           <div class="settings-field">
             <label for="new-provider-type">Provider Type:</label>
-            <select id="new-provider-type" required>
+            <select id="new-provider-type" required onchange="onProviderTypeChange(this.value)">
               <option value="newsnab">Newsnab</option>
               <option value="rss">RSS</option>
-              <option value="torznab">Torznab</option>
-              <option value="custom">Custom</option>
+              <option value="internet_archive">Internet Archive</option>
             </select>
           </div>
           <div class="settings-field">
             <label for="new-provider-name">Name:</label>
             <input type="text" id="new-provider-name" placeholder="e.g., My Newsnab" required />
           </div>
-          <div class="settings-field">
-            <label for="new-provider-url">API URL:</label>
-            <input
-              type="text"
-              id="new-provider-url"
-              placeholder="http://example.com/api"
-              required
-            />
+          <!-- Standard Provider Fields (Newsnab/RSS/Torznab/Custom) -->
+          <div id="provider-standard-fields">
+            <div class="settings-field">
+              <label for="new-provider-url">API URL:</label>
+              <input type="text" id="new-provider-url" placeholder="http://example.com/api" />
+            </div>
+            <div class="settings-field">
+              <label for="new-provider-key">API Key:</label>
+              <input type="password" id="new-provider-key" placeholder="Enter API key" />
+            </div>
+            <div class="settings-field">
+              <label for="new-provider-categories"
+                >Categories
+                <span style="font-size: 11px; color: var(--text-secondary)"
+                  >(Newsnab only, e.g., 7000,7010,7030)</span
+                >:</label
+              >
+              <input type="text" id="new-provider-categories" placeholder="7000,7010,7020,7030" />
+            </div>
           </div>
-          <div class="settings-field">
-            <label for="new-provider-key">API Key:</label>
-            <input type="password" id="new-provider-key" placeholder="Enter API key" />
-          </div>
-          <div class="settings-field">
-            <label for="new-provider-categories"
-              >Categories
-              <span style="font-size: 11px; color: var(--text-secondary)"
-                >(Newsnab only, e.g., 7000,7010,7030)</span
-              >:</label
+          <!-- Internet Archive Provider Fields -->
+          <div id="provider-ia-fields" class="hidden">
+            <div class="settings-field">
+              <label for="new-provider-collections"
+                >Collections
+                <span style="font-size: 11px; color: var(--text-secondary)">(comma-separated)</span
+                >:</label
+              >
+              <input
+                type="text"
+                id="new-provider-collections"
+                placeholder="magazines, periodicals, americana, comics"
+              />
+            </div>
+            <div class="settings-field">
+              <label for="new-provider-formats"
+                >Preferred Formats
+                <span style="font-size: 11px; color: var(--text-secondary)"
+                  >(in order of preference)</span
+                >:</label
+              >
+              <input type="text" id="new-provider-formats" placeholder="PDF, EPUB, ZIP, GZIP" />
+            </div>
+            <div class="settings-field">
+              <label for="new-provider-priority"
+                >Priority
+                <span style="font-size: 11px; color: var(--text-secondary)"
+                  >(lower = searched first)</span
+                >:</label
+              >
+              <input
+                type="number"
+                id="new-provider-priority"
+                placeholder="10"
+                min="1"
+                max="100"
+                value="10"
+              />
+            </div>
+            <div
+              class="settings-field"
+              style="
+                padding: 10px;
+                background: var(--bg-secondary);
+                border-radius: 6px;
+                border: 1px solid var(--border-color);
+                margin-top: 10px;
+              "
             >
-            <input type="text" id="new-provider-categories" placeholder="7000,7010,7020,7030" />
+              <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px">
+                🔐 Optional Authentication (for restricted items)
+              </div>
+              <div style="margin-bottom: 8px">
+                <label for="new-provider-ia-username">Username (email):</label>
+                <input type="text" id="new-provider-ia-username" placeholder="user@example.com" />
+              </div>
+              <div>
+                <label for="new-provider-ia-password">Password:</label>
+                <input type="password" id="new-provider-ia-password" placeholder="Enter password" />
+              </div>
+            </div>
           </div>
           <div class="settings-field">
             <label>
@@ -1936,28 +2064,14 @@
             <label>Category:</label>
             <select id="edit-tracking-category" class="w-full">
               <option value="">Auto-detect from title</option>
-              <option value="Magazines">Magazines</option>
-              <option value="Comics">Comics</option>
-              <option value="Articles">Articles</option>
-              <option value="News">News</option>
+              <!-- Categories populated dynamically from API -->
             </select>
           </div>
 
           <div class="settings-field">
             <label>Language:</label>
             <select id="edit-tracking-language" class="w-full">
-              <option value="English">English</option>
-              <option value="German">German</option>
-              <option value="French">French</option>
-              <option value="Spanish">Spanish</option>
-              <option value="Italian">Italian</option>
-              <option value="Portuguese">Portuguese</option>
-              <option value="Dutch">Dutch</option>
-              <option value="Polish">Polish</option>
-              <option value="Russian">Russian</option>
-              <option value="Japanese">Japanese</option>
-              <option value="Chinese">Chinese</option>
-              <option value="Korean">Korean</option>
+              <!-- Languages populated dynamically from API -->
             </select>
           </div>
         </div>
@@ -1982,6 +2096,20 @@
               >For download client (SABnzbd/NZBGet)</small
             >
           </div>
+        </div>
+
+        <div class="settings-field">
+          <label for="edit-tracking-search-aliases">Alternative Search Names:</label>
+          <input
+            type="text"
+            id="edit-tracking-search-aliases"
+            placeholder="e.g., PC Gamer, PCGamer, PC Gamer US"
+            class="w-full"
+          />
+          <small style="color: var(--text-secondary); display: block; margin-top: 3px"
+            >Comma-separated alternative names to search for (disables automatic query
+            expansion)</small
+          >
         </div>
 
         <div class="settings-field">
@@ -2084,10 +2212,7 @@
           <label for="import-category">Category:</label>
           <select id="import-category" class="w-full">
             <option value="auto">Auto-detect from title</option>
-            <option value="Magazines">Magazines</option>
-            <option value="Comics">Comics</option>
-            <option value="Articles">Articles</option>
-            <option value="News">News</option>
+            <!-- Categories populated dynamically from API -->
           </select>
         </div>
 
@@ -2133,7 +2258,6 @@
               >
               <select id="search-filter-language" class="w-full">
                 <option value="">Any Language</option>
-                <option value="English" selected>English</option>
               </select>
             </div>
             <div style="flex: 1">
@@ -2195,10 +2319,7 @@
               <label>Category:</label>
               <select id="new-tracking-category" class="w-full">
                 <option value="">Auto-detect from title</option>
-                <option value="Magazines">Magazines</option>
-                <option value="Comics">Comics</option>
-                <option value="Articles">Articles</option>
-                <option value="News">News</option>
+                <!-- Categories populated dynamically from API -->
               </select>
             </div>
 
@@ -2229,15 +2350,24 @@
             </div>
           </div>
 
-          <div class="settings-field">
-            <label>Tracking Mode:</label>
-            <select id="new-tracking-mode" class="w-full">
-              <option value="none">Track Nothing - Monitor but don't auto-download</option>
-              <option value="new">
-                Track New Issues - Only download issues published after today
-              </option>
-              <option value="all">Track All Issues - Download all past and future issues</option>
-            </select>
+          <div class="field-row">
+            <div class="settings-field">
+              <label>Tracking Mode:</label>
+              <select id="new-tracking-mode" class="w-full">
+                <option value="none">Track Nothing - Monitor but don't auto-download</option>
+                <option value="new">
+                  Track New Issues - Only download issues published after today
+                </option>
+                <option value="all">Track All Issues - Download all past and future issues</option>
+              </select>
+            </div>
+
+            <div class="settings-field">
+              <label>Add to Stack (optional):</label>
+              <select id="new-tracking-stack" class="w-full">
+                <option value="">No stack</option>
+              </select>
+            </div>
           </div>
 
           <div class="settings-field">
@@ -2424,7 +2554,7 @@
 
     <!-- Manage Queue Modal -->
     <div id="manage-queue-modal" class="modal hidden">
-      <div class="modal-content" style="max-width: 900px">
+      <div class="modal-content" style="max-width: 1100px">
         <span class="close" onclick="downloads.closeManageQueueModal()">&times;</span>
         <div id="manage-queue-modal-content">
           <!-- Content will be dynamically populated by JavaScript -->
@@ -2525,6 +2655,111 @@
       </div>
     </div>
 
+    <!-- Stack Create/Edit Modal -->
+    <div id="stack-create-modal" class="modal hidden">
+      <div class="modal-content" style="max-width: 500px">
+        <span class="close" onclick="closeStackCreateModal()">&times;</span>
+        <h3 id="stack-modal-title">➕ Create New Stack</h3>
+        <div class="settings-field" style="margin-top: 16px">
+          <label for="stack-name-input">Name</label>
+          <input
+            type="text"
+            id="stack-name-input"
+            placeholder="e.g. Science Magazines"
+            class="w-full"
+            style="
+              padding: 10px 14px;
+              border: 1px solid var(--border-color);
+              border-radius: 6px;
+              background: var(--surface);
+              color: var(--text-primary);
+              font-size: 14px;
+            "
+          />
+        </div>
+        <div class="settings-field" style="margin-top: 12px">
+          <label for="stack-desc-input">Description (optional)</label>
+          <textarea
+            id="stack-desc-input"
+            placeholder="A brief description of this stack..."
+            rows="3"
+            class="w-full"
+            style="
+              padding: 10px 14px;
+              border: 1px solid var(--border-color);
+              border-radius: 6px;
+              background: var(--surface);
+              color: var(--text-primary);
+              font-size: 14px;
+              resize: vertical;
+            "
+          ></textarea>
+        </div>
+        <div class="settings-field" style="margin-top: 12px">
+          <label>Categories (optional)</label>
+          <div id="stack-categories-container" class="stack-categories-picker"></div>
+        </div>
+        <div class="flex gap-10 justify-end" style="margin-top: 20px">
+          <button
+            type="button"
+            onclick="closeStackCreateModal()"
+            class="save-btn btn-cancel flex-0"
+          >
+            Cancel
+          </button>
+          <button type="button" id="stack-modal-save-btn" class="save-btn flex-0">Create</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stack Delete Confirmation Modal -->
+    <div id="stack-delete-modal" class="modal hidden">
+      <div class="modal-content delete-modal-content" style="max-width: 500px">
+        <h3 class="delete-modal-title">🗑️ Delete Stack</h3>
+        <p class="delete-modal-subtitle">
+          Are you sure you want to delete <strong id="delete-stack-name"></strong>?
+        </p>
+        <p
+          id="delete-stack-count"
+          style="color: var(--text-secondary); font-size: 0.9em; margin-bottom: 16px"
+        ></p>
+        <div class="flex gap-10 justify-end">
+          <button
+            type="button"
+            onclick="closeDeleteStackModal()"
+            class="save-btn btn-cancel flex-0"
+          >
+            Cancel
+          </button>
+          <button type="button" onclick="confirmDeleteStack()" class="save-btn btn-delete flex-0">
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stack Member Assignment Modal -->
+    <div id="stack-assign-modal" class="modal hidden">
+      <div class="modal-content" style="max-width: 800px">
+        <span class="close" onclick="closeStackAssignModal()">&times;</span>
+        <h3>📋 Manage Members — <span id="assign-stack-name"></span></h3>
+        <div class="stack-assignment-container" style="margin-top: 16px">
+          <div class="stack-assignment-column">
+            <h4>Current Members</h4>
+            <div id="stack-current-members" style="min-height: 100px">
+              <!-- Populated by JavaScript -->
+            </div>
+          </div>
+          <div class="stack-assignment-column">
+            <h4>Available Items</h4>
+            <div id="stack-available-items" style="min-height: 100px">
+              <!-- Populated by JavaScript -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <footer
       style="
         max-width: 1280px;
@@ -2590,10 +2825,16 @@
         .then((data) => {
           const versionElement = document.getElementById('app-version');
           if (versionElement) {
-            versionElement.textContent = data.version;
+            let versionText = data.version;
+            if (data.build_hash && data.build_hash !== 'unknown') {
+              versionText += ` (${data.build_hash})`;
+            }
+            versionElement.textContent = versionText;
             if (data.is_dev) {
               versionElement.style.fontStyle = 'italic';
-              versionElement.title = 'Development version';
+              versionElement.title = `Development version - Build: ${data.build_hash || 'unknown'}`;
+            } else if (data.build_hash) {
+              versionElement.title = `Build: ${data.build_hash}`;
             }
           }
         })

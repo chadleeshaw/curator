@@ -10,7 +10,8 @@ from fastapi import HTTPException
 
 from core.constants.category import DEFAULT_CATEGORY
 from core.constants.errors import ErrorMessages
-from core.utils.db import with_db_session
+from core.constants.language import DEFAULT_LANGUAGE
+from core.utils.db import check_file_path_conflict, with_db_session
 from core.utils.error_handling import handle_api_errors
 from core.utils.files import get_library_dir, get_category_prefix
 from core.utils.general import (
@@ -18,6 +19,7 @@ from core.utils.general import (
     generate_olid,
     cleanup_empty_directories,
 )
+from core.utils.metadata_builder import is_periodical_special_edition, get_derived_field
 from models.database import PeriodicalTracking
 from web.schemas import TrackingPreferencesRequest
 from web.utils.responses import success_response
@@ -135,11 +137,7 @@ async def reorganize_tracking_files(tracking_id: int) -> Dict[str, Any]:
 
         for magazine in magazines:
             # Check if this is a special edition
-            is_special = False
-            if magazine.extra_metadata and isinstance(magazine.extra_metadata, dict):
-                is_special = magazine.extra_metadata.get("special_edition") is not None
-            if not is_special:
-                is_special = is_special_edition(magazine.title)
+            is_special = is_periodical_special_edition(magazine)
 
             # Only reorganize regular editions
             if not is_special:
@@ -156,7 +154,9 @@ async def reorganize_tracking_files(tracking_id: int) -> Dict[str, Any]:
                         "issue_date": magazine.issue_date,
                         "year": magazine.issue_date.year,
                         "month_name": magazine.issue_date.strftime("%B"),
-                        "language": (magazine.extra_metadata.get("language") if magazine.extra_metadata else None),
+                        "language": get_derived_field(magazine, "language") or DEFAULT_LANGUAGE,
+                        "volume": get_derived_field(magazine, "volume"),
+                        "issue_number": get_derived_field(magazine, "issue_number"),
                     }
 
                     # Get category from metadata
@@ -167,11 +167,10 @@ async def reorganize_tracking_files(tracking_id: int) -> Dict[str, Any]:
 
                     if new_pdf_path:
                         # Check for UNIQUE constraint conflicts
-                        existing_record = db.query(Periodical).filter_by(file_path=str(new_pdf_path)).first()
-                        if existing_record and existing_record.id != magazine.id:
+                        if check_file_path_conflict(db, str(new_pdf_path), magazine.id):
                             logger.error(
                                 f"Cannot update magazine {magazine.id}: Target path {new_pdf_path} "
-                                f"already exists in database for magazine {existing_record.id}."
+                                f"already exists in database for different periodical."
                             )
                             files_failed += 1
                             # Roll back the file move
@@ -240,9 +239,11 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
         old_title = tracking.title
         old_language = tracking.language
         old_pattern = tracking.organization_pattern
+        old_aliases = tracking.search_aliases
         title_changed = "title" in updates and updates["title"] != old_title
         language_changed = "language" in updates and updates["language"] != old_language
         pattern_changed = "organization_pattern" in updates and updates["organization_pattern"] != old_pattern
+        aliases_changed = "search_aliases" in updates and updates["search_aliases"] != old_aliases
 
         if "title" in updates:
             tracking.title = updates["title"]
@@ -262,6 +263,8 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
             tracking.delete_from_client_on_completion = updates["delete_from_client_on_completion"]
         if "organization_pattern" in updates:
             tracking.organization_pattern = updates["organization_pattern"]
+        if "search_aliases" in updates:
+            tracking.search_aliases = updates["search_aliases"]
 
         # If title changed, reorganize all files for this tracking record
         files_reorganized = 0
@@ -280,11 +283,7 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
 
             for magazine in magazines:
                 # Check if this is a special edition
-                is_special = False
-                if magazine.extra_metadata and isinstance(magazine.extra_metadata, dict):
-                    is_special = magazine.extra_metadata.get("special_edition") is not None
-                if not is_special:
-                    is_special = is_special_edition(magazine.title)
+                is_special = is_periodical_special_edition(magazine)
 
                 # Only reorganize regular editions
                 if not is_special:
@@ -304,11 +303,10 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
                     # Update database paths if reorganization succeeded
                     if new_pdf_path:
                         # Check if target path already exists in database (UNIQUE constraint check)
-                        existing_record = db.query(Periodical).filter_by(file_path=new_pdf_path).first()
-                        if existing_record and existing_record.id != magazine.id:
+                        if check_file_path_conflict(db, new_pdf_path, magazine.id):
                             logger.error(
                                 f"Cannot update magazine {magazine.id}: Target path {new_pdf_path} "
-                                f"already exists in database for magazine {existing_record.id}. "
+                                f"already exists in database for different periodical. "
                                 f"This is a data integrity issue that needs manual resolution."
                             )
                             # Roll back the file move since we can't update the database
@@ -372,6 +370,8 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
             "track_all_editions": tracking.track_all_editions,
             "track_new_only": tracking.track_new_only,
             "delete_from_client_on_completion": tracking.delete_from_client_on_completion,
+            "search_aliases": tracking.search_aliases,
+            "organization_pattern": tracking.organization_pattern,
         }
 
         return {
@@ -380,6 +380,7 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
             "old_language": old_language,
             "title_changed": title_changed,
             "language_changed": language_changed,
+            "aliases_changed": aliases_changed,
             "language_updates": language_updates,
             "pattern_changed": pattern_changed,
             "files_affected_by_pattern": files_affected_by_pattern,
@@ -392,6 +393,7 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
     tracking_data = result["tracking_data"]
     title_changed = result["title_changed"]
     language_changed = result["language_changed"]
+    aliases_changed = result["aliases_changed"]
     language_updates = result["language_updates"]
     pattern_changed = result["pattern_changed"]
     files_affected_by_pattern = result["files_affected_by_pattern"]
@@ -417,6 +419,16 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
             f"Language changed from '{old_language}' to '{tracking_data.get('language', 'English')}', "
             f"updated {language_updates} periodical records"
         )
+
+    # Reset skipped feed entries when title or aliases change so they get
+    # re-evaluated against the updated search terms on the next auto-download cycle
+    if (title_changed or aliases_changed) and _shared._feed_sync_service:
+        try:
+            reset_count = _shared._feed_sync_service.reset_skipped_entries()
+            if reset_count > 0:
+                logger.info(f"Reset {reset_count} feed entries for re-evaluation after tracking update")
+        except Exception:
+            logger.warning("Failed to reset skipped feed entries after tracking update")
 
     # Note: We don't trigger immediate auto-download here to avoid blocking the response.
     # The scheduled auto-download task will pick up changes on its next run.

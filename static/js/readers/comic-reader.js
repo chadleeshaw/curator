@@ -15,7 +15,14 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Setup keyboard navigation
-setupKeyboardNavigation(comicReader);
+setupKeyboardNavigation({
+  previousItem: () => comicReader.previousPage(),
+  nextItem: () => comicReader.nextPage(),
+  adjustZoom: (delta) => comicReader.adjustZoom(delta),
+  resetZoom: () => comicReader.resetZoom(),
+  toggleFullscreen: () => comicReader.toggleFullscreen(),
+  toggleSpreadMode: () => comicReader.toggleSpreadMode(),
+});
 
 // Setup mobile sidebar toggle
 setupMobileSidebar();

@@ -24,8 +24,8 @@ DATE_PATTERN_YEAR_ONLY = r"\b(\d{4})\b"
 """Pattern for standalone year: 2024"""
 
 # Multi-month patterns (generic, works with any month names)
-DATE_PATTERN_MULTI_MONTH = r"(.+?)\s*[-–]?\s*([A-Za-z]+)[/\-&]([A-Za-z]+)\s*(\d{4})"
-"""Pattern for multi-month periods: June/July 2024, Jun/Jul2024"""
+DATE_PATTERN_MULTI_MONTH = r"(.+?)\s*[-–]?\s*([A-Za-z]+)[/\-&_]([A-Za-z]+)\s*(\d{4})"
+"""Pattern for multi-month periods: June/July 2024, Jun/Jul2024, February_March 2019"""
 
 DATE_PATTERN_MULTI_MONTH_NUMERIC = r"(.+?)[\s.]+(\d{1,2})[\./\-](\d{1,2})[\s.]+(\d{4})"
 """Pattern for numeric multi-month periods: 11.10 2019, 05/06 2023, 12-01 2024, Magazine.11.10.2019"""
@@ -50,7 +50,7 @@ def get_month_year_pattern(languages: list[str] | None = None) -> str:
         >>> # Returns pattern matching "January 2024", "Enero 2024", etc.
     """
     month_pattern = get_month_regex_pattern(languages)
-    return rf"\b({month_pattern})[\s]+(\d{{4}})\b"
+    return rf"\b({month_pattern})[\s.-]+(\d{{4}})\b"
 
 
 def get_abbr_month_year_pattern(languages: list[str] | None = None) -> str:

@@ -1,24 +1,273 @@
 /* Curator - Periodical Page Styles */
 
+/* ==========================================================================
+   Bulk Select Mode
+   ========================================================================== */
+
+.bulk-select-btn {
+  padding: 8px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--surface-variant);
+  color: var(--text-secondary);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  align-self: center;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.bulk-select-btn .btn-label {
+  display: none;
+}
+
+.bulk-select-btn:hover {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: white;
+}
+
+.bulk-select-btn.active {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+/* Checkbox overlay on issue cards in bulk select mode */
+.issue-card .bulk-checkbox {
+  display: none;
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 10;
+  width: 24px;
+  height: 24px;
+  accent-color: var(--primary-color);
+  cursor: pointer;
+}
+
+.bulk-select-mode .issue-card {
+  position: relative;
+}
+
+.bulk-select-mode .issue-card .bulk-checkbox {
+  display: block;
+}
+
+.bulk-select-mode .issue-card .issue-cover {
+  position: relative;
+}
+
+.bulk-select-mode .issue-card.bulk-selected {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px var(--primary-color), 0 4px 12px rgb(99 102 241 / 0.3);
+}
+
+.bulk-select-mode .issue-card.bulk-selected .issue-cover::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgb(99 102 241 / 0.1);
+  pointer-events: none;
+}
+
+/* Bulk action bar (floating bottom) */
+.bulk-action-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 500;
+  background: var(--surface);
+  border-top: 2px solid var(--primary-color);
+  box-shadow: 0 -4px 20px rgb(0 0 0 / 0.2);
+  padding: 14px 24px;
+  transition:
+    transform 0.3s ease,
+    opacity 0.3s ease;
+}
+
+.bulk-action-bar.hidden {
+  display: none;
+}
+
+.bulk-action-content {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.bulk-action-info {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#bulk-selected-count {
+  color: var(--primary-color);
+  font-size: 1.1em;
+}
+
+.bulk-link-btn {
+  background: none;
+  border: none;
+  color: var(--primary-color);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.bulk-link-btn:hover {
+  color: var(--primary-dark);
+}
+
+.bulk-action-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.bulk-btn {
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  border: none;
+  transition:
+    background-color var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.bulk-btn:hover {
+  transform: translateY(-1px);
+}
+
+.btn-delete.bulk-btn {
+  background: var(--error-color);
+  color: white;
+}
+
+.btn-delete.bulk-btn:hover {
+  background: var(--error-dark, #dc2626);
+}
+
+/* ==========================================================================
+   Detail page breadcrumb (periodical + stacks pages)
+   ========================================================================== */
+
+.detail-breadcrumb {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 12px 24px;
+  background: var(--surface);
+  border-radius: 0 0 12px 12px;
+  box-shadow: var(--shadow-md);
+}
+
+/* Collapsible header banner (shared by periodical + stacks pages) */
+.collapsible-header {
+  transition:
+    max-height 0.3s ease,
+    padding 0.3s ease,
+    opacity 0.3s ease,
+    margin 0.3s ease;
+  max-height: 300px;
+  overflow: hidden;
+}
+
+.header-collapsed .collapsible-header {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  margin-bottom: 0;
+  opacity: 0;
+}
+
+/* ==========================================================================
+   Shared header content row (periodical + stacks detail pages)
+   ========================================================================== */
+
+.header-content-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  width: 100%;
+  gap: 16px;
+}
+
+.header-content-row h1 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-content-row .header-icon {
+  font-size: 0.9em;
+  opacity: 0.85;
+}
+
+.header-content-row .sort-controls {
+  flex-shrink: 0;
+}
+
+.header-content-row .sort-controls label {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.9em;
+  font-weight: 500;
+}
+
+.header-content-row .sort-controls select {
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.header-title-area {
+  flex: 1;
+  text-align: left;
+}
+
+/* ==========================================================================
+   Periodical Header
+   ========================================================================== */
+
 .periodical-header {
   background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
   color: white;
-  padding: 40px 20px;
-  margin-bottom: 30px;
+  padding: 20px 20px;
+  margin-bottom: 20px;
   text-align: center;
   border-radius: 8px;
 }
 
 .periodical-header h1 {
   margin: 0;
-  font-size: 2.5em;
+  font-size: 1.6em;
   font-weight: bold;
 }
 
 .periodical-header p {
-  margin: 10px 0 0 0;
+  margin: 4px 0 0 0;
   opacity: 0.9;
-  font-size: 1.1em;
+  font-size: 0.95em;
 }
 
 .back-button {
@@ -413,6 +662,62 @@ body.dark-mode #status-message.status-error {
   font-size: 0.85em;
 }
 
+/* Cover Upload */
+.cover-upload-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.form-input-file {
+  width: 100%;
+  padding: 8px;
+  border-radius: 5px;
+  border: 2px dashed var(--border-color);
+  background: var(--surface);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.form-input-file:hover {
+  border-color: var(--primary);
+  background: var(--surface-variant);
+}
+
+.cover-upload-preview {
+  position: relative;
+  display: inline-block;
+  max-width: 150px;
+}
+
+.cover-upload-preview img {
+  max-width: 100%;
+  max-height: 200px;
+  border-radius: 5px;
+  border: 2px solid var(--border-color);
+}
+
+.btn-remove-preview {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: var(--danger);
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-remove-preview:hover {
+  background: var(--danger-hover, #dc2626);
+}
+
 /* Metadata Footer */
 .metadata-footer {
   padding: 20px;
@@ -545,5 +850,37 @@ body.dark-mode #status-message.status-error {
     background: var(--error-color) !important;
     border-color: var(--error-color) !important;
     color: white !important;
+  }
+
+  /* Bulk action bar mobile */
+  .bulk-action-content {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .bulk-action-buttons {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .bulk-btn {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+
+  .bulk-select-btn {
+    width: 48px !important;
+    height: 48px !important;
+    min-width: 48px !important;
+    min-height: 48px !important;
+    padding: 0 !important;
+    font-size: 20px !important;
+    flex-shrink: 0 !important;
+    border-radius: 10px !important;
+    border: 2px solid var(--border-color) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
   }
 }

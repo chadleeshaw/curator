@@ -4,8 +4,15 @@
  * special edition management, and issue organization.
  */
 
+/* global FileReader */
+
 import { APIClient, APIHelper } from './core/api.js';
-import { CSS_CLASSES } from './core/constants.js';
+import { CSS_CLASSES, API_LIMITS } from './core/constants.js';
+import { UIUtils } from './core/ui-utils.js';
+import { initScrollCollapse } from './core/scroll-collapse.js';
+
+// Initialize scroll-collapse for detail page header
+initScrollCollapse();
 
 // Parse years data and special editions from data attributes
 const container = document.getElementById('periodical-container');
@@ -16,6 +23,81 @@ const specialEditionsData = container
 let pendingDeleteId = null;
 let currentMagazineId = null;
 let currentMagazineData = null;
+
+// Bulk selection state
+let bulkSelectMode = false;
+const selectedIssueIds = new Set();
+
+/**
+ * Load languages from API and populate the edit-language dropdown
+ *
+ * @returns {Promise<void>}
+ */
+async function loadLanguageDropdown() {
+  try {
+    const response = await APIClient.get('/api/constants/languages');
+    const data = await response.json();
+    if (data.success && data.languages) {
+      const dropdown = document.getElementById('edit-language');
+      if (!dropdown) return;
+      const currentValue = dropdown.value;
+      dropdown.innerHTML = '';
+      data.languages.forEach((lang) => {
+        const option = document.createElement('option');
+        option.value = lang;
+        option.textContent = lang;
+        dropdown.appendChild(option);
+      });
+      if (currentValue) {
+        dropdown.value = currentValue;
+      }
+    }
+  } catch (error) {
+    console.error('[Periodical] Failed to load languages:', error);
+  }
+}
+
+// Sorting state
+let currentSortField = localStorage.getItem('periodical-sort-field') || 'issue_date';
+let sortAscending = localStorage.getItem('periodical-sort-order') === 'asc'; // Default to desc for issue_date
+
+// Set initial sort UI state
+if (document.getElementById('periodical-sort-select')) {
+  document.getElementById('periodical-sort-select').value = currentSortField;
+  document.getElementById('periodical-sort-toggle').textContent = sortAscending ? '↑' : '↓';
+  updateSubtitle();
+}
+
+// Expose sorting functions globally
+window.setPeriodicalSort = setPeriodicalSort;
+window.togglePeriodicalSortOrder = togglePeriodicalSortOrder;
+window.toggleBulkSelectMode = toggleBulkSelectMode;
+
+/**
+ * Update subtitle based on current sort field
+ */
+function updateSubtitle() {
+  const subtitle = document.getElementById('periodical-subtitle');
+  if (!subtitle) return;
+  
+  // For issue_date sort, detect if grouped by year or volume
+  let issueGroupingLabel = 'Grouped by Publication Date';
+  if (currentSortField === 'issue_date' && yearsData.length > 0) {
+    // Check if the grouping keys look like years (numeric 4-digit) or volumes
+    const firstKey = String(yearsData[0].year);
+    const looksLikeYear = /^\d{4}$/.test(firstKey);
+    issueGroupingLabel = looksLikeYear ? 'Grouped by Year' : 'Grouped by Volume';
+  }
+  
+  const subtitles = {
+    issue_date: issueGroupingLabel,
+    title: 'Sorted by Title',
+    volume: 'Sorted by Volume',
+    added_date: 'Sorted by Date Added'
+  };
+  
+  subtitle.textContent = subtitles[currentSortField] || issueGroupingLabel;
+}
 
 /**
  * Helper function to extract special edition value from data structure.
@@ -51,20 +133,20 @@ function getSpecialEditionValue(data) {
 
 /**
  * Helper function to check if an issue is marked as a special edition.
- * Checks the boolean is_special_edition flag.
+ * Only checks the explicit is_special_edition flag in derived_metadata.
  *
  * @param {Object} data - The periodical data object
- * @returns {boolean} True if this is a special edition
+ * @returns {boolean} True if this is explicitly marked as a special edition
  */
 function isSpecialEdition(data) {
-  // Check derived_metadata.is_special_edition (boolean flag)
+  // Only check derived_metadata.is_special_edition (boolean flag)
+  // Do NOT fallback to title-based keyword matching
   if (data.derived_metadata?.is_special_edition?.value !== undefined) {
     return Boolean(data.derived_metadata.is_special_edition.value);
   }
 
-  // Fallback: if there's a special edition name/value, it's special
-  const specialValue = getSpecialEditionValue(data);
-  return Boolean(specialValue);
+  // Default to false - only explicitly marked issues are special editions
+  return false;
 }
 
 // Delete modal functions
@@ -99,11 +181,17 @@ function closeDeleteModal() {
 }
 
 // Close modal when clicking outside of it
+// Track mousedown target to prevent text selection drag from closing modal
+let deleteModalMouseDown = null;
+document.addEventListener('mousedown', (event) => {
+  deleteModalMouseDown = event.target;
+});
 document.addEventListener('click', (event) => {
   const modal = document.getElementById('delete-modal');
-  if (modal && event.target === modal) {
+  if (modal && event.target === modal && deleteModalMouseDown === modal) {
     closeDeleteModal();
   }
+  deleteModalMouseDown = null;
 });
 
 function renderIssues() {
@@ -120,20 +208,166 @@ function renderIssues() {
   // Title is already set correctly by the backend from MagazineTracking.title
   // No need to extract it from issue titles
 
-  // Render special editions section first, if any exist
+  // Render based on sort mode
+  if (currentSortField !== 'issue_date') {
+    renderFlatView(container);
+  } else {
+    renderGroupedView(container);
+  }
+}
+
+/**
+ * Helper function to get volume number from periodical metadata
+ * @param {Object} data - The periodical data object
+ * @returns {number} The volume number or 0 if not found
+ */
+function getVolumeNumber(data) {
+  // Check derived_metadata first (new structure)
+  const derivedVolume = data.derived_metadata?.volume?.value;
+  if (derivedVolume !== undefined && derivedVolume !== null) {
+    return parseInt(derivedVolume, 10) || 0;
+  }
+
+  // Check metadata (legacy structure)
+  const metadataVolume = data.metadata?.volume;
+  if (metadataVolume !== undefined && metadataVolume !== null) {
+    return parseInt(metadataVolume, 10) || 0;
+  }
+
+  return 0;
+}
+
+/**
+ * Sort issues based on current sort field and order
+ * @param {Array} issues - Array of issue objects
+ * @returns {Array} Sorted issues
+ */
+function sortIssues(issues) {
+  return issues.sort((a, b) => {
+    let comparison = 0;
+    
+    switch (currentSortField) {
+      case 'issue_date':
+        // Primary sort by issue_date
+        comparison = new Date(a.issue_date || 0) - new Date(b.issue_date || 0);
+        
+        // If both have invalid/missing dates (epoch 0), fallback to volume number
+        if (comparison === 0 && (!a.issue_date || !b.issue_date)) {
+          const volumeA = getVolumeNumber(a);
+          const volumeB = getVolumeNumber(b);
+          comparison = volumeA - volumeB;
+        }
+        break;
+      case 'title':
+        comparison = (a.special_edition_name || a.title || '').localeCompare(b.special_edition_name || b.title || '');
+        break;
+      case 'volume':
+        comparison = getVolumeNumber(a) - getVolumeNumber(b);
+        break;
+      case 'added_date':
+        comparison = new Date(a.created_at || 0) - new Date(b.created_at || 0);
+        break;
+    }
+    
+    return sortAscending ? comparison : -comparison;
+  });
+}
+
+/**
+ * Set the sort field and re-render
+ * @param {string} field - The field to sort by
+ */
+function setPeriodicalSort(field) {
+  currentSortField = field;
+  localStorage.setItem('periodical-sort-field', field);
+  updateSubtitle();
+  rerender();
+}
+
+/**
+ * Toggle sort order and re-render
+ */
+function togglePeriodicalSortOrder() {
+  sortAscending = !sortAscending;
+  localStorage.setItem('periodical-sort-order', sortAscending ? 'asc' : 'desc');
+  document.getElementById('periodical-sort-toggle').textContent = sortAscending ? '↑' : '↓';
+  rerender();
+}
+
+/**
+ * Re-render the issues with current sort settings
+ */
+function rerender() {
+  const container = document.getElementById('issues-container');
+  container.style.opacity = '0.5';
+  container.style.transition = 'opacity 0.2s ease';
+  
+  setTimeout(() => {
+    container.innerHTML = '';
+    
+    // For non-date sorts, show flattened view (no year grouping)
+    if (currentSortField !== 'issue_date') {
+      renderFlatView(container);
+    } else {
+      renderGroupedView(container);
+    }
+    
+    container.style.opacity = '1';
+  }, 100);
+}
+
+/**
+ * Render issues in a flat view (no year grouping)
+ * @param {HTMLElement} container - Container element
+ */
+function renderFlatView(container) {
+  // Collect all issues
+  const allIssues = [];
+  
+  if (specialEditionsData && specialEditionsData.length > 0) {
+    allIssues.push(...specialEditionsData);
+  }
+  
+  yearsData.forEach((yearData) => {
+    allIssues.push(...yearData.issues);
+  });
+  
+  // Sort all issues together
+  const sortedIssues = sortIssues(allIssues);
+  
+  // Create single grid
+  const issuesGrid = document.createElement('div');
+  issuesGrid.className = 'issues-grid';
+  issuesGrid.style.marginTop = '20px';
+  
+  sortedIssues.forEach((issue) => {
+    const issueCard = createIssueCard(issue);
+    issuesGrid.appendChild(issueCard);
+  });
+  
+  container.appendChild(issuesGrid);
+}
+
+/**
+ * Render issues grouped by year
+ * @param {HTMLElement} container - Container element
+ */
+function renderGroupedView(container) {
+  // Render special editions section with golden highlight
   if (specialEditionsData && specialEditionsData.length > 0) {
     const specialSection = document.createElement('div');
     specialSection.className = 'year-section special-edition-section';
 
     const specialTitle = document.createElement('h2');
     specialTitle.className = 'year-title special-edition-title';
-    specialTitle.textContent = '🌟 Special Editions';
+    specialTitle.textContent = 'Special Editions';
     specialSection.appendChild(specialTitle);
 
     const issuesGrid = document.createElement('div');
     issuesGrid.className = 'issues-grid';
 
-    specialEditionsData.forEach((issue) => {
+    const sortedSpecials = sortIssues([...specialEditionsData]);
+    sortedSpecials.forEach((issue) => {
       const issueCard = createIssueCard(issue);
       issuesGrid.appendChild(issueCard);
     });
@@ -142,8 +376,18 @@ function renderIssues() {
     container.appendChild(specialSection);
   }
 
-  // Render regular year sections
-  yearsData.forEach((yearData) => {
+  // Sort years based on current sort order
+  const sortedYearsData = [...yearsData].sort((a, b) => {
+    const yearA = String(a.year);
+    const yearB = String(b.year);
+    const comparison = yearA.localeCompare(yearB, undefined, { numeric: true });
+    return sortAscending ? comparison : -comparison;
+  });
+
+  // Re-render regular year sections
+  sortedYearsData.forEach((yearData) => {
+    const sortedIssues = sortIssues([...yearData.issues]);
+    
     const yearSection = document.createElement('div');
     yearSection.className = 'year-section';
 
@@ -155,7 +399,7 @@ function renderIssues() {
     const issuesGrid = document.createElement('div');
     issuesGrid.className = 'issues-grid';
 
-    yearData.issues.forEach((issue) => {
+    sortedIssues.forEach((issue) => {
       const issueCard = createIssueCard(issue);
       issuesGrid.appendChild(issueCard);
     });
@@ -169,6 +413,30 @@ function renderIssues() {
 function createIssueCard(issue) {
   const issueCard = document.createElement('div');
   issueCard.className = 'issue-card';
+  issueCard.dataset.issueId = issue.id;
+
+  // Bulk select checkbox (hidden by default, shown in bulk mode)
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.className = 'bulk-checkbox';
+  checkbox.checked = selectedIssueIds.has(issue.id);
+  checkbox.onclick = (e) => {
+    e.stopPropagation();
+    toggleIssueSelection(issue.id, checkbox);
+  };
+  issueCard.appendChild(checkbox);
+
+  // In bulk mode, clicking the card toggles selection
+  if (bulkSelectMode) {
+    issueCard.classList.toggle('bulk-selected', selectedIssueIds.has(issue.id));
+    issueCard.addEventListener('click', (e) => {
+      if (!bulkSelectMode) return;
+      // Don't toggle if clicking an action button
+      if (e.target.closest('.issue-actions button')) return;
+      checkbox.checked = !checkbox.checked;
+      toggleIssueSelection(issue.id, checkbox);
+    });
+  }
 
   const coverDiv = document.createElement('div');
   coverDiv.className = 'issue-cover';
@@ -202,8 +470,9 @@ function createIssueCard(issue) {
   if (issue.special_edition_name) {
     const specialEditionP = document.createElement('p');
     specialEditionP.className = 'issue-title';
-    specialEditionP.textContent = issue.special_edition_name;
-    specialEditionP.title = issue.special_edition_name;
+    const titleCased = UIUtils.toTitleCase(issue.special_edition_name);
+    specialEditionP.textContent = titleCased;
+    specialEditionP.title = titleCased;
     infoDiv.appendChild(specialEditionP);
   }
 
@@ -551,7 +820,6 @@ function closeMetadataModal() {
   cancelMetadataEdit();
 }
 
-// eslint-disable-next-line no-unused-vars -- Called from HTML onclick handlers
 function enableMetadataEdit() {
   if (!currentMagazineData) return;
 
@@ -581,17 +849,24 @@ function enableMetadataEdit() {
     languageContainer.style.opacity = '1';
   }
 
-  // Year field
+  // Year field - read from derived_metadata first, fall back to extra_metadata
   document.getElementById('edit-year').value =
-    (currentMagazineData.metadata && currentMagazineData.metadata.year) || '';
+    currentMagazineData.derived_metadata?.year?.value ??
+    currentMagazineData.metadata?.year ??
+    '';
 
-  // Month field
+  // Month field - read month_name from derived_metadata first, fall back to extra_metadata
   document.getElementById('edit-month').value =
-    (currentMagazineData.metadata && currentMagazineData.metadata.month) || '';
+    currentMagazineData.derived_metadata?.month_name?.value ??
+    currentMagazineData.metadata?.month ??
+    '';
 
-  // Country field
+  // Country field - read from derived_metadata first, fall back to extra_metadata
   const countryField = document.getElementById('edit-country');
-  countryField.value = (currentMagazineData.metadata && currentMagazineData.metadata.country) || '';
+  countryField.value =
+    currentMagazineData.derived_metadata?.country?.value ??
+    currentMagazineData.metadata?.country ??
+    '';
 
   // Disable country if controlled by tracking
   const countryContainer = document.getElementById('edit-country-container');
@@ -606,10 +881,15 @@ function enableMetadataEdit() {
   }
 
   // Issue-specific fields (always editable)
+  // Read from derived_metadata first (structured format), fall back to extra_metadata (legacy)
   document.getElementById('edit-issue-number').value =
-    (currentMagazineData.metadata && currentMagazineData.metadata.issue_number) || '';
+    currentMagazineData.derived_metadata?.issue_number?.value ??
+    currentMagazineData.metadata?.issue_number ??
+    '';
   document.getElementById('edit-volume').value =
-    (currentMagazineData.metadata && currentMagazineData.metadata.volume) || '';
+    currentMagazineData.derived_metadata?.volume?.value ??
+    currentMagazineData.metadata?.volume ??
+    '';
 
   // Always show special edition field in edit mode
   const specialField = document.getElementById('special-edition-name-field');
@@ -637,9 +917,100 @@ function cancelMetadataEdit() {
   document.getElementById('metadata-edit-form').classList.add(CSS_CLASSES.HIDDEN);
   document.getElementById('metadata-view-buttons').classList.remove(CSS_CLASSES.HIDDEN);
   document.getElementById('metadata-edit-buttons').classList.add(CSS_CLASSES.HIDDEN);
+  // Clear any cover upload preview
+  clearCoverUpload();
 }
 
-// eslint-disable-next-line no-unused-vars -- Called from HTML onclick handlers
+function previewCoverUpload(input) {
+  const preview = document.getElementById('cover-upload-preview');
+  const previewImg = document.getElementById('cover-preview-img');
+
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      previewImg.src = e.target.result;
+      preview.classList.remove(CSS_CLASSES.HIDDEN);
+    };
+    reader.readAsDataURL(input.files[0]);
+  } else {
+    preview.classList.add(CSS_CLASSES.HIDDEN);
+    previewImg.src = '';
+  }
+}
+
+function clearCoverUpload() {
+  const fileInput = document.getElementById('edit-cover-file');
+  const preview = document.getElementById('cover-upload-preview');
+  const previewImg = document.getElementById('cover-preview-img');
+
+  if (fileInput) fileInput.value = '';
+  if (preview) preview.classList.add(CSS_CLASSES.HIDDEN);
+  if (previewImg) previewImg.src = '';
+}
+
+async function regenerateThumbnailOcr() {
+  if (!currentMagazineId) return;
+
+  showNotification('🔄 Regenerating thumbnail and queuing OCR...', 'info');
+
+  try {
+    const data = await APIHelper.executeWithErrorHandling(async () => {
+      const response = await APIClient.post(
+        `/api/periodicals/${currentMagazineId}/regenerate-thumbnail-ocr`
+      );
+      return await response.json();
+    }, 'Periodical');
+
+    if (data.skipped) {
+      showNotification(`ℹ️ ${data.message}`, 'info');
+      return;
+    }
+
+    const ocrNote = data.ocr_queued
+      ? 'OCR job queued — metadata will update when processing completes.'
+      : data.ocr_message || 'OCR was not queued.';
+
+    showNotification(`✅ Thumbnail regenerated. ${ocrNote}`, 'success');
+
+    // Refresh the metadata modal and page to show updated cover
+    await viewMetadata(currentMagazineId);
+    setTimeout(() => window.location.reload(), 1500);
+  } catch (error) {
+    console.error('[Periodical] Error regenerating thumbnail/OCR:', error);
+    const message = error.toUserMessage
+      ? error.toUserMessage()
+      : 'Failed to regenerate thumbnail. You can upload a cover manually via Edit Metadata.';
+    showNotification(message, 'error');
+  }
+}
+
+async function uploadCoverImage(magazineId) {
+  const fileInput = document.getElementById('edit-cover-file');
+  if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+    return false; // No file to upload
+  }
+
+  const formData = new FormData();
+  formData.append('file', fileInput.files[0]);
+
+  showNotification('🖼️ Uploading cover image...', 'info');
+
+  const response = await fetch(`/api/periodicals/${magazineId}/upload-cover`, {
+    method: 'POST',
+    body: formData,
+    headers: {
+      Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to upload cover');
+  }
+
+  return true; // Successfully uploaded
+}
+
 async function saveMetadataEdit() {
   if (!currentMagazineId) return;
 
@@ -672,13 +1043,19 @@ async function saveMetadataEdit() {
   const currentCoverPage = currentMagazineData.metadata?.cover_page || 1;
   const shouldRegenerateCover = coverPage && parseInt(coverPage) !== currentCoverPage;
 
+  // Check if a custom cover image was selected
+  const coverFileInput = document.getElementById('edit-cover-file');
+  const hasCustomCover = coverFileInput && coverFileInput.files && coverFileInput.files[0];
+
   try {
     await APIHelper.executeWithErrorHandling(async () => {
       await APIClient.put(`/api/periodicals/${currentMagazineId}`, updates);
     }, 'Periodical');
 
-    // Regenerate cover if page number changed
-    if (shouldRegenerateCover) {
+    // Handle cover: custom upload takes priority over page number regeneration
+    if (hasCustomCover) {
+      await uploadCoverImage(currentMagazineId);
+    } else if (shouldRegenerateCover) {
       showNotification('🔄 Regenerating cover from page ' + coverPage, 'info');
       await APIHelper.executeWithErrorHandling(async () => {
         await APIClient.post(`/api/periodicals/${currentMagazineId}/regenerate-cover`, {
@@ -688,6 +1065,9 @@ async function saveMetadataEdit() {
     }
 
     await viewMetadata(currentMagazineId);
+
+    // Clear the file input
+    clearCoverUpload();
 
     // Show success message
     showNotification('✅ Metadata updated successfully', 'success');
@@ -732,11 +1112,17 @@ function showNotification(message, type) {
 }
 
 // Close metadata modal when clicking outside
+// Track mousedown target to prevent text selection drag from closing modal
+let metadataModalMouseDown = null;
+document.addEventListener('mousedown', (event) => {
+  metadataModalMouseDown = event.target;
+});
 document.addEventListener('click', (event) => {
   const modal = document.getElementById('metadata-modal');
-  if (event.target === modal) {
+  if (event.target === modal && metadataModalMouseDown === modal) {
     closeMetadataModal();
   }
+  metadataModalMouseDown = null;
 });
 
 // Delete an issue - opens the modal
@@ -745,7 +1131,6 @@ function deleteIssue(magazineId, title) {
 }
 
 // Confirm delete from modal
-// eslint-disable-next-line no-unused-vars -- Called from HTML onclick handlers
 async function confirmDeleteIssue() {
   if (!pendingDeleteId) {
     console.error('No issue selected for deletion');
@@ -792,10 +1177,10 @@ async function confirmDeleteIssue() {
           window.location.href = '/#library';
         }, 1000);
       } else {
-        // Redirect to library to avoid staying on deleted periodical's page
-        statusDiv.textContent = '✓ Issue deleted. Returning to library...';
+        // Reload to show updated issue list
+        statusDiv.textContent = '✓ Issue deleted. Refreshing...';
         setTimeout(() => {
-          window.location.href = '/#library';
+          location.reload();
         }, 1000);
       }
     }, 1500);
@@ -809,14 +1194,45 @@ async function confirmDeleteIssue() {
   }
 }
 
-// eslint-disable-next-line no-unused-vars -- Called from HTML onclick handlers
 function goBack() {
+  // If we came from a stack page, go back there
+  if (window._stackReturnUrl) {
+    window.location.href = window._stackReturnUrl;
+    return;
+  }
   // Navigate to main page with library hash
   window.location.href = '/#library';
 }
 
+// Detect if navigated from a stack detail page and update breadcrumb
+(function initBreadcrumb() {
+  try {
+    const ref = document.referrer;
+    if (ref) {
+      const refUrl = new URL(ref);
+      const stackMatch = refUrl.pathname.match(/^\/stacks\/([^/]+)/);
+      if (stackMatch) {
+        window._stackReturnUrl = refUrl.pathname;
+        const breadcrumb = document.getElementById('breadcrumb');
+        if (breadcrumb) {
+          const stackSlug = stackMatch[1];
+          const title = document.getElementById('periodical-title')?.textContent || '';
+          const stackName = UIUtils.toTitleCase(decodeURIComponent(stackSlug).replace(/-/g, ' '));
+          breadcrumb.innerHTML =
+            `<a href="/#library">Library</a>` +
+            `<span class="separator">/</span>` +
+            `<a href="/stacks/${stackSlug}">${stackName}</a>` +
+            `<span class="separator">/</span>` +
+            `<span class="current">${title}</span>`;
+        }
+      }
+    }
+  } catch {
+    // Ignore referrer parsing errors
+  }
+})();
+
 // Move issue modal functions
-// eslint-disable-next-line no-unused-vars -- Called from HTML onclick handlers
 async function openMoveIssueModal() {
   if (!currentMagazineId) {
     alert('No magazine selected');
@@ -835,7 +1251,7 @@ async function openMoveIssueModal() {
   try {
     // Fetch all tracking records
     const data = await APIHelper.executeWithErrorHandling(async () => {
-      const response = await APIClient.get('/api/periodicals/tracking?limit=1000');
+      const response = await APIClient.get(`/api/periodicals/tracking?limit=${API_LIMITS.TRACKING_LIST}`);
       return await response.json();
     }, 'Periodical');
 
@@ -876,7 +1292,6 @@ function closeMoveIssueModal() {
   document.getElementById('move-issue-modal').classList.add(CSS_CLASSES.HIDDEN);
 }
 
-// eslint-disable-next-line no-unused-vars -- Called from HTML onclick handlers
 async function confirmMoveIssue() {
   const targetTrackingId = document.getElementById('target-tracking-select').value;
 
@@ -934,7 +1349,6 @@ async function confirmMoveIssue() {
 }
 
 // Toggle special edition status
-// eslint-disable-next-line no-unused-vars -- Called from HTML onclick handlers
 async function toggleSpecialEdition() {
   if (!currentMagazineId || !currentMagazineData) {
     alert('No magazine selected');
@@ -979,6 +1393,344 @@ async function toggleSpecialEdition() {
   }
 }
 
+// ==========================================================================
+// Bulk Selection Mode
+// ==========================================================================
+
+/**
+ * Toggle bulk selection mode on/off
+ */
+function toggleBulkSelectMode() {
+  bulkSelectMode = !bulkSelectMode;
+  selectedIssueIds.clear();
+
+  const container = document.getElementById('issues-container');
+  const toggleBtn = document.getElementById('bulk-select-toggle');
+  const actionBar = document.getElementById('bulk-action-bar');
+
+  if (bulkSelectMode) {
+    container.classList.add('bulk-select-mode');
+    toggleBtn.classList.add('active');
+    toggleBtn.innerHTML = '<span class="bulk-select-icon">☑</span><span class="btn-label"> Selecting...</span>';
+    actionBar.classList.remove(CSS_CLASSES.HIDDEN);
+  } else {
+    container.classList.remove('bulk-select-mode');
+    toggleBtn.classList.remove('active');
+    toggleBtn.innerHTML = '<span class="bulk-select-icon">☑</span><span class="btn-label"> Select</span>';
+    actionBar.classList.add(CSS_CLASSES.HIDDEN);
+  }
+
+  updateBulkSelectionCount();
+  rerender();
+}
+
+/**
+ * Toggle selection of an individual issue
+ * @param {number} issueId - ID of the issue to toggle
+ * @param {HTMLInputElement} checkbox - The checkbox element
+ */
+function toggleIssueSelection(issueId, checkbox) {
+  if (checkbox.checked) {
+    selectedIssueIds.add(issueId);
+  } else {
+    selectedIssueIds.delete(issueId);
+  }
+
+  // Update card selected visual
+  const card = checkbox.closest('.issue-card');
+  if (card) {
+    card.classList.toggle('bulk-selected', checkbox.checked);
+  }
+
+  updateBulkSelectionCount();
+}
+
+/**
+ * Select all visible issues
+ */
+function selectAllIssues() {
+  const cards = document.querySelectorAll('.issue-card');
+  cards.forEach((card) => {
+    const id = parseInt(card.dataset.issueId, 10);
+    if (id) {
+      selectedIssueIds.add(id);
+      card.classList.add('bulk-selected');
+      const cb = card.querySelector('.bulk-checkbox');
+      if (cb) cb.checked = true;
+    }
+  });
+  updateBulkSelectionCount();
+}
+
+/**
+ * Deselect all issues
+ */
+function deselectAllIssues() {
+  selectedIssueIds.clear();
+  const cards = document.querySelectorAll('.issue-card');
+  cards.forEach((card) => {
+    card.classList.remove('bulk-selected');
+    const cb = card.querySelector('.bulk-checkbox');
+    if (cb) cb.checked = false;
+  });
+  updateBulkSelectionCount();
+}
+
+/**
+ * Update the selected count display in the action bar
+ */
+function updateBulkSelectionCount() {
+  const countEl = document.getElementById('bulk-selected-count');
+  if (countEl) {
+    countEl.textContent = selectedIssueIds.size;
+  }
+}
+
+/**
+ * Get array of selected issue IDs
+ * @returns {number[]}
+ */
+function getSelectedIds() {
+  return Array.from(selectedIssueIds);
+}
+
+// ==========================================================================
+// Bulk Move to Tracking
+// ==========================================================================
+
+async function openBulkMoveModal() {
+  const ids = getSelectedIds();
+  if (ids.length === 0) {
+    showNotification('No issues selected', 'error');
+    return;
+  }
+
+  const modal = document.getElementById('bulk-move-modal');
+  const loading = document.getElementById('bulk-move-loading');
+  const options = document.getElementById('bulk-move-options');
+  const select = document.getElementById('bulk-target-tracking-select');
+  const countEl = document.getElementById('bulk-move-count');
+
+  countEl.textContent = ids.length;
+  modal.classList.remove(CSS_CLASSES.HIDDEN);
+  loading.classList.remove(CSS_CLASSES.HIDDEN);
+  options.classList.add(CSS_CLASSES.HIDDEN);
+
+  try {
+    const data = await APIHelper.executeWithErrorHandling(async () => {
+      const response = await APIClient.get(`/api/periodicals/tracking?limit=${API_LIMITS.TRACKING_LIST}`);
+      return await response.json();
+    }, 'Periodical');
+
+    const trackingRecords = data.tracked_magazines || [];
+
+    select.innerHTML = '<option value="">Select a tracking record...</option>';
+
+    trackingRecords.forEach((tracking) => {
+      const option = document.createElement('option');
+      option.value = tracking.id;
+      option.textContent = `${tracking.title} (${tracking.category || 'Auto-detect'} - ${tracking.language || 'English'})`;
+      select.appendChild(option);
+    });
+
+    loading.classList.add(CSS_CLASSES.HIDDEN);
+    options.classList.remove(CSS_CLASSES.HIDDEN);
+
+    select.onchange = function () {
+      document.getElementById('confirm-bulk-move-btn').disabled = !this.value;
+    };
+  } catch (error) {
+    console.error('[Periodical] Error loading tracking records for bulk move:', error);
+    const message = error.toUserMessage ? error.toUserMessage() : 'Failed to load tracking options';
+    showNotification(message, 'error');
+    closeBulkMoveModal();
+  }
+}
+
+function closeBulkMoveModal() {
+  document.getElementById('bulk-move-modal').classList.add(CSS_CLASSES.HIDDEN);
+}
+
+async function confirmBulkMove() {
+  const targetTrackingId = document.getElementById('bulk-target-tracking-select').value;
+  const ids = getSelectedIds();
+
+  if (!targetTrackingId || ids.length === 0) {
+    showNotification('Please select a tracking record', 'error');
+    return;
+  }
+
+  const confirmBtn = document.getElementById('confirm-bulk-move-btn');
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = 'Moving...';
+
+  try {
+    const totalIssues = document.querySelectorAll('.issue-card').length;
+    const isMovingAll = ids.length >= totalIssues;
+
+    const response = await APIHelper.executeWithErrorHandling(async () => {
+      return await APIClient.post('/api/periodicals/bulk/move-to-tracking', {
+        periodical_ids: ids,
+        target_tracking_id: parseInt(targetTrackingId, 10),
+      });
+    }, 'Periodical');
+
+    const result = await response.json();
+
+    const statusDiv = document.getElementById('status-message');
+    statusDiv.className = 'status-success mt-20 p-15 rounded';
+    statusDiv.textContent = `✓ ${result.message}`;
+    statusDiv.style.display = 'block';
+
+    closeBulkMoveModal();
+    toggleBulkSelectMode();
+
+    if (isMovingAll) {
+      statusDiv.textContent = '✓ All issues moved. Returning to library...';
+      setTimeout(() => {
+        window.location.href = '/#library';
+      }, 1500);
+    } else {
+      setTimeout(() => {
+        location.reload();
+      }, 1500);
+    }
+  } catch (error) {
+    console.error('[Periodical] Error in bulk move:', error);
+    const message = error.toUserMessage ? error.toUserMessage() : error.message;
+    showNotification('Failed to move issues: ' + message, 'error');
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = 'Move Issues';
+  }
+}
+
+// ==========================================================================
+// Bulk Regenerate Thumbnail & OCR
+// ==========================================================================
+
+function openBulkRegenerateModal() {
+  const ids = getSelectedIds();
+  if (ids.length === 0) {
+    showNotification('No issues selected', 'error');
+    return;
+  }
+
+  const countEl = document.getElementById('bulk-regenerate-count');
+  countEl.textContent = ids.length;
+
+  const modal = document.getElementById('bulk-regenerate-modal');
+  modal.classList.remove(CSS_CLASSES.HIDDEN);
+}
+
+function closeBulkRegenerateModal() {
+  document.getElementById('bulk-regenerate-modal').classList.add(CSS_CLASSES.HIDDEN);
+}
+
+async function confirmBulkRegenerate() {
+  const ids = getSelectedIds();
+  if (ids.length === 0) return;
+
+  const confirmBtn = document.getElementById('confirm-bulk-regenerate-btn');
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = 'Regenerating...';
+
+  try {
+    const response = await APIHelper.executeWithErrorHandling(async () => {
+      return await APIClient.post('/api/periodicals/bulk/regenerate-thumbnail-ocr', {
+        periodical_ids: ids,
+      });
+    }, 'Periodical');
+
+    const result = await response.json();
+
+    showNotification(`✅ ${result.message}`, 'success');
+
+    closeBulkRegenerateModal();
+    toggleBulkSelectMode();
+
+    setTimeout(() => {
+      location.reload();
+    }, 1500);
+  } catch (error) {
+    console.error('[Periodical] Error in bulk regenerate:', error);
+    const message = error.toUserMessage ? error.toUserMessage() : error.message;
+    showNotification('Failed to regenerate: ' + message, 'error');
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = 'Regenerate';
+  }
+}
+
+// ==========================================================================
+// Bulk Delete
+// ==========================================================================
+
+function openBulkDeleteModal() {
+  const ids = getSelectedIds();
+  if (ids.length === 0) {
+    showNotification('No issues selected', 'error');
+    return;
+  }
+
+  const countEl = document.getElementById('bulk-delete-count');
+  countEl.textContent = ids.length;
+
+  const modal = document.getElementById('bulk-delete-modal');
+  modal.classList.remove(CSS_CLASSES.HIDDEN);
+}
+
+function closeBulkDeleteModal() {
+  document.getElementById('bulk-delete-modal').classList.add(CSS_CLASSES.HIDDEN);
+}
+
+async function confirmBulkDelete() {
+  const ids = getSelectedIds();
+  if (ids.length === 0) return;
+
+  const deleteOption = document.querySelector('input[name="bulk-delete-option"]:checked');
+  if (!deleteOption) return;
+
+  const deleteFiles = deleteOption.value === 'delete-files';
+  const markAsBad = document.getElementById('bulk-mark-as-bad')?.checked || false;
+
+  const totalIssues = document.querySelectorAll('.issue-card').length;
+  const isDeletingAll = ids.length >= totalIssues;
+
+  try {
+    const response = await APIHelper.executeWithErrorHandling(async () => {
+      return await APIClient.post('/api/periodicals/bulk/delete', {
+        periodical_ids: ids,
+        delete_files: deleteFiles,
+        mark_as_bad: markAsBad,
+      });
+    }, 'Periodical');
+
+    const result = await response.json();
+
+    const statusDiv = document.getElementById('status-message');
+    statusDiv.className = 'status-success mt-20 p-15 rounded';
+    statusDiv.textContent = `✓ ${result.message}`;
+    statusDiv.style.display = 'block';
+
+    closeBulkDeleteModal();
+    toggleBulkSelectMode();
+
+    if (isDeletingAll) {
+      statusDiv.textContent = '✓ All issues deleted. Returning to library...';
+      setTimeout(() => {
+        window.location.href = '/#library';
+      }, 1500);
+    } else {
+      setTimeout(() => {
+        location.reload();
+      }, 1500);
+    }
+  } catch (error) {
+    console.error('[Periodical] Error in bulk delete:', error);
+    const message = error.toUserMessage ? error.toUserMessage() : error.message;
+    showNotification('Failed to delete issues: ' + message, 'error');
+  }
+}
+
 // Expose functions to global scope for HTML onclick handlers
 // Must be done immediately so they're available when HTML loads
 window.goBack = goBack;
@@ -992,9 +1744,28 @@ window.toggleSpecialEdition = toggleSpecialEdition;
 window.openMoveIssueModal = openMoveIssueModal;
 window.closeMoveIssueModal = closeMoveIssueModal;
 window.confirmMoveIssue = confirmMoveIssue;
+window.previewCoverUpload = previewCoverUpload;
+window.clearCoverUpload = clearCoverUpload;
+window.regenerateThumbnailOcr = regenerateThumbnailOcr;
+
+// Bulk operation functions
+window.selectAllIssues = selectAllIssues;
+window.deselectAllIssues = deselectAllIssues;
+window.openBulkMoveModal = openBulkMoveModal;
+window.closeBulkMoveModal = closeBulkMoveModal;
+window.confirmBulkMove = confirmBulkMove;
+window.openBulkRegenerateModal = openBulkRegenerateModal;
+window.closeBulkRegenerateModal = closeBulkRegenerateModal;
+window.confirmBulkRegenerate = confirmBulkRegenerate;
+window.openBulkDeleteModal = openBulkDeleteModal;
+window.closeBulkDeleteModal = closeBulkDeleteModal;
+window.confirmBulkDelete = confirmBulkDelete;
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
+  // Load dynamic dropdown data
+  loadLanguageDropdown();
+
   // Ensure delete modal is closed on page load
   const deleteModal = document.getElementById('delete-modal');
   if (deleteModal && typeof deleteModal.close === 'function') {
@@ -1012,7 +1783,7 @@ document.addEventListener('DOMContentLoaded', () => {
       message.style.padding = '40px';
       message.style.color = 'var(--text-secondary)';
       message.innerHTML =
-        '<p>This periodical has no issues remaining.</p><p><button onclick="goBack()" class="back-button">← Back to Library</button></p>';
+        `<p>This periodical has no issues remaining.</p><p><button onclick="goBack()" class="back-button">← ${window._stackReturnUrl ? 'Back to Stack' : 'Back to Library'}</button></p>`;
       const statusDiv = document.getElementById('status-message');
       if (statusDiv && statusDiv.style.display === 'none') {
         // Show helpful message if not already showing deletion success
@@ -1020,7 +1791,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   } catch (error) {
     console.error('Error rendering issues:', error);
-    // If there's an error (e.g., no data), go back to library
-    window.location.href = '/#library';
+    const errorDiv = document.getElementById('status-message');
+    if (errorDiv) {
+      errorDiv.className = 'status-error mt-20 p-15 rounded';
+      errorDiv.textContent = `Error loading issues: ${error.message}`;
+      errorDiv.style.display = 'block';
+    }
   }
 });

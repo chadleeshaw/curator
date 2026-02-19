@@ -28,6 +28,9 @@ TITLE_PATTERN_SPACE_MONTH_ONLY = r"(.+?)\s+([A-Za-z]+)$"
 TITLE_PATTERN_ISO_DATE = r"(.+?)\s+(\d{4})-(\d{2})$"
 """Pattern for Title YYYY-MM: PC Gamer 2024-12"""
 
+TITLE_PATTERN_YEAR_NUMERIC_MONTH = r"(.+?)\s+(\d{4})\s+(\d{1,2})$"
+"""Pattern for Title YYYY MM: Magazine 2017 12"""
+
 TITLE_PATTERN_ISSUE_NUMBER = r"^(.+?)[\.\s]+(?:no\.?|number|issue)[\.\s]*(\d{1,3})[\.\s]+(\d{4})(?:[\.\s]+(.+))?$"
 """Pattern for Title No.XXX YYYY: PC Gamer No.405 2024"""
 
@@ -39,11 +42,26 @@ TITLE_PATTERN_VOLUME_ISSUE = (
 TITLE_PATTERN_SEASONAL = r"^(.+?)[\.\s]+(spring|summer|fall|autumn|winter)[\.\s]+(\d{4})(?:[\.\s]+(.+))?$"
 """Pattern for Title Season YYYY: 2600 Winter 2024"""
 
+# Patterns for volume/issue WITHOUT year (for magazines that use volume numbering)
+TITLE_PATTERN_VOLUME_ONLY = r"^(.+?)[\.\s\-]+vol\.?[\.\s]*(\d{1,4})(?:[\.\s\-]+(.+))?$"
+"""Pattern for Title Vol.XXX (no year): Magazine Vol.260"""
+
+TITLE_PATTERN_ISSUE_ONLY = r"^(.+?)[\.\s\-]+(?:no\.?|number|issue|#)[\.\s]*(\d{1,4})(?:[\.\s\-]+(.+))?$"
+"""Pattern for Title No.XXX (no year): PC Gamer Issue 405"""
+TITLE_SUFFIX_ISSUE_NUMBER = r"^(?:no\.?|number|issue|#)\s*(\d{1,4})"
+"""Pattern to detect issue-number suffixes: No304, No.5, Issue 42, #99"""
+TITLE_PATTERN_LEADING_ISSUE = r"^(\d{1,4})\s*-\s*(.+?)(?:\s*-\s*vol\.?[\.\s]*(\d{1,4}))?(?:\s*-\s*(.+))?$"
+"""Pattern for XXX - Title (leading issue number): 260 - Magazine - Vol.260 - Cover Model
+Groups: (1) issue number, (2) title, (3) volume if present, (4) suffix if present"""
+
 TITLE_PATTERN_DATE_ONLY_COMPACT = r"^([A-Za-z]+)(\d{4})$"
 """Pattern for date-only filename (compact): Apr2001"""
 
 TITLE_PATTERN_DATE_ONLY_SPACED = r"^([A-Za-z]+)\s+(\d{4})$"
 """Pattern for date-only filename (spaced): April 2001"""
+
+TITLE_PATTERN_TIMESTAMP_ID = r"^(.+?)\s*\((\d{4})(\d{2})(\d{2})[_\-]?\d{0,6}\)$"
+"""Pattern for Title (YYYYMMDD_HHMMSS) download timestamps: Magazine (20260205_235420)"""
 
 # ==============================================================================
 # TITLE CLEANUP PATTERNS

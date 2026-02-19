@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 from datetime import datetime
 
+from core.constants.files import YEAR_STRING_LENGTH
 from core.constants.language import DEFAULT_LANGUAGE
 
 logger = logging.getLogger(__name__)
@@ -198,6 +199,13 @@ class Parser:
             # Only provider date available (or neither)
             final_publication_date = publication_date
 
+        # Enrich raw_metadata with parsed volume/issue from NZB title
+        enriched_metadata = dict(raw_metadata or {})
+        if nzb_metadata.get("volume") is not None:
+            enriched_metadata["volume"] = nzb_metadata["volume"]
+        if nzb_metadata.get("issue") is not None:
+            enriched_metadata["issue"] = nzb_metadata["issue"]
+
         return ParsedSearchResult(
             title=cleaned_title,
             original_title=title,
@@ -210,7 +218,7 @@ class Parser:
             publication_date=final_publication_date,
             provider=provider,
             url=url,
-            raw_metadata=raw_metadata or {},
+            raw_metadata=enriched_metadata,
         )
 
     def parse_download_file(
@@ -286,7 +294,7 @@ class Parser:
         # Try to find year in path
         year = None
         for part in file_path.parts:
-            if part.isdigit() and len(part) == 4:
+            if part.isdigit() and len(part) == YEAR_STRING_LENGTH:
                 try:
                     year_val = int(part)
                     if 1900 <= year_val <= 2100:

@@ -16,7 +16,7 @@ from unittest.mock import patch
 from core.utils.general import (
     hash_file_in_chunks,
     is_special_edition,
-    find_pdf_epub_files,
+    find_supported_files,
     cleanup_empty_directories,
 )
 
@@ -132,17 +132,17 @@ class TestIsSpecialEdition:
         """Test detection of 'annual' keyword."""
         assert is_special_edition("National Geographic Annual Edition")
         assert is_special_edition("Forbes Annual Report 2024")
-        assert is_special_edition("The Annual Issue")
+        assert is_special_edition("Time Annual 2024")  # Space-bounded ' annual '
 
     def test_detects_collector_keywords(self):
         """Test detection of collector edition keywords."""
         assert is_special_edition("Marvel Collector's Edition")
-        assert is_special_edition("Collectors Issue #1")
-        assert is_special_edition("Collector Edition - Rare")
+        assert is_special_edition("Star Wars Collectors Edition")
+        assert is_special_edition("Rare Collectors Issue #1")
 
     def test_detects_holiday_keywords(self):
         """Test detection of holiday-related keywords."""
-        assert is_special_edition("Magazine - Holiday Issue")
+        assert is_special_edition("Vogue Holiday Special")
         assert is_special_edition("Christmas Special 2024")
         assert is_special_edition("Summer Special Edition")
         assert is_special_edition("Winter Special")
@@ -151,8 +151,8 @@ class TestIsSpecialEdition:
 
     def test_detects_anniversary_keyword(self):
         """Test detection of 'anniversary' keyword."""
-        assert is_special_edition("Wired 25th Anniversary Issue")
-        assert is_special_edition("Anniversary Edition")
+        assert is_special_edition("Wired 25th Anniversary Edition")
+        assert is_special_edition("50th Anniversary Issue")
 
     def test_detects_yearbook_keyword(self):
         """Test detection of 'yearbook' keyword."""
@@ -166,8 +166,8 @@ class TestIsSpecialEdition:
 
     def test_detects_commemorative_keyword(self):
         """Test detection of 'commemorative' keyword."""
-        assert is_special_edition("Commemorative Issue")
-        assert is_special_edition("Commemorative Edition")
+        assert is_special_edition("Time Commemorative Issue")
+        assert is_special_edition("Magazine Commemorative Edition")
 
     def test_case_insensitive_detection(self):
         """Test that detection is case-insensitive."""
@@ -194,9 +194,10 @@ class TestIsSpecialEdition:
 
     def test_partial_match_not_detected(self):
         """Test that partial keyword matches don't trigger false positives."""
-        # "Especially" contains "special" so it will match - this is expected behavior
-        # The function does substring matching, not whole word matching
-        assert is_special_edition("Especially Good Magazine")  # Contains "special"
+        # Space-bounded keywords prevent false matches
+        assert not is_special_edition("Especially Good Magazine")  # 'special' not space-bounded
+        assert not is_special_edition("Magazine Magazine 13 Holiday")  # 'holiday' part of title
+        assert not is_special_edition("Anniversary Street Magazine")  # 'anniversary' part of street name
 
         # These genuinely don't contain any special edition keywords
         assert not is_special_edition("Magazine Monthly Issue")
@@ -213,7 +214,7 @@ class TestFindPdfEpubFiles:
         (tmp_path / "file2.pdf").touch()
         (tmp_path / "other.txt").touch()
 
-        files = find_pdf_epub_files(tmp_path, recursive=False)
+        files = find_supported_files(tmp_path, recursive=False)
 
         assert len(files) == 2
         assert all(f.suffix == ".pdf" for f in files)
@@ -224,7 +225,7 @@ class TestFindPdfEpubFiles:
         (tmp_path / "book2.epub").touch()
         (tmp_path / "other.txt").touch()
 
-        files = find_pdf_epub_files(tmp_path, recursive=False)
+        files = find_supported_files(tmp_path, recursive=False)
 
         assert len(files) == 2
         assert all(f.suffix == ".epub" for f in files)
@@ -235,7 +236,7 @@ class TestFindPdfEpubFiles:
         (tmp_path / "book.epub").touch()
         (tmp_path / "readme.txt").touch()
 
-        files = find_pdf_epub_files(tmp_path, recursive=False)
+        files = find_supported_files(tmp_path, recursive=False)
 
         assert len(files) == 2
         pdf_files = [f for f in files if f.suffix == ".pdf"]
@@ -259,7 +260,7 @@ class TestFindPdfEpubFiles:
         nested.mkdir()
         (nested / "nested.pdf").touch()
 
-        files = find_pdf_epub_files(tmp_path, recursive=True)
+        files = find_supported_files(tmp_path, recursive=True)
 
         assert len(files) == 4
         assert any(f.name == "root.pdf" for f in files)
@@ -275,21 +276,21 @@ class TestFindPdfEpubFiles:
         subdir.mkdir()
         (subdir / "sub.pdf").touch()
 
-        files = find_pdf_epub_files(tmp_path, recursive=False)
+        files = find_supported_files(tmp_path, recursive=False)
 
         assert len(files) == 1
         assert files[0].name == "root.pdf"
 
     def test_empty_directory(self, tmp_path):
         """Test searching an empty directory."""
-        files = find_pdf_epub_files(tmp_path)
+        files = find_supported_files(tmp_path)
 
         assert files == []
 
     def test_nonexistent_directory(self):
         """Test searching a directory that doesn't exist."""
         non_existent = Path("/nonexistent/path")
-        files = find_pdf_epub_files(non_existent)
+        files = find_supported_files(non_existent)
 
         assert files == []
 
@@ -299,7 +300,7 @@ class TestFindPdfEpubFiles:
         (tmp_path / "image.jpg").touch()
         (tmp_path / "document.docx").touch()
 
-        files = find_pdf_epub_files(tmp_path)
+        files = find_supported_files(tmp_path)
 
         assert files == []
 
@@ -311,7 +312,7 @@ class TestFindPdfEpubFiles:
         (tmp_path / "lowercase.pdf").touch()
         (tmp_path / "epub_upper.EPUB").touch()
 
-        files = find_pdf_epub_files(tmp_path, recursive=False)
+        files = find_supported_files(tmp_path, recursive=False)
 
         # Glob patterns are case-sensitive in the pattern, but filesystem may not be
         # On case-insensitive filesystems (macOS), this won't find any files
@@ -324,7 +325,7 @@ class TestFindPdfEpubFiles:
         """Test that returned files are Path objects."""
         (tmp_path / "test.pdf").touch()
 
-        files = find_pdf_epub_files(tmp_path)
+        files = find_supported_files(tmp_path)
 
         assert len(files) == 1
         assert isinstance(files[0], Path)
@@ -337,7 +338,7 @@ class TestFindPdfEpubFiles:
         (tmp_path / "movie.avi").touch()
         (tmp_path / "book.epub").touch()
 
-        files = find_pdf_epub_files(tmp_path, recursive=False)
+        files = find_supported_files(tmp_path, recursive=False)
 
         # Should only find PDF and EPUB, not video files
         assert len(files) == 2
@@ -350,7 +351,7 @@ class TestFindPdfEpubFiles:
         (tmp_path / "music.mp3").touch()
         (tmp_path / "audio.flac").touch()
 
-        files = find_pdf_epub_files(tmp_path, recursive=False)
+        files = find_supported_files(tmp_path, recursive=False)
 
         assert len(files) == 1
         assert files[0].suffix == ".pdf"
@@ -361,13 +362,44 @@ class TestFindPdfEpubFiles:
         (tmp_path / "manga.cbr").touch()
         (tmp_path / "magazine.pdf").touch()
 
-        files = find_pdf_epub_files(tmp_path, recursive=False)
+        files = find_supported_files(tmp_path, recursive=False)
 
         # All three should be found (CBZ/CBR are supported formats)
         assert len(files) == 3
         assert any(f.suffix == ".cbz" for f in files)
         assert any(f.suffix == ".cbr" for f in files)
         assert any(f.suffix == ".pdf" for f in files)
+
+    def test_excludes_directories_with_file_extensions(self, tmp_path):
+        """Test that directories with file extensions are excluded (bug fix for issue #)."""
+        # Create a real PDF file
+        (tmp_path / "real_magazine.pdf").touch()
+
+        # Create a directory with .pdf extension (should be excluded)
+        # This simulates the bug where "[MAGAZINE] Wired.Netherlands-September.2016.pdf"
+        # was a directory but was being counted as a file
+        dir_with_pdf_ext = tmp_path / "[MAGAZINE] Wired.Netherlands-September.2016.pdf"
+        dir_with_pdf_ext.mkdir()
+
+        # Create a subdirectory with a real file inside it
+        subdir = tmp_path / "subfolder"
+        subdir.mkdir()
+        (subdir / "nested.pdf").touch()
+
+        # Find supported files
+        files = find_supported_files(tmp_path, recursive=True)
+
+        # Verify that only regular files are returned, not directories
+        assert len(files) == 2, f"Expected 2 files, found {len(files)}: {files}"
+
+        file_names = {f.name for f in files}
+        assert "real_magazine.pdf" in file_names
+        assert "nested.pdf" in file_names
+        # The directory should NOT be in the results
+        assert "[MAGAZINE] Wired.Netherlands-September.2016.pdf" not in file_names
+
+        # Verify all returned paths are actually files, not directories
+        assert all(f.is_file() for f in files), "All returned paths should be regular files"
 
 
 class TestUtilsIntegration:
@@ -382,7 +414,7 @@ class TestUtilsIntegration:
         file2.write_bytes(b"PDF content 2")
 
         # Find files
-        found_files = find_pdf_epub_files(tmp_path)
+        found_files = find_supported_files(tmp_path)
         assert len(found_files) == 2
 
         # Hash files
@@ -403,7 +435,7 @@ class TestUtilsIntegration:
         for filename in files:
             (tmp_path / filename).touch()
 
-        found_files = find_pdf_epub_files(tmp_path)
+        found_files = find_supported_files(tmp_path)
         special_editions = [f for f in found_files if is_special_edition(f.stem)]
 
         assert len(special_editions) == 2

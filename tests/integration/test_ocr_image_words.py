@@ -23,6 +23,7 @@ class TestOCRImageWordsExtraction:
         """Test extracting text and words with confidence from image"""
         # Mock image
         mock_img = MagicMock()
+        mock_img.size = (800, 1100)
         mock_image.open.return_value = mock_img
 
         # Mock Tesseract output with word-level data
@@ -76,6 +77,7 @@ class TestOCRImageWordsExtraction:
     def test_extract_with_confidence_threshold(self, mock_image, mock_pytesseract):
         """Test that words below confidence threshold are filtered out"""
         mock_img = MagicMock()
+        mock_img.size = (800, 1100)
         mock_image.open.return_value = mock_img
 
         # Mix of high and low confidence words
@@ -104,6 +106,7 @@ class TestOCRImageWordsExtraction:
     def test_extract_with_empty_result(self, mock_image, mock_pytesseract):
         """Test handling of empty OCR results"""
         mock_img = MagicMock()
+        mock_img.size = (800, 1100)
         mock_image.open.return_value = mock_img
 
         # All empty text
@@ -129,6 +132,7 @@ class TestOCRImageWordsExtraction:
     def test_analyze_cover_uses_words_for_images(self, mock_image, mock_pytesseract):
         """Test that analyze_cover passes words data for image files"""
         mock_img = MagicMock()
+        mock_img.size = (800, 1100)
         mock_image.open.return_value = mock_img
 
         # Mock OCR output for image

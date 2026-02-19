@@ -6,6 +6,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Callable, Optional
+from core.parsers import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ class TaskScheduler:
         task_func: Callable,
         interval_seconds: int,
         run_immediately: bool = False,
+        enabled: bool = True,
     ):
         """
         Schedule a task to run periodically.
@@ -38,8 +40,9 @@ class TaskScheduler:
             task_func: Async function to execute
             interval_seconds: How often to run the task
             run_immediately: If True, run task immediately on first scheduler cycle (default: False)
+            enabled: If False, task is registered but will not run on schedule (default: True)
         """
-        next_run = datetime.now() if run_immediately else datetime.now() + timedelta(seconds=interval_seconds)
+        next_run = utc_now() if run_immediately else utc_now() + timedelta(seconds=interval_seconds)
 
         self.tasks[name] = {
             "func": task_func,
@@ -48,10 +51,12 @@ class TaskScheduler:
             "next_run": next_run,
             "failure_count": 0,
             "backoff_seconds": 0,
+            "enabled": enabled,
         }
 
+        status = "enabled" if enabled else "disabled"
         timing = "immediately, then" if run_immediately else "in"
-        logger.info(f"Scheduled task: {name} ({timing} every {interval_seconds}s)")
+        logger.info(f"Scheduled task: {name} ({timing} every {interval_seconds}s) [{status}]")
 
     async def start(self):
         """Start the scheduler with dynamic sleep and error backoff"""
@@ -63,10 +68,14 @@ class TaskScheduler:
 
         try:
             while self.running:
-                now = datetime.now()
+                now = utc_now()
                 next_wakeup: Optional[datetime] = None
 
                 for task_name, task_info in self.tasks.items():
+                    # Skip disabled tasks
+                    if not task_info.get("enabled", True):
+                        continue
+
                     if now >= task_info["next_run"]:
                         # Mark task as active
                         self.active_tasks.add(task_name)
@@ -114,13 +123,14 @@ class TaskScheduler:
                             # Remove from active tasks
                             self.active_tasks.discard(task_name)
 
-                    # Track earliest next run time for dynamic sleep
-                    if next_wakeup is None or task_info["next_run"] < next_wakeup:
-                        next_wakeup = task_info["next_run"]
+                    # Track earliest next run time for dynamic sleep (only enabled tasks)
+                    if task_info.get("enabled", True):
+                        if next_wakeup is None or task_info["next_run"] < next_wakeup:
+                            next_wakeup = task_info["next_run"]
 
                 # Dynamic sleep: sleep until next task is due (with max 60s)
                 if next_wakeup:
-                    sleep_seconds = max(0, (next_wakeup - datetime.now()).total_seconds())
+                    sleep_seconds = max(0, (next_wakeup - utc_now()).total_seconds())
                     sleep_seconds = min(sleep_seconds, 60)  # Cap at 60 seconds
                 else:
                     sleep_seconds = 1  # Default fallback
@@ -135,9 +145,9 @@ class TaskScheduler:
             if self.active_tasks:
                 logger.info(f"Waiting for {len(self.active_tasks)} active tasks: {self.active_tasks}")
                 timeout = 30  # 30 second timeout
-                start_time = datetime.now()
+                start_time = utc_now()
 
-                while self.active_tasks and (datetime.now() - start_time).total_seconds() < timeout:
+                while self.active_tasks and (utc_now() - start_time).total_seconds() < timeout:
                     await asyncio.sleep(0.5)
 
                 if self.active_tasks:
@@ -192,7 +202,33 @@ class TaskScheduler:
                     "failure_count": info.get("failure_count", 0),
                     "backoff_seconds": info.get("backoff_seconds", 0),
                     "is_active": name in self.active_tasks,
+                    "enabled": info.get("enabled", True),
                 }
                 for name, info in self.tasks.items()
             },
         }
+
+    def set_task_enabled(self, task_name: str, enabled: bool) -> bool:
+        """
+        Enable or disable a task.
+
+        Args:
+            task_name: Name of the task to enable/disable
+            enabled: True to enable, False to disable
+
+        Returns:
+            True if task was found and updated, False otherwise
+        """
+        if task_name not in self.tasks:
+            logger.warning(f"Task not found: {task_name}")
+            return False
+
+        self.tasks[task_name]["enabled"] = enabled
+        state = "enabled" if enabled else "disabled"
+        logger.info(f"Task {task_name} {state}")
+
+        # If re-enabling, schedule next run from now
+        if enabled:
+            self.tasks[task_name]["next_run"] = utc_now() + timedelta(seconds=self.tasks[task_name]["interval"])
+
+        return True

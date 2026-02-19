@@ -4,11 +4,14 @@ Validation constants for periodical detection and filtering.
 Used to distinguish periodicals from books, collections, and other non-periodical content.
 """
 
+import re
+
 from core.constants.category import (
     ACCEPTED_NEWSNAB_CATEGORIES,
     REJECTED_NEWSNAB_CATEGORIES,
 )
-from core.constants.date import get_month_year_patterns, get_season_year_patterns
+from core.constants.date import get_month_year_patterns, get_season_regex_pattern, get_season_year_patterns
+from core.constants.title import COLLECTION_SET_NUMBER_PATTERN
 
 # ==============================================================================
 # Newsnab Category Codes
@@ -37,10 +40,21 @@ PERIODICAL_PATTERNS_STATIC = [
     r"#\d+\b",  # "#123"
     # Volume patterns - moderate indicators
     r"\b(vol\.?|volume)\s*\d+",
+    r"\bv\d+\b",  # Bare volume shorthand: "v12", "v5" (common in comics and illustrated periodicals)
+    # Bare issue number after title text (common in NZB titles without "Issue"/"No." prefix)
+    # Matches: "Illustrated Comix 07", "Weekly Review 12", "Magazine 5"
+    # Requires a letter before the space+number to avoid matching standalone numbers
+    r"(?<=[a-z])\s+\d{1,3}\b",
     # Combined volume + issue - very strong indicator
     r"\bv\d+\s+(i|n|no\.?)\d+\b",  # "V12 N3", "V5 I2"
     # Weekly/bi-weekly date formats
     r"\b\d{4}[\.\s]\d{2}[\.\s]\d{2}\b",  # "2024.01.20" or "2024 01 20" (The Economist style)
+    # Magazine/PDF collections - often contain multiple issues (valuable!)
+    r"\bmagazines?\s+(collection|pack|bundle)\b",
+    r"\b(collection|pack|bundle)\s+.{0,20}\bpdf\b",
+    r"\b\d+\s+.{0,30}\bmagazines?\b.{0,20}\b(collection|pdf)\b",  # "60 ... Magazines Collection/PDF"
+    # Full/Complete collection archives (e.g., from Internet Archive)
+    r"\b(complete|full|entire)\s+(collection|run|archive)\b",
 ]
 """Static periodical patterns (non-date-based)"""
 
@@ -67,6 +81,25 @@ def get_periodical_patterns(languages: list[str] | None = None) -> list[str]:
 
 # For backwards compatibility - default to all languages
 PERIODICAL_PATTERNS = get_periodical_patterns()
+
+
+# ==============================================================================
+# Compiled Collection & Season Detection Patterns
+# ==============================================================================
+
+_COLLECTION_KEYWORDS = ("collection", "pack", "bundle", "complete", "full", "entire")
+
+COLLECTION_DETECTION_PATTERNS = [
+    re.compile(p, re.IGNORECASE) for p in PERIODICAL_PATTERNS_STATIC if any(kw in p for kw in _COLLECTION_KEYWORDS)
+]
+"""Compiled regexes from PERIODICAL_PATTERNS_STATIC that identify collection/pack/bundle titles."""
+
+COLLECTION_SET_NUMBER_COMPILED = re.compile(COLLECTION_SET_NUMBER_PATTERN, re.IGNORECASE)
+"""Compiled version of COLLECTION_SET_NUMBER_PATTERN for direct use."""
+
+SEASON_DETECTION_PATTERN = re.compile(rf"\b({get_season_regex_pattern()})\b", re.IGNORECASE)
+"""Compiled multilingual season detection regex (e.g. Spring, Summer, primavera, hiver …)."""
+
 
 # Patterns that indicate content is NOT a periodical (anti-patterns)
 # These are checked FIRST to quickly filter out movies, TV shows, audiobooks, etc.
@@ -105,8 +138,12 @@ ANTI_PERIODICAL_PATTERNS = [
     r"\b(5\.1|7\.1|2\.0|stereo|multi[\-\s]?audio|dual[\-\s]?audio)\b",
     # ============================================================================
     # Video File Extensions (when appearing in NZB titles)
+    # Pattern 1: Matches .mp4 with dot prefix (e.g., ".mp4", ".mp4.nzb", ".mp4-GRP")
+    # Pattern 2: Matches video extensions at word boundaries (e.g., "mp4", "MP4GROUP", "avi-release")
+    # Both patterns work after normalization (dots/underscores/dashes → spaces)
     # ============================================================================
-    r"\.(mp4|avi|mkv|mov|wmv|flv|m4v|mpg|mpeg|m2ts|ts|vob|iso|img)[\s\-\.\[]",
+    r"\.(mp4|avi|mkv|mov|wmv|flv|m4v|mpg|mpeg|m2ts|ts|vob|iso|img)([\s\-\.\[]|$)",
+    r"\b(mp4|avi|mkv|mov|wmv|flv|m4v|mpg|mpeg|m2ts|vob)",  # video extension prefix (catches MP4GROUP, etc.)
     # ============================================================================
     # TV Show Indicators
     # ============================================================================
@@ -147,7 +184,73 @@ ANTI_PERIODICAL_PATTERNS = [
     # Multi-Subtitle/Language (common in video)
     # ============================================================================
     r"\b(multi[\-\s]?sub|multisub|multi[\-\s]?lang)\b",
+    # ============================================================================
+    # Book/Novel Series Indicators
+    # ============================================================================
+    r"\bbooks?\s+\d+\b",  # "Book 1", "Books 2" - novel series numbering
+    r"\[[^\]]*[a-z][^\]]*\s+\d{2}\]",  # "[Series Name 06]" - book series in brackets
+    # ============================================================================
+    # Collection Range Indicators (packs, not single issues)
+    # ============================================================================
+    r"\b(volumes?|issues?|books?|parts?)\s+\d+\s*[-–]\s*\d+",  # "Volumes 1-5", "Issues 10-20"
 ]
+
+
+# ==============================================================================
+# Title Matching Constants for Search Quality
+# ==============================================================================
+
+# Words that indicate a DIFFERENT periodical (not just metadata)
+# Used by search filtering to distinguish between related but different publications
+# Examples:
+#   - "Wired Times" is different from "Wired"
+#   - "Wired Weekly" is different from "Wired"
+#   - "PC Review" is different from "PC Magazine"
+PERIODICAL_MODIFIERS = {
+    "times",
+    "weekly",
+    "daily",
+    "monthly",
+    "quarterly",
+    "review",
+    "journal",
+    "tribune",
+    "herald",
+    "post",
+    "chronicle",
+    "gazette",
+    "news",
+    "observer",
+    "digest",
+    "report",
+    "bulletin",
+    "express",
+    "standard",
+    "independent",
+    "guardian",
+    "telegraph",
+}
+
+# Words that are just METADATA about the periodical (not part of its name)
+# These words don't indicate a different publication
+# Examples:
+#   - "Wired Magazine" is the same as "Wired"
+#   - "PC - Issue 23" is the same as "PC"
+METADATA_WORDS = {
+    "magazine",
+    "mag",
+    "issue",
+    "vol",
+    "volume",
+    "number",
+    "no",
+    "edition",
+    "special",
+    "annual",
+    "yearbook",
+    "publication",
+    "periodical",
+}
 
 
 # ==============================================================================

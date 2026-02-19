@@ -14,6 +14,7 @@ from core.utils.files.paths import (
     resolve_periodical_file_path,
     get_periodical_file_and_cover_paths,
     verify_periodical_files_exist,
+    strip_duplicate_suffixes,
     DEFAULT_LIBRARY_DIR,
     DEFAULT_CATEGORY_PREFIX,
 )
@@ -25,6 +26,7 @@ __all__ = [
     "resolve_periodical_file_path",
     "get_periodical_file_and_cover_paths",
     "verify_periodical_files_exist",
+    "strip_duplicate_suffixes",
     "DEFAULT_LIBRARY_DIR",
     "DEFAULT_CATEGORY_PREFIX",
 ]

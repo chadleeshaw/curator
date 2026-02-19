@@ -167,7 +167,7 @@ def test_matching_ignores_case():
 
 
 def test_country_mismatch_penalty():
-    """Test that mismatched countries block matching entirely"""
+    """Test that mismatched countries apply penalty instead of blocking"""
     matcher = TrackingMatcher()
 
     # Matching country
@@ -178,7 +178,7 @@ def test_country_mismatch_penalty():
         tracking_country="US",
     )
 
-    # Mismatched country
+    # Mismatched country - now applies penalty instead of blocking
     score_mismatch, breakdown = matcher.match_to_tracking(
         parsed_title="Wired",
         tracking_title="Wired",
@@ -186,30 +186,55 @@ def test_country_mismatch_penalty():
         tracking_country="GB",
     )
 
-    # Country mismatch now blocks matching entirely (score = 0)
-    assert score_mismatch == 0
+    # Country mismatch applies -30 penalty (100 - 30 = 70, still matches at threshold)
+    assert score_mismatch == 70
     assert breakdown["country"] == "mismatch"
+    # Matching country gets bonus
+    assert score_match == 115
 
 
-def test_regional_editions_dont_match():
-    """Test that regional editions (e.g., GQ South Africa vs GQ US) don't match"""
+def test_regional_editions_with_title_differences_dont_match():
+    """Test that regional editions with different titles don't match due to fuzzy + penalty"""
     matcher = TrackingMatcher()
 
     tracking_records = [
-        MockTracking(1, "GQ", "English", "US", CATEGORY_MAGAZINE),
+        MockTracking(1, "GQ US", "English", "US", CATEGORY_MAGAZINE),
     ]
 
-    # GQ South Africa should NOT match GQ US
+    # GQ South Africa should NOT match GQ US (different titles)
     result = matcher.find_best_match(
-        parsed_title="GQ",
+        parsed_title="GQ South Africa",
         tracking_records=tracking_records,
         parsed_language="English",
-        parsed_country="ZA",  # South Africa
+        parsed_country="ZA",
         parsed_category=CATEGORY_MAGAZINE,
     )
 
-    # Should not match due to country mismatch blocking
+    # Should not match due to title difference + country penalty
     assert result is None or not result.is_match
+
+
+def test_exact_title_with_wrong_metadata_country_still_matches():
+    """Test that exact title match with wrong metadata country still matches (bug fix)"""
+    matcher = TrackingMatcher()
+
+    tracking_records = [
+        MockTracking(1, "Wired", "English", "US", CATEGORY_MAGAZINE),
+    ]
+
+    # File with exact title match but wrong country metadata should still match
+    result = matcher.find_best_match(
+        parsed_title="Wired",
+        tracking_records=tracking_records,
+        parsed_language="English",
+        parsed_country="UK",  # Wrong metadata
+        parsed_category=CATEGORY_MAGAZINE,
+    )
+
+    # Should match despite country mismatch (100 + 20 + 10 - 30 = 100)
+    assert result is not None
+    assert result.is_match
+    assert result.score == 100
 
 
 if __name__ == "__main__":

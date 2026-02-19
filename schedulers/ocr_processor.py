@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from core import constants
 from services.ocr.queue import OCRQueueService
 from services.ocr.service import OCRService
+from core.parsers import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,6 @@ class OCRProcessor:
             Dictionary with processing statistics
         """
         try:
-            from datetime import datetime
 
             # Check if OCR is available
             if not OCRService.is_available():
@@ -81,7 +81,7 @@ class OCRProcessor:
                     logger.debug("OCR is disabled in config, skipping OCR processing")
                     return {"skipped": True, "reason": "OCR disabled in config"}
 
-            self.last_run_time = datetime.now()
+            self.last_run_time = utc_now()
             self.stats["total_runs"] += 1
 
             # Run OCR processing in thread pool to avoid blocking the event loop
@@ -95,7 +95,7 @@ class OCRProcessor:
             if "failed" in result:
                 self.stats["jobs_failed"] += result["failed"]
 
-            self.stats["last_process_time"] = datetime.now()
+            self.stats["last_process_time"] = utc_now()
             self.last_status = "success"
 
             return result

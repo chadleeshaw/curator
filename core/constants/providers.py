@@ -42,10 +42,13 @@ NEWSNAB_CATEGORY_MAP = {
 """
 Mapping of Curator category names to Newsnab category IDs for searching.
 
-Note: 6000 (XXX) is intentionally excluded from default searches.
-      Users can add it manually in search filters if needed.
-      8000 (Other) and 8010 (Other/Misc) are included because periodicals are sometimes categorized there.
-      8050 (Other/Hashed) is excluded as it's typically spam/obfuscated releases.
+When a category filter is applied, ONLY these mapped IDs are searched
+(not merged with the user's full configured categories). This ensures
+the filter actually narrows results.
+
+8000 (Other) and 8010 (Other/Misc) are included because periodicals
+are sometimes categorized there.
+8050 (Other/Hashed) is excluded as it's typically spam/obfuscated releases.
 """
 
 NEWSNAB_DEFAULT_MAX_REQUESTS_PER_HOUR = 100
@@ -57,8 +60,17 @@ NEWSNAB_DEFAULT_REQUEST_DELAY = 1.0
 NEWSNAB_REQUEST_TIMEOUT = 10
 """Timeout in seconds for Newsnab API requests"""
 
-NEWSNAB_DEFAULT_RATE_LIMIT_WAIT = 3600
-"""Default wait time in seconds when rate limited (1 hour)"""
+NEWSNAB_DEFAULT_RATE_LIMIT_WAIT = 300
+"""Default wait time in seconds when rate limited without explicit Retry-After (5 minutes)"""
+
+NEWSNAB_RSS_MAX_RESULTS = 100
+"""Maximum number of RSS results to fetch (used by FeedSyncService for cache-first auto-download)"""
+
+NEWSNAB_DEFAULT_SEARCH_LIMIT = 250
+"""Default maximum number of results to request per Newsnab API search query.
+
+Many indexers default to returning only 25-50 results without an explicit limit.
+Setting this higher ensures collection items and older releases are included."""
 
 # ==============================================================================
 # Time Conversion Constants
@@ -72,3 +84,11 @@ SECONDS_PER_HOUR = 3600
 
 SECONDS_PER_DAY = 86400
 """Seconds in one day (24 hours)"""
+
+# Upload date parsing formats (try in order)
+UPLOAD_DATE_FORMATS = [
+    "%a, %d %b %Y %H:%M:%S %z",  # RFC 2822: "Mon, 20 Jan 2025 12:34:56 +0000"
+    "%Y-%m-%dT%H:%M:%S%z",  # ISO 8601 with timezone: "2025-01-20T12:34:56+0000"
+    "%Y-%m-%d %H:%M:%S",  # Simple format: "2025-01-20 12:34:56"
+]
+"""Date formats to try when parsing upload_date from provider responses"""

@@ -355,11 +355,6 @@ def detect_country(text: str, default: Optional[str] = None) -> Optional[str]:
                 # This preserves the original code format (e.g., UK, US)
                 return match if len(match) == 2 else match[:2]
 
-    # Generic "Africa" or "Afrika" - treat as ZA for filtering purposes
-    # (Note: "South Africa" was already checked in full country name matching above)
-    if re.search(r"\b(Africa|Afrika)\b", text, re.IGNORECASE):
-        return "ZA"  # Treat Africa/Afrika as South Africa for filtering
-
     # Special handling for "Nederland" (Dutch for Netherlands)
     if re.search(r"\bNederland", text, re.IGNORECASE):
         return "NL"  # Netherlands

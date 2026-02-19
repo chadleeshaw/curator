@@ -422,8 +422,10 @@ export function setupMobileSidebar() {
 export function setupKeyboardNavigation(handlers) {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowLeft' && handlers.previousItem) {
+      e.preventDefault();
       handlers.previousItem();
     } else if (e.key === 'ArrowRight' && handlers.nextItem) {
+      e.preventDefault();
       handlers.nextItem();
     } else if ((e.key === '+' || e.key === '=') && handlers.adjustZoom) {
       e.preventDefault();

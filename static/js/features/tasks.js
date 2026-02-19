@@ -100,6 +100,8 @@ export class TasksManager {
       .map((task) => {
         const lastRun = task.last_run ? new Date(task.last_run).toLocaleString() : 'Never';
         const nextRun = task.next_run ? new Date(task.next_run).toLocaleString() : 'Pending';
+        const isEnabled = task.enabled !== false;
+        const disabledStyle = isEnabled ? '' : 'opacity: 0.5;';
         console.log(`[Tasks] Rendering task: ${task.name}, lastRun: ${task.last_run}`);
 
         // Build additional timestamps section if available
@@ -123,14 +125,21 @@ export class TasksManager {
         return `
         <div style="padding: 20px; background: var(--surface-variant); border-radius: 8px; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
           <div style="display: flex; justify-content: space-between; align-items: start; gap: 15px; flex-wrap: wrap;">
-            <div style="flex: 1; min-width: 300px;">
-              <strong style="font-size: 1.1em; color: var(--text-primary);">${task.name}</strong>
-              <div style="color: var(--text-secondary); font-size: 0.9em; margin-top: 8px;">
+            <div style="flex: 1; min-width: 300px; ${disabledStyle}">
+              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                <strong style="font-size: 1.1em; color: var(--text-primary);">${task.name}</strong>
+                <label class="task-toggle" title="${isEnabled ? 'Disable' : 'Enable'} ${task.name}">
+                  <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="toggleTask('${task.id}')">
+                  <span class="task-toggle-slider"></span>
+                </label>
+                ${!isEnabled ? '<span style="font-size: 0.8em; color: var(--text-hint); font-style: italic;">Disabled</span>' : ''}
+              </div>
+              <div style="color: var(--text-secondary); font-size: 0.9em;">
                 <div style="margin-bottom: 10px;">${task.description || ''}</div>
                 <div style="display: grid; gap: 4px;">
                   <div>⏱️ Interval: ${task.interval}s</div>
                   <div>✓ Last run: ${lastRun}</div>
-                  <div>⏭️ Next run: ${nextRun}</div>
+                  <div>⏭️ Next run: ${isEnabled ? nextRun : 'Disabled'}</div>
                   ${task.last_status ? `<div style="color: ${task.last_status === 'success' ? 'var(--status-completed)' : 'var(--status-failed)'};">Status: ${task.last_status}</div>` : ''}
                 </div>
               </div>
@@ -335,7 +344,7 @@ export class TasksManager {
         this.displayReorganizeResults(data, false);
         UIUtils.showStatus(
           'reorganize-status',
-          `✓ Reorganized ${data.files_reorganized} file(s) successfully`,
+          `Reorganized ${data.files_reorganized} file(s) successfully`,
           'success'
         );
       } else {
@@ -462,6 +471,38 @@ export class TasksManager {
   }
 
   /**
+   * Toggle a task's enabled/disabled state
+   */
+  async toggleTask(taskId) {
+    try {
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.authenticatedFetch(`/api/tasks/${taskId}/toggle`, {
+            method: 'POST',
+          });
+          return await response.json();
+        },
+        'Tasks',
+        'tasks-status'
+      );
+
+      if (data.success) {
+        const state = data.enabled ? 'enabled' : 'disabled';
+        UIUtils.showStatus('tasks-status', `Task ${state}`, 'success');
+        setTimeout(() => UIUtils.hideStatus('tasks-status'), 3000);
+        this.loadScheduledTasks();
+      } else {
+        UIUtils.showStatus('tasks-status', data.message || 'Failed to toggle task', 'error');
+        this.loadScheduledTasks(); // Reload to reset checkbox state
+      }
+    } catch (error) {
+      console.error('Error toggling task:', error);
+      UIUtils.showStatus('tasks-status', 'Error toggling task', 'error');
+      this.loadScheduledTasks(); // Reload to reset checkbox state
+    }
+  }
+
+  /**
    * Escape HTML to prevent XSS
    */
   escapeHtml(text) {
@@ -476,5 +517,6 @@ export const tasks = new TasksManager();
 
 // Expose functions globally for onclick handlers
 window.runTaskManually = (taskId) => tasks.runTaskManually(taskId);
+window.toggleTask = (taskId) => tasks.toggleTask(taskId);
 window.runReorganizePreview = () => tasks.runReorganizePreview();
 window.runReorganize = () => tasks.runReorganize();

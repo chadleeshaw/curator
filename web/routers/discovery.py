@@ -396,3 +396,35 @@ async def get_statistics_by_tracking() -> Dict[str, List[Dict[str, Any]]]:
         return {"trackings": result}
 
     return await with_db_session(_session_factory, operation)
+
+
+@router.post("/reset-all-search-intervals")
+@handle_api_errors("Reset all search intervals", logger)
+async def reset_all_search_intervals() -> Dict[str, Any]:
+    """
+    Reset all tracked periodicals to the normal search interval.
+
+    This is useful after improving search filters or when periodicals have become
+    overly slowed down due to consecutive empty searches.
+
+    All periodicals will be reset to search every 2 hours (normal interval),
+    and their "searches_without_new_issues" counter will be reset to 0.
+    """
+    if _session_factory is None:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+    if _search_scheduler is None:
+        raise HTTPException(status_code=500, detail="Search scheduler not initialized")
+
+    def operation(db):
+        stats = _search_scheduler.reset_all_search_intervals(db)
+        return success_response(
+            f"Reset {stats['reset']} periodicals to normal search interval "
+            f"({stats['already_normal']} were already at normal)",
+            data={
+                "reset_count": stats["reset"],
+                "already_normal": stats["already_normal"],
+                "normal_interval_hours": _search_scheduler.normal_interval_hours,
+            },
+        )
+
+    return await with_db_session(_session_factory, operation)

@@ -14,7 +14,7 @@ from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from core.utils.general import is_special_edition
 from core.version import get_version_info
-from models.database import Periodical
+from models.database import Periodical, Stack, StackMembership
 
 router = APIRouter(tags=["pages"])
 logger = logging.getLogger(__name__)
@@ -122,17 +122,36 @@ async def view_periodical_by_id(id: int = Query(...)):
                 "file_path": p.file_path,
                 "extra_metadata": p.extra_metadata or {},
                 "derived_metadata": p.derived_metadata or {},
+                "created_at": (p.created_at.isoformat() if p.created_at else None),
             }
 
             # Check if this is a special edition
             is_special = False
+            derived_checked = False
             if p.derived_metadata and isinstance(p.derived_metadata, dict):
                 special_bool = p.derived_metadata.get("is_special_edition")
-                if special_bool:
+                if special_bool is not None:
+                    derived_checked = True
                     if isinstance(special_bool, dict):
                         is_special = bool(special_bool.get("value"))
                     else:
                         is_special = bool(special_bool)
+
+            # Fallback to parsed_metadata scans only if derived_metadata didn't address the field
+            if not derived_checked and not is_special:
+                parsed = p.parsed_metadata or {}
+                if isinstance(parsed, dict):
+                    for scan_key in ("ocr_scan", "text_scan", "file_scan"):
+                        scan = parsed.get(scan_key)
+                        if isinstance(scan, dict):
+                            for field_name in ("special_edition", "is_special_edition"):
+                                val = scan.get(field_name)
+                                if val is not None:
+                                    is_special = bool(val)
+                                    derived_checked = True
+                                    break
+                        if derived_checked:
+                            break
 
             if is_special:
                 special_editions.append(periodical_data)
@@ -183,6 +202,8 @@ async def view_periodical_by_id(id: int = Query(...)):
                     "issue_date": p["issue_date"],
                     "cover_url": f"/api/periodicals/{p['id']}/cover",
                     "file_path": p["file_path"],
+                    "derived_metadata": p.get("derived_metadata", {}),
+                    "created_at": p.get("created_at"),
                 }
             )
 
@@ -266,17 +287,20 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
                 "file_path": p.file_path,
                 "extra_metadata": p.extra_metadata or {},
                 "derived_metadata": p.derived_metadata or {},
+                "created_at": (p.created_at.isoformat() if p.created_at else None),
             }
 
             # Check if this is a special edition by checking derived_metadata first, then extra_metadata, then title
             is_special = False
+            derived_checked = False
             special_edition_value = None
 
             # Check derived_metadata first (new location)
             if p.derived_metadata and isinstance(p.derived_metadata, dict):
                 # Check boolean is_special_edition flag (primary indicator)
                 special_bool = p.derived_metadata.get("is_special_edition")
-                if special_bool:
+                if special_bool is not None:
+                    derived_checked = True
                     if isinstance(special_bool, dict):
                         is_special = bool(special_bool.get("value"))
                     else:
@@ -315,9 +339,28 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
                 else:
                     periodical_data["special_edition_name"] = ""
 
-            # Fallback to title pattern matching
-            if not is_special and is_special_edition(p.title):
-                is_special = True
+            # Before title fallback, check if any scan explicitly determined NOT special edition
+            # Skip all fallbacks if derived_metadata already has an explicit value (e.g., manual override)
+            if not is_special and not derived_checked:
+                scan_checked = False
+                parsed = p.parsed_metadata or {}
+                if isinstance(parsed, dict):
+                    for scan_key in ("ocr_scan", "text_scan", "file_scan"):
+                        scan = parsed.get(scan_key)
+                        if isinstance(scan, dict):
+                            for field_name in ("special_edition", "is_special_edition"):
+                                val = scan.get(field_name)
+                                if val is not None:
+                                    scan_checked = True
+                                    if val:
+                                        is_special = True
+                                    break
+                            if scan_checked:
+                                break
+
+                # Fallback to title pattern matching only if no scan addressed the field
+                if not is_special and not scan_checked and is_special_edition(p.title):
+                    is_special = True
 
             if is_special:
                 special_editions.append(periodical_data)
@@ -378,6 +421,9 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
                     "title": p["title"],
                     "issue_date": p["issue_date"],
                     "cover_url": f"/api/periodicals/{p['id']}/cover",
+                    "file_path": p.get("file_path"),
+                    "derived_metadata": p.get("derived_metadata", {}),
+                    "created_at": p.get("created_at"),
                 }
             )
         years_data.append({"year": year, "issues": year_issues})
@@ -391,5 +437,97 @@ async def view_periodical(periodical_title: str, language: str = Query(None), tr
     html_content = template_content.replace("{{PERIODICAL_TITLE}}", display_title)
     html_content = html_content.replace("{{YEARS_DATA}}", years_json)
     html_content = html_content.replace("{{SPECIAL_EDITIONS_DATA}}", special_editions_json)
+
+    return HTMLResponse(content=html_content)
+
+
+@router.get("/stacks/{stack_slug}")
+@handle_api_errors("View stack", logger)
+async def view_stack(stack_slug: str):
+    """View all periodicals in a stack"""
+
+    def operation(db):
+        from models.database import PeriodicalTracking
+
+        stack = db.query(Stack).filter(Stack.slug == stack_slug).first()
+        if not stack:
+            raise HTTPException(status_code=404, detail=f"Stack '{stack_slug}' not found")
+
+        memberships = (
+            db.query(StackMembership)
+            .filter(StackMembership.stack_id == stack.id)
+            .order_by(StackMembership.added_at.asc())
+            .all()
+        )
+
+        members = []
+        for m in memberships:
+            if m.periodical_tracking_id:
+                tracking = (
+                    db.query(PeriodicalTracking).filter(PeriodicalTracking.id == m.periodical_tracking_id).first()
+                )
+                if tracking:
+                    library_count = db.query(Periodical).filter(Periodical.tracking_id == tracking.id).count()
+                    latest = (
+                        db.query(Periodical)
+                        .filter(
+                            Periodical.tracking_id == tracking.id,
+                            Periodical.cover_path.isnot(None),
+                        )
+                        .order_by(Periodical.issue_date.desc())
+                        .first()
+                    )
+                    member_data = {
+                        "tracking_id": tracking.id,
+                        "title": tracking.title,
+                        "language": tracking.language,
+                        "category": tracking.category,
+                        "type": "tracking",
+                        "library_count": library_count,
+                        "cover_periodical_id": latest.id if latest else None,
+                        "first_publish_year": tracking.first_publish_year,
+                        "country": tracking.country,
+                    }
+                    members.append(member_data)
+            elif m.periodical_id:
+                periodical = db.query(Periodical).filter(Periodical.id == m.periodical_id).first()
+                if periodical:
+                    category = None
+                    if periodical.tracking_id:
+                        pt = (
+                            db.query(PeriodicalTracking).filter(PeriodicalTracking.id == periodical.tracking_id).first()
+                        )
+                        category = pt.category if pt else None
+                    members.append(
+                        {
+                            "id": periodical.id,
+                            "title": periodical.title,
+                            "language": periodical.language,
+                            "category": category,
+                            "type": "periodical",
+                            "issue_date": (periodical.issue_date.isoformat() if periodical.issue_date else None),
+                            "cover_path": periodical.cover_path,
+                            "cover_periodical_id": (periodical.id if periodical.cover_path else None),
+                        }
+                    )
+
+        return stack, members
+
+    stack, members = await with_db_session(_session_factory, operation)
+
+    # Read and render template
+    try:
+        with open("templates/stacks.html", "r") as f:
+            template_content = f.read()
+    except FileNotFoundError:
+        logger.error("stacks.html template not found")
+        raise HTTPException(status_code=500, detail="Stack template not found")
+
+    members_json = json.dumps(members).replace('"', "&quot;")
+
+    html_content = template_content.replace("{{STACK_NAME}}", stack.name)
+    html_content = html_content.replace("{{STACK_SLUG}}", stack.slug)
+    html_content = html_content.replace("{{STACK_DESCRIPTION}}", stack.description or "")
+    html_content = html_content.replace("{{MEMBERS_DATA}}", members_json)
 
     return HTMLResponse(content=html_content)

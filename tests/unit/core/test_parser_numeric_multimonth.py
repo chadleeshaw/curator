@@ -6,7 +6,7 @@ were being mistaken as variants instead of being recognized as month ranges.
 """
 
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
@@ -89,7 +89,7 @@ class TestNumericMultiMonthInNZBParser:
         assert result["year"] == 2019
         assert result["month"] == 10
         assert result["month_name"] == "October/November"
-        assert result["issue_date"] == datetime(2019, 10, 1)
+        assert result["issue_date"] == datetime(2019, 10, 1, tzinfo=UTC)
         assert result["confidence"] == "high"
 
     def test_dot_separator_no_spaces(self, parser):
@@ -100,7 +100,7 @@ class TestNumericMultiMonthInNZBParser:
         assert result["year"] == 2019
         assert result["month"] == 10
         assert result["month_name"] == "October/November"
-        assert result["issue_date"] == datetime(2019, 10, 1)
+        assert result["issue_date"] == datetime(2019, 10, 1, tzinfo=UTC)
         assert result["confidence"] == "high"
 
     def test_slash_separator(self, parser):
@@ -111,7 +111,7 @@ class TestNumericMultiMonthInNZBParser:
         assert result["year"] == 2022
         assert result["month"] == 6
         assert result["month_name"] == "June/July"
-        assert result["issue_date"] == datetime(2022, 6, 1)
+        assert result["issue_date"] == datetime(2022, 6, 1, tzinfo=UTC)
         assert result["confidence"] == "high"
 
     def test_dash_separator(self, parser):
@@ -122,7 +122,7 @@ class TestNumericMultiMonthInNZBParser:
         assert result["year"] == 2021
         assert result["month"] == 10
         assert result["month_name"] == "October/November"
-        assert result["issue_date"] == datetime(2021, 10, 1)
+        assert result["issue_date"] == datetime(2021, 10, 1, tzinfo=UTC)
         assert result["confidence"] == "high"
 
     def test_may_june_period(self, parser):
@@ -133,7 +133,7 @@ class TestNumericMultiMonthInNZBParser:
         assert result["year"] == 2023
         assert result["month"] == 5
         assert result["month_name"] == "May/June"
-        assert result["issue_date"] == datetime(2023, 5, 1)
+        assert result["issue_date"] == datetime(2023, 5, 1, tzinfo=UTC)
         assert result["confidence"] == "high"
 
     def test_december_january_boundary(self, parser):
@@ -144,7 +144,7 @@ class TestNumericMultiMonthInNZBParser:
         assert result["year"] == 2024
         assert result["month"] == 12
         assert result["month_name"] == "December/January"
-        assert result["issue_date"] == datetime(2024, 12, 1)
+        assert result["issue_date"] == datetime(2024, 12, 1, tzinfo=UTC)
         assert result["confidence"] == "high"
 
     def test_march_april_dot_separator(self, parser):
@@ -155,7 +155,7 @@ class TestNumericMultiMonthInNZBParser:
         assert result["year"] == 2020
         assert result["month"] == 3
         assert result["month_name"] == "March/April"
-        assert result["issue_date"] == datetime(2020, 3, 1)
+        assert result["issue_date"] == datetime(2020, 3, 1, tzinfo=UTC)
         assert result["confidence"] == "high"
 
     def test_august_september_slash(self, parser):
@@ -166,7 +166,7 @@ class TestNumericMultiMonthInNZBParser:
         assert result["year"] == 2018
         assert result["month"] == 8
         assert result["month_name"] == "August/September"
-        assert result["issue_date"] == datetime(2018, 8, 1)
+        assert result["issue_date"] == datetime(2018, 8, 1, tzinfo=UTC)
         assert result["confidence"] == "high"
 
     def test_with_country_code(self, parser):
@@ -208,7 +208,7 @@ class TestNumericMultiMonthInFilenameParser:
         assert result["title"] == "Wired Magazine"
         assert result["year"] == 2019
         assert result["month_name"] == "October/November"
-        assert result["issue_date"] == datetime(2019, 10, 1)
+        assert result["issue_date"] == datetime(2019, 10, 1, tzinfo=UTC)
 
     def test_numeric_multimonth_with_dots(self, parser):
         """Test dot-separated format in extract_from_filename"""

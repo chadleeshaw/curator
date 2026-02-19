@@ -7,12 +7,12 @@ Test Coverage:
 - Integration with pdf2image library
 """
 
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, MagicMock, patch
 
 
 # Path setup handled by conftest.py
 
-from core.utils.pdf import extract_cover_from_pdf
+from core.utils.pdf import extract_cover_from_pdf, is_landscape_page
 from core.constants.files import PDF_COVER_DPI_LOW, PDF_COVER_QUALITY
 
 
@@ -292,6 +292,41 @@ class TestPDFUtilsIntegration:
         assert len(set(r.name for r in results)) == 3  # All unique names
 
     @patch("core.utils.pdf.convert_from_path")
+    def test_timestamped_filenames_produce_unique_covers(self, mock_convert, tmp_path):
+        """Test that files with timestamp suffixes produce unique cover filenames.
+
+        When two files differ only by timestamp (e.g., after deduplication),
+        their covers should have different names to avoid overwriting each other.
+        """
+        pdf_dir = tmp_path / "pdfs"
+        pdf_dir.mkdir()
+        output_dir = tmp_path / "covers"
+
+        # Simulate two files that differ only by timestamp suffix
+        pdf_files = [
+            pdf_dir / "Magazine - January2024.pdf",
+            pdf_dir / "Magazine - January2024 (20260203_151457).pdf",
+        ]
+
+        for pdf_path in pdf_files:
+            pdf_path.touch()
+
+        mock_image = Mock()
+        mock_convert.return_value = [mock_image]
+
+        results = []
+        for pdf_path in pdf_files:
+            result = extract_cover_from_pdf(pdf_path, output_dir)
+            results.append(result)
+
+        assert len(results) == 2
+        assert all(r is not None for r in results)
+        # Cover filenames must be unique - second should NOT overwrite first
+        assert results[0].name != results[1].name
+        assert results[0].name == "Magazine - January2024.jpg"
+        assert results[1].name == "Magazine - January2024 (20260203_151457).jpg"
+
+    @patch("core.utils.pdf.convert_from_path")
     def test_extract_cover_workflow(self, mock_convert, tmp_path):
         """Test complete workflow of cover extraction."""
         # Setup
@@ -313,3 +348,182 @@ class TestPDFUtilsIntegration:
         assert output_dir.exists()
         mock_convert.assert_called_once()
         mock_image.save.assert_called_once()
+
+
+class TestLandscapeDetection:
+    """Test landscape page detection and cropping functionality"""
+
+    @patch("core.utils.pdf.fitz")
+    def test_is_landscape_page_portrait(self, mock_fitz, tmp_path):
+        """Test detection of portrait-oriented page."""
+        pdf_path = tmp_path / "portrait.pdf"
+        pdf_path.touch()
+
+        # Mock PyMuPDF document with portrait page (height > width)
+        mock_doc = MagicMock()
+        mock_page = Mock()
+        mock_rect = Mock()
+        mock_rect.width = 612  # 8.5 inches at 72 DPI
+        mock_rect.height = 792  # 11 inches at 72 DPI
+        mock_page.rect = mock_rect
+        mock_doc.__len__.return_value = 1
+        mock_doc.__getitem__.return_value = mock_page
+        mock_fitz.open.return_value = mock_doc
+
+        is_landscape, aspect_ratio = is_landscape_page(pdf_path, page_number=1)
+
+        assert is_landscape is False
+        assert aspect_ratio < 1.0
+        mock_doc.close.assert_called_once()
+
+    @patch("core.utils.pdf.fitz")
+    def test_is_landscape_page_landscape(self, mock_fitz, tmp_path):
+        """Test detection of landscape-oriented page."""
+        pdf_path = tmp_path / "landscape.pdf"
+        pdf_path.touch()
+
+        # Mock PyMuPDF document with landscape page (width > height)
+        mock_doc = MagicMock()
+        mock_page = Mock()
+        mock_rect = Mock()
+        mock_rect.width = 1224  # Two pages side-by-side
+        mock_rect.height = 792
+        mock_page.rect = mock_rect
+        mock_doc.__len__.return_value = 1
+        mock_doc.__getitem__.return_value = mock_page
+        mock_fitz.open.return_value = mock_doc
+
+        is_landscape, aspect_ratio = is_landscape_page(pdf_path, page_number=1)
+
+        assert is_landscape is True
+        assert aspect_ratio > 1.0
+        assert abs(aspect_ratio - 1.545) < 0.01  # 1224/792 ≈ 1.545
+        mock_doc.close.assert_called_once()
+
+    @patch("core.utils.pdf.fitz")
+    def test_is_landscape_page_invalid_page_number(self, mock_fitz, tmp_path):
+        """Test handling of invalid page number."""
+        pdf_path = tmp_path / "test.pdf"
+        pdf_path.touch()
+
+        mock_doc = MagicMock()
+        mock_doc.__len__.return_value = 5
+        mock_fitz.open.return_value = mock_doc
+
+        # Test page number too high
+        is_landscape, aspect_ratio = is_landscape_page(pdf_path, page_number=10)
+        assert is_landscape is False
+        assert aspect_ratio == 1.0
+
+        # Test page number 0 (invalid)
+        is_landscape, aspect_ratio = is_landscape_page(pdf_path, page_number=0)
+        assert is_landscape is False
+        assert aspect_ratio == 1.0
+
+    @patch("core.utils.pdf.fitz")
+    def test_is_landscape_page_error_handling(self, mock_fitz, tmp_path):
+        """Test error handling during page dimension check."""
+        pdf_path = tmp_path / "corrupt.pdf"
+        pdf_path.touch()
+
+        mock_fitz.open.side_effect = Exception("Failed to open PDF")
+
+        is_landscape, aspect_ratio = is_landscape_page(pdf_path)
+        assert is_landscape is False
+        assert aspect_ratio == 1.0
+
+    @patch("core.utils.pdf.is_landscape_page")
+    @patch("core.utils.pdf.convert_from_path")
+    def test_extract_cover_crops_landscape(self, mock_convert, mock_is_landscape, tmp_path):
+        """Test that landscape pages are cropped to right half."""
+        pdf_path = tmp_path / "landscape.pdf"
+        pdf_path.touch()
+        output_dir = tmp_path / "covers"
+
+        # Mock landscape detection
+        mock_is_landscape.return_value = (True, 2.0)
+
+        # Mock a landscape image (1200x600)
+        from PIL import Image
+
+        mock_image = MagicMock(spec=Image.Image)
+        mock_image.size = (1200, 600)
+        mock_cropped_image = MagicMock(spec=Image.Image)
+        mock_image.crop.return_value = mock_cropped_image
+        mock_convert.return_value = [mock_image]
+
+        result = extract_cover_from_pdf(pdf_path, output_dir)
+
+        # Verify landscape detection was called
+        mock_is_landscape.assert_called_once_with(pdf_path, 1)
+
+        # Verify image was cropped (right half: from x=600 to x=1200)
+        mock_image.crop.assert_called_once_with((600, 0, 1200, 600))
+
+        # Verify cropped image was saved
+        mock_cropped_image.save.assert_called_once()
+        assert result == output_dir / "landscape.jpg"
+
+    @patch("core.utils.pdf.is_landscape_page")
+    @patch("core.utils.pdf.convert_from_path")
+    def test_extract_cover_skips_crop_for_portrait(self, mock_convert, mock_is_landscape, tmp_path):
+        """Test that portrait pages are not cropped."""
+        pdf_path = tmp_path / "portrait.pdf"
+        pdf_path.touch()
+        output_dir = tmp_path / "covers"
+
+        # Mock portrait detection
+        mock_is_landscape.return_value = (False, 0.77)
+
+        # Mock a portrait image
+        mock_image = Mock()
+        mock_convert.return_value = [mock_image]
+
+        result = extract_cover_from_pdf(pdf_path, output_dir)
+
+        # Verify landscape detection was called
+        mock_is_landscape.assert_called_once_with(pdf_path, 1)
+
+        # Verify image was NOT cropped
+        mock_image.crop.assert_not_called()
+
+        # Verify original image was saved
+        mock_image.save.assert_called_once()
+        assert result == output_dir / "portrait.jpg"
+
+    @patch("core.utils.pdf.is_landscape_page")
+    @patch("core.utils.pdf.convert_from_path")
+    def test_extract_cover_landscape_with_custom_page(self, mock_convert, mock_is_landscape, tmp_path):
+        """Test landscape detection and cropping with custom page number."""
+        pdf_path = tmp_path / "multipage.pdf"
+        pdf_path.touch()
+        output_dir = tmp_path / "covers"
+        page_number = 3
+
+        # Mock landscape detection for page 3
+        mock_is_landscape.return_value = (True, 1.8)
+
+        # Mock landscape image
+        from PIL import Image
+
+        mock_image = MagicMock(spec=Image.Image)
+        mock_image.size = (1800, 1000)
+        mock_cropped_image = MagicMock(spec=Image.Image)
+        mock_image.crop.return_value = mock_cropped_image
+        mock_convert.return_value = [mock_image]
+
+        result = extract_cover_from_pdf(pdf_path, output_dir, page_number=page_number)
+
+        # Verify landscape detection was called with correct page number
+        mock_is_landscape.assert_called_once_with(pdf_path, page_number)
+
+        # Verify convert_from_path was called with correct page number
+        mock_convert.assert_called_once_with(
+            str(pdf_path),
+            first_page=page_number,
+            last_page=page_number,
+            dpi=PDF_COVER_DPI_LOW,
+        )
+
+        # Verify image was cropped (right half: from x=900 to x=1800)
+        mock_image.crop.assert_called_once_with((900, 0, 1800, 1000))

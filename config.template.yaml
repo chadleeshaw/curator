@@ -8,17 +8,68 @@
 # You can configure multiple providers (Newsnab indexers, RSS feeds)
 
 search_providers:
+  # ==============================================================================
+  # Internet Archive Provider (FREE - No API key required!)
+  # ==============================================================================
+  # Archive.org has millions of free magazines, periodicals, newspapers, and comics.
+  # Results from Internet Archive are prioritized when available (priority: 10).
+  # Downloads are direct (no NZB client needed).
+
+  - type: internet_archive
+    name: Internet Archive
+    enabled: true
+    priority: 1 # Lower = higher priority (searched first, preferred in dedup)
+
+    # Collections to search (defaults to common periodical collections)
+    # Available collections: magazines, periodicals, americana, newspaper, comics, pulpmagazinearchive
+    collections:
+      - magazines
+      - periodicals
+      - americana
+      - comics
+
+    # Preferred file formats for download (in order of preference)
+    # PDF is most common for scanned magazines; EPUB for modern digital publications
+    # ZIP/GZIP for collection archives containing multiple files
+    file_formats:
+      - PDF
+      - EPUB
+      - ZIP
+      - GZIP
+
+    # Max results per search (default: 500)
+    # Higher values ensure comprehensive coverage of large collections.
+    max_results: 500
+
+    # Rate limiting (archive.org is generally permissive)
+    request_delay: 1.0 # Seconds between requests
+    max_requests_per_minute: 15
+
+    # Optional authentication for restricted items (uncomment to enable)
+    # Some items on archive.org require login to download.
+    # Create a free account at https://archive.org/account/signup
+    # username: your-email@example.com
+    # password: your-archive-org-password
+
+  # ==============================================================================
   # Newsnab Provider (e.g., NZBHydra2, NZBGeek, etc.)
+  # ==============================================================================
   - type: newsnab
     name: Newsnab Provider
     api_url: https://your-newsnab-server.com/api
     api_key: your-api-key-here
     enabled: true
+    priority: 50 # Searched after Internet Archive
 
     # Newsnab categories to search
     # 7000 = Other Misc, 7010 = Magazines, 7020 = Ebooks, 7030 = Comics
     # 6000 = Adult, 8000 = Other (varies by indexer)
     categories: '7000,7010,7020,7030'
+
+    # Maximum results per API search query (default: 250)
+    # Many indexers default to 25-50 results without an explicit limit.
+    # Increase this to find older releases and collection items.
+    search_limit: 250
 
     # Rate limiting settings (to avoid provider bans)
     # NOTE: With provider cache enabled (see cache section below), these limits become
@@ -28,29 +79,49 @@ search_providers:
     max_requests_per_hour: 100 # Self-imposed limit (default: 100 requests/hour)
     request_delay_seconds: 1.0 # Delay between requests (default: 1 second)
 
-    # Query expansion settings (improves search match rates)
-    # Automatically generates search variants to find results with different naming
-    # Example: "Magazine Title Regional" → ["Magazine Title Regional", "Title Regional", "MG Title Regional"]
-    enable_query_expansion: true # Enable/disable query expansion (default: true)
-    max_expanded_queries: 3 # Number of query variants to try (default: 3, range: 1-5)
-
   # RSS Provider (optional - for fast new release discovery)
   # Uncomment and configure to enable RSS-based searching
   # - type: rss
   #   name: RSS Feed Provider
   #   feed_url: https://your-indexer.com/rss
   #   enabled: true
+  #   priority: 50
   #
   #   # RSS caching settings (dramatically speeds up searches)
   #   cache_ttl: 3600 # Cache TTL in seconds (1 hour)
   #   enable_cache: true # Enable/disable caching
 
+# ==============================================================================
+# Download Clients
+# ==============================================================================
+# Downloads are automatically routed based on provider type:
+# - Newsnab/RSS providers → NZB client (SABnzbd or NZBGet) configured below
+# - Internet Archive providers → built-in HTTP client configured in download_clients
+
+# NZB download client (SABnzbd/NZBGet) for Newsnab and RSS downloads
 download_client:
   type: sabnzbd
   name: SABnzbd
   api_url: http://localhost:8080
   api_key: your-sabnzbd-api-key
   default_category: books
+  # remote_path: /downloads/  # Path prefix as seen by the download client.
+  # Set this when the client runs in a different container with different mount points.
+  # Client paths starting with this prefix are remapped to storage.download_dir.
+  # Example: SABnzbd saves to /downloads/Books/file.pdf, Curator sees /app/local/downloads/Books/file.pdf
+  #   remote_path: /downloads/
+
+# Internet Archive HTTP client (used automatically for IA provider downloads)
+# This is a built-in HTTP download client — no external software needed.
+download_clients:
+  internet_archive:
+    type: internet_archive
+    name: HTTP
+    downloads_dir: ./local/downloads # Files download here before import
+    max_concurrent: 3 # Max simultaneous downloads from archive.org
+    file_formats: # Preferred formats (in order)
+      - PDF
+      - EPUB
 
 storage:
   db_path: ./local/config/periodicals.db
@@ -59,48 +130,30 @@ storage:
   cache_dir: ./local/cache
 
 # ==============================================================================
-# Provider Cache Configuration
+# NZB Content Cache Configuration
 # ==============================================================================
-# Local caching of provider search results to dramatically reduce API calls
-# and improve search performance. Eliminates rate limit issues.
+# Caches NZB file content fetched from providers to avoid repeated hits
+# on download retries and resubmissions.
 #
 # How it works:
-# - Background sync fetches latest releases from providers (RSS mode)
-# - Search queries use local cache first (instant, no API calls)
-# - Download URLs are cached (NZB files fetched on-demand by download client)
+# - When a download is submitted, the NZB file is fetched once and cached
+# - Subsequent downloads/retries use the cached NZB content directly
+# - NZB content is sent directly to SABnzbd/NZBGet (no provider hit)
+# - Prowlarr proxy URLs are stored as-is (Prowlarr handles resolution)
 #
 # Benefits:
-# - 95%+ reduction in provider API calls
-# - Sub-100ms search response times (vs 1-5 seconds)
-# - Minimal storage usage (~1MB for 1000 releases)
-# - Eliminates rate limit errors
-# - Works offline for cached content
+# - Eliminates rate limit errors from NZB providers on retries
+# - Download retries never hit the provider again
 
 cache:
-  # Enable/disable provider cache
-  # When enabled, search results are cached locally for fast searching
-  # When disabled, all searches go directly to providers (traditional behavior)
+  # Enable/disable NZB content caching
   enabled: true
 
-  # Cache retention in days
-  # Releases older than this are automatically deleted during cleanup
-  # Recommended: 90 days (balances storage vs search coverage)
-  # Storage estimate: ~1MB for 90 days of releases (URL-only caching)
-  retention_days: 90
-
-  # Sync settings - background synchronization with providers
-  sync:
-    # Sync interval in seconds
-    # How often to fetch latest releases from providers
-    # Recommended: 1800-3600 (30 min - 1 hour)
-    # Note: Each sync only makes 2-4 API calls (RSS mode per provider)
-    interval_seconds: 1800 # 30 minutes
-
-    # Number of releases to fetch per provider
-    # Initial sync: First time syncing a provider
-    # Incremental sync: Subsequent syncs (fetches releases since last sync)
-    initial_sync_limit: 100 # Fetch 100 releases on first sync
-    incremental_sync_limit: 100 # Fetch 100 releases per sync
+  # NZB fetch rate limiting
+  # Maximum number of NZB file fetches per hour
+  # Applies when downloading NZB content for caching
+  # Set to 0 to disable rate limiting
+  max_nzb_fetches_per_hour: 50
 
 import:
   # Organization pattern for file structure
@@ -123,6 +176,20 @@ import:
   enable_text_scan: true # Enable direct text extraction from PDF/EPUB during import (fast)
   enable_ocr: true # Enable OCR for image-based text extraction (slower, queued)
   category_prefix: _
+
+  # Auto-cleanup settings
+  # Controls automatic removal of empty folders and folders without importable files
+  # WARNING: If disabled, folders may accumulate over time. Manual cleanup may be required.
+  auto_cleanup:
+    # Enable auto-cleanup of downloads folder
+    # When enabled, automatically removes folders without supported files (.pdf, .epub, .cbz, .cbr)
+    # Disable this if downloads are being removed before they are processed/imported
+    enable_downloads: false
+
+    # Enable auto-cleanup of library folder
+    # When enabled, automatically removes empty folders after file reorganization
+    # Generally safe to keep enabled as it only removes truly empty folders
+    enable_library: true
 
 metadata:
   # Metadata aggregation settings - controls how metadata from different sources is combined
@@ -222,20 +289,76 @@ ocr:
   # Common values: 3, 5, 7. Default: 5
   sharpen_kernel: 5
 
+  # Tesseract Page Segmentation Mode (PSM)
+  # Controls how Tesseract segments text on the page
+  # Common values:
+  #   6 = Uniform block of text (good for organized layouts)
+  #   11 = Sparse text with no OSD (best for scattered magazine cover elements)
+  # Default: 11 (sparse text mode)
+  tesseract_psm: 11
+
+  # Tesseract OCR Engine Mode (OEM)
+  # Controls which OCR engine to use
+  # Values:
+  #   0 = Legacy engine only
+  #   1 = LSTM neural network only (recommended - faster and more accurate)
+  #   2 = Legacy + LSTM
+  #   3 = Default (uses whichever is available)
+  # Default: 1 (LSTM only)
+  tesseract_oem: 1
+
 tasks:
   # Task interval settings (in seconds)
   # How often each background task runs
 
+  # Task enable/disable flags
+  # Set to false to disable a task entirely. Disabled tasks will not run
+  # on their schedule but can still be triggered manually from the UI.
+  feed_sync_enabled: true
+  auto_download_enabled: true
+  download_monitor_enabled: true
+  cleanup_covers_enabled: true
+  ocr_processor_enabled: true
+  folder_cleanup_enabled: true
+  auto_metadata_enabled: true
+
+  # ==============================================================================
+  # Feed Sync: Cache-first auto-download system
+  # Polls each provider's RSS feed on a lightweight schedule (one HTTP GET per
+  # provider per interval). Entries are cached locally and matched against ALL
+  # tracked periodicals with zero additional API calls.
+  # ==============================================================================
+
+  # How often to poll provider RSS feeds (in seconds)
+  # This is lightweight (one GET per provider), so it can run frequently.
+  # Recommended: 900 (15 min) - catches new uploads quickly without hammering APIs
+  feed_sync_interval: 900 # 15 minutes
+
+  # Maximum feed entries to match per auto-download run
+  # Controls how many cached entries are processed at once.
+  # Higher = faster catch-up after downtime, but more DB work per cycle.
+  # Recommended: 100-200
+  feed_sync_match_batch_size: 200
+
+  # Days to retain feed entries before expiring them
+  # Entries older than this are deleted. Bounds the working set.
+  feed_entry_retention_days: 7
+
   # Auto-download: Search for and download new tracked issues
-  # IMPORTANT: With the new Issue Discovery & Tracking system, this interval
-  # determines how often the scheduler runs (not how often each periodical is searched).
-  # The system now intelligently selects 1-2 periodicals per run using adaptive scheduling.
+  # IMPORTANT: With the cache-first system, most discovery happens via feed sync
+  # (zero API calls). This task now primarily:
+  # 1. Matches cached feed entries against tracked periodicals (local, instant)
+  # 2. Falls back to per-periodical API search for adaptive scheduler items
+  # 3. Processes the download queue
   #
   # Recommended: 1800-3600 (30 min - 1 hour)
-  # - Runs more frequently to process the download queue
-  # - Each run only searches 1-2 periodicals (not all)
-  # - Individual periodicals have their own adaptive intervals
   auto_download_interval: 1800 # 30 minutes (recommended with new system)
+
+  # Delay (in seconds) between per-periodical API searches during auto-download.
+  # Spreads out API calls to avoid hitting provider rate limits when tracking
+  # many periodicals. Set to 0 to disable pacing.
+  # Recommended: 3-10 seconds depending on number of tracked periodicals
+  inter_search_delay: 5
 
   # Download monitor: Check download status and import completed files
   download_monitor_interval: 30 # 30 seconds
@@ -253,6 +376,10 @@ tasks:
   # OCR worker settings
   ocr_max_workers: 1 # Number of parallel OCR processes
   ocr_batch_size: 5 # Max jobs to process per batch
+
+  # Folder cleanup: Remove empty folders and folders without importable files
+  # See import.auto_cleanup section for enable/disable settings
+  folder_cleanup_interval: 86400 # 24 hours
 
   # ==============================================================================
   # Issue Discovery & Tracking System
