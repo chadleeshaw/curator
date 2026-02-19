@@ -13,6 +13,7 @@ Architecture:
 """
 
 import logging
+import re
 from typing import Any, Dict, List, Tuple
 
 from sqlalchemy.orm import Session
@@ -46,7 +47,8 @@ class FeedMatchService:
         Match a batch of RSS feed entries against all tracked periodicals.
 
         For each entry, checks if the title matches any tracked periodical's
-        title or search aliases (case-insensitive substring matching).
+        title or search aliases using word boundary matching to avoid
+        substring false positives (e.g., "Maxim" won't match "Maximo").
 
         Args:
             entries: Batch of RssFeedEntry objects to match
@@ -82,11 +84,14 @@ class FeedMatchService:
         tracking_search_terms = self._build_search_terms(tracking_records)
 
         for entry in entries:
-            title_lower = entry.title.lower() if entry.title else ""
+            # Normalize title: replace delimiters with spaces for word boundary matching
+            normalized_title = re.sub(r"[_.\-]", " ", entry.title.lower()) if entry.title else ""
             matched = False
 
             for tracking_id, search_terms, tracking_record in tracking_search_terms:
-                if any(term in title_lower for term in search_terms):
+                # Use word boundary matching to avoid false positives
+                # "Maxim" should NOT match "Maximo Garcia"
+                if self._title_matches_any_term(normalized_title, search_terms):
                     # Match found — convert to SearchResult format
                     search_result = self._entry_to_search_result(entry)
 
@@ -111,6 +116,52 @@ class FeedMatchService:
             )
 
         return result
+
+    @staticmethod
+    def _title_matches_any_term(normalized_title: str, search_terms: List[str]) -> bool:
+        """
+        Check if normalized title matches any search term using word boundaries.
+
+        Uses word boundary matching to prevent substring false positives:
+        - "Maxim" matches "Maxim Magazine" ✓
+        - "Maxim" does NOT match "Maximo Garcia" ✗
+
+        Args:
+            normalized_title: Title normalized with delimiters replaced by spaces
+            search_terms: List of lowercase search terms to match
+
+        Returns:
+            True if any term matches as a whole word in the title
+        """
+        for term in search_terms:
+            # Ensure term is lowercase for case-insensitive matching
+            term_lower = term.lower()
+
+            # Build word boundary pattern
+            # Handle special chars correctly (e.g., "C++", "40+")
+            escaped = re.escape(term_lower)
+
+            # Check if term starts/ends with word character
+            starts_with_word = bool(re.match(r"^\w", term_lower))
+            ends_with_word = bool(re.search(r"\w$", term_lower))
+
+            if starts_with_word and ends_with_word:
+                # Normal word like "maxim" - use boundaries on both sides
+                pattern = rf"\b{escaped}\b"
+            elif starts_with_word and not ends_with_word:
+                # Word ending with special char like "c++"
+                pattern = rf"\b{escaped}(?=\s|[^\w]|$)"
+            elif not starts_with_word and ends_with_word:
+                # Word starting with special char (rare)
+                pattern = rf"{escaped}\b"
+            else:
+                # All special chars (very rare)
+                pattern = escaped
+
+            if re.search(pattern, normalized_title):
+                return True
+
+        return False
 
     @staticmethod
     def _build_search_terms(

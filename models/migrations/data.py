@@ -6,6 +6,7 @@ Called by DatabaseManager.run_migrations() after schema changes are applied.
 
 Current migrations:
 - migrate_metadata_structure: Transform periodical metadata from single to three-column structure
+- migrate_discovered_issues_provider: Fix provider names from display names to routing types
 """
 
 import logging
@@ -150,6 +151,54 @@ def migrate_metadata_structure(session: Session) -> int:
     return migrated_count
 
 
+def migrate_discovered_issues_provider(session: Session) -> int:
+    """
+    Fix discovered_issues.latest_provider from display names to routing types.
+
+    Old provider.name values like "IA" need to be converted to provider.type
+    values like "internet_archive" for correct download client routing.
+
+    Args:
+        session: SQLAlchemy database session
+
+    Returns:
+        Number of records migrated
+
+    Note:
+        This migration is idempotent - safe to run multiple times.
+    """
+    from models.database import DiscoveredIssue
+
+    provider_mapping = {
+        "IA": "internet_archive",
+        # Add more mappings as needed for other providers
+    }
+
+    migrated_count = 0
+
+    for old_name, new_type in provider_mapping.items():
+        # Find all discovered_issues with old provider name
+        issues_to_update = session.query(DiscoveredIssue).filter(DiscoveredIssue.latest_provider == old_name).all()
+
+        if issues_to_update:
+            logger.info(
+                f"Migrating {len(issues_to_update)} discovered_issues " f"from provider '{old_name}' to '{new_type}'"
+            )
+
+            for issue in issues_to_update:
+                issue.latest_provider = new_type
+                migrated_count += 1
+
+            session.commit()
+
+    if migrated_count > 0:
+        logger.info(f"✓ Migrated provider names for {migrated_count} discovered_issue(s)")
+    else:
+        logger.debug("No discovered_issues need provider name migration")
+
+    return migrated_count
+
+
 def run_data_migrations(session: Session) -> dict:
     """
     Run all data migrations.
@@ -167,5 +216,8 @@ def run_data_migrations(session: Session) -> dict:
 
     # Run metadata structure migration
     results["metadata_structure"] = migrate_metadata_structure(session)
+
+    # Run discovered_issues provider migration
+    results["discovered_issues_provider"] = migrate_discovered_issues_provider(session)
 
     return results
