@@ -49,5 +49,9 @@ NZB_VOLUME_PATTERN = r"(?:vol\.?|volume|v)[\s]*(\d+)\b"
 """Pattern for volume numbers: Vol.12, Volume 5, V202"""
 
 # Issue patterns
-NZB_ISSUE_PATTERN = r"(?:issue|no\.?|number|nr\.?|n)[\s]*(\d+)\b|#(\d+)"
-"""Pattern for issue numbers: Issue 389, No. 25, N25, #45"""
+NZB_ISSUE_PATTERN = r"\b(?:issue|no\.?|number|nr\.?|n\.?)[\s]*(\d+)\b|#[\s]*(\d+)"
+"""Pattern for issue numbers: Issue 389, No. 25, N25, N.25, #45, # 45.
+
+The \b word boundary before the keyword group prevents matching mid-word,
+e.g. the trailing 'n' of 'Edition', 'Section', 'Nation', etc.
+"""

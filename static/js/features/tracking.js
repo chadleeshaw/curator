@@ -1758,9 +1758,13 @@ export class TrackingManager {
           }
         }
 
-        // Create unique key based on year, month, issue, season, and volume
+        // Create unique key based on year, month, issue, season, and volume.
+        // When month is known (> 0), exclude issue from the key — for monthly magazines the
+        // cumulative issue number (e.g. "#8") is cosmetic and should not prevent deduplication
+        // of library items and provider results that refer to the same calendar issue.
         const vol = parsed.volume || 0;
-        const key = `${parsed.year}-${parsed.month}-${parsed.issue}-${parsed.season || ''}-v${vol}`;
+        const issueKey = (parsed.month > 0) ? 0 : (parsed.issue || 0);
+        const key = `${parsed.year}-${parsed.month}-${issueKey}-${parsed.season || ''}-v${vol}`;
 
         if (!issueMap.has(key)) {
           // Extract language variant from title if present

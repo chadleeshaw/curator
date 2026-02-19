@@ -534,3 +534,74 @@ class TestIssueMonthYearPatterns:
         assert result["month"] == 12
         assert result["month_name"] == "December"
         assert result["year"] == 2023
+
+
+class TestISODateAndDisjointMonthParserFixes:
+    """
+    Regression tests for two parser bugs fixed in the deduplication chain:
+
+    Bug 1 — ISO year-month ("2025-08") was misread as issue=8 instead of month=8.
+    Bug 2 — Month name not adjacent to year ("August #8 2025") defaulted to month=1
+             instead of correctly extracting month=8.
+    """
+
+    # ── Bug 1: ISO date removal ─────────────────────────────────────────────
+
+    def test_iso_date_dash_gives_month_not_issue(self):
+        """'Playboy Africa 2025-08' → month=8, issue=None (not issue=8)."""
+        parser = FilenameParser()
+        result = parser.extract_from_nzb_title("Playboy Africa 2025-08")
+        assert result["month"] == 8, "Month should be 8 (August), not issue number"
+        assert result["year"] == 2025
+        assert result["issue"] is None, "ISO year-month should not populate issue"
+
+    def test_iso_date_dot_gives_month_not_issue(self):
+        """'Playboy Africa 2025.08' → month=8, issue=None."""
+        parser = FilenameParser()
+        result = parser.extract_from_nzb_title("Playboy Africa 2025.08")
+        assert result["month"] == 8
+        assert result["year"] == 2025
+        assert result["issue"] is None
+
+    # ── Bug 2: Disjoint month name (not adjacent to year) ───────────────────
+
+    def test_month_name_separated_from_year_by_issue(self):
+        """'Playboy Africa August #8 2025' → month=8, issue=8 (not month=1)."""
+        parser = FilenameParser()
+        result = parser.extract_from_nzb_title("Playboy Africa August #8 2025")
+        assert result["month"] == 8, "Month should be 8 (August), not 1 (January)"
+        assert result["month_name"] == "August"
+        assert result["year"] == 2025
+        assert result["issue"] == 8
+
+    def test_month_name_separated_from_year_no_issue_marker(self):
+        """'Playboy Africa August 8 2025' → month=8 extracted from disjoint name."""
+        parser = FilenameParser()
+        result = parser.extract_from_nzb_title("Playboy Africa August 8 2025")
+        assert result["month"] == 8, "Month should be 8 (August), not 1 (January)"
+        assert result["year"] == 2025
+
+    # ── Regressions: must not break existing behaviour ───────────────────────
+
+    def test_year_only_still_defaults_to_january(self):
+        """Pure year-only title with no month name must still default to month=1."""
+        parser = FilenameParser()
+        result = parser.extract_from_nzb_title("Magazine Title 2024")
+        assert result["month"] == 1, "Year-only title should default month to 1"
+        assert result["year"] == 2024
+
+    def test_adjacent_month_year_still_works(self):
+        """'Esquire USA - August 2021' must still parse month=8 (unchanged behaviour)."""
+        parser = FilenameParser()
+        result = parser.extract_from_nzb_title("Esquire USA - August 2021")
+        assert result["month"] == 8
+        assert result["month_name"] == "August"
+        assert result["year"] == 2021
+
+    def test_year_with_volume_issue_no_month(self):
+        """'TIME.V202.N25.2023' must still parse issue=25, month=1."""
+        parser = FilenameParser()
+        result = parser.extract_from_nzb_title("TIME.V202.N25.2023")
+        assert result["month"] == 1
+        assert result["issue"] == 25
+        assert result["year"] == 2023

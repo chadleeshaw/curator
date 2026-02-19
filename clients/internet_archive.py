@@ -473,9 +473,10 @@ class InternetArchiveClient(DownloadClient):
 
             dest_file = self.downloads_dir / f"{safe_title}{ext}"
 
-            # Handle duplicate filenames
+            # Handle duplicate filenames — also check for in-progress .part files so
+            # concurrent downloads of the same identifier don't collide on the same partial file.
             counter = 1
-            while dest_file.exists():
+            while dest_file.exists() or dest_file.with_suffix(dest_file.suffix + ".part").exists():
                 dest_file = self.downloads_dir / f"{safe_title}_{counter}{ext}"
                 counter += 1
 

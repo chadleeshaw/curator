@@ -14,6 +14,7 @@ from core.constants.date import (
     MIN_VALID_YEAR,
     MONTH_TO_NUMBER,
     NUMBER_TO_MONTH,
+    get_month_regex_pattern,
 )
 from core.constants.files import MAX_FILE_EXTENSION_LENGTH, YEAR_STRING_LENGTH
 from core.constants.language import SUPPORTED_LANGUAGES
@@ -122,10 +123,19 @@ class FilenameParser:
         # Normalize delimiters: dots, underscores → spaces (but keep dashes)
         remaining_text = self._normalize_delimiters(nzb_title)
 
-        # Remove pre-detected ISO date from remaining text
+        # Remove pre-detected ISO date from remaining text.
+        # After _normalize_delimiters, dots → spaces but dashes are preserved, so the
+        # ISO date may still appear as "2025-08" (dash) rather than "2025 08" (space).
+        # Try both forms so the month digits are not later mis-detected as an issue number.
         if iso_date_data:
-            pattern_to_remove = f"{iso_date_data['year']} {iso_date_data['month']:02d}"
-            remaining_text = remaining_text.replace(pattern_to_remove, "", 1)
+            year_str = str(iso_date_data["year"])
+            month_str = f"{iso_date_data['month']:02d}"
+            for sep in (" ", "-", "."):
+                pattern_to_remove = f"{year_str}{sep}{month_str}"
+                new_text = remaining_text.replace(pattern_to_remove, "", 1)
+                if new_text != remaining_text:
+                    remaining_text = new_text
+                    break
             remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
             logger.debug(f"Removed ISO date from remaining text, left with: '{remaining_text}'")
 
@@ -150,7 +160,7 @@ class FilenameParser:
         return metadata
 
     def _preprocess_title(self, nzb_title: str) -> str:
-        """Remove file extension if present (but preserve years like '2021')."""
+        """Remove file extension if present (but preserve years like '2021' and ISO months like '2025.08')."""
         if "." not in nzb_title:
             return nzb_title
 
@@ -163,7 +173,15 @@ class FilenameParser:
             and len(last_part) == YEAR_STRING_LENGTH
             and MIN_VALID_YEAR <= int(last_part) <= MAX_VALID_YEAR
         )
-        if is_extension and not is_year:
+        # Preserve ISO year-month suffixes like "2025.08" — a 2-digit month that follows a year
+        # should not be stripped as if it were a file extension.
+        is_iso_month = (
+            last_part.isdigit()
+            and len(last_part) == 2
+            and 1 <= int(last_part) <= 12
+            and bool(re.search(r"\b(\d{4})$", parts[0]))
+        )
+        if is_extension and not is_year and not is_iso_month:
             return parts[0]
         return nzb_title
 
@@ -563,9 +581,24 @@ class FilenameParser:
             return remaining_text, False
 
         metadata["year"] = year
-        metadata["month"] = 1  # Default to January
-        metadata["issue_date"] = datetime(year, 1, 1, tzinfo=UTC)
         remaining_text = self._remove_match_and_cleanup(remaining_text, match)
+
+        # Secondary pass: look for a standalone month name now that the year is removed.
+        # This handles titles like "August #8 2025" where the month name is present but
+        # not adjacent to the year, so the month-year patterns above did not fire.
+        month_pattern = get_month_regex_pattern()
+        month_match = re.search(rf"\b({month_pattern})\b", remaining_text, re.IGNORECASE)
+        if month_match:
+            month_num = parse_month(month_match.group(1))
+            if month_num:
+                metadata["month"] = month_num
+                metadata["month_name"] = NUMBER_TO_MONTH.get(month_num)
+                metadata["issue_date"] = datetime(year, month_num, 1, tzinfo=UTC)
+                return remaining_text, True
+
+        # No month name found — default to January (genuine year-only titles like "Magazine 2024")
+        metadata["month"] = 1
+        metadata["issue_date"] = datetime(year, 1, 1, tzinfo=UTC)
         return remaining_text, True
 
     def _remove_match_and_cleanup(self, text: str, match) -> str:

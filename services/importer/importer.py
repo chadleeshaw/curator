@@ -1028,22 +1028,16 @@ class FileImporter:
                 session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
             )
             if target_tracking_temp:
-                # Check if parsed title has high confidence
-                if parsed.confidence == "high" and parsed.issue_date is not None:
-                    # High confidence parse - use the parsed title (might differ from tracking)
-                    tracking_title = self._build_tracking_title(parsed.base_title, parsed.country, file_path)
-                    logger.info(
-                        f"High confidence parse for '{file_path.name}': using parsed title '{tracking_title}' "
-                        f"(tracking was '{target_tracking_temp.title}')"
-                    )
-                else:
-                    # Low/medium confidence - fall back to tracking title
-                    tracking_title = target_tracking_temp.title
-                    logger.debug(
-                        f"Using tracking title from sidecar: '{tracking_title}' (ID: {tracking_id}) "
-                        f"for low/medium confidence parse (parsed: '{parsed.base_title}', "
-                        f"confidence: {parsed.confidence})"
-                    )
+                # Sidecar tracking_id ALWAYS wins — the file was deliberately downloaded for this
+                # tracking record, so we must not let the filename parser override it.
+                # High-confidence title override only applies when there is no sidecar (e.g. an IA
+                # collection archive that contains issues for multiple different periodicals).
+                tracking_title = target_tracking_temp.title
+                logger.debug(
+                    f"Using sidecar tracking title: '{tracking_title}' (ID: {tracking_id}) "
+                    f"for '{file_path.name}' "
+                    f"(parsed: '{parsed.base_title}', confidence: {parsed.confidence})"
+                )
 
                 # Check if we need to force text/OCR scan to find date
                 date_missing = (

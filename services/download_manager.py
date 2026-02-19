@@ -907,10 +907,11 @@ class DownloadManager:
         if not issue:
             return "DiscoveredIssue not found"
 
-        # Check if already downloading
-        if issue.download_status == "downloading" and issue.current_submission_id:
+        # Check if already downloading, queued, or pending — prevent duplicate concurrent submissions
+        if issue.download_status in ("downloading", "queued", "pending") and issue.current_submission_id:
             logger.warning(
-                f"Issue already has active download: {issue.title} (submission_id: {issue.current_submission_id})"
+                f"Issue already has active download: {issue.title} "
+                f"(status: {issue.download_status}, submission_id: {issue.current_submission_id})"
             )
             return "already_downloading"
 
