@@ -274,6 +274,11 @@ def find_supported_files(directory: Path, recursive: bool = True) -> list[Path]:
     # Filter out blacklisted extensions and incomplete downloads
     filtered_files = []
     for file in all_files:
+        # Skip directories that match file extensions (e.g., 'Magazine.pdf' folder)
+        if not file.is_file():
+            logger.debug(f"Skipping non-regular file (directory or symlink): {file.name}")
+            continue
+
         # Skip blacklisted extensions
         if file.suffix.lower() in BLACKLISTED_FILE_EXTENSIONS:
             logger.warning(f"Skipping blacklisted file extension '{file.suffix}': {file.name}")

@@ -370,6 +370,37 @@ class TestFindPdfEpubFiles:
         assert any(f.suffix == ".cbr" for f in files)
         assert any(f.suffix == ".pdf" for f in files)
 
+    def test_excludes_directories_with_file_extensions(self, tmp_path):
+        """Test that directories with file extensions are excluded (bug fix for issue #)."""
+        # Create a real PDF file
+        (tmp_path / "real_magazine.pdf").touch()
+
+        # Create a directory with .pdf extension (should be excluded)
+        # This simulates the bug where "[MAGAZINE] Wired.Netherlands-September.2016.pdf"
+        # was a directory but was being counted as a file
+        dir_with_pdf_ext = tmp_path / "[MAGAZINE] Wired.Netherlands-September.2016.pdf"
+        dir_with_pdf_ext.mkdir()
+
+        # Create a subdirectory with a real file inside it
+        subdir = tmp_path / "subfolder"
+        subdir.mkdir()
+        (subdir / "nested.pdf").touch()
+
+        # Find supported files
+        files = find_supported_files(tmp_path, recursive=True)
+
+        # Verify that only regular files are returned, not directories
+        assert len(files) == 2, f"Expected 2 files, found {len(files)}: {files}"
+
+        file_names = {f.name for f in files}
+        assert "real_magazine.pdf" in file_names
+        assert "nested.pdf" in file_names
+        # The directory should NOT be in the results
+        assert "[MAGAZINE] Wired.Netherlands-September.2016.pdf" not in file_names
+
+        # Verify all returned paths are actually files, not directories
+        assert all(f.is_file() for f in files), "All returned paths should be regular files"
+
 
 class TestUtilsIntegration:
     """Integration tests for utility functions"""

@@ -548,17 +548,17 @@ class TestISODateAndDisjointMonthParserFixes:
     # ── Bug 1: ISO date removal ─────────────────────────────────────────────
 
     def test_iso_date_dash_gives_month_not_issue(self):
-        """'Playboy Africa 2025-08' → month=8, issue=None (not issue=8)."""
+        """'Wired Africa 2025-08' → month=8, issue=None (not issue=8)."""
         parser = FilenameParser()
-        result = parser.extract_from_nzb_title("Playboy Africa 2025-08")
+        result = parser.extract_from_nzb_title("Wired Africa 2025-08")
         assert result["month"] == 8, "Month should be 8 (August), not issue number"
         assert result["year"] == 2025
         assert result["issue"] is None, "ISO year-month should not populate issue"
 
     def test_iso_date_dot_gives_month_not_issue(self):
-        """'Playboy Africa 2025.08' → month=8, issue=None."""
+        """'Wired Africa 2025.08' → month=8, issue=None."""
         parser = FilenameParser()
-        result = parser.extract_from_nzb_title("Playboy Africa 2025.08")
+        result = parser.extract_from_nzb_title("Wired Africa 2025.08")
         assert result["month"] == 8
         assert result["year"] == 2025
         assert result["issue"] is None
@@ -566,18 +566,18 @@ class TestISODateAndDisjointMonthParserFixes:
     # ── Bug 2: Disjoint month name (not adjacent to year) ───────────────────
 
     def test_month_name_separated_from_year_by_issue(self):
-        """'Playboy Africa August #8 2025' → month=8, issue=8 (not month=1)."""
+        """'Wired Africa August #8 2025' → month=8, issue=8 (not month=1)."""
         parser = FilenameParser()
-        result = parser.extract_from_nzb_title("Playboy Africa August #8 2025")
+        result = parser.extract_from_nzb_title("Wired Africa August #8 2025")
         assert result["month"] == 8, "Month should be 8 (August), not 1 (January)"
         assert result["month_name"] == "August"
         assert result["year"] == 2025
         assert result["issue"] == 8
 
     def test_month_name_separated_from_year_no_issue_marker(self):
-        """'Playboy Africa August 8 2025' → month=8 extracted from disjoint name."""
+        """'Wired Africa August 8 2025' → month=8 extracted from disjoint name."""
         parser = FilenameParser()
-        result = parser.extract_from_nzb_title("Playboy Africa August 8 2025")
+        result = parser.extract_from_nzb_title("Wired Africa August 8 2025")
         assert result["month"] == 8, "Month should be 8 (August), not 1 (January)"
         assert result["year"] == 2025
 

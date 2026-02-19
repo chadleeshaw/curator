@@ -1,59 +1,39 @@
-# 🪙 Curator
+# Curator
 
 Automatically discover, download, and organize periodicals (magazines, comics, newspapers) with a modern web interface.
 
-## ✨ Features
+## Features
 
-- 🔍 **Smart Search** - Multi-provider search with intelligent deduplication
-- 📥 **Auto Downloads** - Track periodicals for automatic downloads via SABnzbd/NZBGet
-- 📚 **Clean Library** - Automatic organization with consistent naming and cover art
-- 🤖 **OCR Metadata** - Extract issue numbers and dates from cover images
-- 🌐 **Web Interface** - Modern, responsive UI to browse and manage your collection
-- 🔄 **Background Tasks** - Automated monitoring, cleanup, and processing
+- **Smart Search** - Multi-provider search with intelligent deduplication
+- **Internet Archive** - Free access to millions of magazines, comics, and newspapers
+- **Auto Downloads** - Track periodicals for automatic downloads
+- **Stacks** - Organize periodicals into custom collections
+- **Clean Library** - Automatic organization with consistent naming and cover art
+- **OCR Metadata** - Extract issue numbers and dates from cover images
+- **Web Interface** - Modern, responsive UI to browse and manage your collection
+- **Background Tasks** - Automated monitoring, cleanup, and processing
 
-## 🚀 Quick Start
+## Requirements
 
-### Prerequisites
+- Docker (recommended) or Python 3.13+
+- Newsnab indexer (optional - Prowlarr, NZBHydra2, etc.)
+- Download client (optional - SABnzbd or NZBGet for Usenet)
 
-- Docker installed
-- Newsnab indexer (Prowlarr recommended)
-- Download client (SABnzbd or NZBGet)
+## Quick Start
 
-### 1. Setup Configuration
+### Docker (Recommended)
 
 ```bash
 # Create directories
 mkdir -p local/config local/data local/downloads
 
-# Copy sample config
+# Copy config template
 cp config.template.yaml local/config/config.yaml
 
-# Edit with your settings
+# Edit configuration (see minimal config below)
 nano local/config/config.yaml
-```
 
-**Minimal config** - Add your provider and download client:
-
-```yaml
-search_providers:
-  - type: newsnab
-    name: Prowlarr
-    enabled: true
-    api_url: 'http://your-prowlarr:9696/api'
-    api_key: 'your_api_key_here'
-
-download_client:
-  type: sabnzbd
-  name: SABnzbd
-  api_url: 'http://your-sabnzbd:8080'
-  api_key: 'your_api_key_here'
-```
-
-### 2. Run with Docker
-
-**Option A: Docker Run**
-
-```bash
+# Run with Docker
 docker run -d \
   --name curator \
   -p 8000:8000 \
@@ -63,9 +43,7 @@ docker run -d \
   chadleeshaw/curator:latest
 ```
 
-**Option B: Docker Compose (Recommended)**
-
-Create `docker-compose.yml`:
+**Docker Compose:**
 
 ```yaml
 services:
@@ -81,87 +59,156 @@ services:
       - ./local/downloads:/app/local/downloads
     environment:
       - TZ=America/New_York
-      # - DISABLE_OCR=true  # Uncomment for low memory mode
 ```
 
-Then start:
+### Minimal Configuration
 
-```bash
-docker compose up -d
+Internet Archive requires no API key and provides millions of free periodicals:
+
+```yaml
+search_providers:
+  - type: internet_archive
+    name: Internet Archive
+    enabled: true
+    priority: 1
+    collections:
+      - magazines
+      - periodicals
+      - comics
 ```
 
-### 3. Access the Web UI
+Add Newsnab indexer (optional):
 
-Open **http://localhost:8000** and start managing your periodicals!
+```yaml
+  - type: newsnab
+    name: Prowlarr
+    enabled: true
+    api_url: 'http://your-prowlarr:9696/api'
+    api_key: 'your_api_key_here'
+    priority: 50
+```
 
-## 📖 Using Curator
+Add download client for Usenet (optional):
+
+```yaml
+download_client:
+  type: sabnzbd
+  name: SABnzbd
+  api_url: 'http://your-sabnzbd:8080'
+  api_key: 'your_api_key_here'
+```
+
+### Access
+
+Open http://localhost:8000 and start managing your periodicals.
+
+## Using Curator
 
 ### Search & Download
 
-1. **Search** → Enter periodical title (e.g., "National Geographic")
-2. Choose automatic deduplication or manual provider selection
-3. Select results and download
+1. Navigate to **Search**
+2. Enter periodical title (e.g., "National Geographic")
+3. Results are automatically deduplicated across all providers
+4. Select results and download
+
+### Stacks
+
+Organize your periodicals into custom collections:
+
+1. Navigate to **Stacks**
+2. Create a new stack (e.g., "Sci-Fi Magazines", "Vintage Comics")
+3. Add periodicals or tracking items to stacks
+4. View stack-specific library and tracking pages
+5. Bulk operations work within stacks
 
 ### Track for Auto-Downloads
 
-1. **Tracking** → Search for a periodical
-2. Configure preferences:
+1. Navigate to **Tracking**
+2. Search for a periodical
+3. Configure tracking preferences:
    - Track all editions
-   - Track new issues only  
+   - Track new issues only
    - Select specific editions
-3. Curator automatically downloads new issues as they're released
+4. Curator automatically downloads new issues as they're released
 
 ### Browse Library
 
-**Library** tab shows your organized collection with:
+**Library** shows your organized collection with:
 - Cover thumbnails
-- Metadata (dates, issue numbers, special editions)
+- Metadata (dates, issue numbers, volumes, special editions)
 - Quick file access and management
+- Bulk operations (move, delete, regenerate covers)
 
-## ⚙️ Configuration
+## Configuration
 
 ### Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `TZ` | System | Set timezone (e.g., `America/New_York`) |
-| `DISABLE_OCR` | `false` | Disable OCR processing (reduces memory usage) |
+| `TZ` | System | Timezone (e.g., `America/New_York`) |
+| `DISABLE_OCR` | `false` | Disable OCR processing (reduces memory) |
 | `CURATOR_CONFIG_PATH` | `local/config/config.yaml` | Config file location |
-| `CURATOR_DB_PATH` | `local/data/curator.db` | Database file location |
+| `CURATOR_DB_PATH` | `local/data/curator.db` | Database location |
 | `CURATOR_DOWNLOAD_DIR` | `local/downloads` | Download directory |
 | `CURATOR_LIBRARY_DIR` | `local/data` | Library directory |
-| `CURATOR_CACHE_DIR` | `local/cache` | Cache directory |
-| `CURATOR_LOG_FILE` | None | Log file path (logs to console if not set) |
 | `CURATOR_LOG_LEVEL` | `INFO` | Log level (DEBUG, INFO, WARNING, ERROR) |
 | `CURATOR_HOST` | `0.0.0.0` | Server bind address |
 | `CURATOR_PORT` | `8000` | Server port |
-| `CURATOR_DRY_RUN` | `false` | Dry run mode for file reorganization |
-
-### Advanced Configuration
-
-For advanced options (provider caching, metadata aggregation, OCR tuning, task scheduling, etc.), see the fully documented [`config.template.yaml`](config.template.yaml).
 
 ### Search Providers
 
-Supports any Newsnab-compatible indexer:
+**Internet Archive** (free, no API key):
 
 ```yaml
 search_providers:
+  - type: internet_archive
+    name: Internet Archive
+    enabled: true
+    priority: 1
+    collections:
+      - magazines
+      - periodicals
+      - americana
+      - newspaper
+      - comics
+    max_results: 500
+```
+
+**Newsnab** (Prowlarr, NZBHydra2, etc.):
+
+```yaml
   - type: newsnab
     name: Prowlarr
-    enabled: true
     api_url: 'http://prowlarr:9696/api'
     api_key: 'your_key'
+    enabled: true
+    priority: 50
+    categories: '7000,7010,7020,7030'
+    search_limit: 250
+```
 
+**RSS** (fast new release discovery):
+
+```yaml
   - type: rss
     name: MyRSS
-    enabled: true
     feed_url: 'http://example.com/feed.rss'
+    enabled: true
+    priority: 50
 ```
 
 ### Download Clients
 
-**SABnzbd** (recommended):
+**Internet Archive** uses built-in HTTP client (no external client needed):
+
+```yaml
+download_clients:
+  internet_archive:
+    max_concurrent_downloads: 3
+    timeout_seconds: 300
+```
+
+**SABnzbd** (for Usenet/Newsnab):
 
 ```yaml
 download_client:
@@ -171,7 +218,7 @@ download_client:
   api_key: 'your_key'
 ```
 
-**NZBGet**:
+**NZBGet** (for Usenet/Newsnab):
 
 ```yaml
 download_client:
@@ -182,7 +229,7 @@ download_client:
   password: 'your_password'
 ```
 
-### Storage Paths
+### Storage
 
 Organize your library with custom patterns:
 
@@ -193,7 +240,7 @@ import:
   enable_ocr: true
 ```
 
-**Example structure:**
+Example structure:
 
 ```
 local/data/
@@ -205,9 +252,11 @@ local/data/
         └── National Geographic - 2024-01.pdf
 ```
 
-## 🛠 Development Setup
+See [`config.template.yaml`](config.template.yaml) for all options including provider caching, metadata aggregation, OCR tuning, and task scheduling.
 
-For local development without Docker:
+## Development
+
+### Local Setup
 
 ```bash
 # Install dependencies
@@ -217,35 +266,34 @@ npm install
 # Copy config
 cp config.template.yaml local/config/config.yaml
 
-# Install Git hooks (auto-runs linters before push)
+# Install Git hooks
 make install-hooks
 
 # Run application
 python main.py
 ```
 
-**Available commands:**
+### Available Commands
 
 ```bash
-make help           # Show all available commands
+make help           # Show all commands
 make install        # Install dependencies
 make run            # Run the application
 make test           # Run all tests
 make test-unit      # Fast unit tests only
-make test-coverage  # Run tests with coverage report
+make test-coverage  # Run tests with coverage
 make lint           # Check code style
 make ci-lint        # CI linters (matches GitHub Actions)
 make format         # Auto-format code
 make clean          # Clean build artifacts
 ```
 
-The project includes a pre-push Git hook that runs `make ci-lint` automatically to ensure code quality.
+The project includes a pre-push Git hook that runs `make ci-lint` automatically.
 
-## 🔧 Troubleshooting
-
-### Container Issues
+## Troubleshooting
 
 **Container keeps restarting:**
+
 ```bash
 # Check logs
 docker logs curator
@@ -256,41 +304,36 @@ docker logs curator
 ```
 
 **Can't connect to download client:**
+
 - Verify `api_url` in config (use container names if on Docker network)
 - Check API key is correct
 - Ensure download client is running
 
 **No search results:**
-- Verify Prowlarr/indexer is running and accessible
+
+- Internet Archive requires no setup - should work immediately
+- For Newsnab: verify indexer is running and accessible
 - Check API key and URL in config
 - Review logs: `docker logs curator`
 
-## 🏗 Architecture
+## Architecture
 
 ```
 curator/
 ├── core/           # Configuration, parsers, utilities
 ├── models/         # Database models (SQLAlchemy)
-├── providers/      # Search providers (Newsnab, RSS)
-├── clients/        # Download clients (SABnzbd, NZBGet)
+├── providers/      # Search providers (Internet Archive, Newsnab, RSS)
+├── clients/        # Download clients (Internet Archive, SABnzbd, NZBGet)
 ├── services/       # Business logic (import, organize, OCR)
 ├── schedulers/     # Background tasks (monitoring, cleanup)
 ├── web/            # FastAPI API & routers
-│   └── routers/    # API endpoints (organized by domain)
 └── static/         # Web UI (JavaScript ES6 modules)
-    └── js/         # Frontend code (core, features, readers)
 ```
-
-## 📄 License
-
-MIT License - See [LICENSE](LICENSE) file for details.
-
-## 💬 Support
-
-- 📚 [Documentation](https://github.com/chadleeshaw/curator/wiki)
-- 🐛 [Report Issues](https://github.com/chadleeshaw/curator/issues)
-- 💬 [Discussions](https://github.com/chadleeshaw/curator/discussions)
 
 ## Documentation
 
-- [Terminology Guide](docs/TERMINOLOGY.md) - Definitions of core concepts (periodicals, issues, variants, editions)
+- [Terminology Guide](docs/TERMINOLOGY.md) - Core concepts (periodicals, issues, variants, editions)
+
+## License
+
+MIT License - See [LICENSE](LICENSE) file for details.
