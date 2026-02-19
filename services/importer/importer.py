@@ -1940,9 +1940,23 @@ class FileImporter:
             # Delete sidecar metadata file if it exists (only for downloads)
             delete_sidecar_file(pdf_path)
 
-            if pdf_path.exists() and pdf_path.is_file():
-                pdf_path.unlink()
-                logger.info(f"Deleted file from downloads: {pdf_path.name}")
+            # Delete the file/path - handle all types (regular file, symlink, directory, etc.)
+            if pdf_path.exists():
+                try:
+                    if pdf_path.is_dir():
+                        # Unexpected: a directory with a file-like name (e.g., "Magazine.pdf" directory)
+                        # Use shutil.rmtree to handle non-empty directories
+                        import shutil
+
+                        logger.warning(f"Path is a directory (unexpected), removing recursively: {pdf_path}")
+                        shutil.rmtree(pdf_path)
+                        logger.info(f"Deleted directory from downloads: {pdf_path.name}")
+                    else:
+                        # Regular file, symlink, FIFO, socket, or other special file
+                        pdf_path.unlink()
+                        logger.info(f"Deleted file from downloads: {pdf_path.name}")
+                except (OSError, PermissionError) as e:
+                    logger.error(f"Failed to delete {pdf_path.name} from downloads: {e}")
 
             # Cleanup parent directory only if not deferred
             if not defer_folder_deletion:
@@ -1982,7 +1996,8 @@ class FileImporter:
 
         # No supported files remain — safe to remove leftover sidecars
         for leftover in folder.iterdir():
-            if leftover.is_file():
+            if leftover.is_file() or leftover.is_symlink():
+                # Remove regular files and symlinks (including broken symlinks)
                 logger.debug(f"Removing leftover download file: {leftover.name}")
                 leftover.unlink()
 
