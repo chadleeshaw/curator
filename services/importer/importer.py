@@ -16,7 +16,11 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from core.constants.app import DEFAULT_FUZZY_THRESHOLD
 from core.constants.category import CATEGORY_KEYWORDS
-from core.constants.date import DUPLICATE_DATE_THRESHOLD_DAYS, UNKNOWN_ISSUE_DATE_YEAR
+from core.constants.date import (
+    DUPLICATE_DATE_THRESHOLD_DAYS,
+    NUMBER_TO_MONTH,
+    UNKNOWN_ISSUE_DATE_YEAR,
+)
 from core.constants.errors import ErrorCodes
 from core.constants.files import IMPORT_MARKER_FILE, SUPPORTED_FILE_EXTENSIONS
 from core.constants.language import DEFAULT_LANGUAGE
@@ -30,6 +34,13 @@ from core.utils.pdf import extract_cover_from_pdf
 from core.utils.epub import extract_cover_from_epub
 from core.utils.cbz import extract_cover_from_cbz, extract_cover_from_cbr
 from core.utils.general import find_supported_files, hash_file_in_chunks
+from core.utils.metadata_builder import (
+    build_derived_metadata,
+    build_extra_metadata,
+    build_file_scan,
+    build_parsed_metadata,
+    sync_issue_date_from_derived,
+)
 from services.response_models import OperationResult
 from models.database import Periodical, PeriodicalTracking, OCRJob
 from services.file_organizer import FileOrganizer
@@ -675,11 +686,6 @@ class FileImporter:
             periodical.parsed_metadata["text_scan"] = scan_result
 
             # Rebuild derived_metadata with text scan results
-            from core.utils.metadata_builder import (
-                build_derived_metadata,
-                sync_issue_date_from_derived,
-            )
-
             periodical.derived_metadata = build_derived_metadata(
                 file_scan=periodical.parsed_metadata.get("file_scan"),
                 text_scan=scan_result,
@@ -793,11 +799,6 @@ class FileImporter:
                 result["text_scan_result"] = scan_result  # Store for DB
 
                 if scan_result.get("year"):
-                    from core.utils.metadata_builder import (
-                        sync_issue_date_from_derived,
-                        build_derived_metadata,
-                    )
-
                     # Build derived metadata to get issue_date
                     derived = build_derived_metadata(text_scan=scan_result)
                     issue_date = sync_issue_date_from_derived(derived)
@@ -806,11 +807,8 @@ class FileImporter:
                         result["issue_date"] = issue_date
                         result["year"] = scan_result.get("year")
                         result["month"] = scan_result.get("month")
-                        # Convert month number to name for organization
                         if result["month"]:
-                            from core.constants.date import MONTH_TO_NAME
-
-                            result["month_name"] = MONTH_TO_NAME.get(result["month"])
+                            result["month_name"] = NUMBER_TO_MONTH.get(result["month"])
                         result["source"] = "text_scan"
                         logger.info(
                             f"Pre-organization text scan found date: {issue_date.strftime('%Y-%m')} for {file_path.name}"
@@ -836,11 +834,6 @@ class FileImporter:
                 result["ocr_scan_result"] = ocr_result  # Store for DB
 
                 if ocr_result and ocr_result.get("year"):
-                    from core.utils.metadata_builder import (
-                        sync_issue_date_from_derived,
-                        build_derived_metadata,
-                    )
-
                     # Build derived metadata to get issue_date
                     derived = build_derived_metadata(ocr_scan=ocr_result)
                     issue_date = sync_issue_date_from_derived(derived)
@@ -850,9 +843,7 @@ class FileImporter:
                         result["year"] = ocr_result.get("year")
                         result["month"] = ocr_result.get("month")
                         if result["month"]:
-                            from core.constants.date import MONTH_TO_NAME
-
-                            result["month_name"] = MONTH_TO_NAME.get(result["month"])
+                            result["month_name"] = NUMBER_TO_MONTH.get(result["month"])
                         result["source"] = "ocr_scan"
                         logger.info(
                             f"Pre-organization OCR scan found date: {issue_date.strftime('%Y-%m')} for {file_path.name}"
@@ -915,11 +906,6 @@ class FileImporter:
             periodical.parsed_metadata["ocr_scan"] = ocr_result
 
             # Rebuild derived_metadata with OCR results
-            from core.utils.metadata_builder import (
-                build_derived_metadata,
-                sync_issue_date_from_derived,
-            )
-
             periodical.derived_metadata = build_derived_metadata(
                 file_scan=periodical.parsed_metadata.get("file_scan"),
                 text_scan=periodical.parsed_metadata.get("text_scan"),
@@ -1200,8 +1186,6 @@ class FileImporter:
 
     def _build_file_scan_metadata(self, parsed) -> Dict[str, Any]:
         """Build file scan metadata from parsed filename data."""
-        from core.utils.metadata_builder import build_file_scan
-
         file_scan = build_file_scan(parsed)
         if parsed.is_special_edition:
             file_scan["special_edition_name"] = parsed.special_edition_name
@@ -1216,8 +1200,6 @@ class FileImporter:
         cached_scan_results: Optional[Dict[str, Any]],
     ) -> Dict[str, Any]:
         """Build extra metadata with import provenance and scan flags."""
-        from core.utils.metadata_builder import build_extra_metadata
-
         extra_meta = build_extra_metadata(
             imported_from=file_path.name,
             import_date=datetime.now().isoformat(),
@@ -1260,11 +1242,6 @@ class FileImporter:
         session: Session,
     ) -> Optional[Periodical]:
         """Create periodical database record, or None if duplicate exists."""
-        from core.utils.metadata_builder import (
-            build_parsed_metadata,
-            build_derived_metadata,
-        )
-
         if self._check_for_duplicate_periodical(organized_path, session):
             return None
 

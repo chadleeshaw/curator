@@ -39,6 +39,9 @@ from services.download import (
 
 logger = logging.getLogger(__name__)
 
+MANUAL_DOWNLOAD_PRIORITY = 100
+SUBMISSION_ID_MAX_LENGTH = 512
+
 
 class DownloadManager:
     """Manage downloads for tracked periodicals"""
@@ -955,6 +958,16 @@ class DownloadManager:
             "raw_metadata": issue.extra_metadata or {},
         }
 
+    def _record_attempt(self, issue) -> None:
+        """Increment attempt counter and record the attempt timestamp."""
+        issue.attempt_count += 1
+        issue.last_attempt = utc_now()
+
+    def _register_submission_id(self, issue, submission_id: int) -> None:
+        """Append submission_id to issue.submission_ids if not already present."""
+        if submission_id not in (issue.submission_ids or []):
+            issue.submission_ids = (issue.submission_ids or []) + [submission_id]
+
     def _create_queued_submission(self, issue, search_result: Dict[str, Any], session: Session) -> DownloadSubmission:
         """
         Create a queued submission when at download limit.
@@ -984,8 +997,7 @@ class DownloadManager:
         # Update DiscoveredIssue with submission info
         issue.download_status = DownloadStatus.QUEUED
         issue.current_submission_id = submission.id
-        if submission.id not in (issue.submission_ids or []):
-            issue.submission_ids = (issue.submission_ids or []) + [submission.id]
+        self._register_submission_id(issue, submission.id)
         session.commit()
 
         return submission
@@ -1028,8 +1040,7 @@ class DownloadManager:
                 logger.warning(f"Download client {client.name} rejected submission: {issue.title}")
                 issue.download_status = DownloadStatus.FAILED
                 issue.last_error = f"Client {client.name} rejected submission"
-                issue.attempt_count += 1
-                issue.last_attempt = utc_now()
+                self._record_attempt(issue)
                 session.commit()
                 return None
 
@@ -1047,10 +1058,8 @@ class DownloadManager:
             # Update DiscoveredIssue with submission info
             issue.download_status = DownloadStatus.QUEUED  # Queued in download client
             issue.current_submission_id = submission.id
-            if submission.id not in (issue.submission_ids or []):
-                issue.submission_ids = (issue.submission_ids or []) + [submission.id]
-            issue.attempt_count += 1
-            issue.last_attempt = utc_now()
+            self._register_submission_id(issue, submission.id)
+            self._record_attempt(issue)
 
             session.commit()
 
@@ -1063,9 +1072,8 @@ class DownloadManager:
                 exc_info=True,
             )
             issue.download_status = DownloadStatus.FAILED
-            issue.last_error = str(e)[:512]  # Truncate to column length
-            issue.attempt_count += 1
-            issue.last_attempt = utc_now()
+            issue.last_error = str(e)[:SUBMISSION_ID_MAX_LENGTH]
+            self._record_attempt(issue)
             session.commit()
             return None
 
@@ -1400,8 +1408,8 @@ class DownloadManager:
             DownloadStatus.DOWNLOADING,
         ]:
             discovered_issue.download_status = DownloadStatus.WANTED
-            discovered_issue.download_priority = 100  # Highest priority for manual downloads
-            discovered_issue.attempt_count = 0  # Reset attempts for manual re-download
+            discovered_issue.download_priority = MANUAL_DOWNLOAD_PRIORITY
+            discovered_issue.attempt_count = 0
             discovered_issue.last_error = None
             session.commit()
 
@@ -1816,20 +1824,7 @@ class DownloadManager:
             Number of issues successfully submitted
         """
         with self._slot_lock:
-            # Count active downloads under the lock
-            active_count = (
-                session.query(DownloadSubmission)
-                .filter(
-                    DownloadSubmission.status.in_(
-                        [
-                            DownloadSubmission.StatusEnum.PENDING,
-                            DownloadSubmission.StatusEnum.DOWNLOADING,
-                        ]
-                    )
-                )
-                .count()
-            )
-
+            active_count = self._get_active_download_count(session)
             remaining_slots = max(0, self.max_downloads - active_count)
             logger.debug(f"Auto-download: {remaining_slots} slots available ({active_count} in progress)")
 

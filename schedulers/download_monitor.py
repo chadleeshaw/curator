@@ -134,34 +134,27 @@ class DownloadMonitor:
             if import_retried > 0:
                 logger.info(f"[DownloadMonitor] Retried {import_retried} previously failed imports")
 
-            # Warn if no files found but there are active downloads (potential config mismatch)
-            # Rate limit to once every 30 minutes to avoid log spam
-            # Use the active_count from queue processing above
-            try:
-                if folder_imported == 0 and queue_result.get("active_count", 0) > 0:
-                    now = utc_now()
-                    should_warn = (
-                        self.last_config_warning_time is None
-                        or (now - self.last_config_warning_time).total_seconds() > AUTO_DOWNLOAD_INTERVAL
-                    )
+            if folder_imported == 0 and queue_result.get("active_count", 0) > 0:
+                now = utc_now()
+                should_warn = (
+                    self.last_config_warning_time is None
+                    or (now - self.last_config_warning_time).total_seconds() > AUTO_DOWNLOAD_INTERVAL
+                )
 
-                    if should_warn:
-                        logger.warning(
-                            f"[DownloadMonitor] No files found in downloads folder ({self.downloads_dir}) "
-                            f"but {queue_result.get('active_count', 0)} downloads are active. "
-                            "Check CURATOR_DOWNLOAD_DIR environment variable or storage.download_dir config "
-                            "matches your download client's output directory. "
-                            "(This warning is rate-limited to once every 30 minutes)"
-                        )
-                        self.last_config_warning_time = now
-                    else:
-                        logger.debug(
-                            f"[DownloadMonitor] Config warning suppressed (rate limited): "
-                            f"No files in {self.downloads_dir} but {queue_result.get('active_count', 0)} active downloads"
-                        )
-            except NameError:
-                # queue_result may not be defined if queue processing failed
-                pass
+                if should_warn:
+                    logger.warning(
+                        f"[DownloadMonitor] No files found in downloads folder ({self.downloads_dir}) "
+                        f"but {queue_result.get('active_count', 0)} downloads are active. "
+                        "Check CURATOR_DOWNLOAD_DIR environment variable or storage.download_dir config "
+                        "matches your download client's output directory. "
+                        "(This warning is rate-limited to once every 30 minutes)"
+                    )
+                    self.last_config_warning_time = now
+                else:
+                    logger.debug(
+                        f"[DownloadMonitor] Config warning suppressed (rate limited): "
+                        f"No files in {self.downloads_dir} but {queue_result.get('active_count', 0)} active downloads"
+                    )
 
             logger.debug(
                 f"[DownloadMonitor] Run completed - Client: {client_processed} processed, "

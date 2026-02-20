@@ -10,6 +10,7 @@ Handles:
 """
 
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -25,6 +26,7 @@ from core.constants.country import (
     ISO_COUNTRIES,
     THREE_LETTER_COUNTRY_CODES,
 )
+from core.constants.validation import ANTI_PERIODICAL_PATTERNS, PERIODICAL_PATTERNS
 from models.database import (
     DiscoveredIssue,
     DownloadStatus,
@@ -33,6 +35,17 @@ from models.database import (
 )
 
 logger = logging.getLogger(__name__)
+
+_PRIORITY_BASE = 50
+_PRIORITY_MIN = 1
+_PRIORITY_MAX = 100
+_RECENCY_BONUS_NEW = 30
+_RECENCY_BONUS_RECENT = 20
+_RECENCY_BONUS_MODERATE = 10
+_NEW_ISSUE_DAYS = 7
+_RECENT_ISSUE_DAYS = 30
+_MODERATE_ISSUE_DAYS = 90
+_TRACKING_PRIORITY_BOOST = 10
 
 
 class IssueDiscoveryService:
@@ -522,11 +535,7 @@ class IssueDiscoveryService:
         Returns:
             True if periodical patterns found, False otherwise
         """
-        import re
-        from core.constants.validation import PERIODICAL_PATTERNS
-
         # Strategy: Match patterns on both normalized (dashes→spaces) and original title
-        # This catches both "Jan-2024" (needs dash) and "Magazine-Jan-2024" (needs space)
 
         # Try matching on original title first (preserves numeric date separators like "01-2024")
         title_lower = title.lower()
@@ -564,9 +573,6 @@ class IssueDiscoveryService:
         Returns:
             True if anti-patterns found (NOT a periodical), False otherwise
         """
-        import re
-        from core.constants.validation import ANTI_PERIODICAL_PATTERNS
-
         # Normalize dots and underscores to spaces
         normalized_title = title.replace(".", " ").replace("_", " ")
         title_lower = normalized_title.lower()
@@ -659,32 +665,26 @@ class IssueDiscoveryService:
         Returns:
             Priority value (1-100)
         """
-        priority = 50  # Base priority
+        priority = _PRIORITY_BASE
 
-        # Factor 1: Recency (max +30)
         if issue.issue_date:
             now = utc_now()
             days_old = (now - issue.issue_date).days
 
-            if days_old < 7:
-                priority += 30  # Very recent
-            elif days_old < 30:
-                priority += 20  # Recent
-            elif days_old < 90:
-                priority += 10  # Moderately recent
-            # Older than 90 days: no bonus
+            if days_old < _NEW_ISSUE_DAYS:
+                priority += _RECENCY_BONUS_NEW
+            elif days_old < _RECENT_ISSUE_DAYS:
+                priority += _RECENCY_BONUS_RECENT
+            elif days_old < _MODERATE_ISSUE_DAYS:
+                priority += _RECENCY_BONUS_MODERATE
 
-        # Factor 2: Seen multiple times (max +10)
-        # Issues seen from multiple providers are likely more reliable
         if issue.times_seen > 1:
             priority += min(10, issue.times_seen * 2)
 
-        # Factor 3: Tracking preferences
         if tracking.track_all_editions:
-            priority += 10  # Boost for comprehensive tracking
+            priority += _TRACKING_PRIORITY_BOOST
 
-        # Clamp to 1-100
-        return max(1, min(100, priority))
+        return max(_PRIORITY_MIN, min(_PRIORITY_MAX, priority))
 
     def _normalize_country(self, country: Optional[str]) -> str:
         """Normalize a country name or code to a 2-letter ISO code. Defaults to 'US'."""
@@ -728,15 +728,7 @@ class IssueDiscoveryService:
         Returns:
             Magazine ID if issue already exists in library, None otherwise
         """
-        existing = (
-            session.query(Periodical)
-            .filter(
-                and_(
-                    Periodical.tracking_id == tracking.id,
-                )
-            )
-            .all()
-        )
+        existing = session.query(Periodical).filter(Periodical.tracking_id == tracking.id).all()
 
         if not existing:
             return None
