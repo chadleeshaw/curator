@@ -91,6 +91,20 @@ discovered → wanted → queued → pending → downloading → completed
                                            (retry loop, up to max_retries)
 ```
 
+Re-evaluation transitions (triggered when an issue is seen again in a subsequent search):
+
+```
+wanted ──(re-seen in search)──→ discovered
+failed ──(re-seen in search)──→ discovered
+```
+
+Only `wanted` and `failed` are reset; all other statuses are intentionally preserved:
+
+- `completed` — already downloaded; resetting would cause duplicate downloads
+- `ignored` — deliberate exclusion; resetting would override the decision on every search cycle
+- `permanently_failed` — use `retry_permanently_failed()` for the explicit admin override path
+- `queued`/`pending`/`downloading` — mid-flight; resetting would corrupt the parallel `DownloadSubmission` state machine
+
 - `queued` — in Curator's internal queue; `DownloadSubmission` is QUEUED, not yet sent to client
 - `pending` — submitted to and accepted by the download client; `DownloadSubmission` is PENDING
 - `downloading` — client reports active download in progress
@@ -134,10 +148,10 @@ pending → processing → completed
 
 Every download path creates a `DiscoveredIssue` before creating a `DownloadSubmission`:
 
-| Entry Point                          | Path                                                                                                                                                     |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Scheduled auto-download              | `auto_download_task` → `IssueDiscoveryService.record_search_results` → `submit_from_discovered_issue`                                                    |
-| Bulk download (`track_all_editions`) | `download_all_periodical_issues` → `IssueDiscoveryService.record_search_results` → `get_download_queue` → `submit_from_discovered_issue`                 |
-| Manual single issue                  | `download_single_issue` → `IssueDiscoveryService.record_search_results` → `submit_from_discovered_issue`                                                 |
-| Manual fallback (IDS failure)        | `_manual_direct_submission` → creates `DownloadSubmission` then best-effort links to `DiscoveredIssue` via `_link_manual_submission_to_discovered_issue` |
-| Queue promotion                      | `QueueProcessor.process_queue` promotes QUEUED→PENDING → `DownloadManager.process_queue` syncs `DiscoveredIssue = pending`                               |
+| Entry Point                          | Path                                                                                                                                                                                          |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Scheduled auto-download              | `auto_download_task` → `IssueDiscoveryService.record_search_results` → `submit_from_discovered_issue`                                                                                         |
+| Bulk download (`track_all_editions`) | `download_all_periodical_issues` → `IssueDiscoveryService.record_search_results` → `IssueDiscoveryService.evaluate_discovered_issues` → `get_download_queue` → `submit_from_discovered_issue` |
+| Manual single issue                  | `download_single_issue` → `IssueDiscoveryService.record_search_results` → `submit_from_discovered_issue`                                                                                      |
+| Manual fallback (IDS failure)        | `_manual_direct_submission` → creates `DownloadSubmission` then best-effort links to `DiscoveredIssue` via `_link_manual_submission_to_discovered_issue`                                      |
+| Queue promotion                      | `QueueProcessor.process_queue` promotes QUEUED→PENDING → `DownloadManager.process_queue` syncs `DiscoveredIssue = pending`                                                                    |

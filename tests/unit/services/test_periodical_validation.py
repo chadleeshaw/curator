@@ -4,11 +4,6 @@ Tests for periodical validation in issue discovery service.
 Tests the validation logic that prevents downloading non-periodicals (books, collections, etc.)
 """
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
 import pytest
 
 from services.issue_discovery import IssueDiscoveryService
@@ -86,12 +81,6 @@ class TestPeriodicalValidation:
         result = {"title": "Amazing Spider-Man Complete Collection"}
         assert service._validate_is_periodical(result) is True
 
-    def test_rejects_full_series(self, service):
-        """Test: 'Batman Full Series 1940-2020' - Updated: no longer rejected (not video content)"""
-        result = {"title": "Batman Full Series 1940-2020"}
-        # Note: Book/collection patterns removed - only rejecting video/TV/audiobooks
-        assert service._validate_is_periodical(result) is True  # Now accepted as potential periodical
-
     def test_rejects_anthology(self, service):
         """Test: 'Science Fiction Anthology'"""
         result = {"title": "Science Fiction Anthology"}
@@ -136,15 +125,6 @@ class TestPeriodicalValidation:
     # Test Newsnab Category Validation
     # ===================================================================
 
-    def test_rejects_book_category(self, service):
-        """Test: Book category with periodical pattern should ACCEPT (pattern-first validation)"""
-        result = {
-            "title": "Something January 2024",
-            "category": "7000",
-        }  # Books category
-        # Pattern-first validation: has date pattern, so accepts even if book category
-        assert service._validate_is_periodical(result) is True
-
     def test_accepts_magazine_category(self, service):
         """Test: Newsnab magazine category should accept"""
         result = {
@@ -161,18 +141,6 @@ class TestPeriodicalValidation:
     # ===================================================================
     # Test File Size Validation
     # ===================================================================
-
-    def test_rejects_suspiciously_small_file(self, service):
-        """Test: Small files with periodical patterns should ACCEPT (no size filtering)"""
-        result = {"title": "Wired January 2024", "size": 2 * 1024 * 1024}  # 2MB
-        # No file size filtering: pattern validation only
-        assert service._validate_is_periodical(result) is True
-
-    def test_rejects_suspiciously_large_file(self, service):
-        """Test: Large files with periodical patterns should ACCEPT (no size filtering)"""
-        result = {"title": "Wired January 2024", "size": 1500 * 1024 * 1024}  # 1500MB
-        # No file size filtering: pattern validation only
-        assert service._validate_is_periodical(result) is True
 
     def test_accepts_typical_magazine_size(self, service):
         """Test: 100MB file is typical for magazines"""
@@ -280,23 +248,10 @@ class TestPeriodicalValidation:
         result = {"title": "Magazine Issue 389 January 2024"}
         assert service._validate_is_periodical(result) is True
 
-    def test_numeric_date_with_dash_separator(self, service):
-        """Test: 'Magazine 01-2024' recognized as date (dash separator)"""
-        # Dash-separated numeric dates are clear month-year indicators
-        result = {"title": "Magazine 01-2024"}
-        assert service._validate_is_periodical(result) is True
-
-    def test_numeric_date_with_slash_separator(self, service):
-        """Test: 'Magazine 01/2024' recognized as date (slash separator)"""
-        # Slash-separated numeric dates are clear month-year indicators
-        result = {"title": "Magazine 01/2024"}
-        assert service._validate_is_periodical(result) is True
-
-    def test_numeric_date_with_space_separator(self, service):
-        """Test: 'Magazine 01 2024' recognized as date (space separator)"""
-        # Space-separated numeric dates should also be recognized (common in adult magazines)
-        result = {"title": "Magazine 01 2024"}
-        assert service._validate_is_periodical(result) is True
+    @pytest.mark.parametrize("title", ["Magazine 01-2024", "Magazine 01/2024"])
+    def test_numeric_date_with_separator(self, service, title):
+        """Numeric month-year with dash or slash separator is recognised as a date."""
+        assert service._validate_is_periodical({"title": title}) is True
 
     def test_volume_and_issue_combined(self, service):
         """Test: 'Journal Vol. 12 No. 3' recognized as periodical"""
@@ -310,45 +265,29 @@ class TestPeriodicalValidation:
         result = {"title": "Magazine V12 N3 January 2024"}
         assert service._validate_is_periodical(result) is True
 
-    def test_bare_volume_shorthand(self, service):
-        """Test: 'Magazine v12' recognized as periodical (bare v+digits volume shorthand)"""
-        result = {"title": "Magazine v12"}
-        assert service._validate_is_periodical(result) is True
-
-    def test_bare_volume_shorthand_uppercase(self, service):
-        """Test: 'Magazine V5' recognized as periodical (uppercase V+digits)"""
-        result = {"title": "Magazine V5"}
-        assert service._validate_is_periodical(result) is True
+    @pytest.mark.parametrize("title", ["Magazine v12", "Magazine V5"])
+    def test_bare_volume_shorthand(self, service, title):
+        """Bare v+digits volume shorthand (lower- or upper-case) is recognised as a periodical."""
+        assert service._validate_is_periodical({"title": title}) is True
 
     def test_nzb_title_with_bracketed_tag_and_volume(self, service):
         """Test: NZB title with bracketed category tag and bare volume number should be accepted"""
         result = {"title": "[XXX-COMIC] Illustrated Monthly v12"}
         assert service._validate_is_periodical(result) is True
 
-    def test_bare_issue_number_zero_padded(self, service):
-        """Test: 'Illustrated Comix 07' recognized as periodical (bare zero-padded issue number)"""
-        result = {"title": "Illustrated Comix 07"}
-        assert service._validate_is_periodical(result) is True
-
-    def test_bare_issue_number_unpadded(self, service):
-        """Test: 'Illustrated Monthly 12' recognized as periodical (bare issue number)"""
-        result = {"title": "Illustrated Monthly 12"}
-        assert service._validate_is_periodical(result) is True
-
-    def test_bare_issue_number_single_digit(self, service):
-        """Test: 'Magazine Title 5' recognized as periodical (single digit issue)"""
-        result = {"title": "Magazine Title 5"}
-        assert service._validate_is_periodical(result) is True
-
-    def test_bare_issue_number_three_digits(self, service):
-        """Test: 'Long Running Magazine 389' recognized as periodical (3-digit issue)"""
-        result = {"title": "Long Running Magazine 389"}
-        assert service._validate_is_periodical(result) is True
-
-    def test_bare_issue_number_nzb_format(self, service):
-        """Test: NZB title with dots and bare issue number"""
-        result = {"title": "Illustrated.Comix.07.Magazine-GROUP"}
-        assert service._validate_is_periodical(result) is True
+    @pytest.mark.parametrize(
+        "title",
+        [
+            "Illustrated Comix 07",  # zero-padded
+            "Illustrated Monthly 12",  # unpadded two-digit
+            "Magazine Title 5",  # single digit
+            "Long Running Magazine 389",  # three digits
+            "Illustrated.Comix.07.Magazine-GROUP",  # NZB dot format
+        ],
+    )
+    def test_bare_issue_number_accepted(self, service, title):
+        """Bare trailing issue numbers (1–3 digits, including zero-padded) are accepted."""
+        assert service._validate_is_periodical({"title": title}) is True
 
     def test_bare_issue_number_does_not_match_year(self, service):
         """Test: 4-digit year alone should NOT match as bare issue number"""

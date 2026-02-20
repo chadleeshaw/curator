@@ -9,51 +9,15 @@ Tests cover:
 - Bad file detection and manual retry
 """
 
-import sys
-
-sys.path.insert(0, ".")
-
 import pytest
-from datetime import datetime, UTC
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from datetime import datetime
 
-from services import IssueDiscoveryService
 from models.database import (
-    Base,
     PeriodicalTracking,
     Periodical,
     DiscoveredIssue,
+    DownloadStatus,
 )
-
-
-@pytest.fixture
-def test_db():
-    """Create file-based test database for thread-safe testing"""
-    import tempfile
-
-    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp_file:
-        db_path = tmp_file.name
-
-    try:
-        engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
-        Base.metadata.create_all(engine)
-        session_factory = sessionmaker(bind=engine)
-        yield engine, session_factory
-    finally:
-        engine.dispose()
-        from pathlib import Path
-
-        Path(db_path).unlink(missing_ok=True)
-
-
-@pytest.fixture
-def issue_discovery_service():
-    """Create IssueDiscoveryService with default settings"""
-    return IssueDiscoveryService(
-        fuzzy_threshold=80,
-        default_max_retries=1,  # 2 total attempts (initial + 1 retry)
-    )
 
 
 class TestRecordSearchResults:
@@ -111,10 +75,9 @@ class TestRecordSearchResults:
         issue1 = [i for i in issues if "January" in i.title][0]
         assert "January" in issue1.title
         assert issue1.latest_url == "http://example.com/mag-jan2024.nzb"
-        assert issue1.download_status == "discovered"
+        assert issue1.download_status == DownloadStatus.DISCOVERED
         assert issue1.times_seen == 1
-        assert issue1.first_seen is not None
-        assert issue1.last_seen is not None
+        assert issue1.first_seen == issue1.last_seen
 
         session.close()
 
@@ -241,9 +204,9 @@ class TestEvaluateDiscoveredIssues:
         # Check database
         issues = session.query(DiscoveredIssue).filter_by(tracking_id=tracking.id).all()
         for issue in issues:
-            assert issue.download_status == "wanted"
+            assert issue.download_status == DownloadStatus.WANTED
             assert issue.download_priority is not None
-            assert 1 <= issue.download_priority <= 100
+            assert issue.download_priority > 50
 
         session.close()
 
@@ -295,11 +258,11 @@ class TestEvaluateDiscoveredIssues:
         )
 
         # Should mark as completed (not wanted)
-        assert stats["already_have"] > 0
+        assert stats["already_have"] == 1
 
         # Check database
         issue = session.query(DiscoveredIssue).filter_by(tracking_id=tracking.id).first()
-        assert issue.download_status == "completed"
+        assert issue.download_status == DownloadStatus.COMPLETED
         assert issue.periodical_id == magazine.id
 
         session.close()
@@ -355,11 +318,11 @@ class TestDownloadFailureHandling:
             session=session,
         )
 
-        assert new_status == "failed"
+        assert new_status == DownloadStatus.FAILED
 
         # Check database
         issue = session.query(DiscoveredIssue).filter_by(id=issue.id).first()
-        assert issue.download_status == "failed"
+        assert issue.download_status == DownloadStatus.FAILED
         assert issue.attempt_count == 1
         assert issue.download_priority < original_priority  # Priority reduced
         assert issue.last_error == "Download failed"
@@ -419,18 +382,18 @@ class TestDownloadFailureHandling:
             session=session,
         )
 
-        assert new_status == "permanently_failed"
+        assert new_status == DownloadStatus.PERMANENTLY_FAILED
 
         # Check database
         issue = session.query(DiscoveredIssue).filter_by(id=issue.id).first()
-        assert issue.download_status == "permanently_failed"
+        assert issue.download_status == DownloadStatus.PERMANENTLY_FAILED
         assert issue.attempt_count == 2
         assert issue.download_priority == 0  # Priority set to 0 for bad files
 
         session.close()
 
 
-class TestDownloadQueue:
+class TestGetDownloadQueue:
     """Test priority queue generation"""
 
     def test_get_download_queue_returns_priority_order(self, test_db, issue_discovery_service):
@@ -541,11 +504,11 @@ class TestDownloadQueue:
 
         # Manually set different statuses
         issues = session.query(DiscoveredIssue).filter_by(tracking_id=tracking.id).all()
-        issues[0].download_status = "wanted"  # Should be in queue
-        issues[1].download_status = "failed"  # Should be in queue
-        issues[2].download_status = "completed"  # Should NOT be in queue
-        issues[3].download_status = "permanently_failed"  # Should NOT be in queue
-        issues[4].download_status = "ignored"  # Should NOT be in queue
+        issues[0].download_status = DownloadStatus.WANTED  # Should be in queue
+        issues[1].download_status = DownloadStatus.FAILED  # Should be in queue
+        issues[2].download_status = DownloadStatus.COMPLETED  # Should NOT be in queue
+        issues[3].download_status = DownloadStatus.PERMANENTLY_FAILED  # Should NOT be in queue
+        issues[4].download_status = DownloadStatus.IGNORED  # Should NOT be in queue
         session.commit()
 
         # Get queue
@@ -553,7 +516,7 @@ class TestDownloadQueue:
 
         # Should only include "wanted" and "failed" statuses
         assert len(queue) == 2
-        assert all(issue.download_status in ["wanted", "failed"] for issue in queue)
+        assert all(issue.download_status in [DownloadStatus.WANTED, DownloadStatus.FAILED] for issue in queue)
 
         session.close()
 
@@ -600,7 +563,7 @@ class TestRetryPermanentlyFailed:
         issue = session.query(DiscoveredIssue).filter_by(tracking_id=tracking.id).first()
 
         # Mark as permanently_failed
-        issue.download_status = "permanently_failed"
+        issue.download_status = DownloadStatus.PERMANENTLY_FAILED
         issue.attempt_count = 5
         issue.last_error = "Import failed"
         issue.download_priority = 0
@@ -617,7 +580,7 @@ class TestRetryPermanentlyFailed:
 
         # Check database
         issue = session.query(DiscoveredIssue).filter_by(id=issue.id).first()
-        assert issue.download_status == "wanted"
+        assert issue.download_status == DownloadStatus.WANTED
         assert issue.attempt_count == 0  # Reset
         assert issue.download_priority == 50  # Reset to default
         assert issue.last_error is None
@@ -672,6 +635,212 @@ class TestRetryPermanentlyFailed:
 
         # Check database - status unchanged
         issue = session.query(DiscoveredIssue).filter_by(id=issue.id).first()
-        assert issue.download_status == "wanted"
+        assert issue.download_status == DownloadStatus.WANTED
+
+        session.close()
+
+
+class TestSecondSearchReEvaluation:
+    """
+    Tests for the re-evaluation behaviour on subsequent searches.
+
+    Regression tests for the bug where issues updated by a second search were
+    silently skipped by evaluate_discovered_issues because their status had
+    already been transitioned away from DISCOVERED.
+    """
+
+    def _make_search_results(self, titles_and_dates):
+        """Helper to build minimal search result dicts."""
+        results = []
+        for i, (title, pubdate) in enumerate(titles_and_dates):
+            results.append(
+                {
+                    "title": title,
+                    "url": f"http://example.com/mag-{i}.nzb",
+                    "provider": "TestProvider",
+                    "pubdate": pubdate,
+                    "guid": f"test-guid-{i}",
+                }
+            )
+        return results
+
+    def test_wanted_issues_re_evaluated_on_second_search(self, test_db, issue_discovery_service):
+        """
+        Issues that were previously evaluated to WANTED should be reset to DISCOVERED
+        when seen again in a subsequent search, so evaluate_discovered_issues can
+        re-examine them (e.g. to detect library additions since the first search).
+        """
+        engine, session_factory = test_db
+        session = session_factory()
+
+        tracking = PeriodicalTracking(
+            olid="test-mag",
+            title="Test Magazine",
+            track_all_editions=True,
+        )
+        session.add(tracking)
+        session.commit()
+
+        search_results = self._make_search_results([("Test Magazine January 2024", "2024-01-15T10:30:00Z")])
+
+        # First search + evaluate → issue should be WANTED
+        issue_discovery_service.record_search_results(
+            tracking_id=tracking.id, search_results=search_results, session=session
+        )
+        issue_discovery_service.evaluate_discovered_issues(tracking_id=tracking.id, session=session)
+        issue = session.query(DiscoveredIssue).filter_by(tracking_id=tracking.id).first()
+        assert issue.download_status == DownloadStatus.WANTED
+
+        # Second search with the same result — _update_existing_issue should reset to DISCOVERED
+        stats = issue_discovery_service.record_search_results(
+            tracking_id=tracking.id, search_results=search_results, session=session
+        )
+        assert stats["updated"] == 1
+        session.refresh(issue)
+        assert (
+            issue.download_status == DownloadStatus.DISCOVERED
+        ), "WANTED issue should be reset to DISCOVERED so it can be re-evaluated"
+
+        # Second evaluate — issue should become WANTED again (no library entry)
+        eval_stats = issue_discovery_service.evaluate_discovered_issues(tracking_id=tracking.id, session=session)
+        assert eval_stats["wanted"] == 1
+        assert eval_stats["ignored"] == 0
+
+        session.close()
+
+    def test_failed_issues_re_evaluated_on_second_search(self, test_db, issue_discovery_service):
+        """
+        Issues in FAILED status should be reset to DISCOVERED on re-search so they
+        can be re-evaluated with potentially updated URL/provider data.
+        """
+        engine, session_factory = test_db
+        session = session_factory()
+
+        tracking = PeriodicalTracking(
+            olid="test-mag",
+            title="Test Magazine",
+            track_all_editions=True,
+        )
+        session.add(tracking)
+        session.commit()
+
+        search_results = self._make_search_results([("Test Magazine February 2024", "2024-02-15T10:30:00Z")])
+
+        # First search + evaluate + simulate failure
+        issue_discovery_service.record_search_results(
+            tracking_id=tracking.id, search_results=search_results, session=session
+        )
+        issue_discovery_service.evaluate_discovered_issues(tracking_id=tracking.id, session=session)
+        issue = session.query(DiscoveredIssue).filter_by(tracking_id=tracking.id).first()
+        issue.download_status = DownloadStatus.FAILED
+        session.commit()
+
+        # Second search — should reset FAILED → DISCOVERED
+        issue_discovery_service.record_search_results(
+            tracking_id=tracking.id, search_results=search_results, session=session
+        )
+        session.refresh(issue)
+        assert (
+            issue.download_status == DownloadStatus.DISCOVERED
+        ), "FAILED issue should be reset to DISCOVERED so it can be re-evaluated"
+
+        # Second evaluate — should be WANTED again
+        eval_stats = issue_discovery_service.evaluate_discovered_issues(tracking_id=tracking.id, session=session)
+        assert eval_stats["wanted"] == 1
+
+        session.close()
+
+    @pytest.mark.parametrize(
+        "protected_status",
+        [
+            DownloadStatus.COMPLETED,
+            DownloadStatus.IGNORED,
+            DownloadStatus.PERMANENTLY_FAILED,
+            DownloadStatus.QUEUED,
+            DownloadStatus.PENDING,
+            DownloadStatus.DOWNLOADING,
+        ],
+    )
+    def test_protected_statuses_not_reset_on_second_search(self, test_db, issue_discovery_service, protected_status):
+        """
+        Issues whose status indicates in-flight or deliberate exclusion must never be
+        reset to DISCOVERED by a subsequent search.  Covered statuses:
+          - COMPLETED  : already downloaded, reset would trigger re-download
+          - IGNORED    : deliberate exclusion by the operator
+          - PERMANENTLY_FAILED : requires explicit retry_permanently_failed call
+          - QUEUED     : queued in Curator's internal queue, resetting loses the slot
+          - PENDING    : submitted to download client, resetting would orphan the job
+          - DOWNLOADING: actively downloading, resetting would orphan the job
+        """
+        engine, session_factory = test_db
+        session = session_factory()
+
+        tracking = PeriodicalTracking(
+            olid="test-mag",
+            title="Test Magazine",
+            track_all_editions=True,
+        )
+        session.add(tracking)
+        session.commit()
+
+        search_results = self._make_search_results([("Test Magazine March 2024", "2024-03-15T10:30:00Z")])
+
+        issue_discovery_service.record_search_results(
+            tracking_id=tracking.id, search_results=search_results, session=session
+        )
+        issue = session.query(DiscoveredIssue).filter_by(tracking_id=tracking.id).first()
+        issue.download_status = protected_status
+        session.commit()
+
+        # Second search — protected status should be preserved
+        issue_discovery_service.record_search_results(
+            tracking_id=tracking.id, search_results=search_results, session=session
+        )
+        session.refresh(issue)
+        assert (
+            issue.download_status == protected_status
+        ), f"{protected_status!r} must not be reset to DISCOVERED on re-search"
+
+        session.close()
+
+    def test_discover_and_evaluate_orchestration(self, test_db, issue_discovery_service):
+        """
+        discover_and_evaluate should return combined stats from both record and evaluate
+        and produce the correct end state in one call.
+        """
+        engine, session_factory = test_db
+        session = session_factory()
+
+        tracking = PeriodicalTracking(
+            olid="test-mag",
+            title="Test Magazine",
+            track_all_editions=True,
+        )
+        session.add(tracking)
+        session.commit()
+
+        search_results = self._make_search_results(
+            [
+                ("Test Magazine June 2024", "2024-06-15T10:30:00Z"),
+                ("Test Magazine July 2024", "2024-07-15T10:30:00Z"),
+            ]
+        )
+
+        combined = issue_discovery_service.discover_and_evaluate(
+            tracking_id=tracking.id,
+            search_results=search_results,
+            session=session,
+        )
+
+        # Should have record-phase keys
+        assert combined["new"] == 2
+        assert combined["errors"] == 0
+        # Should have evaluate-phase keys
+        assert combined["wanted"] == 2
+        assert combined["ignored"] == 0
+
+        # DB should reflect final state
+        issues = session.query(DiscoveredIssue).filter_by(tracking_id=tracking.id).all()
+        assert all(i.download_status == DownloadStatus.WANTED for i in issues)
 
         session.close()

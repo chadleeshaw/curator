@@ -117,7 +117,7 @@ format-css:
 
 # Testing
 test:
-	@echo "🧪 Running all tests (excluding slow performance tests)..."
+	@echo "🧪 Running all tests (excluding performance tests)..."
 	@.venv/bin/python -m pytest tests/ -v --tb=short -m "not slow" 2>&1 | tail -50 || echo "⚠ Some tests failed"
 	@echo "✅ Test run completed!"
 
@@ -142,7 +142,7 @@ test-routers:
 	@echo "✅ Router tests completed!"
 
 test-coverage:
-	@echo "🧪 Running tests with coverage (excluding slow performance tests)..."
+	@echo "🧪 Running tests with coverage (excluding performance tests)..."
 	@.venv/bin/python -m pytest tests/ --cov=. --cov-report=term-missing --cov-report=html -m "not slow"
 	@echo "✅ Coverage report generated in htmlcov/"
 

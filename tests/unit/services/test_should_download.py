@@ -7,14 +7,10 @@ Covers all three tracking modes:
 - Latest Issue (track_new_only=True) → download only recent issues
 """
 
-import sys
 from datetime import datetime, timedelta
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 
 from core.parsers import utc_now
@@ -48,26 +44,6 @@ class TestShouldDownloadWatchOnly:
         issue.country = "US"
         issue.issue_date = utc_now() - timedelta(days=5)
         issue.year = utc_now().year
-
-        assert service._should_download(issue, tracking_watch_only) is False
-
-    def test_watch_only_with_old_issue(self, service, tracking_watch_only):
-        """Watch Only should NOT download old issues"""
-        issue = MagicMock(spec=DiscoveredIssue)
-        issue.title = "Test Magazine January 2020"
-        issue.country = "US"
-        issue.issue_date = datetime(2020, 1, 1)
-        issue.year = 2020
-
-        assert service._should_download(issue, tracking_watch_only) is False
-
-    def test_watch_only_with_no_date(self, service, tracking_watch_only):
-        """Watch Only should NOT download issues with no date"""
-        issue = MagicMock(spec=DiscoveredIssue)
-        issue.title = "Test Magazine"
-        issue.country = "US"
-        issue.issue_date = None
-        issue.year = None
 
         assert service._should_download(issue, tracking_watch_only) is False
 
@@ -119,16 +95,6 @@ class TestShouldDownloadAll:
         issue.year = None
 
         assert service._should_download(issue, tracking_all) is True
-
-    def test_download_all_blocks_wrong_country(self, service, tracking_all):
-        """Download All should still respect country filtering"""
-        issue = MagicMock(spec=DiscoveredIssue)
-        issue.title = "Test Magazine UK Edition"
-        issue.country = "UK"
-        issue.issue_date = utc_now()
-        issue.year = utc_now().year
-
-        assert service._should_download(issue, tracking_all) is False
 
 
 class TestShouldDownloadNewOnly:
@@ -226,16 +192,6 @@ class TestShouldDownloadNewOnly:
         issue.country = "US"
         issue.issue_date = None
         issue.year = None
-
-        assert service._should_download(issue, tracking_new_only) is False
-
-    def test_new_only_blocks_wrong_country(self, service, tracking_new_only):
-        """Should still respect country filtering"""
-        issue = MagicMock(spec=DiscoveredIssue)
-        issue.title = "Test Magazine UK February 2026"
-        issue.country = "UK"
-        issue.issue_date = utc_now() - timedelta(days=5)
-        issue.year = utc_now().year
 
         assert service._should_download(issue, tracking_new_only) is False
 

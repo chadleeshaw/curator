@@ -4,14 +4,10 @@ Tests for country matching in issue discovery.
 Ensures that different country editions are treated as separate periodicals.
 """
 
-import sys
-from pathlib import Path
 from datetime import datetime
 from unittest.mock import MagicMock
 
 import pytest
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from models.database import DiscoveredIssue, PeriodicalTracking
 from services.issue_discovery import IssueDiscoveryService

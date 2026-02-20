@@ -214,8 +214,23 @@ class IssueDiscoveryService:
             return False
         return True
 
+    # Statuses that should be re-evaluated when the issue is seen again in search results.
+    # WANTED: not yet in the download pipeline — re-evaluate in case tracking rules changed.
+    # FAILED: download failed — re-seen result (possibly with a new URL) is a natural retry trigger.
+    # Excluded intentionally:
+    #   COMPLETED/DOWNLOADING/PENDING/QUEUED — terminal or mid-flight; re-evaluation would cause duplicates.
+    #   IGNORED — deliberate exclusion; resetting would override user decisions on every search cycle.
+    #   PERMANENTLY_FAILED — has an explicit admin override path (retry_permanently_failed).
+    _REEVALUATE_ON_RESEEN = frozenset({DownloadStatus.WANTED, DownloadStatus.FAILED})
+
     def _update_existing_issue(self, existing: DiscoveredIssue, result: Dict[str, Any], parsed, pubdate, now) -> None:
-        """Update an existing DiscoveredIssue with fresher data from a new search result."""
+        """Update an existing DiscoveredIssue with fresher data from a new search result.
+
+        If the issue is in a re-evaluable state (WANTED or FAILED), reset it to DISCOVERED
+        so that evaluate_discovered_issues will re-examine it on the next evaluation pass.
+        This ensures subsequent searches can re-evaluate issues whose circumstances have
+        changed (e.g. new URL, updated tracking rules).
+        """
         existing.last_seen = now
         existing.times_seen += 1
 
@@ -235,6 +250,13 @@ class IssueDiscoveryService:
         search_result_id = result.get("search_result_id")
         if search_result_id and search_result_id not in existing.search_result_ids:
             existing.search_result_ids.append(search_result_id)
+
+        if existing.download_status in self._REEVALUATE_ON_RESEEN:
+            logger.debug(
+                f"Resetting {existing.fuzzy_match_group} from '{existing.download_status}' "
+                f"to 'discovered' for re-evaluation"
+            )
+            existing.download_status = DownloadStatus.DISCOVERED
 
     def _create_new_issue(
         self,
@@ -356,6 +378,38 @@ class IssueDiscoveryService:
         )
 
         return stats
+
+    def discover_and_evaluate(
+        self, tracking_id: int, search_results: List[Dict[str, Any]], session: Session
+    ) -> Dict[str, Any]:
+        """
+        Full discovery pipeline: record search results then evaluate discovered issues.
+
+        This is the preferred entry point for callers that need both steps. Using this
+        method ensures the required record → evaluate sequence is always followed and
+        prevents callers from accidentally omitting the evaluation step (which would
+        leave new issues stuck in DISCOVERED status and invisible to the download queue).
+
+        Args:
+            tracking_id: PeriodicalTracking ID
+            search_results: Raw search results from a provider
+            session: Database session
+
+        Returns:
+            Combined stats dict with keys from both record_search_results and
+            evaluate_discovered_issues: {new, updated, duplicate, errors,
+            rejected_non_periodical, wanted, ignored, already_have}
+        """
+        record_stats = self.record_search_results(
+            tracking_id=tracking_id,
+            search_results=search_results,
+            session=session,
+        )
+        eval_stats = self.evaluate_discovered_issues(
+            tracking_id=tracking_id,
+            session=session,
+        )
+        return {**record_stats, **eval_stats}
 
     def handle_download_failure(self, issue_id: int, error_message: str, session: Session) -> str:
         """

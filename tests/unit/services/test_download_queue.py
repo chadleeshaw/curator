@@ -7,17 +7,16 @@ Tests cover:
 - Queue processor can pick up QUEUED submissions
 """
 
-import sys
-
-sys.path.insert(0, ".")
-
 import pytest
 from datetime import datetime, UTC
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 from core.interfaces import DownloadClient
-from models.database import Base, DiscoveredIssue, DownloadSubmission, PeriodicalTracking
+from models.database import (
+    DiscoveredIssue,
+    DownloadSubmission,
+    PeriodicalTracking,
+    DownloadStatus,
+)
 from services.download_manager import DownloadManager
 
 
@@ -48,26 +47,6 @@ class MockDownloadClient(DownloadClient):
 
 
 @pytest.fixture
-def test_db():
-    """Create file-based test database for thread-safe testing"""
-    import tempfile
-
-    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp_file:
-        db_path = tmp_file.name
-
-    try:
-        engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
-        Base.metadata.create_all(engine)
-        session_factory = sessionmaker(bind=engine)
-        yield engine, session_factory
-    finally:
-        engine.dispose()
-        from pathlib import Path
-
-        Path(db_path).unlink(missing_ok=True)
-
-
-@pytest.fixture
 def mock_client():
     return MockDownloadClient()
 
@@ -80,7 +59,13 @@ def _create_tracking(session, title="Test Magazine"):
     return tracking
 
 
-def _create_discovered_issue(session, tracking_id, title, url="http://example.com/test.nzb", status="wanted"):
+def _create_discovered_issue(
+    session,
+    tracking_id,
+    title,
+    url="http://example.com/test.nzb",
+    status=DownloadStatus.WANTED,
+):
     """Helper to create a DiscoveredIssue"""
     issue = DiscoveredIssue(
         tracking_id=tracking_id,
@@ -168,7 +153,7 @@ class TestSubmitFromDiscoveredIssueQueuing:
 
         # Refresh the issue from DB
         session.refresh(issue)
-        assert issue.download_status == "queued"
+        assert issue.download_status == DownloadStatus.QUEUED
         assert issue.current_submission_id == submission.id
         assert submission.id in (issue.submission_ids or [])
 

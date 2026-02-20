@@ -989,7 +989,7 @@ class DownloadManager:
             return results
 
         # Record all results through IssueDiscoveryService — this creates/updates
-        # DiscoveredIssue records and sets download_status="wanted" for new issues.
+        # DiscoveredIssue records with status="discovered" for new issues.
         record_stats = self.issue_discovery_service.record_search_results(
             tracking_id=tracking_id,
             search_results=search_results,
@@ -998,6 +998,18 @@ class DownloadManager:
         logger.info(
             f"Recorded search results: {record_stats['new']} new, {record_stats['updated']} updated, "
             f"{record_stats.get('rejected_non_periodical', 0)} rejected"
+        )
+
+        # Evaluate discovered issues — promotes "discovered" → "wanted" or "ignored"
+        # based on tracking rules. Must be called before get_download_queue, which
+        # only returns "wanted"/"failed" issues.
+        eval_stats = self.issue_discovery_service.evaluate_discovered_issues(
+            tracking_id=tracking_id,
+            session=session,
+        )
+        logger.info(
+            f"Evaluated issues: {eval_stats['wanted']} wanted, {eval_stats['ignored']} ignored, "
+            f"{eval_stats['already_have']} already have"
         )
 
         # Fetch all "wanted" issues for this tracking record and submit them
