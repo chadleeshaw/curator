@@ -5,6 +5,8 @@ Constants for configuring and using the Internet Archive API
 for searching and downloading periodicals.
 """
 
+from core.constants.validation import COLLECTION_INDICATOR_WORDS
+
 # Default search parameters
 IA_DEFAULT_MEDIATYPE = "texts"
 IA_DEFAULT_ROWS = 500
@@ -48,16 +50,8 @@ IA_EXTRACTABLE_EXTENSIONS = {
 }
 
 # Keywords that indicate a collection archive (case-insensitive)
-IA_COLLECTION_KEYWORDS = [
-    "full collection",
-    "complete collection",
-    "complete run",
-    "full run",
-    "entire collection",
-    "all issues",
-    "complete set",
-    "full archive",
-]
+# Canonical list lives in validation.COLLECTION_INDICATOR_WORDS
+IA_COLLECTION_KEYWORDS = sorted(COLLECTION_INDICATOR_WORDS)
 
 # File format extensions mapping
 IA_FORMAT_EXTENSIONS = {

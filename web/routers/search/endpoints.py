@@ -29,7 +29,7 @@ from .dependencies import (
 from .filters import (
     filter_by_language_and_country,
     filter_periodical_variants,
-    filter_ia_results,
+    filter_search_results,
     filter_non_periodicals,
 )
 from .library import (
@@ -216,7 +216,7 @@ async def search_periodical_providers(
 
         # Step 4b: Filter IA collection archives and poor title matches
         ia_before = len(all_results)
-        all_results = filter_ia_results(all_results, query)
+        all_results = filter_search_results(all_results, query)
         ia_filtered = ia_before - len(all_results)
 
         # Step 5: Save fresh results to cache

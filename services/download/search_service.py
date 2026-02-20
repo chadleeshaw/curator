@@ -14,7 +14,7 @@ from core.interfaces import SearchProvider
 from core.constants.app import PROVIDER_SEARCH_TIMEOUT
 from core.parsers import Parser, TitleMatcher, LANGUAGE_INDICATORS
 from core.utils.fuzzy_matching import get_fuzzy_group_id
-from core.utils.ia_filtering import filter_ia_result
+from core.utils.result_filter import filter_result
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +116,7 @@ class SearchService:
                             logger.debug(f"Skipping non-periodical result: {result.title}")
                             continue
 
-                        if not filter_ia_result(
+                        if not filter_result(
                             result_title=result.title,
                             result_provider=result.provider,
                             raw_metadata=result.raw_metadata,
@@ -199,21 +199,24 @@ class SearchService:
             "Tech Magazine No 11 - Feb 2024" -> "tech_2024-02_i11"
             "Wired Vol 30 No 1" -> "wired_v30_i1"
         """
-        # Start with title-only fuzzy group ID (reuse if already calculated)
         fuzzy_group = result.get("fuzzy_match_group_id") or get_fuzzy_group_id(result["title"])
         key_parts = [fuzzy_group]
 
-        # Add publication date if available (year-month precision)
         pub_date = result.get("publication_date")
         if pub_date:
             key_parts.append(pub_date.strftime("%Y-%m"))
 
-        # Add volume/issue numbers if available from metadata
         metadata = result.get("raw_metadata", {})
         if metadata.get("volume"):
             key_parts.append(f"v{metadata['volume']}")
         if metadata.get("issue"):
             key_parts.append(f"i{metadata['issue']}")
+
+        if len(key_parts) == 1:
+            logger.warning(
+                f"Dedup key has no date or issue discriminator for '{result['title']}' — "
+                f"different issues of the same periodical may be collapsed"
+            )
 
         return "_".join(key_parts)
 

@@ -73,25 +73,30 @@ class TestDatesAreFuzzyMatch:
 
     def test_same_season_within_year(self):
         """
-        Dates in the same season should match.
-        This handles "Winter 2024" being Dec, Jan, or Feb.
+        Within a single year, same-season dates that are more than 1 month apart
+        are NOT considered a match. Dec and Feb of the same year are 10 months apart
+        and are clearly different issues (e.g. Winter 2024 vs Spring 2024 overlap).
+        Only the cross-year boundary case (Dec -> Jan/Feb of next year) matches.
         """
-        # Winter: Dec, Jan, Feb
         dec = date(2024, 12, 15)
         jan_same_year = date(2024, 1, 15)
         feb = date(2024, 2, 15)
 
-        assert dates_are_fuzzy_match(dec, feb) is True
+        # Dec 2024 vs Feb 2024: 10 months apart — different issues, should NOT match
+        assert dates_are_fuzzy_match(dec, feb) is False
+
+        # Jan and Feb of the same year are 1 month apart — still matches via tolerance
         assert dates_are_fuzzy_match(jan_same_year, feb) is True
 
-        # Spring: Mar, Apr, May
+        # Spring: consecutive months within tolerance
         mar = date(2024, 3, 15)
         apr = date(2024, 4, 15)
         may = date(2024, 5, 15)
 
         assert dates_are_fuzzy_match(mar, apr) is True
         assert dates_are_fuzzy_match(apr, may) is True
-        assert dates_are_fuzzy_match(mar, may) is True
+        # Mar and May are 2 months apart — exceeds default tolerance
+        assert dates_are_fuzzy_match(mar, may) is False
 
     def test_same_season_across_year_boundary(self):
         """

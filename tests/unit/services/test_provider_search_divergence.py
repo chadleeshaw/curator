@@ -2,7 +2,7 @@
 Tests for medium item #4 — divergent provider search path fixes:
 
 1. Consolidated get_fuzzy_group_id — local copy removed, canonical version used everywhere
-2. IA filtering — shared utility in core/utils/ia_filtering.py, applied in both paths
+2. Result filtering — shared utility in core/utils/result_filter.py, applied in both paths
 3. Provider timeout — fetch_from_providers now wraps calls with PROVIDER_SEARCH_TIMEOUT
 """
 
@@ -18,9 +18,9 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from core.interfaces import SearchProvider, SearchResult
-from core.utils.ia_filtering import (
-    filter_ia_result,
-    ia_title_matches_query,
+from core.utils.result_filter import (
+    filter_result,
+    title_matches_query,
     is_ia_collection,
 )
 from core.utils.fuzzy_matching import get_fuzzy_group_id
@@ -53,17 +53,11 @@ class TestConsolidatedFuzzyGroupId:
         assert lib_mod.get_fuzzy_group_id is get_fuzzy_group_id
 
     def test_canonical_version_handles_publication_date(self):
-        """The canonical version accepts publication_date but ignores it (deprecated)."""
-        # Without date
-        group_no_date = get_fuzzy_group_id("National Geographic")
-        assert isinstance(group_no_date, str)
-        assert len(group_no_date) > 0
-
-        # With date — should produce SAME group (date is deprecated)
-        # This supports items with volume/issue numbers but no dates
-        group_with_date = get_fuzzy_group_id("National Geographic", datetime(2024, 1, 15))
-        assert group_no_date == group_with_date
-        assert "2024-01" not in group_with_date  # Date should NOT be in fuzzy group
+        """Group IDs are title-based only — publication date is not included."""
+        group = get_fuzzy_group_id("National Geographic")
+        assert isinstance(group, str)
+        assert len(group) > 0
+        assert "2024" not in group
 
     def test_canonical_version_removes_noise_words(self):
         """Canonical version strips noise words like 'the', 'magazine'."""
@@ -86,7 +80,7 @@ class TestConsolidatedFuzzyGroupId:
 
 
 class TestIaFilteringUtility:
-    """Test the shared IA filtering functions in core/utils/ia_filtering.py."""
+    """Test the shared result filtering functions in core/utils/result_filter.py."""
 
     def test_is_ia_collection_true(self):
         """Collection archives should be identified."""
@@ -98,49 +92,48 @@ class TestIaFilteringUtility:
         assert is_ia_collection({}) is False
         assert is_ia_collection(None) is False
 
-    def test_ia_title_matches_query_good_match(self):
+    def test_title_matches_query_good_match(self):
         """Title containing all search terms should pass."""
-        assert ia_title_matches_query("National Geographic January 2024", "National Geographic") is True
+        assert title_matches_query("National Geographic January 2024", "National Geographic") is True
 
-    def test_ia_title_matches_query_poor_match(self):
+    def test_title_matches_query_poor_match(self):
         """Title not matching search terms should fail."""
-        assert ia_title_matches_query("Cooking Recipes Vol 5", "National Geographic") is False
+        assert title_matches_query("Cooking Recipes Vol 5", "National Geographic") is False
 
-    def test_ia_title_matches_query_partial_match_long_query(self):
+    def test_title_matches_query_partial_match_long_query(self):
         """50% match passes for queries with 3+ terms (uses default threshold)."""
         # 3-term query: "National Geographic Traveller"
         # "National Geographic" matches (2/3 = 66% >= 50%)
-        assert ia_title_matches_query("National Geographic January 2024", "National Geographic Traveller") is True
+        assert title_matches_query("National Geographic January 2024", "National Geographic Traveller") is True
 
-    def test_ia_title_matches_query_partial_match_short_query_fails(self):
+    def test_title_matches_query_partial_match_short_query_fails(self):
         """Partial matches fail for short queries (1-2 terms require 100% match)."""
         # 2-term query: "National Geographic"
         # "National Review" only has 1/2 terms (50% < 100% required) → fails
-        assert ia_title_matches_query("National Review January 2024", "National Geographic") is False
+        assert title_matches_query("National Review January 2024", "National Geographic") is False
 
-    def test_ia_title_matches_query_short_terms_now_included(self):
+    def test_title_matches_query_short_terms_now_included(self):
         """Terms with 2+ chars are now checked (includes magazine abbreviations like PC, GQ)."""
-        # BUG FIX: Changed from 3+ to 2+ chars
         # Both "PC" and "Gamer" must match (100% for 2-term query)
-        assert ia_title_matches_query("PC Gamer Issue 400", "PC Gamer") is True
+        assert title_matches_query("PC Gamer Issue 400", "PC Gamer") is True
         # Magazine abbreviations like GQ, OK should now work
-        assert ia_title_matches_query("GQ Magazine UK", "GQ") is True
+        assert title_matches_query("GQ Magazine UK", "GQ") is True
 
-    def test_ia_title_matches_query_no_significant_terms(self):
+    def test_title_matches_query_no_significant_terms(self):
         """If all terms are too short (<2 chars), should pass (nothing to check)."""
         # Single-letter terms are ignored
-        assert ia_title_matches_query("Something Else", "a") is True
-        assert ia_title_matches_query("Something Else", "x y z") is True
+        assert title_matches_query("Something Else", "a") is True
+        assert title_matches_query("Something Else", "x y z") is True
 
-    def test_filter_ia_result_non_ia_always_passes(self):
+    def test_filter_result_non_ia_always_passes(self):
         """Non-IA results should always pass regardless of content."""
-        assert filter_ia_result("Random Title", "newsnab", {}, "Something Else") is True
-        assert filter_ia_result("Random Title", "rss", {}, "Something Else") is True
+        assert filter_result("Random Title", "newsnab", {}, "Something Else") is True
+        assert filter_result("Random Title", "rss", {}, "Something Else") is True
 
-    def test_filter_ia_result_collection_filtered(self):
+    def test_filter_result_collection_filtered(self):
         """IA collection archives should be filtered out by default."""
         assert (
-            filter_ia_result(
+            filter_result(
                 "My Archive Collection",
                 "internet_archive",
                 {"is_collection": True},
@@ -149,10 +142,10 @@ class TestIaFilteringUtility:
             is False
         )
 
-    def test_filter_ia_result_collection_preserved_when_disabled(self):
+    def test_filter_result_collection_preserved_when_disabled(self):
         """IA collection archives should pass when filter_collections=False."""
         assert (
-            filter_ia_result(
+            filter_result(
                 "My Archive Collection",
                 "internet_archive",
                 {"is_collection": True},
@@ -162,14 +155,14 @@ class TestIaFilteringUtility:
             is True
         )
 
-    def test_filter_ia_result_poor_title_filtered(self):
+    def test_filter_result_poor_title_filtered(self):
         """IA results with poor title match should be filtered out."""
-        assert filter_ia_result("Cooking Recipes Vol 5", "internet_archive", {}, "National Geographic") is False
+        assert filter_result("Cooking Recipes Vol 5", "internet_archive", {}, "National Geographic") is False
 
-    def test_filter_ia_result_good_match_passes(self):
+    def test_filter_result_good_match_passes(self):
         """IA results with good title match should pass."""
         assert (
-            filter_ia_result(
+            filter_result(
                 "National Geographic January 2024",
                 "internet_archive",
                 {},
@@ -178,28 +171,31 @@ class TestIaFilteringUtility:
             is True
         )
 
-    def test_filter_ia_result_no_query_skips_title_check(self):
+    def test_filter_result_no_query_skips_title_check(self):
         """When search_query is None, title-match check should be skipped."""
-        assert filter_ia_result("Completely Unrelated Title", "internet_archive", {}, None) is True
+        assert filter_result("Completely Unrelated Title", "internet_archive", {}, None) is True
 
 
 class TestIaFilterInUiSearch:
     """Test that the IA filter is wired into the UI search filters module."""
 
-    def test_filter_ia_results_function_exists(self):
-        """filters.py should expose filter_ia_results function."""
-        from web.routers.search.filters import filter_ia_results
+    def test_filter_search_results_function_exists(self):
+        """filters.py should expose filter_search_results function."""
+        from web.routers.search.filters import filter_search_results
 
-        assert callable(filter_ia_results)
+        assert callable(filter_search_results)
 
-    def test_filter_ia_results_preserves_collections(self):
+    def test_filter_search_results_preserves_collections(self):
         """UI filter should preserve IA collection archives and filter by title match."""
-        from web.routers.search.filters import filter_ia_results
+        from web.routers.search.filters import filter_search_results
 
         results = [
-            # BUG FIX: Now filters ALL providers by title match, not just IA
-            # "Good Result" doesn't match "National Geographic" so it gets filtered
-            {"title": "National Geographic Traveler", "provider": "newsnab", "metadata": {}},
+            # All providers are filtered by title match
+            {
+                "title": "National Geographic Traveler",
+                "provider": "newsnab",
+                "metadata": {},
+            },
             {
                 "title": "National Geographic Collection",
                 "provider": "internet_archive",
@@ -211,15 +207,15 @@ class TestIaFilterInUiSearch:
                 "metadata": {},
             },
         ]
-        filtered = filter_ia_results(results, "National Geographic")
+        filtered = filter_search_results(results, "National Geographic")
         assert len(filtered) == 3
         assert filtered[0]["title"] == "National Geographic Traveler"
         assert filtered[1]["title"] == "National Geographic Collection"
         assert filtered[2]["title"] == "National Geographic Jan 2024"
 
-    def test_filter_ia_results_filters_poor_matches(self):
+    def test_filter_search_results_filters_poor_matches(self):
         """UI filter should remove IA results that don't match the query."""
-        from web.routers.search.filters import filter_ia_results
+        from web.routers.search.filters import filter_search_results
 
         results = [
             {
@@ -233,13 +229,13 @@ class TestIaFilterInUiSearch:
                 "metadata": {},
             },
         ]
-        filtered = filter_ia_results(results, "National Geographic")
+        filtered = filter_search_results(results, "National Geographic")
         assert len(filtered) == 1
         assert filtered[0]["title"] == "National Geographic Jan 2024"
 
-    def test_filter_ia_results_filters_all_providers_by_title_match(self):
-        """BUG FIX: All providers (not just IA) are now filtered by title match."""
-        from web.routers.search.filters import filter_ia_results
+    def test_filter_search_results_filters_all_providers_by_title_match(self):
+        """All providers (not just IA) are filtered by title match."""
+        from web.routers.search.filters import filter_search_results
 
         results = [
             # These don't match "National Geographic" so they get filtered
@@ -248,27 +244,27 @@ class TestIaFilterInUiSearch:
             # This matches so it's kept
             {"title": "National Geographic UK", "provider": "newsnab", "metadata": {}},
         ]
-        filtered = filter_ia_results(results, "National Geographic")
+        filtered = filter_search_results(results, "National Geographic")
         assert len(filtered) == 1
         assert filtered[0]["title"] == "National Geographic UK"
 
-    def test_filter_ia_results_imported_in_endpoints(self):
-        """endpoints.py should import filter_ia_results from filters."""
+    def test_filter_search_results_imported_in_endpoints(self):
+        """endpoints.py should import filter_search_results from filters."""
         import web.routers.search.endpoints as endpoints_mod
-        from web.routers.search.filters import filter_ia_results
+        from web.routers.search.filters import filter_search_results
 
-        assert hasattr(endpoints_mod, "filter_ia_results")
+        assert hasattr(endpoints_mod, "filter_search_results")
 
 
 class TestIaFilterInAutoDownload:
     """Test that auto-download SearchService uses the shared IA filter."""
 
-    def test_search_service_imports_filter_ia_result(self):
-        """SearchService should import filter_ia_result from core.utils.ia_filtering."""
+    def test_search_service_imports_filter_result(self):
+        """SearchService should import filter_result from core.utils.result_filter."""
         import services.download.search_service as ss_mod
 
-        assert hasattr(ss_mod, "filter_ia_result")
-        assert ss_mod.filter_ia_result is filter_ia_result
+        assert hasattr(ss_mod, "filter_result")
+        assert ss_mod.filter_result is filter_result
 
 
 # =============================================================================

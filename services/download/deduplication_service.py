@@ -41,11 +41,8 @@ class DeduplicationService:
         Returns:
             Tuple of (is_duplicate, existing_submission_record)
         """
-        # Calculate group ID from title (no dict available here, only string)
         fuzzy_group = get_fuzzy_group_id(result_title)
 
-        # Check for similar results already submitted
-        # Include QUEUED status to prevent duplicate queueing
         existing = (
             session.query(DownloadSubmission)
             .filter(
@@ -65,9 +62,10 @@ class DeduplicationService:
         )
 
         if existing:
-            # Check if within time window
-            cutoff = utc_now() - timedelta(hours=window_hours)
-            if existing.created_at > cutoff:
+            is_completed = existing.status == DownloadSubmission.StatusEnum.COMPLETED
+            is_within_window = existing.created_at > utc_now() - timedelta(hours=window_hours)
+
+            if is_completed or is_within_window:
                 logger.debug(
                     f"Duplicate found: '{result_title}' matches existing submission "
                     f"(ID: {existing.id}, status: {existing.status.value}, "

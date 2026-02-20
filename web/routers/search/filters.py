@@ -13,7 +13,7 @@ from core.constants.country import LANGUAGE_TO_COUNTRY
 from core.constants.periodical import AUDIENCE_PERIODICAL_INDICATORS
 from core.constants.language import LANGUAGE_KEYWORDS
 from core.parsers.country import detect_country
-from core.utils.ia_filtering import filter_ia_result, ia_title_matches_query
+from core.utils.result_filter import filter_result, title_matches_query
 from services.issue_discovery import IssueDiscoveryService
 
 from .dependencies import get_title_matcher
@@ -138,14 +138,12 @@ def filter_non_periodicals(results: List[Dict[str, Any]]) -> List[Dict[str, Any]
     return filtered
 
 
-def filter_ia_results(results: List[Dict[str, Any]], search_query: str) -> List[Dict[str, Any]]:
+def filter_search_results(results: List[Dict[str, Any]], search_query: str) -> List[Dict[str, Any]]:
     """
     Filter search results from ALL providers to remove poor title matches.
 
-    BUG FIX: Previously only filtered IA results, but Newsnab also returns
-    broad keyword matches. Now applies title-match filtering to ALL providers.
-
-    Examples of bugs this fixes:
+    Applies title-match filtering to all providers. For Internet Archive results,
+    also applies collection detection. Examples:
     - Searching "Nuts UK" no longer returns "Hexagon Head Bolts, Screws and Nuts"
     - Searching "PC Gamer" won't return "PC Hardware Guide"
     - Word boundaries prevent "nuts" from matching "donuts", "peanuts"
@@ -170,7 +168,7 @@ def filter_ia_results(results: List[Dict[str, Any]], search_query: str) -> List[
 
         # Apply IA-specific filters (collections, etc.)
         if provider == "internet_archive":
-            if filter_ia_result(
+            if filter_result(
                 result_title=result_title,
                 result_provider=provider,
                 raw_metadata=metadata,
@@ -181,9 +179,8 @@ def filter_ia_results(results: List[Dict[str, Any]], search_query: str) -> List[
             else:
                 filtered_count += 1
         else:
-            # Apply title-match filtering to ALL non-IA providers (Newsnab, etc.)
-            # BUG FIX: This was missing - Newsnab results were not being filtered
-            if ia_title_matches_query(result_title, search_query):
+            # Apply title-match filtering to all non-IA providers (Newsnab, etc.)
+            if title_matches_query(result_title, search_query):
                 filtered.append(result)
             else:
                 logger.debug(
@@ -199,7 +196,9 @@ def filter_ia_results(results: List[Dict[str, Any]], search_query: str) -> List[
 
 
 def filter_by_language_and_country(
-    results: List[Dict[str, Any]], language: Optional[str] = None, country: Optional[str] = None
+    results: List[Dict[str, Any]],
+    language: Optional[str] = None,
+    country: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
     Filter search results by language and/or country.

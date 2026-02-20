@@ -10,7 +10,11 @@ from core.constants.category import (
     ACCEPTED_NEWSNAB_CATEGORIES,
     REJECTED_NEWSNAB_CATEGORIES,
 )
-from core.constants.date import get_month_year_patterns, get_season_regex_pattern, get_season_year_patterns
+from core.constants.date import (
+    get_month_year_patterns,
+    get_season_regex_pattern,
+    get_season_year_patterns,
+)
 from core.constants.title import COLLECTION_SET_NUMBER_PATTERN
 
 # ==============================================================================
@@ -250,6 +254,120 @@ METADATA_WORDS = {
     "yearbook",
     "publication",
     "periodical",
+}
+
+
+# Words that indicate this IS likely a single periodical issue.
+# Used when validating single-term search results (e.g. "Maxim") to require
+# at least one of these before accepting the result as a periodical.
+#
+# Intentional overlap with METADATA_WORDS: several words (magazine, mag, issue,
+# vol, volume, edition, special, annual, yearbook) appear in both sets.
+# The semantics differ: METADATA_WORDS means "this word describes the periodical
+# but is not part of its name" (used to skip words when checking for a different
+# publication); PERIODICAL_INDICATOR_WORDS means "this word is evidence that the
+# result is a single periodical issue at all" (used to accept or reject a result).
+PERIODICAL_INDICATOR_WORDS = {
+    # Publication type
+    "magazine",
+    "mag",
+    # Issue/volume markers
+    "issue",
+    "no.",
+    "no",
+    "number",
+    "#",
+    "vol",
+    "vol.",
+    "volume",
+    # Month names (full and abbreviated)
+    "january",
+    "february",
+    "march",
+    "april",
+    "may",
+    "june",
+    "july",
+    "august",
+    "september",
+    "october",
+    "november",
+    "december",
+    "jan",
+    "feb",
+    "mar",
+    "apr",
+    # "may" is omitted here intentionally: its 3-letter abbreviation is identical
+    # to the full month name already listed above. Adding it again would be redundant.
+    # It is also a common English auxiliary verb, but since the full word "may" is
+    # already in the set, filtering benefit is unchanged.
+    "jun",
+    "jul",
+    "aug",
+    "sep",
+    "sept",
+    "oct",
+    "nov",
+    "dec",
+    # Seasons
+    "spring",
+    "summer",
+    "fall",
+    "autumn",
+    "winter",
+    # Frequency descriptors
+    "weekly",
+    "monthly",
+    "quarterly",
+    "annual",
+    # Other periodical-specific words
+    "edition",
+    "special",
+    "yearbook",
+}
+
+# Words/phrases that indicate a title represents a multi-issue bundle, not a
+# single issue.  Year ranges (e.g. "2020-2024") are detected separately in
+# result_filter.py via regex.
+COLLECTION_INDICATOR_WORDS = {
+    "collection",
+    "archive",
+    "pack",
+    "bundle",
+    "complete collection",
+    "full collection",
+    "complete archive",
+    "full archive",
+    "complete run",
+    "full run",
+    "entire collection",
+    "all issues",
+    "complete issues",
+    "complete set",
+}
+
+# Words that strongly indicate the result is a book, guide, or other
+# non-periodical content rather than a magazine issue.
+NON_PERIODICAL_KEYWORDS = {
+    "photography",
+    "photos",
+    "pictures",
+    "album",
+    "cookbook",
+    "recipes",
+    "cooking",
+    "textbook",
+    "workbook",
+    "study guide",
+    "manual",
+    "handbook",
+    "reference",
+    "guide",
+    "complete works",
+    "anthology",
+    "omnibus",
+    "standards",
+    "specifications",
 }
 
 

@@ -186,10 +186,9 @@ class FeedMatchService:
         search_terms = []
 
         for tracking in tracking_records:
-            # Skip periodicals with no download criteria (Watch Only mode)
-            if not tracking.track_all_editions and not tracking.track_new_only:
-                if not tracking.selected_years or len(tracking.selected_years) == 0:
-                    continue
+            has_download_criteria = tracking.track_all_editions or tracking.track_new_only or tracking.selected_years
+            if not has_download_criteria:
+                continue
 
             terms = [tracking.title.lower()]
 

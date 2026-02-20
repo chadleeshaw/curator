@@ -49,25 +49,20 @@ def dates_are_fuzzy_match(date1: date, date2: date, tolerance_months: int = 1) -
         >>> dates_are_fuzzy_match(date(2024, 12, 1), date(2025, 1, 1))
         True  # Winter issues span year boundary
     """
-    # Same date is always a match
     if date1 == date2:
         return True
 
-    # Check simple month difference (within tolerance)
-    # Calculate months between dates
     months_diff = abs((date1.year - date2.year) * 12 + (date1.month - date2.month))
     if months_diff <= tolerance_months:
         return True
 
-    # Check if both dates are in the same season (handles Dec/Jan/Feb Winter issues)
-    season1 = get_season_for_month(date1.month)
-    season2 = get_season_for_month(date2.month)
-
-    if season1 == season2:
-        # Same season - but also check year is close (within 1 year for year-boundary seasons)
-        year_diff = abs(date1.year - date2.year)
-        if year_diff <= 1:
-            return True
+    # Handle Winter issues that span Dec/Jan year boundaries.
+    # Only applies when one date is December and the other is January or February
+    # of the following year — not for any same-season pair up to 12 months apart.
+    earlier, later = (date1, date2) if date1 < date2 else (date2, date1)
+    spans_year_boundary = earlier.month == 12 and later.month in (1, 2) and later.year == earlier.year + 1
+    if spans_year_boundary:
+        return True
 
     return False
 

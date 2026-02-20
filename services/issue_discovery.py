@@ -27,6 +27,7 @@ from core.constants.country import (
     THREE_LETTER_COUNTRY_CODES,
 )
 from core.constants.validation import ANTI_PERIODICAL_PATTERNS, PERIODICAL_PATTERNS
+from core.utils.result_filter import title_matches_query
 from models.database import (
     DiscoveredIssue,
     DownloadStatus,
@@ -94,38 +95,38 @@ class IssueDiscoveryService:
 
         now = utc_now()
 
-        for result in search_results:
+        for search_result in search_results:
             try:
-                title = result.get("title", "")
+                title = search_result.get("title", "")
                 if not title:
                     logger.debug("Search result missing title, skipping")
                     stats["errors"] += 1
                     continue
 
-                if not self._validate_is_periodical(result):
+                if not self._validate_is_periodical(search_result):
                     logger.debug(f"Rejecting non-periodical result: {title}")
                     stats["rejected_non_periodical"] += 1
                     continue
 
-                if result.get("raw_metadata", {}).get("is_collection"):
+                if search_result.get("raw_metadata", {}).get("is_collection"):
                     logger.debug(f"Skipping IA collection archive: {title}")
                     stats["rejected_non_periodical"] += 1
                     continue
 
-                if not self._ia_title_matches_tracking(result, tracking):
+                if not self._ia_title_matches_tracking(search_result, tracking):
                     stats["rejected_non_periodical"] += 1
                     continue
 
-                url = result.get("url", "")
-                provider = result.get("provider", "")
-                pubdate = self._parse_pubdate(result.get("pubdate") or result.get("publication_date"))
+                url = search_result.get("url", "")
+                provider = search_result.get("provider", "")
+                pubdate = self._parse_pubdate(search_result.get("pubdate") or search_result.get("publication_date"))
 
                 parsed = self.parser.parse_search_result(
                     title=title,
                     url=url,
                     provider=provider,
                     publication_date=pubdate,
-                    raw_metadata=result,
+                    raw_metadata=search_result,
                 )
 
                 if parsed is None:
@@ -146,7 +147,7 @@ class IssueDiscoveryService:
                 )
 
                 if existing:
-                    self._update_existing_issue(existing, result, parsed, pubdate, now)
+                    self._update_existing_issue(existing, search_result, parsed, pubdate, now)
                     stats["updated"] += 1
                     logger.debug(f"Updated existing issue: {fuzzy_group} (seen {existing.times_seen} times)")
                 else:
@@ -157,7 +158,7 @@ class IssueDiscoveryService:
                         parsed,
                         pubdate,
                         provider,
-                        result,
+                        search_result,
                         now,
                     )
                     session.add(new_issue)
@@ -207,19 +208,9 @@ class IssueDiscoveryService:
         if result.get("provider") != "internet_archive":
             return True
 
-        title = result.get("title", "").lower()
-        search_terms = tracking.title.lower().split()
-        significant_terms = [t for t in search_terms if len(t) >= 3]
-        if not significant_terms:
-            return True
-
-        matching_terms = sum(1 for t in significant_terms if t in title)
-        match_ratio = matching_terms / len(significant_terms)
-        if match_ratio < 0.5:
-            logger.debug(
-                f"Skipping IA result with poor title match: '{result.get('title')}' "
-                f"(tracking '{tracking.title}', match ratio: {match_ratio:.1%})"
-            )
+        title = result.get("title", "")
+        if not title_matches_query(title, tracking.title):
+            logger.debug(f"Skipping IA result with poor title match: '{title}' " f"(tracking '{tracking.title}')")
             return False
         return True
 
@@ -273,7 +264,7 @@ class IssueDiscoveryService:
             last_seen=now,
             times_seen=1,
             download_status=DownloadStatus.DISCOVERED,
-            download_priority=50,
+            download_priority=_PRIORITY_BASE,
             latest_url=result.get("url"),
             latest_provider=parsed.provider,
             latest_pubdate=pubdate,
@@ -476,14 +467,12 @@ class IssueDiscoveryService:
             issue.attempt_count = 0
 
         issue.download_status = DownloadStatus.WANTED
-        issue.download_priority = 50  # Reset to default priority
+        issue.download_priority = _PRIORITY_BASE
         issue.last_error = None
 
         session.commit()
         logger.info(f"Manually reset permanently_failed issue to wanted: {issue.title}")
         return True
-
-    # Private helper methods
 
     def _validate_is_periodical(self, search_result: Dict[str, Any]) -> bool:
         """
@@ -597,9 +586,6 @@ class IssueDiscoveryService:
         Returns:
             True if issue matches tracking criteria, False otherwise
         """
-        # CRITICAL: Country matching - different countries are different periodicals
-        # National Geographic US != National Geographic UK
-        # Default: No country specified = USA
         issue_country = self._normalize_country(issue.country or "US")
         tracking_country = self._normalize_country(tracking.country or "US")
 
@@ -609,21 +595,16 @@ class IssueDiscoveryService:
             )
             return False
 
-        # Rule 1: track_all_editions = True means download everything
         if tracking.track_all_editions:
             return True
 
-        # Rule 2: track_new_only = True means only download recent/current issues
         if tracking.track_new_only:
             if issue.issue_date:
                 now = utc_now()
-                # Ensure issue_date is timezone-aware for comparison
                 issue_date = issue.issue_date
                 if issue_date.tzinfo is None:
                     issue_date = issue_date.replace(tzinfo=timezone.utc)
                 days_old = (now - issue_date).days
-                # Consider issues within the threshold as "new"
-                # Future-dated issues (days_old < 0) are always considered new
                 is_new = days_old <= NEW_ISSUE_THRESHOLD_DAYS
                 if not is_new:
                     logger.debug(
@@ -632,23 +613,15 @@ class IssueDiscoveryService:
                     )
                 return is_new
             elif issue.year:
-                # If we have a year but no full date, check if it's the current year
                 current_year = utc_now().year
                 return issue.year >= current_year
             else:
-                # No date information at all - skip to avoid downloading old back issues
                 logger.debug(f"Skipping issue with no date for track_new_only: {issue.title}")
                 return False
 
-        # Rule 3: selected_years - download issues from specific years
         if tracking.selected_years and issue.year:
             return issue.year in tracking.selected_years
 
-        # Rule 4: selected_editions - download specific editions (requires OLID)
-        # This is harder to implement without OLID in search results
-        # For now, we'll skip this rule and implement it later
-
-        # Default: Don't download unless explicitly requested
         return False
 
     def _calculate_priority(self, issue: DiscoveredIssue, tracking: PeriodicalTracking) -> int:
@@ -745,15 +718,10 @@ class IssueDiscoveryService:
                     )
                     return mag.id
 
-        # Fallback: match by fuzzy group ID against library items
-        # This catches cases where date parsing failed but the issue is clearly the same
-        # Pre-compute fuzzy groups for all library items to avoid repeated computation
+        # Fallback: match by fuzzy group ID against all library items (including dateless ones)
         if issue.fuzzy_match_group:
-            existing_by_id = {mag.id: mag for mag in existing}
-            library_groups = {mag.id: get_fuzzy_group_id(mag.title) for mag in existing if mag.issue_date}
-            for mag_id, lib_group in library_groups.items():
-                if lib_group == issue.fuzzy_match_group:
-                    mag = existing_by_id[mag_id]
+            for mag in existing:
+                if get_fuzzy_group_id(mag.title) == issue.fuzzy_match_group:
                     logger.debug(f"Fuzzy group match found: library '{mag.title}' matches {issue.fuzzy_match_group}")
                     return mag.id
 
