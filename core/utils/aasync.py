@@ -1,14 +1,21 @@
 """Helper utilities for running blocking operations asynchronously."""
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, TypeVar
 
 T = TypeVar("T")
 
+# Shared bounded thread pool for background blocking tasks (DB queries, file I/O, network).
+# Capped at 5 workers to prevent thread starvation when many long-blocking tasks fire at once.
+# All background tasks should use this pool via run_in_thread() rather than the default
+# asyncio executor (which is unbounded).
+BACKGROUND_TASK_EXECUTOR = ThreadPoolExecutor(max_workers=5)
+
 
 async def run_in_thread(func: Callable[[], T]) -> T:
     """
-    Run a blocking operation in a thread pool to avoid blocking the event loop.
+    Run a blocking operation in the shared bounded thread pool.
 
     This is useful for:
     - Database queries (SQLAlchemy synchronous sessions)
@@ -37,4 +44,4 @@ async def run_in_thread(func: Callable[[], T]) -> T:
         ```
     """
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, func)
+    return await loop.run_in_executor(BACKGROUND_TASK_EXECUTOR, func)

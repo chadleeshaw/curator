@@ -66,8 +66,7 @@ class DeduplicationService:
 
         if existing:
             # Check if within time window
-            # Use timezone-naive cutoff since SQLite stores naive UTC datetimes
-            cutoff = utc_now().replace(tzinfo=None) - timedelta(hours=window_hours)
+            cutoff = utc_now() - timedelta(hours=window_hours)
             if existing.created_at > cutoff:
                 logger.debug(
                     f"Duplicate found: '{result_title}' matches existing submission "

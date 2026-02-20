@@ -5,7 +5,7 @@ This package reorganizes utility modules for better organization and discoverabi
 """
 
 # Async utilities
-from .aasync import run_in_thread
+from .aasync import run_in_thread, BACKGROUND_TASK_EXECUTOR
 
 # Database utilities
 from .db import get_db_session

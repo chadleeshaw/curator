@@ -266,14 +266,11 @@ def build_search_response(
     Returns:
         Response dict
     """
-    # Calculate cache age once (handle naive/aware datetime comparison)
+    # Calculate cache age once
     cache_age_days = None
     if cached_results:
         now = utc_now()
         cache_created = cached_results[0].created_at
-        # Strip timezone if needed for consistent comparison with SQLite naive datetimes
-        if cache_created and cache_created.tzinfo is None:
-            now = now.replace(tzinfo=None)
         cache_age_days = (now - cache_created).days if cache_created else None
 
     final_results = library_matches + provider_results

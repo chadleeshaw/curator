@@ -447,11 +447,10 @@ class FileImporter:
             is_match, score = self.title_matcher.match(tracking_title, existing_normalized)
 
             if is_match and parsed_issue_date and existing.issue_date:
-                # Normalize both datetimes to handle mixed naive/aware comparison
-                # (parsed dates are UTC-aware, but older DB records may be naive)
-                p_date = parsed_issue_date.replace(tzinfo=None) if parsed_issue_date.tzinfo else parsed_issue_date
-                e_date = existing.issue_date.replace(tzinfo=None) if existing.issue_date.tzinfo else existing.issue_date
-                date_diff = abs((p_date - e_date).days)
+                # Ensure UTC-aware for comparison: filename-parsed dates are treated as UTC
+                # if naive; DB dates are always UTC-aware via UTCDateTime TypeDecorator.
+                p_date = parsed_issue_date if parsed_issue_date.tzinfo else parsed_issue_date.replace(tzinfo=UTC)
+                date_diff = abs((p_date - existing.issue_date).days)
                 same_language = (existing.language == parsed_language) or (
                     not existing.language and parsed_language == DEFAULT_LANGUAGE
                 )

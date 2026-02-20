@@ -3,12 +3,12 @@ Scheduled task for cleaning up orphaned covers and generating missing ones.
 Runs periodically to maintain cover image consistency.
 """
 
-import asyncio
 import logging
 from pathlib import Path
 
 from sqlalchemy.orm import sessionmaker
 
+from core.utils import run_in_thread
 from models.database import Periodical
 
 logger = logging.getLogger(__name__)
@@ -87,15 +87,14 @@ class CoverCleanup:
                 # Part 2: Generate missing covers and thumbnails
                 generated_count = 0
                 thumbnail_count = 0
-                loop = asyncio.get_event_loop()
 
                 for magazine in periodicals_without_covers:
                     file_path = Path(magazine.file_path)
                     if not file_path.exists():
                         continue
 
-                    # Extract cover from PDF or EPUB (run in thread pool)
-                    cover_path = await loop.run_in_executor(None, self.file_importer._extract_cover, file_path)
+                    # Extract cover from PDF or EPUB (run in bounded thread pool)
+                    cover_path = await run_in_thread(lambda fp=file_path: self.file_importer._extract_cover(fp))
                     if cover_path:
                         magazine.cover_path = str(cover_path)
                         generated_count += 1
@@ -106,7 +105,9 @@ class CoverCleanup:
                             from core.utils.thumbnail import generate_thumbnail
 
                             thumbnail_dir = cover_path.parent
-                            await loop.run_in_executor(None, generate_thumbnail, cover_path, thumbnail_dir)
+                            await run_in_thread(
+                                lambda gt=generate_thumbnail, cp=cover_path, td=thumbnail_dir: gt(cp, td)
+                            )
                             thumbnail_count += 1
                         except Exception as thumb_error:
                             logger.debug(f"Thumbnail generation failed (non-critical): {thumb_error}")

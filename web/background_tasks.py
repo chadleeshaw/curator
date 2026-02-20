@@ -9,11 +9,12 @@ performs a specific maintenance or processing operation.
 import asyncio
 import logging
 import time
-from datetime import timedelta, timezone
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from core.parsers import utc_now
 from core import constants
+from core.utils.aasync import BACKGROUND_TASK_EXECUTOR
 
 if TYPE_CHECKING:
     from web.app import AppState
@@ -43,7 +44,7 @@ async def feed_sync_task(app_state: "AppState") -> None:
 
     try:
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, _run_feed_sync)
+        await loop.run_in_executor(BACKGROUND_TASK_EXECUTOR, _run_feed_sync)
     except Exception as e:
         logger.error(f"Feed sync error: {e}", exc_info=True)
 
@@ -79,7 +80,7 @@ async def auto_download_task(app_state: "AppState") -> None:
 
     try:
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, _run_auto_download)
+        await loop.run_in_executor(BACKGROUND_TASK_EXECUTOR, _run_auto_download)
     except Exception as e:
         logger.error(f"Auto-download error: {e}", exc_info=True)
 
@@ -192,13 +193,9 @@ def _process_periodical_searches(app_state: "AppState", db_session) -> None:
             # Cache-aware optimization: Skip API searches if cache matching found results recently
             # This prevents redundant API calls when the feed cache is already working
             if periodical.last_cache_match and cache_skip_threshold_hours > 0:
-                # Ensure both datetimes are timezone-aware for comparison
-                # SQLite may return naive datetimes, so add UTC timezone if missing
-
+                # Datetimes are now guaranteed to be timezone-aware UTC
+                # due to the models/database.py UTCDateTime TypeDecorator.
                 cache_match = periodical.last_cache_match
-                if cache_match.tzinfo is None:
-                    # Assume naive datetime from SQLite is UTC
-                    cache_match = cache_match.replace(tzinfo=timezone.utc)
 
                 time_since_cache_match = now - cache_match
                 hours_since_cache_match = time_since_cache_match.total_seconds() / 3600
@@ -279,7 +276,7 @@ def _cleanup_stale_search_results(app_state: "AppState", db_session) -> None:
         retention_days = app_state.tasks_config.get(
             "search_result_retention_days", constants.SEARCH_RESULT_RETENTION_DAYS
         )
-        cutoff = utc_now().replace(tzinfo=None) - timedelta(days=retention_days)
+        cutoff = utc_now() - timedelta(days=retention_days)
         deleted = (
             db_session.query(DBSearchResult)
             .filter(DBSearchResult.created_at < cutoff)
@@ -327,7 +324,7 @@ async def folder_cleanup_periodic_task(app_state: "AppState") -> None:
     """Clean up empty folders and folders without importable files."""
     try:
         loop = asyncio.get_event_loop()
-        stats = await loop.run_in_executor(None, app_state.folder_cleanup_task.run)
+        stats = await loop.run_in_executor(BACKGROUND_TASK_EXECUTOR, app_state.folder_cleanup_task.run)
         if stats.get("total_deleted", 0) > 0:
             logger.info(f"Folder cleanup: {stats}")
     except Exception as e:

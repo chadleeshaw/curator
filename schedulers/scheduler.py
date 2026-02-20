@@ -5,10 +5,21 @@ Background task scheduler for automated file imports and maintenance.
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Callable, Optional
+from typing import Callable, Optional, Dict, TypedDict, cast
+
 from core.parsers import utc_now
 
 logger = logging.getLogger(__name__)
+
+
+class TaskInfo(TypedDict):
+    func: Callable
+    interval: int
+    last_run: Optional[datetime]
+    next_run: datetime
+    failure_count: int
+    backoff_seconds: int
+    enabled: bool
 
 
 class TaskScheduler:
@@ -20,9 +31,10 @@ class TaskScheduler:
     BACKOFF_MULTIPLIER = 2.0  # Double the backoff each failure
 
     def __init__(self):
-        self.tasks = {}
+        self.tasks: Dict[str, TaskInfo] = {}
         self.running = False
         self.active_tasks = set()  # Track currently executing tasks
+        self._async_tasks = set()  # Track running asyncio.Task objects
 
     def schedule_periodic(
         self,
@@ -44,19 +56,65 @@ class TaskScheduler:
         """
         next_run = utc_now() if run_immediately else utc_now() + timedelta(seconds=interval_seconds)
 
-        self.tasks[name] = {
-            "func": task_func,
-            "interval": interval_seconds,
-            "last_run": None,
-            "next_run": next_run,
-            "failure_count": 0,
-            "backoff_seconds": 0,
-            "enabled": enabled,
-        }
+        self.tasks[name] = TaskInfo(
+            func=task_func,
+            interval=interval_seconds,
+            last_run=None,
+            next_run=next_run,
+            failure_count=0,
+            backoff_seconds=0,
+            enabled=enabled,
+        )
 
         status = "enabled" if enabled else "disabled"
         timing = "immediately, then" if run_immediately else "in"
         logger.info(f"Scheduled task: {name} ({timing} every {interval_seconds}s) [{status}]")
+
+    async def _run_task(self, task_name: str, task_info: TaskInfo) -> None:
+        """Execute a scheduled task with error handling and backoff calculation"""
+        now = utc_now()
+        try:
+            logger.debug(f"[TaskScheduler] About to run task: {task_name}")
+            logger.debug(f"Running task: {task_name}")
+
+            await task_info["func"]()
+
+            # Task succeeded - reset failure count and backoff
+            task_info["last_run"] = now
+            task_info["failure_count"] = 0
+            task_info["backoff_seconds"] = 0
+            task_info["next_run"] = now + timedelta(seconds=task_info["interval"])
+
+            logger.debug(f"[TaskScheduler] Task completed: {task_name}, next_run: {task_info['next_run']}")
+            logger.debug(f"Task completed: {task_name}")
+
+        except Exception as e:
+            # Task failed - increment failure count and apply backoff
+            task_info["failure_count"] += 1
+
+            # Calculate exponential backoff
+            if task_info["failure_count"] == 1:
+                task_info["backoff_seconds"] = self.MIN_BACKOFF_SECONDS
+            else:
+                task_info["backoff_seconds"] = int(
+                    min(
+                        task_info["backoff_seconds"] * self.BACKOFF_MULTIPLIER,
+                        self.MAX_BACKOFF_SECONDS,
+                    )
+                )
+
+            # Schedule next run with backoff
+            backoff_interval = task_info["interval"] + task_info["backoff_seconds"]
+            task_info["next_run"] = now + timedelta(seconds=backoff_interval)
+
+            logger.error(
+                f"Error in task {task_name} (failure #{task_info['failure_count']}): {e}. "
+                f"Next retry in {backoff_interval}s",
+                exc_info=True,
+            )
+        finally:
+            # Remove from active tasks
+            self.active_tasks.discard(task_name)
 
     async def start(self):
         """Start the scheduler with dynamic sleep and error backoff"""
@@ -76,62 +134,30 @@ class TaskScheduler:
                     if not task_info.get("enabled", True):
                         continue
 
+                    # Prevent scheduling if already running concurrently
+                    if task_name in self.active_tasks:
+                        continue
+
                     if now >= task_info["next_run"]:
                         # Mark task as active
                         self.active_tasks.add(task_name)
 
-                        try:
-                            logger.debug(f"[TaskScheduler] About to run task: {task_name}")
-                            logger.debug(f"Running task: {task_name}")
-
-                            await task_info["func"]()
-
-                            # Task succeeded - reset failure count and backoff
-                            task_info["last_run"] = now
-                            task_info["failure_count"] = 0
-                            task_info["backoff_seconds"] = 0
-                            task_info["next_run"] = now + timedelta(seconds=task_info["interval"])
-
-                            logger.debug(
-                                f"[TaskScheduler] Task completed: {task_name}, next_run: {task_info['next_run']}"
-                            )
-                            logger.debug(f"Task completed: {task_name}")
-
-                        except Exception as e:
-                            # Task failed - increment failure count and apply backoff
-                            task_info["failure_count"] += 1
-
-                            # Calculate exponential backoff
-                            if task_info["failure_count"] == 1:
-                                task_info["backoff_seconds"] = self.MIN_BACKOFF_SECONDS
-                            else:
-                                task_info["backoff_seconds"] = min(
-                                    task_info["backoff_seconds"] * self.BACKOFF_MULTIPLIER,
-                                    self.MAX_BACKOFF_SECONDS,
-                                )
-
-                            # Schedule next run with backoff
-                            backoff_interval = task_info["interval"] + task_info["backoff_seconds"]
-                            task_info["next_run"] = now + timedelta(seconds=backoff_interval)
-
-                            logger.error(
-                                f"Error in task {task_name} (failure #{task_info['failure_count']}): {e}. "
-                                f"Next retry in {backoff_interval}s",
-                                exc_info=True,
-                            )
-                        finally:
-                            # Remove from active tasks
-                            self.active_tasks.discard(task_name)
+                        # Execute task concurrently
+                        task = asyncio.create_task(self._run_task(task_name, task_info))
+                        self._async_tasks.add(task)
+                        task.add_done_callback(self._async_tasks.discard)
 
                     # Track earliest next run time for dynamic sleep (only enabled tasks)
                     if task_info.get("enabled", True):
-                        if next_wakeup is None or task_info["next_run"] < next_wakeup:
+                        if next_wakeup is None:
+                            next_wakeup = task_info["next_run"]
+                        elif next_wakeup is not None and task_info["next_run"] < cast(datetime, next_wakeup):
                             next_wakeup = task_info["next_run"]
 
                 # Dynamic sleep: sleep until next task is due (with max 60s)
                 if next_wakeup:
-                    sleep_seconds = max(0, (next_wakeup - utc_now()).total_seconds())
-                    sleep_seconds = min(sleep_seconds, 60)  # Cap at 60 seconds
+                    sleep_seconds = max(0.0, (next_wakeup - utc_now()).total_seconds())
+                    sleep_seconds = min(sleep_seconds, 60.0)  # Cap at 60 seconds
                 else:
                     sleep_seconds = 1  # Default fallback
 
@@ -191,21 +217,23 @@ class TaskScheduler:
 
     def get_status(self) -> dict:
         """Get scheduler status with failure and backoff info"""
+        status_tasks = {}
+        for name, info in self.tasks.items():
+            last_run = info["last_run"]
+            next_run = info["next_run"]
+            status_tasks[name] = {
+                "interval": info["interval"],
+                "last_run": last_run.isoformat() if last_run else None,
+                "next_run": next_run.isoformat() if next_run else None,
+                "failure_count": info.get("failure_count", 0),
+                "backoff_seconds": info.get("backoff_seconds", 0),
+                "is_active": name in self.active_tasks,
+                "enabled": info.get("enabled", True),
+            }
         return {
             "running": self.running,
             "active_tasks": list(self.active_tasks),
-            "tasks": {
-                name: {
-                    "interval": info["interval"],
-                    "last_run": (info["last_run"].isoformat() if info["last_run"] else None),
-                    "next_run": info["next_run"].isoformat(),
-                    "failure_count": info.get("failure_count", 0),
-                    "backoff_seconds": info.get("backoff_seconds", 0),
-                    "is_active": name in self.active_tasks,
-                    "enabled": info.get("enabled", True),
-                }
-                for name, info in self.tasks.items()
-            },
+            "tasks": status_tasks,
         }
 
     def set_task_enabled(self, task_name: str, enabled: bool) -> bool:
@@ -229,6 +257,7 @@ class TaskScheduler:
 
         # If re-enabling, schedule next run from now
         if enabled:
-            self.tasks[task_name]["next_run"] = utc_now() + timedelta(seconds=self.tasks[task_name]["interval"])
+            interval = int(self.tasks[task_name]["interval"])
+            self.tasks[task_name]["next_run"] = utc_now() + timedelta(seconds=interval)
 
         return True

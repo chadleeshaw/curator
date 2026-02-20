@@ -690,8 +690,8 @@ class OCRQueueService:
                     stats["processed"] += 1
                     continue
 
-                # Ensure started_at is timezone-aware (SQLite stores naive datetimes)
-                started_at = job.started_at.replace(tzinfo=UTC) if job.started_at.tzinfo is None else job.started_at
+                # started_at is always UTC-aware via UTCDateTime TypeDecorator
+                started_at = job.started_at
                 processing_time = (datetime.now(UTC) - started_at).total_seconds()
 
                 if result.get("success"):
@@ -881,18 +881,7 @@ class OCRQueueService:
             "failed": failed_count,
             "total": pending_count + processing_count + completed_count + failed_count,
             "oldest_pending_age_seconds": (
-                int(
-                    (
-                        datetime.now(UTC)
-                        - (
-                            oldest_pending.created_at.replace(tzinfo=UTC)
-                            if oldest_pending.created_at.tzinfo is None
-                            else oldest_pending.created_at
-                        )
-                    ).total_seconds()
-                )
-                if oldest_pending
-                else None
+                int((datetime.now(UTC) - oldest_pending.created_at).total_seconds()) if oldest_pending else None
             ),
         }
 

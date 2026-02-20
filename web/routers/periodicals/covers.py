@@ -2,7 +2,6 @@
 Cover image operations for periodicals
 """
 
-import asyncio
 import shutil
 from pathlib import Path
 from typing import Any, Dict
@@ -14,6 +13,7 @@ from PIL import Image
 from core.constants.errors import ErrorMessages
 from core.constants.files import PDF_COVER_QUALITY_HIGH
 from core.constants.ocr import PDF_COVER_DPI_OCR
+from core.utils import run_in_thread
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from core.utils.pdf import extract_cover_from_pdf
@@ -67,8 +67,7 @@ async def get_cover(
     if thumbnail:
         from core.utils.thumbnail import get_or_create_thumbnail
 
-        loop = asyncio.get_event_loop()
-        thumbnail_path = await loop.run_in_executor(None, get_or_create_thumbnail, cover_path)
+        thumbnail_path = await run_in_thread(lambda: get_or_create_thumbnail(cover_path))
         response = FileResponse(thumbnail_path, media_type="image/jpeg")
         return add_cache_headers(response, max_age=86400)  # Cache for 24 hours
 

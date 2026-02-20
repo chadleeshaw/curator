@@ -10,7 +10,7 @@ Handles:
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import and_
@@ -144,17 +144,21 @@ class IssueDiscoveryService:
                     try:
                         # Handle ISO format (2024-01-15T10:30:00Z)
                         if isinstance(pubdate_str, str):
-                            # Remove 'Z' suffix if present
+                            # Remove 'Z' suffix if present; fromisoformat then gives naive UTC
                             pubdate_str_clean = pubdate_str.rstrip("Z")
                             pubdate = datetime.fromisoformat(pubdate_str_clean)
-                            # Convert to naive datetime (remove timezone info)
-                            if pubdate.tzinfo is not None:
-                                pubdate = pubdate.replace(tzinfo=None)
+                            # Normalize to UTC-aware (Z stripped → treat as UTC)
+                            if pubdate.tzinfo is None:
+                                pubdate = pubdate.replace(tzinfo=timezone.utc)
+                            else:
+                                pubdate = pubdate.astimezone(timezone.utc)
                         elif isinstance(pubdate_str, datetime):
                             pubdate = pubdate_str
-                            # Convert to naive datetime if needed
-                            if pubdate.tzinfo is not None:
-                                pubdate = pubdate.replace(tzinfo=None)
+                            # Normalize to UTC-aware (assume UTC if naive)
+                            if pubdate.tzinfo is None:
+                                pubdate = pubdate.replace(tzinfo=timezone.utc)
+                            else:
+                                pubdate = pubdate.astimezone(timezone.utc)
                     except (ValueError, AttributeError) as e:
                         logger.warning(f"Failed to parse pubdate '{pubdate_str}': {e}")
 
@@ -610,13 +614,8 @@ class IssueDiscoveryService:
         # Rule 2: track_new_only = True means only download recent/current issues
         if tracking.track_new_only:
             if issue.issue_date:
-                # Use naive datetime for comparison (issue_date is stored as naive in DB)
-                # Normalize both to naive datetimes for comparison
-                now = utc_now().replace(tzinfo=None)
-                issue_date_naive = (
-                    issue.issue_date.replace(tzinfo=None) if issue.issue_date.tzinfo else issue.issue_date
-                )
-                days_old = (now - issue_date_naive).days
+                now = utc_now()
+                days_old = (now - issue.issue_date).days
                 # Consider issues within the threshold as "new"
                 # Future-dated issues (days_old < 0) are always considered new
                 is_new = days_old <= NEW_ISSUE_THRESHOLD_DAYS
@@ -666,11 +665,8 @@ class IssueDiscoveryService:
 
         # Factor 1: Recency (max +30)
         if issue.issue_date:
-            # Use naive datetime for comparison (issue_date is stored as naive in DB)
-            # Normalize both to naive datetimes for comparison
-            now = utc_now().replace(tzinfo=None)
-            issue_date_naive = issue.issue_date.replace(tzinfo=None) if issue.issue_date.tzinfo else issue.issue_date
-            days_old = (now - issue_date_naive).days
+            now = utc_now()
+            days_old = (now - issue.issue_date).days
 
             if days_old < 7:
                 priority += 30  # Very recent
