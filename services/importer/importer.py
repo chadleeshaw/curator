@@ -507,9 +507,32 @@ class FileImporter:
         if tracking_id:
             target_tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
             if target_tracking:
-                logger.info(
-                    f"Using provided tracking_id={tracking_id} ('{target_tracking.title}') for '{tracking_title}'"
-                )
+                # Validate that sidecar tracking matches parsed metadata (country/language)
+                # This prevents "Wired USA" from claiming "Wired Africa" files
+                mismatch_reasons = []
+
+                if parsed_country and target_tracking.country:
+                    if parsed_country != target_tracking.country:
+                        mismatch_reasons.append(
+                            f"country mismatch (parsed: {parsed_country}, tracking: {target_tracking.country})"
+                        )
+
+                if parsed_language and target_tracking.language:
+                    if parsed_language != target_tracking.language:
+                        mismatch_reasons.append(
+                            f"language mismatch (parsed: {parsed_language}, tracking: {target_tracking.language})"
+                        )
+
+                if mismatch_reasons:
+                    logger.warning(
+                        f"Sidecar tracking_id={tracking_id} ('{target_tracking.title}') doesn't match "
+                        f"parsed metadata: {', '.join(mismatch_reasons)}. Will search for better match."
+                    )
+                    target_tracking = None  # Reject sidecar, fall back to matching
+                else:
+                    logger.info(
+                        f"Using provided tracking_id={tracking_id} ('{target_tracking.title}') for '{tracking_title}'"
+                    )
             else:
                 logger.warning(f"Provided tracking_id={tracking_id} not found, will try to find best match")
 
