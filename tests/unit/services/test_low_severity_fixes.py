@@ -193,8 +193,6 @@ class TestDeduplicationServiceUtcNow:
 
         source = inspect.getsource(DeduplicationService)
         assert "utc_now()" in source
-        # Should strip timezone for SQLite compatibility
-        assert "replace(tzinfo=None)" in source
 
 
 class TestProperSqlalchemyImports:

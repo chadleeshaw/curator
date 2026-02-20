@@ -46,7 +46,8 @@ class UTCDateTime(TypeDecorator):  # pylint: disable=too-many-ancestors
     def process_bind_param(self, value, dialect):
         if value is not None:
             if not value.tzinfo:
-                raise TypeError("tzinfo is required")
+                # Assume naive datetimes are UTC
+                value = value.replace(tzinfo=datetime.timezone.utc)
             value = value.astimezone(datetime.timezone.utc).replace(tzinfo=None)
         return value
 

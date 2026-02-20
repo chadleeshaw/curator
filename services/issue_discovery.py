@@ -615,7 +615,11 @@ class IssueDiscoveryService:
         if tracking.track_new_only:
             if issue.issue_date:
                 now = utc_now()
-                days_old = (now - issue.issue_date).days
+                # Ensure issue_date is timezone-aware for comparison
+                issue_date = issue.issue_date
+                if issue_date.tzinfo is None:
+                    issue_date = issue_date.replace(tzinfo=timezone.utc)
+                days_old = (now - issue_date).days
                 # Consider issues within the threshold as "new"
                 # Future-dated issues (days_old < 0) are always considered new
                 is_new = days_old <= NEW_ISSUE_THRESHOLD_DAYS
