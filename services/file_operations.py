@@ -33,37 +33,13 @@ def reorganize_periodical_files(
     new_title: str,
     library_base_dir: Path,
     category_prefix: str = "_",
-    update_db: bool = True,
+    should_update_database: bool = True,
 ) -> FileReorganizationResult:
     """
     Reorganize periodical files to match new title structure.
 
-    This function handles the complete reorganization of a periodical's files:
-    1. Extracts metadata from the periodical object
-    2. Builds new directory structure based on title/date
-    3. Handles filename conflicts by appending timestamps
-    4. Moves PDF and cover files
-    5. Optionally updates the database object
-
-    Args:
-        periodical: Periodical database object with file_path, cover_path, issue_date, etc.
-        new_title: New title to use for folder organization
-        library_base_dir: Base directory for organized files
-        category_prefix: Prefix for category folders (default: "_")
-        update_db: Whether to update the periodical object with new paths (default: True)
-
-    Returns:
-        FileReorganizationResult with success status and new paths
-
-    Example:
-        result = reorganize_periodical_files(
-            magazine,
-            "Wired (US)",
-            Path("./local/data"),
-            category_prefix="_"
-        )
-        if result.success:
-            print(f"Moved to: {result.new_pdf_path}")
+    Handles filename conflicts by appending timestamps.
+    Moves both PDF and cover files while preserving file extensions.
     """
     try:
         from core.utils.files import strip_duplicate_suffixes
@@ -130,11 +106,10 @@ def reorganize_periodical_files(
             shutil.move(str(old_pdf_path), str(new_pdf_path))
             logger.info(f"Moved PDF: {old_pdf_path} -> {new_pdf_path}")
             files_moved = True
-            if update_db:
+            if should_update_database:
                 periodical.file_path = str(new_pdf_path)
         elif new_pdf_path == old_pdf_path:
-            # File is already in correct location
-            if update_db:
+            if should_update_database:
                 periodical.file_path = str(new_pdf_path)
         else:
             logger.warning(f"PDF file not found: {old_pdf_path}")
@@ -150,9 +125,9 @@ def reorganize_periodical_files(
             shutil.move(str(old_cover_path), str(new_cover_path))
             logger.info(f"Moved cover: {old_cover_path} -> {new_cover_path}")
             files_moved = True
-            if update_db:
+            if should_update_database:
                 periodical.cover_path = str(new_cover_path)
-        elif new_cover_path and update_db:
+        elif new_cover_path and should_update_database:
             periodical.cover_path = str(new_cover_path)
 
         return FileReorganizationResult(

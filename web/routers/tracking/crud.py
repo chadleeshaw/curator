@@ -99,62 +99,12 @@ async def start_tracking_periodical(
     return await with_db_session(_shared._session_factory, operation)
 
 
-@router.get(
-    "/periodicals/tracked",
-    summary="List tracked periodicals",
-    description="Get a paginated list of all periodicals currently being tracked.",
-    responses={
-        200: {
-            "description": "List retrieved successfully",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "success": True,
-                        "tracked": [{"id": 1, "title": "Wired", "publisher": "Condé Nast"}],
-                        "total": 1,
-                    }
-                }
-            },
-        },
-        500: {"description": "Failed to retrieve tracking list", "model": APIError},
-    },
-)
-@handle_api_errors("List tracked periodicals", logger)
-async def list_tracked_periodicals(skip: int = 0, limit: int = 50) -> Dict[str, Any]:
-    """List all tracked periodicals"""
-
-    def operation(db):
-        tracked = db.query(PeriodicalTracking).offset(skip).limit(limit).all()
-        total = db.query(PeriodicalTracking).count()
-
-        return success_response(
-            None,
-            tracked=[
-                {
-                    "id": m.id,
-                    "olid": m.olid,
-                    "title": m.title,
-                    "category": m.category,
-                    "language": m.language,
-                    "track_all_editions": m.track_all_editions,
-                    "created_at": (m.created_at.isoformat() if m.created_at else None),
-                }
-                for m in tracked
-            ],
-            total=total,
-            skip=skip,
-            limit=limit,
-        )
-
-    return await with_db_session(_shared._session_factory, operation)
-
-
 @router.get("/periodicals/tracking")
-@handle_api_errors("List tracked magazines", logger)
-async def list_tracked_magazines(
+@handle_api_errors("List tracked periodicals", logger)
+async def list_tracked_periodicals(
     skip: int = 0, limit: int = 50, sort_by: str = "title", sort_order: str = "asc"
 ) -> Dict[str, Any]:
-    """List all currently tracked magazines"""
+    """List all currently tracked periodicals"""
 
     def operation(db):
         is_descending = sort_order.lower() == "desc"
@@ -293,7 +243,7 @@ async def list_tracked_magazines(
 
         return success_response(
             None,
-            tracked_magazines=tracked_list,
+            tracked_periodicals=tracked_list,
             total=total,
             skip=skip,
             limit=limit,
@@ -364,7 +314,7 @@ def _reorganize_periodical_files(
         new_title=new_title,
         library_base_dir=library_base_dir,
         category_prefix=category_prefix,
-        update_db=True,
+        should_update_database=True,
     )
     if result.success:
         return result.new_pdf_path, result.new_cover_path

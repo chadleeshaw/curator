@@ -65,13 +65,19 @@ async def download_all_periodical_issues(
             )
 
         results = _shared._download_manager.download_all_periodical_issues(request.tracking_id, db)
+        submitted = results.get("submitted", 0)
+        queued = results.get("queued", 0)
+        skipped = results.get("skipped", 0)
+        failed = results.get("failed", 0)
         return success_response(
-            message=f"Started downloading issues: {results['submitted']} submitted, {results['skipped']} skipped",
+            message=(f"Batch download: {submitted} submitted, {queued} queued, " f"{skipped} skipped, {failed} failed"),
             tracking_id=request.tracking_id,
-            magazine=tracking.title,
-            submitted=results["submitted"],
-            skipped=results["skipped"],
-            failed=results["failed"],
+            periodical=tracking.title,
+            submitted=submitted,
+            queued=queued,
+            skipped=skipped,
+            failed=failed,
+            results=results,
         )
 
     return await with_db_session(_shared._session_factory, operation)

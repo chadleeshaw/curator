@@ -267,7 +267,13 @@ async def search_periodical_providers(
         enrich_results_with_parsed_metadata(library_matches)
 
         # Step 12: Build and return response (sorts results internally)
-        return build_search_response(query, library_matches, deduplicated_results, cached_results, provider_errors)
+        return build_search_response(
+            query,
+            library_matches,
+            deduplicated_results,
+            cached_results,
+            provider_errors,
+        )
 
     return await with_db_session(session_factory, operation)
 

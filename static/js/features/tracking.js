@@ -733,7 +733,7 @@ export class TrackingManager {
         return await response.json();
       }, 'Tracking');
 
-      const tracked = data.tracked_magazines ?? data.tracked ?? [];
+      const tracked = data.tracked_periodicals ?? data.tracked ?? [];
 
       // Store all tracked periodicals unfiltered
       this.allTracked = tracked;
@@ -1763,7 +1763,7 @@ export class TrackingManager {
         // cumulative issue number (e.g. "#8") is cosmetic and should not prevent deduplication
         // of library items and provider results that refer to the same calendar issue.
         const vol = parsed.volume || 0;
-        const issueKey = (parsed.month > 0) ? 0 : (parsed.issue || 0);
+        const issueKey = parsed.month > 0 ? 0 : parsed.issue || 0;
         const key = `${parsed.year}-${parsed.month}-${issueKey}-${parsed.season || ''}-v${vol}`;
 
         if (!issueMap.has(key)) {
@@ -3041,9 +3041,11 @@ window.moveLibraryCopy = async function (periodicalId, issueKey) {
 
   try {
     // Fetch all tracking records
-    const response = await APIClient.get(`/api/periodicals/tracking?limit=${API_LIMITS.TRACKING_LIST}`);
+    const response = await APIClient.get(
+      `/api/periodicals/tracking?limit=${API_LIMITS.TRACKING_LIST}`
+    );
     const data = await response.json();
-    const trackingRecords = data.tracked_magazines || [];
+    const trackingRecords = data.tracked_periodicals || [];
 
     if (trackingRecords.length === 0) {
       UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'No tracking records found', 'error');
@@ -3193,14 +3195,16 @@ window.openMergeModal = async function () {
   try {
     const data = await APIHelper.executeWithErrorHandling(
       async () => {
-        const response = await APIClient.get(`/api/periodicals/tracking?limit=${API_LIMITS.TRACKING_LIST}`);
+        const response = await APIClient.get(
+          `/api/periodicals/tracking?limit=${API_LIMITS.TRACKING_LIST}`
+        );
         return await response.json();
       },
       'Tracking',
       ELEMENT_IDS.TRACKING_STATUS
     );
 
-    const items = data.tracked_magazines || [];
+    const items = data.tracked_periodicals || [];
 
     console.log('Merge modal check:', {
       itemsLength: items.length,
@@ -3294,13 +3298,15 @@ window.showMergeTargetSelection = async function () {
   // Get the tracking data for selected items
   const data = await APIHelper.executeWithErrorHandling(
     async () => {
-      const response = await APIClient.get(`/api/periodicals/tracking?limit=${API_LIMITS.TRACKING_LIST}`);
+      const response = await APIClient.get(
+        `/api/periodicals/tracking?limit=${API_LIMITS.TRACKING_LIST}`
+      );
       return await response.json();
     },
     'Tracking',
     ELEMENT_IDS.TRACKING_STATUS
   );
-  const selectedItems = (data.tracked_magazines || []).filter((item) =>
+  const selectedItems = (data.tracked_periodicals || []).filter((item) =>
     selectedIds.includes(item.id)
   );
 

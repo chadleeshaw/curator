@@ -21,8 +21,8 @@ const specialEditionsData = container
   ? JSON.parse(container.getAttribute('data-special-editions') || '[]')
   : [];
 let pendingDeleteId = null;
-let currentMagazineId = null;
-let currentMagazineData = null;
+let currentPeriodicalId = null;
+let currentPeriodicalData = null;
 
 // Bulk selection state
 let bulkSelectMode = false;
@@ -150,8 +150,8 @@ function isSpecialEdition(data) {
 }
 
 // Delete modal functions
-function openDeleteModal(magazineId, title) {
-  pendingDeleteId = magazineId;
+function openDeleteModal(periodicalId, title) {
+  pendingDeleteId = periodicalId;
 
   const modal = document.getElementById('delete-modal');
 
@@ -518,11 +518,11 @@ function createIssueCard(issue) {
   return issueCard;
 }
 
-async function openPDF(magazineId) {
+async function openPDF(periodicalId) {
   try {
     // Get magazine metadata to check file type
     const data = await APIHelper.executeWithErrorHandling(async () => {
-      const response = await APIClient.get(`/api/periodicals/${magazineId}`);
+      const response = await APIClient.get(`/api/periodicals/${periodicalId}`);
       return await response.json();
     }, 'Periodical');
 
@@ -533,37 +533,37 @@ async function openPDF(magazineId) {
       if (filePath.endsWith('.epub')) {
         console.log('[Periodical] Detected EPUB, opening EPUB reader');
         // Open EPUB reader in same window
-        window.location.href = `/epub-reader?id=${magazineId}`;
+        window.location.href = `/epub-reader?id=${periodicalId}`;
       } else if (filePath.endsWith('.cbz') || filePath.endsWith('.cbr')) {
         console.log('[Periodical] Detected comic file, opening comic reader');
         // Open comic reader in same window
-        window.location.href = `/comic-reader?id=${magazineId}`;
+        window.location.href = `/comic-reader?id=${periodicalId}`;
       } else if (filePath.endsWith('.pdf')) {
         console.log('[Periodical] Detected PDF, opening PDF reader');
         // Open PDF reader in same window
-        window.location.href = `/pdf-reader?id=${magazineId}`;
+        window.location.href = `/pdf-reader?id=${periodicalId}`;
       } else {
         console.log('[Periodical] Unknown file type, opening directly');
         // Open file directly in new tab (for non-reader files)
-        window.open(`/api/periodicals/${magazineId}/pdf`, '_blank');
+        window.open(`/api/periodicals/${periodicalId}/pdf`, '_blank');
       }
     } else {
       console.log('[Periodical] No file_path, opening directly');
       // Fallback to opening directly in new tab
-      window.open(`/api/periodicals/${magazineId}/pdf`, '_blank');
+      window.open(`/api/periodicals/${periodicalId}/pdf`, '_blank');
     }
   } catch (error) {
     console.error('[Periodical] Error checking file type:', error);
     // Fallback to opening as PDF in new tab
-    window.open(`/api/periodicals/${magazineId}/pdf`, '_blank');
+    window.open(`/api/periodicals/${periodicalId}/pdf`, '_blank');
   }
 }
 
 // View metadata - opens the metadata modal
-async function viewMetadata(magazineId) {
+async function viewMetadata(periodicalId) {
   try {
     const data = await APIHelper.executeWithErrorHandling(async () => {
-      const response = await APIClient.get(`/api/periodicals/${magazineId}`);
+      const response = await APIClient.get(`/api/periodicals/${periodicalId}`);
       return await response.json();
     }, 'Periodical');
     displayMetadata(data);
@@ -579,8 +579,8 @@ function displayMetadata(data) {
   metadataBody.innerHTML = '';
 
   // Store current magazine data globally
-  currentMagazineId = data.id;
-  currentMagazineData = data;
+  currentPeriodicalId = data.id;
+  currentPeriodicalData = data;
 
   // Update special edition button text based on current status
   const isSpecial = isSpecialEdition(data);
@@ -823,7 +823,7 @@ function closeMetadataModal() {
 }
 
 function enableMetadataEdit() {
-  if (!currentMagazineData) return;
+  if (!currentPeriodicalData) return;
 
   // Hide view, show edit form
   document.getElementById('metadata-body').classList.add(CSS_CLASSES.HIDDEN);
@@ -833,11 +833,11 @@ function enableMetadataEdit() {
 
   // Check if this issue is linked to tracking
   const hasTracking =
-    currentMagazineData.tracking_id !== null && currentMagazineData.tracking_id !== undefined;
+    currentPeriodicalData.tracking_id !== null && currentPeriodicalData.tracking_id !== undefined;
 
   // Populate form fields
   const languageField = document.getElementById('edit-language');
-  languageField.value = currentMagazineData.language || 'English';
+  languageField.value = currentPeriodicalData.language || 'English';
 
   // Disable language if controlled by tracking
   const languageContainer = document.getElementById('edit-language-container');
@@ -853,19 +853,21 @@ function enableMetadataEdit() {
 
   // Year field - read from derived_metadata first, fall back to extra_metadata
   document.getElementById('edit-year').value =
-    currentMagazineData.derived_metadata?.year?.value ?? currentMagazineData.metadata?.year ?? '';
+    currentPeriodicalData.derived_metadata?.year?.value ??
+    currentPeriodicalData.metadata?.year ??
+    '';
 
   // Month field - read month_name from derived_metadata first, fall back to extra_metadata
   document.getElementById('edit-month').value =
-    currentMagazineData.derived_metadata?.month_name?.value ??
-    currentMagazineData.metadata?.month ??
+    currentPeriodicalData.derived_metadata?.month_name?.value ??
+    currentPeriodicalData.metadata?.month ??
     '';
 
   // Country field - read from derived_metadata first, fall back to extra_metadata
   const countryField = document.getElementById('edit-country');
   countryField.value =
-    currentMagazineData.derived_metadata?.country?.value ??
-    currentMagazineData.metadata?.country ??
+    currentPeriodicalData.derived_metadata?.country?.value ??
+    currentPeriodicalData.metadata?.country ??
     '';
 
   // Disable country if controlled by tracking
@@ -883,18 +885,18 @@ function enableMetadataEdit() {
   // Issue-specific fields (always editable)
   // Read from derived_metadata first (structured format), fall back to extra_metadata (legacy)
   document.getElementById('edit-issue-number').value =
-    currentMagazineData.derived_metadata?.issue_number?.value ??
-    currentMagazineData.metadata?.issue_number ??
+    currentPeriodicalData.derived_metadata?.issue_number?.value ??
+    currentPeriodicalData.metadata?.issue_number ??
     '';
   document.getElementById('edit-volume').value =
-    currentMagazineData.derived_metadata?.volume?.value ??
-    currentMagazineData.metadata?.volume ??
+    currentPeriodicalData.derived_metadata?.volume?.value ??
+    currentPeriodicalData.metadata?.volume ??
     '';
 
   // Always show special edition field in edit mode
   const specialField = document.getElementById('special-edition-name-field');
-  const specialEditionValue = getSpecialEditionValue(currentMagazineData);
-  const isSpecial = isSpecialEdition(currentMagazineData);
+  const specialEditionValue = getSpecialEditionValue(currentPeriodicalData);
+  const isSpecial = isSpecialEdition(currentPeriodicalData);
   specialField.classList.remove(CSS_CLASSES.HIDDEN);
   document.getElementById('edit-special-edition').value = specialEditionValue || '';
 
@@ -908,7 +910,7 @@ function enableMetadataEdit() {
 
   // Cover page field
   document.getElementById('edit-cover-page').value =
-    (currentMagazineData.metadata && currentMagazineData.metadata.cover_page) || '1';
+    (currentPeriodicalData.metadata && currentPeriodicalData.metadata.cover_page) || '1';
 }
 
 function cancelMetadataEdit() {
@@ -949,14 +951,14 @@ function clearCoverUpload() {
 }
 
 async function regenerateThumbnailOcr() {
-  if (!currentMagazineId) return;
+  if (!currentPeriodicalId) return;
 
   showNotification('🔄 Regenerating thumbnail and queuing OCR...', 'info');
 
   try {
     const data = await APIHelper.executeWithErrorHandling(async () => {
       const response = await APIClient.post(
-        `/api/periodicals/${currentMagazineId}/regenerate-thumbnail-ocr`
+        `/api/periodicals/${currentPeriodicalId}/regenerate-thumbnail-ocr`
       );
       return await response.json();
     }, 'Periodical');
@@ -973,7 +975,7 @@ async function regenerateThumbnailOcr() {
     showNotification(`✅ Thumbnail regenerated. ${ocrNote}`, 'success');
 
     // Refresh the metadata modal and page to show updated cover
-    await viewMetadata(currentMagazineId);
+    await viewMetadata(currentPeriodicalId);
     setTimeout(() => window.location.reload(), 1500);
   } catch (error) {
     console.error('[Periodical] Error regenerating thumbnail/OCR:', error);
@@ -984,7 +986,7 @@ async function regenerateThumbnailOcr() {
   }
 }
 
-async function uploadCoverImage(magazineId) {
+async function uploadCoverImage(periodicalId) {
   const fileInput = document.getElementById('edit-cover-file');
   if (!fileInput || !fileInput.files || !fileInput.files[0]) {
     return false; // No file to upload
@@ -995,7 +997,7 @@ async function uploadCoverImage(magazineId) {
 
   showNotification('🖼️ Uploading cover image...', 'info');
 
-  const response = await fetch(`/api/periodicals/${magazineId}/upload-cover`, {
+  const response = await fetch(`/api/periodicals/${periodicalId}/upload-cover`, {
     method: 'POST',
     body: formData,
     headers: {
@@ -1012,11 +1014,11 @@ async function uploadCoverImage(magazineId) {
 }
 
 async function saveMetadataEdit() {
-  if (!currentMagazineId) return;
+  if (!currentPeriodicalId) return;
 
   // Check if this issue is linked to tracking
   const hasTracking =
-    currentMagazineData.tracking_id !== null && currentMagazineData.tracking_id !== undefined;
+    currentPeriodicalData.tracking_id !== null && currentPeriodicalData.tracking_id !== undefined;
 
   const updates = {
     year: document.getElementById('edit-year').value || null,
@@ -1040,7 +1042,7 @@ async function saveMetadataEdit() {
   updates.cover_page = coverPage ? parseInt(coverPage) : 1;
 
   // Check if cover page number has changed
-  const currentCoverPage = currentMagazineData.metadata?.cover_page || 1;
+  const currentCoverPage = currentPeriodicalData.metadata?.cover_page || 1;
   const shouldRegenerateCover = coverPage && parseInt(coverPage) !== currentCoverPage;
 
   // Check if a custom cover image was selected
@@ -1049,22 +1051,22 @@ async function saveMetadataEdit() {
 
   try {
     await APIHelper.executeWithErrorHandling(async () => {
-      await APIClient.put(`/api/periodicals/${currentMagazineId}`, updates);
+      await APIClient.put(`/api/periodicals/${currentPeriodicalId}`, updates);
     }, 'Periodical');
 
     // Handle cover: custom upload takes priority over page number regeneration
     if (hasCustomCover) {
-      await uploadCoverImage(currentMagazineId);
+      await uploadCoverImage(currentPeriodicalId);
     } else if (shouldRegenerateCover) {
       showNotification('🔄 Regenerating cover from page ' + coverPage, 'info');
       await APIHelper.executeWithErrorHandling(async () => {
-        await APIClient.post(`/api/periodicals/${currentMagazineId}/regenerate-cover`, {
+        await APIClient.post(`/api/periodicals/${currentPeriodicalId}/regenerate-cover`, {
           page_number: parseInt(coverPage),
         });
       }, 'Periodical');
     }
 
-    await viewMetadata(currentMagazineId);
+    await viewMetadata(currentPeriodicalId);
 
     // Clear the file input
     clearCoverUpload();
@@ -1126,8 +1128,8 @@ document.addEventListener('click', (event) => {
 });
 
 // Delete an issue - opens the modal
-function deleteIssue(magazineId, title) {
-  openDeleteModal(magazineId, title);
+function deleteIssue(periodicalId, title) {
+  openDeleteModal(periodicalId, title);
 }
 
 // Confirm delete from modal
@@ -1234,7 +1236,7 @@ function goBack() {
 
 // Move issue modal functions
 async function openMoveIssueModal() {
-  if (!currentMagazineId) {
+  if (!currentPeriodicalId) {
     alert('No magazine selected');
     return;
   }
@@ -1257,14 +1259,14 @@ async function openMoveIssueModal() {
       return await response.json();
     }, 'Periodical');
 
-    const trackingRecords = data.tracked_magazines || [];
+    const trackingRecords = data.tracked_periodicals || [];
 
     // Clear and populate select
     select.innerHTML = '<option value="">Select a tracking record...</option>';
 
     trackingRecords.forEach((tracking) => {
       // Don't show current tracking as an option
-      if (tracking.id === currentMagazineData.tracking_id) {
+      if (tracking.id === currentPeriodicalData.tracking_id) {
         return;
       }
 
@@ -1297,7 +1299,7 @@ function closeMoveIssueModal() {
 async function confirmMoveIssue() {
   const targetTrackingId = document.getElementById('target-tracking-select').value;
 
-  if (!targetTrackingId || !currentMagazineId) {
+  if (!targetTrackingId || !currentPeriodicalId) {
     alert('Please select a tracking record');
     return;
   }
@@ -1313,7 +1315,7 @@ async function confirmMoveIssue() {
 
     const response = await APIHelper.executeWithErrorHandling(async () => {
       return await APIClient.post(
-        `/api/periodicals/${currentMagazineId}/move-to-tracking?target_tracking_id=${targetTrackingId}`
+        `/api/periodicals/${currentPeriodicalId}/move-to-tracking?target_tracking_id=${targetTrackingId}`
       );
     }, 'Periodical');
 
@@ -1352,12 +1354,12 @@ async function confirmMoveIssue() {
 
 // Toggle special edition status
 async function toggleSpecialEdition() {
-  if (!currentMagazineId || !currentMagazineData) {
+  if (!currentPeriodicalId || !currentPeriodicalData) {
     alert('No magazine selected');
     return;
   }
 
-  const isCurrentlySpecial = isSpecialEdition(currentMagazineData);
+  const isCurrentlySpecial = isSpecialEdition(currentPeriodicalData);
 
   const toggleBtn = document.getElementById('toggle-special-btn');
   const originalText = toggleBtn.textContent;
@@ -1367,7 +1369,7 @@ async function toggleSpecialEdition() {
   try {
     const response = await APIHelper.executeWithErrorHandling(async () => {
       return await APIClient.post(
-        `/api/periodicals/${currentMagazineId}/toggle-special-edition?is_special=${!isCurrentlySpecial}`
+        `/api/periodicals/${currentPeriodicalId}/toggle-special-edition?is_special=${!isCurrentlySpecial}`
       );
     }, 'Periodical');
 
@@ -1528,7 +1530,7 @@ async function openBulkMoveModal() {
       return await response.json();
     }, 'Periodical');
 
-    const trackingRecords = data.tracked_magazines || [];
+    const trackingRecords = data.tracked_periodicals || [];
 
     select.innerHTML = '<option value="">Select a tracking record...</option>';
 

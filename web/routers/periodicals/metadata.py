@@ -32,42 +32,35 @@ async def toggle_special_edition(magazine_id: int, is_special: bool) -> Dict[str
     """
 
     def operation(db):
-        magazine = _shared.get_periodical_or_404(db, magazine_id)
+        periodical = _shared.get_periodical_or_404(db, magazine_id)
 
-        # Initialize derived_metadata if needed
-        if magazine.derived_metadata is None:
-            magazine.derived_metadata = {}
+        if periodical.derived_metadata is None:
+            periodical.derived_metadata = {}
 
-        # Update special edition status in derived_metadata
         if is_special:
-            # Mark as special edition - store as structured data with proper field names
-            magazine.derived_metadata["is_special_edition"] = {
+            periodical.derived_metadata["is_special_edition"] = {
                 "value": True,
                 "source": "manual",
             }
-            magazine.derived_metadata["special_edition_name"] = {
-                "value": magazine.title,
+            periodical.derived_metadata["special_edition_name"] = {
+                "value": periodical.title,
                 "source": "manual",
             }
-            logger.info(f"Marked issue as special edition: {magazine.title}")
-            message = f"Marked '{magazine.title}' as a special edition"
+            logger.info(f"Marked issue as special edition: {periodical.title}")
+            message = f"Marked '{periodical.title}' as a special edition"
         else:
-            # Unmark as special edition - set to false (not delete!) so it overrides
-            # any parsed_metadata fallback (e.g., OCR detected "anniversary issue")
-            magazine.derived_metadata["is_special_edition"] = {
+            periodical.derived_metadata["is_special_edition"] = {
                 "value": False,
                 "source": "manual",
             }
-            if "special_edition_name" in magazine.derived_metadata:
-                del magazine.derived_metadata["special_edition_name"]
-            # Also remove legacy field if present
-            if "special_edition" in magazine.derived_metadata:
-                del magazine.derived_metadata["special_edition"]
-            logger.info(f"Unmarked special edition: {magazine.title}")
-            message = f"Unmarked '{magazine.title}' as special edition"
+            if "special_edition_name" in periodical.derived_metadata:
+                del periodical.derived_metadata["special_edition_name"]
+            if "special_edition" in periodical.derived_metadata:
+                del periodical.derived_metadata["special_edition"]
+            logger.info(f"Unmarked special edition: {periodical.title}")
+            message = f"Unmarked '{periodical.title}' as special edition"
 
-        # Mark the column as modified for SQLAlchemy to detect the change
-        mark_json_modified(magazine, "derived_metadata")
+        mark_json_modified(periodical, "derived_metadata")
 
         db.commit()
 
@@ -85,151 +78,132 @@ async def update_periodical(magazine_id: int, updates: Dict[str, Any]) -> Dict[s
     """Update periodical metadata"""
 
     def operation(db):
-        magazine = _shared.get_periodical_or_404(db, magazine_id)
+        periodical = _shared.get_periodical_or_404(db, magazine_id)
 
-        # Check if this magazine is linked to tracking
-        has_tracking = magazine.tracking_id is not None
+        has_tracking = periodical.tracking_id is not None
 
-        # Update allowed fields
-        # Language can only be updated if NOT linked to tracking
         if "language" in updates and not has_tracking:
-            magazine.language = updates["language"]
+            periodical.language = updates["language"]
 
-        # Update extra_metadata fields
-        if magazine.extra_metadata is None:
-            magazine.extra_metadata = {}
+        if periodical.extra_metadata is None:
+            periodical.extra_metadata = {}
 
-        # Ensure derived_metadata is initialized
-        if magazine.derived_metadata is None:
-            magazine.derived_metadata = {}
+        if periodical.derived_metadata is None:
+            periodical.derived_metadata = {}
 
-        # Country can only be updated if NOT linked to tracking
         if "country" in updates and not has_tracking:
-            magazine.derived_metadata["country"] = {
+            periodical.derived_metadata["country"] = {
                 "value": updates["country"],
                 "source": "manual",
                 "confidence": 1.0,
             }
 
-        # Handle year and month updates
         year_provided = "year" in updates and updates["year"]
         month_provided = "month" in updates
 
-        # Update derived_metadata fields (structured with source/confidence)
         if year_provided:
-            magazine.derived_metadata["year"] = {
+            periodical.derived_metadata["year"] = {
                 "value": int(updates["year"]),
                 "source": "manual",
                 "confidence": 1.0,
             }
 
         if month_provided:
-            magazine.derived_metadata["month_name"] = {
+            periodical.derived_metadata["month_name"] = {
                 "value": updates["month"],
                 "source": "manual",
                 "confidence": 1.0,
             }
-            # Also store numeric month if parseable
             month_num_val, _ = _shared.parse_month_string(updates["month"])
-            if month_num_val and month_num_val > 1:  # parse_month_string defaults to 1
-                magazine.derived_metadata["month"] = {
+            if month_num_val and month_num_val > 1:
+                periodical.derived_metadata["month"] = {
                     "value": month_num_val,
                     "source": "manual",
                     "confidence": 1.0,
                 }
 
-        # Auto-populate from issue_date if fields not provided
-        if magazine.issue_date:
+        if periodical.issue_date:
             if not year_provided:
-                magazine.derived_metadata["year"] = {
-                    "value": magazine.issue_date.year,
+                periodical.derived_metadata["year"] = {
+                    "value": periodical.issue_date.year,
                     "source": "issue_date",
                     "confidence": 1.0,
                 }
             if not month_provided or not updates.get("month"):
-                month_name = NUMBER_TO_MONTH.get(magazine.issue_date.month, "")
+                month_name = NUMBER_TO_MONTH.get(periodical.issue_date.month, "")
                 if month_name:
-                    magazine.derived_metadata["month_name"] = {
+                    periodical.derived_metadata["month_name"] = {
                         "value": month_name,
                         "source": "issue_date",
                         "confidence": 1.0,
                     }
-                    magazine.derived_metadata["month"] = {
-                        "value": magazine.issue_date.month,
+                    periodical.derived_metadata["month"] = {
+                        "value": periodical.issue_date.month,
                         "source": "issue_date",
                         "confidence": 1.0,
                     }
 
-        # Reconstruct issue_date when year is provided
-        # This keeps the database field in sync for sorting/filtering
         if year_provided:
             year = int(updates["year"])
             month_str = updates.get("month", "")
             month_num, _ = _shared.parse_month_string(month_str)
 
             try:
-                magazine.issue_date = datetime(year, month_num, 1, tzinfo=UTC)
+                periodical.issue_date = datetime(year, month_num, 1, tzinfo=UTC)
             except ValueError:
-                # Invalid date (e.g., Feb 30) - default to year start
                 logger.warning(f"Invalid date: year={year}, month={month_num}")
-                magazine.issue_date = datetime(year, 1, 1, tzinfo=UTC)
+                periodical.issue_date = datetime(year, 1, 1, tzinfo=UTC)
 
         if "issue_number" in updates:
-            magazine.derived_metadata["issue_number"] = {
+            periodical.derived_metadata["issue_number"] = {
                 "value": updates["issue_number"],
                 "source": "manual",
                 "confidence": 1.0,
             }
 
         if "volume" in updates:
-            magazine.derived_metadata["volume"] = {
+            periodical.derived_metadata["volume"] = {
                 "value": updates["volume"],
                 "source": "manual",
                 "confidence": 1.0,
             }
 
-        # Handle cover page number (stored in extra_metadata)
         if "cover_page" in updates:
             cover_page_value = updates["cover_page"]
             if cover_page_value and isinstance(cover_page_value, int) and cover_page_value > 0:
-                magazine.extra_metadata["cover_page"] = cover_page_value
-                logger.info(f"Updated cover page to {cover_page_value} for magazine {magazine_id}")
+                periodical.extra_metadata["cover_page"] = cover_page_value
+                logger.info(f"Updated cover page to {cover_page_value} for periodical {magazine_id}")
 
-        # Handle special edition in derived_metadata (structured storage)
         if "special_edition" in updates:
             if updates["special_edition"]:
-                # Store as structured data with source indicator
-                magazine.derived_metadata["special_edition"] = {
+                periodical.derived_metadata["special_edition"] = {
                     "value": updates["special_edition"],
                     "source": "manual",
                 }
-            elif "special_edition" in magazine.derived_metadata:
-                del magazine.derived_metadata["special_edition"]
+            elif "special_edition" in periodical.derived_metadata:
+                del periodical.derived_metadata["special_edition"]
 
-        # Mark both columns as modified for SQLAlchemy to detect changes
-        mark_json_modified(magazine, "extra_metadata", "derived_metadata")
+        mark_json_modified(periodical, "extra_metadata", "derived_metadata")
 
         db.commit()
-        db.refresh(magazine)
+        db.refresh(periodical)
 
-        # Reorganize files if date-affecting metadata changed (year/month)
-        # This keeps the filesystem paths in sync with metadata
         files_reorganized = False
         if year_provided or month_provided:
             library_base_dir = _shared._library_base_dir or get_library_dir(None)
             category_prefix = _shared._category_prefix
 
             result = reorganize_periodical_files(
-                magazine,
-                new_title=magazine.title,
+                periodical,
+                new_title=periodical.title,
                 library_base_dir=library_base_dir,
                 category_prefix=category_prefix,
-                update_db=True,
+                should_update_database=True,
             )
             if result.success and result.files_moved:
                 files_reorganized = True
                 db.commit()
-                db.refresh(magazine)
+                db.refresh(periodical)
                 logger.info(f"Reorganized files for periodical {magazine_id} after metadata update")
             elif not result.success:
                 logger.warning(f"Failed to reorganize files for periodical {magazine_id}: {result.error}")
@@ -237,14 +211,14 @@ async def update_periodical(magazine_id: int, updates: Dict[str, Any]) -> Dict[s
         return success_response(
             "Metadata updated successfully",
             periodical={
-                "id": magazine.id,
-                "title": magazine.title,
-                "language": magazine.language,
-                "issue_date": (magazine.issue_date.isoformat() if magazine.issue_date else None),
-                "file_path": magazine.file_path,
-                "cover_path": magazine.cover_path,
-                "metadata": magazine.extra_metadata,
-                "derived_metadata": magazine.derived_metadata,
+                "id": periodical.id,
+                "title": periodical.title,
+                "language": periodical.language,
+                "issue_date": (periodical.issue_date.isoformat() if periodical.issue_date else None),
+                "file_path": periodical.file_path,
+                "cover_path": periodical.cover_path,
+                "metadata": periodical.extra_metadata,
+                "derived_metadata": periodical.derived_metadata,
             },
             files_reorganized=files_reorganized,
         )

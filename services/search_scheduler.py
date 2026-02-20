@@ -1,11 +1,7 @@
 """
-Search Scheduler - Adaptive search scheduling for periodical tracking.
+Adaptive search scheduling for periodical tracking.
 
-Handles:
-- Selecting which periodicals to search each run
-- Adjusting search intervals based on discovery success
-- Prioritizing active/promising periodicals
-- Updating search statistics
+Adjusts search intervals based on discovery success to optimize API rate limit usage.
 """
 
 import logging
@@ -25,11 +21,8 @@ class SearchScheduler:
     """
     Adaptive scheduler for periodical searches.
 
-    Instead of searching ALL tracked periodicals every 30 minutes (overwhelming),
-    this scheduler:
-    - Searches 1-2 periodicals per run
-    - Adjusts search intervals based on discovery success
-    - Prioritizes periodicals that are actively finding new issues
+    Prevents rate limit exhaustion by searching a small number of periodicals per run
+    and adjusting intervals based on discovery success.
     """
 
     def __init__(
@@ -61,63 +54,46 @@ class SearchScheduler:
 
     def select_periodicals_to_search(self, session: Session) -> List[PeriodicalTracking]:
         """
-        Select which periodicals to search this run.
-
-        Selection criteria (in priority order):
-        1. Never searched before (last_searched is NULL)
-        2. Overdue for search (last_searched + interval < now)
-        3. Recently successful (found new issues recently)
-
-        Args:
-            session: Database session
-
-        Returns:
-            List of PeriodicalTracking objects to search (max: max_periodicals_per_run)
+        Prioritizes never-searched periodicals, then overdue searches.
+        Filters out "watch only" items that will never trigger downloads.
         """
         now = utc_now()
         candidates = []
 
-        # Only search periodicals that have download criteria set.
-        # "Watch Only" items (track_all=False, track_new=False, no selected_years)
-        # will never download anything, so searching wastes API rate limit budget.
-        # selected_years is a JSON column that may be NULL or [] so we filter in Python.
-
-        # Priority 1: Never searched before
         never_searched = session.query(PeriodicalTracking).filter(PeriodicalTracking.last_searched.is_(None)).all()
 
-        # Filter to only downloadable periodicals (track_all, track_new, or selected_years)
-        never_searched = [p for p in never_searched if self._has_download_criteria(p)]
+        downloadable_never_searched = [p for p in never_searched if self._has_download_criteria(p)]
 
-        if never_searched:
-            logger.debug(f"Found {len(never_searched)} downloadable periodicals never searched before")
-            candidates.extend(never_searched[: self.max_periodicals_per_run])
+        if downloadable_never_searched:
+            logger.debug(f"Found {len(downloadable_never_searched)} downloadable periodicals never searched before")
+            candidates.extend(downloadable_never_searched[: self.max_periodicals_per_run])
 
-        # If we have enough, return
         if len(candidates) >= self.max_periodicals_per_run:
             return candidates[: self.max_periodicals_per_run]
 
-        # Priority 2: Overdue for search
-        remaining = self.max_periodicals_per_run - len(candidates)
+        remaining_slots = self.max_periodicals_per_run - len(candidates)
+        next_search_due = (
+            PeriodicalTracking.last_searched + timedelta(hours=1) * PeriodicalTracking.search_interval_hours
+        )
+        is_overdue = next_search_due <= now
+
         overdue = (
             session.query(PeriodicalTracking)
             .filter(
                 and_(
                     PeriodicalTracking.last_searched.isnot(None),
-                    # Calculate due time: last_searched + (search_interval_hours * 3600)
-                    PeriodicalTracking.last_searched + timedelta(hours=1) * PeriodicalTracking.search_interval_hours
-                    <= now,
+                    is_overdue,
                 )
             )
-            .order_by(PeriodicalTracking.last_searched.asc())  # Oldest first
+            .order_by(PeriodicalTracking.last_searched.asc())
             .all()
         )
 
-        # Filter to only downloadable periodicals
-        overdue = [p for p in overdue if self._has_download_criteria(p)][:remaining]
+        downloadable_overdue = [p for p in overdue if self._has_download_criteria(p)][:remaining_slots]
 
-        if overdue:
-            logger.debug(f"Found {len(overdue)} downloadable periodicals overdue for search")
-            candidates.extend(overdue)
+        if downloadable_overdue:
+            logger.debug(f"Found {len(downloadable_overdue)} downloadable periodicals overdue for search")
+            candidates.extend(downloadable_overdue)
 
         logger.debug(f"Selected {len(candidates)} periodicals to search: " f"{[p.title for p in candidates]}")
 
@@ -125,17 +101,10 @@ class SearchScheduler:
 
     @staticmethod
     def _has_download_criteria(tracking: PeriodicalTracking) -> bool:
-        """Check if a tracked periodical has any download criteria set.
+        """Check if a tracked periodical has download criteria set.
 
-        Periodicals in "Watch Only" mode (no download flags or year selections)
-        should not be searched during auto-download since they would never
-        download anything, wasting API rate limit budget.
-
-        Args:
-            tracking: PeriodicalTracking record to check
-
-        Returns:
-            True if the periodical has criteria that could trigger downloads
+        Periodicals in "watch only" mode should not be searched during auto-download
+        to avoid wasting API rate limits.
         """
         if tracking.track_all_editions:
             return True
@@ -152,18 +121,7 @@ class SearchScheduler:
         session: Session,
     ) -> None:
         """
-        Update search statistics and adjust search interval.
-
-        This method:
-        1. Updates last_searched timestamp
-        2. Increments search_count
-        3. Updates discovery statistics
-        4. Adjusts search_interval_hours based on success
-
-        Args:
-            tracking_id: PeriodicalTracking ID
-            new_issues_found: Number of new issues discovered in this search
-            session: Database session
+        Update search statistics and adjust search interval based on discovery success.
         """
         tracking = session.query(PeriodicalTracking).filter_by(id=tracking_id).first()
         if not tracking:

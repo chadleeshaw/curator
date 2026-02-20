@@ -3,7 +3,7 @@ CRUD operations for periodicals
 """
 
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import cast, case, func, literal, String
 from sqlalchemy.orm import Session
@@ -23,15 +23,12 @@ logger = _shared.logger
 
 class PeriodicalQueryBuilder:
     """
-    Builder class for constructing complex periodical list queries.
+    Constructs queries to find the latest periodical issue per tracking group.
 
-    Encapsulates the logic for grouping periodicals by tracking_id,
-    finding the latest issue per group, applying sorting, and
-    calculating issue counts.
+    Uses string-prefixed group keys to prevent ID namespace collisions.
     """
 
     def __init__(self, db: Session):
-        """Initialize builder with database session."""
         self.db = db
         self._date_subquery = None
         self._id_subquery = None
@@ -39,8 +36,6 @@ class PeriodicalQueryBuilder:
 
     def _build_group_key_expression(self):
         """
-        Build case expression for grouping by tracking_id or periodical.id.
-
         Groups tracked items together while keeping untracked items separate.
         Uses string prefixes ("t_" for tracked, "p_" for untracked) to prevent
         namespace collisions between tracking_id and periodical.id integers.
@@ -54,11 +49,9 @@ class PeriodicalQueryBuilder:
         )
 
     def _build_language_expression(self):
-        """Build coalesce expression for language, defaulting NULL to 'English'."""
         return func.coalesce(Periodical.language, "English")
 
     def _build_date_subquery(self):
-        """Build subquery to find the most recent issue date for each group."""
         if self._date_subquery is None:
             group_key_expr = self._build_group_key_expression()
             lang_expr = self._build_language_expression()
@@ -97,7 +90,6 @@ class PeriodicalQueryBuilder:
         return self._id_subquery
 
     def _build_count_subquery(self):
-        """Build subquery to count total issues per group."""
         if self._count_subquery is None:
             group_key_expr = self._build_group_key_expression()
             lang_expr = self._build_language_expression()
@@ -113,12 +105,7 @@ class PeriodicalQueryBuilder:
         return self._count_subquery
 
     def build_base_query(self):
-        """
-        Build the base query that selects the latest issue per group.
-
-        Returns:
-            SQLAlchemy query joined with tracking for display titles
-        """
+        """Build query that selects the latest issue per group, joined with tracking for display titles."""
         id_subquery = self._build_id_subquery()
         group_key_expr = self._build_group_key_expression()
         lang_expr = self._build_language_expression()
@@ -207,98 +194,103 @@ class PeriodicalQueryBuilder:
             )
         ).scalar()
 
-    def get_issue_counts(self, magazines: List[Periodical]) -> Dict:
+    def get_issue_counts(self, periodicals: List[Periodical]) -> Dict:
         """
-        Get issue counts for each magazine in the list.
+        Get issue counts for each periodical in the list.
 
         For tracked items, counts all issues with same tracking_id + language.
         For untracked items, counts by title + language.
 
         Args:
-            magazines: List of Periodical objects
+            periodicals: List of Periodical objects
 
         Returns:
             Dictionary mapping (tracking_id, language) or (title, language, None) to count
         """
         issue_counts = {}
-        for mag in magazines:
-            if mag.tracking_id:
-                key = (mag.tracking_id, mag.language or "English")
+        for periodical in periodicals:
+            if periodical.tracking_id:
+                key = (periodical.tracking_id, periodical.language or "English")
                 if key not in issue_counts:
                     issue_counts[key] = (
                         self.db.query(Periodical)
                         .filter(
-                            Periodical.tracking_id == mag.tracking_id,
-                            Periodical.language == mag.language,
+                            Periodical.tracking_id == periodical.tracking_id,
+                            Periodical.language == periodical.language,
                         )
                         .count()
                     )
             else:
-                key = (mag.title, mag.language or "English", None)
+                key = (periodical.title, periodical.language or "English", None)
                 if key not in issue_counts:
                     issue_counts[key] = (
                         self.db.query(Periodical)
                         .filter(
-                            Periodical.title == mag.title,
-                            Periodical.language == mag.language,
+                            Periodical.title == periodical.title,
+                            Periodical.language == periodical.language,
                             Periodical.tracking_id.is_(None),
                         )
                         .count()
                     )
         return issue_counts
 
-    def get_tracking_titles(self, magazines: List[Periodical]) -> Dict[int, str]:
+    def get_tracking_titles(self, periodicals: List[Periodical]) -> Dict[int, str]:
         """
-        Fetch tracking titles for magazines with tracking_id.
+        Fetch tracking titles for periodicals with tracking_id.
 
         Args:
-            magazines: List of Periodical objects
+            periodicals: List of Periodical objects
 
         Returns:
             Dictionary mapping tracking_id to title
         """
         tracking_titles = {}
-        for mag in magazines:
-            if mag.tracking_id and mag.tracking_id not in tracking_titles:
-                tracking = self.db.query(PeriodicalTracking).filter(PeriodicalTracking.id == mag.tracking_id).first()
+        for periodical in periodicals:
+            if periodical.tracking_id and periodical.tracking_id not in tracking_titles:
+                tracking = (
+                    self.db.query(PeriodicalTracking).filter(PeriodicalTracking.id == periodical.tracking_id).first()
+                )
                 if tracking:
-                    tracking_titles[mag.tracking_id] = tracking.title
+                    tracking_titles[periodical.tracking_id] = tracking.title
         return tracking_titles
 
-    def get_best_title(self, mag: Periodical, tracking_titles: Dict[int, str]) -> str:
+    def get_best_title(self, periodical: Periodical, tracking_titles: Dict[int, str]) -> str:
         """
-        Get the best display title for a magazine.
+        Get the best display title for a periodical.
 
         Priority: tracking title > derived_metadata title > database column
 
         Args:
-            mag: Periodical object
+            periodical: Periodical object
             tracking_titles: Dictionary of tracking_id to title
 
         Returns:
             Best available title string
         """
         # Priority 1: Tracking title (if linked to tracking)
-        if mag.tracking_id and mag.tracking_id in tracking_titles:
-            return tracking_titles[mag.tracking_id]
+        if periodical.tracking_id and periodical.tracking_id in tracking_titles:
+            return tracking_titles[periodical.tracking_id]
 
         # Priority 2: Title from derived_metadata (from best scan source)
-        if mag.derived_metadata and mag.derived_metadata.get("title"):
-            title_data = mag.derived_metadata["title"]
+        if periodical.derived_metadata and periodical.derived_metadata.get("title"):
+            title_data = periodical.derived_metadata["title"]
             if isinstance(title_data, dict) and title_data.get("value"):
                 return title_data["value"]
 
         # Priority 3: Database column (fallback)
-        return mag.title
+        return periodical.title
 
     def build_periodical_dict(
-        self, mag: Periodical, issue_counts: Dict, tracking_titles: Dict[int, str]
+        self,
+        periodical: Periodical,
+        issue_counts: Dict,
+        tracking_titles: Dict[int, str],
     ) -> Dict[str, Any]:
         """
         Build dictionary representation of a periodical for API response.
 
         Args:
-            mag: Periodical object
+            periodical: Periodical object
             issue_counts: Issue count dictionary from get_issue_counts()
             tracking_titles: Tracking titles from get_tracking_titles()
 
@@ -306,57 +298,63 @@ class PeriodicalQueryBuilder:
             Dictionary with periodical data
         """
         count_key = (
-            (mag.tracking_id, mag.language or "English")
-            if mag.tracking_id
-            else (mag.title, mag.language or "English", None)
+            (periodical.tracking_id, periodical.language or "English")
+            if periodical.tracking_id
+            else (periodical.title, periodical.language or "English", None)
         )
 
         # Look up stack membership
-        stack_info = self._get_stack_info_for_periodical(mag)
+        stack_info = self._get_stack_info_for_periodical(periodical)
 
         return {
-            "id": mag.id,
-            "title": self.get_best_title(mag, tracking_titles),
-            "language": mag.language or "English",
-            "issue_date": (mag.issue_date.date().isoformat() if mag.issue_date else None),
-            "file_path": mag.file_path,
-            "cover_path": mag.cover_path,
-            "content_hash": mag.content_hash,
-            "tracking_id": mag.tracking_id,
-            "created_at": (mag.created_at.isoformat() if mag.created_at else None),
-            "updated_at": (mag.updated_at.isoformat() if mag.updated_at else None),
-            "metadata": mag.extra_metadata,
-            "derived_metadata": mag.derived_metadata,
+            "id": periodical.id,
+            "title": self.get_best_title(periodical, tracking_titles),
+            "language": periodical.language or "English",
+            "issue_date": (periodical.issue_date.date().isoformat() if periodical.issue_date else None),
+            "file_path": periodical.file_path,
+            "cover_path": periodical.cover_path,
+            "content_hash": periodical.content_hash,
+            "tracking_id": periodical.tracking_id,
+            "created_at": (periodical.created_at.isoformat() if periodical.created_at else None),
+            "updated_at": (periodical.updated_at.isoformat() if periodical.updated_at else None),
+            "metadata": periodical.extra_metadata,
+            "derived_metadata": periodical.derived_metadata,
             "issue_count": issue_counts.get(count_key, 1),
             "stack_id": stack_info.get("stack_id"),
             "stack_name": stack_info.get("stack_name"),
             "stack_slug": stack_info.get("stack_slug"),
         }
 
-    def _get_stack_info_for_periodical(self, mag: Periodical) -> Dict[str, Any]:
+    def _get_stack_info_for_periodical(self, periodical: Periodical) -> Dict[str, Any]:
         """
         Get stack information for a periodical.
 
         Checks both tracking-based and direct periodical memberships.
 
         Args:
-            mag: Periodical object
+            periodical: Periodical object
 
         Returns:
             Dictionary with stack_id, stack_name, stack_slug (or empty values)
         """
         membership = None
-        if mag.tracking_id:
+        if periodical.tracking_id:
             membership = (
-                self.db.query(StackMembership).filter(StackMembership.periodical_tracking_id == mag.tracking_id).first()
+                self.db.query(StackMembership)
+                .filter(StackMembership.periodical_tracking_id == periodical.tracking_id)
+                .first()
             )
         if not membership:
-            membership = self.db.query(StackMembership).filter(StackMembership.periodical_id == mag.id).first()
+            membership = self.db.query(StackMembership).filter(StackMembership.periodical_id == periodical.id).first()
 
         if membership:
             stack = self.db.query(Stack).filter(Stack.id == membership.stack_id).first()
             if stack:
-                return {"stack_id": stack.id, "stack_name": stack.name, "stack_slug": stack.slug}
+                return {
+                    "stack_id": stack.id,
+                    "stack_name": stack.name,
+                    "stack_slug": stack.slug,
+                }
 
         return {"stack_id": None, "stack_name": None, "stack_slug": None}
 
@@ -387,15 +385,15 @@ async def list_periodicals(
         # Build and execute query
         query = builder.build_base_query()
         query = builder.apply_sorting(query, sort_by, is_descending)
-        magazines = query.offset(skip).limit(limit).all()
+        periodicals = query.offset(skip).limit(limit).all()
 
         # Gather metadata for response
         total = builder.get_total_count()
-        issue_counts = builder.get_issue_counts(magazines)
-        tracking_titles = builder.get_tracking_titles(magazines)
+        issue_counts = builder.get_issue_counts(periodicals)
+        tracking_titles = builder.get_tracking_titles(periodicals)
 
         return success_response(
-            periodicals=[builder.build_periodical_dict(m, issue_counts, tracking_titles) for m in magazines],
+            periodicals=[builder.build_periodical_dict(m, issue_counts, tracking_titles) for m in periodicals],
             total=total,
             skip=skip,
             limit=limit,
@@ -437,22 +435,162 @@ async def get_languages() -> Dict[str, Any]:
 
 
 @router.get("/periodicals/{magazine_id}")
-@handle_api_errors("Get magazine", logger)
-async def get_magazine(magazine_id: int) -> PeriodicalResponse:
-    """Get magazine details"""
+@handle_api_errors("Get periodical", logger)
+async def get_periodical(magazine_id: int) -> PeriodicalResponse:
+    """Get periodical details"""
 
     def operation(db):
-        magazine = _shared.get_periodical_or_404(db, magazine_id)
+        periodical = _shared.get_periodical_or_404(db, magazine_id)
 
         # Use to_dict() to get all fields from the Periodical model
-        result = magazine.to_dict()
+        result = periodical.to_dict()
 
         # Add legacy 'metadata' field for backward compatibility (points to extra_metadata)
-        result["metadata"] = magazine.extra_metadata
+        result["metadata"] = periodical.extra_metadata
 
         return result
 
     return await with_db_session(_shared._session_factory, operation)
+
+
+def _get_periodicals_to_delete(db: Session, periodical: Periodical, delete_all_issues: bool) -> List[Periodical]:
+    """Get list of periodicals to delete based on deletion scope."""
+    if delete_all_issues:
+        return (
+            db.query(Periodical)
+            .filter(
+                Periodical.title == periodical.title,
+                Periodical.language == periodical.language,
+            )
+            .all()
+        )
+    return [periodical]
+
+
+def _collect_file_paths(
+    periodicals: List[Periodical],
+) -> List[Tuple[Path, Optional[Path]]]:
+    """Collect file paths from periodicals for potential deletion."""
+    file_paths = []
+    for periodical in periodicals:
+        pdf_path = Path(periodical.file_path)
+        cover_path = Path(periodical.cover_path) if periodical.cover_path else None
+        file_paths.append((pdf_path, cover_path))
+    return file_paths
+
+
+def _delete_associated_ocr_jobs(db: Session, periodical_ids: List[int], title: str) -> None:
+    """Delete OCR jobs associated with periodicals."""
+    from models.database import OCRJob
+
+    ocr_deleted = db.query(OCRJob).filter(OCRJob.periodical_id.in_(periodical_ids)).delete(synchronize_session="fetch")
+    if ocr_deleted:
+        logger.info(f"Deleted {ocr_deleted} OCR job(s) for periodical(s): {title}")
+
+
+def _delete_periodical_stack_memberships(db: Session, periodical_ids: List[int], title: str) -> None:
+    """Delete stack memberships for periodicals."""
+    membership_deleted = (
+        db.query(StackMembership)
+        .filter(StackMembership.periodical_id.in_(periodical_ids))
+        .delete(synchronize_session="fetch")
+    )
+    if membership_deleted:
+        logger.info(f"Removed {membership_deleted} stack membership(s) for periodical(s): {title}")
+
+
+def _mark_discovered_issues_as_failed(db: Session, periodicals: List[Periodical], title: str) -> None:
+    """Mark related discovered issues as permanently failed to prevent re-download."""
+    from models.database import DiscoveredIssue
+
+    tracking_ids = [p.tracking_id for p in periodicals if p.tracking_id]
+    if not tracking_ids:
+        return
+
+    issues = (
+        db.query(DiscoveredIssue)
+        .filter(
+            DiscoveredIssue.tracking_id.in_(tracking_ids),
+            DiscoveredIssue.download_status.in_(["discovered", "wanted", "failed"]),
+        )
+        .all()
+    )
+
+    marked_count = 0
+    for issue in issues:
+        issue.download_status = "permanently_failed"
+        issue.last_error = "Manually marked as bad file (user deleted from library)"
+        marked_count += 1
+
+    if marked_count > 0:
+        logger.info(f"Marked {marked_count} discovered issue(s) as permanently failed for: {title}")
+
+
+def _delete_tracking_record(db: Session, title: str) -> None:
+    """Delete tracking record and associated stack memberships."""
+    from models.database import PeriodicalTracking
+
+    olid = generate_olid(title)
+    tracking = db.query(PeriodicalTracking).filter(PeriodicalTracking.olid == olid).first()
+    if not tracking:
+        return
+
+    tracking_membership_deleted = (
+        db.query(StackMembership)
+        .filter(StackMembership.periodical_tracking_id == tracking.id)
+        .delete(synchronize_session="fetch")
+    )
+    if tracking_membership_deleted:
+        logger.info(f"Removed {tracking_membership_deleted} stack membership(s) for tracking: {title}")
+
+    db.delete(tracking)
+    db.commit()
+    logger.info(f"Removed tracking record for: {title}")
+
+
+def _delete_periodical_files(file_paths: List[Tuple[Path, Optional[Path]]]) -> None:
+    """Delete periodical PDF and cover files from filesystem."""
+    for pdf_path, cover_path in file_paths:
+        try:
+            if pdf_path.exists():
+                pdf_path.unlink()
+                logger.info(f"Deleted PDF file: {pdf_path}")
+        except Exception as e:
+            logger.warning(f"Could not delete PDF file {pdf_path}: {e}")
+
+        try:
+            if cover_path and cover_path.exists():
+                cover_path.unlink()
+                logger.info(f"Deleted cover file: {cover_path}")
+        except Exception as e:
+            logger.warning(f"Could not delete cover file {cover_path}: {e}")
+
+
+def _build_deletion_message(
+    title: str,
+    deleted_count: int,
+    files_deleted: bool,
+    mark_as_bad: bool,
+    remove_tracking: bool,
+) -> str:
+    """Build user-facing deletion success message."""
+    if files_deleted:
+        if deleted_count > 1:
+            message = f"Deleted {deleted_count} issues of '{title}' and their files from disk"
+        else:
+            message = f"Deleted '{title}' and files from disk"
+    else:
+        if deleted_count > 1:
+            message = f"Removed {deleted_count} issues of '{title}' from library (files retained on disk)"
+        else:
+            message = f"Removed '{title}' from library (files retained on disk)"
+
+    if mark_as_bad:
+        message += " (prevented auto-download)"
+    if remove_tracking:
+        message += " (tracking removed)"
+
+    return message
 
 
 @router.delete("/periodicals/{magazine_id}")
@@ -464,154 +602,46 @@ async def delete_periodical(
     delete_all_issues: bool = False,
     mark_as_bad: bool = False,
 ) -> Dict[str, Any]:
-    """
-    Delete a periodical from the library
+    """Delete a periodical from the library"""
 
-    Args:
-        magazine_id: ID of periodical to delete
-        delete_files: If True, also delete the PDF and cover files from disk. If False, only remove from database.
-        remove_tracking: If True, also remove the tracking record for this periodical.
-        delete_all_issues: If True, delete all issues with the same title and language. If False, only delete the single issue.
-        mark_as_bad: If True, mark related discovered issues as permanently_failed to prevent automatic re-download.
-    """
+    def delete_periodical_operation(db):
+        periodical = _shared.get_periodical_or_404(db, magazine_id)
+        title = periodical.title
 
-    def operation(db):
-        magazine = _shared.get_periodical_or_404(db, magazine_id)
+        periodicals_to_delete = _get_periodicals_to_delete(db, periodical, delete_all_issues)
+        file_paths = _collect_file_paths(periodicals_to_delete)
+        periodical_ids = [p.id for p in periodicals_to_delete]
 
-        # Store title and language for potential deletion of all issues
-        title = magazine.title
-        language = magazine.language
+        _delete_associated_ocr_jobs(db, periodical_ids, title)
+        _delete_periodical_stack_memberships(db, periodical_ids, title)
 
-        # Determine which magazines to delete
-        if delete_all_issues:
-            # Get all magazines with the same title and language
-            magazines_to_delete = (
-                db.query(Periodical).filter(Periodical.title == title, Periodical.language == language).all()
-            )
-        else:
-            # Only delete the single specified magazine
-            magazines_to_delete = [magazine]
+        for p in periodicals_to_delete:
+            db.delete(p)
 
-        # Store file paths for potential deletion
-        file_paths_to_delete = []
-        for mag in magazines_to_delete:
-            pdf_path = Path(mag.file_path)
-            cover_path = Path(mag.cover_path) if mag.cover_path else None
-            file_paths_to_delete.append((pdf_path, cover_path))
-
-        # Delete associated OCR jobs (non-nullable FK to periodicals)
-        from models.database import OCRJob
-
-        mag_ids = [mag.id for mag in magazines_to_delete]
-        ocr_deleted = db.query(OCRJob).filter(OCRJob.periodical_id.in_(mag_ids)).delete(synchronize_session="fetch")
-        if ocr_deleted:
-            logger.info(f"Deleted {ocr_deleted} OCR job(s) for periodical(s): {title}")
-
-        # Clean up stack memberships referencing these periodicals
-        membership_deleted = (
-            db.query(StackMembership)
-            .filter(StackMembership.periodical_id.in_(mag_ids))
-            .delete(synchronize_session="fetch")
-        )
-        if membership_deleted:
-            logger.info(f"Removed {membership_deleted} stack membership(s) for periodical(s): {title}")
-
-        # Delete database entries
-        for mag in magazines_to_delete:
-            db.delete(mag)
-
-        # Mark related discovered issues as permanently failed if requested
         if mark_as_bad:
-            from models.database import DiscoveredIssue
-
-            # Find discovered issues for the deleted magazine(s)
-            # Match by tracking_id (periodicals.tracking_id -> discovered_issues.tracking_id)
-            tracking_ids = [mag.tracking_id for mag in magazines_to_delete if mag.tracking_id]
-            if tracking_ids:
-                # Mark all related discovered issues as permanently_failed to prevent re-download
-                issues = (
-                    db.query(DiscoveredIssue)
-                    .filter(
-                        DiscoveredIssue.tracking_id.in_(tracking_ids),
-                        DiscoveredIssue.download_status.in_(["discovered", "wanted", "failed"]),
-                    )
-                    .all()
-                )
-
-                marked_count = 0
-                for issue in issues:
-                    issue.download_status = "permanently_failed"
-                    issue.last_error = "Manually marked as bad file (user deleted from library)"
-                    marked_count += 1
-
-                if marked_count > 0:
-                    logger.info(f"Marked {marked_count} discovered issue(s) as permanently failed for: {title}")
+            _mark_discovered_issues_as_failed(db, periodicals_to_delete, title)
 
         db.commit()
 
-        deleted_count = len(magazines_to_delete)
-
-        # Remove tracking record if requested
         if remove_tracking:
-            from models.database import PeriodicalTracking
+            _delete_tracking_record(db, title)
 
-            olid = generate_olid(title)
-            tracking = db.query(PeriodicalTracking).filter(PeriodicalTracking.olid == olid).first()
-            if tracking:
-                # Clean up stack memberships referencing this tracking
-                tracking_membership_deleted = (
-                    db.query(StackMembership)
-                    .filter(StackMembership.periodical_tracking_id == tracking.id)
-                    .delete(synchronize_session="fetch")
-                )
-                if tracking_membership_deleted:
-                    logger.info(f"Removed {tracking_membership_deleted} stack membership(s) for tracking: {title}")
-                db.delete(tracking)
-                db.commit()
-                logger.info(f"Removed tracking record for: {title}")
-
-        # Delete files from filesystem if requested
         if delete_files:
-            files_deleted = 0
-            for pdf_path, cover_path in file_paths_to_delete:
-                try:
-                    if pdf_path.exists():
-                        pdf_path.unlink()
-                        files_deleted += 1
-                        logger.info(f"Deleted PDF file: {pdf_path}")
-                except Exception as e:
-                    logger.warning(f"Could not delete PDF file {pdf_path}: {e}")
-
-                try:
-                    if cover_path and cover_path.exists():
-                        cover_path.unlink()
-                        logger.info(f"Deleted cover file: {cover_path}")
-                except Exception as e:
-                    logger.warning(f"Could not delete cover file {cover_path}: {e}")
-
-            logger.info(f"Deleted {deleted_count} issue(s) and files from disk: {title}")
-            if deleted_count > 1:
-                message = f"Deleted {deleted_count} issues of '{title}' and their files from disk"
-            else:
-                message = f"Deleted '{title}' and files from disk"
-            if mark_as_bad:
-                message += " (prevented auto-download)"
-            if remove_tracking:
-                message += " (tracking removed)"
-            return success_response(message)
+            _delete_periodical_files(file_paths)
+            logger.info(f"Deleted {len(periodicals_to_delete)} issue(s) and files from disk: {title}")
         else:
-            logger.info(f"Deleted {deleted_count} issue(s) from library (files retained): {title}")
-            if deleted_count > 1:
-                message = f"Removed {deleted_count} issues of '{title}' from library (files retained on disk)"
-            else:
-                message = f"Removed '{title}' from library (files retained on disk)"
-            if mark_as_bad:
-                message += " (prevented auto-download)"
-            if remove_tracking:
-                message += " (tracking removed)"
-            return success_response(message)
+            logger.info(f"Deleted {len(periodicals_to_delete)} issue(s) from library (files retained): {title}")
 
-    return await with_db_session(_shared._session_factory, operation)
+        message = _build_deletion_message(
+            title,
+            len(periodicals_to_delete),
+            delete_files,
+            mark_as_bad,
+            remove_tracking,
+        )
+        return success_response(message)
+
+    return await with_db_session(_shared._session_factory, delete_periodical_operation)
 
 
 @router.post("/purge-database")

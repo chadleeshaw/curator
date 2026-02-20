@@ -10,7 +10,7 @@ from ._shared import router, set_dependencies
 # Re-export all route functions for backward compatibility
 from .crud import (
     list_periodicals,
-    get_magazine,
+    get_periodical,
     delete_periodical,
     purge_database,
     purge_cache,
@@ -50,7 +50,7 @@ __all__ = [
     "set_dependencies",
     # CRUD operations
     "list_periodicals",
-    "get_magazine",
+    "get_periodical",
     "delete_periodical",
     "purge_database",
     "purge_cache",

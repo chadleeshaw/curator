@@ -77,7 +77,7 @@ def _reorganize_periodical_files(
         new_title=new_title,
         library_base_dir=library_base_dir,
         category_prefix=category_prefix,
-        update_db=True,
+        should_update_database=True,
     )
     if result.success:
         return result.new_pdf_path, result.new_cover_path

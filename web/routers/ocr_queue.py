@@ -56,30 +56,30 @@ async def get_ocr_queue(status: Optional[str] = None):
         # Order by priority (highest first) and creation time
         jobs = query.order_by(OCRJob.priority.desc(), OCRJob.created_at).all()
 
-        # Build response with magazine details
+        # Build response with periodical details
         result = []
         for job in jobs:
-            magazine = db.query(Periodical).filter(Periodical.id == job.periodical_id).first()
+            periodical = db.query(Periodical).filter(Periodical.id == job.periodical_id).first()
 
             # Handle orphaned jobs where periodical was deleted
-            if magazine:
-                issue_display = magazine.issue_date.strftime("%b %Y") if magazine.issue_date else ""
-                magazine_title = magazine.title
-                magazine_year = magazine.issue_date.year if magazine.issue_date else None
-                tracking_id = magazine.tracking_id
+            if periodical:
+                issue_display = periodical.issue_date.strftime("%b %Y") if periodical.issue_date else ""
+                periodical_title = periodical.title
+                periodical_year = periodical.issue_date.year if periodical.issue_date else None
+                tracking_id = periodical.tracking_id
             else:
                 issue_display = ""
-                magazine_title = f"[Deleted Periodical #{job.periodical_id}]"
-                magazine_year = None
+                periodical_title = f"[Deleted Periodical #{job.periodical_id}]"
+                periodical_year = None
                 tracking_id = None
 
             result.append(
                 {
                     "id": job.id,
-                    "magazine_id": job.periodical_id,
-                    "magazine_title": magazine_title,
-                    "magazine_issue": issue_display,
-                    "magazine_year": magazine_year,
+                    "periodical_id": job.periodical_id,
+                    "periodical_title": periodical_title,
+                    "periodical_issue": issue_display,
+                    "periodical_year": periodical_year,
                     "tracking_id": tracking_id,
                     "tracking_title": None,  # Will be populated below
                     "status": job.status.value,
@@ -106,9 +106,9 @@ async def get_ocr_queue(status: Optional[str] = None):
             # Update tracking_title in results
             for job_data in result:
                 if job_data["tracking_id"]:
-                    job_data["tracking_title"] = tracking_map.get(job_data["tracking_id"], job_data["magazine_title"])
+                    job_data["tracking_title"] = tracking_map.get(job_data["tracking_id"], job_data["periodical_title"])
                 else:
-                    job_data["tracking_title"] = job_data["magazine_title"]
+                    job_data["tracking_title"] = job_data["periodical_title"]
 
         return {"jobs": result, "count": len(result)}
 
@@ -383,13 +383,13 @@ async def delete_ocr_job(job_id: int):
 
 
 @router.post("/queue/{magazine_id}")
-@handle_api_errors("Queue magazine OCR", logger)
-async def queue_magazine_ocr(magazine_id: int, priority: int = OCRJob.PriorityEnum.NORMAL.value):
+@handle_api_errors("Queue periodical OCR", logger)
+async def queue_periodical_ocr(magazine_id: int, priority: int = OCRJob.PriorityEnum.NORMAL.value):
     """
-    Manually queue OCR for a magazine.
+    Manually queue OCR for a periodical.
 
     Args:
-        magazine_id: Magazine ID to process
+        magazine_id: Periodical ID to process
         priority: Job priority (1=LOW, 5=NORMAL, 10=HIGH)
 
     Returns:
@@ -399,21 +399,18 @@ async def queue_magazine_ocr(magazine_id: int, priority: int = OCRJob.PriorityEn
         raise HTTPException(status_code=500, detail="Database not initialized")
 
     def operation(db):
-        # Verify magazine exists
-        magazine = db.query(Periodical).filter(Periodical.id == magazine_id).first()
-        if not magazine:
-            raise HTTPException(status_code=404, detail="Magazine not found")
+        periodical = db.query(Periodical).filter(Periodical.id == magazine_id).first()
+        if not periodical:
+            raise HTTPException(status_code=404, detail="Periodical not found")
 
-        # Queue the job
         job = OCRQueueService.queue_ocr_job(
             db=db,
             periodical_id=magazine_id,
             priority=priority,
-            language=magazine.language,
+            language=periodical.language,
         )
 
         if not job:
-            # Job already exists
             existing = (
                 db.query(OCRJob)
                 .filter(
@@ -430,7 +427,7 @@ async def queue_magazine_ocr(magazine_id: int, priority: int = OCRJob.PriorityEn
 
         return {
             "id": job.id,
-            "magazine_id": job.periodical_id,
+            "periodical_id": job.periodical_id,
             "status": job.status.value,
             "priority": job.priority,
             "message": "Job queued successfully",

@@ -127,9 +127,11 @@ class AutoMetadataService:
                 session.commit()
 
             except Exception as e:
-                # Rollback on error to continue processing other periodicals
                 session.rollback()
-                logger.error(f"Error processing periodical {periodical_id}: {e}")
+                logger.error(
+                    f"Error processing periodical {periodical_id}: {type(e).__name__}: {e}",
+                    exc_info=True,
+                )
                 stats["errors"] += 1
 
         logger.info(f"Auto-metadata scan complete: {stats}")

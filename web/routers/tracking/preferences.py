@@ -123,8 +123,8 @@ async def reorganize_tracking_files(tracking_id: int) -> Dict[str, Any]:
         # Get organization pattern (per-periodical or global default)
         organization_pattern = tracking.organization_pattern
 
-        # Get all magazines linked to this tracking record
-        magazines = db.query(Periodical).filter(Periodical.tracking_id == tracking_id).all()
+        # Get all periodicals linked to this tracking record
+        periodicals = db.query(Periodical).filter(Periodical.tracking_id == tracking_id).all()
 
         files_reorganized = 0
         files_failed = 0
@@ -135,14 +135,14 @@ async def reorganize_tracking_files(tracking_id: int) -> Dict[str, Any]:
 
         organizer = FileOrganizer(str(library_base_dir), category_prefix=category_prefix)
 
-        for magazine in magazines:
+        for periodical in periodicals:
             # Check if this is a special edition
-            is_special = is_periodical_special_edition(magazine)
+            is_special = is_periodical_special_edition(periodical)
 
             # Only reorganize regular editions
             if not is_special:
                 # Store old directory for cleanup
-                old_pdf_path = Path(magazine.file_path)
+                old_pdf_path = Path(periodical.file_path)
                 if old_pdf_path.exists():
                     title_dir = old_pdf_path.parent.parent
                     directories_to_cleanup.add(title_dir)
@@ -151,25 +151,27 @@ async def reorganize_tracking_files(tracking_id: int) -> Dict[str, Any]:
                     # Build metadata dict for organizer
                     metadata = {
                         "title": tracking.title,
-                        "issue_date": magazine.issue_date,
-                        "year": magazine.issue_date.year,
-                        "month_name": magazine.issue_date.strftime("%B"),
-                        "language": get_derived_field(magazine, "language") or DEFAULT_LANGUAGE,
-                        "volume": get_derived_field(magazine, "volume"),
-                        "issue_number": get_derived_field(magazine, "issue_number"),
+                        "issue_date": periodical.issue_date,
+                        "year": periodical.issue_date.year,
+                        "month_name": periodical.issue_date.strftime("%B"),
+                        "language": get_derived_field(periodical, "language") or DEFAULT_LANGUAGE,
+                        "volume": get_derived_field(periodical, "volume"),
+                        "issue_number": get_derived_field(periodical, "issue_number"),
                     }
 
                     # Get category from metadata
-                    category = magazine.extra_metadata.get("category") if magazine.extra_metadata else DEFAULT_CATEGORY
+                    category = (
+                        periodical.extra_metadata.get("category") if periodical.extra_metadata else DEFAULT_CATEGORY
+                    )
 
                     # Reorganize using FileOrganizer with custom pattern
                     new_pdf_path = organizer.organize(old_pdf_path, metadata, category, organization_pattern)
 
                     if new_pdf_path:
                         # Check for UNIQUE constraint conflicts
-                        if check_file_path_conflict(db, str(new_pdf_path), magazine.id):
+                        if check_file_path_conflict(db, str(new_pdf_path), periodical.id):
                             logger.error(
-                                f"Cannot update magazine {magazine.id}: Target path {new_pdf_path} "
+                                f"Cannot update periodical {periodical.id}: Target path {new_pdf_path} "
                                 f"already exists in database for different periodical."
                             )
                             files_failed += 1
@@ -180,16 +182,16 @@ async def reorganize_tracking_files(tracking_id: int) -> Dict[str, Any]:
                             except Exception as rollback_error:
                                 logger.error(f"Failed to rollback file move: {rollback_error}")
                         else:
-                            magazine.file_path = str(new_pdf_path)
+                            periodical.file_path = str(new_pdf_path)
                             # Cover path is handled by organizer
                             files_reorganized += 1
-                            logger.info(f"Reorganized: {magazine.title} ({magazine.issue_date.strftime('%b %Y')})")
+                            logger.info(f"Reorganized: {periodical.title} ({periodical.issue_date.strftime('%b %Y')})")
                     else:
-                        logger.warning(f"Failed to reorganize magazine ID {magazine.id}")
+                        logger.warning(f"Failed to reorganize periodical ID {periodical.id}")
                         files_failed += 1
                 except Exception as e:
                     logger.error(
-                        f"Error reorganizing magazine ID {magazine.id}: {e}",
+                        f"Error reorganizing periodical ID {periodical.id}: {e}",
                         exc_info=True,
                     )
                     files_failed += 1
@@ -278,78 +280,78 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
             library_base_dir = get_library_dir(_shared._storage_config)
             category_prefix = get_category_prefix(_shared._import_config)
 
-            # Get all magazines linked to this tracking record
-            magazines = db.query(Periodical).filter(Periodical.tracking_id == tracking_id).all()
+            # Get all periodicals linked to this tracking record
+            periodicals = db.query(Periodical).filter(Periodical.tracking_id == tracking_id).all()
 
-            for magazine in magazines:
+            for periodical in periodicals:
                 # Check if this is a special edition
-                is_special = is_periodical_special_edition(magazine)
+                is_special = is_periodical_special_edition(periodical)
 
                 # Only reorganize regular editions
                 if not is_special:
                     # Store old title directory for cleanup (parent of year directory)
-                    old_pdf_path = Path(magazine.file_path)
+                    old_pdf_path = Path(periodical.file_path)
                     if old_pdf_path.exists():
                         # Add title directory (grandparent of PDF) not just year directory
-                        # Structure: title_dir/year/magazine.pdf
+                        # Structure: title_dir/year/periodical.pdf
                         title_dir = old_pdf_path.parent.parent
                         directories_to_cleanup.add(title_dir)
 
                     # Reorganize files to match new title structure
                     new_pdf_path, new_cover_path = _reorganize_periodical_files(
-                        magazine, tracking.title, library_base_dir, category_prefix
+                        periodical, tracking.title, library_base_dir, category_prefix
                     )
 
                     # Update database paths if reorganization succeeded
                     if new_pdf_path:
                         # Check if target path already exists in database (UNIQUE constraint check)
-                        if check_file_path_conflict(db, new_pdf_path, magazine.id):
+                        if check_file_path_conflict(db, new_pdf_path, periodical.id):
                             logger.error(
-                                f"Cannot update magazine {magazine.id}: Target path {new_pdf_path} "
+                                f"Cannot update periodical {periodical.id}: Target path {new_pdf_path} "
                                 f"already exists in database for different periodical. "
                                 f"This is a data integrity issue that needs manual resolution."
                             )
                             # Roll back the file move since we can't update the database
                             try:
-                                old_pdf_path = Path(magazine.file_path)
+                                old_pdf_path = Path(periodical.file_path)
                                 if Path(new_pdf_path).exists() and not old_pdf_path.exists():
                                     shutil.move(new_pdf_path, str(old_pdf_path))
                                     logger.info(f"Rolled back file move: {new_pdf_path} -> {old_pdf_path}")
                             except Exception as rollback_error:
                                 logger.error(
-                                    f"Failed to rollback file move for magazine {magazine.id}: {rollback_error}"
+                                    f"Failed to rollback file move for periodical {periodical.id}: {rollback_error}"
                                 )
                         else:
-                            magazine.file_path = new_pdf_path
+                            periodical.file_path = new_pdf_path
                             if new_cover_path:
-                                magazine.cover_path = new_cover_path
+                                periodical.cover_path = new_cover_path
                             files_reorganized += 1
                             logger.info(
-                                f"Reorganized files for: {magazine.title} ({magazine.issue_date.strftime('%b %Y')})"
+                                f"Reorganized files for: {periodical.title} ({periodical.issue_date.strftime('%b %Y')})"
                             )
                     else:
                         logger.warning(
-                            f"Failed to reorganize files for magazine ID {magazine.id}, keeping original paths"
+                            f"Failed to reorganize files for periodical ID {periodical.id}, keeping original paths"
                         )
 
-                    # Update magazine title to match tracking title
-                    magazine.title = tracking.title
+                    # Update periodical title to match tracking title
+                    periodical.title = tracking.title
 
         # If language changed, update all linked periodicals to match new language
         language_updates = 0
         if language_changed:
             from models.database import Periodical
 
-            # Get all magazines linked to this tracking record
-            magazines = db.query(Periodical).filter(Periodical.tracking_id == tracking_id).all()
+            # Get all periodicals linked to this tracking record
+            periodicals = db.query(Periodical).filter(Periodical.tracking_id == tracking_id).all()
 
-            for magazine in magazines:
+            for periodical in periodicals:
                 # Update language to match tracking
-                if magazine.language != tracking.language:
-                    magazine.language = tracking.language
+                if periodical.language != tracking.language:
+                    periodical.language = tracking.language
                     language_updates += 1
                     logger.info(
-                        f"Updated language for: {magazine.title} ({magazine.issue_date.strftime('%b %Y')}) "
+                        f"Updated language for: {periodical.title} ({periodical.issue_date.strftime('%b %Y')}) "
                         f"from '{old_language}' to '{tracking.language}'"
                     )
 

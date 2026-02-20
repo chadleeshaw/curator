@@ -197,7 +197,7 @@ export class OCRQueueManager {
       // For non-title sorts, sort groups by the first item's sort field
       grouped.sort((a, b) => {
         if (a.jobs.length === 0 || b.jobs.length === 0) return 0;
-        
+
         const firstA = a.jobs[0];
         const firstB = b.jobs[0];
         let comparison = 0;
@@ -247,7 +247,7 @@ export class OCRQueueManager {
       const statusCounts = this.getJobStatusCounts(jobs);
 
       // Build status indicators for the Status column (active states)
-      const processingJobs = jobs.filter(j => j.status === 'processing');
+      const processingJobs = jobs.filter((j) => j.status === 'processing');
       let statusIndicators = '';
       if (processingJobs.length > 0) {
         statusIndicators += `<span style="background: var(--status-downloading); color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.85em; white-space: nowrap;">⚡ ${processingJobs.length} processing</span>`;
@@ -255,12 +255,14 @@ export class OCRQueueManager {
 
       // Build uniform summary bubbles (fixed order, always shown)
       const summaryStatuses = ['pending', 'processing', 'completed', 'failed'];
-      const summaryBubbles = summaryStatuses.map(status => {
-        const count = statusCounts[status] || 0;
-        const color = this.getStatusColor(status);
-        const padded = String(count).padStart(2, '0');
-        return `<span class="status-bubble" data-status="${status}" style="background: ${color}; color: white; min-width: 26px; display: inline-block; text-align: center; padding: 2px 6px; border-radius: 10px; font-size: 0.8em; cursor: pointer; font-weight: 600; font-variant-numeric: tabular-nums; opacity: ${count === 0 ? '0.3' : '1'};" title="${count} ${status}">${padded}</span>`;
-      }).join('');
+      const summaryBubbles = summaryStatuses
+        .map((status) => {
+          const count = statusCounts[status] || 0;
+          const color = this.getStatusColor(status);
+          const padded = String(count).padStart(2, '0');
+          return `<span class="status-bubble" data-status="${status}" style="background: ${color}; color: white; min-width: 26px; display: inline-block; text-align: center; padding: 2px 6px; border-radius: 10px; font-size: 0.8em; cursor: pointer; font-weight: 600; font-variant-numeric: tabular-nums; opacity: ${count === 0 ? '0.3' : '1'};" title="${count} ${status}">${padded}</span>`;
+        })
+        .join('');
 
       headerRow.innerHTML = `
         <td style="padding: 12px; font-weight: bold;">
@@ -287,7 +289,7 @@ export class OCRQueueManager {
       `;
 
       // Add click handlers for individual status bubbles
-      headerRow.querySelectorAll('.status-bubble').forEach(bubble => {
+      headerRow.querySelectorAll('.status-bubble').forEach((bubble) => {
         bubble.addEventListener('click', (e) => {
           e.stopPropagation();
           this.openPeriodicalModal(periodical, jobs, bubble.dataset.status);
@@ -307,7 +309,7 @@ export class OCRQueueManager {
     const map = new Map();
 
     jobs.forEach((job) => {
-      const key = job.tracking_title || job.magazine_title || 'Unknown';
+      const key = job.tracking_title || job.periodical_title || 'Unknown';
       if (!map.has(key)) {
         map.set(key, { periodical: key, jobs: [] });
       }
@@ -372,7 +374,11 @@ export class OCRQueueManager {
    * @returns {void}
    */
   renderPeriodicalModal() {
-    const { currentModalJobs: jobs, currentModalPeriodical: periodical, currentModalFilter: filter } = this;
+    const {
+      currentModalJobs: jobs,
+      currentModalPeriodical: periodical,
+      currentModalFilter: filter,
+    } = this;
     if (!jobs || !periodical) return;
 
     // Build status summary
@@ -387,9 +393,9 @@ export class OCRQueueManager {
     if (filter === 'all') {
       filteredJobs = jobs;
     } else if (filter === 'active') {
-      filteredJobs = jobs.filter(j => j.status === 'pending' || j.status === 'processing');
+      filteredJobs = jobs.filter((j) => j.status === 'pending' || j.status === 'processing');
     } else {
-      filteredJobs = jobs.filter(j => j.status === filter);
+      filteredJobs = jobs.filter((j) => j.status === filter);
     }
 
     // Filter buttons
@@ -412,14 +418,16 @@ export class OCRQueueManager {
       let cmp = 0;
       switch (sortField) {
         case 'title':
-          cmp = (a.magazine_title || '').localeCompare(b.magazine_title || '');
+          cmp = (a.periodical_title || '').localeCompare(b.periodical_title || '');
           break;
         case 'status':
           cmp = (a.status || '').localeCompare(b.status || '');
           break;
         case 'date':
         default:
-          cmp = new Date(a.completed_at || a.created_at || 0) - new Date(b.completed_at || b.created_at || 0);
+          cmp =
+            new Date(a.completed_at || a.created_at || 0) -
+            new Date(b.completed_at || b.created_at || 0);
           break;
       }
       return sortAsc ? cmp : -cmp;
@@ -433,7 +441,8 @@ export class OCRQueueManager {
       tableRows = sorted
         .map((job) => {
           const statusColor = this.getStatusColor(job.status);
-          const issueInfo = `${job.magazine_issue || 'Unknown Issue'} ${job.magazine_year ? `(${job.magazine_year})` : ''}`.trim();
+          const issueInfo =
+            `${job.periodical_issue || 'Unknown Issue'} ${job.periodical_year ? `(${job.periodical_year})` : ''}`.trim();
 
           // Format relative time
           const timestamp = job.completed_at || job.created_at;
@@ -452,7 +461,7 @@ export class OCRQueueManager {
           return `
           <tr style="background: var(--surface-variant); border-radius: 6px;">
             <td style="padding: 14px; border-bottom: 1px solid var(--border-color);">
-              <div style="font-weight: 600;">${job.magazine_title}</div>
+              <div style="font-weight: 600;">${job.periodical_title}</div>
               <div style="font-size: 0.85em; color: var(--text-secondary); margin-top: 2px;">${issueInfo}</div>
             </td>
             <td style="padding: 14px; border-bottom: 1px solid var(--border-color); text-align: center; white-space: nowrap;">
@@ -528,7 +537,11 @@ export class OCRQueueManager {
   showJobInfo(message) {
     const decoded = message.replace(/&#39;/g, "'").replace(/&quot;/g, '"');
     const statusEl = document.getElementById('ocr-modal-status');
-    if (statusEl && !statusEl.classList.contains('hidden') && statusEl.textContent.includes(decoded)) {
+    if (
+      statusEl &&
+      !statusEl.classList.contains('hidden') &&
+      statusEl.textContent.includes(decoded)
+    ) {
       UIUtils.hideStatus('ocr-modal-status');
       return;
     }
@@ -595,8 +608,8 @@ export class OCRQueueManager {
       const html = `
         <div class="modal-header">
           <h3>OCR Job Details</h3>
-          <p style="font-weight: 600; margin-top: 10px;">${job.magazine_title}</p>
-          <p style="color: var(--text-secondary); font-size: 0.9em;">${job.magazine_issue || 'Unknown Issue'} ${job.magazine_year ? `(${job.magazine_year})` : ''}</p>
+          <p style="font-weight: 600; margin-top: 10px;">${job.periodical_title}</p>
+          <p style="color: var(--text-secondary); font-size: 0.9em;">${job.periodical_issue || 'Unknown Issue'} ${job.periodical_year ? `(${job.periodical_year})` : ''}</p>
         </div>
         <div class="modal-body" style="max-height: 500px; overflow-y: auto; margin: 20px 0;">
           <div style="display: grid; grid-template-columns: auto 1fr; gap: 10px 20px; margin-bottom: 20px;">
@@ -802,7 +815,7 @@ export class OCRQueueManager {
         return;
       }
 
-      const jobTitle = `${job.magazine_title} - ${job.magazine_issue || 'Unknown Issue'}`;
+      const jobTitle = `${job.periodical_title} - ${job.periodical_issue || 'Unknown Issue'}`;
       this.showDeleteConfirmation(jobId, jobTitle);
     } catch (error) {
       console.error('[OCR Queue] Error fetching job for delete:', error);
@@ -984,7 +997,8 @@ export class OCRQueueManager {
       if (saved) {
         const settings = JSON.parse(saved);
         this.currentSort = settings.sort?.field || 'title';
-        this.sortAscending = settings.sort?.ascending !== undefined ? settings.sort.ascending : true;
+        this.sortAscending =
+          settings.sort?.ascending !== undefined ? settings.sort.ascending : true;
       }
     } catch (error) {
       console.warn('[OCR Queue] Failed to parse sort preference:', error);
@@ -1016,7 +1030,7 @@ export class OCRQueueManager {
       const settings = saved ? JSON.parse(saved) : {};
       settings.sort = {
         field: sort,
-        ascending: this.sortAscending
+        ascending: this.sortAscending,
       };
       localStorage.setItem('ocrQueueSettings', JSON.stringify(settings));
     } catch (error) {
@@ -1038,7 +1052,7 @@ export class OCRQueueManager {
       const settings = saved ? JSON.parse(saved) : {};
       settings.sort = {
         field: this.currentSort,
-        ascending: this.sortAscending
+        ascending: this.sortAscending,
       };
       localStorage.setItem('ocrQueueSettings', JSON.stringify(settings));
     } catch (error) {

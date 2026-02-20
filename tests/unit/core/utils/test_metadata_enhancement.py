@@ -9,13 +9,13 @@ from datetime import datetime
 
 # Path setup handled by conftest.py
 
-from services.ocr.queue import _apply_scan_metadata_to_magazine
+from services.ocr.queue import _apply_scan_metadata_to_periodical
 from models.database import Periodical
 
 
-def _dval(magazine, field):
+def _dval(periodical, field):
     """Helper to extract value from derived_metadata structured entry."""
-    entry = (magazine.derived_metadata or {}).get(field)
+    entry = (periodical.derived_metadata or {}).get(field)
     if isinstance(entry, dict) and "value" in entry:
         return entry["value"]
     return entry
@@ -28,7 +28,7 @@ def _derived_entry(value, source="filename", confidence=1.0):
 
 def test_apply_year_from_scan():
     """Test applying year from scan when not present in metadata"""
-    magazine = Periodical(
+    periodical = Periodical(
         id=1,
         title="Test Magazine",
         language="English",
@@ -39,17 +39,17 @@ def test_apply_year_from_scan():
 
     scan_metadata = {"year": 2024, "month": 6, "issue_number": 42}
 
-    updated = _apply_scan_metadata_to_magazine(magazine, scan_metadata)
+    updated = _apply_scan_metadata_to_periodical(periodical, scan_metadata)
 
     assert updated is True
-    assert _dval(magazine, "year") == 2024
-    assert _dval(magazine, "month") == 6
-    assert _dval(magazine, "issue_number") == 42
+    assert _dval(periodical, "year") == 2024
+    assert _dval(periodical, "month") == 6
+    assert _dval(periodical, "issue_number") == 42
 
 
 def test_apply_volume_from_scan():
     """Test applying volume from scan when not present"""
-    magazine = Periodical(
+    periodical = Periodical(
         id=2,
         title="Tech Monthly",
         language="English",
@@ -60,17 +60,17 @@ def test_apply_volume_from_scan():
 
     scan_metadata = {"volume": 32, "issue_number": 5, "year": 2023}
 
-    updated = _apply_scan_metadata_to_magazine(magazine, scan_metadata)
+    updated = _apply_scan_metadata_to_periodical(periodical, scan_metadata)
 
     assert updated is True
-    assert _dval(magazine, "volume") == 32
-    assert _dval(magazine, "issue_number") == 5
-    assert _dval(magazine, "year") == 2023
+    assert _dval(periodical, "volume") == 32
+    assert _dval(periodical, "issue_number") == 5
+    assert _dval(periodical, "year") == 2023
 
 
 def test_dont_overwrite_existing_year():
     """Test that existing year from filename parsing is not overridden by low-confidence OCR"""
-    magazine = Periodical(
+    periodical = Periodical(
         id=3,
         title="Science Weekly",
         language="English",
@@ -91,17 +91,17 @@ def test_dont_overwrite_existing_year():
         "month_confidence": 50,
     }
 
-    updated = _apply_scan_metadata_to_magazine(magazine, scan_metadata)
+    updated = _apply_scan_metadata_to_periodical(periodical, scan_metadata)
 
     # Should NOT update because OCR confidence too low, falls back to filename values (same as existing)
     assert updated is False
-    assert _dval(magazine, "year") == 2023  # Original preserved
-    assert _dval(magazine, "month") == 3  # Original preserved
+    assert _dval(periodical, "year") == 2023  # Original preserved
+    assert _dval(periodical, "month") == 3  # Original preserved
 
 
 def test_dont_overwrite_existing_issue_number():
     """Test that existing issue number from filename is preserved when OCR confidence is low"""
-    magazine = Periodical(
+    periodical = Periodical(
         id=4,
         title="Gaming Magazine",
         language="English",
@@ -121,17 +121,17 @@ def test_dont_overwrite_existing_issue_number():
         "year_confidence": 85,
     }
 
-    updated = _apply_scan_metadata_to_magazine(magazine, scan_metadata)
+    updated = _apply_scan_metadata_to_periodical(periodical, scan_metadata)
 
     # Should only update year (high confidence), not issue_number (low confidence)
     assert updated is True
-    assert _dval(magazine, "issue_number") == 405  # Original preserved (OCR rejected)
-    assert _dval(magazine, "year") == 2024  # OCR value applied (high confidence)
+    assert _dval(periodical, "issue_number") == 405  # Original preserved (OCR rejected)
+    assert _dval(periodical, "year") == 2024  # OCR value applied (high confidence)
 
 
 def test_apply_special_edition_flag():
     """Test applying special edition flag from scan"""
-    magazine = Periodical(
+    periodical = Periodical(
         id=5,
         title="Holiday Magazine",
         language="English",
@@ -142,17 +142,17 @@ def test_apply_special_edition_flag():
 
     scan_metadata = {"year": 2024, "month": 12, "special_edition": True}
 
-    updated = _apply_scan_metadata_to_magazine(magazine, scan_metadata)
+    updated = _apply_scan_metadata_to_periodical(periodical, scan_metadata)
 
     assert updated is True
-    assert _dval(magazine, "special_edition") is True
-    assert _dval(magazine, "year") == 2024
-    assert _dval(magazine, "month") == 12
+    assert _dval(periodical, "special_edition") is True
+    assert _dval(periodical, "year") == 2024
+    assert _dval(periodical, "month") == 12
 
 
 def test_partial_metadata_enhancement():
     """Test filling in only missing fields"""
-    magazine = Periodical(
+    periodical = Periodical(
         id=6,
         title="Mixed Metadata",
         language="English",
@@ -171,18 +171,18 @@ def test_partial_metadata_enhancement():
         "issue_number": 3,
     }
 
-    updated = _apply_scan_metadata_to_magazine(magazine, scan_metadata)
+    updated = _apply_scan_metadata_to_periodical(periodical, scan_metadata)
 
     assert updated is True
-    assert _dval(magazine, "year") == 2024  # Unchanged
-    assert _dval(magazine, "month") == 8  # Added
-    assert _dval(magazine, "volume") == 15  # Added
-    assert _dval(magazine, "issue_number") == 3  # Added
+    assert _dval(periodical, "year") == 2024  # Unchanged
+    assert _dval(periodical, "month") == 8  # Added
+    assert _dval(periodical, "volume") == 15  # Added
+    assert _dval(periodical, "issue_number") == 3  # Added
 
 
 def test_no_update_when_all_fields_present():
     """Test that filename values are preserved when OCR confidence is low"""
-    magazine = Periodical(
+    periodical = Periodical(
         id=7,
         title="Complete Magazine",
         language="English",
@@ -209,19 +209,19 @@ def test_no_update_when_all_fields_present():
         "issue_number_confidence": 50,
     }
 
-    updated = _apply_scan_metadata_to_magazine(magazine, scan_metadata)
+    updated = _apply_scan_metadata_to_periodical(periodical, scan_metadata)
 
     # Nothing should be updated (all OCR values rejected, filename values match existing)
     assert updated is False
-    assert _dval(magazine, "year") == 2024
-    assert _dval(magazine, "month") == 5
-    assert _dval(magazine, "volume") == 10
-    assert _dval(magazine, "issue_number") == 123
+    assert _dval(periodical, "year") == 2024
+    assert _dval(periodical, "month") == 5
+    assert _dval(periodical, "volume") == 10
+    assert _dval(periodical, "issue_number") == 123
 
 
 def test_empty_scan_metadata():
     """Test handling of empty scan metadata"""
-    magazine = Periodical(
+    periodical = Periodical(
         id=8,
         title="Empty Scan",
         language="English",
@@ -232,15 +232,15 @@ def test_empty_scan_metadata():
 
     scan_metadata = {}
 
-    updated = _apply_scan_metadata_to_magazine(magazine, scan_metadata)
+    updated = _apply_scan_metadata_to_periodical(periodical, scan_metadata)
 
     assert updated is False
-    assert magazine.derived_metadata is None
+    assert periodical.derived_metadata is None
 
 
 def test_none_scan_metadata():
     """Test handling of None scan metadata"""
-    magazine = Periodical(
+    periodical = Periodical(
         id=9,
         title="None Scan",
         language="English",
@@ -249,7 +249,7 @@ def test_none_scan_metadata():
         extra_metadata={},
     )
 
-    updated = _apply_scan_metadata_to_magazine(magazine, None)
+    updated = _apply_scan_metadata_to_periodical(periodical, None)
 
     assert updated is False
 
@@ -257,7 +257,7 @@ def test_none_scan_metadata():
 def test_update_issue_date_when_year_found():
     """Test that issue_date is updated when year is applied from scan"""
     created_time = datetime(2024, 1, 15, 10, 30, 0)
-    magazine = Periodical(
+    periodical = Periodical(
         id=10,
         title="Date Update Test",
         language="English",
@@ -269,13 +269,13 @@ def test_update_issue_date_when_year_found():
 
     scan_metadata = {"year": 2023, "month": 7}
 
-    updated = _apply_scan_metadata_to_magazine(magazine, scan_metadata)
+    updated = _apply_scan_metadata_to_periodical(periodical, scan_metadata)
 
     assert updated is True
-    assert _dval(magazine, "year") == 2023
-    assert _dval(magazine, "month") == 7
-    assert magazine.issue_date.year == 2023
-    assert magazine.issue_date.month == 7
+    assert _dval(periodical, "year") == 2023
+    assert _dval(periodical, "month") == 7
+    assert periodical.issue_date.year == 2023
+    assert periodical.issue_date.month == 7
 
 
 def test_month_stored_as_int():
@@ -283,7 +283,7 @@ def test_month_stored_as_int():
     test_months = [(1, 1), (6, 6), (12, 12)]
 
     for month_num, expected_int in test_months:
-        mag = Periodical(
+        periodical = Periodical(
             id=11,
             title="Month Test",
             language="English",
@@ -293,14 +293,14 @@ def test_month_stored_as_int():
         )
 
         scan_metadata = {"month": month_num}
-        _apply_scan_metadata_to_magazine(mag, scan_metadata)
+        _apply_scan_metadata_to_periodical(periodical, scan_metadata)
 
-        assert _dval(mag, "month") == expected_int
+        assert _dval(periodical, "month") == expected_int
 
 
 def test_month_name_string_normalized_to_int():
     """Test that month name strings are normalized to integers"""
-    magazine = Periodical(
+    periodical = Periodical(
         id=12,
         title="Month Name Test",
         language="English",
@@ -311,10 +311,10 @@ def test_month_name_string_normalized_to_int():
 
     scan_metadata = {"month": "June", "month_confidence": 90}
 
-    updated = _apply_scan_metadata_to_magazine(magazine, scan_metadata)
+    updated = _apply_scan_metadata_to_periodical(periodical, scan_metadata)
 
     assert updated is True
-    assert _dval(magazine, "month") == 6  # Normalized to int
+    assert _dval(periodical, "month") == 6  # Normalized to int
 
 
 if __name__ == "__main__":

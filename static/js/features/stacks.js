@@ -316,14 +316,11 @@ export class StacksManager {
     const body = { name, description: description || '', categories };
 
     const data = await APIHelper.executeWithErrorHandling(async () => {
-      const response = await APIClient.authenticatedFetch(
-        `/api/stacks/${this.currentStack.slug}`,
-        {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        }
-      );
+      const response = await APIClient.authenticatedFetch(`/api/stacks/${this.currentStack.slug}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
       return await response.json();
     }, 'Stacks');
 
@@ -418,26 +415,24 @@ export class StacksManager {
 
     // Load library periodicals (to find untracked items)
     const libraryData = await APIHelper.executeWithErrorHandling(async () => {
-      const response = await APIClient.authenticatedFetch(`/api/periodicals?limit=${API_LIMITS.PERIODICAL_LIST}`);
+      const response = await APIClient.authenticatedFetch(
+        `/api/periodicals?limit=${API_LIMITS.PERIODICAL_LIST}`
+      );
       return await response.json();
     }, 'Stacks');
 
     if (!stackData || !trackingData) return;
 
     const currentMembers = stackData.stack?.members || [];
-    const allTracked = trackingData.tracked_magazines || [];
+    const allTracked = trackingData.tracked_periodicals || [];
     const allPeriodicals = libraryData?.periodicals || [];
 
     // Get IDs already in this stack
     const memberTrackingIds = new Set(
-      currentMembers
-        .filter((m) => m.periodical_tracking_id)
-        .map((m) => m.periodical_tracking_id)
+      currentMembers.filter((m) => m.periodical_tracking_id).map((m) => m.periodical_tracking_id)
     );
     const memberPeriodicalIds = new Set(
-      currentMembers
-        .filter((m) => m.periodical_id)
-        .map((m) => m.periodical_id)
+      currentMembers.filter((m) => m.periodical_id).map((m) => m.periodical_id)
     );
 
     // Render current members
@@ -536,8 +531,7 @@ export class StacksManager {
    * @param {string} [type='tracking'] - 'tracking' or 'periodical'
    */
   async addMember(slug, id, type = 'tracking') {
-    const payload =
-      type === 'periodical' ? { periodical_ids: [id] } : { tracking_ids: [id] };
+    const payload = type === 'periodical' ? { periodical_ids: [id] } : { tracking_ids: [id] };
 
     await APIHelper.executeWithErrorHandling(async () => {
       const response = await APIClient.authenticatedFetch(`/api/stacks/${slug}/members`, {

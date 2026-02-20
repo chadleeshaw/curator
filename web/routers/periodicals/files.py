@@ -82,9 +82,8 @@ async def get_epub_metadata_endpoint(periodical_id: int) -> Dict[str, Any]:
     """
 
     def operation(db):
-        magazine, file_path = _shared.get_periodical_with_file(db, periodical_id)
+        periodical, file_path = _shared.get_periodical_with_file(db, periodical_id)
 
-        # Verify it's an EPUB file
         if file_path.suffix.lower() != ".epub":
             raise HTTPException(status_code=400, detail="File is not an EPUB")
 
@@ -116,9 +115,8 @@ async def get_epub_chapter_endpoint(periodical_id: int, chapter_index: int) -> H
     """
 
     def operation(db):
-        magazine, file_path = _shared.get_periodical_with_file(db, periodical_id)
+        periodical, file_path = _shared.get_periodical_with_file(db, periodical_id)
 
-        # Verify it's an EPUB file
         if file_path.suffix.lower() != ".epub":
             raise HTTPException(status_code=400, detail="File is not an EPUB")
 
@@ -153,9 +151,8 @@ async def get_epub_image_endpoint(periodical_id: int, image_name: str):
     """
 
     def operation(db):
-        magazine, file_path = _shared.get_periodical_with_file(db, periodical_id)
+        periodical, file_path = _shared.get_periodical_with_file(db, periodical_id)
 
-        # Verify it's an EPUB file
         if file_path.suffix.lower() != ".epub":
             raise HTTPException(status_code=400, detail="File is not an EPUB")
 
@@ -194,17 +191,15 @@ async def get_comic_metadata_endpoint(periodical_id: int) -> Dict[str, Any]:
     """
 
     def operation(db):
-        magazine, file_path = _shared.get_periodical_with_file(db, periodical_id)
+        periodical, file_path = _shared.get_periodical_with_file(db, periodical_id)
 
-        # Verify it's a comic file
         if file_path.suffix.lower() not in [".cbz", ".cbr"]:
             raise HTTPException(status_code=400, detail="File is not a comic (CBZ/CBR)")
 
-        # Get cover page index from extra_metadata (defaults to 0)
         cover_page = 0
-        if magazine.extra_metadata and "cover_page" in magazine.extra_metadata:
+        if periodical.extra_metadata and "cover_page" in periodical.extra_metadata:
             # Convert from 1-based (stored) to 0-based (used by frontend)
-            cover_page = magazine.extra_metadata["cover_page"] - 1
+            cover_page = periodical.extra_metadata["cover_page"] - 1
 
         return file_path, cover_page
 
@@ -234,9 +229,8 @@ async def get_comic_page_endpoint(periodical_id: int, page_index: int):
     """
 
     def operation(db):
-        magazine, file_path = _shared.get_periodical_with_file(db, periodical_id)
+        periodical, file_path = _shared.get_periodical_with_file(db, periodical_id)
 
-        # Verify it's a comic file
         if file_path.suffix.lower() not in [".cbz", ".cbr"]:
             raise HTTPException(status_code=400, detail="File is not a comic (CBZ/CBR)")
 
@@ -282,9 +276,8 @@ async def get_comic_page_thumbnail_endpoint(periodical_id: int, page_index: int)
     """
 
     def operation(db):
-        magazine, file_path = _shared.get_periodical_with_file(db, periodical_id)
+        periodical, file_path = _shared.get_periodical_with_file(db, periodical_id)
 
-        # Verify it's a comic file
         if file_path.suffix.lower() not in [".cbz", ".cbr"]:
             raise HTTPException(status_code=400, detail="File is not a comic (CBZ/CBR)")
 
@@ -315,17 +308,15 @@ async def get_pdf_metadata_endpoint(periodical_id: int) -> Dict[str, Any]:
     """
 
     def operation(db):
-        magazine, file_path = _shared.get_periodical_with_file(db, periodical_id)
+        periodical, file_path = _shared.get_periodical_with_file(db, periodical_id)
 
-        # Check if file is PDF
         if file_path.suffix.lower() != ".pdf":
             raise HTTPException(status_code=400, detail="File is not a PDF")
 
-        # Get cover page index from extra_metadata (defaults to 0)
         cover_page = 0
-        if magazine.extra_metadata and "cover_page" in magazine.extra_metadata:
+        if periodical.extra_metadata and "cover_page" in periodical.extra_metadata:
             # Convert from 1-based (stored) to 0-based (used by frontend)
-            cover_page = magazine.extra_metadata["cover_page"] - 1
+            cover_page = periodical.extra_metadata["cover_page"] - 1
 
         return file_path, cover_page
 
@@ -347,7 +338,7 @@ async def get_pdf_page_endpoint(periodical_id: int, page_index: int):
     Get a specific page from a PDF as an image.
 
     Args:
-        periodical_id: ID of the magazine
+        periodical_id: ID of the periodical
         page_index: Page index (0-based)
 
     Returns:
@@ -355,9 +346,8 @@ async def get_pdf_page_endpoint(periodical_id: int, page_index: int):
     """
 
     def operation(db):
-        magazine, file_path = _shared.get_periodical_with_file(db, periodical_id)
+        periodical, file_path = _shared.get_periodical_with_file(db, periodical_id)
 
-        # Check if file is PDF
         if file_path.suffix.lower() != ".pdf":
             raise HTTPException(status_code=400, detail="File is not a PDF")
 
@@ -384,7 +374,7 @@ async def get_pdf_page_thumbnail_endpoint(periodical_id: int, page_index: int):
     Get a thumbnail of a specific page from a PDF.
 
     Args:
-        periodical_id: ID of the magazine
+        periodical_id: ID of the periodical
         page_index: Page index (0-based)
 
     Returns:
@@ -392,9 +382,8 @@ async def get_pdf_page_thumbnail_endpoint(periodical_id: int, page_index: int):
     """
 
     def operation(db):
-        magazine, file_path = _shared.get_periodical_with_file(db, periodical_id)
+        periodical, file_path = _shared.get_periodical_with_file(db, periodical_id)
 
-        # Check if file is PDF
         if file_path.suffix.lower() != ".pdf":
             raise HTTPException(status_code=400, detail="File is not a PDF")
 
@@ -429,57 +418,45 @@ async def move_issue_to_tracking(periodical_id: int, target_tracking_id: int) ->
     def operation(db):
         from models.database import PeriodicalTracking
 
-        # Get the magazine to move
-        magazine = _shared.get_periodical_or_404(db, periodical_id)
+        periodical = _shared.get_periodical_or_404(db, periodical_id)
 
-        # Get the target tracking record
         target_tracking = db.query(PeriodicalTracking).filter(PeriodicalTracking.id == target_tracking_id).first()
         if not target_tracking:
             raise HTTPException(status_code=404, detail="Target tracking record not found")
 
-        old_title = magazine.title
-        old_tracking_id = magazine.tracking_id
+        old_title = periodical.title
+        old_tracking_id = periodical.tracking_id
 
-        # Get library directory and category prefix from shared module
-        # These are already configured via set_dependencies() from main app
         library_base_dir = _shared._library_base_dir or get_library_dir(None)
         category_prefix = _shared._category_prefix
 
-        # Update the magazine's tracking_id
-        magazine.tracking_id = target_tracking_id
+        periodical.tracking_id = target_tracking_id
 
-        # Check if this is a special edition
-        is_special = is_periodical_special_edition(magazine)
+        is_special = is_periodical_special_edition(periodical)
 
-        # Only update title and reorganize files for regular editions
         files_reorganized = False
         old_dir_to_cleanup = None
         if not is_special:
-            # Store old directory for cleanup
-            old_pdf_path = Path(magazine.file_path)
+            old_pdf_path = Path(periodical.file_path)
             old_dir_to_cleanup = old_pdf_path.parent
 
-            # Reorganize files using shared utility
             result = reorganize_periodical_files(
-                magazine,
+                periodical,
                 new_title=target_tracking.title,
                 library_base_dir=library_base_dir,
                 category_prefix=category_prefix,
-                update_db=True,
+                should_update_database=True,
             )
 
             if result.success:
                 files_reorganized = result.files_moved
-                # Update title after successful file operations
-                magazine.title = target_tracking.title
+                periodical.title = target_tracking.title
             else:
-                logger.error(f"Error reorganizing magazine files: {result.error}")
-                # Still update the tracking_id and title even if file move failed
-                magazine.title = target_tracking.title
+                logger.error(f"Error reorganizing periodical files: {result.error}")
+                periodical.title = target_tracking.title
 
         db.commit()
 
-        # Clean up old directory after successful commit
         if old_dir_to_cleanup and old_dir_to_cleanup.exists():
             cleanup_empty_directories(old_dir_to_cleanup, library_base_dir)
 

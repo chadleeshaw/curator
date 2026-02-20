@@ -47,7 +47,7 @@ export class PageReader {
     this.displayName = config.displayName;
     this.logPrefix = config.logPrefix;
 
-    this.magazineId = null;
+    this.periodicalId = null;
     this.metadata = null;
     this.currentPageIndex = 0;
     this.loading = false;
@@ -70,7 +70,7 @@ export class PageReader {
 
     this.progressManager = new ProgressManager({
       logPrefix: this.logPrefix,
-      getMagazineId: () => this.magazineId,
+      getMagazineId: () => this.periodicalId,
       getProgressData: () => ({
         current_page: this.currentPageIndex,
         total_pages: this.metadata?.pages?.length || 0,
@@ -91,9 +91,9 @@ export class PageReader {
    */
   async init() {
     const urlParams = new URLSearchParams(window.location.search);
-    this.magazineId = urlParams.get('id');
+    this.periodicalId = urlParams.get('id');
 
-    if (!this.magazineId) {
+    if (!this.periodicalId) {
       this.showError('No periodical ID provided');
       return;
     }
@@ -133,7 +133,7 @@ export class PageReader {
    * @returns {string} Full API endpoint
    */
   getEndpoint(action) {
-    return `/api/periodicals/${this.magazineId}/${this.apiPrefix}/${action}`;
+    return `/api/periodicals/${this.periodicalId}/${this.apiPrefix}/${action}`;
   }
 
   /**
@@ -481,7 +481,8 @@ export class PageReader {
     if (prevBtn) prevBtn.disabled = this.currentPageIndex === 0;
     if (nextBtn) nextBtn.disabled = this.currentPageIndex === this.metadata.pages.length - 1;
     if (headerPrevBtn) headerPrevBtn.disabled = this.currentPageIndex === 0;
-    if (headerNextBtn) headerNextBtn.disabled = this.currentPageIndex === this.metadata.pages.length - 1;
+    if (headerNextBtn)
+      headerNextBtn.disabled = this.currentPageIndex === this.metadata.pages.length - 1;
   }
 
   /**
@@ -634,7 +635,7 @@ export class PageReader {
    * Navigate back to the periodical detail page
    */
   goBackToPeriodical() {
-    goBackToPeriodical(this.magazineId);
+    goBackToPeriodical(this.periodicalId);
   }
 
   /**

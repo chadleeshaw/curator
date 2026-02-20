@@ -319,7 +319,7 @@ export class DownloadsManager {
 
       if (data.queue?.length > 0) {
         data.queue.slice(0, 3).forEach((item, idx) => {
-          console.log(`  [${idx}] ${item.title}: ${item.status} (${item.magazine})`);
+          console.log(`  [${idx}] ${item.title}: ${item.status} (${item.periodical})`);
         });
         if (data.queue.length > 3) console.log(`  ... and ${data.queue.length - 3} more`);
       }
@@ -461,7 +461,7 @@ export class DownloadsManager {
       // For non-title sorts, sort groups by the first item's sort field
       grouped.sort((a, b) => {
         if (a.items.length === 0 || b.items.length === 0) return 0;
-        
+
         const firstA = a.items[0];
         const firstB = b.items[0];
         let comparison = 0;
@@ -512,25 +512,33 @@ export class DownloadsManager {
       const rateLimitedCount = waitInfo ? waitInfo.count : 0;
 
       // Build status indicators for the Status column (active/dynamic states)
-      const downloadingItems = items.filter(item => item.status === 'downloading' && item.progress != null);
+      const downloadingItems = items.filter(
+        (item) => item.status === 'downloading' && item.progress != null
+      );
       let statusIndicators = '';
       if (downloadingItems.length > 0) {
-        const avgProgress = Math.round(downloadingItems.reduce((sum, item) => sum + item.progress, 0) / downloadingItems.length);
+        const avgProgress = Math.round(
+          downloadingItems.reduce((sum, item) => sum + item.progress, 0) / downloadingItems.length
+        );
         statusIndicators += `<span style="background: linear-gradient(90deg, var(--status-downloading), var(--accent-color)); color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.85em; margin-right: 5px; white-space: nowrap;">${downloadingItems.length > 1 ? downloadingItems.length + ' ' : ''}⏳ ${avgProgress}%</span>`;
       }
       if (rateLimitedCount > 0) {
-        const waitLabel = waitInfo.waitTime ? `WAIT ${this.formatWaitTime(waitInfo.waitTime)}` : 'WAIT';
+        const waitLabel = waitInfo.waitTime
+          ? `WAIT ${this.formatWaitTime(waitInfo.waitTime)}`
+          : 'WAIT';
         statusIndicators += `<span style="background: var(--status-pending); color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.85em; font-weight: 600;">⏸ ${rateLimitedCount} ${waitLabel}</span>`;
       }
 
       // Build uniform summary bubbles (fixed order, always shown)
       const summaryStatuses = ['queued', 'pending', 'completed', 'failed', 'skipped'];
-      const summaryBubbles = summaryStatuses.map(status => {
-        const count = statusCounts[status] || 0;
-        const color = this.getStatusColor(status);
-        const padded = String(count).padStart(2, '0');
-        return `<span class="status-bubble" data-status="${status}" style="background: ${color}; color: white; min-width: 26px; display: inline-block; text-align: center; padding: 2px 6px; border-radius: 10px; font-size: 0.8em; cursor: pointer; font-weight: 600; font-variant-numeric: tabular-nums; opacity: ${count === 0 ? '0.3' : '1'};" title="${count} ${status}">${padded}</span>`;
-      }).join('');
+      const summaryBubbles = summaryStatuses
+        .map((status) => {
+          const count = statusCounts[status] || 0;
+          const color = this.getStatusColor(status);
+          const padded = String(count).padStart(2, '0');
+          return `<span class="status-bubble" data-status="${status}" style="background: ${color}; color: white; min-width: 26px; display: inline-block; text-align: center; padding: 2px 6px; border-radius: 10px; font-size: 0.8em; cursor: pointer; font-weight: 600; font-variant-numeric: tabular-nums; opacity: ${count === 0 ? '0.3' : '1'};" title="${count} ${status}">${padded}</span>`;
+        })
+        .join('');
 
       headerRow.innerHTML = `
         <td style="padding: 12px; font-weight: bold;">
@@ -557,7 +565,7 @@ export class DownloadsManager {
       `;
 
       // Add click handlers for individual status bubbles
-      headerRow.querySelectorAll('.status-bubble').forEach(bubble => {
+      headerRow.querySelectorAll('.status-bubble').forEach((bubble) => {
         bubble.addEventListener('click', (e) => {
           e.stopPropagation();
           this.openManageQueueModal(periodical, items, bubble.dataset.status);
@@ -634,7 +642,7 @@ export class DownloadsManager {
     const map = new Map();
 
     queue.forEach((item) => {
-      const key = item.magazine ?? 'Unknown';
+      const key = item.periodical ?? 'Unknown';
       if (!map.has(key)) {
         map.set(key, { periodical: key, items: [] });
       }
@@ -748,7 +756,15 @@ export class DownloadsManager {
          </div>`
       : '';
 
-    const filterButtons = ['all', 'queued', 'pending', 'downloading', 'completed', 'failed', 'skipped']
+    const filterButtons = [
+      'all',
+      'queued',
+      'pending',
+      'downloading',
+      'completed',
+      'failed',
+      'skipped',
+    ]
       .map((f) => {
         const count = f === 'all' ? items.length : (statusCounts[f] ?? 0);
         const active = filter === f ? 'active' : '';
@@ -780,7 +796,9 @@ export class DownloadsManager {
             break;
           case 'date':
           default:
-            cmp = new Date(a.updated_at || a.created_at || 0) - new Date(b.updated_at || b.created_at || 0);
+            cmp =
+              new Date(a.updated_at || a.created_at || 0) -
+              new Date(b.updated_at || b.created_at || 0);
             break;
         }
         return sortAsc ? cmp : -cmp;
@@ -790,7 +808,7 @@ export class DownloadsManager {
         .map((item) => {
           const {
             title,
-            magazine,
+            periodical,
             submission_id: submissionId,
             created_at: createdAt,
             status,
@@ -812,9 +830,9 @@ export class DownloadsManager {
             else timeAgo = `${days}d ago`;
           }
 
-          // Add clarity if title equals magazine name
+          // Add clarity if title equals periodical name
           let displayTitle = title;
-          if (title === magazine || title === periodical) {
+          if (title === periodical) {
             const date = createdAt ? new Date(createdAt).toLocaleDateString() : '';
             displayTitle = `${title} <span style="color: var(--text-secondary); font-size: 0.85em;">(#${submissionId}${date ? ' - ' + date : ''})</span>`;
           }
@@ -1224,7 +1242,11 @@ export class DownloadsManager {
     const decoded = message.replace(/&#39;/g, "'").replace(/&quot;/g, '"');
     const statusEl = document.getElementById('modal-queue-status');
     // Toggle off if already showing this same message
-    if (statusEl && !statusEl.classList.contains('hidden') && statusEl.textContent.includes(decoded)) {
+    if (
+      statusEl &&
+      !statusEl.classList.contains('hidden') &&
+      statusEl.textContent.includes(decoded)
+    ) {
       UIUtils.hideStatus('modal-queue-status');
       return;
     }
@@ -1238,7 +1260,7 @@ export class DownloadsManager {
    * @returns {void}
    */
   showItemDetails(submissionId) {
-    const item = (this.currentModalItems || []).find(i => i.submission_id === submissionId);
+    const item = (this.currentModalItems || []).find((i) => i.submission_id === submissionId);
     if (!item) return;
 
     const statusColor = this.getStatusColor(item.status);
@@ -1247,8 +1269,11 @@ export class DownloadsManager {
 
     const rows = [
       ['Title', item.title || '-'],
-      ['Periodical', item.magazine || '-'],
-      ['Status', `<span style="background: ${statusColor}; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.85em;">${item.status}</span>`],
+      ['Periodical', item.periodical || '-'],
+      [
+        'Status',
+        `<span style="background: ${statusColor}; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.85em;">${item.status}</span>`,
+      ],
       ['Submission ID', `#${item.submission_id}`],
       ['Job ID', item.job_id || '-'],
       ['Client', item.client_name || '-'],
@@ -1258,21 +1283,33 @@ export class DownloadsManager {
     ];
 
     if (item.url) {
-      rows.push(['Source URL', `<span style="word-break: break-all; font-size: 0.85em;">${item.url}</span>`]);
+      rows.push([
+        'Source URL',
+        `<span style="word-break: break-all; font-size: 0.85em;">${item.url}</span>`,
+      ]);
     }
     if (item.extra_status) {
-      rows.push(['Extra Status', `<span style="color: var(--status-pending);">${item.extra_status}</span>`]);
+      rows.push([
+        'Extra Status',
+        `<span style="color: var(--status-pending);">${item.extra_status}</span>`,
+      ]);
     }
     if (item.error) {
-      rows.push(['Error', `<span style="color: var(--status-failed); word-break: break-word;">${item.error}</span>`]);
+      rows.push([
+        'Error',
+        `<span style="color: var(--status-failed); word-break: break-word;">${item.error}</span>`,
+      ]);
     }
 
-    const tableHtml = rows.map(([label, value]) =>
-      `<tr>
+    const tableHtml = rows
+      .map(
+        ([label, value]) =>
+          `<tr>
         <td style="padding: 8px 12px; border-bottom: 1px solid var(--border-color); font-weight: 600; white-space: nowrap; vertical-align: top; width: 130px;">${label}</td>
         <td style="padding: 8px 12px; border-bottom: 1px solid var(--border-color);">${value}</td>
       </tr>`
-    ).join('');
+      )
+      .join('');
 
     const html = `
       <div class="modal-header">
@@ -1663,7 +1700,8 @@ export class DownloadsManager {
       if (saved) {
         const settings = JSON.parse(saved);
         this.currentSort = settings.sort?.field || 'title';
-        this.sortAscending = settings.sort?.ascending !== undefined ? settings.sort.ascending : true;
+        this.sortAscending =
+          settings.sort?.ascending !== undefined ? settings.sort.ascending : true;
       }
     } catch (error) {
       console.warn('[Downloads] Failed to parse sort preference:', error);
@@ -1695,7 +1733,7 @@ export class DownloadsManager {
       const settings = saved ? JSON.parse(saved) : {};
       settings.sort = {
         field: sort,
-        ascending: this.sortAscending
+        ascending: this.sortAscending,
       };
       localStorage.setItem('downloadQueueSettings', JSON.stringify(settings));
     } catch (error) {
@@ -1717,7 +1755,7 @@ export class DownloadsManager {
       const settings = saved ? JSON.parse(saved) : {};
       settings.sort = {
         field: this.currentSort,
-        ascending: this.sortAscending
+        ascending: this.sortAscending,
       };
       localStorage.setItem('downloadQueueSettings', JSON.stringify(settings));
     } catch (error) {

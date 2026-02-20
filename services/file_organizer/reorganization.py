@@ -83,7 +83,7 @@ class ReorganizationMixin:
 
         return target_dir, filename, target_dir / filename
 
-    def _resolve_volume_and_issue(self, magazine: Any) -> Tuple[Optional[int], Optional[int]]:
+    def _resolve_volume_and_issue(self, periodical: Any) -> Tuple[Optional[int], Optional[int]]:
         """
         Resolve volume and issue number from all available metadata sources.
 
@@ -93,7 +93,7 @@ class ReorganizationMixin:
         3. Original imported filename (from extra_metadata.imported_from)
 
         Args:
-            magazine: Periodical database record
+            periodical: Periodical database record
 
         Returns:
             Tuple of (volume, issue_number), either may be None
@@ -102,7 +102,7 @@ class ReorganizationMixin:
         issue_number = None
 
         # Source 1: derived_metadata (highest priority)
-        derived = magazine.derived_metadata or {}
+        derived = periodical.derived_metadata or {}
         if "volume" in derived and isinstance(derived["volume"], dict):
             volume = derived["volume"].get("value")
         if "issue_number" in derived and isinstance(derived["issue_number"], dict):
@@ -110,7 +110,7 @@ class ReorganizationMixin:
 
         # Source 2: parsed_metadata.file_scan
         if volume is None or issue_number is None:
-            parsed = magazine.parsed_metadata or {}
+            parsed = periodical.parsed_metadata or {}
             file_scan = parsed.get("file_scan", {})
             if volume is None:
                 volume = file_scan.get("volume")
@@ -119,7 +119,7 @@ class ReorganizationMixin:
 
         # Source 3: Re-parse original imported filename
         if volume is None or issue_number is None:
-            extra = magazine.extra_metadata or {}
+            extra = periodical.extra_metadata or {}
             original_filename = extra.get("imported_from")
             if original_filename:
                 try:
@@ -131,24 +131,24 @@ class ReorganizationMixin:
                         volume = original_parsed.volume
                         logger.debug(
                             f"Recovered volume={volume} from original filename "
-                            f"'{original_filename}' for periodical {magazine.id}"
+                            f"'{original_filename}' for periodical {periodical.id}"
                         )
                     if issue_number is None and original_parsed.issue_number:
                         issue_number = original_parsed.issue_number
                         logger.debug(
                             f"Recovered issue_number={issue_number} from original filename "
-                            f"'{original_filename}' for periodical {magazine.id}"
+                            f"'{original_filename}' for periodical {periodical.id}"
                         )
                 except Exception:
                     logger.debug(
-                        f"Failed to parse original filename '{original_filename}' for periodical {magazine.id}"
+                        f"Failed to parse original filename '{original_filename}' for periodical {periodical.id}"
                     )
 
         return volume, issue_number
 
-    def _process_single_magazine_reorganization(
+    def _process_single_periodical_reorganization(
         self,
-        magazine: Any,
+        periodical: Any,
         db_session: Any,
         category_with_prefix: str,
         pattern: Optional[str],
@@ -156,10 +156,10 @@ class ReorganizationMixin:
         old_directories: set,
     ) -> Dict[str, Any]:
         """
-        Process a single magazine for reorganization.
+        Process a single periodical for reorganization.
 
         Args:
-            magazine: Periodical database record
+            periodical: Periodical database record
             db_session: SQLAlchemy database session
             category_with_prefix: Category name with prefix (e.g., "_Magazines")
             pattern: Organization pattern or None for default
@@ -172,29 +172,29 @@ class ReorganizationMixin:
         # Try to resolve the file path
         try:
             current_path = resolve_periodical_file_path(
-                stored_path=magazine.file_path,
+                stored_path=periodical.file_path,
                 library_base_dir=self.library_dir,
                 category_prefix=self.category_prefix,
             )
         except FileNotFoundError:
-            logger.debug(f"File not found, skipping: {magazine.file_path}")
+            logger.debug(f"File not found, skipping: {periodical.file_path}")
             return {"status": "skipped", "reason": "file_not_found"}
 
-        # Get canonical title: prefer tracking title over magazine title
-        tracking_title = self._get_tracking_title(db_session, magazine.tracking_id)
-        full_title = tracking_title or magazine.title
+        # Get canonical title: prefer tracking title over periodical title
+        tracking_title = self._get_tracking_title(db_session, periodical.tracking_id)
+        full_title = tracking_title or periodical.title
 
         if tracking_title:
-            logger.debug(f"Using tracking title: {tracking_title} (magazine title was: {magazine.title})")
+            logger.debug(f"Using tracking title: {tracking_title} (periodical title was: {periodical.title})")
         else:
-            logger.debug(f"No tracking record, using magazine title: {magazine.title}")
+            logger.debug(f"No tracking record, using periodical title: {periodical.title}")
 
         # Build expected path based on pattern
-        volume, issue_number = self._resolve_volume_and_issue(magazine)
+        volume, issue_number = self._resolve_volume_and_issue(periodical)
         metadata = {
             "title": full_title,
-            "issue_date": magazine.issue_date,
-            "language": magazine.language or DEFAULT_LANGUAGE,
+            "issue_date": periodical.issue_date,
+            "language": periodical.language or DEFAULT_LANGUAGE,
             "issue_number": issue_number,
             "volume": volume,
         }
@@ -210,9 +210,9 @@ class ReorganizationMixin:
         change_info = {
             "old_path": str(current_path),
             "new_path": str(expected_path),
-            "old_title": magazine.title,
+            "old_title": periodical.title,
             "new_title": full_title,
-            "title_changed": magazine.title != full_title,
+            "title_changed": periodical.title != full_title,
             "old_folder": current_path.parent.name,
             "new_folder": target_dir.name,
         }
@@ -222,8 +222,8 @@ class ReorganizationMixin:
 
         # Perform the actual move
         logger.info(f"Reorganizing: {current_path} -> {expected_path}")
-        move_result = self._move_magazine_and_update_db(
-            magazine=magazine,
+        move_result = self._move_periodical_and_update_db(
+            periodical=periodical,
             db_session=db_session,
             current_path=current_path,
             target_dir=target_dir,
@@ -237,9 +237,9 @@ class ReorganizationMixin:
         else:
             return {"status": "skipped", "reason": move_result["reason"]}
 
-    def _move_magazine_and_update_db(
+    def _move_periodical_and_update_db(
         self,
-        magazine: Any,
+        periodical: Any,
         db_session: Any,
         current_path: Path,
         target_dir: Path,
@@ -248,18 +248,18 @@ class ReorganizationMixin:
         old_directories: set,
     ) -> Dict[str, Any]:
         """
-        Move a magazine file and update database records.
+        Move a periodical file and update database records.
 
         Handles directory creation, unique path generation, conflict detection,
         file movement, and cover file handling.
 
         Args:
-            magazine: Periodical database record
+            periodical: Periodical database record
             db_session: SQLAlchemy database session
             current_path: Current file path
             target_dir: Target directory path
             filename: Target filename
-            full_title: Title to use for the magazine
+            full_title: Title to use for the periodical
             old_directories: Set to track directories we moved files from
 
         Returns:
@@ -274,7 +274,7 @@ class ReorganizationMixin:
         final_path = self._get_unique_target_path(target_dir, filename)
 
         # Check if target path already exists in database
-        if check_file_path_conflict(db_session, str(final_path), magazine.id):
+        if check_file_path_conflict(db_session, str(final_path), periodical.id):
             logger.warning(
                 f"Target path already exists in database for different record: {final_path}. "
                 f"Skipping reorganization of {current_path}"
@@ -288,8 +288,8 @@ class ReorganizationMixin:
         shutil.move(str(current_path), str(final_path))
 
         # Update database with new path and title
-        magazine.file_path = str(final_path)
-        magazine.title = full_title
+        periodical.file_path = str(final_path)
+        periodical.title = full_title
         db_session.commit()
 
         # Also move cover if it exists
@@ -297,7 +297,7 @@ class ReorganizationMixin:
         if current_cover.exists():
             new_cover = final_path.with_suffix(".jpg")
             shutil.move(str(current_cover), str(new_cover))
-            magazine.cover_path = str(new_cover)
+            periodical.cover_path = str(new_cover)
             db_session.commit()
             logger.info(f"Moved cover: {current_cover} -> {new_cover}")
 
@@ -461,20 +461,20 @@ class ReorganizationMixin:
         if not dry_run:
             logger.info(f"Reorganizing files in: {category_dir}")
 
-        # Step 3: Process all magazines from database
+        # Step 3: Process all periodicals from database
         files_found, files_reorganized, files_skipped = 0, 0, 0
         errors, changes = [], []
         old_directories = set()
 
-        magazines = db_session.query(Periodical).filter(Periodical.file_path.like(f"%{category_with_prefix}%")).all()
+        periodicals = db_session.query(Periodical).filter(Periodical.file_path.like(f"%{category_with_prefix}%")).all()
 
         if not dry_run:
-            logger.info(f"Found {len(magazines)} magazine records in database for category {category}")
+            logger.info(f"Found {len(periodicals)} periodical records in database for category {category}")
 
-        for magazine in magazines:
+        for periodical in periodicals:
             files_found += 1
-            result = self._process_magazine_with_error_handling(
-                magazine,
+            result = self._process_periodical_with_error_handling(
+                periodical,
                 db_session,
                 category_with_prefix,
                 pattern,
@@ -544,9 +544,9 @@ class ReorganizationMixin:
 
         return tracking_fixes
 
-    def _process_magazine_with_error_handling(
+    def _process_periodical_with_error_handling(
         self,
-        magazine: Any,
+        periodical: Any,
         db_session: Any,
         category_with_prefix: str,
         pattern: Optional[str],
@@ -554,11 +554,11 @@ class ReorganizationMixin:
         old_directories: set,
         errors: List[str],
     ) -> Dict[str, Any]:
-        """Process a single magazine with error handling and rollback."""
-        original_file_path = magazine.file_path
+        """Process a single periodical with error handling and rollback."""
+        original_file_path = periodical.file_path
         try:
-            return self._process_single_magazine_reorganization(
-                magazine,
+            return self._process_single_periodical_reorganization(
+                periodical,
                 db_session,
                 category_with_prefix,
                 pattern,

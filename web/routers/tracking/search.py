@@ -74,7 +74,7 @@ async def search_tracked_periodical_issues(tracking_id: int) -> Dict[str, Any]:
             db.commit()
             return success_response(
                 None,
-                magazine=tracking.title,
+                periodical=tracking.title,
                 tracking_id=tracking.id,
                 results=result_dicts,
                 count=len(result_dicts),
@@ -82,7 +82,7 @@ async def search_tracked_periodical_issues(tracking_id: int) -> Dict[str, Any]:
         else:
             return error_response(
                 f"No issues found for '{tracking.title}'",
-                magazine=tracking.title,
+                periodical=tracking.title,
                 tracking_id=tracking.id,
                 results=[],
                 count=0,

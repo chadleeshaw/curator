@@ -78,12 +78,12 @@ async def get_cover(
 
 def _get_cover_path(db_session, magazine_id):
     """Helper to get cover path from database"""
-    magazine = _shared.get_periodical_or_404(db_session, magazine_id)
+    periodical = _shared.get_periodical_or_404(db_session, magazine_id)
 
-    if not magazine.cover_path:
+    if not periodical.cover_path:
         raise HTTPException(status_code=404, detail=ErrorMessages.COVER_NOT_FOUND)
 
-    cover_path = Path(str(magazine.cover_path))
+    cover_path = Path(str(periodical.cover_path))
     if not cover_path.exists():
         raise HTTPException(status_code=404, detail="Cover file not found")
 
@@ -108,13 +108,12 @@ async def regenerate_cover(magazine_id: int, request_data: Dict[str, Any]) -> Di
         raise HTTPException(status_code=400, detail="Page number must be >= 1")
 
     def operation(db):
-        magazine, pdf_path = _shared.get_periodical_with_file(db, magazine_id)
+        periodical, pdf_path = _shared.get_periodical_with_file(db, magazine_id)
 
         # Determine cover directory from config
         if _shared._library_base_dir:
             cover_dir = _shared._library_base_dir / ".covers"
         else:
-            # Fallback: use pdf's parent directory structure
             cover_dir = pdf_path.parent.parent.parent / ".covers"
 
         # Extract cover from specified page
@@ -133,13 +132,13 @@ async def regenerate_cover(magazine_id: int, request_data: Dict[str, Any]) -> Di
             raise HTTPException(status_code=500, detail="Failed to extract cover from PDF")
 
         # Update database with new cover path and page number
-        magazine.cover_path = str(cover_path)
-        if magazine.extra_metadata is None:
-            magazine.extra_metadata = {}
-        magazine.extra_metadata["cover_page"] = page_number
+        periodical.cover_path = str(cover_path)
+        if periodical.extra_metadata is None:
+            periodical.extra_metadata = {}
+        periodical.extra_metadata["cover_page"] = page_number
         db.commit()
 
-        logger.info(f"Regenerated cover for magazine {magazine_id} from page {page_number}")
+        logger.info(f"Regenerated cover for periodical {magazine_id} from page {page_number}")
 
         return success_response(
             f"Cover regenerated from page {page_number}",
@@ -177,26 +176,26 @@ async def upload_cover(magazine_id: int, file: UploadFile = File(...)) -> Dict[s
     content = await file.read()
 
     def operation(db):
-        magazine = _shared.get_periodical_or_404(db, magazine_id)
+        periodical = _shared.get_periodical_or_404(db, magazine_id)
 
         # Determine cover directory from config
         if _shared._library_base_dir:
             cover_dir = _shared._library_base_dir / ".covers"
         else:
             # Fallback: use stored file path's parent directory structure
-            if magazine.file_path:
-                pdf_path = Path(magazine.file_path)
+            if periodical.file_path:
+                pdf_path = Path(periodical.file_path)
                 cover_dir = pdf_path.parent.parent.parent / ".covers"
             else:
                 raise HTTPException(status_code=500, detail="Unable to determine cover directory")
 
         cover_dir.mkdir(parents=True, exist_ok=True)
 
-        # Determine output filename (use magazine's existing naming or generate from ID)
-        if magazine.file_path:
-            base_name = Path(magazine.file_path).stem
+        # Determine output filename (use periodical's existing naming or generate from ID)
+        if periodical.file_path:
+            base_name = Path(periodical.file_path).stem
         else:
-            base_name = f"magazine_{magazine_id}"
+            base_name = f"periodical_{magazine_id}"
 
         # Always save as JPG for consistency
         cover_path = cover_dir / f"{base_name}.jpg"
@@ -210,7 +209,6 @@ async def upload_cover(magazine_id: int, file: UploadFile = File(...)) -> Dict[s
             # Convert to JPG if not already
             if file_ext in {".png", ".webp"}:
                 img = Image.open(temp_path)
-                # Convert to RGB if necessary (for transparency)
                 if img.mode in ("RGBA", "P"):
                     img = img.convert("RGB")
                 img.save(str(cover_path), "JPEG", quality=90)
@@ -225,26 +223,24 @@ async def upload_cover(magazine_id: int, file: UploadFile = File(...)) -> Dict[s
             raise HTTPException(status_code=500, detail=f"Failed to save cover: {e}")
 
         # Store old cover path before updating (for thumbnail cleanup)
-        old_cover_path = Path(magazine.cover_path) if magazine.cover_path else None
+        old_cover_path = Path(periodical.cover_path) if periodical.cover_path else None
 
         # Update database with new cover path
-        magazine.cover_path = str(cover_path)
-        # Mark as custom uploaded cover (not from PDF)
-        if magazine.extra_metadata is None:
-            magazine.extra_metadata = {}
-        magazine.extra_metadata["cover_uploaded"] = True
-        magazine.extra_metadata.pop("cover_page", None)  # Remove page reference
+        periodical.cover_path = str(cover_path)
+        if periodical.extra_metadata is None:
+            periodical.extra_metadata = {}
+        periodical.extra_metadata["cover_uploaded"] = True
+        periodical.extra_metadata.pop("cover_page", None)
         db.commit()
 
         # Invalidate thumbnail cache by removing old thumbnail
         if old_cover_path and old_cover_path.exists():
-            # Thumbnails have _thumb suffix before extension
             old_thumbnail_path = old_cover_path.parent / f"{old_cover_path.stem}_thumb.jpg"
             if old_thumbnail_path.exists():
                 old_thumbnail_path.unlink()
                 logger.debug(f"Removed old thumbnail: {old_thumbnail_path}")
 
-        logger.info(f"Uploaded custom cover for magazine {magazine_id}")
+        logger.info(f"Uploaded custom cover for periodical {magazine_id}")
 
         return success_response(
             "Cover uploaded successfully",
@@ -271,21 +267,21 @@ async def regenerate_thumbnail_ocr(magazine_id: int) -> Dict[str, Any]:
     """
 
     def operation(db):
-        magazine, pdf_path = _shared.get_periodical_with_file(db, magazine_id)
+        periodical, pdf_path = _shared.get_periodical_with_file(db, magazine_id)
 
         # Skip regeneration if a custom cover was uploaded and the file still exists
-        if magazine.extra_metadata and isinstance(magazine.extra_metadata, dict):
-            if magazine.extra_metadata.get("cover_uploaded") and magazine.cover_path:
-                cover_file = Path(magazine.cover_path)
+        if periodical.extra_metadata and isinstance(periodical.extra_metadata, dict):
+            if periodical.extra_metadata.get("cover_uploaded") and periodical.cover_path:
+                cover_file = Path(periodical.cover_path)
                 if cover_file.exists():
-                    logger.info(f"Skipping regeneration for magazine {magazine_id} — custom uploaded cover exists")
+                    logger.info(f"Skipping regeneration for periodical {magazine_id} — custom uploaded cover exists")
                     return success_response(
                         "Skipped — custom uploaded cover exists. Use Edit Metadata to change the cover.",
                         cover_path=str(cover_file),
                         skipped=True,
                     )
                 else:
-                    logger.info(f"Custom cover missing for magazine {magazine_id}, regenerating from PDF")
+                    logger.info(f"Custom cover missing for periodical {magazine_id}, regenerating from PDF")
 
         # Determine cover directory
         if _shared._library_base_dir:
@@ -295,12 +291,12 @@ async def regenerate_thumbnail_ocr(magazine_id: int) -> Dict[str, Any]:
 
         # Use stored cover page or default to 1
         page_number = 1
-        if magazine.extra_metadata and isinstance(magazine.extra_metadata, dict):
-            page_number = magazine.extra_metadata.get("cover_page", 1)
+        if periodical.extra_metadata and isinstance(periodical.extra_metadata, dict):
+            page_number = periodical.extra_metadata.get("cover_page", 1)
 
         # Invalidate old thumbnail before regenerating
-        if magazine.cover_path:
-            old_cover = Path(magazine.cover_path)
+        if periodical.cover_path:
+            old_cover = Path(periodical.cover_path)
             old_thumbnail = old_cover.parent / f"{old_cover.stem}_thumb.jpg"
             if old_thumbnail.exists():
                 old_thumbnail.unlink()
@@ -325,10 +321,9 @@ async def regenerate_thumbnail_ocr(magazine_id: int) -> Dict[str, Any]:
             )
 
         # Update database with new cover path
-        magazine.cover_path = str(cover_path)
-        # Clear uploaded flag since we regenerated from PDF
-        if magazine.extra_metadata and isinstance(magazine.extra_metadata, dict):
-            magazine.extra_metadata.pop("cover_uploaded", None)
+        periodical.cover_path = str(cover_path)
+        if periodical.extra_metadata and isinstance(periodical.extra_metadata, dict):
+            periodical.extra_metadata.pop("cover_uploaded", None)
 
         # Queue OCR job
         ocr_queued = False
@@ -338,7 +333,7 @@ async def regenerate_thumbnail_ocr(magazine_id: int) -> Dict[str, Any]:
                 db=db,
                 periodical_id=magazine_id,
                 priority=OCRJob.PriorityEnum.HIGH.value,
-                language=magazine.language,
+                language=periodical.language,
             )
             if job:
                 ocr_queued = True
@@ -350,7 +345,7 @@ async def regenerate_thumbnail_ocr(magazine_id: int) -> Dict[str, Any]:
 
         db.commit()
 
-        logger.info(f"Regenerated thumbnail and queued OCR for magazine {magazine_id} (page {page_number})")
+        logger.info(f"Regenerated thumbnail and queued OCR for periodical {magazine_id} (page {page_number})")
 
         return success_response(
             f"Thumbnail regenerated from page {page_number}. {ocr_message}",

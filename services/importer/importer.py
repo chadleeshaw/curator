@@ -10,7 +10,7 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -431,9 +431,9 @@ class FileImporter:
         Returns:
             True if duplicate found (caller should skip import), False otherwise
         """
-        existing_magazines = session.query(Periodical).all()
+        existing_periodicals = session.query(Periodical).all()
 
-        for existing in existing_magazines:
+        for existing in existing_periodicals:
             # Normalize existing title for comparison
             existing_normalized = existing.title
             existing_metadata = existing.extra_metadata or {}
@@ -561,7 +561,7 @@ class FileImporter:
 
     def _link_or_create_tracking(
         self,
-        magazine: Periodical,
+        periodical: Periodical,
         target_tracking: Optional[PeriodicalTracking],
         tracking_title: str,
         parsed_language: Optional[str],
@@ -574,10 +574,10 @@ class FileImporter:
         session: Session,
     ) -> None:
         """
-        Link magazine to existing tracking or create new tracking record.
+        Link periodical to existing tracking or create new tracking record.
 
         Args:
-            magazine: The Periodical record to link
+            periodical: The Periodical record to link
             target_tracking: Existing tracking match (or None)
             tracking_title: Normalized tracking title
             parsed_language: Language from parser
@@ -590,23 +590,23 @@ class FileImporter:
             session: Database session
         """
         if target_tracking:
-            magazine.tracking_id = target_tracking.id
+            periodical.tracking_id = target_tracking.id
             target_tracking.last_metadata_update = datetime.now(UTC)
 
             # Synchronize language between tracking and periodical
             if target_tracking.language:
-                magazine.language = target_tracking.language
+                periodical.language = target_tracking.language
                 logger.debug(
                     f"Synchronized language to '{target_tracking.language}' from tracking for: {target_tracking.title}"
                 )
             elif parsed_language:
                 target_tracking.language = parsed_language
-                magazine.language = parsed_language
+                periodical.language = parsed_language
                 logger.debug(
                     f"Set tracking and periodical language to '{parsed_language}' for: {target_tracking.title}"
                 )
 
-            logger.debug(f"Linked magazine to tracking: {target_tracking.title} (ID: {target_tracking.id})")
+            logger.debug(f"Linked periodical to tracking: {target_tracking.title} (ID: {target_tracking.id})")
 
             # Add special edition to selected_editions if applicable
             if is_special_edition and special_name:
@@ -635,7 +635,7 @@ class FileImporter:
             )
             session.add(new_tracking)
             session.flush()
-            magazine.tracking_id = new_tracking.id
+            periodical.tracking_id = new_tracking.id
             logger.info(f"Created new tracking record: {tracking_title} (ID: {new_tracking.id}, mode: {tracking_mode})")
 
             if is_special_edition:
@@ -643,7 +643,7 @@ class FileImporter:
 
     def _run_text_scan(
         self,
-        magazine: Periodical,
+        periodical: Periodical,
         organized_path: Path,
         parsed_language: Optional[str],
         session: Session,
@@ -652,7 +652,7 @@ class FileImporter:
         Run direct text extraction on the imported file.
 
         Args:
-            magazine: The Periodical record
+            periodical: The Periodical record
             organized_path: Path to the organized file
             parsed_language: Language from parser
             session: Database session
@@ -666,13 +666,13 @@ class FileImporter:
             return
 
         try:
-            logger.debug(f"Attempting direct text extraction for {magazine.id}")
+            logger.debug(f"Attempting direct text extraction for {periodical.id}")
             scan_result = TextScanService.scan_document(str(organized_path), language=parsed_language)
 
             # Store text scan metadata
-            if not magazine.parsed_metadata:
-                magazine.parsed_metadata = {}
-            magazine.parsed_metadata["text_scan"] = scan_result
+            if not periodical.parsed_metadata:
+                periodical.parsed_metadata = {}
+            periodical.parsed_metadata["text_scan"] = scan_result
 
             # Rebuild derived_metadata with text scan results
             from core.utils.metadata_builder import (
@@ -680,17 +680,17 @@ class FileImporter:
                 sync_issue_date_from_derived,
             )
 
-            magazine.derived_metadata = build_derived_metadata(
-                file_scan=magazine.parsed_metadata.get("file_scan"),
+            periodical.derived_metadata = build_derived_metadata(
+                file_scan=periodical.parsed_metadata.get("file_scan"),
                 text_scan=scan_result,
-                ocr_scan=magazine.parsed_metadata.get("ocr_scan"),
+                ocr_scan=periodical.parsed_metadata.get("ocr_scan"),
             )
 
             # Sync issue_date from derived_metadata
             metadata_discovered = False
-            new_issue_date = sync_issue_date_from_derived(magazine.derived_metadata)
+            new_issue_date = sync_issue_date_from_derived(periodical.derived_metadata)
             if new_issue_date:
-                magazine.issue_date = new_issue_date
+                periodical.issue_date = new_issue_date
                 metadata_discovered = True
                 logger.debug(f"Updated issue_date to {new_issue_date.strftime('%Y-%m')} from derived_metadata")
 
@@ -700,32 +700,34 @@ class FileImporter:
 
             # Flag for reorganization if we discovered new metadata
             if metadata_discovered:
-                if not magazine.extra_metadata:
-                    magazine.extra_metadata = {}
-                magazine.extra_metadata["needs_reorganization"] = True
-                magazine.extra_metadata["reorganization_reason"] = "metadata_discovered_by_text_scan"
-                logger.info(f"Flagged {magazine.title} for reorganization (metadata discovered by text scan)")
+                if not periodical.extra_metadata:
+                    periodical.extra_metadata = {}
+                periodical.extra_metadata["needs_reorganization"] = True
+                periodical.extra_metadata["reorganization_reason"] = "metadata_discovered_by_text_scan"
+                logger.info(f"Flagged {periodical.title} for reorganization (metadata discovered by text scan)")
 
             if scan_result.get("text_found"):
-                logger.info(f"Enhanced {magazine.title} with metadata from text scan")
+                logger.info(f"Enhanced {periodical.title} with metadata from text scan")
 
             from core.utils.db import mark_json_modified
 
-            mark_json_modified(magazine, "parsed_metadata", "derived_metadata", "extra_metadata")
+            mark_json_modified(periodical, "parsed_metadata", "derived_metadata", "extra_metadata")
             session.commit()
 
             if scan_result.get("text_found"):
                 has_sufficient = scan_result.get("has_sufficient_metadata", False)
-                logger.info(f"Successfully extracted text metadata for {magazine.title} (sufficient: {has_sufficient})")
+                logger.info(
+                    f"Successfully extracted text metadata for {periodical.title} (sufficient: {has_sufficient})"
+                )
             else:
                 logger.debug(f"No text found in {organized_path.name}")
 
         except Exception as e:
-            logger.debug(f"Direct text extraction failed for {magazine.id}: {e}")
+            logger.debug(f"Direct text extraction failed for {periodical.id}: {e}")
 
     def _queue_ocr_job(
         self,
-        magazine: Periodical,
+        periodical: Periodical,
         parsed_language: Optional[str],
         skip_organize: bool,
         session: Session,
@@ -734,7 +736,7 @@ class FileImporter:
         Queue OCR job for background processing.
 
         Args:
-            magazine: The Periodical record
+            periodical: The Periodical record
             parsed_language: Language from parser
             skip_organize: Whether this was a skip_organize import
             session: Database session
@@ -743,14 +745,14 @@ class FileImporter:
             priority = OCRJob.PriorityEnum.HIGH.value if not skip_organize else OCRJob.PriorityEnum.NORMAL.value
             ocr_job = OCRQueueService.queue_ocr_job(
                 db=session,
-                periodical_id=magazine.id,
+                periodical_id=periodical.id,
                 priority=priority,
                 language=parsed_language,
             )
             if ocr_job:
-                logger.info(f"Queued OCR job {ocr_job.id} for magazine {magazine.id}")
+                logger.info(f"Queued OCR job {ocr_job.id} for periodical {periodical.id}")
         except Exception as e:
-            logger.warning(f"Failed to queue OCR job for magazine {magazine.id}: {e}")
+            logger.warning(f"Failed to queue OCR job for periodical {periodical.id}: {e}")
 
     def _scan_for_missing_date(
         self,
@@ -869,7 +871,7 @@ class FileImporter:
 
     def _run_ocr_scan(
         self,
-        magazine: Periodical,
+        periodical: Periodical,
         organized_path: Path,
         parsed_language: Optional[str],
         session: Session,
@@ -881,7 +883,7 @@ class FileImporter:
         to avoid duplicate detection issues with fallback dates.
 
         Args:
-            magazine: The Periodical record
+            periodical: The Periodical record
             organized_path: Path to the organized file
             parsed_language: Language from parser
             session: Database session
@@ -898,7 +900,7 @@ class FileImporter:
             return False
 
         try:
-            logger.info(f"Running immediate OCR scan for {magazine.title} to find date")
+            logger.info(f"Running immediate OCR scan for {periodical.title} to find date")
 
             # Run OCR directly on the PDF
             ocr_result = OCRService.analyze_cover(str(organized_path), language=parsed_language)
@@ -908,9 +910,9 @@ class FileImporter:
                 return False
 
             # Store OCR scan results in parsed_metadata
-            if not magazine.parsed_metadata:
-                magazine.parsed_metadata = {}
-            magazine.parsed_metadata["ocr_scan"] = ocr_result
+            if not periodical.parsed_metadata:
+                periodical.parsed_metadata = {}
+            periodical.parsed_metadata["ocr_scan"] = ocr_result
 
             # Rebuild derived_metadata with OCR results
             from core.utils.metadata_builder import (
@@ -918,36 +920,36 @@ class FileImporter:
                 sync_issue_date_from_derived,
             )
 
-            magazine.derived_metadata = build_derived_metadata(
-                file_scan=magazine.parsed_metadata.get("file_scan"),
-                text_scan=magazine.parsed_metadata.get("text_scan"),
+            periodical.derived_metadata = build_derived_metadata(
+                file_scan=periodical.parsed_metadata.get("file_scan"),
+                text_scan=periodical.parsed_metadata.get("text_scan"),
                 ocr_scan=ocr_result,
             )
 
             # Sync issue_date from derived_metadata
-            new_issue_date = sync_issue_date_from_derived(magazine.derived_metadata)
+            new_issue_date = sync_issue_date_from_derived(periodical.derived_metadata)
             found_date = False
             metadata_discovered = False
 
             if new_issue_date:
-                magazine.issue_date = new_issue_date
+                periodical.issue_date = new_issue_date
                 found_date = True
                 metadata_discovered = True
-                logger.info(f"OCR scan found date {new_issue_date.strftime('%Y-%m')} for {magazine.title}")
+                logger.info(f"OCR scan found date {new_issue_date.strftime('%Y-%m')} for {periodical.title}")
 
             # Check if OCR found volume/issue that we didn't have
             if ocr_result.get("volume") or ocr_result.get("issue_number"):
                 metadata_discovered = True
-                if not magazine.derived_metadata:
-                    magazine.derived_metadata = {}
+                if not periodical.derived_metadata:
+                    periodical.derived_metadata = {}
                 if ocr_result.get("volume"):
-                    magazine.derived_metadata["volume"] = {
+                    periodical.derived_metadata["volume"] = {
                         "value": ocr_result["volume"],
                         "source": "ocr_scan",
                         "confidence": ocr_result.get("volume_confidence", 70) / 100.0,
                     }
                 if ocr_result.get("issue_number"):
-                    magazine.derived_metadata["issue_number"] = {
+                    periodical.derived_metadata["issue_number"] = {
                         "value": ocr_result["issue_number"],
                         "source": "ocr_scan",
                         "confidence": ocr_result.get("issue_number_confidence", 70) / 100.0,
@@ -956,25 +958,25 @@ class FileImporter:
             # Flag for reorganization if we discovered new metadata
             # This allows the file to be renamed/moved later with correct metadata
             if metadata_discovered:
-                if not magazine.extra_metadata:
-                    magazine.extra_metadata = {}
-                magazine.extra_metadata["needs_reorganization"] = True
-                magazine.extra_metadata["reorganization_reason"] = "metadata_discovered_by_ocr"
-                logger.info(f"Flagged {magazine.title} for reorganization (metadata discovered by OCR)")
+                if not periodical.extra_metadata:
+                    periodical.extra_metadata = {}
+                periodical.extra_metadata["needs_reorganization"] = True
+                periodical.extra_metadata["reorganization_reason"] = "metadata_discovered_by_ocr"
+                logger.info(f"Flagged {periodical.title} for reorganization (metadata discovered by OCR)")
 
             from core.utils.db import mark_json_modified
 
-            mark_json_modified(magazine, "parsed_metadata", "derived_metadata", "extra_metadata")
+            mark_json_modified(periodical, "parsed_metadata", "derived_metadata", "extra_metadata")
             session.commit()
 
             if ocr_result.get("year"):
-                logger.info(f"Enhanced {magazine.title} with metadata from immediate OCR scan")
+                logger.info(f"Enhanced {periodical.title} with metadata from immediate OCR scan")
                 return found_date
 
             return False
 
         except Exception as e:
-            logger.warning(f"Immediate OCR scan failed for {magazine.id}: {e}")
+            logger.warning(f"Immediate OCR scan failed for {periodical.id}: {e}")
             return False
 
     # =========================================================================
@@ -1184,49 +1186,8 @@ class FileImporter:
 
         return organized_path, cover_path
 
-    def _create_periodical_record(
-        self,
-        organized_path: Path,
-        cover_path: Optional[Path],
-        content_hash: str,
-        parsed,
-        pre_scan_result: Optional[Dict[str, Any]],
-        needs_date_scan: bool,
-        file_path: Path,
-        category: str,
-        target_tracking,
-        tracking_title: str,
-        session: Session,
-    ) -> Optional[Periodical]:
-        """
-        Create periodical database record.
-
-        Args:
-            organized_path: Path to organized file
-            cover_path: Path to cover image
-            content_hash: File content hash
-            parsed: Parsed metadata
-            pre_scan_result: Pre-scan results
-            needs_date_scan: Whether date scan is needed
-            file_path: Original file path
-            category: File category
-            target_tracking: Target tracking record
-            tracking_title: Tracking title
-            session: Database session
-
-        Returns:
-            Created Periodical record or None if duplicate found
-        """
-        from core.utils.metadata_builder import (
-            build_file_scan,
-            build_parsed_metadata,
-            build_derived_metadata,
-            build_extra_metadata,
-        )
-
-        organization_title = target_tracking.title if target_tracking else tracking_title
-
-        # Check for existing record at the organized path (prevents UNIQUE constraint on file_path)
+    def _check_for_duplicate_periodical(self, organized_path: Path, session: Session) -> bool:
+        """Check if periodical already exists at the organized path."""
         organized_path_str = str(organized_path)
         existing_by_path = session.query(Periodical).filter(Periodical.file_path == organized_path_str).first()
         if existing_by_path:
@@ -1234,51 +1195,106 @@ class FileImporter:
                 f"File already in library at organized path: '{organized_path_str}' "
                 f"(existing ID: {existing_by_path.id})"
             )
-            return None
+            return True
+        return False
+
+    def _build_file_scan_metadata(self, parsed) -> Dict[str, Any]:
+        """Build file scan metadata from parsed filename data."""
+        from core.utils.metadata_builder import build_file_scan
 
         file_scan = build_file_scan(parsed)
         if parsed.is_special_edition:
             file_scan["special_edition_name"] = parsed.special_edition_name
             file_scan["is_special_edition"] = True
+        return file_scan
 
-        # Build extra metadata, flagging if date scan is needed
+    def _build_extra_metadata(
+        self,
+        file_path: Path,
+        category: str,
+        needs_date_scan: bool,
+        cached_scan_results: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Build extra metadata with import provenance and scan flags."""
+        from core.utils.metadata_builder import build_extra_metadata
+
         extra_meta = build_extra_metadata(
             imported_from=file_path.name,
             import_date=datetime.now().isoformat(),
             category=category,
             import_method="auto",
         )
-        if needs_date_scan and not (pre_scan_result and pre_scan_result.get("issue_date")):
-            # Only flag for future date scan if pre-scan didn't find a date
+
+        should_flag_for_date_scan = needs_date_scan and not (
+            cached_scan_results and cached_scan_results.get("issue_date")
+        )
+        if should_flag_for_date_scan:
             extra_meta["needs_date_scan"] = True
             extra_meta["date_scan_reason"] = "tracking_title_without_parsed_date"
 
-        # Include pre-scan results in parsed_metadata if available
-        text_scan = pre_scan_result.get("text_scan_result") if pre_scan_result else None
-        ocr_scan = pre_scan_result.get("ocr_scan_result") if pre_scan_result else None
+        return extra_meta
 
-        magazine = Periodical(
+    def _extract_cached_scan_results(
+        self, cached_scan_results: Optional[Dict[str, Any]]
+    ) -> Tuple[Optional[Dict], Optional[Dict]]:
+        """Extract text and OCR scan results from cached scan data."""
+        if not cached_scan_results:
+            return None, None
+
+        text_scan = cached_scan_results.get("text_scan_result")
+        ocr_scan = cached_scan_results.get("ocr_scan_result")
+        return text_scan, ocr_scan
+
+    def _create_periodical_record(
+        self,
+        organized_path: Path,
+        cover_path: Optional[Path],
+        content_hash: str,
+        parsed,
+        cached_scan_results: Optional[Dict[str, Any]],
+        needs_date_scan: bool,
+        file_path: Path,
+        category: str,
+        target_tracking,
+        tracking_title: str,
+        session: Session,
+    ) -> Optional[Periodical]:
+        """Create periodical database record, or None if duplicate exists."""
+        from core.utils.metadata_builder import (
+            build_parsed_metadata,
+            build_derived_metadata,
+        )
+
+        if self._check_for_duplicate_periodical(organized_path, session):
+            return None
+
+        organization_title = target_tracking.title if target_tracking else tracking_title
+        file_scan = self._build_file_scan_metadata(parsed)
+        extra_meta = self._build_extra_metadata(file_path, category, needs_date_scan, cached_scan_results)
+        text_scan, ocr_scan = self._extract_cached_scan_results(cached_scan_results)
+
+        periodical = Periodical(
             title=organization_title,
             issue_date=parsed.issue_date or datetime(UNKNOWN_ISSUE_DATE_YEAR, 1, 1, tzinfo=UTC),
             language=parsed.language or DEFAULT_LANGUAGE,
-            file_path=organized_path_str,
+            file_path=str(organized_path),
             cover_path=str(cover_path) if cover_path else None,
             content_hash=content_hash,
             parsed_metadata=build_parsed_metadata(file_scan=file_scan, text_scan=text_scan, ocr_scan=ocr_scan),
             derived_metadata=build_derived_metadata(file_scan=file_scan, text_scan=text_scan, ocr_scan=ocr_scan),
             extra_metadata=extra_meta,
         )
-        session.add(magazine)
-        return magazine
+        session.add(periodical)
+        return periodical
 
     def _run_post_import_text_scan(
         self,
-        magazine: Periodical,
+        periodical: Periodical,
         organized_path: Path,
         language: Optional[str],
         needs_date_scan: bool,
         skip_enhancement: bool,
-        pre_scan_result: Optional[Dict[str, Any]],
+        cached_scan_results: Optional[Dict[str, Any]],
         tracking_title: str,
         session: Session,
     ) -> None:
@@ -1287,33 +1303,23 @@ class FileImporter:
 
         Force text scan if needs_date_scan (even during bulk imports) to try to find date/volume.
         Otherwise skip during bulk imports for speed.
-
-        Args:
-            magazine: Periodical record
-            organized_path: Path to organized file
-            language: Parsed language
-            needs_date_scan: Whether date scan is needed
-            skip_enhancement: Whether to skip enhancements
-            pre_scan_result: Pre-scan results
-            tracking_title: Tracking title
-            session: Database session
         """
-        pre_scan_did_text = pre_scan_result and pre_scan_result.get("text_scan_result") is not None
+        cached_text_scan_exists = cached_scan_results and cached_scan_results.get("text_scan_result") is not None
 
-        if not pre_scan_did_text and (not skip_enhancement or needs_date_scan):
+        if not cached_text_scan_exists and (not skip_enhancement or needs_date_scan):
             if needs_date_scan:
                 logger.info(f"Forcing text scan for '{tracking_title}' to find missing date/volume")
-            self._run_text_scan(magazine, organized_path, language, session)
+            self._run_text_scan(periodical, organized_path, language, session)
 
     def _run_post_import_ocr(
         self,
-        magazine: Periodical,
+        periodical: Periodical,
         organized_path: Path,
         parsed,
         needs_date_scan: bool,
         should_queue_ocr: bool,
         skip_organize: bool,
-        pre_scan_result: Optional[Dict[str, Any]],
+        cached_scan_results: Optional[Dict[str, Any]],
         tracking_title: str,
         session: Session,
     ) -> None:
@@ -1323,41 +1329,29 @@ class FileImporter:
         For needs_date_scan files: run OCR synchronously to get date before next file
         (avoids duplicate detection issues when multiple files have same fallback date).
         For other files: queue OCR for background processing.
-
-        Args:
-            magazine: Periodical record
-            organized_path: Path to organized file
-            parsed: Parsed metadata
-            needs_date_scan: Whether date scan is needed
-            should_queue_ocr: Whether OCR should be queued
-            skip_organize: Whether organization was skipped
-            pre_scan_result: Pre-scan results
-            tracking_title: Tracking title
-            session: Database session
         """
-        pre_scan_did_ocr = pre_scan_result and pre_scan_result.get("ocr_scan_result") is not None
-        pre_scan_found_date = pre_scan_result and pre_scan_result.get("issue_date") is not None
+        cached_ocr_exists = cached_scan_results and cached_scan_results.get("ocr_scan_result") is not None
+        cached_date_found = cached_scan_results and cached_scan_results.get("issue_date") is not None
 
-        text_scan_result = magazine.parsed_metadata.get("text_scan", {}) if magazine.parsed_metadata else {}
+        text_scan_result = periodical.parsed_metadata.get("text_scan", {}) if periodical.parsed_metadata else {}
         text_scan_sufficient = text_scan_result.get("has_sufficient_metadata", False)
         text_scan_found_date = text_scan_result.get("year") is not None
 
-        # For files needing date scan, run OCR synchronously to get date immediately
-        # But skip if pre-scan already did OCR or found a date
-        if needs_date_scan and not text_scan_found_date and not pre_scan_found_date and not pre_scan_did_ocr:
-            # Text scan didn't find date - run OCR immediately (not queued)
-            # This is critical to avoid duplicate detection issues
+        should_run_immediate_ocr = (
+            needs_date_scan and not text_scan_found_date and not cached_date_found and not cached_ocr_exists
+        )
+
+        if should_run_immediate_ocr:
             logger.info(f"Text scan didn't find date for '{tracking_title}' - running immediate OCR scan")
-            ocr_found_date = self._run_ocr_scan(magazine, organized_path, parsed.language, session)
+            ocr_found_date = self._run_ocr_scan(periodical, organized_path, parsed.language, session)
             if not ocr_found_date:
                 logger.warning(
                     f"Could not determine date for '{tracking_title}' from filename, text, or OCR. "
                     f"Using fallback date. Manual review recommended."
                 )
-        elif not pre_scan_did_ocr and should_queue_ocr and not text_scan_sufficient:
-            # Normal case: queue OCR for background processing
-            self._queue_ocr_job(magazine, parsed.language, skip_organize, session)
-        elif text_scan_sufficient or pre_scan_found_date:
+        elif not cached_ocr_exists and should_queue_ocr and not text_scan_sufficient:
+            self._queue_ocr_job(periodical, parsed.language, skip_organize, session)
+        elif text_scan_sufficient or cached_date_found:
             logger.info(f"Skipping OCR for '{parsed.title}' - sufficient metadata already found")
 
     def import_supported_files(
@@ -1388,7 +1382,7 @@ class FileImporter:
             skip_enhancement: If True, skip cover extraction and text scanning for faster bulk imports (default: False)
 
         Returns:
-            Dictionary with result information including magazine_id, or empty dict if failed
+            Dictionary with result information including periodical_id, or empty dict if failed
         """
         try:
             # Step 1: Get tracking context from sidecar and tracking record
@@ -1453,7 +1447,7 @@ class FileImporter:
                 return {"skip_reason": "organization_failed"}
 
             # Step 9: Create database record
-            magazine = self._create_periodical_record(
+            periodical = self._create_periodical_record(
                 organized_path,
                 cover_path,
                 content_hash,
@@ -1466,12 +1460,12 @@ class FileImporter:
                 tracking_title,
                 session,
             )
-            if not magazine:
+            if not periodical:
                 return {"skip_reason": "duplicate_path"}
 
             # Step 10: Link to existing tracking or create new one
             self._link_or_create_tracking(
-                magazine=magazine,
+                periodical=periodical,
                 target_tracking=target_tracking,
                 tracking_title=tracking_title,
                 parsed_language=parsed.language,
@@ -1490,7 +1484,7 @@ class FileImporter:
             # Step 11: Run text scan for additional metadata
             should_queue_ocr = use_ocr and (cover_path or file_path) and OCRService.is_available()
             self._run_post_import_text_scan(
-                magazine,
+                periodical,
                 organized_path,
                 parsed.language,
                 needs_date_scan,
@@ -1502,7 +1496,7 @@ class FileImporter:
 
             # Step 12: Run OCR if needed
             self._run_post_import_ocr(
-                magazine,
+                periodical,
                 organized_path,
                 parsed,
                 needs_date_scan,
@@ -1517,7 +1511,7 @@ class FileImporter:
             if not skip_organize:
                 self._cleanup_download_file(file_path, defer_folder_deletion=True)
 
-            return {"periodical_id": magazine.id}
+            return {"periodical_id": periodical.id}
 
         except Exception as e:
             session.rollback()

@@ -307,13 +307,13 @@ export class ProgressManager {
   /**
    * @param {Object} options
    * @param {string} options.logPrefix - Prefix for log messages
-   * @param {Function} options.getMagazineId - Function that returns current magazine ID
+   * @param {Function} options.getPeriodicalId - Function that returns current magazine ID
    * @param {Function} options.getProgressData - Function that returns progress data to save
    * @param {Function} options.onProgressLoaded - Callback when progress is loaded
    */
   constructor(options = {}) {
     this.logPrefix = options.logPrefix || 'Reader';
-    this.getMagazineId = options.getMagazineId || (() => null);
+    this.getPeriodicalId = options.getPeriodicalId || (() => null);
     this.getProgressData = options.getProgressData || (() => ({}));
     this.onProgressLoaded = options.onProgressLoaded || (() => {});
     this.saveTimer = null;
@@ -323,12 +323,12 @@ export class ProgressManager {
    * Load saved reading progress
    */
   async load() {
-    const magazineId = this.getMagazineId();
-    if (!magazineId) return null;
+    const periodicalId = this.getPeriodicalId();
+    if (!periodicalId) return null;
 
     try {
       const data = await APIHelper.executeWithErrorHandling(async () => {
-        const response = await APIClient.get(`/api/periodicals/${magazineId}/progress`);
+        const response = await APIClient.get(`/api/periodicals/${periodicalId}/progress`);
         return await response.json();
       }, this.logPrefix);
 
@@ -358,14 +358,14 @@ export class ProgressManager {
    * Save current reading progress
    */
   async save() {
-    const magazineId = this.getMagazineId();
+    const periodicalId = this.getPeriodicalId();
     const progressData = this.getProgressData();
 
-    if (!magazineId || !progressData) return;
+    if (!periodicalId || !progressData) return;
 
     try {
       await APIHelper.executeWithErrorHandling(async () => {
-        await APIClient.post(`/api/periodicals/${magazineId}/progress`, progressData);
+        await APIClient.post(`/api/periodicals/${periodicalId}/progress`, progressData);
       }, this.logPrefix);
       console.log(`Progress saved:`, progressData);
     } catch (error) {
@@ -387,11 +387,11 @@ export function escapeHtml(text) {
 
 /**
  * Navigate back to the periodical detail page
- * @param {string|number} magazineId
+ * @param {string|number} periodicalId
  */
-export function goBackToPeriodical(magazineId) {
-  if (magazineId) {
-    window.location.href = `/periodical?id=${magazineId}`;
+export function goBackToPeriodical(periodicalId) {
+  if (periodicalId) {
+    window.location.href = `/periodical?id=${periodicalId}`;
   } else {
     window.location.href = '/';
   }

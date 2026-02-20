@@ -12,8 +12,8 @@ def __getattr__(name):
         from .queue import OCRQueueService
 
         return OCRQueueService
-    elif name == "_apply_scan_metadata_to_magazine":
-        from .queue import _apply_scan_metadata_to_magazine
+    elif name == "_apply_scan_metadata_to_periodical":
+        from .queue import _apply_scan_metadata_to_periodical
 
-        return _apply_scan_metadata_to_magazine
+        return _apply_scan_metadata_to_periodical
     raise AttributeError(f"module 'services.ocr' has no attribute '{name}'")

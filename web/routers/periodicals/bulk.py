@@ -79,40 +79,40 @@ async def bulk_move_to_tracking(request: BulkMoveRequest) -> Dict[str, Any]:
         # periodical while previous ones have dirty file_path changes.
         with db.no_autoflush:
             for periodical_id in request.periodical_ids:
-                magazine = db.query(Periodical).filter(Periodical.id == periodical_id).first()
-                if not magazine:
+                periodical = db.query(Periodical).filter(Periodical.id == periodical_id).first()
+                if not periodical:
                     failed_ids.append(periodical_id)
                     logger.warning(f"Periodical {periodical_id} not found during bulk move")
                     continue
 
                 # Skip if already in the target tracking
-                if magazine.tracking_id == request.target_tracking_id:
+                if periodical.tracking_id == request.target_tracking_id:
                     continue
 
                 # Use a savepoint so a single failure doesn't roll back the whole batch
                 savepoint = db.begin_nested()
                 try:
-                    magazine.tracking_id = request.target_tracking_id
+                    periodical.tracking_id = request.target_tracking_id
 
-                    is_special = is_periodical_special_edition(magazine)
+                    is_special = is_periodical_special_edition(periodical)
 
                     if not is_special:
-                        old_pdf_path = Path(magazine.file_path)
+                        old_pdf_path = Path(periodical.file_path)
                         old_dir = old_pdf_path.parent
 
                         result = reorganize_periodical_files(
-                            magazine,
+                            periodical,
                             new_title=target_tracking.title,
                             library_base_dir=library_base_dir,
                             category_prefix=category_prefix,
-                            update_db=True,
+                            should_update_database=True,
                         )
 
                         if result.success:
-                            magazine.title = target_tracking.title
+                            periodical.title = target_tracking.title
                         else:
                             logger.error(f"Error reorganizing files for periodical {periodical_id}: {result.error}")
-                            magazine.title = target_tracking.title
+                            periodical.title = target_tracking.title
 
                         if old_dir not in dirs_to_cleanup:
                             dirs_to_cleanup.append(old_dir)
@@ -155,7 +155,9 @@ async def bulk_move_to_tracking(request: BulkMoveRequest) -> Dict[str, Any]:
 
 @router.post("/periodicals/bulk/regenerate-thumbnail-ocr")
 @handle_api_errors("Bulk regenerate thumbnail & OCR", logger)
-async def bulk_regenerate_thumbnail_ocr(request: BulkRegenerateRequest) -> Dict[str, Any]:
+async def bulk_regenerate_thumbnail_ocr(
+    request: BulkRegenerateRequest,
+) -> Dict[str, Any]:
     """
     Regenerate cover thumbnails and queue OCR for multiple issues.
 
@@ -176,28 +178,28 @@ async def bulk_regenerate_thumbnail_ocr(request: BulkRegenerateRequest) -> Dict[
         failed_ids = []
 
         for periodical_id in request.periodical_ids:
-            magazine = db.query(Periodical).filter(Periodical.id == periodical_id).first()
-            if not magazine:
+            periodical = db.query(Periodical).filter(Periodical.id == periodical_id).first()
+            if not periodical:
                 failed_ids.append(periodical_id)
                 logger.warning(f"Periodical {periodical_id} not found during bulk regenerate")
                 continue
 
-            if not magazine.file_path:
+            if not periodical.file_path:
                 failed_ids.append(periodical_id)
                 logger.warning(f"Periodical {periodical_id} has no file path")
                 continue
 
             try:
-                pdf_path = _shared.resolve_file_path(magazine.file_path)
+                pdf_path = _shared.resolve_file_path(periodical.file_path)
             except FileNotFoundError:
                 failed_ids.append(periodical_id)
-                logger.warning(f"File not found for periodical {periodical_id}: {magazine.file_path}")
+                logger.warning(f"File not found for periodical {periodical_id}: {periodical.file_path}")
                 continue
 
             # Skip if custom cover was uploaded and the file still exists
-            if magazine.extra_metadata and isinstance(magazine.extra_metadata, dict):
-                if magazine.extra_metadata.get("cover_uploaded") and magazine.cover_path:
-                    if Path(magazine.cover_path).exists():
+            if periodical.extra_metadata and isinstance(periodical.extra_metadata, dict):
+                if periodical.extra_metadata.get("cover_uploaded") and periodical.cover_path:
+                    if Path(periodical.cover_path).exists():
                         logger.debug(f"Skipping periodical {periodical_id} — custom uploaded cover exists")
                         skipped_count += 1
                         continue
@@ -212,12 +214,12 @@ async def bulk_regenerate_thumbnail_ocr(request: BulkRegenerateRequest) -> Dict[
 
             # Use stored cover page or default to 1
             page_number = 1
-            if magazine.extra_metadata and isinstance(magazine.extra_metadata, dict):
-                page_number = magazine.extra_metadata.get("cover_page", 1)
+            if periodical.extra_metadata and isinstance(periodical.extra_metadata, dict):
+                page_number = periodical.extra_metadata.get("cover_page", 1)
 
             # Invalidate old thumbnail
-            if magazine.cover_path:
-                old_cover = Path(magazine.cover_path)
+            if periodical.cover_path:
+                old_cover = Path(periodical.cover_path)
                 old_thumbnail = old_cover.parent / f"{old_cover.stem}_thumb.jpg"
                 if old_thumbnail.exists():
                     old_thumbnail.unlink()
@@ -236,10 +238,9 @@ async def bulk_regenerate_thumbnail_ocr(request: BulkRegenerateRequest) -> Dict[
                     cover_path = extract_cover_from_pdf(pdf_path, cover_dir, page_number=page_number)
 
                 if cover_path:
-                    magazine.cover_path = str(cover_path)
-                    # Clear uploaded flag since we regenerated from PDF
-                    if magazine.extra_metadata and isinstance(magazine.extra_metadata, dict):
-                        magazine.extra_metadata.pop("cover_uploaded", None)
+                    periodical.cover_path = str(cover_path)
+                    if periodical.extra_metadata and isinstance(periodical.extra_metadata, dict):
+                        periodical.extra_metadata.pop("cover_uploaded", None)
                     regenerated_count += 1
                 else:
                     failed_ids.append(periodical_id)
@@ -256,7 +257,7 @@ async def bulk_regenerate_thumbnail_ocr(request: BulkRegenerateRequest) -> Dict[
                     db=db,
                     periodical_id=periodical_id,
                     priority=OCRJob.PriorityEnum.HIGH.value,
-                    language=magazine.language,
+                    language=periodical.language,
                 )
                 if job:
                     ocr_queued_count += 1
@@ -303,17 +304,16 @@ async def bulk_delete(request: BulkDeleteRequest) -> Dict[str, Any]:
         dirs_to_cleanup = []
 
         for periodical_id in request.periodical_ids:
-            magazine = db.query(Periodical).filter(Periodical.id == periodical_id).first()
-            if not magazine:
+            periodical = db.query(Periodical).filter(Periodical.id == periodical_id).first()
+            if not periodical:
                 failed_ids.append(periodical_id)
                 logger.warning(f"Periodical {periodical_id} not found during bulk delete")
                 continue
 
-            file_path = Path(magazine.file_path) if magazine.file_path else None
-            cover_path = Path(magazine.cover_path) if magazine.cover_path else None
+            file_path = Path(periodical.file_path) if periodical.file_path else None
+            cover_path = Path(periodical.cover_path) if periodical.cover_path else None
 
             if request.delete_files:
-                # Delete the actual files
                 if file_path and file_path.exists():
                     old_dir = file_path.parent
                     file_path.unlink()
@@ -322,8 +322,7 @@ async def bulk_delete(request: BulkDeleteRequest) -> Dict[str, Any]:
                 if cover_path and cover_path.exists():
                     cover_path.unlink()
 
-            if request.mark_as_bad and magazine.tracking_id:
-                # Mark as permanently failed in the download submissions table
+            if request.mark_as_bad and periodical.tracking_id:
                 from models.database import DownloadSubmission
 
                 submission = (
@@ -332,7 +331,7 @@ async def bulk_delete(request: BulkDeleteRequest) -> Dict[str, Any]:
                 if submission:
                     submission.status = "permanently_failed"
 
-            db.delete(magazine)
+            db.delete(periodical)
             deleted_count += 1
 
         db.commit()

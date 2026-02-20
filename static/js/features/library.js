@@ -1087,18 +1087,18 @@ export class LibraryManager {
   /**
    * View a magazine's PDF/EPUB file
    *
-   * @param {number} magazineId - The ID of the magazine
+   * @param {number} periodicalId - The ID of the magazine
    * @param {string} _title - The title (unused, for logging)
    * @returns {Promise<void>}
    *
    * @example
    * library.viewPDF(123, 'PC Gamer Issue 1');
    */
-  async viewPDF(magazineId, _title) {
+  async viewPDF(periodicalId, _title) {
     try {
       // Get magazine metadata to check file type
       const data = await APIHelper.executeWithErrorHandling(async () => {
-        const response = await APIClient.get(`/api/periodicals/${magazineId}`);
+        const response = await APIClient.get(`/api/periodicals/${periodicalId}`);
         return await response.json();
       }, 'Library');
 
@@ -1109,29 +1109,29 @@ export class LibraryManager {
         if (filePath.endsWith('.epub')) {
           console.log('[Library] Detected EPUB, opening EPUB reader');
           // Open EPUB reader
-          window.open(`/epub-reader?id=${magazineId}`, '_blank');
+          window.open(`/epub-reader?id=${periodicalId}`, '_blank');
         } else if (filePath.endsWith('.cbz') || filePath.endsWith('.cbr')) {
           console.log('[Library] Detected comic file, opening comic reader');
           // Open comic reader
-          window.open(`/comic-reader?id=${magazineId}`, '_blank');
+          window.open(`/comic-reader?id=${periodicalId}`, '_blank');
         } else if (filePath.endsWith('.pdf')) {
           console.log('[Library] Detected PDF, opening PDF reader');
           // Open PDF reader
-          window.open(`/pdf-reader?id=${magazineId}`, '_blank');
+          window.open(`/pdf-reader?id=${periodicalId}`, '_blank');
         } else {
           console.log('[Library] Unknown file type, opening directly');
           // Open file directly
-          window.open(`/api/periodicals/${magazineId}/pdf`, '_blank');
+          window.open(`/api/periodicals/${periodicalId}/pdf`, '_blank');
         }
       } else {
         console.log('[Library] No file_path, opening directly');
         // Fallback to opening directly
-        window.open(`/api/periodicals/${magazineId}/pdf`, '_blank');
+        window.open(`/api/periodicals/${periodicalId}/pdf`, '_blank');
       }
     } catch (error) {
       console.error('[Library] Error checking file type:', error);
       // Fallback to opening as PDF
-      window.open(`/api/periodicals/${magazineId}/pdf`, '_blank');
+      window.open(`/api/periodicals/${periodicalId}/pdf`, '_blank');
     }
   }
 

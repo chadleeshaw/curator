@@ -198,7 +198,9 @@ class TestRunWithFlagged:
         session.query.return_value.filter.return_value.limit.return_value.all.return_value = [magazine]
 
         with patch.object(
-            reorganizer, "_reorganize_single", return_value={"status": "skipped", "reason": "already_correct"}
+            reorganizer,
+            "_reorganize_single",
+            return_value={"status": "skipped", "reason": "already_correct"},
         ):
             result = reorganizer.run()
 
@@ -298,7 +300,7 @@ class TestReorganizeSingle:
 
         with patch("services.file_organizer.FileOrganizer") as MockOrganizer:
             mock_instance = MockOrganizer.return_value
-            mock_instance._process_magazine_with_error_handling.return_value = {"status": "reorganized"}
+            mock_instance._process_periodical_with_error_handling.return_value = {"status": "reorganized"}
             mock_instance._safe_cleanup_library_directories = MagicMock()
 
             result = reorganizer._reorganize_single(magazine, db)
@@ -315,13 +317,13 @@ class TestReorganizeSingle:
 
         with patch("services.file_organizer.FileOrganizer") as MockOrganizer:
             mock_instance = MockOrganizer.return_value
-            mock_instance._process_magazine_with_error_handling.return_value = {"status": "skipped"}
+            mock_instance._process_periodical_with_error_handling.return_value = {"status": "skipped"}
             mock_instance._safe_cleanup_library_directories = MagicMock()
 
             reorganizer._reorganize_single(magazine, db)
 
             # Verify category_with_prefix uses default
-            call_kwargs = mock_instance._process_magazine_with_error_handling.call_args
+            call_kwargs = mock_instance._process_periodical_with_error_handling.call_args
             assert "_Magazines" in str(call_kwargs)
 
 

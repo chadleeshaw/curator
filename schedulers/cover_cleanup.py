@@ -88,17 +88,17 @@ class CoverCleanup:
                 generated_count = 0
                 thumbnail_count = 0
 
-                for magazine in periodicals_without_covers:
-                    file_path = Path(magazine.file_path)
+                for periodical in periodicals_without_covers:
+                    file_path = Path(periodical.file_path)
                     if not file_path.exists():
                         continue
 
                     # Extract cover from PDF or EPUB (run in bounded thread pool)
                     cover_path = await run_in_thread(lambda fp=file_path: self.file_importer._extract_cover(fp))
                     if cover_path:
-                        magazine.cover_path = str(cover_path)
+                        periodical.cover_path = str(cover_path)
                         generated_count += 1
-                        logger.debug(f"Generated missing cover for: {magazine.title}")
+                        logger.debug(f"Generated missing cover for: {periodical.title}")
 
                         # Generate thumbnail for UI performance
                         try:

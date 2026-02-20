@@ -1,4 +1,4 @@
-.PHONY: help lint format lint-python lint-js lint-css format-python format-js format-css test test-unit test-integration test-e2e test-routers test-coverage test-quick test-perf test-perf-api test-perf-load install install-hooks run clean ci-lint
+.PHONY: help lint format lint-python lint-js lint-css format-python format-js format-css test test-unit test-integration test-e2e test-routers test-coverage test-quick test-perf test-perf-api test-perf-ocr test-perf-ocr-accuracy test-perf-load install install-hooks run clean ci-lint
 
 PYTHON_FILES := $(shell find . -name '*.py' -not -path './.venv/*' -not -path './node_modules/*' -not -path './.node_modules/*')
 JS_FILES := static/js/*.js
@@ -37,9 +37,11 @@ help:
 	@echo "  make test-quick       Quick syntax check of test files"
 	@echo ""
 	@echo "Performance Testing:"
-	@echo "  make test-perf        Run all performance tests"
-	@echo "  make test-perf-api    Benchmark API endpoints"
-	@echo "  make test-perf-load   Run Locust load tests"
+	@echo "  make test-perf             Run all performance tests (API + OCR)"
+	@echo "  make test-perf-api         Benchmark API endpoints"
+	@echo "  make test-perf-ocr         Benchmark OCR (DPI vs speed vs accuracy)"
+	@echo "  make test-perf-ocr-accuracy  Run OCR accuracy-only tests with output"
+	@echo "  make test-perf-load        Run Locust load tests"
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  make clean            Remove cache, build, and temp files"
@@ -149,7 +151,7 @@ test-quick:
 	@find tests/ -name "test_*.py" -exec .venv/bin/python -m py_compile {} + && echo "✅ All test files compile"
 
 # Performance testing
-test-perf: test-perf-api
+test-perf: test-perf-api test-perf-ocr
 	@echo "✅ Performance testing complete!"
 
 test-perf-api:
@@ -158,6 +160,19 @@ test-perf-api:
 		--benchmark-columns=min,max,mean,stddev,ops \
 		--benchmark-sort=mean
 	@echo "✅ API benchmarks completed!"
+
+test-perf-ocr:
+	@echo "🔬 Running OCR performance benchmarks (DPI vs speed vs accuracy)..."
+	@.venv/bin/python -m pytest tests/performance/test_ocr_benchmarks.py --benchmark-only -v \
+		--benchmark-columns=min,max,mean,stddev,ops \
+		--benchmark-sort=mean \
+		--benchmark-min-rounds=3
+	@echo "✅ OCR benchmarks completed!"
+
+test-perf-ocr-accuracy:
+	@echo "🎯 Running OCR accuracy tests..."
+	@.venv/bin/python -m pytest tests/performance/test_ocr_benchmarks.py -k accuracy -v -s
+	@echo "✅ OCR accuracy tests completed!"
 
 test-perf-load:
 	@echo "🔥 Running Locust load tests..."

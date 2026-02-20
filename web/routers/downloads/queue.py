@@ -75,7 +75,7 @@ async def get_download_queue_all(status: Optional[str] = None) -> Dict[str, Any]
                     "submission_id": s.id,
                     "tracking_id": s.tracking_id,
                     "title": s.result_title,
-                    "magazine": tracking_map.get(s.tracking_id, "Unknown"),
+                    "periodical": tracking_map.get(s.tracking_id, "Unknown"),
                     "url": s.source_url or "",
                     "status": s.status.value,
                     "job_id": s.job_id,

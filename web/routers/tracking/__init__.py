@@ -18,7 +18,6 @@ from ._shared import router, set_dependencies
 from .crud import (
     start_tracking_periodical,
     list_tracked_periodicals,
-    list_tracked_magazines,
     get_tracking_details,
     delete_tracking,
 )
@@ -34,7 +33,6 @@ __all__ = [
     # CRUD functions
     "start_tracking_periodical",
     "list_tracked_periodicals",
-    "list_tracked_magazines",
     "get_tracking_details",
     "delete_tracking",
     # Search functions

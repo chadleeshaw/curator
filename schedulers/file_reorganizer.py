@@ -81,7 +81,7 @@ class FileReorganizer:
 
         return flagged
 
-    def _resolve_organization_pattern(self, magazine: Any, db: Session) -> str:
+    def _resolve_organization_pattern(self, periodical: Any, db: Session) -> str:
         """
         Resolve the organization pattern for a periodical.
 
@@ -89,29 +89,29 @@ class FileReorganizer:
         then falls back to the global organization pattern.
 
         Args:
-            magazine: Periodical database record
+            periodical: Periodical database record
             db: SQLAlchemy session
 
         Returns:
             Organization pattern string, or None for default
         """
-        if magazine.tracking_id:
+        if periodical.tracking_id:
             try:
                 from models.database import PeriodicalTracking
 
-                tracking = db.query(PeriodicalTracking).filter_by(id=magazine.tracking_id).first()
+                tracking = db.query(PeriodicalTracking).filter_by(id=periodical.tracking_id).first()
                 if tracking and tracking.organization_pattern:
                     logger.debug(
-                        f"Using per-periodical organization pattern for '{magazine.title}': "
+                        f"Using per-periodical organization pattern for '{periodical.title}': "
                         f"{tracking.organization_pattern}"
                     )
                     return tracking.organization_pattern
             except Exception:
-                logger.debug(f"Failed to look up tracking record for periodical {magazine.id}")
+                logger.debug(f"Failed to look up tracking record for periodical {periodical.id}")
 
         return self.organization_pattern
 
-    def _reorganize_single(self, magazine: Any, db: Session) -> Dict[str, Any]:
+    def _reorganize_single(self, periodical: Any, db: Session) -> Dict[str, Any]:
         """
         Reorganize a single periodical's files.
 
@@ -119,7 +119,7 @@ class FileReorganizer:
         correct location based on current metadata.
 
         Args:
-            magazine: Periodical database record
+            periodical: Periodical database record
             db: SQLAlchemy session
 
         Returns:
@@ -132,17 +132,19 @@ class FileReorganizer:
 
         # Determine category
         category = (
-            magazine.extra_metadata.get("category", DEFAULT_CATEGORY) if magazine.extra_metadata else DEFAULT_CATEGORY
+            periodical.extra_metadata.get("category", DEFAULT_CATEGORY)
+            if periodical.extra_metadata
+            else DEFAULT_CATEGORY
         )
         category_with_prefix = f"{self.category_prefix}{category}"
 
         # Resolve organization pattern: per-periodical tracking pattern > global pattern
-        pattern = self._resolve_organization_pattern(magazine, db)
+        pattern = self._resolve_organization_pattern(periodical, db)
 
-        # Use the organizer's single-magazine reorganization
+        # Use the organizer's single-periodical reorganization
         old_directories = set()
-        result = organizer._process_magazine_with_error_handling(
-            magazine=magazine,
+        result = organizer._process_periodical_with_error_handling(
+            periodical=periodical,
             db_session=db,
             category_with_prefix=category_with_prefix,
             pattern=pattern,
@@ -160,33 +162,33 @@ class FileReorganizer:
 
         return result
 
-    def _clear_flag(self, magazine: Any, db: Session, result: Dict[str, Any]) -> None:
+    def _clear_flag(self, periodical: Any, db: Session, result: Dict[str, Any]) -> None:
         """
         Clear the needs_reorganization flag after processing.
 
         Records the reorganization result in extra_metadata for audit purposes.
 
         Args:
-            magazine: Periodical database record
+            periodical: Periodical database record
             db: SQLAlchemy session
             result: Result from reorganization attempt
         """
         from core.utils.db import mark_json_modified
 
-        if not magazine.extra_metadata:
-            magazine.extra_metadata = {}
+        if not periodical.extra_metadata:
+            periodical.extra_metadata = {}
 
         # Remove the flag
-        magazine.extra_metadata.pop("needs_reorganization", None)
+        periodical.extra_metadata.pop("needs_reorganization", None)
 
         # Record what happened
-        magazine.extra_metadata["last_reorganization"] = {
+        periodical.extra_metadata["last_reorganization"] = {
             "timestamp": utc_now().isoformat(),
-            "reason": magazine.extra_metadata.pop("reorganization_reason", "unknown"),
+            "reason": periodical.extra_metadata.pop("reorganization_reason", "unknown"),
             "status": result.get("status", "unknown"),
         }
 
-        mark_json_modified(magazine, "extra_metadata")
+        mark_json_modified(periodical, "extra_metadata")
         db.commit()
 
     def run(self) -> Dict[str, Any]:
@@ -210,39 +212,41 @@ class FileReorganizer:
             skipped = 0
             errors = 0
 
-            for magazine in flagged:
+            for periodical in flagged:
                 try:
                     reason = (
-                        magazine.extra_metadata.get("reorganization_reason", "unknown")
-                        if magazine.extra_metadata
+                        periodical.extra_metadata.get("reorganization_reason", "unknown")
+                        if periodical.extra_metadata
                         else "unknown"
                     )
-                    logger.debug(f"File reorganizer: Processing '{magazine.title}' (id={magazine.id}, reason={reason})")
+                    logger.debug(
+                        f"File reorganizer: Processing '{periodical.title}' (id={periodical.id}, reason={reason})"
+                    )
 
-                    result = self._reorganize_single(magazine, db)
+                    result = self._reorganize_single(periodical, db)
 
                     if result.get("status") == "reorganized":
                         reorganized += 1
-                        logger.info(f"File reorganizer: Reorganized '{magazine.title}'")
+                        logger.info(f"File reorganizer: Reorganized '{periodical.title}'")
                     else:
                         skipped += 1
                         skip_reason = result.get("reason", "unknown")
-                        logger.debug(f"File reorganizer: Skipped '{magazine.title}' ({skip_reason})")
+                        logger.debug(f"File reorganizer: Skipped '{periodical.title}' ({skip_reason})")
 
                     # Always clear the flag, whether reorganized or skipped
-                    self._clear_flag(magazine, db, result)
+                    self._clear_flag(periodical, db, result)
 
                 except Exception as e:
                     errors += 1
                     logger.error(
-                        f"File reorganizer: Error processing '{magazine.title}' (id={magazine.id}): {e}",
+                        f"File reorganizer: Error processing '{periodical.title}' (id={periodical.id}): {e}",
                         exc_info=True,
                     )
                     # Still clear the flag to prevent infinite retry loops
                     try:
-                        self._clear_flag(magazine, db, {"status": "error", "error": str(e)})
+                        self._clear_flag(periodical, db, {"status": "error", "error": str(e)})
                     except Exception:
-                        logger.error(f"File reorganizer: Failed to clear flag for {magazine.id}")
+                        logger.error(f"File reorganizer: Failed to clear flag for {periodical.id}")
 
             # Update stats
             self.stats["total_runs"] += 1

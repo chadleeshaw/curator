@@ -54,7 +54,7 @@ async def get_download_status_for_tracking(tracking_id: int) -> Dict[str, Any]:
 
         return success_response(
             tracking_id=tracking_id,
-            magazine=tracking.title,
+            periodical=tracking.title,
             submissions=status_list,
             count=len(status_list),
         )

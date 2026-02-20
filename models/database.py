@@ -99,7 +99,7 @@ class Credentials(Base):
 
 
 class Periodical(Base):
-    """Organized periodical with metadata (magazines, comics, books, documents)"""
+    """Physical periodical file with metadata from filename, text extraction, and OCR."""
 
     __tablename__ = "periodicals"
 
@@ -144,7 +144,7 @@ class Periodical(Base):
 
 
 class PeriodicalTracking(Base):
-    """Track periodical series for monitoring and downloading specific editions"""
+    """Tracks periodical series for automated discovery and download."""
 
     __tablename__ = "periodical_tracking"
 

@@ -18,7 +18,7 @@ import {
 
 class EPUBReader {
   constructor() {
-    this.magazineId = null;
+    this.periodicalId = null;
     this.metadata = null;
     this.currentChapterIndex = 0;
     this.loading = false;
@@ -33,7 +33,7 @@ class EPUBReader {
 
     this.progressManager = new ProgressManager({
       logPrefix: 'EPUBReader',
-      getMagazineId: () => this.magazineId,
+      getMagazineId: () => this.periodicalId,
       getProgressData: () => ({
         current_chapter: this.currentChapterIndex,
         total_pages: this.metadata?.chapters?.length || 0,
@@ -54,9 +54,9 @@ class EPUBReader {
    */
   async init() {
     const urlParams = new URLSearchParams(window.location.search);
-    this.magazineId = urlParams.get('id');
+    this.periodicalId = urlParams.get('id');
 
-    if (!this.magazineId) {
+    if (!this.periodicalId) {
       this.showError('No periodical ID provided');
       return;
     }
@@ -87,7 +87,7 @@ class EPUBReader {
   async loadMetadata() {
     try {
       this.metadata = await APIHelper.executeWithErrorHandling(async () => {
-        const response = await APIClient.get(`/api/periodicals/${this.magazineId}/epub/metadata`);
+        const response = await APIClient.get(`/api/periodicals/${this.periodicalId}/epub/metadata`);
         return await response.json();
       }, 'EPUBReader');
 
@@ -162,7 +162,7 @@ class EPUBReader {
       } else {
         html = await APIHelper.executeWithErrorHandling(async () => {
           const response = await APIClient.get(
-            `/api/periodicals/${this.magazineId}/epub/chapter/${index}`
+            `/api/periodicals/${this.periodicalId}/epub/chapter/${index}`
           );
           return await response.text();
         }, 'EPUBReader');
@@ -255,7 +255,7 @@ class EPUBReader {
   async prefetchChapter(index) {
     if (this.chapterCache.has(index)) return;
 
-    const chapterUrl = `/api/periodicals/${this.magazineId}/epub/chapter/${index}`;
+    const chapterUrl = `/api/periodicals/${this.periodicalId}/epub/chapter/${index}`;
 
     try {
       if (this.workerInitialized) {
@@ -384,7 +384,7 @@ class EPUBReader {
    * Navigate back to the periodical detail page
    */
   goBackToPeriodical() {
-    goBackToPeriodical(this.magazineId);
+    goBackToPeriodical(this.periodicalId);
   }
 
   /**

@@ -275,7 +275,12 @@ class TestReorganizePeriodicalFiles:
         original_pdf = mock_periodical.file_path
         original_cover = mock_periodical.cover_path
 
-        result = reorganize_periodical_files(mock_periodical, "Updated Title", temp_library_dir, update_db=True)
+        result = reorganize_periodical_files(
+            mock_periodical,
+            "Updated Title",
+            temp_library_dir,
+            should_update_database=True,
+        )
 
         assert result.success is True
         # Verify paths were updated
@@ -289,7 +294,7 @@ class TestReorganizePeriodicalFiles:
         original_pdf = mock_periodical.file_path
         original_cover = mock_periodical.cover_path
 
-        result = reorganize_periodical_files(mock_periodical, "Test", temp_library_dir, update_db=False)
+        result = reorganize_periodical_files(mock_periodical, "Test", temp_library_dir, should_update_database=False)
 
         assert result.success is True
         # Verify paths were NOT updated
@@ -323,7 +328,7 @@ class TestReorganizePeriodicalFiles:
             periodical,
             new_title="Wired",
             library_base_dir=temp_library_dir,
-            update_db=True,
+            should_update_database=True,
         )
 
         assert result.success is True
