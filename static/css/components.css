@@ -781,7 +781,9 @@
   cursor: pointer;
   padding: 4px 8px;
   border-radius: var(--radius-sm, 4px);
-  transition: color var(--transition-fast), background-color var(--transition-fast);
+  transition:
+    color var(--transition-fast),
+    background-color var(--transition-fast);
 }
 
 .btn-danger-text:hover {

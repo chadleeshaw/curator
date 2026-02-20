@@ -79,7 +79,7 @@ window.toggleBulkSelectMode = toggleBulkSelectMode;
 function updateSubtitle() {
   const subtitle = document.getElementById('periodical-subtitle');
   if (!subtitle) return;
-  
+
   // For issue_date sort, detect if grouped by year or volume
   let issueGroupingLabel = 'Grouped by Publication Date';
   if (currentSortField === 'issue_date' && yearsData.length > 0) {
@@ -88,14 +88,14 @@ function updateSubtitle() {
     const looksLikeYear = /^\d{4}$/.test(firstKey);
     issueGroupingLabel = looksLikeYear ? 'Grouped by Year' : 'Grouped by Volume';
   }
-  
+
   const subtitles = {
     issue_date: issueGroupingLabel,
     title: 'Sorted by Title',
     volume: 'Sorted by Volume',
-    added_date: 'Sorted by Date Added'
+    added_date: 'Sorted by Date Added',
   };
-  
+
   subtitle.textContent = subtitles[currentSortField] || issueGroupingLabel;
 }
 
@@ -245,12 +245,12 @@ function getVolumeNumber(data) {
 function sortIssues(issues) {
   return issues.sort((a, b) => {
     let comparison = 0;
-    
+
     switch (currentSortField) {
       case 'issue_date':
         // Primary sort by issue_date
         comparison = new Date(a.issue_date || 0) - new Date(b.issue_date || 0);
-        
+
         // If both have invalid/missing dates (epoch 0), fallback to volume number
         if (comparison === 0 && (!a.issue_date || !b.issue_date)) {
           const volumeA = getVolumeNumber(a);
@@ -259,7 +259,9 @@ function sortIssues(issues) {
         }
         break;
       case 'title':
-        comparison = (a.special_edition_name || a.title || '').localeCompare(b.special_edition_name || b.title || '');
+        comparison = (a.special_edition_name || a.title || '').localeCompare(
+          b.special_edition_name || b.title || ''
+        );
         break;
       case 'volume':
         comparison = getVolumeNumber(a) - getVolumeNumber(b);
@@ -268,7 +270,7 @@ function sortIssues(issues) {
         comparison = new Date(a.created_at || 0) - new Date(b.created_at || 0);
         break;
     }
-    
+
     return sortAscending ? comparison : -comparison;
   });
 }
@@ -301,17 +303,17 @@ function rerender() {
   const container = document.getElementById('issues-container');
   container.style.opacity = '0.5';
   container.style.transition = 'opacity 0.2s ease';
-  
+
   setTimeout(() => {
     container.innerHTML = '';
-    
+
     // For non-date sorts, show flattened view (no year grouping)
     if (currentSortField !== 'issue_date') {
       renderFlatView(container);
     } else {
       renderGroupedView(container);
     }
-    
+
     container.style.opacity = '1';
   }, 100);
 }
@@ -323,28 +325,28 @@ function rerender() {
 function renderFlatView(container) {
   // Collect all issues
   const allIssues = [];
-  
+
   if (specialEditionsData && specialEditionsData.length > 0) {
     allIssues.push(...specialEditionsData);
   }
-  
+
   yearsData.forEach((yearData) => {
     allIssues.push(...yearData.issues);
   });
-  
+
   // Sort all issues together
   const sortedIssues = sortIssues(allIssues);
-  
+
   // Create single grid
   const issuesGrid = document.createElement('div');
   issuesGrid.className = 'issues-grid';
   issuesGrid.style.marginTop = '20px';
-  
+
   sortedIssues.forEach((issue) => {
     const issueCard = createIssueCard(issue);
     issuesGrid.appendChild(issueCard);
   });
-  
+
   container.appendChild(issuesGrid);
 }
 
@@ -387,7 +389,7 @@ function renderGroupedView(container) {
   // Re-render regular year sections
   sortedYearsData.forEach((yearData) => {
     const sortedIssues = sortIssues([...yearData.issues]);
-    
+
     const yearSection = document.createElement('div');
     yearSection.className = 'year-section';
 
@@ -851,9 +853,7 @@ function enableMetadataEdit() {
 
   // Year field - read from derived_metadata first, fall back to extra_metadata
   document.getElementById('edit-year').value =
-    currentMagazineData.derived_metadata?.year?.value ??
-    currentMagazineData.metadata?.year ??
-    '';
+    currentMagazineData.derived_metadata?.year?.value ?? currentMagazineData.metadata?.year ?? '';
 
   // Month field - read month_name from derived_metadata first, fall back to extra_metadata
   document.getElementById('edit-month').value =
@@ -1251,7 +1251,9 @@ async function openMoveIssueModal() {
   try {
     // Fetch all tracking records
     const data = await APIHelper.executeWithErrorHandling(async () => {
-      const response = await APIClient.get(`/api/periodicals/tracking?limit=${API_LIMITS.TRACKING_LIST}`);
+      const response = await APIClient.get(
+        `/api/periodicals/tracking?limit=${API_LIMITS.TRACKING_LIST}`
+      );
       return await response.json();
     }, 'Periodical');
 
@@ -1411,12 +1413,14 @@ function toggleBulkSelectMode() {
   if (bulkSelectMode) {
     container.classList.add('bulk-select-mode');
     toggleBtn.classList.add('active');
-    toggleBtn.innerHTML = '<span class="bulk-select-icon">☑</span><span class="btn-label"> Selecting...</span>';
+    toggleBtn.innerHTML =
+      '<span class="bulk-select-icon">☑</span><span class="btn-label"> Selecting...</span>';
     actionBar.classList.remove(CSS_CLASSES.HIDDEN);
   } else {
     container.classList.remove('bulk-select-mode');
     toggleBtn.classList.remove('active');
-    toggleBtn.innerHTML = '<span class="bulk-select-icon">☑</span><span class="btn-label"> Select</span>';
+    toggleBtn.innerHTML =
+      '<span class="bulk-select-icon">☑</span><span class="btn-label"> Select</span>';
     actionBar.classList.add(CSS_CLASSES.HIDDEN);
   }
 
@@ -1518,7 +1522,9 @@ async function openBulkMoveModal() {
 
   try {
     const data = await APIHelper.executeWithErrorHandling(async () => {
-      const response = await APIClient.get(`/api/periodicals/tracking?limit=${API_LIMITS.TRACKING_LIST}`);
+      const response = await APIClient.get(
+        `/api/periodicals/tracking?limit=${API_LIMITS.TRACKING_LIST}`
+      );
       return await response.json();
     }, 'Periodical');
 
@@ -1782,8 +1788,7 @@ document.addEventListener('DOMContentLoaded', () => {
       message.style.textAlign = 'center';
       message.style.padding = '40px';
       message.style.color = 'var(--text-secondary)';
-      message.innerHTML =
-        `<p>This periodical has no issues remaining.</p><p><button onclick="goBack()" class="back-button">← ${window._stackReturnUrl ? 'Back to Stack' : 'Back to Library'}</button></p>`;
+      message.innerHTML = `<p>This periodical has no issues remaining.</p><p><button onclick="goBack()" class="back-button">← ${window._stackReturnUrl ? 'Back to Stack' : 'Back to Library'}</button></p>`;
       const statusDiv = document.getElementById('status-message');
       if (statusDiv && statusDiv.style.display === 'none') {
         // Show helpful message if not already showing deletion success

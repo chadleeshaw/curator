@@ -63,7 +63,9 @@
 
 .bulk-select-mode .issue-card.bulk-selected {
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 2px var(--primary-color), 0 4px 12px rgb(99 102 241 / 0.3);
+  box-shadow:
+    0 0 0 2px var(--primary-color),
+    0 4px 12px rgb(99 102 241 / 0.3);
 }
 
 .bulk-select-mode .issue-card.bulk-selected .issue-cover::after {
