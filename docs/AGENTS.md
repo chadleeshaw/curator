@@ -135,6 +135,10 @@ curator/
 │   ├── sabnzbd.py       # SABnzbd client
 │   └── nzbget.py        # NZBGet client
 ├── services/            # Business logic
+│   ├── download/        # Download pipeline
+│   │   ├── nzb_submit.py       # Shared NZB submission helper
+│   │   ├── queue_processor.py  # QUEUED→PENDING promotion
+│   │   └── submission_service.py
 │   ├── file_organizer/  # File organization
 │   ├── importer/        # File import
 │   ├── ocr/             # OCR processing
@@ -464,6 +468,19 @@ See `docs/TERMINOLOGY.md` for complete definitions and examples.
 - **Sentinel dates**: Periodicals without detectable dates use `1900-01-01` instead of current date
 - **Issue dates**: Use `issue_date` column (DateTime with timezone)
 - **Unknown dates**: Constant `UNKNOWN_ISSUE_DATE_YEAR = 1900` in `core/constants/date.py`
+
+### Download Pipeline
+
+All download paths go through `DiscoveredIssue` — never create a `DownloadSubmission` directly:
+
+1. Search results → `IssueDiscoveryService.record_search_results()` → `DiscoveredIssue` created/updated
+2. `IssueDiscoveryService.evaluate_discovered_issues()` → sets status to `wanted`
+3. `DownloadManager.submit_from_discovered_issue()` → creates `DownloadSubmission`, submits to client
+
+The only exception is `_manual_direct_submission` (fallback when IDS lookup fails), which creates a
+`DownloadSubmission` first and then best-effort links it via `_link_manual_submission_to_discovered_issue()`.
+
+See `docs/periodical-lifecycle.md` for the full state machine and component diagram.
 
 ---
 
