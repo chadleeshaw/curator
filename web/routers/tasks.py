@@ -8,6 +8,7 @@ from typing import Any, Callable, Dict, Optional
 
 from fastapi import APIRouter
 
+from core.constants.files import BYTES_PER_MB
 from core.utils.error_handling import handle_api_errors
 from core.utils import run_in_thread
 from web.utils.responses import success_response, error_response
@@ -307,7 +308,7 @@ async def run_task_manually(task_id: str):
             stats = await run_in_thread(_folder_cleanup_task.run)
             message = (
                 f"Folder cleanup executed. Deleted: {stats.get('total_deleted', 0)} folders, "
-                f"Freed: {stats.get('total_size_freed', 0) / (1024 * 1024):.2f} MB"
+                f"Freed: {stats.get('total_size_freed', 0) / BYTES_PER_MB:.2f} MB"
             )
             return success_response(
                 message,

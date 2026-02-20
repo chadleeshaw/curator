@@ -14,7 +14,15 @@ from core.utils.error_handling import handle_api_errors
 from core.utils.general import (
     generate_olid,
 )
-from models.database import Periodical, PeriodicalTracking, Stack, StackMembership
+from models.database import (
+    DiscoveredIssue,
+    DownloadStatus,
+    DownloadSubmission,
+    Periodical,
+    PeriodicalTracking,
+    Stack,
+    StackMembership,
+)
 from services.file_operations import reorganize_periodical_files
 from web.schemas import APIError
 from web.utils.responses import success_response, error_response
@@ -158,11 +166,6 @@ async def list_tracked_periodicals(
         total = db.query(PeriodicalTracking).count()
 
         # Compute library count and failed download count for each tracked periodical
-        from models.database import (
-            DiscoveredIssue,
-            DownloadSubmission,
-        )
-
         tracked_list = []
         for t in tracked:
             library_count = db.query(Periodical).filter(Periodical.tracking_id == t.id).count()
@@ -174,7 +177,7 @@ async def list_tracked_periodicals(
                 db.query(DiscoveredIssue)
                 .filter(
                     DiscoveredIssue.tracking_id == t.id,
-                    DiscoveredIssue.download_status.in_(["failed", "permanently_failed"]),
+                    DiscoveredIssue.download_status.in_([DownloadStatus.FAILED, DownloadStatus.PERMANENTLY_FAILED]),
                 )
                 .count()
             )
@@ -340,8 +343,6 @@ async def delete_tracking(tracking_id: int) -> Dict[str, Any]:
     """Delete a magazine tracking record"""
 
     def operation(db):
-        from models.database import DiscoveredIssue, DownloadSubmission
-
         tracking = db.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
         if not tracking:
             raise HTTPException(status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND)

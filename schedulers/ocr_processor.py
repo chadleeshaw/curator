@@ -68,7 +68,6 @@ class OCRProcessor:
             Dictionary with processing statistics
         """
         try:
-
             # Check if OCR is available
             if not OCRService.is_available():
                 logger.debug("OCR service not available, skipping OCR processing")
@@ -86,7 +85,7 @@ class OCRProcessor:
 
             # Run OCR processing in thread pool to avoid blocking the event loop
             # This prevents the web interface from freezing during PNG generation and OCR
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             result = await loop.run_in_executor(self.executor, self._process_sync)
 
             # Update stats

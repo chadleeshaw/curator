@@ -116,7 +116,6 @@ class SearchService:
                             logger.debug(f"Skipping non-periodical result: {result.title}")
                             continue
 
-                        # Filter IA collection archives and poor title matches
                         if not filter_ia_result(
                             result_title=result.title,
                             result_provider=result.provider,
@@ -125,7 +124,6 @@ class SearchService:
                         ):
                             continue
 
-                        # Apply language filter if specified
                         if language_filter and parsed.language != language_filter:
                             logger.debug(
                                 f"Skipping result with language '{parsed.language}' "
@@ -133,22 +131,15 @@ class SearchService:
                             )
                             continue
 
-                        # Apply edition variant filter
                         normalized_search = search_title.replace(".", " ").replace("_", " ")
                         normalized_result = parsed.title.replace(".", " ").replace("_", " ")
 
                         search_variant = self.title_matcher.extract_periodical_variant(normalized_search)
                         result_variant = self.title_matcher.extract_periodical_variant(normalized_result)
-
-                        # Skip results with mismatched edition variants
-                        if not (
-                            (search_variant is None and result_variant is None)
-                            or (
-                                search_variant is not None
-                                and result_variant is not None
-                                and search_variant == result_variant
-                            )
-                        ):
+                        variants_match = search_variant == result_variant or (
+                            search_variant is None and result_variant is None
+                        )
+                        if not variants_match:
                             logger.debug(
                                 f"Skipping edition variant mismatch: '{parsed.title}' (variant: {result_variant}) "
                                 f"doesn't match search '{search_title}' (variant: {search_variant})"

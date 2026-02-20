@@ -16,7 +16,7 @@ from typing import Dict, List, Set, Tuple
 
 from core.constants import SUPPORTED_FILE_EXTENSIONS
 from core.constants.category import CATEGORIES
-from core.constants.files import IMPORT_MARKER_FILE
+from core.constants.files import BYTES_PER_MB, IMPORT_MARKER_FILE
 from core.utils import cleanup_empty_directories
 
 logger = logging.getLogger(__name__)
@@ -301,7 +301,7 @@ class FolderCleanup:
         logger.info(
             f"Folder cleanup complete for {description}: "
             f"{stats['deleted']} deleted, {stats['protected']} protected, "
-            f"{stats['errors']} errors, {stats['total_size_freed'] / (1024 * 1024):.2f} MB freed"
+            f"{stats['errors']} errors, {stats['total_size_freed'] / BYTES_PER_MB:.2f} MB freed"
         )
 
         return stats
@@ -356,7 +356,7 @@ class FolderCleanup:
             f"Folder cleanup task complete ({mode}): "
             f"{total_stats['total_deleted']} folders deleted, "
             f"{total_stats['total_protected']} folders protected, "
-            f"{total_stats['total_size_freed'] / (1024 * 1024):.2f} MB freed"
+            f"{total_stats['total_size_freed'] / BYTES_PER_MB:.2f} MB freed"
         )
 
         return total_stats

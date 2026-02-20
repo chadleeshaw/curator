@@ -3,6 +3,48 @@ Country and regional constants
 """
 
 # ==============================================================================
+# Country Code Normalization
+# ==============================================================================
+
+THREE_LETTER_COUNTRY_CODES = {
+    "USA": "US",
+    "GBR": "UK",
+    "CAN": "CA",
+    "AUS": "AU",
+    "NZL": "NZ",
+    "DEU": "DE",
+    "FRA": "FR",
+    "ITA": "IT",
+    "ESP": "ES",
+    "JPN": "JP",
+    "CHN": "CN",
+}
+"""ISO 3166-1 alpha-3 to alpha-2 country code mappings"""
+
+FULL_NAME_COUNTRY_CODES = {
+    "UNITED STATES": "US",
+    "UNITED KINGDOM": "UK",
+    "GREAT BRITAIN": "UK",
+    "ENGLAND": "UK",
+    "SCOTLAND": "UK",
+    "WALES": "UK",
+    "AUSTRALIA": "AU",
+    "CANADA": "CA",
+    "NEW ZEALAND": "NZ",
+    "GERMANY": "DE",
+    "FRANCE": "FR",
+    "ITALY": "IT",
+    "SPAIN": "ES",
+    "JAPAN": "JP",
+    "CHINA": "CN",
+    "NETHERLANDS": "NL",
+    "HOLLAND": "NL",
+    "NEDERLAND": "NL",
+}
+"""Full country name to ISO 3166-1 alpha-2 code mappings"""
+
+
+# ==============================================================================
 # ISO Country Codes
 # ==============================================================================
 

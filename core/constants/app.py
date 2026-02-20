@@ -37,6 +37,9 @@ MAX_DOWNLOAD_RETRIES_IA = 5
 MAX_IMPORT_RETRIES = 3
 """Maximum number of retry attempts for failed file imports (file exists but import failed)"""
 
+ORPHANED_SUBMISSION_THRESHOLD_HOURS = 24
+"""Hours after which a completed submission with no file_path is considered orphaned and skipped"""
+
 MAX_DOWNLOADS = 10
 """Maximum number of concurrent downloads allowed system-wide""" ""
 

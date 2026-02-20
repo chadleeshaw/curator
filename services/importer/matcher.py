@@ -10,25 +10,22 @@ from dataclasses import dataclass
 
 from fuzzywuzzy import fuzz
 
+from core.constants.matching import (
+    FUZZY_THRESHOLD_HIGH,
+    FUZZY_THRESHOLD_MEDIUM,
+    MIN_SCORE_FOR_MATCH,
+    WEIGHT_CATEGORY_MATCH,
+    WEIGHT_COUNTRY_MATCH,
+    WEIGHT_COUNTRY_MISMATCH_PENALTY,
+    WEIGHT_LANGUAGE_MATCH,
+    WEIGHT_TITLE_ABBREVIATION,
+    WEIGHT_TITLE_EXACT,
+    WEIGHT_TITLE_FUZZY_HIGH,
+    WEIGHT_TITLE_FUZZY_MEDIUM,
+)
 from core.constants.title import TITLE_SKIP_WORDS
 
 logger = logging.getLogger(__name__)
-
-
-# Scoring weights for different matching criteria
-WEIGHT_TITLE_EXACT = 100
-WEIGHT_TITLE_FUZZY_HIGH = 80
-WEIGHT_TITLE_ABBREVIATION = 70
-WEIGHT_TITLE_FUZZY_MEDIUM = 60
-WEIGHT_LANGUAGE_MATCH = 20
-WEIGHT_COUNTRY_MATCH = 15
-WEIGHT_CATEGORY_MATCH = 10
-WEIGHT_COUNTRY_MISMATCH_PENALTY = -30
-
-# Thresholds
-MIN_SCORE_FOR_MATCH = 70  # Minimum score to consider it a match
-FUZZY_THRESHOLD_HIGH = 90  # High confidence fuzzy match
-FUZZY_THRESHOLD_MEDIUM = 75  # Medium confidence fuzzy match
 
 
 @dataclass

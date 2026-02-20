@@ -11,7 +11,16 @@ from sqlalchemy.orm import Session
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
 from core.utils.general import generate_olid
-from models.database import Periodical, PeriodicalTracking, Stack, StackMembership
+from models.database import (
+    DiscoveredIssue,
+    DownloadStatus,
+    DownloadSubmission,
+    OCRJob,
+    Periodical,
+    PeriodicalTracking,
+    Stack,
+    StackMembership,
+)
 from web.schemas import PeriodicalResponse
 from web.utils.responses import success_response
 
@@ -481,8 +490,6 @@ def _collect_file_paths(
 
 def _delete_associated_ocr_jobs(db: Session, periodical_ids: List[int], title: str) -> None:
     """Delete OCR jobs associated with periodicals."""
-    from models.database import OCRJob
-
     ocr_deleted = db.query(OCRJob).filter(OCRJob.periodical_id.in_(periodical_ids)).delete(synchronize_session="fetch")
     if ocr_deleted:
         logger.info(f"Deleted {ocr_deleted} OCR job(s) for periodical(s): {title}")
@@ -501,8 +508,6 @@ def _delete_periodical_stack_memberships(db: Session, periodical_ids: List[int],
 
 def _mark_discovered_issues_as_failed(db: Session, periodicals: List[Periodical], title: str) -> None:
     """Mark related discovered issues as permanently failed to prevent re-download."""
-    from models.database import DiscoveredIssue
-
     tracking_ids = [p.tracking_id for p in periodicals if p.tracking_id]
     if not tracking_ids:
         return
@@ -511,14 +516,20 @@ def _mark_discovered_issues_as_failed(db: Session, periodicals: List[Periodical]
         db.query(DiscoveredIssue)
         .filter(
             DiscoveredIssue.tracking_id.in_(tracking_ids),
-            DiscoveredIssue.download_status.in_(["discovered", "wanted", "failed"]),
+            DiscoveredIssue.download_status.in_(
+                [
+                    DownloadStatus.DISCOVERED,
+                    DownloadStatus.WANTED,
+                    DownloadStatus.FAILED,
+                ]
+            ),
         )
         .all()
     )
 
     marked_count = 0
     for issue in issues:
-        issue.download_status = "permanently_failed"
+        issue.download_status = DownloadStatus.PERMANENTLY_FAILED
         issue.last_error = "Manually marked as bad file (user deleted from library)"
         marked_count += 1
 
@@ -528,8 +539,6 @@ def _mark_discovered_issues_as_failed(db: Session, periodicals: List[Periodical]
 
 def _delete_tracking_record(db: Session, title: str) -> None:
     """Delete tracking record and associated stack memberships."""
-    from models.database import PeriodicalTracking
-
     olid = generate_olid(title)
     tracking = db.query(PeriodicalTracking).filter(PeriodicalTracking.olid == olid).first()
     if not tracking:
@@ -656,13 +665,6 @@ async def purge_database() -> Dict[str, Any]:
     """
 
     def operation(db):
-        from models.database import (
-            PeriodicalTracking,
-            DownloadSubmission,
-            OCRJob,
-            DiscoveredIssue,
-        )
-
         # Count entries before deletion
         magazine_count = db.query(Periodical).count()
         tracking_count = db.query(PeriodicalTracking).count()

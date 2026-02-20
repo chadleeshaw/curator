@@ -10,13 +10,22 @@ from typing import Callable, Optional
 
 from sqlalchemy.orm import Session, sessionmaker
 
-from core.constants.app import DOWNLOAD_FILE_SEARCH_DEPTH
-from core.constants.app import MAX_IMPORT_RETRIES
+from core.constants.app import (
+    AUTO_DOWNLOAD_INTERVAL,
+    DOWNLOAD_FILE_SEARCH_DEPTH,
+    MAX_IMPORT_RETRIES,
+    ORPHANED_SUBMISSION_THRESHOLD_HOURS,
+)
 from core.constants.files import INCOMPLETE_DOWNLOAD_PATTERNS
 from core.parsers import utc_now
 from core.utils import find_supported_files
 from services.importer.sidecar import create_sidecar_file
-from models.database import DownloadSubmission, PeriodicalTracking, DiscoveredIssue
+from models.database import (
+    DiscoveredIssue,
+    DownloadStatus,
+    DownloadSubmission,
+    PeriodicalTracking,
+)
 from services import DownloadManager
 from services import FileImporter
 
@@ -133,7 +142,7 @@ class DownloadMonitor:
                     now = utc_now()
                     should_warn = (
                         self.last_config_warning_time is None
-                        or (now - self.last_config_warning_time).total_seconds() > 1800  # 30 minutes
+                        or (now - self.last_config_warning_time).total_seconds() > AUTO_DOWNLOAD_INTERVAL
                     )
 
                     if should_warn:
@@ -399,7 +408,11 @@ class DownloadMonitor:
                     self.download_manager.mark_processed(submission.id, session)
 
                     if self._should_delete_from_client(submission.tracking_id, session):
-                        self._delete_from_client(submission.job_id, "completed (import retry)", submission.client_name)
+                        self._delete_from_client(
+                            submission.job_id,
+                            "completed (import retry)",
+                            submission.client_name,
+                        )
 
                     logger.info(f"[DownloadMonitor] Import retry succeeded: {file_path.name}")
                 else:
@@ -527,11 +540,11 @@ class DownloadMonitor:
             f"  This typically happens when SABnzbd history was purged or storage field was empty."
         )
 
-        # Auto-recovery: Mark as SKIPPED if older than 24 hours
-        if age_hours > 24:
+        # Auto-recovery: Mark as SKIPPED if older than threshold
+        if age_hours > ORPHANED_SUBMISSION_THRESHOLD_HOURS:
             logger.info(
                 f"[DownloadMonitor] Marking submission {submission.id} as SKIPPED "
-                f"(age: {age_hours:.1f} hours > 24 hours threshold)"
+                f"(age: {age_hours:.1f} hours > {ORPHANED_SUBMISSION_THRESHOLD_HOURS} hours threshold)"
             )
             submission.status = DownloadSubmission.StatusEnum.SKIPPED
             submission.last_error = (
@@ -659,10 +672,17 @@ class DownloadMonitor:
 
                     # Delete from client
                     if submission.job_id and self._should_delete_from_client(submission.tracking_id, session):
-                        self._delete_from_client(submission.job_id, "completed (folder import)", submission.client_name)
+                        self._delete_from_client(
+                            submission.job_id,
+                            "completed (folder import)",
+                            submission.client_name,
+                        )
 
         except Exception as e:
-            logger.error(f"[DownloadMonitor] Error cleaning up stale submissions: {e}", exc_info=True)
+            logger.error(
+                f"[DownloadMonitor] Error cleaning up stale submissions: {e}",
+                exc_info=True,
+            )
 
     def _process_completed_downloads(self, session: Session) -> int:
         """
@@ -779,7 +799,7 @@ class DownloadMonitor:
                 session.commit()
 
                 # Sync DiscoveredIssue status (NEW: Issue Discovery & Tracking)
-                self._sync_discovered_issue_status(submission, "failed", None, session)
+                self._sync_discovered_issue_status(submission, DownloadStatus.FAILED, None, session)
 
         return processed_count
 
@@ -894,7 +914,7 @@ class DownloadMonitor:
             discovered_issue.download_status = new_status
 
             # Handle different status transitions
-            if new_status == "completed" and periodical_id:
+            if new_status == DownloadStatus.COMPLETED and periodical_id:
                 # Successfully completed
                 discovered_issue.periodical_id = periodical_id
                 discovered_issue.download_priority = 0  # No longer needed
@@ -902,7 +922,7 @@ class DownloadMonitor:
                 logger.info(f"Marked DiscoveredIssue as completed: {discovered_issue.title}")
                 session.commit()
 
-            elif new_status == "failed":
+            elif new_status == DownloadStatus.FAILED:
                 # Failed download - use IssueDiscoveryService to handle retry logic
                 from services import IssueDiscoveryService
 
@@ -915,9 +935,9 @@ class DownloadMonitor:
                 )
                 # Don't commit here - service already commits
 
-            elif new_status == "downloading":
+            elif new_status == DownloadStatus.DOWNLOADING:
                 # Download is progressing
-                discovered_issue.download_status = "downloading"
+                discovered_issue.download_status = DownloadStatus.DOWNLOADING
                 session.commit()
 
             else:

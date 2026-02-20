@@ -24,6 +24,7 @@ from core.parsers import utc_now, TitleMatcher, Parser
 from core.utils.fuzzy_matching import get_fuzzy_group_id
 from models.database import (
     DiscoveredIssue,
+    DownloadStatus,
     DownloadSubmission,
     Periodical,
     PeriodicalTracking,
@@ -908,7 +909,10 @@ class DownloadManager:
             return "DiscoveredIssue not found"
 
         # Check if already downloading, queued, or pending — prevent duplicate concurrent submissions
-        if issue.download_status in ("downloading", "queued", "pending") and issue.current_submission_id:
+        if (
+            issue.download_status in (DownloadStatus.DOWNLOADING, DownloadStatus.QUEUED, "pending")
+            and issue.current_submission_id
+        ):
             logger.warning(
                 f"Issue already has active download: {issue.title} "
                 f"(status: {issue.download_status}, submission_id: {issue.current_submission_id})"
@@ -916,15 +920,15 @@ class DownloadManager:
             return "already_downloading"
 
         # Check if this is a bad file
-        if issue.download_status == "permanently_failed":
+        if issue.download_status == DownloadStatus.PERMANENTLY_FAILED:
             logger.warning(f"Skipping bad file (marked as permanently failed): {issue.title}")
-            return "permanently_failed"
+            return DownloadStatus.PERMANENTLY_FAILED
 
         # Validate we have the necessary metadata
         if not issue.latest_url:
             logger.error(f"DiscoveredIssue missing URL: {issue.title}")
             # Mark as failed
-            issue.download_status = "failed"
+            issue.download_status = DownloadStatus.FAILED
             issue.last_error = "Missing URL"
             session.commit()
             return "missing_url"
@@ -978,7 +982,7 @@ class DownloadManager:
         )
 
         # Update DiscoveredIssue with submission info
-        issue.download_status = "queued"
+        issue.download_status = DownloadStatus.QUEUED
         issue.current_submission_id = submission.id
         if submission.id not in (issue.submission_ids or []):
             issue.submission_ids = (issue.submission_ids or []) + [submission.id]
@@ -1022,7 +1026,7 @@ class DownloadManager:
 
             if not job_id:
                 logger.warning(f"Download client {client.name} rejected submission: {issue.title}")
-                issue.download_status = "failed"
+                issue.download_status = DownloadStatus.FAILED
                 issue.last_error = f"Client {client.name} rejected submission"
                 issue.attempt_count += 1
                 issue.last_attempt = utc_now()
@@ -1041,7 +1045,7 @@ class DownloadManager:
             )
 
             # Update DiscoveredIssue with submission info
-            issue.download_status = "queued"  # Queued in download client
+            issue.download_status = DownloadStatus.QUEUED  # Queued in download client
             issue.current_submission_id = submission.id
             if submission.id not in (issue.submission_ids or []):
                 issue.submission_ids = (issue.submission_ids or []) + [submission.id]
@@ -1058,7 +1062,7 @@ class DownloadManager:
                 f"Error submitting discovered issue '{issue.title}': {e}",
                 exc_info=True,
             )
-            issue.download_status = "failed"
+            issue.download_status = DownloadStatus.FAILED
             issue.last_error = str(e)[:512]  # Truncate to column length
             issue.attempt_count += 1
             issue.last_attempt = utc_now()
@@ -1390,8 +1394,12 @@ class DownloadManager:
 
         # Force status to "wanted" for manual downloads (user explicitly requested it)
         # This allows re-downloading previously failed/completed/skipped issues
-        if discovered_issue.download_status not in ["wanted", "queued", "downloading"]:
-            discovered_issue.download_status = "wanted"
+        if discovered_issue.download_status not in [
+            DownloadStatus.WANTED,
+            DownloadStatus.QUEUED,
+            DownloadStatus.DOWNLOADING,
+        ]:
+            discovered_issue.download_status = DownloadStatus.WANTED
             discovered_issue.download_priority = 100  # Highest priority for manual downloads
             discovered_issue.attempt_count = 0  # Reset attempts for manual re-download
             discovered_issue.last_error = None

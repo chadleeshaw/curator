@@ -17,7 +17,7 @@ from sqlalchemy.orm import sessionmaker
 
 from core.utils.db import with_db_session
 from core.utils.error_handling import handle_api_errors
-from models.database import DiscoveredIssue, PeriodicalTracking
+from models.database import DiscoveredIssue, DownloadStatus, PeriodicalTracking
 from services import IssueDiscoveryService, SearchScheduler
 from web.utils.responses import success_response
 
@@ -78,14 +78,14 @@ async def list_discovered_issues(
         if status:
             # Validate status (can be single or comma-separated)
             valid_statuses = [
-                "discovered",
-                "wanted",
-                "queued",
-                "downloading",
+                DownloadStatus.DISCOVERED,
+                DownloadStatus.WANTED,
+                DownloadStatus.QUEUED,
+                DownloadStatus.DOWNLOADING,
                 "completed",
-                "failed",
-                "permanently_failed",
-                "ignored",
+                DownloadStatus.FAILED,
+                DownloadStatus.PERMANENTLY_FAILED,
+                DownloadStatus.IGNORED,
             ]
 
             # Handle comma-separated statuses
@@ -247,14 +247,14 @@ async def get_discovery_statistics() -> Dict[str, Any]:
         # Get counts by status
         status_counts = {}
         for status in [
-            "discovered",
-            "wanted",
-            "queued",
-            "downloading",
+            DownloadStatus.DISCOVERED,
+            DownloadStatus.WANTED,
+            DownloadStatus.QUEUED,
+            DownloadStatus.DOWNLOADING,
             "completed",
-            "failed",
-            "permanently_failed",
-            "ignored",
+            DownloadStatus.FAILED,
+            DownloadStatus.PERMANENTLY_FAILED,
+            DownloadStatus.IGNORED,
         ]:
             count = db.query(DiscoveredIssue).filter(DiscoveredIssue.download_status == status).count()
             status_counts[status] = count
@@ -264,7 +264,7 @@ async def get_discovery_statistics() -> Dict[str, Any]:
             db.query(DiscoveredIssue)
             .filter(
                 and_(
-                    DiscoveredIssue.download_status.in_(["wanted", "failed"]),
+                    DiscoveredIssue.download_status.in_([DownloadStatus.WANTED, DownloadStatus.FAILED]),
                     DiscoveredIssue.download_priority >= 70,
                 )
             )
@@ -275,7 +275,7 @@ async def get_discovery_statistics() -> Dict[str, Any]:
             db.query(DiscoveredIssue)
             .filter(
                 and_(
-                    DiscoveredIssue.download_status.in_(["wanted", "failed"]),
+                    DiscoveredIssue.download_status.in_([DownloadStatus.WANTED, DownloadStatus.FAILED]),
                     DiscoveredIssue.download_priority >= 40,
                     DiscoveredIssue.download_priority < 70,
                 )
@@ -287,7 +287,7 @@ async def get_discovery_statistics() -> Dict[str, Any]:
             db.query(DiscoveredIssue)
             .filter(
                 and_(
-                    DiscoveredIssue.download_status.in_(["wanted", "failed"]),
+                    DiscoveredIssue.download_status.in_([DownloadStatus.WANTED, DownloadStatus.FAILED]),
                     DiscoveredIssue.download_priority < 40,
                 )
             )
@@ -349,7 +349,7 @@ async def get_statistics_by_tracking() -> Dict[str, List[Dict[str, Any]]]:
                 .filter(
                     and_(
                         DiscoveredIssue.tracking_id == tracking.id,
-                        DiscoveredIssue.download_status == "wanted",
+                        DiscoveredIssue.download_status == DownloadStatus.WANTED,
                     )
                 )
                 .count()
@@ -360,7 +360,7 @@ async def get_statistics_by_tracking() -> Dict[str, List[Dict[str, Any]]]:
                 .filter(
                     and_(
                         DiscoveredIssue.tracking_id == tracking.id,
-                        DiscoveredIssue.download_status == "completed",
+                        DiscoveredIssue.download_status == DownloadStatus.COMPLETED,
                     )
                 )
                 .count()
@@ -371,7 +371,7 @@ async def get_statistics_by_tracking() -> Dict[str, List[Dict[str, Any]]]:
                 .filter(
                     and_(
                         DiscoveredIssue.tracking_id == tracking.id,
-                        DiscoveredIssue.download_status == "permanently_failed",
+                        DiscoveredIssue.download_status == DownloadStatus.PERMANENTLY_FAILED,
                     )
                 )
                 .count()

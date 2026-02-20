@@ -143,3 +143,11 @@ MAX_FILE_EXTENSION_LENGTH = 4
 
 YEAR_STRING_LENGTH = 4
 """Length of a year string (YYYY format)"""
+
+
+# ==============================================================================
+# Size Conversions
+# ==============================================================================
+
+BYTES_PER_MB = 1024 * 1024
+"""Bytes per megabyte, used for human-readable size formatting"""

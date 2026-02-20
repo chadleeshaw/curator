@@ -20,7 +20,17 @@ from core.parsers import Parser, utc_now
 from core.utils.date import dates_are_fuzzy_match
 from core.utils.fuzzy_matching import get_fuzzy_group_id
 from core.constants.app import MAX_DOWNLOAD_RETRIES_IA, NEW_ISSUE_THRESHOLD_DAYS
-from models.database import DiscoveredIssue, Periodical, PeriodicalTracking
+from core.constants.country import (
+    FULL_NAME_COUNTRY_CODES,
+    ISO_COUNTRIES,
+    THREE_LETTER_COUNTRY_CODES,
+)
+from models.database import (
+    DiscoveredIssue,
+    DownloadStatus,
+    Periodical,
+    PeriodicalTracking,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,32 +60,11 @@ class IssueDiscoveryService:
         """
         Process search results and record as discovered issues.
 
-        This method:
-        1. Parses each search result to extract metadata
-        2. Creates a fuzzy_match_group for deduplication
-        3. Checks for existing DiscoveredIssue by fuzzy_match_group
-        4. Creates new or updates existing (increment times_seen, update last_seen)
-
-        Args:
-            tracking_id: PeriodicalTracking ID these results belong to
-            search_results: List of search result dicts from providers
-            session: Database session
+        Creates new DiscoveredIssue records or updates existing ones
+        (incrementing times_seen and preferring newer NZB URLs).
 
         Returns:
-            Dictionary with stats: {new, updated, duplicate, errors}
-
-        Example:
-            search_results = [
-                {
-                    "title": "Magazine - January 2024",
-                    "url": "https://provider.com/nzb/12345",
-                    "provider": "NZBGeek",
-                    "pubdate": "2024-01-15T10:30:00Z",
-                    "guid": "12345",
-                    ...
-                },
-                ...
-            ]
+            Dictionary with stats: {new, updated, duplicate, errors, rejected_non_periodical}
         """
         stats = {
             "new": 0,
@@ -85,7 +74,6 @@ class IssueDiscoveryService:
             "rejected_non_periodical": 0,
         }
 
-        # Get the tracking record for context
         tracking = session.query(PeriodicalTracking).filter_by(id=tracking_id).first()
         if not tracking:
             logger.error(f"Tracking ID {tracking_id} not found")
@@ -95,72 +83,29 @@ class IssueDiscoveryService:
 
         for result in search_results:
             try:
-                # Parse the search result title
                 title = result.get("title", "")
                 if not title:
                     logger.debug("Search result missing title, skipping")
                     stats["errors"] += 1
                     continue
 
-                # Validate it's actually a periodical (not a book/collection)
                 if not self._validate_is_periodical(result):
                     logger.debug(f"Rejecting non-periodical result: {title}")
                     stats["rejected_non_periodical"] += 1
                     continue
 
-                # Skip IA collection archives (they contain many issues, not single issues)
-                raw_metadata = result.get("raw_metadata", {})
-                if raw_metadata.get("is_collection"):
+                if result.get("raw_metadata", {}).get("is_collection"):
                     logger.debug(f"Skipping IA collection archive: {title}")
                     stats["rejected_non_periodical"] += 1
                     continue
 
-                # For IA results, verify title actually matches the periodical we're tracking
-                # IA returns items where search term appears anywhere in metadata, not just title
-                provider = result.get("provider", "")
-                if provider == "internet_archive":
-                    result_title_lower = title.lower()
-                    search_terms = tracking.title.lower().split()
-                    # Require significant search terms (3+ chars) to be in the title
-                    significant_terms = [t for t in search_terms if len(t) >= 3]
-                    if significant_terms:
-                        matching_terms = sum(1 for t in significant_terms if t in result_title_lower)
-                        match_ratio = matching_terms / len(significant_terms)
-                        if match_ratio < 0.5:
-                            logger.debug(
-                                f"Skipping IA result with poor title match: '{title}' "
-                                f"(tracking '{tracking.title}', match ratio: {match_ratio:.1%})"
-                            )
-                            stats["rejected_non_periodical"] += 1
-                            continue
+                if not self._ia_title_matches_tracking(result, tracking):
+                    stats["rejected_non_periodical"] += 1
+                    continue
 
                 url = result.get("url", "")
                 provider = result.get("provider", "")
-                pubdate_str = result.get("pubdate") or result.get("publication_date")
-
-                # Parse pubdate string to datetime if provided
-                pubdate = None
-                if pubdate_str:
-                    try:
-                        # Handle ISO format (2024-01-15T10:30:00Z)
-                        if isinstance(pubdate_str, str):
-                            # Remove 'Z' suffix if present; fromisoformat then gives naive UTC
-                            pubdate_str_clean = pubdate_str.rstrip("Z")
-                            pubdate = datetime.fromisoformat(pubdate_str_clean)
-                            # Normalize to UTC-aware (Z stripped → treat as UTC)
-                            if pubdate.tzinfo is None:
-                                pubdate = pubdate.replace(tzinfo=timezone.utc)
-                            else:
-                                pubdate = pubdate.astimezone(timezone.utc)
-                        elif isinstance(pubdate_str, datetime):
-                            pubdate = pubdate_str
-                            # Normalize to UTC-aware (assume UTC if naive)
-                            if pubdate.tzinfo is None:
-                                pubdate = pubdate.replace(tzinfo=timezone.utc)
-                            else:
-                                pubdate = pubdate.astimezone(timezone.utc)
-                    except (ValueError, AttributeError) as e:
-                        logger.warning(f"Failed to parse pubdate '{pubdate_str}': {e}")
+                pubdate = self._parse_pubdate(result.get("pubdate") or result.get("publication_date"))
 
                 parsed = self.parser.parse_search_result(
                     title=title,
@@ -170,16 +115,12 @@ class IssueDiscoveryService:
                     raw_metadata=result,
                 )
 
-                # Skip if parser rejected as non-periodical (movies/TV/audiobooks)
                 if parsed is None:
                     logger.debug(f"Skipping non-periodical result: {title}")
                     continue
 
-                # Generate fuzzy match group for deduplication
-                # This normalizes the title to group similar results together
                 fuzzy_group = get_fuzzy_group_id(parsed.original_title)
 
-                # Check if we've already discovered this issue
                 existing = (
                     session.query(DiscoveredIssue)
                     .filter(
@@ -192,77 +133,19 @@ class IssueDiscoveryService:
                 )
 
                 if existing:
-                    # Update existing issue
-                    existing.last_seen = now
-                    existing.times_seen += 1
-
-                    # Prefer newer NZBs for better Usenet retention
-                    # Only update URL/provider if new result is newer (or existing has no pubdate)
-                    new_pubdate = pubdate
-                    should_update_url = False
-
-                    if new_pubdate:
-                        if existing.latest_pubdate is None:
-                            # No existing pubdate, always use the new one
-                            should_update_url = True
-                        elif new_pubdate > existing.latest_pubdate:
-                            # New result is newer, prefer it
-                            should_update_url = True
-                            logger.debug(
-                                f"Preferring newer NZB for {fuzzy_group}: " f"{new_pubdate} > {existing.latest_pubdate}"
-                            )
-                    elif existing.latest_pubdate is None:
-                        # Neither has pubdate, just update (backwards compatible)
-                        should_update_url = True
-
-                    if should_update_url:
-                        existing.latest_url = result.get("url")
-                        existing.latest_provider = parsed.provider
-                        existing.latest_pubdate = new_pubdate
-
-                    # Add search result ID if available
-                    if "search_result_id" in result and result["search_result_id"]:
-                        if result["search_result_id"] not in existing.search_result_ids:
-                            existing.search_result_ids.append(result["search_result_id"])
-
+                    self._update_existing_issue(existing, result, parsed, pubdate, now)
                     stats["updated"] += 1
                     logger.debug(f"Updated existing issue: {fuzzy_group} (seen {existing.times_seen} times)")
                 else:
-                    # Create new discovered issue
-                    new_issue = DiscoveredIssue(
-                        tracking_id=tracking_id,
-                        title=title,
-                        normalized_title=parsed.cleaned_title.lower(),
-                        fuzzy_match_group=fuzzy_group,
-                        issue_date=parsed.publication_date,
-                        issue_number=parsed.raw_metadata.get("issue"),
-                        year=parsed.publication_date.year if parsed.publication_date else None,
-                        month=parsed.publication_date.month if parsed.publication_date else None,
-                        language=parsed.language,
-                        country=parsed.country,  # Store parsed country (e.g., "US", "UK", None)
-                        first_seen=now,
-                        last_seen=now,
-                        times_seen=1,
-                        download_status="discovered",
-                        download_priority=50,  # Default middle priority
-                        latest_url=result.get("url"),
-                        latest_provider=parsed.provider,
-                        latest_pubdate=pubdate,  # Store NZB post date for retention preference
-                        search_result_ids=(
-                            [result["search_result_id"]]
-                            if "search_result_id" in result and result["search_result_id"]
-                            else []
-                        ),
-                        # IA downloads get more retries since failures are usually transient (server busy)
-                        max_retries=(
-                            MAX_DOWNLOAD_RETRIES_IA if provider == "internet_archive" else self.default_max_retries
-                        ),
-                        extra_metadata={
-                            "raw_title": title,
-                            "base_title": parsed.base_title,
-                            "is_special_edition": parsed.is_special_edition,
-                            "special_edition_name": parsed.special_edition_name,
-                        },
+                    new_issue = self._create_new_issue(
+                        tracking_id,
+                        title,
+                        fuzzy_group,
+                        parsed,
+                        pubdate,
+                        provider,
+                        result,
+                        now,
                     )
                     session.add(new_issue)
                     stats["new"] += 1
@@ -282,12 +165,121 @@ class IssueDiscoveryService:
 
         return stats
 
+    def _parse_pubdate(self, pubdate_str) -> Optional[datetime]:
+        """Parse a pubdate string or datetime to a UTC-aware datetime, or return None."""
+        if not pubdate_str:
+            return None
+        try:
+            if isinstance(pubdate_str, str):
+                pubdate = datetime.fromisoformat(pubdate_str.rstrip("Z"))
+                if pubdate.tzinfo is None:
+                    pubdate = pubdate.replace(tzinfo=timezone.utc)
+                else:
+                    pubdate = pubdate.astimezone(timezone.utc)
+            elif isinstance(pubdate_str, datetime):
+                pubdate = pubdate_str
+                if pubdate.tzinfo is None:
+                    pubdate = pubdate.replace(tzinfo=timezone.utc)
+                else:
+                    pubdate = pubdate.astimezone(timezone.utc)
+            else:
+                return None
+            return pubdate
+        except (ValueError, AttributeError) as parse_error:
+            logger.warning(f"Failed to parse pubdate '{pubdate_str}': {parse_error}")
+            return None
+
+    def _ia_title_matches_tracking(self, result: Dict[str, Any], tracking: PeriodicalTracking) -> bool:
+        """Return False for Internet Archive results whose title doesn't match the tracked periodical."""
+        if result.get("provider") != "internet_archive":
+            return True
+
+        title = result.get("title", "").lower()
+        search_terms = tracking.title.lower().split()
+        significant_terms = [t for t in search_terms if len(t) >= 3]
+        if not significant_terms:
+            return True
+
+        matching_terms = sum(1 for t in significant_terms if t in title)
+        match_ratio = matching_terms / len(significant_terms)
+        if match_ratio < 0.5:
+            logger.debug(
+                f"Skipping IA result with poor title match: '{result.get('title')}' "
+                f"(tracking '{tracking.title}', match ratio: {match_ratio:.1%})"
+            )
+            return False
+        return True
+
+    def _update_existing_issue(self, existing: DiscoveredIssue, result: Dict[str, Any], parsed, pubdate, now) -> None:
+        """Update an existing DiscoveredIssue with fresher data from a new search result."""
+        existing.last_seen = now
+        existing.times_seen += 1
+
+        should_update_url = (
+            pubdate is not None and (existing.latest_pubdate is None or pubdate > existing.latest_pubdate)
+        ) or (pubdate is None and existing.latest_pubdate is None)
+
+        if should_update_url:
+            if pubdate and existing.latest_pubdate and pubdate > existing.latest_pubdate:
+                logger.debug(
+                    f"Preferring newer NZB for {existing.fuzzy_match_group}: {pubdate} > {existing.latest_pubdate}"
+                )
+            existing.latest_url = result.get("url")
+            existing.latest_provider = parsed.provider
+            existing.latest_pubdate = pubdate
+
+        search_result_id = result.get("search_result_id")
+        if search_result_id and search_result_id not in existing.search_result_ids:
+            existing.search_result_ids.append(search_result_id)
+
+    def _create_new_issue(
+        self,
+        tracking_id: int,
+        title: str,
+        fuzzy_group: str,
+        parsed,
+        pubdate,
+        provider: str,
+        result: Dict[str, Any],
+        now,
+    ) -> DiscoveredIssue:
+        """Build a new DiscoveredIssue from a parsed search result."""
+        search_result_id = result.get("search_result_id")
+        return DiscoveredIssue(
+            tracking_id=tracking_id,
+            title=title,
+            normalized_title=parsed.cleaned_title.lower(),
+            fuzzy_match_group=fuzzy_group,
+            issue_date=parsed.publication_date,
+            issue_number=parsed.raw_metadata.get("issue"),
+            year=parsed.publication_date.year if parsed.publication_date else None,
+            month=parsed.publication_date.month if parsed.publication_date else None,
+            language=parsed.language,
+            country=parsed.country,
+            first_seen=now,
+            last_seen=now,
+            times_seen=1,
+            download_status=DownloadStatus.DISCOVERED,
+            download_priority=50,
+            latest_url=result.get("url"),
+            latest_provider=parsed.provider,
+            latest_pubdate=pubdate,
+            search_result_ids=[search_result_id] if search_result_id else [],
+            max_retries=(MAX_DOWNLOAD_RETRIES_IA if provider == "internet_archive" else self.default_max_retries),
+            extra_metadata={
+                "raw_title": title,
+                "base_title": parsed.base_title,
+                "is_special_edition": parsed.is_special_edition,
+                "special_edition_name": parsed.special_edition_name,
+            },
+        )
+
     def evaluate_discovered_issues(self, tracking_id: int, session: Session) -> Dict[str, int]:
         """
         Evaluate all "discovered" issues and determine which should be downloaded.
 
         This method:
-        1. Queries DiscoveredIssue where download_status="discovered"
+        1. Queries DiscoveredIssue where download_status=DownloadStatus.DISCOVERED
         2. Checks if already in library (Magazine table)
         3. Checks if already being downloaded (current_submission_id)
         4. Applies tracking rules (track_all_editions, track_new_only, selected_editions)
@@ -315,7 +307,7 @@ class IssueDiscoveryService:
             .filter(
                 and_(
                     DiscoveredIssue.tracking_id == tracking_id,
-                    DiscoveredIssue.download_status == "discovered",
+                    DiscoveredIssue.download_status == DownloadStatus.DISCOVERED,
                 )
             )
             .all()
@@ -328,7 +320,7 @@ class IssueDiscoveryService:
                 # Check if we already have this in our library
                 periodical_id = self._check_if_in_library(issue, tracking, session)
                 if periodical_id:
-                    issue.download_status = "completed"
+                    issue.download_status = DownloadStatus.COMPLETED
                     issue.download_priority = 0
                     issue.periodical_id = periodical_id
                     stats["already_have"] += 1
@@ -337,12 +329,12 @@ class IssueDiscoveryService:
 
                 # Apply tracking rules to determine if we want this issue
                 if self._should_download(issue, tracking):
-                    issue.download_status = "wanted"
+                    issue.download_status = DownloadStatus.WANTED
                     issue.download_priority = self._calculate_priority(issue, tracking)
                     stats["wanted"] += 1
                     logger.info(f"Marked as wanted (priority {issue.download_priority}): {issue.title}")
                 else:
-                    issue.download_status = "ignored"
+                    issue.download_status = DownloadStatus.IGNORED
                     issue.download_priority = 0
                     stats["ignored"] += 1
                     logger.debug(f"Ignored (doesn't match criteria): {issue.title}")
@@ -393,17 +385,17 @@ class IssueDiscoveryService:
         # Check if we've exceeded max retries
         if issue.attempt_count > issue.max_retries:
             # Permanent failure - mark as permanently_failed
-            issue.download_status = "permanently_failed"
+            issue.download_status = DownloadStatus.PERMANENTLY_FAILED
             issue.download_priority = 0
             logger.warning(f"Marking as permanently_failed after {issue.attempt_count} attempts: {issue.title}")
-            new_status = "permanently_failed"
+            new_status = DownloadStatus.PERMANENTLY_FAILED
         else:
             # Temporary failure - can retry
-            issue.download_status = "failed"
+            issue.download_status = DownloadStatus.FAILED
             # Reduce priority slightly for failed downloads
             issue.download_priority = max(1, issue.download_priority - 10)
             logger.info(f"Download failed (attempt {issue.attempt_count}/{issue.max_retries + 1}): {issue.title}")
-            new_status = "failed"
+            new_status = DownloadStatus.FAILED
 
         session.commit()
         return new_status
@@ -425,7 +417,9 @@ class IssueDiscoveryService:
         Returns:
             List of DiscoveredIssue objects ready for download
         """
-        query = session.query(DiscoveredIssue).filter(DiscoveredIssue.download_status.in_(["wanted", "failed"]))
+        query = session.query(DiscoveredIssue).filter(
+            DiscoveredIssue.download_status.in_([DownloadStatus.WANTED, DownloadStatus.FAILED])
+        )
 
         if tracking_id:
             query = query.filter(DiscoveredIssue.tracking_id == tracking_id)
@@ -459,14 +453,14 @@ class IssueDiscoveryService:
             logger.error(f"DiscoveredIssue {issue_id} not found")
             return False
 
-        if issue.download_status != "permanently_failed":
+        if issue.download_status != DownloadStatus.PERMANENTLY_FAILED:
             logger.warning(f"Issue {issue_id} is not marked as permanently_failed (status: {issue.download_status})")
             return False
 
         if reset_attempts:
             issue.attempt_count = 0
 
-        issue.download_status = "wanted"
+        issue.download_status = DownloadStatus.WANTED
         issue.download_priority = 50  # Reset to default priority
         issue.last_error = None
 
@@ -693,77 +687,25 @@ class IssueDiscoveryService:
         return max(1, min(100, priority))
 
     def _normalize_country(self, country: Optional[str]) -> str:
-        """
-        Normalize country code to standard 2-letter ISO format.
-
-        Uses the ISO_COUNTRIES constants to ensure consistent country codes.
-        Default: No country specified = USA ("US")
-
-        Args:
-            country: Country code or name (e.g., "USA", "US", "United States", "UK", None)
-
-        Returns:
-            Normalized 2-letter country code (e.g., "US", "UK", "AU")
-
-        Examples:
-            >>> _normalize_country("USA")
-            "US"
-            >>> _normalize_country("US")
-            "US"
-            >>> _normalize_country("United States")
-            "US"
-            >>> _normalize_country(None)
-            "US"
-        """
-        from core.constants.country import ISO_COUNTRIES
-
+        """Normalize a country name or code to a 2-letter ISO code. Defaults to 'US'."""
         if not country:
-            return "US"  # Default to USA if no country specified
+            return "US"
 
         country_upper = country.strip().upper()
 
-        # Common 3-letter normalizations (USA, GBR, etc.)
-        three_letter_codes = {
-            "USA": "US",
-            "GBR": "UK",
-            "CAN": "CA",
-            "AUS": "AU",
-            "NZL": "NZ",
-            "DEU": "DE",
-            "FRA": "FR",
-            "ITA": "IT",
-            "ESP": "ES",
-            "JPN": "JP",
-            "CHN": "CN",
-        }
+        if country_upper in THREE_LETTER_COUNTRY_CODES:
+            return THREE_LETTER_COUNTRY_CODES[country_upper]
 
-        # Full name normalizations
-        full_names = {
-            "UNITED STATES": "US",
-            "UNITED KINGDOM": "UK",
-            "GREAT BRITAIN": "UK",
-            "HOLLAND": "NL",
-            "NEDERLAND": "NL",
-        }
+        if country_upper in FULL_NAME_COUNTRY_CODES:
+            return FULL_NAME_COUNTRY_CODES[country_upper]
 
-        # Try 3-letter code normalization first
-        if country_upper in three_letter_codes:
-            return three_letter_codes[country_upper]
-
-        # Try full name match
-        if country_upper in full_names:
-            return full_names[country_upper]
-
-        # Check if it's already a valid 2-letter ISO code
         if len(country_upper) == 2 and country_upper in ISO_COUNTRIES:
             return country_upper
 
-        # Try reverse lookup in ISO_COUNTRIES by name
         for code, name in ISO_COUNTRIES.items():
             if name.upper() == country_upper:
                 return code
 
-        # Default: If can't parse, assume USA
         logger.warning(f"Could not normalize country '{country}', defaulting to US")
         return "US"
 
