@@ -326,10 +326,13 @@ async def bulk_delete(request: BulkDeleteRequest) -> Dict[str, Any]:
                 from models.database import DownloadSubmission
 
                 submission = (
-                    db.query(DownloadSubmission).filter(DownloadSubmission.periodical_id == periodical_id).first()
+                    db.query(DownloadSubmission)
+                    .filter(DownloadSubmission.tracking_id == periodical.tracking_id)
+                    .first()
                 )
                 if submission:
-                    submission.status = "permanently_failed"
+                    submission.status = DownloadSubmission.StatusEnum.FAILED
+                    submission.last_error = "Marked as bad during bulk delete"
 
             db.delete(periodical)
             deleted_count += 1

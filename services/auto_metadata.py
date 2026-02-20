@@ -369,7 +369,7 @@ class AutoMetadataService:
             session.query(OCRJob)
             .filter(
                 OCRJob.periodical_id == periodical.id,
-                OCRJob.status.in_(["pending", "in_progress"]),
+                OCRJob.status.in_([OCRJob.StatusEnum.PENDING, OCRJob.StatusEnum.PROCESSING]),
             )
             .first()
         )
