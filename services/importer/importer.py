@@ -1158,9 +1158,9 @@ class FileImporter:
                 except ValueError:
                     logger.error(
                         f"Security: Organized path '{organized_path}' is outside library directory '{self.library_base_dir}'. "
-                        f"Possible path traversal attempt in organization pattern or metadata."
+                        f"Possible path traversal attempt in organization pattern or metadata. Rejecting import."
                     )
-                    organized_path = None
+                    return None, None
 
         # Extract cover AFTER organization so the cover filename is derived from
         # the organized path (which already has uniqueness via timestamps).

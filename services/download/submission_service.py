@@ -15,6 +15,8 @@ from models.database import DownloadSubmission
 
 logger = logging.getLogger(__name__)
 
+MAX_RETRY_AGE_DAYS = 7
+
 
 class SubmissionService:
     """Manage download submission records"""
@@ -165,11 +167,18 @@ class SubmissionService:
             logger.warning(f"Cannot retry submission {submission.id}: " f"max retries ({max_retries}) reached")
             return False
 
+        # Don't retry submissions older than 7 days to prevent accumulation of old failed downloads
+        if (utc_now() - submission.created_at).days > MAX_RETRY_AGE_DAYS:
+            logger.debug(f"Cannot retry submission {submission.id}: older than {MAX_RETRY_AGE_DAYS} days")
+            return False
+
         return True
 
     @staticmethod
     def update_submission_for_retry(
-        submission: DownloadSubmission, session: Session, max_retries: int = MAX_DOWNLOAD_RETRIES
+        submission: DownloadSubmission,
+        session: Session,
+        max_retries: int = MAX_DOWNLOAD_RETRIES,
     ) -> None:
         """
         Update submission record for a retry attempt.

@@ -712,10 +712,9 @@ class DownloadManager:
         """
         title = search_result["title"]
         provider = search_result.get("provider", "unknown")
-        active_count = self._get_active_download_count(session)
 
         logger.info(
-            f"[DownloadManager] At download limit ({active_count}/{self.max_downloads}), "
+            f"[DownloadManager] At download limit ({self.max_downloads}/{self.max_downloads}), "
             f"queuing download: '{title}'"
         )
 
@@ -761,13 +760,15 @@ class DownloadManager:
         if validation_error:
             return None
 
-        # Queue if at concurrent download limit
-        active_count = self._get_active_download_count(session)
-        if active_count >= self.max_downloads:
-            return self._queue_download_at_limit(tracking_id, search_result, session, search_result_db_id)
+        # Acquire lock to prevent race condition in concurrent download limit checking
+        with self._slot_lock:
+            # Queue if at concurrent download limit
+            active_count = self._get_active_download_count(session)
+            if active_count >= self.max_downloads:
+                return self._queue_download_at_limit(tracking_id, search_result, session, search_result_db_id)
 
-        # Submit to download client
-        return self._submit_to_client(tracking_id, search_result, session, search_result_db_id)
+            # Submit to download client
+            return self._submit_to_client(tracking_id, search_result, session, search_result_db_id)
 
     def _handle_client_rejection(
         self,
@@ -1072,7 +1073,10 @@ class DownloadManager:
                 exc_info=True,
             )
             issue.download_status = DownloadStatus.FAILED
-            issue.last_error = str(e)[:SUBMISSION_ID_MAX_LENGTH]
+            error_str = str(e)
+            if len(error_str) > SUBMISSION_ID_MAX_LENGTH:
+                logger.warning(f"Error message truncated from {len(error_str)} to {SUBMISSION_ID_MAX_LENGTH} chars")
+            issue.last_error = error_str[:SUBMISSION_ID_MAX_LENGTH]
             self._record_attempt(issue)
             session.commit()
             return None
@@ -1106,13 +1110,15 @@ class DownloadManager:
         # Build search result for compatibility
         search_result = self._build_search_result_from_issue(issue, discovered_issue_id)
 
-        # Check if at download limit - if so, queue the submission
-        active_count = self._get_active_download_count(session)
-        if active_count >= self.max_downloads:
-            return self._create_queued_submission(issue, search_result, session)
+        # Acquire lock to prevent race condition in concurrent download limit checking
+        with self._slot_lock:
+            # Check if at download limit - if so, queue the submission
+            active_count = self._get_active_download_count(session)
+            if active_count >= self.max_downloads:
+                return self._create_queued_submission(issue, search_result, session)
 
-        # Submit to download client
-        return self._submit_issue_to_client(issue, search_result, session)
+            # Submit to download client
+            return self._submit_issue_to_client(issue, search_result, session)
 
     def _get_editions_to_download(self, tracking: PeriodicalTracking) -> list[str]:
         """
@@ -1442,25 +1448,27 @@ class DownloadManager:
             logger.warning(f"Could not create DB search result: {e}", exc_info=True)
 
         # Skip duplicate checking for manual downloads — user explicitly wants this
-        # Check if at concurrent download limit; queue if so, otherwise submit directly
-        active_count = self._get_active_download_count(session)
-        if active_count >= self.max_downloads:
-            provider = search_result.get("provider", "unknown")
-            logger.info(
-                f"[DownloadManager] At download limit ({active_count}/{self.max_downloads}), "
-                f"queuing manual download: '{search_result['title']}'"
-            )
-            return self._create_submission_record(
-                tracking_id,
-                search_result,
-                DownloadSubmission.StatusEnum.QUEUED,
-                session,
-                search_result_db_id=search_result_db_id,
-                client_name=self._get_client_name_for_provider(provider),
-                attempt_count=0,
-            )
+        # Acquire lock to prevent race condition in concurrent download limit checking
+        with self._slot_lock:
+            # Check if at concurrent download limit; queue if so, otherwise submit directly
+            active_count = self._get_active_download_count(session)
+            if active_count >= self.max_downloads:
+                provider = search_result.get("provider", "unknown")
+                logger.info(
+                    f"[DownloadManager] At download limit ({active_count}/{self.max_downloads}), "
+                    f"queuing manual download: '{search_result['title']}'"
+                )
+                return self._create_submission_record(
+                    tracking_id,
+                    search_result,
+                    DownloadSubmission.StatusEnum.QUEUED,
+                    session,
+                    search_result_db_id=search_result_db_id,
+                    client_name=self._get_client_name_for_provider(provider),
+                    attempt_count=0,
+                )
 
-        return self._submit_to_client(tracking_id, search_result, session, search_result_db_id)
+            return self._submit_to_client(tracking_id, search_result, session, search_result_db_id)
 
     def _handle_rate_limited_submission(
         self, submission: DownloadSubmission, client_status: Dict[str, Any], job_id: str

@@ -393,6 +393,8 @@ class IssueDiscoveryService:
         now = utc_now()
         issue.attempt_count += 1
         issue.last_attempt = now
+        if len(error_message) > 512:
+            logger.warning(f"Error message truncated from {len(error_message)} to 512 chars for issue {issue_id}")
         issue.last_error = error_message[:512]  # Truncate to column length
 
         # Check if we've exceeded max retries
@@ -745,14 +747,14 @@ class IssueDiscoveryService:
 
         # Fallback: match by fuzzy group ID against library items
         # This catches cases where date parsing failed but the issue is clearly the same
+        # Pre-compute fuzzy groups for all library items to avoid repeated computation
         if issue.fuzzy_match_group:
-            for mag in existing:
-                if mag.issue_date:
-                    lib_group = get_fuzzy_group_id(mag.title)
-                    if lib_group == issue.fuzzy_match_group:
-                        logger.debug(
-                            f"Fuzzy group match found: library '{mag.title}' matches {issue.fuzzy_match_group}"
-                        )
-                        return mag.id
+            existing_by_id = {mag.id: mag for mag in existing}
+            library_groups = {mag.id: get_fuzzy_group_id(mag.title) for mag in existing if mag.issue_date}
+            for mag_id, lib_group in library_groups.items():
+                if lib_group == issue.fuzzy_match_group:
+                    mag = existing_by_id[mag_id]
+                    logger.debug(f"Fuzzy group match found: library '{mag.title}' matches {issue.fuzzy_match_group}")
+                    return mag.id
 
         return None

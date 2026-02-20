@@ -88,12 +88,24 @@ class DatabaseManager:
 
         return inspector
 
+    def _get_validated_schema_tables(self):
+        """Get validated schema tables from Base metadata."""
+        from models.database import Base
+
+        return Base.metadata.tables
+
     def _add_missing_columns(self, inspector) -> int:
         from models.migrations import COLUMN_ADDITIONS
 
         migrations_applied = 0
+        schema_tables = self._get_validated_schema_tables()
 
         for table_name, columns_to_add in COLUMN_ADDITIONS.items():
+            # Validate table name exists in schema to prevent SQL injection
+            if table_name not in schema_tables:
+                logger.warning(f"Table {table_name} not in schema, skipping column additions")
+                continue
+
             if not inspector.has_table(table_name):
                 logger.warning(f"Table {table_name} still doesn't exist after migration attempt")
                 continue
@@ -105,6 +117,8 @@ class DatabaseManager:
                     logger.info(f"Adding missing column '{column_name}' to {table_name}")
                     try:
                         with self.engine.connect() as conn:
+                            # SQL identifiers (table/column names) cannot be parameterized
+                            # Validation above ensures table_name is in our known schema
                             conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}"))
                             conn.commit()
                         migrations_applied += 1
@@ -118,8 +132,14 @@ class DatabaseManager:
         from models.migrations import COLUMN_RENAMES
 
         migrations_applied = 0
+        schema_tables = self._get_validated_schema_tables()
 
         for table_name, renames in COLUMN_RENAMES.items():
+            # Validate table name exists in schema to prevent SQL injection
+            if table_name not in schema_tables:
+                logger.warning(f"Table {table_name} not in schema, skipping column renames")
+                continue
+
             if not inspector.has_table(table_name):
                 continue
 
@@ -130,6 +150,8 @@ class DatabaseManager:
                     logger.info(f"Renaming column '{old_name}' to '{new_name}' in {table_name}")
                     try:
                         with self.engine.connect() as conn:
+                            # SQL identifiers (table/column names) cannot be parameterized
+                            # Validation above ensures table_name is in our known schema
                             conn.execute(text(f"ALTER TABLE {table_name} RENAME COLUMN {old_name} TO {new_name}"))
                             conn.commit()
                         migrations_applied += 1
@@ -164,8 +186,14 @@ class DatabaseManager:
         from models.migrations import COLUMN_REMOVALS
 
         migrations_applied = 0
+        schema_tables = self._get_validated_schema_tables()
 
         for table_name, columns_to_remove in COLUMN_REMOVALS.items():
+            # Validate table name exists in schema to prevent SQL injection
+            if table_name not in schema_tables:
+                logger.warning(f"Table {table_name} not in schema, skipping column removals")
+                continue
+
             if not inspector.has_table(table_name):
                 continue
 
@@ -176,6 +204,8 @@ class DatabaseManager:
                     logger.info(f"Removing deprecated column '{column_name}' from {table_name}")
                     try:
                         with self.engine.connect() as conn:
+                            # SQL identifiers (table/column names) cannot be parameterized
+                            # Validation above ensures table_name is in our known schema
                             conn.execute(text(f"ALTER TABLE {table_name} DROP COLUMN {column_name}"))
                             conn.commit()
                         migrations_applied += 1
@@ -219,5 +249,8 @@ class DatabaseManager:
         session = self.session_factory()
         try:
             yield session
+        except Exception:
+            session.rollback()
+            raise
         finally:
             session.close()

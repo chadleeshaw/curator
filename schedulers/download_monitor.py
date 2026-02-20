@@ -381,10 +381,8 @@ class DownloadMonitor:
                 file_path = self._find_file_in_downloads(submission.file_path)
 
                 if not file_path:
-                    # File no longer on disk — mark as permanently failed so it stops being retried
-                    submission.attempt_count = MAX_IMPORT_RETRIES
-                    submission.last_error = "Import file no longer exists on disk"
-                    session.commit()
+                    # File no longer on disk — skip retry without modifying attempt_count
+                    # This allows natural exhaustion if file reappears, or cleanup by other processes
                     logger.debug(f"[DownloadMonitor] Import retry skipped: file gone for submission {submission.id}")
                     continue
 
@@ -522,15 +520,18 @@ class DownloadMonitor:
         logger.warning(
             f"[DownloadMonitor] Orphaned completed submission detected:\n"
             f"  ID: {submission.id}\n"
-            f"  Title: {submission.result_title}\n"
-            f"  Job ID: {submission.job_id}\n"
             f"  Status: {submission.status.value}\n"
             f"  Created: {submission.created_at}\n"
             f"  Updated: {submission.updated_at} ({age_hours:.1f} hours ago)\n"
-            f"  Attempt Count: {submission.attempt_count}\n"
-            f"  Last Error: {submission.last_error}\n"
             f"  Reason: Download client marked job as completed but file_path is NULL.\n"
             f"  This typically happens when SABnzbd history was purged or storage field was empty."
+        )
+        # Log detailed info only in debug mode to avoid exposing sensitive data
+        logger.debug(
+            f"  Title: {submission.result_title}\n"
+            f"  Job ID: {submission.job_id}\n"
+            f"  Attempt Count: {submission.attempt_count}\n"
+            f"  Last Error: {submission.last_error}"
         )
 
         # Auto-recovery: Mark as SKIPPED if older than threshold
