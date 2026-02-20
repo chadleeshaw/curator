@@ -28,6 +28,7 @@ from models.database import (
 )
 from services import DownloadManager
 from services import FileImporter
+from services import IssueDiscoveryService
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,7 @@ class DownloadMonitor:
         session_factory: sessionmaker,
         downloads_dir: str,
         *,
+        issue_discovery_service: Optional[IssueDiscoveryService] = None,
         remote_path: Optional[str] = None,
         import_callback: Optional[Callable] = None,
     ):
@@ -59,6 +61,9 @@ class DownloadMonitor:
             file_importer: FileImporter instance for processing completed downloads
             session_factory: SQLAlchemy session factory
             downloads_dir: Path to downloads folder to scan
+            issue_discovery_service: IssueDiscoveryService for syncing DiscoveredIssue state.
+                When provided, the configured fuzzy_threshold and max_retries are honoured.
+                When None, a default-configured instance is created as a fallback.
             remote_path: Path prefix as seen by the download client (e.g., "/downloads/").
                 When set, client paths starting with this prefix are remapped to downloads_dir.
                 Useful when the client runs in a different container with different mount points.
@@ -70,6 +75,7 @@ class DownloadMonitor:
         self.downloads_dir = Path(downloads_dir)
         self.remote_path = remote_path.rstrip("/") + "/" if remote_path else None
         self.import_callback = import_callback
+        self.issue_discovery_service = issue_discovery_service or IssueDiscoveryService()
         self.last_run_time = None
         self.next_run_time = None
         self.last_status = None
@@ -918,11 +924,10 @@ class DownloadMonitor:
 
             elif new_status == DownloadStatus.FAILED:
                 # Failed download - use IssueDiscoveryService to handle retry logic
-                from services import IssueDiscoveryService
-
-                service = IssueDiscoveryService()
                 error_message = submission.last_error or "Unknown error"
-                final_status = service.handle_download_failure(discovered_issue.id, error_message, session)
+                final_status = self.issue_discovery_service.handle_download_failure(
+                    discovered_issue.id, error_message, session
+                )
                 logger.info(
                     f"Handled download failure for DiscoveredIssue {discovered_issue.id}: "
                     f"final status = {final_status}"

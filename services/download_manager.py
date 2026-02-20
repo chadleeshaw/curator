@@ -35,7 +35,9 @@ from services.download import (
     DeduplicationService,
     SubmissionService,
     QueueProcessor,
+    submit_with_nzb_content,
 )
+from services.issue_discovery import IssueDiscoveryService
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +64,7 @@ class DownloadManager:
         nzb_cache_service: Optional[Any] = None,
         download_clients: Optional[Dict[str, DownloadClient]] = None,
         provider_client_map: Optional[Dict[str, str]] = None,
+        issue_discovery_service: Optional[IssueDiscoveryService] = None,
     ):
         """
         Initialize download manager.
@@ -74,6 +77,8 @@ class DownloadManager:
             nzb_cache_service: Optional NZB cache service for content caching
             download_clients: Optional dict of additional download clients keyed by type
             provider_client_map: Optional mapping of provider types to client types
+            issue_discovery_service: Optional IssueDiscoveryService for routing downloads
+                through the discovery pipeline. Falls back to a default instance if not provided.
         """
         self.search_providers = search_providers
         self.download_client = download_client
@@ -107,6 +112,9 @@ class DownloadManager:
             max_downloads,
             nzb_cache_service,
             download_clients=self.download_clients,
+        )
+        self.issue_discovery_service: IssueDiscoveryService = issue_discovery_service or IssueDiscoveryService(
+            fuzzy_threshold=fuzzy_threshold
         )
 
         # Lock to serialize slot counting + submission between concurrent callers
@@ -171,10 +179,7 @@ class DownloadManager:
         """
         Submit a download, preferring cached NZB content over URL to avoid provider rate limits.
 
-        Tries in order:
-        1. Cached NZB content from provider cache → submit_content() (no provider hit)
-        2. Fetch NZB content from provider → submit_content() (one provider hit, then cached)
-        3. Fallback to URL submission → submit() (provider hit by download client)
+        Delegates to the shared submit_with_nzb_content helper in services.download.nzb_submit.
 
         Args:
             client: Download client to submit to
@@ -185,26 +190,13 @@ class DownloadManager:
         Returns:
             Job ID from download client, or None if all methods failed
         """
-        # Try NZB content-based submission if cache service is available
-        # Check that the client actually overrides submit_content (not the base class no-op)
-        if self.nzb_cache_service and type(client).submit_content is not DownloadClient.submit_content:
-            try:
-                nzb_content = self.nzb_cache_service.get_nzb_content(nzb_url)
-                if nzb_content:
-                    job_id = client.submit_content(
-                        nzb_content=nzb_content,
-                        title=title,
-                        category=category,
-                    )
-                    if job_id:
-                        logger.info(f"[DownloadManager] Submitted via cached NZB content: {title} -> {job_id}")
-                        return job_id
-                    logger.warning(f"[DownloadManager] submit_content failed for {title}, falling back to URL")
-            except Exception as e:
-                logger.warning(f"[DownloadManager] NZB content submission error: {e}, falling back to URL")
-
-        # Fallback: submit URL directly (download client fetches NZB from provider)
-        return client.submit(nzb_url=nzb_url, title=title, category=category)
+        return submit_with_nzb_content(
+            client=client,
+            nzb_url=nzb_url,
+            title=title,
+            category=category,
+            nzb_cache_service=self.nzb_cache_service,
+        )
 
     def _get_client_by_name(self, client_name: Optional[str]) -> DownloadClient:
         """
@@ -291,35 +283,6 @@ class DownloadManager:
         """
         title_lower = title.lower()
         return any(ext in title_lower for ext in BLACKLISTED_FILE_EXTENSIONS)
-
-    def _collect_submission_result(
-        self,
-        submission: Optional[DownloadSubmission],
-        search_result: Dict[str, Any],
-        results: Dict[str, Any],
-    ) -> None:
-        """
-        Update result counts based on submission status.
-
-        Args:
-            submission: DownloadSubmission or None if skipped
-            search_result: Original search result dict (for error messages)
-            results: Results dict to update with counts and errors
-        """
-        if not submission:
-            results["skipped"] += 1
-            return
-
-        if submission.status == DownloadSubmission.StatusEnum.PENDING:
-            results["submitted"] += 1
-        elif submission.status == DownloadSubmission.StatusEnum.QUEUED:
-            results.setdefault("queued", 0)
-            results["queued"] += 1
-        elif submission.status == DownloadSubmission.StatusEnum.SKIPPED:
-            results["skipped"] += 1
-        elif submission.status == DownloadSubmission.StatusEnum.FAILED:
-            results["failed"] += 1
-            results["errors"].append(f"Failed: {search_result['title']} - {submission.last_error}")
 
     def _create_search_result_record(
         self,
@@ -629,147 +592,6 @@ class DownloadManager:
 
         return False, None
 
-    def _validate_download_submission(
-        self,
-        title: str,
-        tracking_id: int,
-        search_result: Dict[str, Any],
-        session: Session,
-        search_result_db_id: Optional[int],
-    ) -> Optional[str]:
-        """
-        Validate a download submission before attempting to submit.
-
-        Args:
-            title: Result title
-            tracking_id: Periodical tracking ID
-            search_result: Search result dict
-            session: Database session
-            search_result_db_id: Optional SearchResult DB record ID
-
-        Returns:
-            Error message if validation failed, None if valid
-        """
-        # Check blacklisted file types
-        if self._has_blacklisted_extension(title):
-            logger.warning(f"[DownloadManager] Skipping download with blacklisted extension: {title}")
-            self._create_submission_record(
-                tracking_id,
-                search_result,
-                DownloadSubmission.StatusEnum.SKIPPED,
-                session,
-                search_result_db_id=search_result_db_id,
-                error_message="Skipped: blacklisted file extension",
-            )
-            return "blacklisted_extension"
-
-        # Check bad files
-        fuzzy_group = get_fuzzy_group_id(title)
-        url = search_result.get("url", "")
-        bad_file = self._is_bad_file(tracking_id, fuzzy_group, session, url=url)
-        if bad_file:
-            logger.info(
-                f"[DownloadManager] Skipping bad file (failed {bad_file.attempt_count} times): "
-                f"{title} - Last error: {bad_file.last_error}"
-            )
-            return "bad_file"
-
-        # Check duplicates
-        is_dup, _ = self.check_duplicate_submission(tracking_id, title, session)
-        if is_dup:
-            logger.debug("[DownloadManager] Duplicate found, recording as SKIPPED")
-            self._create_submission_record(
-                tracking_id,
-                search_result,
-                DownloadSubmission.StatusEnum.SKIPPED,
-                session,
-                search_result_db_id=search_result_db_id,
-                error_message="Skipped: duplicate download",
-            )
-            logger.info(f"Skipped duplicate download: {title} (tracking_id: {tracking_id})")
-            return "duplicate"
-
-        return None
-
-    def _queue_download_at_limit(
-        self,
-        tracking_id: int,
-        search_result: Dict[str, Any],
-        session: Session,
-        search_result_db_id: Optional[int],
-    ) -> DownloadSubmission:
-        """
-        Queue a download when at concurrent download limit.
-
-        Args:
-            tracking_id: Periodical tracking ID
-            search_result: Search result dict
-            session: Database session
-            search_result_db_id: Optional SearchResult DB record ID
-
-        Returns:
-            Queued DownloadSubmission record
-        """
-        title = search_result["title"]
-        provider = search_result.get("provider", "unknown")
-
-        logger.info(
-            f"[DownloadManager] At download limit ({self.max_downloads}/{self.max_downloads}), "
-            f"queuing download: '{title}'"
-        )
-
-        submission = self._create_submission_record(
-            tracking_id,
-            search_result,
-            DownloadSubmission.StatusEnum.QUEUED,
-            session,
-            search_result_db_id=search_result_db_id,
-            client_name=self._get_client_name_for_provider(provider),
-            attempt_count=0,
-        )
-
-        logger.info(f"Download queued: {title} (tracking_id: {tracking_id})")
-        return submission
-
-    def submit_download(
-        self,
-        tracking_id: int,
-        search_result: Dict[str, Any],
-        session: Session,
-        search_result_db_id: Optional[int] = None,
-    ) -> Optional[DownloadSubmission]:
-        """
-        Submit a search result for download, checking for duplicates and bad files first.
-
-        Args:
-            tracking_id: Periodical tracking ID
-            search_result: Search result dict with title, url, provider, etc.
-            session: Database session
-            search_result_db_id: Optional ID of SearchResult DB record
-
-        Returns:
-            DownloadSubmission record if submitted, None if duplicate or error
-        """
-        title = search_result["title"]
-        logger.debug(f"[DownloadManager] submit_download called for: {title}")
-
-        # Validate submission
-        validation_error = self._validate_download_submission(
-            title, tracking_id, search_result, session, search_result_db_id
-        )
-        if validation_error:
-            return None
-
-        # Acquire lock to prevent race condition in concurrent download limit checking
-        with self._slot_lock:
-            # Queue if at concurrent download limit
-            active_count = self._get_active_download_count(session)
-            if active_count >= self.max_downloads:
-                return self._queue_download_at_limit(tracking_id, search_result, session, search_result_db_id)
-
-            # Submit to download client
-            return self._submit_to_client(tracking_id, search_result, session, search_result_db_id)
-
     def _handle_client_rejection(
         self,
         tracking_id: int,
@@ -914,7 +736,12 @@ class DownloadManager:
 
         # Check if already downloading, queued, or pending — prevent duplicate concurrent submissions
         if (
-            issue.download_status in (DownloadStatus.DOWNLOADING, DownloadStatus.QUEUED, "pending")
+            issue.download_status
+            in (
+                DownloadStatus.DOWNLOADING,
+                DownloadStatus.QUEUED,
+                DownloadStatus.PENDING,
+            )
             and issue.current_submission_id
         ):
             logger.warning(
@@ -927,6 +754,14 @@ class DownloadManager:
         if issue.download_status == DownloadStatus.PERMANENTLY_FAILED:
             logger.warning(f"Skipping bad file (marked as permanently failed): {issue.title}")
             return DownloadStatus.PERMANENTLY_FAILED
+
+        # Check blacklisted file types
+        if self._has_blacklisted_extension(issue.title):
+            logger.warning(f"Skipping discovered issue with blacklisted extension: {issue.title}")
+            issue.download_status = DownloadStatus.PERMANENTLY_FAILED
+            issue.last_error = "Blacklisted file extension"
+            session.commit()
+            return "blacklisted_extension"
 
         # Validate we have the necessary metadata
         if not issue.latest_url:
@@ -941,7 +776,7 @@ class DownloadManager:
 
     def _build_search_result_from_issue(self, issue, discovered_issue_id: int) -> Dict[str, Any]:
         """
-        Build search_result dict from DiscoveredIssue for compatibility with submit_download.
+        Build search_result dict from DiscoveredIssue for use by submission helpers.
 
         Args:
             issue: DiscoveredIssue record
@@ -1057,7 +892,7 @@ class DownloadManager:
             )
 
             # Update DiscoveredIssue with submission info
-            issue.download_status = DownloadStatus.QUEUED  # Queued in download client
+            issue.download_status = DownloadStatus.PENDING  # Submitted to and accepted by download client
             issue.current_submission_id = submission.id
             self._register_submission_id(issue, submission.id)
             self._record_attempt(issue)
@@ -1120,170 +955,13 @@ class DownloadManager:
             # Submit to download client
             return self._submit_issue_to_client(issue, search_result, session)
 
-    def _get_editions_to_download(self, tracking: PeriodicalTracking) -> list[str]:
-        """
-        Get list of OLIDs for editions marked for download.
-
-        Args:
-            tracking: Periodical tracking record
-
-        Returns:
-            List of OLID strings to download
-        """
-        selected_editions = tracking.selected_editions or {}
-        return [olid for olid, tracked in selected_editions.items() if tracked]
-
-    def _match_search_result_to_edition(
-        self,
-        search_result: Dict[str, Any],
-        editions_to_download: list[str],
-        tracking: PeriodicalTracking,
-    ) -> Optional[str]:
-        """
-        Try to match a search result to a selected edition OLID.
-
-        Args:
-            search_result: Search result dict
-            editions_to_download: List of edition OLIDs to match against
-            tracking: Tracking record with edition metadata
-
-        Returns:
-            Matched edition OLID or None if no match
-        """
-        # Check if metadata contains an OLID that matches selected editions
-        raw_metadata = search_result.get("raw_metadata", {})
-        result_olid = raw_metadata.get("olid") or raw_metadata.get("edition_id") or raw_metadata.get("open_library_id")
-
-        if result_olid and result_olid in editions_to_download:
-            logger.debug(f"Matched search result to selected edition {result_olid}: {search_result['title']}")
-            return result_olid
-
-        # No OLID match - try fuzzy matching against edition titles
-        edition_metadata = tracking.periodical_metadata or {}
-        editions_list = edition_metadata.get("editions", [])
-
-        if not editions_list:
-            return None
-
-        # Try to match by title similarity
-        for olid in editions_to_download:
-            edition_info = next((e for e in editions_list if e.get("olid") == olid), None)
-            if not edition_info:
-                continue
-
-            edition_title = edition_info.get("title", "")
-            is_match, score = self.title_matcher.match(search_result["title"], edition_title)
-            if is_match:
-                logger.debug(
-                    f"Fuzzy matched search result to edition {olid}: " f"{search_result['title']} (score: {score})"
-                )
-                return olid
-
-        return None
-
-    def _create_search_result_db_record(
-        self,
-        search_result: Dict[str, Any],
-        tracking: PeriodicalTracking,
-        matched_edition: Optional[str],
-        session: Session,
-    ) -> Optional[int]:
-        """
-        Create database search result record with edition info.
-
-        Args:
-            search_result: Search result dict
-            tracking: Tracking record
-            matched_edition: Matched edition OLID
-            session: Database session
-
-        Returns:
-            Search result DB ID or None if creation failed
-        """
-        try:
-            metadata = search_result.get("raw_metadata", {}).copy()
-            if matched_edition:
-                metadata["matched_edition_olid"] = matched_edition
-
-            db_result = DBSearchResult(
-                provider=search_result.get("provider", "unknown"),
-                query=tracking.title,
-                title=search_result["title"],
-                url=search_result["url"],
-                publication_date=search_result.get("publication_date"),
-                raw_metadata=metadata,
-            )
-            session.add(db_result)
-            session.flush()
-            return db_result.id
-        except Exception as e:
-            logger.warning(f"Could not create DB search result: {e}", exc_info=True)
-            return None
-
-    def download_selected_editions(self, tracking_id: int, session: Session) -> Dict[str, Any]:
-        """
-        Download only the specific editions marked in selected_editions dict.
-        Used when specific issues are individually tracked.
-
-        Args:
-            tracking_id: Periodical tracking ID
-            session: Database session
-
-        Returns:
-            Dict with submission results
-        """
-        # Get tracking record
-        tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
-
-        if not tracking:
-            logger.error(f"Tracking record not found: {tracking_id}")
-            return {"submitted": 0, "skipped": 0, "failed": 0}
-
-        # Get selected editions
-        editions_to_download = self._get_editions_to_download(tracking)
-        if not editions_to_download:
-            logger.debug(f"No selected editions to download for: {tracking.title}")
-            return {"submitted": 0, "skipped": 0, "failed": 0}
-
-        logger.info(f"Downloading {len(editions_to_download)} selected editions for: {tracking.title}")
-
-        # Search for issues
-        search_results = self.search_periodical_issues(tracking.title, session)
-        results = {"submitted": 0, "skipped": 0, "failed": 0, "errors": []}
-
-        # Process each search result
-        for search_result in search_results:
-            matched_edition = self._match_search_result_to_edition(search_result, editions_to_download, tracking)
-
-            if not matched_edition:
-                logger.debug(f"Skipping search result (no match to selected editions): " f"{search_result['title']}")
-                results["skipped"] += 1
-                continue
-
-            # Create DB search result record
-            search_result_db_id = self._create_search_result_db_record(
-                search_result, tracking, matched_edition, session
-            )
-
-            # Submit download
-            submission = self.submit_download(tracking_id, search_result, session, search_result_db_id)
-            self._collect_submission_result(submission, search_result, results)
-
-            if submission and submission.status == DownloadSubmission.StatusEnum.PENDING:
-                logger.info(f"Submitted selected edition {matched_edition}: {search_result['title']}")
-
-        logger.info(
-            f"Selected editions download completed: submitted={results['submitted']}, "
-            f"queued={results.get('queued', 0)}, "
-            f"skipped={results['skipped']}, failed={results['failed']}"
-        )
-
-        return results
-
     def download_all_periodical_issues(self, tracking_id: int, session: Session) -> Dict[str, Any]:
         """
         Search for all issues of a tracked periodical and submit downloads.
         Called when track_all_editions is set to True.
+
+        Routes all results through IssueDiscoveryService so every submission is
+        linked to a DiscoveredIssue and tracked through the unified state machine.
 
         Args:
             tracking_id: Periodical tracking ID
@@ -1306,34 +984,51 @@ class DownloadManager:
 
         results = {"submitted": 0, "skipped": 0, "failed": 0, "errors": []}
 
-        # Filter out issues that are already downloaded, pending, or in library
-        filtered_results = []
-        for search_result in search_results:
-            # Check if already submitted or downloaded
-            is_duplicate, _ = self.check_duplicate_submission(tracking_id, search_result["title"], session)
-            if not is_duplicate:
-                filtered_results.append(search_result)
+        if not search_results:
+            logger.info(f"No search results for '{tracking.title}'")
+            return results
 
-        logger.info(f"Found {len(filtered_results)} new issues (filtered from {len(search_results)} total results)")
+        # Record all results through IssueDiscoveryService — this creates/updates
+        # DiscoveredIssue records and sets download_status="wanted" for new issues.
+        record_stats = self.issue_discovery_service.record_search_results(
+            tracking_id=tracking_id,
+            search_results=search_results,
+            session=session,
+        )
+        logger.info(
+            f"Recorded search results: {record_stats['new']} new, {record_stats['updated']} updated, "
+            f"{record_stats.get('rejected_non_periodical', 0)} rejected"
+        )
 
-        # Sort results: English editions first, then by date (newest first)
-        filtered_results.sort(key=self._get_result_sort_key)
+        # Fetch all "wanted" issues for this tracking record and submit them
+        wanted_issues = self.issue_discovery_service.get_download_queue(
+            session, limit=len(search_results), tracking_id=tracking_id
+        )
 
-        if filtered_results:
+        if not wanted_issues:
             logger.info(
-                f"Submitting {len(filtered_results)} issues for download "
-                f"(max concurrent: {self.max_downloads}, excess will be queued)"
+                f"No new issues to download for '{tracking.title}' - "
+                f"all found issues already downloaded, pending, or filtered"
             )
-        else:
-            logger.info(
-                f"No new issues to download for '{tracking.title}' - all found issues already downloaded or pending"
-            )
+            return results
 
-        # Submit each result - submit_download will queue excess beyond max_downloads
-        for search_result in filtered_results:
-            search_result_db_id = self._create_search_result_record(search_result, tracking.title, session)
-            submission = self.submit_download(tracking_id, search_result, session, search_result_db_id)
-            self._collect_submission_result(submission, search_result, results)
+        logger.info(
+            f"Submitting {len(wanted_issues)} issues for download "
+            f"(max concurrent: {self.max_downloads}, excess will be queued)"
+        )
+
+        for issue in wanted_issues:
+            submission = self.submit_from_discovered_issue(issue.id, session)
+            if submission:
+                if submission.status == DownloadSubmission.StatusEnum.PENDING:
+                    results["submitted"] += 1
+                elif submission.status == DownloadSubmission.StatusEnum.QUEUED:
+                    results.setdefault("queued", 0)
+                    results["queued"] += 1
+                else:
+                    results["skipped"] += 1
+            else:
+                results["skipped"] += 1
 
         logger.info(
             f"Download search completed: submitted={results['submitted']}, "
@@ -1361,17 +1056,12 @@ class DownloadManager:
             DownloadSubmission record if successful
         """
         from models.database import DiscoveredIssue
-        from services import IssueDiscoveryService
 
         title = search_result["title"]
         logger.info(f"Submitting single issue download: {title} (tracking_id: {tracking_id})")
 
-        # Use Issue Discovery service to create/find DiscoveredIssue
-        # This ensures manual downloads go through the same system as automatic ones
-        service = IssueDiscoveryService()
-
         # Record this as a discovered issue (will be "wanted" if it matches tracking rules)
-        record_result = service.record_search_results(
+        record_result = self.issue_discovery_service.record_search_results(
             tracking_id=tracking_id,
             search_results=[search_result],
             session=session,
@@ -1411,6 +1101,7 @@ class DownloadManager:
         if discovered_issue.download_status not in [
             DownloadStatus.WANTED,
             DownloadStatus.QUEUED,
+            DownloadStatus.PENDING,
             DownloadStatus.DOWNLOADING,
         ]:
             discovered_issue.download_status = DownloadStatus.WANTED
@@ -1429,6 +1120,9 @@ class DownloadManager:
         Direct submission for manual user-initiated downloads.
         Bypasses duplicate checking since the user explicitly requested the download.
         Used as fallback when Issue Discovery system fails.
+
+        Attempts to create a minimal DiscoveredIssue after submission so the download
+        monitor can track the submission going forward.
         """
         # Create DB search result record
         search_result_db_id = None
@@ -1452,13 +1146,13 @@ class DownloadManager:
         with self._slot_lock:
             # Check if at concurrent download limit; queue if so, otherwise submit directly
             active_count = self._get_active_download_count(session)
+            provider = search_result.get("provider", "unknown")
             if active_count >= self.max_downloads:
-                provider = search_result.get("provider", "unknown")
                 logger.info(
                     f"[DownloadManager] At download limit ({active_count}/{self.max_downloads}), "
                     f"queuing manual download: '{search_result['title']}'"
                 )
-                return self._create_submission_record(
+                submission = self._create_submission_record(
                     tracking_id,
                     search_result,
                     DownloadSubmission.StatusEnum.QUEUED,
@@ -1467,8 +1161,106 @@ class DownloadManager:
                     client_name=self._get_client_name_for_provider(provider),
                     attempt_count=0,
                 )
+            else:
+                submission = self._submit_to_client(tracking_id, search_result, session, search_result_db_id)
 
-            return self._submit_to_client(tracking_id, search_result, session, search_result_db_id)
+        # Attempt to create a DiscoveredIssue and link it so the monitor can track this submission.
+        # This is best-effort — we're already in a fallback path, so don't fail if this also errors.
+        if submission:
+            self._link_manual_submission_to_discovered_issue(tracking_id, search_result, submission, session)
+
+        return submission
+
+    def _link_manual_submission_to_discovered_issue(
+        self,
+        tracking_id: int,
+        search_result: Dict[str, Any],
+        submission: DownloadSubmission,
+        session: Session,
+    ) -> None:
+        """
+        Best-effort: create or find a DiscoveredIssue and link it to a manual submission.
+
+        Called after _manual_direct_submission creates a DownloadSubmission without going
+        through IssueDiscoveryService. Ensures the download monitor can sync status for this
+        submission going forward.
+
+        Args:
+            tracking_id: Periodical tracking ID
+            search_result: Search result dict
+            submission: The DownloadSubmission that was just created
+            session: Database session
+        """
+        try:
+            title = search_result.get("title", "")
+            url = search_result.get("url", "")
+            provider = search_result.get("provider", "unknown")
+
+            parsed = self.parser.parse_search_result(title=title, url=url, provider=provider)
+            if not parsed:
+                logger.debug(f"[DownloadManager] Could not parse title for manual submission link: {title}")
+                return
+
+            fuzzy_group = get_fuzzy_group_id(parsed.original_title)
+
+            # Find an existing DiscoveredIssue for this group, or create one
+            discovered_issue = (
+                session.query(DiscoveredIssue)
+                .filter(
+                    DiscoveredIssue.tracking_id == tracking_id,
+                    DiscoveredIssue.fuzzy_match_group == fuzzy_group,
+                )
+                .first()
+            )
+
+            if not discovered_issue:
+                now = utc_now()
+                discovered_issue = DiscoveredIssue(
+                    tracking_id=tracking_id,
+                    title=title,
+                    normalized_title=parsed.cleaned_title.lower(),
+                    fuzzy_match_group=fuzzy_group,
+                    issue_date=parsed.publication_date,
+                    year=parsed.publication_date.year if parsed.publication_date else None,
+                    month=parsed.publication_date.month if parsed.publication_date else None,
+                    language=parsed.language,
+                    country=parsed.country,
+                    first_seen=now,
+                    last_seen=now,
+                    times_seen=1,
+                    download_priority=MANUAL_DOWNLOAD_PRIORITY,
+                    latest_url=url,
+                    latest_provider=provider,
+                )
+                session.add(discovered_issue)
+                session.flush()
+                logger.debug(f"[DownloadManager] Created DiscoveredIssue for manual fallback submission: {title}")
+
+            # Set status and link to submission
+            if submission.status == DownloadSubmission.StatusEnum.PENDING:
+                discovered_issue.download_status = DownloadStatus.PENDING
+            elif submission.status == DownloadSubmission.StatusEnum.QUEUED:
+                discovered_issue.download_status = DownloadStatus.QUEUED
+            else:
+                discovered_issue.download_status = DownloadStatus.WANTED
+
+            discovered_issue.current_submission_id = submission.id
+            ids = list(discovered_issue.submission_ids or [])
+            if submission.id not in ids:
+                ids.append(submission.id)
+                discovered_issue.submission_ids = ids
+
+            session.commit()
+            logger.debug(
+                f"[DownloadManager] Linked manual submission {submission.id} to "
+                f"DiscoveredIssue {discovered_issue.id} (status: {discovered_issue.download_status})"
+            )
+
+        except Exception as e:
+            logger.warning(
+                f"[DownloadManager] Could not link manual submission {submission.id} to DiscoveredIssue: {e}",
+                exc_info=True,
+            )
 
     def _handle_rate_limited_submission(
         self, submission: DownloadSubmission, client_status: Dict[str, Any], job_id: str
@@ -1805,6 +1597,10 @@ class DownloadManager:
         Thread-safe: acquires _slot_lock to prevent concurrent slot counting
         from auto-download Phase 3 and download monitor from exceeding max_downloads.
 
+        After the queue processor promotes submissions (QUEUED→PENDING), syncs the
+        linked DiscoveredIssue.download_status to QUEUED so the two state machines
+        stay consistent.
+
         Args:
             session: Database session
 
@@ -1812,7 +1608,32 @@ class DownloadManager:
             Dict with processing results
         """
         with self._slot_lock:
-            return self.queue_processor.process_queue(session)
+            result = self.queue_processor.process_queue(session)
+
+        # Sync DiscoveredIssue status for each promoted submission (outside _slot_lock;
+        # no slot counting involved in the sync).
+        for submission in result.get("promoted_submissions", []):
+            try:
+                discovered_issue = (
+                    session.query(DiscoveredIssue)
+                    .filter(DiscoveredIssue.current_submission_id == submission.id)
+                    .first()
+                )
+                if discovered_issue:
+                    logger.debug(
+                        f"Syncing DiscoveredIssue {discovered_issue.id} status: "
+                        f"{discovered_issue.download_status} -> {DownloadStatus.PENDING} "
+                        f"(submission {submission.id} promoted to PENDING)"
+                    )
+                    discovered_issue.download_status = DownloadStatus.PENDING
+                    session.commit()
+            except Exception as e:
+                logger.error(
+                    f"Error syncing DiscoveredIssue for promoted submission {submission.id}: {e}",
+                    exc_info=True,
+                )
+
+        return result
 
     def submit_discovered_batch(self, session: Session, issue_discovery_service) -> int:
         """

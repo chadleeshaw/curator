@@ -638,21 +638,7 @@ def _initialize_core_services() -> None:
         parallel_workers=app_state.import_config.get("parallel_workers", 2),
     )
 
-    # Download manager (requires download client and search providers)
-    if app_state.download_client and app_state.search_providers:
-        app_state.download_manager = DownloadManager(
-            search_providers=app_state.search_providers,
-            download_client=app_state.download_client,
-            fuzzy_threshold=app_state.fuzzy_threshold,
-            max_downloads=app_state.downloads_config.get("max_concurrent", 10),
-            nzb_cache_service=app_state.nzb_cache_service,
-            download_clients=app_state.download_clients or None,  # Additional clients for routing
-        )
-        logger.info(f"Download manager initialized with {len(app_state.download_clients or {})} additional client(s)")
-    else:
-        logger.warning("Download manager not initialized: missing download client or search providers")
-
-    # Issue Discovery services
+    # Issue Discovery services (initialized before DownloadManager so it can be injected)
     app_state.issue_discovery_service = IssueDiscoveryService(
         fuzzy_threshold=app_state.fuzzy_threshold,
         default_max_retries=app_state.downloads_config.get("max_retries", 1),
@@ -665,6 +651,21 @@ def _initialize_core_services() -> None:
         very_slow_interval_hours=app_state.tasks_config.get("very_slow_search_interval", 168),
     )
     logger.info("Issue discovery services initialized")
+
+    # Download manager (requires download client and search providers)
+    if app_state.download_client and app_state.search_providers:
+        app_state.download_manager = DownloadManager(
+            search_providers=app_state.search_providers,
+            download_client=app_state.download_client,
+            fuzzy_threshold=app_state.fuzzy_threshold,
+            max_downloads=app_state.downloads_config.get("max_concurrent", 10),
+            nzb_cache_service=app_state.nzb_cache_service,
+            download_clients=app_state.download_clients or None,  # Additional clients for routing
+            issue_discovery_service=app_state.issue_discovery_service,
+        )
+        logger.info(f"Download manager initialized with {len(app_state.download_clients or {})} additional client(s)")
+    else:
+        logger.warning("Download manager not initialized: missing download client or search providers")
 
 
 def _initialize_background_tasks() -> None:
@@ -685,6 +686,7 @@ def _initialize_background_tasks() -> None:
             file_importer=app_state.file_importer,
             session_factory=app_state.session_factory,
             downloads_dir=app_state.storage_config.get("download_dir", "./downloads"),
+            issue_discovery_service=app_state.issue_discovery_service,
             remote_path=remote_path,
         )
         if remote_path:

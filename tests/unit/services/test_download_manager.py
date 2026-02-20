@@ -22,7 +22,7 @@ from sqlalchemy.orm import sessionmaker
 
 from services.download_manager import DownloadManager
 from core.interfaces import SearchProvider, SearchResult, DownloadClient
-from models.database import Base
+from models.database import Base, DiscoveredIssue, PeriodicalTracking
 
 
 # Mock providers and clients
@@ -646,48 +646,64 @@ class TestEdgeCases:
 
 
 class TestBlacklistFiltering:
-    """Test blacklisted file extension filtering in submit_download()"""
+    """Test blacklisted file extension filtering via submit_from_discovered_issue()"""
 
-    def test_filters_video_extension_mp4(self, test_db, mock_download_client):
-        """Test that .mp4 extension in title is filtered out"""
-        engine, session_factory = test_db
-        session = session_factory()
+    def _make_issue(
+        self,
+        session,
+        tracking_id: int,
+        title: str,
+        url: str = "http://example.com/test.nzb",
+    ):
+        """Helper: create a DiscoveredIssue ready for submission."""
+        from core.utils.fuzzy_matching import get_fuzzy_group_id
 
-        from models.database import PeriodicalTracking
-
-        # Create tracking record
-        tracking = PeriodicalTracking(
-            title="Test Magazine",
-            olid="test_magazine",
-            language="en",
+        issue = DiscoveredIssue(
+            tracking_id=tracking_id,
+            title=title,
+            normalized_title=title.lower(),
+            fuzzy_match_group=get_fuzzy_group_id(title),
+            latest_url=url,
+            latest_provider="MockProvider",
+            download_status="wanted",
         )
-        session.add(tracking)
-        session.commit()
+        session.add(issue)
+        session.flush()
+        return issue
 
+    def _make_manager(self, mock_download_client):
         provider = MockSearchProvider({"name": "MockProvider", "type": "newsnab"})
-        manager = DownloadManager(
+        return DownloadManager(
             search_providers=[provider],
             download_client=mock_download_client,
         )
 
-        # Try to submit download with .mp4 in title
-        search_result = {
-            "title": "Test Magazine Jan 2024.mp4",
-            "url": "http://example.com/test.nzb",
-            "provider": "MockProvider",
-        }
+    def _make_tracking(self, session, title: str, olid: str):
+        tracking = PeriodicalTracking(title=title, olid=olid, language="en")
+        session.add(tracking)
+        session.flush()
+        return tracking
 
-        result = manager.submit_download(tracking.id, search_result, session)
+    def test_filters_video_extension_mp4(self, test_db, mock_download_client):
+        """Test that .mp4 extension in title is filtered out"""
+        from models.database import DownloadSubmission
+
+        engine, session_factory = test_db
+        session = session_factory()
+
+        tracking = self._make_tracking(session, "Test Magazine", "test_magazine")
+        issue = self._make_issue(session, tracking.id, "Test Magazine Jan 2024.mp4")
+        session.commit()
+
+        manager = self._make_manager(mock_download_client)
+        result = manager.submit_from_discovered_issue(issue.id, session)
 
         # Should return None (rejected)
         assert result is None
 
-        # Check that it was recorded as SKIPPED
-        from models.database import DownloadSubmission
-
-        submissions = session.query(DownloadSubmission).all()
-        assert len(submissions) == 1
-        assert submissions[0].status == DownloadSubmission.StatusEnum.SKIPPED
+        # Issue should be marked permanently failed
+        session.refresh(issue)
+        assert issue.download_status == "permanently_failed"
 
         session.close()
 
@@ -696,29 +712,12 @@ class TestBlacklistFiltering:
         engine, session_factory = test_db
         session = session_factory()
 
-        from models.database import PeriodicalTracking
-
-        tracking = PeriodicalTracking(
-            title="Test Magazine",
-            olid="test_magazine",
-            language="en",
-        )
-        session.add(tracking)
+        tracking = self._make_tracking(session, "Test Magazine", "test_magazine")
+        issue = self._make_issue(session, tracking.id, "Test.Magazine.2024.avi")
         session.commit()
 
-        provider = MockSearchProvider({"name": "MockProvider", "type": "newsnab"})
-        manager = DownloadManager(
-            search_providers=[provider],
-            download_client=mock_download_client,
-        )
-
-        search_result = {
-            "title": "Test.Magazine.2024.avi",
-            "url": "http://example.com/test.nzb",
-            "provider": "MockProvider",
-        }
-
-        result = manager.submit_download(tracking.id, search_result, session)
+        manager = self._make_manager(mock_download_client)
+        result = manager.submit_from_discovered_issue(issue.id, session)
 
         assert result is None
 
@@ -729,31 +728,13 @@ class TestBlacklistFiltering:
         engine, session_factory = test_db
         session = session_factory()
 
-        from models.database import PeriodicalTracking
-
         # Magazine with "MP" in name (like "Computer Music" or "Example MP")
-        tracking = PeriodicalTracking(
-            title="Example MP Magazine",
-            olid="example_mp_magazine",
-            language="en",
-        )
-        session.add(tracking)
+        tracking = self._make_tracking(session, "Example MP Magazine", "example_mp_magazine")
+        issue = self._make_issue(session, tracking.id, "Example MP Magazine - Jan 2024")
         session.commit()
 
-        provider = MockSearchProvider({"name": "MockProvider", "type": "newsnab"})
-        manager = DownloadManager(
-            search_providers=[provider],
-            download_client=mock_download_client,
-        )
-
-        # Title contains "MP" but NOT the extension ".mp4"
-        search_result = {
-            "title": "Example MP Magazine - Jan 2024",
-            "url": "http://example.com/test.nzb",
-            "provider": "MockProvider",
-        }
-
-        result = manager.submit_download(tracking.id, search_result, session)
+        manager = self._make_manager(mock_download_client)
+        result = manager.submit_from_discovered_issue(issue.id, session)
 
         # Should be accepted (not None)
         assert result is not None
@@ -765,29 +746,12 @@ class TestBlacklistFiltering:
         engine, session_factory = test_db
         session = session_factory()
 
-        from models.database import PeriodicalTracking
-
-        tracking = PeriodicalTracking(
-            title="Test Magazine",
-            olid="test_magazine",
-            language="en",
-        )
-        session.add(tracking)
+        tracking = self._make_tracking(session, "Test Magazine", "test_magazine")
+        issue = self._make_issue(session, tracking.id, "Test Magazine 2024.mkv")
         session.commit()
 
-        provider = MockSearchProvider({"name": "MockProvider", "type": "newsnab"})
-        manager = DownloadManager(
-            search_providers=[provider],
-            download_client=mock_download_client,
-        )
-
-        search_result = {
-            "title": "Test Magazine 2024.mkv",
-            "url": "http://example.com/test.nzb",
-            "provider": "MockProvider",
-        }
-
-        result = manager.submit_download(tracking.id, search_result, session)
+        manager = self._make_manager(mock_download_client)
+        result = manager.submit_from_discovered_issue(issue.id, session)
 
         assert result is None
 
@@ -798,30 +762,12 @@ class TestBlacklistFiltering:
         engine, session_factory = test_db
         session = session_factory()
 
-        from models.database import PeriodicalTracking
-
-        tracking = PeriodicalTracking(
-            title="Test Magazine",
-            olid="test_magazine",
-            language="en",
-        )
-        session.add(tracking)
+        tracking = self._make_tracking(session, "Test Magazine", "test_magazine")
+        issue = self._make_issue(session, tracking.id, "Test Magazine 2024.MP4")
         session.commit()
 
-        provider = MockSearchProvider({"name": "MockProvider", "type": "newsnab"})
-        manager = DownloadManager(
-            search_providers=[provider],
-            download_client=mock_download_client,
-        )
-
-        # Test uppercase extension
-        search_result = {
-            "title": "Test Magazine 2024.MP4",
-            "url": "http://example.com/test.nzb",
-            "provider": "MockProvider",
-        }
-
-        result = manager.submit_download(tracking.id, search_result, session)
+        manager = self._make_manager(mock_download_client)
+        result = manager.submit_from_discovered_issue(issue.id, session)
 
         assert result is None  # Should still be filtered
 
@@ -829,38 +775,20 @@ class TestBlacklistFiltering:
 
     def test_allows_normal_pdf_download(self, test_db, mock_download_client):
         """Test that normal PDF downloads are NOT filtered"""
+        from models.database import DownloadSubmission
+
         engine, session_factory = test_db
         session = session_factory()
 
-        from models.database import PeriodicalTracking
-
-        tracking = PeriodicalTracking(
-            title="Test Magazine",
-            olid="test_magazine",
-            language="en",
-        )
-        session.add(tracking)
+        tracking = self._make_tracking(session, "Test Magazine", "test_magazine")
+        issue = self._make_issue(session, tracking.id, "Test Magazine - January 2024")
         session.commit()
 
-        provider = MockSearchProvider({"name": "MockProvider", "type": "newsnab"})
-        manager = DownloadManager(
-            search_providers=[provider],
-            download_client=mock_download_client,
-        )
-
-        # Normal magazine title without blacklisted extensions
-        search_result = {
-            "title": "Test Magazine - January 2024",
-            "url": "http://example.com/test.nzb",
-            "provider": "MockProvider",
-        }
-
-        result = manager.submit_download(tracking.id, search_result, session)
+        manager = self._make_manager(mock_download_client)
+        result = manager.submit_from_discovered_issue(issue.id, session)
 
         # Should be accepted
         assert result is not None
-
-        from models.database import DownloadSubmission
 
         submissions = session.query(DownloadSubmission).all()
         assert len(submissions) == 1

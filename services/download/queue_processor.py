@@ -9,8 +9,8 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from core.interfaces import DownloadClient
-from core.parsers import utc_now
 from models.database import DownloadSubmission, PeriodicalTracking
+from services.download.nzb_submit import submit_with_nzb_content
 
 logger = logging.getLogger(__name__)
 
@@ -61,33 +61,6 @@ class QueueProcessor:
                     return client
             logger.debug(f"Client '{submission.client_name}' not found for submission {submission.id}, using default")
         return self.download_client
-
-    def _submit_with_nzb_content(self, nzb_url: str, title: str, category: str = None, client=None) -> str:
-        """
-        Submit a download, preferring cached NZB content to avoid provider rate limits.
-
-        Args:
-            nzb_url: NZB download URL
-            title: Download title
-            category: Optional download category
-
-        Returns:
-            Job ID from download client
-        """
-        active_client = client or self.download_client
-        if self.nzb_cache_service and type(active_client).submit_content is not DownloadClient.submit_content:
-            try:
-                nzb_content = self.nzb_cache_service.get_nzb_content(nzb_url)
-                if nzb_content:
-                    job_id = active_client.submit_content(nzb_content=nzb_content, title=title, category=category)
-                    if job_id:
-                        logger.info(f"Submitted via cached NZB content: {title} -> {job_id}")
-                        return job_id
-                    logger.warning(f"submit_content failed for {title}, falling back to URL")
-            except Exception as e:
-                logger.warning(f"NZB content submission error: {e}, falling back to URL")
-
-        return active_client.submit(nzb_url=nzb_url, title=title, category=category)
 
     def process_queue(self, session: Session) -> Dict[str, Any]:
         """
@@ -147,6 +120,7 @@ class QueueProcessor:
 
         submitted_count = 0
         errors: List[str] = []
+        promoted_submissions: List[DownloadSubmission] = []
 
         for submission in queued:
             try:
@@ -172,11 +146,12 @@ class QueueProcessor:
                     f"(submission_id: {submission.id}, category: {category}, client: {client.name})"
                 )
 
-                job_id = self._submit_with_nzb_content(
+                job_id = submit_with_nzb_content(
+                    client=client,
                     nzb_url=submission.source_url,
                     title=submission.result_title,
                     category=category,
-                    client=client,
+                    nzb_cache_service=self.nzb_cache_service,
                 )
 
                 if not job_id:
@@ -202,9 +177,13 @@ class QueueProcessor:
                     f"(job_id: {job_id}, submission_id: {submission.id})"
                 )
                 submitted_count += 1
+                promoted_submissions.append(submission)
 
             except Exception as e:
-                logger.error(f"Failed to submit queued download {submission.id}: {e}", exc_info=True)
+                logger.error(
+                    f"Failed to submit queued download {submission.id}: {e}",
+                    exc_info=True,
+                )
                 submission.status = DownloadSubmission.StatusEnum.FAILED
                 submission.last_error = str(e)
                 session.commit()
@@ -221,4 +200,5 @@ class QueueProcessor:
             "checked": len(queued),
             "submitted": submitted_count,
             "errors": errors,
+            "promoted_submissions": promoted_submissions,
         }

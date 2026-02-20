@@ -11,7 +11,12 @@ from sqlalchemy.orm import sessionmaker
 
 # Path setup handled by conftest.py
 
-from models.database import Base, DownloadSubmission, PeriodicalTracking
+from models.database import (
+    Base,
+    DiscoveredIssue,
+    DownloadSubmission,
+    PeriodicalTracking,
+)
 from services import DownloadManager
 
 
@@ -72,7 +77,7 @@ class TestDownloadSubmission:
     """Test download submission functionality"""
 
     def test_submit_single_download(self, test_db, download_manager):
-        """Test submitting a single download"""
+        """Test submitting a single download via DiscoveredIssue"""
         engine, session_factory = test_db
         session = session_factory()
 
@@ -83,18 +88,22 @@ class TestDownloadSubmission:
             track_all_editions=False,
         )
         session.add(tracking)
+        session.flush()
+
+        # Create a DiscoveredIssue ready to download
+        issue = DiscoveredIssue(
+            tracking_id=tracking.id,
+            title="Test Magazine Issue 1",
+            normalized_title="test magazine issue 1",
+            fuzzy_match_group="test-magazine-issue-1",
+            latest_url="http://example.com/test.nzb",
+            latest_provider="test",
+            download_status="wanted",
+        )
+        session.add(issue)
         session.commit()
 
-        # Submit download
-        search_result = {
-            "title": "Test Magazine Issue 1",
-            "url": "http://example.com/test.nzb",
-            "provider": "test",
-            "publication_date": None,
-            "raw_metadata": {},
-        }
-
-        submission = download_manager.submit_download(tracking.id, search_result, session)
+        submission = download_manager.submit_from_discovered_issue(issue.id, session)
 
         assert submission is not None
         assert submission.job_id == "job_123"
@@ -104,7 +113,7 @@ class TestDownloadSubmission:
         session.close()
 
     def test_submit_duplicate_prevention(self, test_db, download_manager):
-        """Test that duplicate downloads are prevented"""
+        """Test that re-submitting an already-active issue is prevented"""
         engine, session_factory = test_db
         session = session_factory()
 
@@ -115,37 +124,28 @@ class TestDownloadSubmission:
             track_all_editions=False,
         )
         session.add(tracking)
+        session.flush()
+
+        # Create and successfully submit a DiscoveredIssue
+        issue = DiscoveredIssue(
+            tracking_id=tracking.id,
+            title="Test Magazine - Dec 2023",
+            normalized_title="test magazine dec 2023",
+            fuzzy_match_group="test-magazine-dec-2023",
+            latest_url="http://example.com/test1.nzb",
+            latest_provider="test",
+            download_status="wanted",
+        )
+        session.add(issue)
         session.commit()
 
-        # Submit first download
-        search_result1 = {
-            "title": "Test Magazine - Dec 2023",
-            "url": "http://example.com/test1.nzb",
-            "provider": "test",
-            "publication_date": None,
-            "raw_metadata": {},
-        }
-        submission1 = download_manager.submit_download(tracking.id, search_result1, session)
-        assert submission1 is not None
+        sub1 = download_manager.submit_from_discovered_issue(issue.id, session)
+        assert sub1 is not None
 
-        # Try to submit similar issue (should be detected as duplicate)
-        search_result2 = {
-            "title": "Test Magazine December 2023",  # Similar title
-            "url": "http://example.com/test2.nzb",
-            "provider": "test",
-            "publication_date": None,
-            "raw_metadata": {},
-        }
-        submission2 = download_manager.submit_download(tracking.id, search_result2, session)
-        assert submission2 is None  # Should be rejected as duplicate
-
-        # Verify duplicate was recorded as SKIPPED
-        skipped = (
-            session.query(DownloadSubmission)
-            .filter(DownloadSubmission.status == DownloadSubmission.StatusEnum.SKIPPED)
-            .count()
-        )
-        assert skipped == 1
+        # Attempting to submit the same issue again should be blocked
+        # (it's now PENDING with an active submission_id)
+        sub2 = download_manager.submit_from_discovered_issue(issue.id, session)
+        assert sub2 is None  # Rejected — already active
 
         session.close()
 

@@ -14,7 +14,12 @@ import pytest
 
 from core.auth import AuthManager
 from core.database import DatabaseManager
-from models.database import DownloadSubmission, Periodical, PeriodicalTracking
+from models.database import (
+    DiscoveredIssue,
+    DownloadSubmission,
+    Periodical,
+    PeriodicalTracking,
+)
 from services import DownloadManager
 from services import FileImporter
 from services import FileOrganizer
@@ -188,6 +193,8 @@ class TestDownloadWorkflow:
 
     def test_search_and_download_workflow(self, session, mock_search_provider, mock_download_client):
         """Test complete search and download workflow"""
+        from core.utils.fuzzy_matching import get_fuzzy_group_id
+
         # Step 1: Create tracking
         tracking = PeriodicalTracking(
             olid="test_magazine",
@@ -195,21 +202,26 @@ class TestDownloadWorkflow:
             track_all_editions=False,
         )
         session.add(tracking)
-        session.commit()
+        session.flush()
 
         # Step 2: Create download manager
         manager = DownloadManager([mock_search_provider], mock_download_client, fuzzy_threshold=80)
 
-        # Step 3: Submit download
-        search_result = {
-            "title": "Test Magazine Issue 1",
-            "url": "http://example.com/test.nzb",
-            "provider": "test",
-            "publication_date": None,
-            "raw_metadata": {},
-        }
+        # Step 3: Create DiscoveredIssue and submit
+        title = "Test Magazine Issue 1"
+        issue = DiscoveredIssue(
+            tracking_id=tracking.id,
+            title=title,
+            normalized_title=title.lower(),
+            fuzzy_match_group=get_fuzzy_group_id(title),
+            latest_url="http://example.com/test.nzb",
+            latest_provider="test",
+            download_status="wanted",
+        )
+        session.add(issue)
+        session.commit()
 
-        submission = manager.submit_download(tracking.id, search_result, session)
+        submission = manager.submit_from_discovered_issue(issue.id, session)
 
         # Step 4: Verify submission created
         assert submission is not None
@@ -222,35 +234,36 @@ class TestDownloadWorkflow:
         assert updated.file_path is not None
 
     def test_duplicate_prevention_workflow(self, session, mock_download_client):
-        """Test that duplicates are prevented"""
+        """Test that re-submitting an already-active issue is prevented"""
+        from core.utils.fuzzy_matching import get_fuzzy_group_id
+
         # Setup tracking
         tracking = PeriodicalTracking(olid="test_mag", title="Test")
         session.add(tracking)
-        session.commit()
+        session.flush()
 
         manager = DownloadManager([], mock_download_client, fuzzy_threshold=80)
 
-        # Submit first download
-        result1 = {
-            "title": "Test Magazine - Dec 2023",
-            "url": "http://example.com/1.nzb",
-            "provider": "test",
-            "publication_date": None,
-            "raw_metadata": {},
-        }
-        sub1 = manager.submit_download(tracking.id, result1, session)
+        # Create and submit a DiscoveredIssue
+        title = "Test Magazine - Dec 2023"
+        issue = DiscoveredIssue(
+            tracking_id=tracking.id,
+            title=title,
+            normalized_title=title.lower(),
+            fuzzy_match_group=get_fuzzy_group_id(title),
+            latest_url="http://example.com/1.nzb",
+            latest_provider="test",
+            download_status="wanted",
+        )
+        session.add(issue)
+        session.commit()
+
+        sub1 = manager.submit_from_discovered_issue(issue.id, session)
         assert sub1 is not None
 
-        # Try similar title (should be duplicate)
-        result2 = {
-            "title": "Test Magazine December 2023",
-            "url": "http://example.com/2.nzb",
-            "provider": "test",
-            "publication_date": None,
-            "raw_metadata": {},
-        }
-        sub2 = manager.submit_download(tracking.id, result2, session)
-        assert sub2 is None  # Rejected as duplicate
+        # Attempting to resubmit the same issue should be blocked
+        sub2 = manager.submit_from_discovered_issue(issue.id, session)
+        assert sub2 is None  # Rejected — already active
 
 
 class TestFileOrganizationWorkflow:
@@ -340,15 +353,22 @@ class TestEndToEndJourney:
         # Step 3: Search and download
         manager = DownloadManager([mock_search_provider], mock_download_client, fuzzy_threshold=80)
 
-        search_result = {
-            "title": "Wired - January 2024",
-            "url": "http://example.com/wired-jan-2024.nzb",
-            "provider": "test",
-            "publication_date": datetime(2024, 1, 1),
-            "raw_metadata": {},
-        }
+        from core.utils.fuzzy_matching import get_fuzzy_group_id
 
-        submission = manager.submit_download(tracking.id, search_result, session)
+        title = "Wired - January 2024"
+        issue = DiscoveredIssue(
+            tracking_id=tracking.id,
+            title=title,
+            normalized_title=title.lower(),
+            fuzzy_match_group=get_fuzzy_group_id(title),
+            latest_url="http://example.com/wired-jan-2024.nzb",
+            latest_provider="test",
+            download_status="wanted",
+        )
+        session.add(issue)
+        session.commit()
+
+        submission = manager.submit_from_discovered_issue(issue.id, session)
         assert submission is not None
 
         # Step 4: Monitor and complete download

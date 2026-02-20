@@ -386,7 +386,8 @@ class DownloadStatus:
 
     DISCOVERED = "discovered"
     WANTED = "wanted"
-    QUEUED = "queued"
+    QUEUED = "queued"  # In Curator's internal queue, not yet sent to download client
+    PENDING = "pending"  # Submitted to download client and accepted (client-side pending)
     DOWNLOADING = "downloading"
     COMPLETED = "completed"
     FAILED = "failed"
@@ -424,7 +425,8 @@ class DiscoveredIssue(Base):
     last_seen = Column(UTCDateTime, default=utcnow, index=True)
     times_seen = Column(Integer, default=1)
 
-    # Download state: discovered → wanted → queued → downloading → completed/failed/permanently_failed/ignored
+    # Download state: discovered → wanted → queued → pending → downloading → completed/failed/permanently_failed/ignored
+    # queued = in Curator's internal queue; pending = submitted to and accepted by download client
     download_status = Column(String(50), nullable=False, default="discovered", index=True)
     download_priority = Column(Integer, default=50, index=True)
 
