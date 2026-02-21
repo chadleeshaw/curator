@@ -64,9 +64,18 @@ def get_version() -> str:
     3. package.json
     4. Falls back to "unknown"
 
+    Only the env var and git sources are cached. If resolution falls through
+    to package.json the cache is bypassed so subsequent calls retry git,
+    ensuring a temporary git failure doesn't permanently freeze the version.
+
     Returns:
         Base version tag (e.g., "v1.0.0")
     """
+    return _resolve_version()
+
+
+def _resolve_version() -> str:
+    """Resolve the version without caching (called by get_version with cache bypass logic)."""
     # Check environment variable first (set during Docker build)
     env_version = os.environ.get("BUILD_VERSION", "").strip()
     if env_version and env_version != "unknown":
@@ -90,7 +99,9 @@ def get_version() -> str:
     except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
         logger.debug("Could not get version from git: %s", e)
 
-    # Try to get version from package.json
+    # Try to get version from package.json — clear lru_cache so the next
+    # call retries git in case this was a transient failure
+    get_version.cache_clear()
     try:
         package_json_path = Path(__file__).parent.parent / "package.json"
         if package_json_path.exists():
