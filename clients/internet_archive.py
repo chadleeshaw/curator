@@ -63,9 +63,7 @@ class DownloadJob:  # pylint: disable=too-many-instance-attributes
         self.prefer_collection = prefer_collection  # Prefer ZIP/TAR collection formats
         self.status = IA_STATUS_PENDING
         self.progress = 0
-        self.file_path: Optional[str] = (
-            None  # Single file or comma-separated list for collections
-        )
+        self.file_path: Optional[str] = None  # Single file or comma-separated list for collections
         self.error: Optional[str] = None
         self.expected_size = 0
         self.downloaded_size = 0
@@ -88,9 +86,7 @@ class InternetArchiveClient(DownloadClient):
         self.downloads_dir.mkdir(parents=True, exist_ok=True)
 
         # Concurrency settings
-        self.max_concurrent = config.get(
-            "max_concurrent", IA_DEFAULT_MAX_CONCURRENT_DOWNLOADS
-        )
+        self.max_concurrent = config.get("max_concurrent", IA_DEFAULT_MAX_CONCURRENT_DOWNLOADS)
 
         # Preferred file formats
         self.preferred_formats = config.get("file_formats", IA_PREFERRED_FORMATS)
@@ -100,9 +96,7 @@ class InternetArchiveClient(DownloadClient):
         self._jobs_lock = threading.Lock()
 
         # Thread pool for background downloads
-        self._executor = ThreadPoolExecutor(
-            max_workers=self.max_concurrent, thread_name_prefix="ia_download"
-        )
+        self._executor = ThreadPoolExecutor(max_workers=self.max_concurrent, thread_name_prefix="ia_download")
 
         # Threshold for using compress URL (for multi-file items)
         self.compress_threshold = 3  # Use compress URL if 3+ files of desired format
@@ -329,9 +323,7 @@ class InternetArchiveClient(DownloadClient):
                 logger.warning(f"[{self.name}] Unknown archive format: {suffix}")
                 return [archive_path]  # Return original if can't extract
 
-            logger.info(
-                f"[{self.name}] Extracted {len(extracted_files)} files from {archive_path.name}"
-            )
+            logger.info(f"[{self.name}] Extracted {len(extracted_files)} files from {archive_path.name}")
 
             # Remove the archive file after successful extraction
             if extracted_files:
@@ -350,11 +342,7 @@ class InternetArchiveClient(DownloadClient):
         with zipfile.ZipFile(archive_path, "r") as zf:
             for member in zf.namelist():
                 # Skip directories and hidden files
-                if (
-                    member.endswith("/")
-                    or member.startswith("__")
-                    or member.startswith(".")
-                ):
+                if member.endswith("/") or member.startswith("__") or member.startswith("."):
                     continue
                 # Extract only supported file types
                 member_ext = Path(member).suffix.lower()
@@ -429,9 +417,7 @@ class InternetArchiveClient(DownloadClient):
         # Validate extracted file has supported extension
         extracted_ext = Path(out_name).suffix.lower()
         if extracted_ext and extracted_ext not in SUPPORTED_FILE_EXTENSIONS:
-            logger.warning(
-                f"[{self.name}] Skipping gzip extraction: unsupported extension '{extracted_ext}'"
-            )
+            logger.warning(f"[{self.name}] Skipping gzip extraction: unsupported extension '{extracted_ext}'")
             return []  # Return empty list to indicate no files extracted
 
         dest_path = dest_dir / out_name
@@ -480,16 +466,12 @@ class InternetArchiveClient(DownloadClient):
             job.download_url = download_url
 
             # Determine destination path and extension
-            safe_title = "".join(
-                c if c.isalnum() or c in " .-_" else "_" for c in job.title
-            )[:100]
+            safe_title = "".join(c if c.isalnum() or c in " .-_" else "_" for c in job.title)[:100]
 
             if strategy["strategy"] == "compress":
                 # Compress endpoint returns a ZIP
                 ext = ".zip"
-                logger.info(
-                    f"[{self.name}] Using compress URL for {file_count} {format_name} files"
-                )
+                logger.info(f"[{self.name}] Using compress URL for {file_count} {format_name} files")
             else:
                 # Direct download - use original file extension if supported
                 file_info = strategy.get("file_info", {})
@@ -498,9 +480,7 @@ class InternetArchiveClient(DownloadClient):
                 # Validate extension is supported
                 if ext.lower() not in SUPPORTED_FILE_EXTENSIONS:
                     job.status = IA_STATUS_FAILED
-                    job.error = (
-                        f"Unsupported file extension '{ext}' for {job.identifier}"
-                    )
+                    job.error = f"Unsupported file extension '{ext}' for {job.identifier}"
                     logger.warning(f"[{self.name}] Skipping download: {job.error}")
                     return
 
@@ -509,10 +489,7 @@ class InternetArchiveClient(DownloadClient):
             # Handle duplicate filenames — also check for in-progress .part files so
             # concurrent downloads of the same identifier don't collide on the same partial file.
             counter = 1
-            while (
-                dest_file.exists()
-                or dest_file.with_suffix(dest_file.suffix + ".part").exists()
-            ):
+            while dest_file.exists() or dest_file.with_suffix(dest_file.suffix + ".part").exists():
                 dest_file = self.downloads_dir / f"{safe_title}_{counter}{ext}"
                 counter += 1
 
@@ -545,18 +522,14 @@ class InternetArchiveClient(DownloadClient):
                     job.downloaded_size = 0
 
                     with open(partial_file, "wb") as f:
-                        for chunk in response.iter_content(
-                            chunk_size=IA_DOWNLOAD_CHUNK_SIZE
-                        ):
+                        for chunk in response.iter_content(chunk_size=IA_DOWNLOAD_CHUNK_SIZE):
                             if chunk:
                                 f.write(chunk)
                                 job.downloaded_size += len(chunk)
 
                                 # Update progress (UI polls this value)
                                 if job.expected_size > 0:
-                                    job.progress = int(
-                                        (job.downloaded_size / job.expected_size) * 100
-                                    )
+                                    job.progress = int((job.downloaded_size / job.expected_size) * 100)
 
                     # Verify download and rename from .part to final name atomically
                     if partial_file.exists() and partial_file.stat().st_size > 0:
@@ -568,22 +541,14 @@ class InternetArchiveClient(DownloadClient):
 
                         # Check if this is an archive that needs extraction
                         if self._is_extractable(dest_file):
-                            logger.info(
-                                f"[{self.name}] Extracting archive: {dest_file}"
-                            )
-                            extracted_files = self._extract_archive(
-                                dest_file, self.downloads_dir
-                            )
+                            logger.info(f"[{self.name}] Extracting archive: {dest_file}")
+                            extracted_files = self._extract_archive(dest_file, self.downloads_dir)
 
                             if extracted_files:
                                 # Store list of extracted files (comma-separated for compatibility)
-                                job.file_path = ",".join(
-                                    str(f) for f in extracted_files
-                                )
+                                job.file_path = ",".join(str(f) for f in extracted_files)
                                 job.extracted_count = len(extracted_files)
-                                logger.info(
-                                    f"[{self.name}] Extracted {len(extracted_files)} files from collection"
-                                )
+                                logger.info(f"[{self.name}] Extracted {len(extracted_files)} files from collection")
                             else:
                                 # Extraction failed, keep original archive
                                 job.file_path = str(dest_file)
@@ -628,9 +593,7 @@ class InternetArchiveClient(DownloadClient):
             except (NameError, Exception):
                 pass  # partial_file may not be defined if failure was before download started
 
-    def submit(
-        self, url: str, title: str = None, category: str = None
-    ) -> Optional[str]:
+    def submit(self, url: str, title: str = None, category: str = None) -> Optional[str]:
         """
         Submit an Internet Archive item for download.
 
@@ -660,15 +623,11 @@ class InternetArchiveClient(DownloadClient):
             # Submit download to thread pool
             self._executor.submit(self._download_file, job)
 
-            logger.info(
-                f"[{self.name}] Submitted download: {identifier} -> job_id={job_id}"
-            )
+            logger.info(f"[{self.name}] Submitted download: {identifier} -> job_id={job_id}")
             return job_id
 
         except Exception as e:
-            logger.error(
-                f"[{self.name}] Error submitting download for {identifier}: {e}"
-            )
+            logger.error(f"[{self.name}] Error submitting download for {identifier}: {e}")
             return None
 
     def get_status(self, job_id: str) -> Dict[str, Any]:
@@ -780,9 +739,7 @@ class InternetArchiveClient(DownloadClient):
 
             # Test IA API connectivity
             with safe_ia_call():
-                item = get_item(
-                    "principia_mathematica"
-                )  # Well-known item that should always exist
+                item = get_item("principia_mathematica")  # Well-known item that should always exist
             if item and item.identifier:
                 return {
                     "success": True,
@@ -819,8 +776,7 @@ class InternetArchiveClient(DownloadClient):
             to_remove = [
                 job_id
                 for job_id, job in self._jobs.items()
-                if job.status in (IA_STATUS_COMPLETED, IA_STATUS_FAILED)
-                and job.created_at < cutoff
+                if job.status in (IA_STATUS_COMPLETED, IA_STATUS_FAILED) and job.created_at < cutoff
             ]
 
             for job_id in to_remove:

@@ -68,9 +68,7 @@ def test_db():
         db_path = tmp_file.name
 
     try:
-        engine = create_engine(
-            f"sqlite:///{db_path}", connect_args={"check_same_thread": False}
-        )
+        engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
         Base.metadata.create_all(engine)
         session_factory = sessionmaker(bind=engine)
         yield engine, session_factory
@@ -113,9 +111,7 @@ class TestEditionVariantFiltering:
                 publication_date=datetime(2024, 1, 1, tzinfo=UTC),
             ),
         ]
-        provider = MockSearchProvider(
-            {"name": "MockProvider", "type": "newsnab"}, mock_results
-        )
+        provider = MockSearchProvider({"name": "MockProvider", "type": "newsnab"}, mock_results)
 
         # Create download manager
         manager = DownloadManager(
@@ -135,9 +131,7 @@ class TestEditionVariantFiltering:
 
         session.close()
 
-    def test_filter_little_kids_variant_from_base_search(
-        self, test_db, mock_download_client
-    ):
+    def test_filter_little_kids_variant_from_base_search(self, test_db, mock_download_client):
         """Searching 'National Geographic' should filter out 'National Geographic Little Kids'"""
         engine, session_factory = test_db
         session = session_factory()
@@ -157,9 +151,7 @@ class TestEditionVariantFiltering:
                 publication_date=datetime(2024, 1, 1, tzinfo=UTC),
             ),
         ]
-        provider = MockSearchProvider(
-            {"name": "MockProvider", "type": "newsnab"}, mock_results
-        )
+        provider = MockSearchProvider({"name": "MockProvider", "type": "newsnab"}, mock_results)
 
         manager = DownloadManager(
             search_providers=[provider],
@@ -196,9 +188,7 @@ class TestEditionVariantFiltering:
                 publication_date=datetime(2024, 1, 1, tzinfo=UTC),
             ),
         ]
-        provider = MockSearchProvider(
-            {"name": "MockProvider", "type": "newsnab"}, mock_results
-        )
+        provider = MockSearchProvider({"name": "MockProvider", "type": "newsnab"}, mock_results)
 
         manager = DownloadManager(
             search_providers=[provider],
@@ -235,9 +225,7 @@ class TestEditionVariantFiltering:
                 publication_date=datetime(2024, 1, 1, tzinfo=UTC),
             ),
         ]
-        provider = MockSearchProvider(
-            {"name": "MockProvider", "type": "newsnab"}, mock_results
-        )
+        provider = MockSearchProvider({"name": "MockProvider", "type": "newsnab"}, mock_results)
 
         manager = DownloadManager(
             search_providers=[provider],
@@ -274,9 +262,7 @@ class TestEditionVariantFiltering:
                 publication_date=datetime(2024, 1, 1, tzinfo=UTC),
             ),
         ]
-        provider = MockSearchProvider(
-            {"name": "MockProvider", "type": "newsnab"}, mock_results
-        )
+        provider = MockSearchProvider({"name": "MockProvider", "type": "newsnab"}, mock_results)
 
         manager = DownloadManager(
             search_providers=[provider],
@@ -312,9 +298,7 @@ class TestEditionVariantFiltering:
                 publication_date=datetime(2024, 1, 1, tzinfo=UTC),
             ),
         ]
-        provider = MockSearchProvider(
-            {"name": "MockProvider", "type": "newsnab"}, mock_results
-        )
+        provider = MockSearchProvider({"name": "MockProvider", "type": "newsnab"}, mock_results)
 
         manager = DownloadManager(
             search_providers=[provider],
@@ -333,9 +317,7 @@ class TestEditionVariantFiltering:
 
         session.close()
 
-    def test_format_indicators_not_treated_as_variants(
-        self, test_db, mock_download_client
-    ):
+    def test_format_indicators_not_treated_as_variants(self, test_db, mock_download_client):
         """Digital/Print format indicators are stripped and same-date issues are deduplicated"""
         engine, session_factory = test_db
         session = session_factory()
@@ -355,9 +337,7 @@ class TestEditionVariantFiltering:
                 publication_date=datetime(2024, 1, 1, tzinfo=UTC),
             ),
         ]
-        provider = MockSearchProvider(
-            {"name": "MockProvider", "type": "newsnab"}, mock_results
-        )
+        provider = MockSearchProvider({"name": "MockProvider", "type": "newsnab"}, mock_results)
 
         manager = DownloadManager(
             search_providers=[provider],
@@ -394,9 +374,7 @@ class TestEditionVariantFiltering:
                 publication_date=datetime(2024, 2, 1, tzinfo=UTC),
             ),
         ]
-        provider = MockSearchProvider(
-            {"name": "MockProvider", "type": "newsnab"}, mock_results
-        )
+        provider = MockSearchProvider({"name": "MockProvider", "type": "newsnab"}, mock_results)
 
         manager = DownloadManager(
             search_providers=[provider],
@@ -415,9 +393,7 @@ class TestEditionVariantFiltering:
 class TestLanguageFilterWithEditionVariants:
     """Test interaction between language filter and edition variant filtering"""
 
-    def test_language_filter_applied_before_edition_filter(
-        self, test_db, mock_download_client
-    ):
+    def test_language_filter_applied_before_edition_filter(self, test_db, mock_download_client):
         """Language filter should be applied first, then edition variant filter"""
         engine, session_factory = test_db
         session = session_factory()
@@ -443,9 +419,7 @@ class TestLanguageFilterWithEditionVariants:
                 publication_date=datetime(2024, 1, 1, tzinfo=UTC),
             ),
         ]
-        provider = MockSearchProvider(
-            {"name": "MockProvider", "type": "newsnab"}, mock_results
-        )
+        provider = MockSearchProvider({"name": "MockProvider", "type": "newsnab"}, mock_results)
 
         manager = DownloadManager(
             search_providers=[provider],
@@ -464,9 +438,7 @@ class TestLanguageFilterWithEditionVariants:
 
         session.close()
 
-    def test_edition_variant_in_different_languages(
-        self, test_db, mock_download_client
-    ):
+    def test_edition_variant_in_different_languages(self, test_db, mock_download_client):
         """Edition variants should work across different languages"""
         engine, session_factory = test_db
         session = session_factory()
@@ -486,9 +458,7 @@ class TestLanguageFilterWithEditionVariants:
                 publication_date=datetime(2024, 1, 1, tzinfo=UTC),
             ),
         ]
-        provider = MockSearchProvider(
-            {"name": "MockProvider", "type": "newsnab"}, mock_results
-        )
+        provider = MockSearchProvider({"name": "MockProvider", "type": "newsnab"}, mock_results)
 
         manager = DownloadManager(
             search_providers=[provider],
@@ -531,9 +501,7 @@ class TestNormalizationAndVariantExtraction:
                 publication_date=datetime(2024, 1, 1, tzinfo=UTC),
             ),
         ]
-        provider = MockSearchProvider(
-            {"name": "MockProvider", "type": "newsnab"}, mock_results
-        )
+        provider = MockSearchProvider({"name": "MockProvider", "type": "newsnab"}, mock_results)
 
         manager = DownloadManager(
             search_providers=[provider],
@@ -549,9 +517,7 @@ class TestNormalizationAndVariantExtraction:
 
         session.close()
 
-    def test_multiple_providers_with_edition_filtering(
-        self, test_db, mock_download_client
-    ):
+    def test_multiple_providers_with_edition_filtering(self, test_db, mock_download_client):
         """Edition filtering should work across multiple providers"""
         engine, session_factory = test_db
         session = session_factory()
@@ -565,9 +531,7 @@ class TestNormalizationAndVariantExtraction:
                 publication_date=datetime(2024, 1, 1, tzinfo=UTC),
             ),
         ]
-        provider1 = MockSearchProvider(
-            {"name": "Provider1", "type": "newsnab"}, provider1_results
-        )
+        provider1 = MockSearchProvider({"name": "Provider1", "type": "newsnab"}, provider1_results)
 
         # Provider 2 returns Kids variant (should be filtered)
         provider2_results = [
@@ -578,9 +542,7 @@ class TestNormalizationAndVariantExtraction:
                 publication_date=datetime(2024, 1, 1, tzinfo=UTC),
             ),
         ]
-        provider2 = MockSearchProvider(
-            {"name": "Provider2", "type": "newsnab"}, provider2_results
-        )
+        provider2 = MockSearchProvider({"name": "Provider2", "type": "newsnab"}, provider2_results)
 
         manager = DownloadManager(
             search_providers=[provider1, provider2],
@@ -639,9 +601,7 @@ class TestEdgeCases:
                 publication_date=datetime(2024, 2, 1, tzinfo=UTC),
             ),
         ]
-        provider = MockSearchProvider(
-            {"name": "MockProvider", "type": "newsnab"}, mock_results
-        )
+        provider = MockSearchProvider({"name": "MockProvider", "type": "newsnab"}, mock_results)
 
         manager = DownloadManager(
             search_providers=[provider],
@@ -669,9 +629,7 @@ class TestEdgeCases:
                 publication_date=datetime(2024, 1, 1, tzinfo=UTC),
             ),
         ]
-        provider = MockSearchProvider(
-            {"name": "MockProvider", "type": "newsnab"}, mock_results
-        )
+        provider = MockSearchProvider({"name": "MockProvider", "type": "newsnab"}, mock_results)
 
         manager = DownloadManager(
             search_providers=[provider],
@@ -771,9 +729,7 @@ class TestBlacklistFiltering:
         session = session_factory()
 
         # Magazine with "MP" in name (like "Computer Music" or "Example MP")
-        tracking = self._make_tracking(
-            session, "Example MP Magazine", "example_mp_magazine"
-        )
+        tracking = self._make_tracking(session, "Example MP Magazine", "example_mp_magazine")
         issue = self._make_issue(session, tracking.id, "Example MP Magazine - Jan 2024")
         session.commit()
 
@@ -861,9 +817,7 @@ class TestGetClientForProviderRouting:
 
     def test_default_provider_client_map_contains_torznab(self):
         """DEFAULT_PROVIDER_CLIENT_MAP must include torznab → qbittorrent."""
-        assert (
-            DownloadManager.DEFAULT_PROVIDER_CLIENT_MAP.get("torznab") == "qbittorrent"
-        )
+        assert DownloadManager.DEFAULT_PROVIDER_CLIENT_MAP.get("torznab") == "qbittorrent"
 
     def test_default_provider_client_map_has_four_entries(self):
         """DEFAULT_PROVIDER_CLIENT_MAP should have exactly four entries."""
@@ -911,9 +865,7 @@ class TestGetClientForProviderRouting:
         ia = self._make_client("InternetArchive")
         manager = self._make_manager(mock_download_client, {"internet_archive": ia})
         # 'rss' maps to 'default', but the archive.org URL should trigger upgrade
-        client = manager._get_client_for_provider(
-            "rss", url="https://archive.org/download/some-item/file.pdf"
-        )
+        client = manager._get_client_for_provider("rss", url="https://archive.org/download/some-item/file.pdf")
         assert client is ia
 
     def test_url_ia_prefix_upgrades_to_ia_client(self, mock_download_client):
@@ -923,23 +875,17 @@ class TestGetClientForProviderRouting:
         client = manager._get_client_for_provider("rss", url="ia:some-identifier")
         assert client is ia
 
-    def test_url_archive_org_without_ia_client_falls_back_to_default(
-        self, mock_download_client
-    ):
+    def test_url_archive_org_without_ia_client_falls_back_to_default(self, mock_download_client):
         """archive.org URL with no IA client configured should stay on default client."""
         manager = self._make_manager(mock_download_client)
-        client = manager._get_client_for_provider(
-            "rss", url="https://archive.org/download/some-item/file.pdf"
-        )
+        client = manager._get_client_for_provider("rss", url="https://archive.org/download/some-item/file.pdf")
         assert client is mock_download_client
 
 
 class TestTorznabQBittorrentIntegration:
     """Integration test: torznab provider → qBittorrent client submission path."""
 
-    def test_get_client_for_torznab_uses_qbittorrent_not_default(
-        self, mock_download_client
-    ):
+    def test_get_client_for_torznab_uses_qbittorrent_not_default(self, mock_download_client):
         """
         End-to-end routing: a SearchResult from a torznab provider must be routed
         to the qbittorrent client, not the default NZB client.
@@ -955,14 +901,10 @@ class TestTorznabQBittorrentIntegration:
         )
 
         client = manager._get_client_for_provider("torznab")
-        assert client is qbt, (
-            "torznab provider must route to qBittorrent, not default NZB client"
-        )
+        assert client is qbt, "torznab provider must route to qBittorrent, not default NZB client"
         assert client is not mock_download_client
 
-    def test_torznab_submit_calls_qbittorrent_client(
-        self, mock_download_client, test_db
-    ):
+    def test_torznab_submit_calls_qbittorrent_client(self, mock_download_client, test_db):
         """
         Full submission path: a torznab SearchResult goes through _submit_to_client
         and the job is accepted by the qBittorrent client (not the default client).
@@ -987,9 +929,7 @@ class TestTorznabQBittorrentIntegration:
         engine, session_factory = test_db
         session = session_factory()
 
-        tracking = PeriodicalTracking(
-            title="Test Magazine", olid="test_magazine", language="en"
-        )
+        tracking = PeriodicalTracking(title="Test Magazine", olid="test_magazine", language="en")
         session.add(tracking)
         session.commit()
 
@@ -1002,9 +942,7 @@ class TestTorznabQBittorrentIntegration:
         submission = manager._submit_to_client(tracking.id, search_result, session)
 
         assert submission is not None, "Expected a DownloadSubmission to be created"
-        assert len(submitted_urls) == 1, (
-            "qBittorrent client should have been called once"
-        )
+        assert len(submitted_urls) == 1, "qBittorrent client should have been called once"
         assert submitted_urls[0] == search_result["url"]
         assert submission.client_name == "qBittorrent"
 
@@ -1078,9 +1016,7 @@ class TestDuplicateDetectionConsistency:
         }
 
         # Check if duplicate is detected
-        is_dup, existing = manager.check_duplicate_submission(
-            tracking.id, search_result["title"], session
-        )
+        is_dup, existing = manager.check_duplicate_submission(tracking.id, search_result["title"], session)
 
         # EXPECTED: Should be detected as duplicate (same publication, different formatting)
         # ACTUAL: Will NOT be detected because:
@@ -1156,9 +1092,7 @@ class TestDuplicateDetectionConsistency:
         }
 
         # Check if duplicate is detected
-        is_dup, existing = manager.check_duplicate_submission(
-            tracking.id, search_result["title"], session
-        )
+        is_dup, existing = manager.check_duplicate_submission(tracking.id, search_result["title"], session)
 
         # EXPECTED: Should be detected as duplicate because dates are within 7-day tolerance
         # ACTUAL: May not be detected because check_duplicate_submission doesn't check dates
@@ -1221,9 +1155,7 @@ class TestDuplicateDetectionConsistency:
         }
 
         # Check if duplicate is detected
-        is_dup, existing = manager.check_duplicate_submission(
-            tracking.id, search_result["title"], session
-        )
+        is_dup, existing = manager.check_duplicate_submission(tracking.id, search_result["title"], session)
 
         # EXPECTED: Should be detected as duplicate (exact title match)
         assert is_dup, "Expected duplicate detection for exact title match"
@@ -1282,9 +1214,7 @@ class TestDuplicateDetectionConsistency:
         }
 
         # Check if duplicate is detected
-        is_dup, existing = manager.check_duplicate_submission(
-            tracking.id, search_result["title"], session
-        )
+        is_dup, existing = manager.check_duplicate_submission(tracking.id, search_result["title"], session)
 
         # EXPECTED: Should NOT be duplicate (different language)
         assert not is_dup, "Expected NO duplicate detection for different language"

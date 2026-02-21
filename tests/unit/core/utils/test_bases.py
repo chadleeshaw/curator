@@ -45,9 +45,7 @@ def test_search_result_with_metadata():
 
 def test_search_result_post_init():
     """Test SearchResult __post_init__ sets empty dict for raw_metadata"""
-    result = SearchResult(
-        title="Test", url="https://example.com/nzb", provider="Test", raw_metadata=None
-    )
+    result = SearchResult(title="Test", url="https://example.com/nzb", provider="Test", raw_metadata=None)
 
     assert result.raw_metadata == {}
     assert isinstance(result.raw_metadata, dict)

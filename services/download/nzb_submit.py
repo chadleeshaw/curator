@@ -37,10 +37,7 @@ def submit_with_nzb_content(
     Returns:
         Job ID from download client, or None if all methods failed
     """
-    if (
-        nzb_cache_service
-        and type(client).submit_content is not DownloadClient.submit_content
-    ):
+    if nzb_cache_service and type(client).submit_content is not DownloadClient.submit_content:
         try:
             nzb_content = nzb_cache_service.get_nzb_content(nzb_url)
             if nzb_content:
@@ -50,13 +47,9 @@ def submit_with_nzb_content(
                     category=category,
                 )
                 if job_id:
-                    logger.info(
-                        f"Submitted via cached NZB content: {title} -> {job_id}"
-                    )
+                    logger.info(f"Submitted via cached NZB content: {title} -> {job_id}")
                     return job_id
-                logger.warning(
-                    f"submit_content failed for {title}, falling back to URL"
-                )
+                logger.warning(f"submit_content failed for {title}, falling back to URL")
         except Exception as e:
             logger.warning(f"NZB content submission error: {e}, falling back to URL")
 
