@@ -400,14 +400,15 @@ export class OCRQueueManager {
 
     // Filter buttons
     const activeCount = (statusCounts.pending ?? 0) + (statusCounts.processing ?? 0);
-    const filterButtons = ['all', 'active', 'completed', 'failed']
+    const filterLabels = { all: 'All', active: 'Active (all)', pending: 'Pending', processing: 'Active', completed: 'Completed', failed: 'Failed' };
+    const filterButtons = ['all', 'active', 'pending', 'processing', 'completed', 'failed']
       .map((f) => {
         let count;
         if (f === 'all') count = jobs.length;
         else if (f === 'active') count = activeCount;
         else count = statusCounts[f] ?? 0;
         const selected = filter === f ? 'active' : '';
-        return `<button onclick="ocrQueue.filterOcrModal('${f}')" class="sort-btn ${selected}">${f.charAt(0).toUpperCase() + f.slice(1)} (${count})</button>`;
+        return `<button onclick="ocrQueue.filterOcrModal('${f}')" class="sort-btn ${selected}">${filterLabels[f]} (${count})</button>`;
       })
       .join('\n');
 
