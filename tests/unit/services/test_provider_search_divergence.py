@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from core.interfaces import SearchProvider, SearchResult
 from core.utils.result_filter import (
+    _query_contains_collection_word,
     filter_result,
     title_matches_query,
     is_ia_collection,
@@ -174,6 +175,82 @@ class TestIaFilteringUtility:
     def test_filter_result_no_query_skips_title_check(self):
         """When search_query is None, title-match check should be skipped."""
         assert filter_result("Completely Unrelated Title", "internet_archive", {}, None) is True
+
+
+class TestCollectionQueryAutoAllow:
+    """Test that title_matches_query auto-enables allow_collections when the query contains a collection word."""
+
+    def test_query_contains_collection_word_true(self):
+        """Queries with collection indicator words should be detected."""
+        assert _query_contains_collection_word("Magazines Collection") is True
+        assert _query_contains_collection_word("photography archive") is True
+        assert _query_contains_collection_word("magazine pack") is True
+        assert _query_contains_collection_word("PC Gamer bundle") is True
+
+    def test_query_contains_collection_word_false(self):
+        """Queries without collection indicator words should not be detected."""
+        assert _query_contains_collection_word("National Geographic") is False
+        assert _query_contains_collection_word("PC Gamer") is False
+        assert _query_contains_collection_word("Wired Magazine") is False
+
+    def test_query_contains_collection_word_case_insensitive(self):
+        """Detection should be case-insensitive."""
+        assert _query_contains_collection_word("Magazines COLLECTION") is True
+        assert _query_contains_collection_word("Magazines Collection") is True
+        assert _query_contains_collection_word("magazines collection") is True
+
+    def test_collection_query_passes_collection_title(self):
+        """A search for 'Magazines Collection' should accept NZB collection titles."""
+        # This is the core bug fix: titles like "60 Magazines Collection PDF Set 332-xpost"
+        # should NOT be rejected when the user's query contains "collection"
+        assert (
+            title_matches_query(
+                "60 Magazines Collection PDF Set 332-xpost",
+                "Magazines Collection",
+            )
+            is True
+        )
+
+    def test_non_collection_query_still_rejects_collection_title(self):
+        """Without a collection word in the query, collection titles are still rejected."""
+        assert (
+            title_matches_query(
+                "60 Magazines Collection PDF Set 332-xpost",
+                "Wired",
+            )
+            is False
+        )
+
+    def test_explicit_allow_collections_still_works(self):
+        """Passing allow_collections=True explicitly still overrides the filter."""
+        assert (
+            title_matches_query(
+                "60 Magazines Collection PDF Set 332-xpost",
+                "Magazines",
+                allow_collections=True,
+            )
+            is True
+        )
+
+    def test_archive_in_query_allows_archive_title(self):
+        """A query containing 'archive' auto-allows archive collection titles."""
+        assert (
+            title_matches_query(
+                "National Geographic Complete Archive 1888-2024",
+                "National Geographic archive",
+            )
+            is True
+        )
+
+    def test_pack_in_query_allows_pack_title(self):
+        """A query containing 'pack' auto-allows pack collection titles."""
+        assert (
+            title_matches_query(
+                "Wired Magazine Pack 2022-2024",
+                "Wired pack",
+            )
+            is True
+        )
 
 
 class TestIaFilterInUiSearch:

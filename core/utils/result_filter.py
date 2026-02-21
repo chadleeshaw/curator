@@ -134,6 +134,17 @@ def _build_word_boundary_pattern(term: str) -> str:
         return escaped
 
 
+def _query_contains_collection_word(query: str) -> bool:
+    """Return True if the query itself contains a collection indicator word.
+
+    When the user searches for something like "Magazines Collection" or "Magazines Pack",
+    they explicitly want collection-type results, so collection filtering should be
+    suppressed for that search.
+    """
+    query_lower = query.lower()
+    return any(indicator in query_lower for indicator in COLLECTION_INDICATOR_WORDS)
+
+
 def title_matches_query(
     result_title: str,
     search_query: str,
@@ -148,7 +159,8 @@ def title_matches_query(
        Short queries (1-2 terms) require 100 % match; longer queries require
        *min_match_ratio* (default 50 %).
     2. Non-periodical signals rejected (year ranges, photography/manual/etc.
-       keywords; collection-bundle keywords unless *allow_collections* is True).
+       keywords; collection-bundle keywords unless *allow_collections* is True or
+       the query itself contains a collection indicator word).
     3. For single-term queries:
        a. No periodical-modifier word immediately after the query term
           (rejects "Wired Times" when searching "Wired").
@@ -159,9 +171,15 @@ def title_matches_query(
             (e.g. "complete collection", "archive") are not rejected on that basis.
             Pass True when the caller is in a UI browse context where collections
             are intentionally shown (*filter_collections=False* in filter_result).
+            Also set automatically when the query itself contains a collection word.
     """
     normalized_title = re.sub(r"[_.\-]", " ", result_title.lower())
     normalized_query = re.sub(r"[_.\-]", " ", search_query.lower())
+
+    # If the user's query itself contains a collection word (e.g. "Adult Collection"),
+    # they explicitly want collection-type results — suppress the collection filter.
+    if not allow_collections and _query_contains_collection_word(search_query):
+        allow_collections = True
 
     significant_terms = [t for t in normalized_query.split() if len(t) >= 2]
     if not significant_terms:
