@@ -45,7 +45,9 @@ def test_search_result_with_metadata():
 
 def test_search_result_post_init():
     """Test SearchResult __post_init__ sets empty dict for raw_metadata"""
-    result = SearchResult(title="Test", url="https://example.com/nzb", provider="Test", raw_metadata=None)
+    result = SearchResult(
+        title="Test", url="https://example.com/nzb", provider="Test", raw_metadata=None
+    )
 
     assert result.raw_metadata == {}
     assert isinstance(result.raw_metadata, dict)
@@ -124,7 +126,7 @@ def test_download_client_concrete_implementation():
     """Test a concrete implementation of DownloadClient"""
 
     class TestClient(DownloadClient):
-        def submit(self, nzb_url, title=None, category=None):
+        def submit(self, url, title=None, category=None):
             return "job_123"
 
         def get_status(self, job_id):
@@ -161,7 +163,7 @@ def test_download_client_default_values():
     """Test DownloadClient default name and type"""
 
     class MyClient(DownloadClient):
-        def submit(self, nzb_url, title=None, category=None):
+        def submit(self, url, title=None, category=None):
             return "id"
 
         def get_status(self, job_id):

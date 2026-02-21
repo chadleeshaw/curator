@@ -28,12 +28,14 @@ class MockDownloadClient(DownloadClient):
         self.submitted = []
         self.submitted_content = []
 
-    def submit(self, nzb_url, title=None, category=None):
-        self.submitted.append({"url": nzb_url, "title": title, "category": category})
+    def submit(self, url, title=None, category=None):
+        self.submitted.append({"url": url, "title": title, "category": category})
         return f"mock_job_{len(self.submitted)}"
 
-    def submit_content(self, nzb_content, title=None, category=None):
-        self.submitted_content.append({"content": nzb_content, "title": title, "category": category})
+    def submit_content(self, content, title=None, category=None):
+        self.submitted_content.append(
+            {"content": content, "title": title, "category": category}
+        )
         return f"mock_content_job_{len(self.submitted_content)}"
 
     def get_status(self, job_id):
@@ -53,7 +55,9 @@ def mock_client():
 
 def _create_tracking(session, title="Test Magazine"):
     """Helper to create a tracking record"""
-    tracking = PeriodicalTracking(title=title, olid=title.lower().replace(" ", "_"), language="en")
+    tracking = PeriodicalTracking(
+        title=title, olid=title.lower().replace(" ", "_"), language="en"
+    )
     session.add(tracking)
     session.commit()
     return tracking
@@ -82,7 +86,9 @@ def _create_discovered_issue(
     return issue
 
 
-def _create_active_submission(session, tracking_id, title, status=DownloadSubmission.StatusEnum.PENDING):
+def _create_active_submission(
+    session, tracking_id, title, status=DownloadSubmission.StatusEnum.PENDING
+):
     """Helper to create an active submission to fill up the download limit"""
     submission = DownloadSubmission(
         tracking_id=tracking_id,
@@ -112,7 +118,9 @@ class TestSubmitFromDiscoveredIssueQueuing:
             _create_active_submission(session, tracking.id, f"Active Download {i}")
 
         # Create a discovered issue that should be queued
-        issue = _create_discovered_issue(session, tracking.id, "New Issue - January 2024")
+        issue = _create_discovered_issue(
+            session, tracking.id, "New Issue - January 2024"
+        )
 
         manager = DownloadManager(
             search_providers=[],
@@ -141,7 +149,9 @@ class TestSubmitFromDiscoveredIssueQueuing:
         for i in range(10):
             _create_active_submission(session, tracking.id, f"Active Download {i}")
 
-        issue = _create_discovered_issue(session, tracking.id, "Queued Issue - February 2024")
+        issue = _create_discovered_issue(
+            session, tracking.id, "Queued Issue - February 2024"
+        )
 
         manager = DownloadManager(
             search_providers=[],
@@ -165,7 +175,9 @@ class TestSubmitFromDiscoveredIssueQueuing:
         session = session_factory()
 
         tracking = _create_tracking(session)
-        issue = _create_discovered_issue(session, tracking.id, "Direct Issue - March 2024")
+        issue = _create_discovered_issue(
+            session, tracking.id, "Direct Issue - March 2024"
+        )
 
         manager = DownloadManager(
             search_providers=[],
