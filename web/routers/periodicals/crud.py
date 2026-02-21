@@ -538,7 +538,10 @@ def _mark_discovered_issues_as_failed(db: Session, periodicals: List[Periodical]
 
 
 def _delete_tracking_record(db: Session, title: str) -> None:
-    """Delete tracking record and associated stack memberships."""
+    """Delete tracking record and associated stack memberships.
+
+    Does NOT commit — callers are responsible for committing the session.
+    """
     olid = generate_olid(title)
     tracking = db.query(PeriodicalTracking).filter(PeriodicalTracking.olid == olid).first()
     if not tracking:
@@ -553,7 +556,6 @@ def _delete_tracking_record(db: Session, title: str) -> None:
         logger.info(f"Removed {tracking_membership_deleted} stack membership(s) for tracking: {title}")
 
     db.delete(tracking)
-    db.commit()
     logger.info(f"Removed tracking record for: {title}")
 
 
@@ -630,10 +632,10 @@ async def delete_periodical(
         if mark_as_bad:
             _mark_discovered_issues_as_failed(db, periodicals_to_delete, title)
 
-        db.commit()
-
         if remove_tracking:
             _delete_tracking_record(db, title)
+
+        db.commit()
 
         if delete_files:
             _delete_periodical_files(file_paths)

@@ -14,7 +14,7 @@ from core.constants.errors import ErrorMessages
 from core.constants.files import PDF_COVER_QUALITY_HIGH
 from core.constants.ocr import PDF_COVER_DPI_OCR
 from core.utils import run_in_thread
-from core.utils.db import with_db_session
+from core.utils.db import mark_json_modified, with_db_session
 from core.utils.error_handling import handle_api_errors
 from core.utils.pdf import extract_cover_from_pdf
 from models.database import OCRJob
@@ -231,6 +231,7 @@ async def upload_cover(magazine_id: int, file: UploadFile = File(...)) -> Dict[s
             periodical.extra_metadata = {}
         periodical.extra_metadata["cover_uploaded"] = True
         periodical.extra_metadata.pop("cover_page", None)
+        mark_json_modified(periodical, "extra_metadata")
         db.commit()
 
         # Invalidate thumbnail cache by removing old thumbnail
@@ -324,6 +325,7 @@ async def regenerate_thumbnail_ocr(magazine_id: int) -> Dict[str, Any]:
         periodical.cover_path = str(cover_path)
         if periodical.extra_metadata and isinstance(periodical.extra_metadata, dict):
             periodical.extra_metadata.pop("cover_uploaded", None)
+            mark_json_modified(periodical, "extra_metadata")
 
         # Queue OCR job
         ocr_queued = False
