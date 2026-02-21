@@ -92,9 +92,7 @@ class DownloadManager:
             self.download_clients.update(download_clients)
 
         # Provider to client routing
-        self.provider_client_map = (
-            provider_client_map or self.DEFAULT_PROVIDER_CLIENT_MAP.copy()
-        )
+        self.provider_client_map = provider_client_map or self.DEFAULT_PROVIDER_CLIENT_MAP.copy()
 
         # Get default category from client config (handles mocks gracefully)
         client_config = getattr(download_client, "config", {})
@@ -118,9 +116,8 @@ class DownloadManager:
             nzb_cache_service,
             download_clients=self.download_clients,
         )
-        self.issue_discovery_service: IssueDiscoveryService = (
-            issue_discovery_service
-            or IssueDiscoveryService(fuzzy_threshold=fuzzy_threshold)
+        self.issue_discovery_service: IssueDiscoveryService = issue_discovery_service or IssueDiscoveryService(
+            fuzzy_threshold=fuzzy_threshold
         )
 
         # Lock to serialize slot counting + submission between concurrent callers
@@ -136,9 +133,7 @@ class DownloadManager:
         """Check if all search providers are currently rate limited."""
         return self.search_service.all_providers_rate_limited
 
-    def _get_client_for_provider(
-        self, provider: str, url: Optional[str] = None
-    ) -> DownloadClient:
+    def _get_client_for_provider(self, provider: str, url: Optional[str] = None) -> DownloadClient:
         """
         Get the appropriate download client for a provider.
 
@@ -167,16 +162,12 @@ class DownloadManager:
                     )
                     client_type = "internet_archive"
                 else:
-                    logger.warning(
-                        f"Archive.org URL detected but no IA client configured: {url}"
-                    )
+                    logger.warning(f"Archive.org URL detected but no IA client configured: {url}")
 
         # Get the client, falling back to default if not available
         client = self.download_clients.get(client_type)
         if not client:
-            logger.debug(
-                f"Client '{client_type}' not found for provider '{provider}', using default"
-            )
+            logger.debug(f"Client '{client_type}' not found for provider '{provider}', using default")
             client = self.download_clients["default"]
 
         return client
@@ -407,9 +398,7 @@ class DownloadManager:
         if submission:
             # First try by current_submission_id (most direct link)
             issue = (
-                session.query(DiscoveredIssue)
-                .filter(DiscoveredIssue.current_submission_id == submission.id)
-                .first()
+                session.query(DiscoveredIssue).filter(DiscoveredIssue.current_submission_id == submission.id).first()
             )
 
         if not issue and tracking_id and fuzzy_group:
@@ -455,9 +444,7 @@ class DownloadManager:
             .count()
         )
 
-    def _get_download_category(
-        self, tracking_id: int, session: Session
-    ) -> Optional[str]:
+    def _get_download_category(self, tracking_id: int, session: Session) -> Optional[str]:
         """
         Determine the download category for a submission.
 
@@ -471,21 +458,13 @@ class DownloadManager:
         Returns:
             Category name or None if no category configured
         """
-        tracking = (
-            session.query(PeriodicalTracking)
-            .filter(PeriodicalTracking.id == tracking_id)
-            .first()
-        )
+        tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
 
         if tracking and tracking.download_category:
-            logger.debug(
-                f"[DownloadManager] Using tracked item download_category: {tracking.download_category}"
-            )
+            logger.debug(f"[DownloadManager] Using tracked item download_category: {tracking.download_category}")
             return tracking.download_category
         elif self.default_category:
-            logger.debug(
-                f"[DownloadManager] Using default download_category: {self.default_category}"
-            )
+            logger.debug(f"[DownloadManager] Using default download_category: {self.default_category}")
             return self.default_category
 
         return None
@@ -507,9 +486,7 @@ class DownloadManager:
         Returns:
             List of search results with deduplication grouping
         """
-        return self.search_service.search_periodical_issues(
-            periodical_title, session, aliases=aliases
-        )
+        return self.search_service.search_periodical_issues(periodical_title, session, aliases=aliases)
 
     def _create_submission_record(
         self,
@@ -570,9 +547,7 @@ class DownloadManager:
             Tuple of (is_duplicate, existing_submission_record)
         """
         # Check submissions table for duplicates
-        is_dup, existing = self.deduplication_service.check_duplicate_submission(
-            result_title, tracking_id, session
-        )
+        is_dup, existing = self.deduplication_service.check_duplicate_submission(result_title, tracking_id, session)
 
         if is_dup:
             return True, existing
@@ -590,9 +565,7 @@ class DownloadManager:
             logger.debug(f"Skipping non-periodical result: {result_title}")
             return False, None
 
-        logger.debug(
-            f"Parsed result title: '{result_title}' -> base_title: '{parsed.base_title}'"
-        )
+        logger.debug(f"Parsed result title: '{result_title}' -> base_title: '{parsed.base_title}'")
 
         # Compute tracking_title the same way file_importer does
         tracking_title = parsed.base_title
@@ -732,9 +705,7 @@ class DownloadManager:
                 )
                 return None
 
-            logger.debug(
-                f"[DownloadManager] Client {client.name} accepted, job_id: {job_id}"
-            )
+            logger.debug(f"[DownloadManager] Client {client.name} accepted, job_id: {job_id}")
             submission = self._create_submission_record(
                 tracking_id,
                 search_result,
@@ -745,15 +716,11 @@ class DownloadManager:
                 client_name=client.name,
                 attempt_count=0,
             )
-            logger.info(
-                f"Submitted download: {title} (job_id: {job_id}, client: {client.name})"
-            )
+            logger.info(f"Submitted download: {title} (job_id: {job_id}, client: {client.name})")
             return submission
 
         except Exception as e:
-            self._handle_submission_error(
-                tracking_id, search_result, e, session, search_result_db_id
-            )
+            self._handle_submission_error(tracking_id, search_result, e, session, search_result_db_id)
             return None
 
     def _validate_discovered_issue(self, issue, session: Session) -> Optional[str]:
@@ -788,16 +755,12 @@ class DownloadManager:
 
         # Check if this is a bad file
         if issue.download_status == DownloadStatus.PERMANENTLY_FAILED:
-            logger.warning(
-                f"Skipping bad file (marked as permanently failed): {issue.title}"
-            )
+            logger.warning(f"Skipping bad file (marked as permanently failed): {issue.title}")
             return DownloadStatus.PERMANENTLY_FAILED
 
         # Check blacklisted file types
         if self._has_blacklisted_extension(issue.title):
-            logger.warning(
-                f"Skipping discovered issue with blacklisted extension: {issue.title}"
-            )
+            logger.warning(f"Skipping discovered issue with blacklisted extension: {issue.title}")
             issue.download_status = DownloadStatus.PERMANENTLY_FAILED
             issue.last_error = "Blacklisted file extension"
             session.commit()
@@ -814,9 +777,7 @@ class DownloadManager:
 
         return None
 
-    def _build_search_result_from_issue(
-        self, issue, discovered_issue_id: int
-    ) -> Dict[str, Any]:
+    def _build_search_result_from_issue(self, issue, discovered_issue_id: int) -> Dict[str, Any]:
         """
         Build search_result dict from DiscoveredIssue for use by submission helpers.
 
@@ -846,9 +807,7 @@ class DownloadManager:
         if submission_id not in (issue.submission_ids or []):
             issue.submission_ids = (issue.submission_ids or []) + [submission_id]
 
-    def _create_queued_submission(
-        self, issue, search_result: Dict[str, Any], session: Session
-    ) -> DownloadSubmission:
+    def _create_queued_submission(self, issue, search_result: Dict[str, Any], session: Session) -> DownloadSubmission:
         """
         Create a queued submission when at download limit.
 
@@ -863,10 +822,7 @@ class DownloadManager:
         provider = issue.latest_provider or "unknown"
         active_count = self._get_active_download_count(session)
 
-        logger.info(
-            f"At download limit ({active_count}/{self.max_downloads}), "
-            f"queuing download: '{issue.title}'"
-        )
+        logger.info(f"At download limit ({active_count}/{self.max_downloads}), " f"queuing download: '{issue.title}'")
 
         submission = self._create_submission_record(
             issue.tracking_id,
@@ -920,9 +876,7 @@ class DownloadManager:
             )
 
             if not job_id:
-                logger.warning(
-                    f"Download client {client.name} rejected submission: {issue.title}"
-                )
+                logger.warning(f"Download client {client.name} rejected submission: {issue.title}")
                 issue.download_status = DownloadStatus.FAILED
                 issue.last_error = f"Client {client.name} rejected submission"
                 self._record_attempt(issue)
@@ -941,18 +895,14 @@ class DownloadManager:
             )
 
             # Update DiscoveredIssue with submission info
-            issue.download_status = (
-                DownloadStatus.PENDING
-            )  # Submitted to and accepted by download client
+            issue.download_status = DownloadStatus.PENDING  # Submitted to and accepted by download client
             issue.current_submission_id = submission.id
             self._register_submission_id(issue, submission.id)
             self._record_attempt(issue)
 
             session.commit()
 
-            logger.info(
-                f"Submitted discovered issue: {issue.title} (job_id: {job_id}, submission_id: {submission.id})"
-            )
+            logger.info(f"Submitted discovered issue: {issue.title} (job_id: {job_id}, submission_id: {submission.id})")
             return submission
 
         except Exception as e:
@@ -963,17 +913,13 @@ class DownloadManager:
             issue.download_status = DownloadStatus.FAILED
             error_str = str(e)
             if len(error_str) > SUBMISSION_ID_MAX_LENGTH:
-                logger.warning(
-                    f"Error message truncated from {len(error_str)} to {SUBMISSION_ID_MAX_LENGTH} chars"
-                )
+                logger.warning(f"Error message truncated from {len(error_str)} to {SUBMISSION_ID_MAX_LENGTH} chars")
             issue.last_error = error_str[:SUBMISSION_ID_MAX_LENGTH]
             self._record_attempt(issue)
             session.commit()
             return None
 
-    def submit_from_discovered_issue(
-        self, discovered_issue_id: int, session: Session
-    ) -> Optional[DownloadSubmission]:
+    def submit_from_discovered_issue(self, discovered_issue_id: int, session: Session) -> Optional[DownloadSubmission]:
         """
         Submit a download from a DiscoveredIssue (new Issue Discovery & Tracking system).
 
@@ -990,19 +936,13 @@ class DownloadManager:
         from models.database import DiscoveredIssue
 
         # Get the discovered issue
-        issue = (
-            session.query(DiscoveredIssue)
-            .filter(DiscoveredIssue.id == discovered_issue_id)
-            .first()
-        )
+        issue = session.query(DiscoveredIssue).filter(DiscoveredIssue.id == discovered_issue_id).first()
 
         # Validate the issue
         error = self._validate_discovered_issue(issue, session)
         if error:
             if error not in ["already_downloading", "permanently_failed"]:
-                logger.error(
-                    f"DiscoveredIssue validation failed: {error} (id: {discovered_issue_id})"
-                )
+                logger.error(f"DiscoveredIssue validation failed: {error} (id: {discovered_issue_id})")
             return None
 
         # Build search result for compatibility
@@ -1018,9 +958,7 @@ class DownloadManager:
             # Submit to download client
             return self._submit_issue_to_client(issue, search_result, session)
 
-    def download_all_periodical_issues(
-        self, tracking_id: int, session: Session
-    ) -> Dict[str, Any]:
+    def download_all_periodical_issues(self, tracking_id: int, session: Session) -> Dict[str, Any]:
         """
         Search for all issues of a tracked periodical and submit downloads.
         Called when track_all_editions is set to True.
@@ -1036,19 +974,13 @@ class DownloadManager:
             Dict with submission results
         """
         # Get tracking record
-        tracking = (
-            session.query(PeriodicalTracking)
-            .filter(PeriodicalTracking.id == tracking_id)
-            .first()
-        )
+        tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
 
         if not tracking:
             logger.error(f"Tracking record not found: {tracking_id}")
             return {"submitted": 0, "skipped": 0, "failed": 0}
 
-        logger.info(
-            f"Starting download search for all issues of: {tracking.title} (tracking_id: {tracking_id})"
-        )
+        logger.info(f"Starting download search for all issues of: {tracking.title} (tracking_id: {tracking_id})")
 
         # Search for issues
         search_results = self.search_periodical_issues(tracking.title, session)
@@ -1141,9 +1073,7 @@ class DownloadManager:
         from models.database import DiscoveredIssue
 
         title = search_result["title"]
-        logger.info(
-            f"Submitting single issue download: {title} (tracking_id: {tracking_id})"
-        )
+        logger.info(f"Submitting single issue download: {title} (tracking_id: {tracking_id})")
 
         # Record this as a discovered issue (will be "wanted" if it matches tracking rules)
         record_result = self.issue_discovery_service.record_search_results(
@@ -1153,9 +1083,7 @@ class DownloadManager:
         )
 
         if record_result["new"] == 0 and record_result["updated"] == 0:
-            logger.warning(
-                f"Failed to record search result for manual download: {title}"
-            )
+            logger.warning(f"Failed to record search result for manual download: {title}")
             return self._manual_direct_submission(tracking_id, search_result, session)
 
         # Find the discovered issue by fuzzy_match_group (same approach as issue_discovery)
@@ -1249,16 +1177,12 @@ class DownloadManager:
                     attempt_count=0,
                 )
             else:
-                submission = self._submit_to_client(
-                    tracking_id, search_result, session, search_result_db_id
-                )
+                submission = self._submit_to_client(tracking_id, search_result, session, search_result_db_id)
 
         # Attempt to create a DiscoveredIssue and link it so the monitor can track this submission.
         # This is best-effort — we're already in a fallback path, so don't fail if this also errors.
         if submission:
-            self._link_manual_submission_to_discovered_issue(
-                tracking_id, search_result, submission, session
-            )
+            self._link_manual_submission_to_discovered_issue(tracking_id, search_result, submission, session)
 
         return submission
 
@@ -1287,13 +1211,9 @@ class DownloadManager:
             url = search_result.get("url", "")
             provider = search_result.get("provider", "unknown")
 
-            parsed = self.parser.parse_search_result(
-                title=title, url=url, provider=provider
-            )
+            parsed = self.parser.parse_search_result(title=title, url=url, provider=provider)
             if not parsed:
-                logger.debug(
-                    f"[DownloadManager] Could not parse title for manual submission link: {title}"
-                )
+                logger.debug(f"[DownloadManager] Could not parse title for manual submission link: {title}")
                 return
 
             fuzzy_group = get_fuzzy_group_id(parsed.original_title)
@@ -1316,12 +1236,8 @@ class DownloadManager:
                     normalized_title=parsed.cleaned_title.lower(),
                     fuzzy_match_group=fuzzy_group,
                     issue_date=parsed.publication_date,
-                    year=parsed.publication_date.year
-                    if parsed.publication_date
-                    else None,
-                    month=parsed.publication_date.month
-                    if parsed.publication_date
-                    else None,
+                    year=parsed.publication_date.year if parsed.publication_date else None,
+                    month=parsed.publication_date.month if parsed.publication_date else None,
                     language=parsed.language,
                     country=parsed.country,
                     first_seen=now,
@@ -1333,9 +1249,7 @@ class DownloadManager:
                 )
                 session.add(discovered_issue)
                 session.flush()
-                logger.debug(
-                    f"[DownloadManager] Created DiscoveredIssue for manual fallback submission: {title}"
-                )
+                logger.debug(f"[DownloadManager] Created DiscoveredIssue for manual fallback submission: {title}")
 
             # Set status and link to submission
             if submission.status == DownloadSubmission.StatusEnum.PENDING:
@@ -1413,9 +1327,7 @@ class DownloadManager:
             client_status.setdefault("error", "Job no longer exists in download client")
             return DownloadSubmission.StatusEnum.FAILED
 
-        return status_map.get(
-            client_status_value, DownloadSubmission.StatusEnum.PENDING
-        )
+        return status_map.get(client_status_value, DownloadSubmission.StatusEnum.PENDING)
 
     def _update_submission_from_client_status(
         self,
@@ -1443,9 +1355,7 @@ class DownloadManager:
         # Update file path if provided
         if "file_path" in client_status:
             submission.file_path = client_status["file_path"]
-            logger.debug(
-                f"[DownloadManager] Updated file_path for {job_id}: {submission.file_path}"
-            )
+            logger.debug(f"[DownloadManager] Updated file_path for {job_id}: {submission.file_path}")
 
     def _handle_failed_submission(
         self,
@@ -1466,9 +1376,7 @@ class DownloadManager:
         submission.attempt_count = (submission.attempt_count or 0) + 1
         submission.last_error = client_status.get("error", "Unknown error")
 
-        max_retries = self._get_max_retries_for_submission_context(
-            session, submission=submission
-        )
+        max_retries = self._get_max_retries_for_submission_context(session, submission=submission)
 
         logger.warning(
             f"[DownloadManager] Download failed for {job_id}: {submission.last_error} "
@@ -1482,9 +1390,7 @@ class DownloadManager:
                 f"Reason: {submission.last_error}"
             )
 
-    def update_submission_status(
-        self, job_id: str, session: Session
-    ) -> Optional[DownloadSubmission]:
+    def update_submission_status(self, job_id: str, session: Session) -> Optional[DownloadSubmission]:
         """
         Update status of a submission from the download client.
 
@@ -1496,11 +1402,7 @@ class DownloadManager:
             Updated DownloadSubmission record
         """
         # Find submission
-        submission = (
-            session.query(DownloadSubmission)
-            .filter(DownloadSubmission.job_id == job_id)
-            .first()
-        )
+        submission = session.query(DownloadSubmission).filter(DownloadSubmission.job_id == job_id).first()
 
         if not submission:
             logger.warning(f"Submission not found for job_id: {job_id}")
@@ -1512,9 +1414,7 @@ class DownloadManager:
         # Get status from client
         try:
             client_status = client.get_status(job_id)
-            logger.debug(
-                f"[DownloadManager] Client {client.name} status for {job_id}: {client_status}"
-            )
+            logger.debug(f"[DownloadManager] Client {client.name} status for {job_id}: {client_status}")
 
             # Check if download client is waiting due to provider rate limit
             if client_status.get("rate_limited"):
@@ -1523,20 +1423,14 @@ class DownloadManager:
                 return submission
 
             # Map client status to our status
-            new_status = self._map_client_status_to_submission_status(
-                client_status, job_id
-            )
+            new_status = self._map_client_status_to_submission_status(client_status, job_id)
 
             # Update submission fields
-            self._update_submission_from_client_status(
-                submission, client_status, new_status, job_id
-            )
+            self._update_submission_from_client_status(submission, client_status, new_status, job_id)
 
             # Handle failure with retry logic
             if new_status == DownloadSubmission.StatusEnum.FAILED:
-                self._handle_failed_submission(
-                    submission, client_status, job_id, session
-                )
+                self._handle_failed_submission(submission, client_status, job_id, session)
 
             session.commit()
 
@@ -1615,9 +1509,7 @@ class DownloadManager:
             }
 
         # Check if exceeded max retries
-        max_retries = self._get_max_retries_for_submission_context(
-            session, submission=submission
-        )
+        max_retries = self._get_max_retries_for_submission_context(session, submission=submission)
         if submission.attempt_count > max_retries:
             logger.warning(
                 f"Cannot retry bad file (failed {submission.attempt_count} times): "
@@ -1646,9 +1538,7 @@ class DownloadManager:
         """
         client = self._get_client_by_name(submission.client_name)
 
-        logger.info(
-            f"Retrying submission {submission.id} with {client.name}: {submission.result_title}"
-        )
+        logger.info(f"Retrying submission {submission.id} with {client.name}: {submission.result_title}")
 
         job_id = self._submit_with_nzb_content(
             client=client,
@@ -1658,9 +1548,7 @@ class DownloadManager:
         )
 
         if not job_id:
-            logger.warning(
-                f"Download client {client.name} rejected retry submission: {submission.result_title}"
-            )
+            logger.warning(f"Download client {client.name} rejected retry submission: {submission.result_title}")
             return None
 
         return job_id
@@ -1676,28 +1564,20 @@ class DownloadManager:
         Returns:
             Dict with success status and message
         """
-        submission = (
-            session.query(DownloadSubmission)
-            .filter(DownloadSubmission.id == submission_id)
-            .first()
-        )
+        submission = session.query(DownloadSubmission).filter(DownloadSubmission.id == submission_id).first()
 
         if not submission:
             logger.warning(f"Submission not found: {submission_id}")
             return {"success": False, "message": "Submission not found"}
 
         # Validate submission can be retried
-        validation_error = self._validate_retry_submission(
-            submission, submission_id, session
-        )
+        validation_error = self._validate_retry_submission(submission, submission_id, session)
         if validation_error:
             return validation_error
 
         try:
             # Get download category using helper
-            download_category = self._get_download_category(
-                submission.tracking_id, session
-            )
+            download_category = self._get_download_category(submission.tracking_id, session)
 
             # Resubmit to download client
             job_id = self._resubmit_to_client(submission, download_category, session)
@@ -1714,9 +1594,7 @@ class DownloadManager:
             submission.updated_at = utc_now()
             session.commit()
 
-            logger.info(
-                f"Successfully retried submission {submission_id} with new job_id: {job_id}"
-            )
+            logger.info(f"Successfully retried submission {submission_id} with new job_id: {job_id}")
             return {
                 "success": True,
                 "message": f"Retry submitted (attempt {submission.attempt_count + 1})",
@@ -1724,9 +1602,7 @@ class DownloadManager:
             }
 
         except Exception as e:
-            logger.error(
-                f"Error retrying submission {submission_id}: {e}", exc_info=True
-            )
+            logger.error(f"Error retrying submission {submission_id}: {e}", exc_info=True)
             return {"success": False, "message": f"Error: {str(e)}"}
 
     def process_queue(self, session: Session) -> Dict[str, Any]:
@@ -1794,16 +1670,12 @@ class DownloadManager:
         with self._slot_lock:
             active_count = self._get_active_download_count(session)
             remaining_slots = max(0, self.max_downloads - active_count)
-            logger.debug(
-                f"Auto-download: {remaining_slots} slots available ({active_count} in progress)"
-            )
+            logger.debug(f"Auto-download: {remaining_slots} slots available ({active_count} in progress)")
 
             if remaining_slots <= 0:
                 return 0
 
-            download_queue = issue_discovery_service.get_download_queue(
-                session, limit=remaining_slots
-            )
+            download_queue = issue_discovery_service.get_download_queue(session, limit=remaining_slots)
             if not download_queue:
                 return 0
 

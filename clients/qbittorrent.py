@@ -66,18 +66,14 @@ class QBittorrentClient(DownloadClient):
 
             url = f"{self.api_url}/api/v2{path}"
             try:
-                response = getattr(self._session, method)(
-                    url, timeout=HTTP_REQUEST_TIMEOUT, **kwargs
-                )
+                response = getattr(self._session, method)(url, timeout=HTTP_REQUEST_TIMEOUT, **kwargs)
 
                 if response.status_code == 403:
                     logger.debug("qBittorrent session expired, re-authenticating")
                     self._authenticated = False
                     if not self._login():
                         return None
-                    response = getattr(self._session, method)(
-                        url, timeout=HTTP_REQUEST_TIMEOUT, **kwargs
-                    )
+                    response = getattr(self._session, method)(url, timeout=HTTP_REQUEST_TIMEOUT, **kwargs)
 
                 response.raise_for_status()
                 return response
@@ -92,9 +88,7 @@ class QBittorrentClient(DownloadClient):
                 logger.error(f"qBittorrent request error {path}: {e}")
                 return None
 
-    def submit(
-        self, url: str, title: str = None, category: str = None
-    ) -> Optional[str]:
+    def submit(self, url: str, title: str = None, category: str = None) -> Optional[str]:
         """
         Add a torrent by magnet link or .torrent URL.
 
@@ -114,14 +108,10 @@ class QBittorrentClient(DownloadClient):
             return None
 
         torrent_hash = self._resolve_hash_from_url(url)
-        logger.info(
-            f"Submitted to qBittorrent: {title or url} -> {torrent_hash or 'unknown'}"
-        )
+        logger.info(f"Submitted to qBittorrent: {title or url} -> {torrent_hash or 'unknown'}")
         return torrent_hash
 
-    def submit_content(
-        self, content: bytes, title: str = None, category: str = None
-    ) -> Optional[str]:
+    def submit_content(self, content: bytes, title: str = None, category: str = None) -> Optional[str]:
         """
         Upload a .torrent file directly.
 
@@ -207,9 +197,7 @@ class QBittorrentClient(DownloadClient):
         if response is None:
             return False
 
-        logger.info(
-            f"[qBittorrent] Deleted torrent {job_id} (delete_files={delete_files})"
-        )
+        logger.info(f"[qBittorrent] Deleted torrent {job_id} (delete_files={delete_files})")
         return True
 
     def test_connection(self) -> Dict[str, Any]:
@@ -241,11 +229,7 @@ class QBittorrentClient(DownloadClient):
         """
         if not url.startswith("magnet:"):
             return None
-        query = (
-            url[len("magnet:?") :]
-            if url.startswith("magnet:?")
-            else url[len("magnet:") :]
-        )
+        query = url[len("magnet:?") :] if url.startswith("magnet:?") else url[len("magnet:") :]
         for part in query.split("&"):
             if part.startswith("xt=urn:btih:"):
                 return part.split(":")[-1].lower()

@@ -98,20 +98,14 @@ class ServiceState:
     """Application service instances (initialized during lifespan)."""
 
     download_client: Optional[Any] = None
-    download_clients: Dict[str, Any] = field(
-        default_factory=dict
-    )  # Additional clients by type
+    download_clients: Dict[str, Any] = field(default_factory=dict)  # Additional clients by type
     download_manager: Optional[DownloadManager] = None
     title_matcher: Optional[TitleMatcher] = None
     file_processor: Optional[FileOrganizer] = None
     file_importer: Optional[FileImporter] = None
     nzb_cache_service: Optional[Any] = None
-    feed_sync_service: Optional[Any] = (
-        None  # RSS feed entry sync (cache-first auto-download)
-    )
-    feed_match_service: Optional[Any] = (
-        None  # Local matching against cached feed entries
-    )
+    feed_sync_service: Optional[Any] = None  # RSS feed entry sync (cache-first auto-download)
+    feed_match_service: Optional[Any] = None  # Local matching against cached feed entries
     issue_discovery_service: Optional[IssueDiscoveryService] = None
     search_scheduler: Optional[SearchScheduler] = None
 
@@ -470,9 +464,7 @@ def _initialize_search_providers() -> None:
         try:
             provider_type = provider_config.get("type")
             if not provider_type:
-                logger.warning(
-                    f"Skipping provider with no type: {provider_config.get('name')}"
-                )
+                logger.warning(f"Skipping provider with no type: {provider_config.get('name')}")
                 continue
 
             # Validate provider configuration
@@ -483,9 +475,7 @@ def _initialize_search_providers() -> None:
                 logger.warning("Skipping RSS provider: Feed URL not configured")
                 continue
 
-            logger.debug(
-                f"Creating search provider: {provider_config.get('name')} (type: {provider_type})"
-            )
+            logger.debug(f"Creating search provider: {provider_config.get('name')} (type: {provider_type})")
             provider = ProviderFactory.create(provider_config)
             app_state.search_providers.append(provider)
             logger.info(f"Loaded search provider: {provider.name}")
@@ -517,9 +507,7 @@ def _initialize_download_client() -> None:
     for client_config in client_configs:
         client_type = client_config.get("type")
         if not client_type:
-            logger.warning(
-                f"Skipping download client with no type: {client_config.get('name')}"
-            )
+            logger.warning(f"Skipping download client with no type: {client_config.get('name')}")
             continue
         try:
             client = ClientFactory.create(client_config)
@@ -537,9 +525,7 @@ def _initialize_download_client() -> None:
         if candidate:
             cfg = getattr(candidate, "config", {})
             if isinstance(cfg, dict) and not cfg.get("api_key"):
-                logger.warning(
-                    f"Download client '{nzb_type}' configured but API key is missing — skipping as primary"
-                )
+                logger.warning(f"Download client '{nzb_type}' configured but API key is missing — skipping as primary")
                 continue
             primary = candidate
             break
@@ -547,9 +533,7 @@ def _initialize_download_client() -> None:
     if primary is None and app_state.download_clients:
         # No NZB client available — use first available as primary
         primary = next(iter(app_state.download_clients.values()))
-        logger.info(
-            f"No NZB client configured — using {primary.name} as primary download client"
-        )
+        logger.info(f"No NZB client configured — using {primary.name} as primary download client")
 
     app_state.download_client = primary
     if primary:
@@ -593,9 +577,7 @@ def _initialize_cache_services() -> None:
 
     # Initialize feed sync service (cache-first auto-download)
     try:
-        retention_days = app_state.tasks_config.get(
-            "feed_entry_retention_days", constants.FEED_ENTRY_RETENTION_DAYS
-        )
+        retention_days = app_state.tasks_config.get("feed_entry_retention_days", constants.FEED_ENTRY_RETENTION_DAYS)
         app_state.feed_sync_service = FeedSyncService(
             cache_db_path=str(cache_db_path),
             retention_days=retention_days,
@@ -614,9 +596,7 @@ def _initialize_cache_services() -> None:
         return
 
     # Check if there are any NZB providers (newsnab or rss) - Internet Archive doesn't need cache
-    nzb_providers = [
-        p for p in app_state.search_providers if p.type in ("newsnab", "rss")
-    ]
+    nzb_providers = [p for p in app_state.search_providers if p.type in ("newsnab", "rss")]
     if not nzb_providers:
         logger.info("NZB cache not initialized: no NZB providers (newsnab/rss) enabled")
         return
@@ -624,9 +604,7 @@ def _initialize_cache_services() -> None:
     try:
         app_state.nzb_cache_service = NzbCacheService(
             cache_db_path=str(cache_db_path),
-            max_nzb_fetches_per_hour=app_state.cache_config.get(
-                "max_nzb_fetches_per_hour", 50
-            ),
+            max_nzb_fetches_per_hour=app_state.cache_config.get("max_nzb_fetches_per_hour", 50),
             session_factory=cache_session_factory,
         )
         logger.info(f"NZB cache service initialized: {cache_db_path}")
@@ -665,15 +643,11 @@ def _initialize_core_services() -> None:
         default_max_retries=app_state.downloads_config.get("max_retries", 1),
     )
     app_state.search_scheduler = SearchScheduler(
-        max_periodicals_per_run=app_state.tasks_config.get(
-            "max_periodicals_per_search", 2
-        ),
+        max_periodicals_per_run=app_state.tasks_config.get("max_periodicals_per_search", 2),
         rapid_interval_hours=app_state.tasks_config.get("rapid_search_interval", 1),
         normal_interval_hours=app_state.tasks_config.get("normal_search_interval", 6),
         slow_interval_hours=app_state.tasks_config.get("slow_search_interval", 24),
-        very_slow_interval_hours=app_state.tasks_config.get(
-            "very_slow_search_interval", 168
-        ),
+        very_slow_interval_hours=app_state.tasks_config.get("very_slow_search_interval", 168),
     )
     logger.info("Issue discovery services initialized")
 
@@ -685,17 +659,12 @@ def _initialize_core_services() -> None:
             fuzzy_threshold=app_state.fuzzy_threshold,
             max_downloads=app_state.downloads_config.get("max_concurrent", 10),
             nzb_cache_service=app_state.nzb_cache_service,
-            download_clients=app_state.download_clients
-            or None,  # Additional clients for routing
+            download_clients=app_state.download_clients or None,  # Additional clients for routing
             issue_discovery_service=app_state.issue_discovery_service,
         )
-        logger.info(
-            f"Download manager initialized with {len(app_state.download_clients or {})} additional client(s)"
-        )
+        logger.info(f"Download manager initialized with {len(app_state.download_clients or {})} additional client(s)")
     else:
-        logger.warning(
-            "Download manager not initialized: missing download client or search providers"
-        )
+        logger.warning("Download manager not initialized: missing download client or search providers")
 
 
 def _initialize_background_tasks() -> None:
@@ -720,9 +689,7 @@ def _initialize_background_tasks() -> None:
             remote_path=remote_path,
         )
         if remote_path:
-            logger.info(
-                f"Download monitor task initialized (remote_path: {remote_path})"
-            )
+            logger.info(f"Download monitor task initialized (remote_path: {remote_path})")
         else:
             logger.info("Download monitor task initialized")
 
@@ -738,12 +705,8 @@ def _initialize_background_tasks() -> None:
     app_state.ocr_processor_task = OCRProcessor(
         session_factory=app_state.session_factory,
         config_loader=app_state.config_loader,
-        max_workers=app_state.tasks_config.get(
-            "ocr_max_workers", constants.OCR_MAX_WORKERS
-        ),
-        batch_size=app_state.tasks_config.get(
-            "ocr_batch_size", constants.OCR_BATCH_SIZE
-        ),
+        max_workers=app_state.tasks_config.get("ocr_max_workers", constants.OCR_MAX_WORKERS),
+        batch_size=app_state.tasks_config.get("ocr_batch_size", constants.OCR_BATCH_SIZE),
     )
     logger.info("OCR processor task initialized")
 
@@ -1079,11 +1042,7 @@ async def get_status():
     return {
         "status": "running",
         "providers": [p.get_provider_info() for p in app_state.search_providers],
-        "download_client": (
-            app_state.download_client.get_client_info()
-            if app_state.download_client
-            else None
-        ),
+        "download_client": (app_state.download_client.get_client_info() if app_state.download_client else None),
     }
 
 
@@ -1114,6 +1073,4 @@ if __name__ == "__main__":
     import uvicorn
 
     server_config = config_loader.get_server()
-    uvicorn.run(
-        app, host=server_config["host"], port=server_config["port"], access_log=False
-    )
+    uvicorn.run(app, host=server_config["host"], port=server_config["port"], access_log=False)

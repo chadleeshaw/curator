@@ -102,9 +102,7 @@ class TestDownloadClient:
             "api_url": "http://localhost:8080",
             "api_key": "test",
         }
-        config_loader.config = {
-            k: v for k, v in original.items() if k != "download_clients"
-        }
+        config_loader.config = {k: v for k, v in original.items() if k != "download_clients"}
         config_loader.config.pop("download_clients", None)
         config_loader.config["download_client"] = legacy_client
 

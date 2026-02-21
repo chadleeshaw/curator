@@ -241,9 +241,7 @@ class NZBGetClient(DownloadClient):
             return {
                 "status": "downloading",
                 "progress": self._calculate_progress(group),
-                "extra_status": f"Post-processing: {post_info}"
-                if post_info
-                else "Post-processing",
+                "extra_status": f"Post-processing: {post_info}" if post_info else "Post-processing",
             }
 
         # QUEUED, PAUSED, or any other queue status
@@ -371,9 +369,7 @@ class NZBGetClient(DownloadClient):
                 logger.info(f"[NZBGet] Deleted job {job_id} from history")
                 return True
 
-            logger.warning(
-                f"[NZBGet] Could not delete job {job_id} — not found in queue or history"
-            )
+            logger.warning(f"[NZBGet] Could not delete job {job_id} — not found in queue or history")
             return False
 
         except Exception as e:

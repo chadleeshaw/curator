@@ -142,9 +142,7 @@ class SABnzbdClient(DownloadClient):
             }
 
             url = f"{self.api_url}/api"
-            response = requests.post(
-                url, params=params, files=files, timeout=HTTP_REQUEST_TIMEOUT
-            )
+            response = requests.post(url, params=params, files=files, timeout=HTTP_REQUEST_TIMEOUT)
             response.raise_for_status()
             result = response.json()
 
@@ -184,9 +182,7 @@ class SABnzbdClient(DownloadClient):
                 return history_status
 
             # Job not found
-            logger.debug(
-                f"[SABnzbd] Job {job_id} not found in queue or history (may have been deleted)"
-            )
+            logger.debug(f"[SABnzbd] Job {job_id} not found in queue or history (may have been deleted)")
             return {"status": "unknown", "progress": 0}
 
         except Exception as e:
@@ -217,9 +213,7 @@ class SABnzbdClient(DownloadClient):
         msg = slot.get("msg", "")
 
         # Check for encryption (takes priority)
-        encryption_status = self._check_encryption_status(
-            job_id, slot_status, labels, msg
-        )
+        encryption_status = self._check_encryption_status(job_id, slot_status, labels, msg)
         if encryption_status:
             return encryption_status
 
@@ -244,9 +238,7 @@ class SABnzbdClient(DownloadClient):
     ) -> Optional[Dict[str, Any]]:
         """Check if job is paused due to encryption."""
         all_text = " ".join(labels + [msg]).lower()
-        is_encrypted = slot_status == "Paused" and any(
-            indicator in all_text for indicator in ENCRYPTION_INDICATORS
-        )
+        is_encrypted = slot_status == "Paused" and any(indicator in all_text for indicator in ENCRYPTION_INDICATORS)
 
         if not is_encrypted:
             return None
@@ -273,9 +265,7 @@ class SABnzbdClient(DownloadClient):
 
         return ""
 
-    def _check_rate_limit_status(
-        self, job_id: str, wait_text: str, labels: list
-    ) -> Optional[Dict[str, Any]]:
+    def _check_rate_limit_status(self, job_id: str, wait_text: str, labels: list) -> Optional[Dict[str, Any]]:
         """Check if job is rate limited and return status."""
         wait_time = self._parse_wait_time(wait_text)
         if not wait_time:
@@ -312,18 +302,14 @@ class SABnzbdClient(DownloadClient):
 
         return None
 
-    def _process_history_slot(
-        self, job_id: str, slot: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _process_history_slot(self, job_id: str, slot: Dict[str, Any]) -> Dict[str, Any]:
         """Process a history slot and determine its final status."""
         slot_status = slot.get("status", "Unknown").lower()
         logger.info(f"[SABnzbd] Found {job_id} in history with status: {slot_status}")
         logger.info(f"[SABnzbd] History slot: {slot}")
 
         if "completed" in slot_status:
-            logger.info(
-                f"[SABnzbd] Job {job_id} completed, file_path: {slot.get('storage')}"
-            )
+            logger.info(f"[SABnzbd] Job {job_id} completed, file_path: {slot.get('storage')}")
             return {
                 "status": "completed",
                 "progress": 100,
@@ -339,9 +325,7 @@ class SABnzbdClient(DownloadClient):
             "progress": int(float(slot.get("percentage", 0))),
         }
 
-    def _build_failure_status(
-        self, job_id: str, slot: Dict[str, Any], slot_status: str
-    ) -> Dict[str, Any]:
+    def _build_failure_status(self, job_id: str, slot: Dict[str, Any], slot_status: str) -> Dict[str, Any]:
         """Build failure status with detailed error information."""
         fail_message = slot.get("fail_message", "No details available")
         failure_details = self._extract_failure_details(slot.get("stage_log", []))
@@ -353,10 +337,7 @@ class SABnzbdClient(DownloadClient):
 
         logger.warning(f"[SABnzbd] Job {job_id} failed: {error_message}")
 
-        is_encrypted = any(
-            indicator in fail_message.lower()
-            for indicator in ENCRYPTION_INDICATORS_HISTORY
-        )
+        is_encrypted = any(indicator in fail_message.lower() for indicator in ENCRYPTION_INDICATORS_HISTORY)
 
         return {
             "status": "failed",
@@ -372,10 +353,7 @@ class SABnzbdClient(DownloadClient):
             stage_name = stage.get("name", "")
             actions = stage.get("actions", [])
             for action in actions:
-                if any(
-                    keyword in action.lower()
-                    for keyword in ["missing", "failed", "error", "incomplete"]
-                ):
+                if any(keyword in action.lower() for keyword in ["missing", "failed", "error", "incomplete"]):
                     failure_details.append(f"{stage_name}: {action}")
         return failure_details
 

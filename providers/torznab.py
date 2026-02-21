@@ -85,9 +85,7 @@ class TorznabProvider(SearchProvider):
         self.api_key = config.get("api_key", "")
         self.categories = config.get("categories", TORZNAB_DEFAULT_CATEGORIES)
         self.search_limit = config.get("search_limit", TORZNAB_DEFAULT_SEARCH_LIMIT)
-        self.request_delay = config.get(
-            "request_delay_seconds", TORZNAB_DEFAULT_REQUEST_DELAY
-        )
+        self.request_delay = config.get("request_delay_seconds", TORZNAB_DEFAULT_REQUEST_DELAY)
 
         if not self.api_url:
             raise ValueError("Torznab provider requires api_url")
@@ -143,11 +141,7 @@ class TorznabProvider(SearchProvider):
 
             root = ET.fromstring(response.content)
             server_el = root.find("server")
-            title = (
-                server_el.get("title", "Torznab")
-                if server_el is not None
-                else "Torznab"
-            )
+            title = server_el.get("title", "Torznab") if server_el is not None else "Torznab"
 
             return {"success": True, "message": f"Connection successful — {title}"}
 

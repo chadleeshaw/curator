@@ -48,9 +48,7 @@ def _mask_sensitive_config(config: Dict[str, Any]) -> Dict[str, Any]:
 
     # Mask legacy singular download_client key
     if "download_client" in masked and "api_key" in masked["download_client"]:
-        masked["download_client"]["api_key"] = (
-            "***" if masked["download_client"].get("api_key") else ""
-        )
+        masked["download_client"]["api_key"] = "***" if masked["download_client"].get("api_key") else ""
 
     return masked
 
@@ -69,9 +67,7 @@ def _deep_merge(base: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, Any]:
                     for i, provider in enumerate(value):
                         provider_copy = provider.copy()
                         # If the API key is masked and there's an original, use the original
-                        if provider_copy.get("api_key") == "***" and i < len(
-                            result[key]
-                        ):
+                        if provider_copy.get("api_key") == "***" and i < len(result[key]):
                             original_key = result[key][i].get("api_key", "")
                             provider_copy["api_key"] = original_key
                         merged_list.append(provider_copy)
@@ -102,14 +98,9 @@ def _deep_merge(base: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, Any]:
             result[key] = value
 
     # Preserve legacy singular download_client API key if masked
-    if (
-        "download_client" in update
-        and update["download_client"].get("api_key") == "***"
-    ):
+    if "download_client" in update and update["download_client"].get("api_key") == "***":
         if "download_client" in base:
-            result["download_client"]["api_key"] = base["download_client"].get(
-                "api_key", ""
-            )
+            result["download_client"]["api_key"] = base["download_client"].get("api_key", "")
 
     return result
 
@@ -170,13 +161,9 @@ def _resolve_masked_client_key(client_config: Dict[str, Any]) -> Dict[str, Any]:
     test_url = client_config.get("api_url", "")
     client_type = client_config.get("type", "")
 
-    all_clients = [
-        c for c in saved_config.get("download_clients", []) if isinstance(c, dict)
-    ]
+    all_clients = [c for c in saved_config.get("download_clients", []) if isinstance(c, dict)]
 
-    matched = next(
-        (c for c in all_clients if test_url and c.get("api_url") == test_url), None
-    )
+    matched = next((c for c in all_clients if test_url and c.get("api_url") == test_url), None)
 
     if matched is None and client_type:
         same_type = [c for c in all_clients if c.get("type") == client_type]
@@ -185,13 +172,9 @@ def _resolve_masked_client_key(client_config: Dict[str, Any]) -> Dict[str, Any]:
 
     if matched is None:
         if has_masked_key:
-            logger.warning(
-                f"Could not resolve masked API key for download client URL: {test_url}"
-            )
+            logger.warning(f"Could not resolve masked API key for download client URL: {test_url}")
         if has_masked_password:
-            logger.warning(
-                f"Could not resolve masked password for download client URL: {test_url}"
-            )
+            logger.warning(f"Could not resolve masked password for download client URL: {test_url}")
         return resolved
 
     if has_masked_key and matched.get("api_key"):
@@ -220,9 +203,7 @@ async def get_config():
 
 @router.post("")
 @handle_api_errors("Update config", logger)
-async def update_config(
-    config_update: Dict[str, Any], background_tasks: BackgroundTasks
-):
+async def update_config(config_update: Dict[str, Any], background_tasks: BackgroundTasks):
     """Update configuration and restart application"""
     # Reload from file to ensure we have the latest (including manual edits)
     _config_loader.reload_config()
@@ -301,9 +282,7 @@ async def reload_config():
     # This endpoint signals the need to reload but actual reloading happens elsewhere
     _config_loader.reload_config()
 
-    return status_response(
-        "success", "Configuration reloaded. Providers will be reinitialized."
-    )
+    return status_response("success", "Configuration reloaded. Providers will be reinitialized.")
 
 
 @router.post("/restart")
@@ -360,9 +339,7 @@ async def test_provider_connection(provider_config: Dict[str, Any]):
             provider = TorznabProvider(provider_config)
             result = provider.test_connection()
         else:
-            raise HTTPException(
-                status_code=400, detail=f"Unknown provider type: {provider_type}"
-            )
+            raise HTTPException(status_code=400, detail=f"Unknown provider type: {provider_type}")
 
         return result
 
@@ -389,9 +366,7 @@ async def test_download_client_connection(client_config: Dict[str, Any]):
     try:
         client_type = client_config.get("type")
         if not client_type:
-            raise HTTPException(
-                status_code=400, detail="Download client type is required"
-            )
+            raise HTTPException(status_code=400, detail="Download client type is required")
 
         # Resolve masked API key from saved config
         client_config = _resolve_masked_client_key(client_config)
@@ -418,9 +393,7 @@ async def test_download_client_connection(client_config: Dict[str, Any]):
             client = QBittorrentClient(client_config)
             result = client.test_connection()
         else:
-            raise HTTPException(
-                status_code=400, detail=f"Unknown download client type: {client_type}"
-            )
+            raise HTTPException(status_code=400, detail=f"Unknown download client type: {client_type}")
 
         return result
 

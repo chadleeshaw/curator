@@ -142,9 +142,7 @@ def test_request_reauth_on_403(client):
     second_response.status_code = 200
     second_response.raise_for_status = Mock()
 
-    with patch.object(
-        client._session, "get", side_effect=[first_response, second_response]
-    ):
+    with patch.object(client._session, "get", side_effect=[first_response, second_response]):
         with patch.object(client, "_login", return_value=True) as mock_login:
             result = client._request("get", "/app/version")
 
@@ -170,9 +168,7 @@ def test_request_returns_none_on_connection_error(client):
     """Test that _request returns None on ConnectionError."""
     client._authenticated = True
 
-    with patch.object(
-        client._session, "get", side_effect=requests.exceptions.ConnectionError("down")
-    ):
+    with patch.object(client._session, "get", side_effect=requests.exceptions.ConnectionError("down")):
         result = client._request("get", "/app/version")
 
     assert result is None
@@ -316,9 +312,7 @@ def test_submit_content_uses_category(client):
 def test_get_status_downloading(client):
     """Test get_status returns downloading status with correct progress."""
     mock_response = Mock()
-    mock_response.json.return_value = [
-        {"state": "downloading", "progress": 0.45, "save_path": "/downloads/mag"}
-    ]
+    mock_response.json.return_value = [{"state": "downloading", "progress": 0.45, "save_path": "/downloads/mag"}]
 
     with patch.object(client, "_request", return_value=mock_response):
         status = client.get_status("abc123")
@@ -330,9 +324,7 @@ def test_get_status_downloading(client):
 def test_get_status_completed(client):
     """Test get_status returns completed status and file_path for seeding torrent."""
     mock_response = Mock()
-    mock_response.json.return_value = [
-        {"state": "uploading", "progress": 1.0, "save_path": "/downloads/mag"}
-    ]
+    mock_response.json.return_value = [{"state": "uploading", "progress": 1.0, "save_path": "/downloads/mag"}]
 
     with patch.object(client, "_request", return_value=mock_response):
         status = client.get_status("abc123")
@@ -389,9 +381,7 @@ def test_get_status_error_when_request_fails(client):
 def test_get_status_no_file_path_when_not_completed(client):
     """Test that file_path is not included when torrent is still downloading."""
     mock_response = Mock()
-    mock_response.json.return_value = [
-        {"state": "downloading", "progress": 0.5, "save_path": "/downloads/mag"}
-    ]
+    mock_response.json.return_value = [{"state": "downloading", "progress": 0.5, "save_path": "/downloads/mag"}]
 
     with patch.object(client, "_request", return_value=mock_response):
         status = client.get_status("abc123")
@@ -548,10 +538,7 @@ def test_test_connection_failure_no_response(client):
         result = client.test_connection()
 
     assert result["success"] is False
-    assert (
-        "check URL" in result["message"].lower()
-        or "credentials" in result["message"].lower()
-    )
+    assert "check URL" in result["message"].lower() or "credentials" in result["message"].lower()
 
 
 def test_test_connection_timeout(client):
@@ -562,10 +549,7 @@ def test_test_connection_timeout(client):
         result = client.test_connection()
 
     assert result["success"] is False
-    assert (
-        "check" in result["message"].lower()
-        or "credentials" in result["message"].lower()
-    )
+    assert "check" in result["message"].lower() or "credentials" in result["message"].lower()
 
 
 def test_test_connection_connection_error(client):
@@ -574,10 +558,7 @@ def test_test_connection_connection_error(client):
         result = client.test_connection()
 
     assert result["success"] is False
-    assert (
-        "unexpected" in result["message"].lower()
-        or "error" in result["message"].lower()
-    )
+    assert "unexpected" in result["message"].lower() or "error" in result["message"].lower()
 
 
 # ---------------------------------------------------------------------------
@@ -587,9 +568,7 @@ def test_test_connection_connection_error(client):
 
 def test_resolve_hash_from_magnet_link(client):
     """Test that hash is correctly extracted from a magnet link."""
-    magnet = (
-        "magnet:?xt=urn:btih:ABCDEF123456&dn=Some+Title&tr=http://tracker.example.com"
-    )
+    magnet = "magnet:?xt=urn:btih:ABCDEF123456&dn=Some+Title&tr=http://tracker.example.com"
     result = client._resolve_hash_from_url(magnet)
     assert result == "abcdef123456"
 
@@ -602,9 +581,7 @@ def test_resolve_hash_returns_none_for_torrent_url(client):
 
 def test_resolve_hash_returns_none_for_malformed_magnet(client):
     """Test that None is returned for a magnet link missing the btih parameter."""
-    result = client._resolve_hash_from_url(
-        "magnet:?dn=SomeTitle&tr=http://tracker.example.com"
-    )
+    result = client._resolve_hash_from_url("magnet:?dn=SomeTitle&tr=http://tracker.example.com")
     assert result is None
 
 
@@ -694,9 +671,7 @@ def test_request_returns_none_on_http_error_from_raise_for_status(client):
 
     mock_response = Mock()
     mock_response.status_code = 500
-    mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError(
-        "500 Server Error"
-    )
+    mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError("500 Server Error")
 
     with patch.object(client._session, "get", return_value=mock_response):
         result = client._request("get", "/app/version")
@@ -708,9 +683,7 @@ def test_request_returns_none_on_generic_exception(client):
     """Test that _request returns None when an unexpected exception is raised."""
     client._authenticated = True
 
-    with patch.object(
-        client._session, "get", side_effect=RuntimeError("unexpected failure")
-    ):
+    with patch.object(client._session, "get", side_effect=RuntimeError("unexpected failure")):
         result = client._request("get", "/app/version")
 
     assert result is None
@@ -913,9 +886,7 @@ def test_get_status_missing_files_maps_to_failed(client):
 def test_get_status_forced_up_maps_to_completed_with_file_path(client):
     """Test that the 'forcedUP' state maps to 'completed' and includes file_path."""
     mock_response = Mock()
-    mock_response.json.return_value = [
-        {"state": "forcedUP", "progress": 1.0, "save_path": "/downloads/mag"}
-    ]
+    mock_response.json.return_value = [{"state": "forcedUP", "progress": 1.0, "save_path": "/downloads/mag"}]
 
     with patch.object(client, "_request", return_value=mock_response):
         status = client.get_status("abc123")
@@ -927,9 +898,7 @@ def test_get_status_forced_up_maps_to_completed_with_file_path(client):
 def test_get_status_paused_up_maps_to_completed_with_file_path(client):
     """Test that the 'pausedUP' state maps to 'completed' and includes file_path."""
     mock_response = Mock()
-    mock_response.json.return_value = [
-        {"state": "pausedUP", "progress": 1.0, "save_path": "/downloads/paused"}
-    ]
+    mock_response.json.return_value = [{"state": "pausedUP", "progress": 1.0, "save_path": "/downloads/paused"}]
 
     with patch.object(client, "_request", return_value=mock_response):
         status = client.get_status("abc123")
@@ -941,9 +910,7 @@ def test_get_status_paused_up_maps_to_completed_with_file_path(client):
 def test_get_status_stopped_up_maps_to_completed_with_file_path(client):
     """Test that the 'stoppedUP' state maps to 'completed' and includes file_path."""
     mock_response = Mock()
-    mock_response.json.return_value = [
-        {"state": "stoppedUP", "progress": 1.0, "save_path": "/downloads/stopped"}
-    ]
+    mock_response.json.return_value = [{"state": "stoppedUP", "progress": 1.0, "save_path": "/downloads/stopped"}]
 
     with patch.object(client, "_request", return_value=mock_response):
         status = client.get_status("abc123")
@@ -955,9 +922,7 @@ def test_get_status_stopped_up_maps_to_completed_with_file_path(client):
 def test_get_status_queued_up_maps_to_completed_with_file_path(client):
     """Test that the 'queuedUP' state maps to 'completed' and includes file_path."""
     mock_response = Mock()
-    mock_response.json.return_value = [
-        {"state": "queuedUP", "progress": 1.0, "save_path": "/downloads/queued"}
-    ]
+    mock_response.json.return_value = [{"state": "queuedUP", "progress": 1.0, "save_path": "/downloads/queued"}]
 
     with patch.object(client, "_request", return_value=mock_response):
         status = client.get_status("abc123")

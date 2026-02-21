@@ -28,9 +28,7 @@ class SearchProvider(ABC):
         self.type = config.get("type", "unknown")
 
     @abstractmethod
-    def search(
-        self, query: str, category: str = None, aliases: Optional[Sequence[str]] = None
-    ) -> List[SearchResult]:
+    def search(self, query: str, category: str = None, aliases: Optional[Sequence[str]] = None) -> List[SearchResult]:
         """
         Search for periodicals matching query.
 
@@ -84,9 +82,7 @@ class DownloadClient(ABC):
             Job ID returned by the client
         """
 
-    def submit_content(
-        self, content: Union[str, bytes], title: str = None, category: str = None
-    ) -> Optional[str]:
+    def submit_content(self, content: Union[str, bytes], title: str = None, category: str = None) -> Optional[str]:
         """
         Submit raw download content directly to the client (avoids provider URL fetch).
 
@@ -105,9 +101,7 @@ class DownloadClient(ABC):
     def _sanitize_title(title: str, max_length: int = 100) -> str:
         """Normalize a job title: replace path separators and truncate."""
         sanitized = title.replace("/", "-").replace("\\", "-").strip()
-        return (
-            sanitized[:max_length].strip() if len(sanitized) > max_length else sanitized
-        )
+        return sanitized[:max_length].strip() if len(sanitized) > max_length else sanitized
 
     @staticmethod
     def _to_bytes(content: Union[str, bytes]) -> bytes:
