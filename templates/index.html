@@ -382,12 +382,20 @@
 
             <!-- Action Buttons -->
             <div class="tracking-controls-row mb-40">
-              <div style="display: flex; gap: 10px; flex-wrap: wrap; width: 100%; align-items: center">
+              <div
+                style="display: flex; gap: 10px; flex-wrap: wrap; width: 100%; align-items: center"
+              >
                 <button onclick="openTrackNewPeriodicalModal()" class="btn-primary">
                   📌 Track New Periodical
                 </button>
                 <button onclick="openMergeModal()" class="btn-primary">🔀 Merge Tracking</button>
-                <button onclick="openCreateStackModal()" class="btn-primary" style="margin-left: auto">📂 Create Stack</button>
+                <button
+                  onclick="openCreateStackModal()"
+                  class="btn-primary"
+                  style="margin-left: auto"
+                >
+                  📂 Create Stack
+                </button>
               </div>
             </div>
 
@@ -809,102 +817,16 @@
               <div id="search-providers-message" class="hidden"></div>
             </div>
 
-            <!-- NZB Download Client Settings -->
-            <div id="download-client-section" class="settings-section">
-              <h3>NZB Download Client</h3>
-              <p class="text-sm text-hint mb-15">
-                Used for Newsnab and RSS provider downloads. Select SABnzbd or NZBGet as your Usenet
-                download client.
+            <!-- Download Clients -->
+            <div id="download-clients-section" class="settings-section">
+              <h3>Download Clients</h3>
+              <p class="text-base text-muted mb-15">
+                Downloads are automatically routed by provider type: Newsnab/RSS → SABnzbd/NZBGet,
+                Torznab → qBittorrent, Internet Archive → built-in HTTP client.
               </p>
-              <div class="settings-field">
-                <label for="download-client-type">Type:</label>
-                <select id="download-client-type">
-                  <option value="sabnzbd">SABnzbd</option>
-                  <option value="nzbget">NZBGet</option>
-                </select>
-              </div>
-              <div class="settings-field">
-                <label for="download-client-name">Name:</label>
-                <input type="text" id="download-client-name" placeholder="e.g., SABnzbd" />
-              </div>
-              <div class="settings-field">
-                <label for="download-client-url">API URL:</label>
-                <input
-                  type="text"
-                  id="download-client-url"
-                  placeholder="http://192.168.1.112:9080"
-                />
-              </div>
-              <div class="settings-field">
-                <label for="download-client-apikey">API Key:</label>
-                <input
-                  type="password"
-                  id="download-client-apikey"
-                  placeholder="Enter your API key"
-                />
-              </div>
-              <div class="settings-field">
-                <label for="download-client-default-category">Default Category:</label>
-                <input
-                  type="text"
-                  id="download-client-default-category"
-                  placeholder="e.g., books"
-                />
-              </div>
-              <div class="settings-field">
-                <label for="download-client-remote-path">Remote Path:</label>
-                <input
-                  type="text"
-                  id="download-client-remote-path"
-                  placeholder="e.g., /downloads/"
-                />
-                <p class="text-sm text-hint mt-8">
-                  Path prefix as seen by the download client. Set when the client runs in a
-                  different container with different mount points.
-                </p>
-              </div>
-              <div style="display: flex; gap: 10px">
-                <button onclick="testDownloadClientConnection()" class="save-btn btn-secondary">
-                  Test Connection
-                </button>
-                <button onclick="saveDownloadClientSettings()" class="save-btn">
-                  Save Download Client
-                </button>
-              </div>
-              <div id="download-client-message" class="hidden"></div>
-            </div>
-
-            <!-- Internet Archive Download Client Settings -->
-            <div id="ia-client-section" class="settings-section">
-              <h3>Internet Archive (HTTP)</h3>
-              <p class="text-sm text-hint mb-15">
-                Downloads from Internet Archive use a built-in HTTP client — no external software
-                needed. These settings are applied automatically when an Internet Archive search
-                provider is configured above.
-              </p>
-              <div class="settings-field">
-                <label for="ia-client-downloads-dir">Downloads Directory:</label>
-                <input type="text" id="ia-client-downloads-dir" placeholder="./local/downloads" />
-              </div>
-              <div class="settings-field">
-                <label for="ia-client-max-concurrent">Max Concurrent Downloads:</label>
-                <input
-                  type="number"
-                  id="ia-client-max-concurrent"
-                  placeholder="3"
-                  min="1"
-                  max="10"
-                />
-              </div>
-              <div style="display: flex; gap: 10px">
-                <button onclick="testIAClientConnection()" class="save-btn btn-secondary">
-                  Test Connection
-                </button>
-                <button onclick="saveIAClientSettings()" class="save-btn">
-                  Save Internet Archive
-                </button>
-              </div>
-              <div id="ia-client-message" class="hidden"></div>
+              <div id="download-clients-list"></div>
+              <button onclick="addDownloadClient()" class="save-btn">+ Add Download Client</button>
+              <div id="download-clients-message" class="hidden"></div>
             </div>
           </div>
 
@@ -1715,8 +1637,6 @@
               <button onclick="saveThemeSettings()" class="save-btn">Save Theme Settings</button>
               <div id="theme-message" class="hidden"></div>
             </div>
-
-
           </div>
 
           <!-- Account & Security Settings Tab -->
@@ -2039,6 +1959,105 @@
               type="button"
               class="save-btn btn-cancel flex-1"
               onclick="closeAddProviderModal()"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Add Download Client Modal -->
+    <div id="add-client-modal" class="modal hidden">
+      <div class="modal-content max-w-500">
+        <span class="close" onclick="closeAddClientModal()">&times;</span>
+        <h3>Add New Download Client</h3>
+        <form id="add-client-form" class="p-20">
+          <div class="settings-field">
+            <label for="new-client-type">Client Type:</label>
+            <select id="new-client-type" required onchange="onClientTypeChange(this.value)">
+              <option value="sabnzbd">SABnzbd</option>
+              <option value="nzbget">NZBGet</option>
+              <option value="qbittorrent">qBittorrent</option>
+              <option value="internet_archive">Internet Archive</option>
+            </select>
+          </div>
+          <div class="settings-field">
+            <label for="new-client-name">Name:</label>
+            <input type="text" id="new-client-name" placeholder="e.g., My qBittorrent" required />
+          </div>
+          <!-- NZB Client Fields (SABnzbd / NZBGet) -->
+          <div id="client-nzb-fields">
+            <div class="settings-field">
+              <label for="new-client-nzb-url">API URL:</label>
+              <input type="text" id="new-client-nzb-url" placeholder="http://localhost:8080" />
+            </div>
+            <div class="settings-field">
+              <label for="new-client-apikey">API Key:</label>
+              <input type="password" id="new-client-apikey" placeholder="Enter API key" />
+            </div>
+            <div class="settings-field">
+              <label for="new-client-nzb-category">Default Category:</label>
+              <input type="text" id="new-client-nzb-category" placeholder="books" />
+            </div>
+            <div class="settings-field">
+              <label for="new-client-remote-path"
+                >Remote Path
+                <span style="font-size: 11px; color: var(--text-secondary)">(optional)</span
+                >:</label
+              >
+              <input type="text" id="new-client-remote-path" placeholder="/downloads" />
+            </div>
+          </div>
+          <!-- qBittorrent Client Fields -->
+          <div id="client-qbt-fields" class="hidden">
+            <div class="settings-field">
+              <label for="new-client-qbt-url">API URL:</label>
+              <input type="text" id="new-client-qbt-url" placeholder="http://localhost:8090" />
+            </div>
+            <div class="settings-field">
+              <label for="new-client-username">Username:</label>
+              <input type="text" id="new-client-username" placeholder="admin" />
+            </div>
+            <div class="settings-field">
+              <label for="new-client-password">Password:</label>
+              <input type="password" id="new-client-password" placeholder="Enter password" />
+            </div>
+            <div class="settings-field">
+              <label for="new-client-qbt-category">Default Category:</label>
+              <input type="text" id="new-client-qbt-category" placeholder="curator" />
+            </div>
+          </div>
+          <!-- Internet Archive Client Fields -->
+          <div id="client-ia-fields" class="hidden">
+            <div class="settings-field">
+              <label for="new-client-downloads-dir">Downloads Directory:</label>
+              <input type="text" id="new-client-downloads-dir" placeholder="./local/downloads" />
+            </div>
+            <div class="settings-field">
+              <label for="new-client-max-concurrent">Max Concurrent Downloads:</label>
+              <input
+                type="number"
+                id="new-client-max-concurrent"
+                placeholder="3"
+                min="1"
+                max="20"
+                value="3"
+              />
+            </div>
+          </div>
+          <div class="settings-field">
+            <label>
+              <input type="checkbox" id="new-client-enabled" checked />
+              <span>Enabled</span>
+            </label>
+          </div>
+          <div class="flex gap-10 mt-20">
+            <button type="submit" class="save-btn flex-1">Add Client</button>
+            <button
+              type="button"
+              class="save-btn btn-cancel flex-1"
+              onclick="closeAddClientModal()"
             >
               Cancel
             </button>

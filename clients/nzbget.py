@@ -11,7 +11,7 @@ API Reference: https://nzbget.com/documentation/api/
 
 import base64
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import requests
 
@@ -82,7 +82,7 @@ class NZBGetClient(DownloadClient):
         file_size_mb = group.get("FileSizeMB", 1)
         return min(int(downloaded_mb / max(file_size_mb, 1) * 100), 100)
 
-    def submit(self, nzb_url: str, title: str = None, category: str = None) -> str:
+    def submit(self, url: str, title: str = None, category: str = None) -> str:
         """
         Submit an NZB URL to NZBGet via the append API method.
 
@@ -91,7 +91,7 @@ class NZBGetClient(DownloadClient):
         - Content: the URL to fetch the NZB from
 
         Args:
-            nzb_url: URL to NZB file
+            url: URL to NZB file
             title: Optional title for the job (sanitized to prevent subfolder issues)
             category: Optional category (determines download folder)
 
@@ -99,19 +99,10 @@ class NZBGetClient(DownloadClient):
             Job ID (NZBID), or None on failure
         """
         try:
-            nzb_name = title or "download"
-
-            # Sanitize title: replace path separators and limit length
-            nzb_name = nzb_name.replace("/", "-").replace("\\", "-").strip()
-            if len(nzb_name) > 100:
-                nzb_name = nzb_name[:100].strip()
-
-            # NZBGet append params: (Filename, Content, Category, Priority, AddToTop, AddPaused)
-            # Filename = descriptive name with .nzb extension
-            # Content = URL to fetch the NZB from
+            nzb_name = self._sanitize_title(title or "download")
             params = [
                 nzb_name + ".nzb",  # Filename
-                nzb_url,  # Content (URL)
+                url,  # Content (URL)
                 category or "",  # Category
                 50,  # Priority (high)
                 False,  # AddToTop
@@ -121,7 +112,7 @@ class NZBGetClient(DownloadClient):
 
             if isinstance(result, (int, float)) and result > 0:
                 job_id = str(int(result))
-                logger.info(f"[NZBGet] Submitted URL: {title or nzb_url} -> {job_id}")
+                logger.info(f"[NZBGet] Submitted URL: {title or url} -> {job_id}")
                 return job_id
             else:
                 logger.error(f"[NZBGet] URL submission failed: {result}")
@@ -131,7 +122,9 @@ class NZBGetClient(DownloadClient):
             logger.error(f"[NZBGet] Error submitting URL: {e}")
             return None
 
-    def submit_content(self, nzb_content: str, title: str = None, category: str = None) -> Optional[str]:
+    def submit_content(  # pylint: disable=arguments-renamed
+        self, nzb_content: Union[str, bytes], title: str = None, category: str = None
+    ) -> Optional[str]:
         """
         Submit NZB content directly to NZBGet via base64-encoded content.
 
@@ -140,7 +133,7 @@ class NZBGetClient(DownloadClient):
         - Content: base64-encoded NZB XML
 
         Args:
-            nzb_content: Raw NZB XML content as string
+            nzb_content: Raw NZB XML content as string or bytes
             title: Optional title for the job
             category: Optional category for download client
 
@@ -148,12 +141,8 @@ class NZBGetClient(DownloadClient):
             Job ID (NZBID), or None if submission failed
         """
         try:
-            nzb_name = title or "download"
-            nzb_name = nzb_name.replace("/", "-").replace("\\", "-").strip()
-            if len(nzb_name) > 100:
-                nzb_name = nzb_name[:100].strip()
-
-            nzb_b64 = base64.b64encode(nzb_content.encode("utf-8")).decode("ascii")
+            nzb_name = self._sanitize_title(title or "download")
+            nzb_b64 = base64.b64encode(self._to_bytes(nzb_content)).decode("ascii")
 
             params = [
                 nzb_name + ".nzb",  # Filename
@@ -252,7 +241,9 @@ class NZBGetClient(DownloadClient):
             return {
                 "status": "downloading",
                 "progress": self._calculate_progress(group),
-                "extra_status": f"Post-processing: {post_info}" if post_info else "Post-processing",
+                "extra_status": f"Post-processing: {post_info}"
+                if post_info
+                else "Post-processing",
             }
 
         # QUEUED, PAUSED, or any other queue status
@@ -380,7 +371,9 @@ class NZBGetClient(DownloadClient):
                 logger.info(f"[NZBGet] Deleted job {job_id} from history")
                 return True
 
-            logger.warning(f"[NZBGet] Could not delete job {job_id} — not found in queue or history")
+            logger.warning(
+                f"[NZBGet] Could not delete job {job_id} — not found in queue or history"
+            )
             return False
 
         except Exception as e:

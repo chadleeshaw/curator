@@ -91,37 +91,63 @@ search_providers:
   #   cache_ttl: 3600 # Cache TTL in seconds (1 hour)
   #   enable_cache: true # Enable/disable caching
 
+  # Torznab Provider (optional - for torrent-based discovery via Prowlarr/Jackett)
+  # Requires a qBittorrent download client configured in download_clients below.
+  # Uncomment and configure to enable torrent support via any Torznab-compatible indexer.
+  # - type: torznab
+  #   name: Prowlarr
+  #   api_url: http://localhost:9696/1/api   # Prowlarr indexer URL (append /api to the indexer path)
+  #   api_key: your-prowlarr-api-key
+  #   enabled: true
+  #   priority: 50
+  #   categories: '7010,7020,7030'   # 7010=Magazines, 7020=Ebooks, 7030=Comics
+  #   search_limit: 100
+
 # ==============================================================================
 # Download Clients
 # ==============================================================================
 # Downloads are automatically routed based on provider type:
-# - Newsnab/RSS providers → NZB client (SABnzbd or NZBGet) configured below
-# - Internet Archive providers → built-in HTTP client configured in download_clients
+# - Newsnab/RSS providers → NZB client (SABnzbd or NZBGet)
+# - Internet Archive providers → Internet Archive built-in HTTP client
+# - Torznab providers → qBittorrent client
+#
+# All clients are configured as a unified list. Multiple clients of any type
+# are supported. The first enabled client of the appropriate type is used.
 
-# NZB download client (SABnzbd/NZBGet) for Newsnab and RSS downloads
-download_client:
-  type: sabnzbd
-  name: SABnzbd
-  api_url: http://localhost:8080
-  api_key: your-sabnzbd-api-key
-  default_category: books
-  # remote_path: /downloads/  # Path prefix as seen by the download client.
-  # Set this when the client runs in a different container with different mount points.
-  # Client paths starting with this prefix are remapped to storage.download_dir.
-  # Example: SABnzbd saves to /downloads/Books/file.pdf, Curator sees /app/local/downloads/Books/file.pdf
-  #   remote_path: /downloads/
-
-# Internet Archive HTTP client (used automatically for IA provider downloads)
-# This is a built-in HTTP download client — no external software needed.
 download_clients:
-  internet_archive:
-    type: internet_archive
-    name: HTTP
+  # SABnzbd — NZB client for Newsnab and RSS provider downloads
+  - type: sabnzbd
+    name: SABnzbd
+    enabled: true
+    api_url: http://localhost:8080
+    api_key: your-sabnzbd-api-key
+    default_category: books
+    # remote_path: /downloads/  # Path prefix as seen by the download client.
+    # Set this when the client runs in a different container with different mount points.
+    # Client paths starting with this prefix are remapped to storage.download_dir.
+    # Example: SABnzbd saves to /downloads/Books/file.pdf, Curator sees /app/local/downloads/Books/file.pdf
+    #   remote_path: /downloads/
+
+  # Internet Archive HTTP client (used automatically for IA provider downloads)
+  # This is a built-in HTTP download client — no external software needed.
+  - type: internet_archive
+    name: Internet Archive
+    enabled: true
     downloads_dir: ./local/downloads # Files download here before import
     max_concurrent: 3 # Max simultaneous downloads from archive.org
     file_formats: # Preferred formats (in order)
       - PDF
       - EPUB
+
+  # qBittorrent — torrent client for Torznab provider downloads
+  # Uncomment and configure to enable torrent support
+  # - type: qbittorrent
+  #   name: qBittorrent
+  #   enabled: true
+  #   api_url: http://localhost:8090
+  #   username: admin
+  #   password: adminadmin
+  #   default_category: curator   # Torrent category/label used to identify curator downloads
 
 storage:
   db_path: ./local/config/periodicals.db

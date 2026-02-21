@@ -5,7 +5,7 @@ Handles NZB submissions and status tracking for SABnzbd.
 
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import requests
 
@@ -75,12 +75,12 @@ class SABnzbdClient(DownloadClient):
             logger.error(f"SABnzbd API error: {e}")
             return {}
 
-    def submit(self, nzb_url: str, title: str = None, category: str = None) -> str:
+    def submit(self, url: str, title: str = None, category: str = None) -> str:
         """
         Submit an NZB URL to SABnzbd.
 
         Args:
-            nzb_url: URL to NZB file
+            url: URL to NZB file
             title: Optional title for the job (sanitized to prevent subfolder issues)
             category: Optional category (determines download folder)
 
@@ -88,18 +88,9 @@ class SABnzbdClient(DownloadClient):
             Job ID (NZO ID)
         """
         try:
-            params = {
-                "mode": "addurl",
-                "name": nzb_url,
-            }
-
+            params = {"mode": "addurl", "name": url}
             if title:
-                # Sanitize title: replace path separators and limit length
-                sanitized_title = title.replace("/", "-").replace("\\", "-").strip()
-                if len(sanitized_title) > 100:
-                    sanitized_title = sanitized_title[:100].strip()
-                params["nzbname"] = sanitized_title
-
+                params["nzbname"] = self._sanitize_title(title)
             if category:
                 params["cat"] = category
 
@@ -107,7 +98,7 @@ class SABnzbdClient(DownloadClient):
 
             if response.get("status"):
                 job_id = response.get("nzo_ids", [None])[0]
-                logger.info(f"Submitted to SABnzbd: {title or nzb_url} -> {job_id}")
+                logger.info(f"Submitted to SABnzbd: {title or url} -> {job_id}")
                 return job_id
             else:
                 logger.error(f"SABnzbd submission failed: {response}")
@@ -117,7 +108,9 @@ class SABnzbdClient(DownloadClient):
             logger.error(f"Error submitting to SABnzbd: {e}")
             return None
 
-    def submit_content(self, nzb_content: str, title: str = None, category: str = None) -> Optional[str]:
+    def submit_content(  # pylint: disable=arguments-renamed
+        self, nzb_content: Union[str, bytes], title: str = None, category: str = None
+    ) -> Optional[str]:
         """
         Submit NZB content directly to SABnzbd via file upload.
 
@@ -125,7 +118,7 @@ class SABnzbdClient(DownloadClient):
         avoiding the provider URL fetch that would otherwise hit rate limits.
 
         Args:
-            nzb_content: Raw NZB XML content as string
+            nzb_content: Raw NZB XML content as string or bytes
             title: Optional title for the job
             category: Optional category for download client
 
@@ -133,33 +126,25 @@ class SABnzbdClient(DownloadClient):
             Job ID (NZO ID), or None if submission failed
         """
         try:
-            params = {
-                "mode": "addfile",
-                "output": "json",
-                "apikey": self.api_key,
-            }
-
+            params = {"mode": "addfile", "output": "json", "apikey": self.api_key}
             if title:
-                sanitized_title = title.replace("/", "-").replace("\\", "-").strip()
-                if len(sanitized_title) > 100:
-                    sanitized_title = sanitized_title[:100].strip()
-                params["nzbname"] = sanitized_title
-
+                params["nzbname"] = self._sanitize_title(title)
             if category:
                 params["cat"] = category
 
-            # Upload NZB content as multipart file
             nzb_filename = f"{title or 'download'}.nzb"
             files = {
                 "nzbfile": (
                     nzb_filename,
-                    nzb_content.encode("utf-8"),
+                    self._to_bytes(nzb_content),
                     "application/x-nzb",
-                ),
+                )
             }
 
             url = f"{self.api_url}/api"
-            response = requests.post(url, params=params, files=files, timeout=HTTP_REQUEST_TIMEOUT)
+            response = requests.post(
+                url, params=params, files=files, timeout=HTTP_REQUEST_TIMEOUT
+            )
             response.raise_for_status()
             result = response.json()
 
@@ -199,7 +184,9 @@ class SABnzbdClient(DownloadClient):
                 return history_status
 
             # Job not found
-            logger.debug(f"[SABnzbd] Job {job_id} not found in queue or history (may have been deleted)")
+            logger.debug(
+                f"[SABnzbd] Job {job_id} not found in queue or history (may have been deleted)"
+            )
             return {"status": "unknown", "progress": 0}
 
         except Exception as e:
@@ -230,7 +217,9 @@ class SABnzbdClient(DownloadClient):
         msg = slot.get("msg", "")
 
         # Check for encryption (takes priority)
-        encryption_status = self._check_encryption_status(job_id, slot_status, labels, msg)
+        encryption_status = self._check_encryption_status(
+            job_id, slot_status, labels, msg
+        )
         if encryption_status:
             return encryption_status
 
@@ -255,7 +244,9 @@ class SABnzbdClient(DownloadClient):
     ) -> Optional[Dict[str, Any]]:
         """Check if job is paused due to encryption."""
         all_text = " ".join(labels + [msg]).lower()
-        is_encrypted = slot_status == "Paused" and any(indicator in all_text for indicator in ENCRYPTION_INDICATORS)
+        is_encrypted = slot_status == "Paused" and any(
+            indicator in all_text for indicator in ENCRYPTION_INDICATORS
+        )
 
         if not is_encrypted:
             return None
@@ -282,7 +273,9 @@ class SABnzbdClient(DownloadClient):
 
         return ""
 
-    def _check_rate_limit_status(self, job_id: str, wait_text: str, labels: list) -> Optional[Dict[str, Any]]:
+    def _check_rate_limit_status(
+        self, job_id: str, wait_text: str, labels: list
+    ) -> Optional[Dict[str, Any]]:
         """Check if job is rate limited and return status."""
         wait_time = self._parse_wait_time(wait_text)
         if not wait_time:
@@ -319,14 +312,18 @@ class SABnzbdClient(DownloadClient):
 
         return None
 
-    def _process_history_slot(self, job_id: str, slot: Dict[str, Any]) -> Dict[str, Any]:
+    def _process_history_slot(
+        self, job_id: str, slot: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Process a history slot and determine its final status."""
         slot_status = slot.get("status", "Unknown").lower()
         logger.info(f"[SABnzbd] Found {job_id} in history with status: {slot_status}")
         logger.info(f"[SABnzbd] History slot: {slot}")
 
         if "completed" in slot_status:
-            logger.info(f"[SABnzbd] Job {job_id} completed, file_path: {slot.get('storage')}")
+            logger.info(
+                f"[SABnzbd] Job {job_id} completed, file_path: {slot.get('storage')}"
+            )
             return {
                 "status": "completed",
                 "progress": 100,
@@ -342,7 +339,9 @@ class SABnzbdClient(DownloadClient):
             "progress": int(float(slot.get("percentage", 0))),
         }
 
-    def _build_failure_status(self, job_id: str, slot: Dict[str, Any], slot_status: str) -> Dict[str, Any]:
+    def _build_failure_status(
+        self, job_id: str, slot: Dict[str, Any], slot_status: str
+    ) -> Dict[str, Any]:
         """Build failure status with detailed error information."""
         fail_message = slot.get("fail_message", "No details available")
         failure_details = self._extract_failure_details(slot.get("stage_log", []))
@@ -354,7 +353,10 @@ class SABnzbdClient(DownloadClient):
 
         logger.warning(f"[SABnzbd] Job {job_id} failed: {error_message}")
 
-        is_encrypted = any(indicator in fail_message.lower() for indicator in ENCRYPTION_INDICATORS_HISTORY)
+        is_encrypted = any(
+            indicator in fail_message.lower()
+            for indicator in ENCRYPTION_INDICATORS_HISTORY
+        )
 
         return {
             "status": "failed",
@@ -370,7 +372,10 @@ class SABnzbdClient(DownloadClient):
             stage_name = stage.get("name", "")
             actions = stage.get("actions", [])
             for action in actions:
-                if any(keyword in action.lower() for keyword in ["missing", "failed", "error", "incomplete"]):
+                if any(
+                    keyword in action.lower()
+                    for keyword in ["missing", "failed", "error", "incomplete"]
+                ):
                     failure_details.append(f"{stage_name}: {action}")
         return failure_details
 

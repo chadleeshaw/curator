@@ -200,15 +200,8 @@ export class SettingsManager {
       this.renderSearchProviders(config.config.search_providers);
     }
 
-    // Display NZB download client config
-    if (config.config?.download_client) {
-      this.displayDownloadClient(config.config.download_client);
-    }
-
-    // Display Internet Archive client config
-    if (config.config?.download_clients?.internet_archive) {
-      this.displayIAClient(config.config.download_clients.internet_archive);
-    }
+    // Render download clients (new unified list format)
+    this.renderDownloadClients(config.config?.download_clients || []);
 
     // Display storage settings
     if (config.config?.storage) {
@@ -390,40 +383,430 @@ export class SettingsManager {
   }
 
   /**
-   * Display NZB download client configuration (SABnzbd/NZBGet)
+   * Render download clients list (unified format)
    */
-  displayDownloadClient(clientConfig) {
-    const typeSelect = document.getElementById('download-client-type');
-    const nameInput = document.getElementById('download-client-name');
-    const urlInput = document.getElementById('download-client-url');
-    const apiKeyInput = document.getElementById('download-client-apikey');
-    const defaultCategoryInput = document.getElementById('download-client-default-category');
-    const remotePathInput = document.getElementById('download-client-remote-path');
+  renderDownloadClients(clients) {
+    const list = document.getElementById('download-clients-list');
+    if (!list) return;
 
-    const clientType = clientConfig.type || 'sabnzbd';
-    if (typeSelect) typeSelect.value = clientType;
-    if (nameInput) nameInput.value = clientConfig.name || '';
+    const typeDisplayNames = {
+      sabnzbd: 'SABnzbd',
+      nzbget: 'NZBGet',
+      qbittorrent: 'qBittorrent',
+      internet_archive: 'Internet Archive',
+    };
 
-    // NZB client fields
-    if (urlInput) urlInput.value = clientConfig.api_url || '';
-    if (apiKeyInput) {
-      apiKeyInput.value = '';
-      apiKeyInput.setAttribute('data-original-key', clientConfig.api_key || '');
-      apiKeyInput.placeholder = clientConfig.api_key ? '••••••••••••••••' : 'Enter API key';
-    }
-    if (defaultCategoryInput) defaultCategoryInput.value = clientConfig.default_category || '';
-    if (remotePathInput) remotePathInput.value = clientConfig.remote_path || '';
+    list.innerHTML = '';
+    clients.forEach((client, index) => {
+      const div = document.createElement('div');
+      div.className = 'provider-block';
+      const typeDisplayName = typeDisplayNames[client.type] || client.type || 'Client';
+
+      let html = `
+        <h4>${this.escapeHtml(typeDisplayName)}</h4>
+        <input type="hidden" id="dc-type-${index}" value="${this.escapeHtml(client.type || '')}">
+        <div style="margin: 10px 0;">
+          <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">Name:</label>
+          <input type="text" id="dc-name-${index}" value="${this.escapeHtml(client.name || '')}"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
+        </div>
+      `;
+
+      if (client.type === 'internet_archive') {
+        html += `
+        <div style="margin: 10px 0;">
+          <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">Downloads Directory:</label>
+          <input type="text" id="dc-downloads-dir-${index}" value="${this.escapeHtml(client.downloads_dir || './local/downloads')}"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
+        </div>
+        <div style="margin: 10px 0;">
+          <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">Max Concurrent Downloads:</label>
+          <input type="number" id="dc-max-concurrent-${index}" value="${client.max_concurrent || 3}"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
+        </div>
+        `;
+      } else if (client.type === 'qbittorrent') {
+        html += `
+        <div style="margin: 10px 0;">
+          <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">API URL:</label>
+          <input type="text" id="dc-url-${index}" value="${this.escapeHtml(client.api_url || '')}"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
+        </div>
+        <div style="margin: 10px 0;">
+          <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">Username:</label>
+          <input type="text" id="dc-username-${index}" value="${this.escapeHtml(client.username || '')}"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
+        </div>
+        <div style="margin: 10px 0;">
+          <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">Password:</label>
+          <input type="password" id="dc-password-${index}" placeholder="${client.password ? '••••••••••••••••' : 'Enter password'}"
+                data-original-password="${this.escapeHtml(client.password || '')}"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
+        </div>
+        <div style="margin: 10px 0;">
+          <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">Default Category:</label>
+          <input type="text" id="dc-category-${index}" value="${this.escapeHtml(client.default_category || '')}"
+                placeholder="curator"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
+        </div>
+        `;
+      } else {
+        // sabnzbd / nzbget
+        html += `
+        <div style="margin: 10px 0;">
+          <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">API URL:</label>
+          <input type="text" id="dc-url-${index}" value="${this.escapeHtml(client.api_url || '')}"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
+        </div>
+        <div style="margin: 10px 0;">
+          <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">API Key:</label>
+          <input type="password" id="dc-apikey-${index}" placeholder="${client.api_key ? '••••••••••••••••' : 'Enter API key'}"
+                data-original-key="${this.escapeHtml(client.api_key || '')}"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
+        </div>
+        <div style="margin: 10px 0;">
+          <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">Default Category:</label>
+          <input type="text" id="dc-category-${index}" value="${this.escapeHtml(client.default_category || '')}"
+                placeholder="books"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
+        </div>
+        <div style="margin: 10px 0;">
+          <label style="display: block; margin-bottom: 5px; font-weight: 600; color: var(--text-primary); font-size: 14px;">Remote Path:</label>
+          <input type="text" id="dc-remote-path-${index}" value="${this.escapeHtml(client.remote_path || '')}"
+                placeholder="Optional remote path mapping"
+                style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: var(--text-primary);">
+        </div>
+        `;
+      }
+
+      html += `
+        <div style="margin: 10px 0;">
+          <label style="display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" id="dc-enabled-${index}" ${client.enabled !== false ? 'checked' : ''}>
+            Enabled
+          </label>
+        </div>
+        <div style="margin-top: 15px; display: flex; gap: 10px;">
+      `;
+
+      if (client.type !== 'internet_archive') {
+        html += `<button onclick="testDownloadClientConnectionByIndex(${index})" class="btn-secondary">Test Connection</button>`;
+      }
+
+      html += `
+          <button onclick="editDownloadClient(${index})" class="btn-primary">Save</button>
+          <button onclick="removeDownloadClient(${index})" class="btn-danger">Remove</button>
+        </div>
+      `;
+
+      div.innerHTML = html;
+      list.appendChild(div);
+    });
   }
 
   /**
-   * Display Internet Archive client configuration
+   * Save an individual download client by index
    */
-  displayIAClient(iaConfig) {
-    const downloadsDirInput = document.getElementById('ia-client-downloads-dir');
-    const maxConcurrentInput = document.getElementById('ia-client-max-concurrent');
+  async editDownloadClient(index) {
+    try {
+      const type = document.getElementById(`dc-type-${index}`)?.value;
+      const name = document.getElementById(`dc-name-${index}`)?.value;
+      const enabled = document.getElementById(`dc-enabled-${index}`)?.checked ?? true;
 
-    if (downloadsDirInput) downloadsDirInput.value = iaConfig.downloads_dir || './local/downloads';
-    if (maxConcurrentInput) maxConcurrentInput.value = iaConfig.max_concurrent || 3;
+      if (!name) {
+        UIUtils.showStatus('settings-status', 'Please fill in client name', 'error');
+        return;
+      }
+
+      const clientUpdate = { type, name, enabled };
+
+      if (type === 'internet_archive') {
+        clientUpdate.downloads_dir =
+          document.getElementById(`dc-downloads-dir-${index}`)?.value || './local/downloads';
+        const mc = document.getElementById(`dc-max-concurrent-${index}`)?.value;
+        clientUpdate.max_concurrent = mc ? parseInt(mc, 10) : 3;
+      } else if (type === 'qbittorrent') {
+        clientUpdate.api_url = document.getElementById(`dc-url-${index}`)?.value || '';
+        clientUpdate.username = document.getElementById(`dc-username-${index}`)?.value || '';
+        const pwInput = document.getElementById(`dc-password-${index}`);
+        const pw = pwInput?.value;
+        if (pw) {
+          clientUpdate.password = pw;
+        } else {
+          const orig = pwInput?.dataset.originalPassword;
+          if (orig) clientUpdate.password = orig;
+        }
+        clientUpdate.default_category =
+          document.getElementById(`dc-category-${index}`)?.value || '';
+      } else {
+        // sabnzbd / nzbget
+        clientUpdate.api_url = document.getElementById(`dc-url-${index}`)?.value || '';
+        const keyInput = document.getElementById(`dc-apikey-${index}`);
+        const key = keyInput?.value;
+        if (key) {
+          clientUpdate.api_key = key;
+        } else {
+          const orig = keyInput?.dataset.originalKey;
+          if (orig) clientUpdate.api_key = orig;
+        }
+        clientUpdate.default_category =
+          document.getElementById(`dc-category-${index}`)?.value || '';
+        const rp = document.getElementById(`dc-remote-path-${index}`)?.value;
+        if (rp) clientUpdate.remote_path = rp;
+      }
+
+      const updatedClients = JSON.parse(
+        JSON.stringify(this.currentConfig.config.download_clients || [])
+      );
+      updatedClients[index] = clientUpdate;
+
+      const saveData = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const saveResponse = await APIClient.post('/api/config', {
+            download_clients: updatedClients,
+          });
+          return await saveResponse.json();
+        },
+        'Settings',
+        'settings-status'
+      );
+
+      if (saveData.success) {
+        UIUtils.showStatus('settings-status', 'Download client updated successfully', 'success');
+        setTimeout(() => this.loadSettings(), 1500);
+      } else {
+        UIUtils.showStatus(
+          'settings-status',
+          saveData.message || 'Failed to update client',
+          'error'
+        );
+      }
+    } catch (error) {
+      console.error('Failed to update download client:', error);
+      UIUtils.showStatus('settings-status', 'Error: ' + error.message, 'error');
+    }
+  }
+
+  /**
+   * Remove a download client by index
+   */
+  async removeDownloadClient(index) {
+    const confirmed = await UIUtils.confirm(
+      'Remove Client',
+      'Are you sure you want to remove this download client?'
+    );
+    if (!confirmed) return;
+
+    try {
+      const updatedClients = JSON.parse(
+        JSON.stringify(this.currentConfig.config.download_clients || [])
+      );
+      updatedClients.splice(index, 1);
+
+      const saveData = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const saveResponse = await APIClient.post('/api/config', {
+            download_clients: updatedClients,
+          });
+          return await saveResponse.json();
+        },
+        'Settings',
+        'settings-status'
+      );
+
+      if (saveData.success) {
+        UIUtils.showStatus('settings-status', 'Download client removed successfully', 'success');
+        setTimeout(() => this.loadSettings(), 1500);
+      } else {
+        UIUtils.showStatus(
+          'settings-status',
+          saveData.message || 'Failed to remove client',
+          'error'
+        );
+      }
+    } catch (error) {
+      console.error('Failed to remove download client:', error);
+      UIUtils.showStatus('settings-status', 'Error: ' + error.message, 'error');
+    }
+  }
+
+  /**
+   * Test connection to a download client by index
+   */
+  async testDownloadClientConnectionByIndex(index) {
+    try {
+      const type = document.getElementById(`dc-type-${index}`)?.value;
+      let testPayload;
+
+      if (type === 'qbittorrent') {
+        const url = document.getElementById(`dc-url-${index}`)?.value;
+        const username = document.getElementById(`dc-username-${index}`)?.value;
+        const pwInput = document.getElementById(`dc-password-${index}`);
+        const password = pwInput?.value || pwInput?.dataset.originalPassword;
+
+        if (!url) {
+          UIUtils.showStatus('settings-status', 'Please enter an API URL', 'error');
+          return;
+        }
+
+        testPayload = { type, api_url: url, username, password };
+      } else {
+        // sabnzbd / nzbget
+        const url = document.getElementById(`dc-url-${index}`)?.value;
+        const keyInput = document.getElementById(`dc-apikey-${index}`);
+        const apiKey = keyInput?.value || keyInput?.dataset.originalKey;
+
+        if (!url) {
+          UIUtils.showStatus('settings-status', 'Please enter an API URL', 'error');
+          return;
+        }
+        if (!apiKey) {
+          UIUtils.showStatus('settings-status', 'Please enter an API key', 'error');
+          return;
+        }
+
+        testPayload = { type, api_url: url, api_key: apiKey };
+      }
+
+      UIUtils.showStatus('settings-status', `Testing connection to ${type}...`, 'info');
+
+      const data = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const response = await APIClient.post('/api/config/test-download-client', testPayload);
+          return await response.json();
+        },
+        'Settings',
+        'settings-status'
+      );
+
+      if (data.success) {
+        const versionInfo = data.version ? ` (v${data.version})` : '';
+        UIUtils.showStatus('settings-status', `Connection successful!${versionInfo}`, 'success');
+        setTimeout(() => UIUtils.hideStatus('settings-status'), 5000);
+      } else {
+        UIUtils.showStatus('settings-status', data.message || 'Connection test failed', 'error');
+      }
+    } catch (error) {
+      console.error('Failed to test download client connection:', error);
+      UIUtils.showStatus('settings-status', 'Error: ' + error.message, 'error');
+    }
+  }
+
+  /**
+   * Open add download client modal
+   */
+  addDownloadClient() {
+    const modal = document.getElementById('add-client-modal');
+    const form = document.getElementById('add-client-form');
+
+    // Reset form
+    form.reset();
+    this.onClientTypeChange('sabnzbd');
+
+    // Remove any existing submit handlers
+    const newForm = form.cloneNode(true);
+    form.parentNode.replaceChild(newForm, form);
+
+    newForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      this.submitAddClient(e);
+      return false;
+    });
+
+    modal.classList.remove(CSS_CLASSES.HIDDEN);
+  }
+
+  /**
+   * Close add download client modal
+   */
+  closeAddClientModal() {
+    const modal = document.getElementById('add-client-modal');
+    modal.classList.add(CSS_CLASSES.HIDDEN);
+  }
+
+  /**
+   * Submit add download client form
+   */
+  async submitAddClient(event) {
+    if (event) event.preventDefault();
+
+    try {
+      const type = document.getElementById('new-client-type').value;
+      const name = document.getElementById('new-client-name').value;
+      const enabled = document.getElementById('new-client-enabled').checked;
+
+      const newClient = { type, name, enabled };
+
+      if (type === 'internet_archive') {
+        newClient.downloads_dir =
+          document.getElementById('new-client-downloads-dir').value || './local/downloads';
+        const mc = document.getElementById('new-client-max-concurrent').value;
+        newClient.max_concurrent = mc ? parseInt(mc, 10) : 3;
+      } else if (type === 'qbittorrent') {
+        newClient.api_url = document.getElementById('new-client-qbt-url').value;
+        newClient.username = document.getElementById('new-client-username').value;
+        newClient.password = document.getElementById('new-client-password').value;
+        newClient.default_category = document.getElementById('new-client-qbt-category').value;
+      } else {
+        // sabnzbd / nzbget
+        newClient.api_url = document.getElementById('new-client-nzb-url').value;
+        newClient.api_key = document.getElementById('new-client-apikey').value;
+        newClient.default_category = document.getElementById('new-client-nzb-category').value;
+        const rp = document.getElementById('new-client-remote-path').value;
+        if (rp) newClient.remote_path = rp;
+      }
+
+      const updatedClients = JSON.parse(
+        JSON.stringify(this.currentConfig.config.download_clients || [])
+      );
+      updatedClients.push(newClient);
+
+      const saveData = await APIHelper.executeWithErrorHandling(
+        async () => {
+          const saveResponse = await APIClient.post('/api/config', {
+            download_clients: updatedClients,
+          });
+          return await saveResponse.json();
+        },
+        'Settings',
+        'settings-status'
+      );
+
+      if (saveData.success) {
+        UIUtils.showStatus('settings-status', 'Download client added successfully', 'success');
+        this.closeAddClientModal();
+        setTimeout(() => this.loadSettings(), 500);
+      } else {
+        UIUtils.showStatus('settings-status', saveData.message || 'Failed to add client', 'error');
+      }
+    } catch (error) {
+      console.error('Failed to add download client:', error);
+      UIUtils.showStatus('settings-status', 'Error: ' + error.message, 'error');
+    }
+
+    return false;
+  }
+
+  /**
+   * Handle client type selection change in the add modal
+   * Shows/hides appropriate fields based on client type
+   */
+  onClientTypeChange(type) {
+    const nzbFields = document.getElementById('client-nzb-fields');
+    const qbtFields = document.getElementById('client-qbt-fields');
+    const iaFields = document.getElementById('client-ia-fields');
+
+    if (nzbFields) nzbFields.classList.add('hidden');
+    if (qbtFields) qbtFields.classList.add('hidden');
+    if (iaFields) iaFields.classList.add('hidden');
+
+    if (type === 'internet_archive') {
+      if (iaFields) iaFields.classList.remove('hidden');
+    } else if (type === 'qbittorrent') {
+      if (qbtFields) qbtFields.classList.remove('hidden');
+    } else {
+      if (nzbFields) nzbFields.classList.remove('hidden');
+    }
   }
 
   /**
@@ -688,184 +1071,6 @@ export class SettingsManager {
     } catch (error) {
       console.error('Error saving settings:', error);
       UIUtils.showStatus('settings-status', `Error: ${error.message}`, 'error');
-    }
-  }
-
-  /**
-   * Save download client settings
-   */
-  async saveDownloadClientSettings() {
-    const type = document.getElementById('download-client-type')?.value;
-    const name = document.getElementById('download-client-name')?.value;
-
-    const downloadClientConfig = {
-      type,
-      name,
-    };
-
-    // NZB client fields (SABnzbd/NZBGet)
-    const url = document.getElementById('download-client-url')?.value;
-    const apiKeyInput = document.getElementById('download-client-apikey');
-    const apiKey = apiKeyInput?.value;
-    const defaultCategory = document.getElementById('download-client-default-category')?.value;
-    const remotePath = document.getElementById('download-client-remote-path')?.value;
-
-    downloadClientConfig.api_url = url;
-
-    // Only include api_key if user entered a new one
-    if (apiKey) {
-      downloadClientConfig.api_key = apiKey;
-    } else if (this.currentConfig?.config?.download_client?.api_key) {
-      // Preserve existing key from cached config
-      downloadClientConfig.api_key = this.currentConfig.config.download_client.api_key;
-    }
-
-    if (defaultCategory) downloadClientConfig.default_category = defaultCategory;
-    if (remotePath) downloadClientConfig.remote_path = remotePath;
-
-    try {
-      const data = await APIHelper.executeWithErrorHandling(
-        async () => {
-          const response = await APIClient.post('/api/config', {
-            download_client: downloadClientConfig,
-          });
-          return await response.json();
-        },
-        'Settings',
-        'settings-status'
-      );
-
-      if (data.success) {
-        UIUtils.showStatus('settings-status', 'NZB download client settings saved', 'success');
-        setTimeout(() => UIUtils.hideStatus('settings-status'), 3000);
-      } else {
-        UIUtils.showStatus('settings-status', data.message || 'Error saving settings', 'error');
-      }
-    } catch (error) {
-      console.error('Error saving download client settings:', error);
-      UIUtils.showStatus('settings-status', `Error: ${error.message}`, 'error');
-    }
-  }
-
-  /**
-   * Save Internet Archive client settings
-   */
-  async saveIAClientSettings() {
-    const downloadsDir = document.getElementById('ia-client-downloads-dir')?.value;
-    const maxConcurrent = document.getElementById('ia-client-max-concurrent')?.value;
-
-    const iaConfig = {
-      type: 'internet_archive',
-      name: 'HTTP',
-      downloads_dir: downloadsDir || './local/downloads',
-      max_concurrent: maxConcurrent ? parseInt(maxConcurrent, 10) : 3,
-    };
-
-    try {
-      const data = await APIHelper.executeWithErrorHandling(
-        async () => {
-          const response = await APIClient.post('/api/config', {
-            download_clients: {
-              internet_archive: iaConfig,
-            },
-          });
-          return await response.json();
-        },
-        'Settings',
-        'settings-status'
-      );
-
-      if (data.success) {
-        UIUtils.showStatus('settings-status', 'Internet Archive settings saved', 'success');
-        setTimeout(() => UIUtils.hideStatus('settings-status'), 3000);
-      } else {
-        UIUtils.showStatus('settings-status', data.message || 'Error saving settings', 'error');
-      }
-    } catch (error) {
-      console.error('Error saving Internet Archive settings:', error);
-      UIUtils.showStatus('settings-status', `Error: ${error.message}`, 'error');
-    }
-  }
-
-  /**
-   * Test connection to download client
-   */
-  async testDownloadClientConnection() {
-    try {
-      const type = document.getElementById('download-client-type')?.value;
-
-      // NZB clients need URL and API key
-      const url = document.getElementById('download-client-url')?.value;
-      const apiKeyInput = document.getElementById('download-client-apikey');
-      const apiKey = apiKeyInput?.value || apiKeyInput?.dataset.originalKey;
-
-      if (!url) {
-        UIUtils.showStatus('settings-status', 'Please enter an API URL', 'error');
-        return;
-      }
-
-      if (!apiKey) {
-        UIUtils.showStatus('settings-status', 'Please enter an API key', 'error');
-        return;
-      }
-
-      const testPayload = { type, api_url: url, api_key: apiKey };
-
-      UIUtils.showStatus('settings-status', `Testing connection to ${type}...`, 'info');
-
-      const data = await APIHelper.executeWithErrorHandling(
-        async () => {
-          const response = await APIClient.post('/api/config/test-download-client', testPayload);
-          return await response.json();
-        },
-        'Settings',
-        'settings-status'
-      );
-
-      if (data.success) {
-        const versionInfo = data.version ? ` (v${data.version})` : '';
-        UIUtils.showStatus('settings-status', `Connection successful!${versionInfo}`, 'success');
-        setTimeout(() => UIUtils.hideStatus('settings-status'), 5000);
-      } else {
-        UIUtils.showStatus('settings-status', data.message || 'Connection test failed', 'error');
-      }
-    } catch (error) {
-      console.error('Failed to test download client connection:', error);
-      UIUtils.showStatus('settings-status', 'Error: ' + error.message, 'error');
-    }
-  }
-
-  /**
-   * Test Internet Archive client connection
-   */
-  async testIAClientConnection() {
-    try {
-      const downloadsDir = document.getElementById('ia-client-downloads-dir')?.value;
-      const testPayload = {
-        type: 'internet_archive',
-        downloads_dir: downloadsDir || './local/downloads',
-      };
-
-      UIUtils.showStatus('settings-status', 'Testing Internet Archive client...', 'info');
-
-      const data = await APIHelper.executeWithErrorHandling(
-        async () => {
-          const response = await APIClient.post('/api/config/test-download-client', testPayload);
-          return await response.json();
-        },
-        'Settings',
-        'settings-status'
-      );
-
-      if (data.success) {
-        UIUtils.showStatus('settings-status', 'Internet Archive client OK!', 'success');
-        setTimeout(() => UIUtils.hideStatus('settings-status'), 5000);
-      } else {
-        UIUtils.showStatus('settings-status', data.message || 'Connection test failed', 'error');
-      }
-    } catch (error) {
-      console.error('Failed to test IA client connection:', error);
-      UIUtils.showStatus('settings-status', 'Error: ' + error.message, 'error');
     }
   }
 
@@ -1506,8 +1711,6 @@ export class SettingsManager {
       UIUtils.showStatus('theme-message', 'Error: ' + error.message, 'error');
     }
   }
-
-
 
   /**
    * Save downloads settings
@@ -2259,15 +2462,18 @@ export const settings = new SettingsManager();
 
 // Expose functions globally for onclick handlers
 window.saveProviderSettings = () => settings.saveProviderSettings();
-window.saveDownloadClientSettings = () => settings.saveDownloadClientSettings();
-window.saveIAClientSettings = () => settings.saveIAClientSettings();
 window.testProviderConnection = (index) => settings.testProviderConnection(index);
-window.testDownloadClientConnection = () => settings.testDownloadClientConnection();
-window.testIAClientConnection = () => settings.testIAClientConnection();
+window.testDownloadClientConnectionByIndex = (index) =>
+  settings.testDownloadClientConnectionByIndex(index);
 window.editSearchProvider = (index) => settings.editSearchProvider(index);
 window.removeSearchProvider = (index) => settings.removeSearchProvider(index);
 window.addSearchProvider = () => settings.addSearchProvider();
 window.closeAddProviderModal = () => settings.closeAddProviderModal();
+window.editDownloadClient = (index) => settings.editDownloadClient(index);
+window.removeDownloadClient = (index) => settings.removeDownloadClient(index);
+window.addDownloadClient = () => settings.addDownloadClient();
+window.closeAddClientModal = () => settings.closeAddClientModal();
+window.onClientTypeChange = (type) => settings.onClientTypeChange(type);
 window.saveStorageSettings = () => settings.saveStorageSettings();
 window.saveMatchingSettings = () => settings.saveMatchingSettings();
 window.saveMetadataSettings = () => settings.saveMetadataSettings();

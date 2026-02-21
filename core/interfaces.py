@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Union
 
 
 @dataclass
@@ -28,7 +28,9 @@ class SearchProvider(ABC):
         self.type = config.get("type", "unknown")
 
     @abstractmethod
-    def search(self, query: str, category: str = None, aliases: Optional[Sequence[str]] = None) -> List[SearchResult]:
+    def search(
+        self, query: str, category: str = None, aliases: Optional[Sequence[str]] = None
+    ) -> List[SearchResult]:
         """
         Search for periodicals matching query.
 
@@ -69,12 +71,12 @@ class DownloadClient(ABC):
         self.type = config.get("type", "unknown")
 
     @abstractmethod
-    def submit(self, nzb_url: str, title: str = None, category: str = None) -> str:
+    def submit(self, url: str, title: str = None, category: str = None) -> str:
         """
-        Submit an NZB URL to download.
+        Submit a download URL to the client.
 
         Args:
-            nzb_url: URL to NZB file
+            url: URL to the download file (NZB, magnet link, .torrent URL, etc.)
             title: Optional title for the job
             category: Optional category for download client (determines download folder)
 
@@ -82,22 +84,35 @@ class DownloadClient(ABC):
             Job ID returned by the client
         """
 
-    def submit_content(self, nzb_content: str, title: str = None, category: str = None) -> Optional[str]:
+    def submit_content(
+        self, content: Union[str, bytes], title: str = None, category: str = None
+    ) -> Optional[str]:
         """
-        Submit NZB content directly to download client (avoids provider URL fetch).
+        Submit raw download content directly to the client (avoids provider URL fetch).
 
-        Override in subclasses to support direct NZB content upload.
-        Default implementation falls back to None (caller should use submit() with URL).
+        Override in subclasses to support direct content upload.
+        Default implementation returns None (caller should use submit() with URL instead).
 
-        Args:
-            nzb_content: Raw NZB XML content as string
-            title: Optional title for the job
-            category: Optional category for download client
+        NZB clients (SABnzbd, NZBGet) accept NZB XML as a string and encode internally.
+        Torrent clients (qBittorrent) accept .torrent file bytes.
 
         Returns:
-            Job ID returned by the client, or None if not supported
+            Job ID returned by the client, or None if not supported or hash unavailable
         """
         return None
+
+    @staticmethod
+    def _sanitize_title(title: str, max_length: int = 100) -> str:
+        """Normalize a job title: replace path separators and truncate."""
+        sanitized = title.replace("/", "-").replace("\\", "-").strip()
+        return (
+            sanitized[:max_length].strip() if len(sanitized) > max_length else sanitized
+        )
+
+    @staticmethod
+    def _to_bytes(content: Union[str, bytes]) -> bytes:
+        """Encode content to bytes if it is a string, otherwise pass through."""
+        return content.encode("utf-8") if isinstance(content, str) else content
 
     @abstractmethod
     def get_status(self, job_id: str) -> Dict[str, Any]:

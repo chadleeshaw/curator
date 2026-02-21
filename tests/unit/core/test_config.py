@@ -89,6 +89,55 @@ class TestDownloadClient:
         # May not have api_key in test config, but should have api_url
         assert "api_url" in client or "type" in client
 
+    def test_get_download_clients_legacy_singular_key(self, config_loader):
+        """
+        get_download_clients() must fall back to the singular 'download_client' key
+        when 'download_clients' is absent/empty, wrapping the dict in a list.
+        """
+        # Patch the in-memory config to simulate a legacy-only config:
+        # no 'download_clients' key, only the singular 'download_client'.
+        original = config_loader.config.copy()
+        legacy_client = {
+            "type": "sabnzbd",
+            "api_url": "http://localhost:8080",
+            "api_key": "test",
+        }
+        config_loader.config = {
+            k: v for k, v in original.items() if k != "download_clients"
+        }
+        config_loader.config.pop("download_clients", None)
+        config_loader.config["download_client"] = legacy_client
+
+        try:
+            clients = config_loader.get_download_clients()
+            assert isinstance(clients, list)
+            assert len(clients) == 1
+            assert clients[0]["type"] == "sabnzbd"
+        finally:
+            config_loader.config = original
+
+    def test_get_download_clients_legacy_singular_key_disabled(self, config_loader):
+        """
+        get_download_clients() must return an empty list when the singular
+        'download_client' dict has enabled=False.
+        """
+        original = config_loader.config.copy()
+        legacy_client = {
+            "type": "sabnzbd",
+            "api_url": "http://localhost:8080",
+            "enabled": False,
+        }
+        patched = {k: v for k, v in original.items()}
+        patched.pop("download_clients", None)
+        patched["download_client"] = legacy_client
+        config_loader.config = patched
+
+        try:
+            clients = config_loader.get_download_clients()
+            assert clients == []
+        finally:
+            config_loader.config = original
+
 
 class TestStorageConfiguration:
     """Test storage configuration"""

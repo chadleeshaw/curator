@@ -73,7 +73,9 @@ def _deep_merge(user_value: Any, template_value: Any, path: str = "") -> Any:
     if isinstance(user_value, dict) and isinstance(template_value, dict):
         result = template_value.copy()  # Start with template (includes new keys)
         for key in user_value:
-            result[key] = _deep_merge(user_value.get(key), template_value.get(key), f"{path}.{key}")
+            result[key] = _deep_merge(
+                user_value.get(key), template_value.get(key), f"{path}.{key}"
+            )
         return result
 
     # For lists, prefer user value entirely (don't merge list items)
@@ -91,6 +93,90 @@ def _deep_merge(user_value: Any, template_value: Any, path: str = "") -> Any:
         )
 
     return user_value
+
+
+def _migrate_download_clients(config: Dict[str, Any]) -> Tuple[Dict[str, Any], bool]:
+    """
+    Migrate old split download_client/download_clients format to the unified list format.
+
+    Old format:
+        download_client:          # singular dict — the NZB client
+          type: sabnzbd
+          ...
+        download_clients:         # named dict — additional clients by type key
+          internet_archive:
+            type: internet_archive
+            ...
+
+    New format:
+        download_clients:         # list of all clients
+          - type: sabnzbd
+            ...
+          - type: internet_archive
+            ...
+
+    Args:
+        config: User config dictionary (may be old or new format)
+
+    Returns:
+        Tuple of (migrated config, was_migrated)
+    """
+    has_legacy_singular = "download_client" in config and isinstance(
+        config["download_client"], dict
+    )
+    has_legacy_plural = "download_clients" in config and isinstance(
+        config["download_clients"], dict
+    )
+
+    # Already in new list format — nothing to do
+    if not has_legacy_singular and not has_legacy_plural:
+        return config, False
+
+    # If download_clients is already a list, it's already migrated
+    if "download_clients" in config and isinstance(config["download_clients"], list):
+        # Clean up any leftover singular key
+        if has_legacy_singular:
+            migrated = {k: v for k, v in config.items() if k != "download_client"}
+            logger.info(
+                "Removed legacy 'download_client' key (download_clients list already present)"
+            )
+            return migrated, True
+        return config, False
+
+    clients_list: List[Dict[str, Any]] = []
+
+    # Add the primary NZB client first
+    if has_legacy_singular:
+        primary = dict(config["download_client"])
+        clients_list.append(primary)
+        logger.info(
+            f"Migrating legacy 'download_client' ({primary.get('type', 'unknown')}) to unified list"
+        )
+
+    # Add additional clients (old named-dict format)
+    if has_legacy_plural:
+        for client_type, client_cfg in config["download_clients"].items():
+            if isinstance(client_cfg, dict):
+                entry = dict(client_cfg)
+                # Ensure type is set
+                if "type" not in entry:
+                    entry["type"] = client_type
+                clients_list.append(entry)
+                logger.info(
+                    f"Migrating legacy 'download_clients.{client_type}' to unified list"
+                )
+
+    migrated = {
+        k: v
+        for k, v in config.items()
+        if k not in ("download_client", "download_clients")
+    }
+    migrated["download_clients"] = clients_list
+
+    logger.info(
+        f"Migrated {len(clients_list)} download client(s) to unified list format"
+    )
+    return migrated, True
 
 
 def _remove_deprecated_keys(config: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]:
@@ -149,7 +235,9 @@ def merge_config_with_sample(
     """
     # Check if ruamel.yaml is available
     if not HAS_RUAMEL:
-        logger.warning("Config sync skipped: ruamel.yaml not installed (run: pip install ruamel.yaml)")
+        logger.warning(
+            "Config sync skipped: ruamel.yaml not installed (run: pip install ruamel.yaml)"
+        )
         return False, "ruamel.yaml not installed"
 
     # Validate inputs
@@ -182,23 +270,34 @@ def merge_config_with_sample(
         logger.warning(f"User config is empty: {config_path}")
         user_config = {}
 
-    # Step 1: Remove deprecated keys
+    # Accumulate change descriptions throughout the merge process
+    changes = []
+
+    # Step 1: Migrate legacy download client format to unified list
+    user_config, migration_happened = _migrate_download_clients(user_config)
+    if migration_happened:
+        changes.append(
+            "Migrated download_client/download_clients to unified download_clients list"
+        )
+
+    # Step 2: Remove deprecated keys
     cleaned_config, removed_keys = _remove_deprecated_keys(user_config)
 
-    # Step 2: Deep merge user config into template config
+    # Step 3: Deep merge user config into template config
     merged_config = _deep_merge(cleaned_config, template_config)
 
-    # Step 3: Check if anything changed
-    changed = merged_config != user_config
+    # Step 4: Check if anything changed
+    changed = merged_config != user_config or migration_happened
 
     if not changed:
         logger.debug("Config is already up to date")
         return False, "Config is already up to date"
 
     # Build change summary
-    changes = []
     if removed_keys:
-        changes.append(f"Removed {len(removed_keys)} deprecated keys: {', '.join(removed_keys)}")
+        changes.append(
+            f"Removed {len(removed_keys)} deprecated keys: {', '.join(removed_keys)}"
+        )
 
     # Count new keys added (approximate - just check top-level)
     new_keys = set(merged_config.keys()) - set(user_config.keys())

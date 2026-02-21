@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 
 CONFIG_KEY_SEARCH_PROVIDERS = "search_providers"
 CONFIG_KEY_METADATA_PROVIDERS = "metadata_providers"
-CONFIG_KEY_DOWNLOAD_CLIENT = "download_client"
 CONFIG_KEY_DOWNLOAD_CLIENTS = "download_clients"
+CONFIG_KEY_DOWNLOAD_CLIENT = "download_client"
 CONFIG_KEY_STORAGE = "storage"
 CONFIG_KEY_CACHE = "cache"
 CONFIG_KEY_MATCHING = "matching"
@@ -78,12 +78,16 @@ def _validate_directory(dir_path: Path, dir_name: str) -> None:
     try:
         dir_path.mkdir(parents=True, exist_ok=True)
         if not dir_path.is_dir():
-            raise ValueError(f"{dir_name} path exists but is not a directory: {dir_path}")
+            raise ValueError(
+                f"{dir_name} path exists but is not a directory: {dir_path}"
+            )
         if not os.access(dir_path, os.W_OK):
             raise ValueError(f"{dir_name} directory is not writable: {dir_path}")
         logger.debug(f"Validated {dir_name}: {dir_path}")
     except PermissionError as e:
-        raise ValueError(f"Permission denied creating {dir_name} directory: {dir_path}") from e
+        raise ValueError(
+            f"Permission denied creating {dir_name} directory: {dir_path}"
+        ) from e
 
 
 def _validate_database_path(db_path: Path) -> None:
@@ -104,7 +108,9 @@ def _validate_database_path(db_path: Path) -> None:
             raise ValueError(f"Database directory is not writable: {db_dir}")
         logger.debug(f"Validated db_path: {db_path}")
     except PermissionError as e:
-        raise ValueError(f"Permission denied creating database directory: {db_dir}") from e
+        raise ValueError(
+            f"Permission denied creating database directory: {db_dir}"
+        ) from e
 
 
 def _apply_storage_env_overrides(storage: Dict[str, Any]) -> None:
@@ -134,7 +140,9 @@ def _apply_storage_env_overrides(storage: Dict[str, Any]) -> None:
     elif os.environ.get("CURATOR_ORGANIZE_DIR"):
         # Backward compatibility: map old env var to new key
         storage[STORAGE_KEY_LIBRARY_DIR] = os.environ["CURATOR_ORGANIZE_DIR"]
-        logger.warning(f"CURATOR_ORGANIZE_DIR is deprecated. Please use {ENV_CURATOR_LIBRARY_DIR} instead.")
+        logger.warning(
+            f"CURATOR_ORGANIZE_DIR is deprecated. Please use {ENV_CURATOR_LIBRARY_DIR} instead."
+        )
 
     if os.environ.get(ENV_CURATOR_CACHE_DIR):
         storage[STORAGE_KEY_CACHE_DIR] = os.environ[ENV_CURATOR_CACHE_DIR]
@@ -260,7 +268,8 @@ class ConfigLoader:
             test_config_path = Path(DEFAULT_TEST_CONFIG_PATH)
             if test_config_path.exists():
                 logger.warning(
-                    f"Config file not found at {self.config_path}, " f"using test config: {test_config_path}"
+                    f"Config file not found at {self.config_path}, "
+                    f"using test config: {test_config_path}"
                 )
                 self.config_path = test_config_path
             else:
@@ -285,21 +294,64 @@ class ConfigLoader:
         providers = self.config.get(CONFIG_KEY_METADATA_PROVIDERS, [])
         return [p for p in providers if p.get("enabled", True)]
 
+    def get_download_clients(self) -> List[Dict[str, Any]]:
+        """
+        Get all configured download clients as a unified list.
+
+        Supports the new unified list format:
+            download_clients:
+              - type: sabnzbd
+                ...
+              - type: internet_archive
+                ...
+
+        Returns:
+            List of client configuration dicts (only enabled clients).
+        """
+        clients = self.config.get(CONFIG_KEY_DOWNLOAD_CLIENTS)
+
+        # New format: non-empty list
+        if isinstance(clients, list) and clients:
+            return [c for c in clients if c.get("enabled", True)]
+
+        # Fallback: old named-dict format (should have been migrated, but handle gracefully)
+        if isinstance(clients, dict):
+            result = []
+            for client_type, client_cfg in clients.items():
+                if isinstance(client_cfg, dict):
+                    entry = dict(client_cfg)
+                    if "type" not in entry:
+                        entry["type"] = client_type
+                    if entry.get("enabled", True):
+                        result.append(entry)
+            return result
+
+        # Legacy: singular download_client dict key
+        legacy = self.config.get(CONFIG_KEY_DOWNLOAD_CLIENT)
+        if isinstance(legacy, dict) and legacy.get("enabled", True):
+            return [legacy]
+
+        return []
+
     def get_download_client(self) -> Dict[str, Any]:
-        """Get configured download client"""
-        client = self.config.get(CONFIG_KEY_DOWNLOAD_CLIENT, {})
-        if not client:
-            raise ValueError("No download client configured")
-        return client
-
-    def get_download_clients(self) -> Dict[str, Dict[str, Any]]:
         """
-        Get additional download clients configuration.
+        Compatibility shim: return the first NZB-capable download client config.
 
-        Returns dict mapping client type to its configuration.
-        Used for multi-client support (e.g., Internet Archive + SABnzbd).
+        Prefers sabnzbd/nzbget over other client types. Raises ValueError if
+        no NZB client is configured (matches the old behaviour callers expect).
         """
-        return self.config.get(CONFIG_KEY_DOWNLOAD_CLIENTS, {})
+        nzb_types = ("sabnzbd", "nzbget")
+        clients = self.get_download_clients()
+
+        for client in clients:
+            if client.get("type") in nzb_types:
+                return client
+
+        # Fall back to first client of any type if no NZB client found
+        if clients:
+            return clients[0]
+
+        raise ValueError("No download client configured")
 
     def get_storage(self) -> Dict[str, Any]:
         """
@@ -339,7 +391,9 @@ class ConfigLoader:
 
         return {
             "enabled": cache_config.get("enabled", True),
-            "max_nzb_fetches_per_hour": cache_config.get("max_nzb_fetches_per_hour", DEFAULT_MAX_NZB_FETCHES_PER_HOUR),
+            "max_nzb_fetches_per_hour": cache_config.get(
+                "max_nzb_fetches_per_hour", DEFAULT_MAX_NZB_FETCHES_PER_HOUR
+            ),
         }
 
     def get_matching(self) -> Dict[str, Any]:
@@ -420,7 +474,9 @@ class ConfigLoader:
 
     def get_logging(self) -> Dict[str, Any]:
         """Get logging configuration with environment variable overrides"""
-        logging_config = self.config.get(CONFIG_KEY_LOGGING, {"level": DEFAULT_LOG_LEVEL}).copy()
+        logging_config = self.config.get(
+            CONFIG_KEY_LOGGING, {"level": DEFAULT_LOG_LEVEL}
+        ).copy()
 
         # Environment variables override YAML config
         if os.environ.get(ENV_CURATOR_LOG_FILE):

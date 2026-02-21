@@ -1,8 +1,9 @@
 """
-Download client constants — shared across SABnzbd and NZBGet clients.
+Download client constants — shared across SABnzbd, NZBGet, and qBittorrent clients.
 
-Encryption detection indicators are shared between both clients.
+Encryption detection indicators are shared between both NZB clients.
 NZBGet-specific status sets and history messages are also defined here.
+qBittorrent torrent state mappings are defined at the bottom.
 """
 
 # ---------------------------------------------------------------------------
@@ -82,3 +83,51 @@ NZBGET_HISTORY_STATUS_MESSAGES = {
     "DELETED/GOOD": "Deleted — good duplicate already exists",
 }
 """Map of NZBGet history composite Status to human-readable error messages."""
+
+
+# ---------------------------------------------------------------------------
+# qBittorrent: torrent state → normalized status mapping
+# Reference: https://github.com/qbittorrent/qBittorrent/wiki/WebUI-API-(qBittorrent-4.1)
+# ---------------------------------------------------------------------------
+
+QBITTORRENT_STATE_MAP: dict = {
+    # Actively downloading
+    "downloading": "downloading",
+    "metaDL": "downloading",
+    "forcedMetaDL": "downloading",
+    "forcedDL": "downloading",
+    # Checking/verifying
+    "checkingDL": "downloading",
+    "checkingUP": "downloading",
+    "checkingResumeData": "downloading",
+    # Queued
+    "queuedDL": "pending",
+    # Paused
+    "pausedDL": "pending",
+    "stoppedDL": "pending",
+    # Completed / seeding
+    "uploading": "completed",
+    "stalledUP": "completed",
+    "forcedUP": "completed",
+    "pausedUP": "completed",
+    "stoppedUP": "completed",
+    "queuedUP": "completed",
+    # Stalled download (no peers)
+    "stalledDL": "pending",
+    # Errors
+    "error": "failed",
+    "missingFiles": "failed",
+    "unknown": "pending",
+}
+"""Map of qBittorrent raw torrent states to Curator normalized statuses."""
+
+QBITTORRENT_COMPLETED_STATES: frozenset = frozenset(
+    {
+        "uploading",
+        "stalledUP",
+        "forcedUP",
+        "pausedUP",
+        "stoppedUP",
+    }
+)
+"""qBittorrent states considered fully downloaded (seeding or paused after completion)."""

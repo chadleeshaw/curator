@@ -13,6 +13,7 @@ class ProviderFactory:
         "newsnab": "providers.newsnab:NewsnabProvider",
         "rss": "providers.rss:RSSProvider",
         "internet_archive": "providers.internet_archive:InternetArchiveProvider",
+        "torznab": "providers.torznab:TorznabProvider",
     }
 
     @staticmethod
@@ -45,6 +46,7 @@ class ClientFactory:
         "sabnzbd": "clients.sabnzbd:SABnzbdClient",
         "nzbget": "clients.nzbget:NZBGetClient",
         "internet_archive": "clients.internet_archive:InternetArchiveClient",
+        "qbittorrent": "clients.qbittorrent:QBittorrentClient",
     }
 
     @staticmethod
