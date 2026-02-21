@@ -403,7 +403,7 @@ class DownloadMonitor:
 
                 if self._process_single_file(file_path, submission, session):
                     retried_count += 1
-                    self._sync_discovered_issue_status(submission, "completed", None, session)
+                    self._sync_discovered_issue_status(submission, DownloadStatus.COMPLETED, None, session)
                     self.download_manager.mark_processed(submission.id, session)
 
                     if self._should_delete_from_client(submission.tracking_id, session):
@@ -670,7 +670,7 @@ class DownloadMonitor:
                     self.download_manager.mark_processed(submission.id, session)
 
                     # Sync DiscoveredIssue status
-                    self._sync_discovered_issue_status(submission, "completed", None, session)
+                    self._sync_discovered_issue_status(submission, DownloadStatus.COMPLETED, None, session)
 
                     # Delete from client
                     if submission.job_id and self._should_delete_from_client(submission.tracking_id, session):
@@ -750,7 +750,7 @@ class DownloadMonitor:
                     processed_count += collection_success_count
 
                     # Sync status and mark processed after all collection files are done
-                    self._sync_discovered_issue_status(submission, "completed", None, session)
+                    self._sync_discovered_issue_status(submission, DownloadStatus.COMPLETED, None, session)
                     self.download_manager.mark_processed(submission.id, session)
 
                     if self._should_delete_from_client(submission.tracking_id, session):
@@ -760,7 +760,7 @@ class DownloadMonitor:
                     submission.status = DownloadSubmission.StatusEnum.FAILED
                     submission.last_error = "All collection files failed to import"
                     session.commit()
-                    self._sync_discovered_issue_status(submission, "failed", None, session)
+                    self._sync_discovered_issue_status(submission, DownloadStatus.FAILED, None, session)
 
                 continue
 
@@ -787,7 +787,7 @@ class DownloadMonitor:
                 processed_count += 1
 
                 # Sync DiscoveredIssue status (NEW: Issue Discovery & Tracking)
-                self._sync_discovered_issue_status(submission, "completed", None, session)
+                self._sync_discovered_issue_status(submission, DownloadStatus.COMPLETED, None, session)
 
                 # Mark submission as processed
                 self.download_manager.mark_processed(submission.id, session)

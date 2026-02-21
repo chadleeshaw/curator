@@ -243,7 +243,7 @@ def _process_periodical_searches(app_state: "AppState", db_session) -> None:
             if eval_stats["wanted"] > 0:
                 logger.info(f"Auto-download: '{periodical.title}' - {eval_stats['wanted']} queued")
 
-            app_state.search_scheduler.update_search_stats(periodical.id, record_stats["new"], db_session)
+            app_state.search_scheduler.update_search_stats(periodical.id, eval_stats["wanted"], db_session)
 
         except Exception as e:
             logger.error(
