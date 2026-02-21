@@ -128,6 +128,7 @@ QBITTORRENT_COMPLETED_STATES: frozenset = frozenset(
         "forcedUP",
         "pausedUP",
         "stoppedUP",
+        "queuedUP",
     }
 )
 """qBittorrent states considered fully downloaded (seeding or paused after completion)."""

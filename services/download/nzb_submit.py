@@ -42,7 +42,7 @@ def submit_with_nzb_content(
             nzb_content = nzb_cache_service.get_nzb_content(nzb_url)
             if nzb_content:
                 job_id = client.submit_content(
-                    nzb_content=nzb_content,
+                    nzb_content,
                     title=title,
                     category=category,
                 )

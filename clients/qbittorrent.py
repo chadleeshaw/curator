@@ -53,40 +53,50 @@ class QBittorrentClient(DownloadClient):
             self._authenticated = False
             return False
 
+    def _ensure_authenticated(self) -> bool:
+        """Ensure the client is authenticated. Thread-safe via lock."""
+        with self._lock:
+            if not self._authenticated:
+                return self._login()
+            return True
+
     def _request(self, method: str, path: str, **kwargs) -> Optional[requests.Response]:
         """
         Make an authenticated request to the qBittorrent API.
 
         Automatically re-authenticates once on 403 responses.
-        Thread-safe: uses a lock to serialize the auth + request sequence.
+        The lock is held only during auth state checks and updates, not during
+        network I/O, so concurrent callers are not serialized by the lock.
+        Note: requests.Session is not thread-safe for truly concurrent use;
+        callers should avoid issuing simultaneous requests from multiple threads.
         """
-        with self._lock:
-            if not self._authenticated and not self._login():
-                return None
+        if not self._ensure_authenticated():
+            return None
 
-            url = f"{self.api_url}/api/v2{path}"
-            try:
-                response = getattr(self._session, method)(url, timeout=HTTP_REQUEST_TIMEOUT, **kwargs)
+        url = f"{self.api_url}/api/v2{path}"
+        try:
+            response = getattr(self._session, method)(url, timeout=HTTP_REQUEST_TIMEOUT, **kwargs)
 
-                if response.status_code == 403:
-                    logger.debug("qBittorrent session expired, re-authenticating")
+            if response.status_code == 403:
+                logger.debug("qBittorrent session expired, re-authenticating")
+                with self._lock:
                     self._authenticated = False
                     if not self._login():
                         return None
-                    response = getattr(self._session, method)(url, timeout=HTTP_REQUEST_TIMEOUT, **kwargs)
+                response = getattr(self._session, method)(url, timeout=HTTP_REQUEST_TIMEOUT, **kwargs)
 
-                response.raise_for_status()
-                return response
+            response.raise_for_status()
+            return response
 
-            except requests.exceptions.Timeout:
-                logger.error(f"qBittorrent request timeout: {path}")
-                return None
-            except requests.exceptions.ConnectionError:
-                logger.error(f"qBittorrent connection error: {path}")
-                return None
-            except Exception as e:
-                logger.error(f"qBittorrent request error {path}: {e}")
-                return None
+        except requests.exceptions.Timeout:
+            logger.error(f"qBittorrent request timeout: {path}")
+            return None
+        except requests.exceptions.ConnectionError:
+            logger.error(f"qBittorrent connection error: {path}")
+            return None
+        except Exception as e:
+            logger.error(f"qBittorrent request error {path}: {e}")
+            return None
 
     def submit(self, url: str, title: str = None, category: str = None) -> Optional[str]:
         """

@@ -7,6 +7,7 @@ Results include magnet links and/or .torrent file URLs alongside seeder/leecher 
 """
 
 import logging
+import time
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Sequence
@@ -25,7 +26,6 @@ logger = logging.getLogger(__name__)
 _TORZNAB_NS = "http://torznab.com/schemas/2015/feed"
 _NEWZNAB_NS = "http://www.newznab.com/DTD/2010/feeds/attributes/"
 
-# Default Torznab categories covering magazines, comics, and ebooks
 # Default Torznab categories covering magazines, comics, and ebooks:
 # 5000=TV (some indexers put periodicals here), 7000=Books, 7010=Books/Mags,
 # 7020=Books/EBook, 7030=Books/Comics
@@ -116,6 +116,8 @@ class TorznabProvider(SearchProvider):
         if aliases:
             seen_urls = {r.url for r in results}
             for alias in aliases:
+                if self.request_delay > 0:
+                    time.sleep(self.request_delay)
                 for result in self._search_query(alias):
                     if result.url not in seen_urls:
                         results.append(result)
@@ -139,9 +141,12 @@ class TorznabProvider(SearchProvider):
             )
             response.raise_for_status()
 
-            root = ET.fromstring(response.content)
-            server_el = root.find("server")
-            title = server_el.get("title", "Torznab") if server_el is not None else "Torznab"
+            try:
+                root = ET.fromstring(response.content)
+                server_el = root.find("server")
+                title = server_el.get("title", "Torznab") if server_el is not None else "Torznab"
+            except ET.ParseError:
+                title = "Torznab"
 
             return {"success": True, "message": f"Connection successful — {title}"}
 

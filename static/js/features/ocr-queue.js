@@ -132,7 +132,7 @@ export class OCRQueueManager {
           </div>
           <div class="queue-stat-item" title="Currently processing">
             <div class="queue-stat-number" style="color: ${colors.processing};">${statsData.processing || 0}</div>
-            <div class="queue-stat-label">Active</div>
+            <div class="queue-stat-label">Processing</div>
           </div>
           <div class="queue-stat-item" title="Successfully completed">
             <div class="queue-stat-number" style="color: ${colors.completed};">${statsData.completed || 0}</div>
@@ -146,22 +146,11 @@ export class OCRQueueManager {
       `;
     }
 
-    // Filter jobs based on current filter
-    let filteredJobs = queueData.jobs;
-    if (this.currentFilter === 'active') {
-      filteredJobs = queueData.jobs.filter(
-        (job) => job.status === 'pending' || job.status === 'processing'
-      );
-    } else if (this.currentFilter === 'failed') {
-      filteredJobs = queueData.jobs.filter((job) => job.status === 'failed');
-    } else if (this.currentFilter === 'completed') {
-      filteredJobs = queueData.jobs.filter((job) => job.status === 'completed');
-    } else if (this.currentFilter === 'pending') {
-      filteredJobs = queueData.jobs.filter((job) => job.status === 'pending');
-    } else if (this.currentFilter === 'processing') {
-      filteredJobs = queueData.jobs.filter((job) => job.status === 'processing');
-    }
-    // 'all' filter shows everything
+    // Filter jobs based on current filter ('all' shows everything; others match status directly)
+    const filteredJobs =
+      this.currentFilter === 'all'
+        ? queueData.jobs
+        : queueData.jobs.filter((job) => job.status === this.currentFilter);
 
     if (filteredJobs.length === 0) {
       emptyDiv.classList.remove(CSS_CLASSES.HIDDEN);
@@ -392,22 +381,23 @@ export class OCRQueueManager {
     let filteredJobs;
     if (filter === 'all') {
       filteredJobs = jobs;
-    } else if (filter === 'active') {
-      filteredJobs = jobs.filter((j) => j.status === 'pending' || j.status === 'processing');
     } else {
       filteredJobs = jobs.filter((j) => j.status === filter);
     }
 
     // Filter buttons
-    const activeCount = (statusCounts.pending ?? 0) + (statusCounts.processing ?? 0);
-    const filterButtons = ['all', 'active', 'completed', 'failed']
+    const filterLabels = {
+      all: 'All',
+      pending: 'Pending',
+      processing: 'Processing',
+      completed: 'Completed',
+      failed: 'Failed',
+    };
+    const filterButtons = ['all', 'pending', 'processing', 'completed', 'failed']
       .map((f) => {
-        let count;
-        if (f === 'all') count = jobs.length;
-        else if (f === 'active') count = activeCount;
-        else count = statusCounts[f] ?? 0;
+        const count = f === 'all' ? jobs.length : (statusCounts[f] ?? 0);
         const selected = filter === f ? 'active' : '';
-        return `<button onclick="ocrQueue.filterOcrModal('${f}')" class="sort-btn ${selected}">${f.charAt(0).toUpperCase() + f.slice(1)} (${count})</button>`;
+        return `<button onclick="ocrQueue.filterOcrModal('${f}')" class="sort-btn ${selected}">${filterLabels[f]} (${count})</button>`;
       })
       .join('\n');
 
@@ -969,11 +959,13 @@ export class OCRQueueManager {
    * @returns {void}
    */
   loadFilterPreference() {
+    const validFilters = ['all', 'pending', 'processing', 'completed', 'failed'];
     try {
       const saved = localStorage.getItem('ocrQueueSettings');
       if (saved) {
         const settings = JSON.parse(saved);
-        this.currentFilter = settings.filter?.status || 'all';
+        const storedFilter = settings.filter?.status;
+        this.currentFilter = validFilters.includes(storedFilter) ? storedFilter : 'all';
       }
     } catch (error) {
       console.warn('[OCR Queue] Failed to parse filter preference:', error);

@@ -20,7 +20,11 @@ from sqlalchemy.orm import Session
 from core.parsers import Parser, utc_now
 from core.utils.date import dates_are_fuzzy_match
 from core.utils.fuzzy_matching import get_fuzzy_group_id
-from core.constants.app import MAX_DOWNLOAD_RETRIES_IA, NEW_ISSUE_THRESHOLD_DAYS
+from core.constants.app import (
+    MAX_DOWNLOAD_RETRIES_IA,
+    MAX_ERROR_LENGTH,
+    NEW_ISSUE_THRESHOLD_DAYS,
+)
 from core.constants.country import (
     FULL_NAME_COUNTRY_CODES,
     ISO_COUNTRIES,
@@ -409,16 +413,20 @@ class IssueDiscoveryService:
             tracking_id=tracking_id,
             session=session,
         )
-        return {**record_stats, **eval_stats}
+        return {
+            **record_stats,
+            **eval_stats,
+            "errors": record_stats["errors"] + eval_stats["errors"],
+        }
 
-    def handle_download_failure(self, issue_id: int, error_message: str, session: Session) -> str:
+    def handle_download_failure(self, issue_id: int, error_message: str, session: Session) -> DownloadStatus:
         """
         Handle a download failure for a discovered issue.
 
         This method:
         1. Increments attempt_count
         2. Compares to max_retries
-        3. Marks as "failed" (can retry) or "permanently_failed" (permanent)
+        3. Marks as FAILED (can retry) or PERMANENTLY_FAILED (permanent)
         4. Adjusts priority (reduce for failures)
         5. Records error message
 
@@ -428,19 +436,21 @@ class IssueDiscoveryService:
             session: Database session
 
         Returns:
-            New status: "failed" or "permanently_failed"
+            New status: DownloadStatus.FAILED or DownloadStatus.PERMANENTLY_FAILED
         """
         issue = session.query(DiscoveredIssue).filter_by(id=issue_id).first()
         if not issue:
             logger.error(f"DiscoveredIssue {issue_id} not found")
-            return "unknown"
+            return DownloadStatus.FAILED
 
         now = utc_now()
         issue.attempt_count += 1
         issue.last_attempt = now
-        if len(error_message) > 512:
-            logger.warning(f"Error message truncated from {len(error_message)} to 512 chars for issue {issue_id}")
-        issue.last_error = error_message[:512]  # Truncate to column length
+        if len(error_message) > MAX_ERROR_LENGTH:
+            logger.warning(
+                f"Error message truncated from {len(error_message)} to {MAX_ERROR_LENGTH} chars for issue {issue_id}"
+            )
+        issue.last_error = error_message[:MAX_ERROR_LENGTH]
 
         # Check if we've exceeded max retries
         if issue.attempt_count > issue.max_retries:

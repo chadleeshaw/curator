@@ -964,8 +964,8 @@ def test_get_completed_downloads_includes_all_completed_states(client):
     assert len(downloads) == len(QBITTORRENT_COMPLETED_STATES)
 
 
-def test_get_completed_downloads_excludes_queued_up_state(client):
-    """Test that 'queuedUP' (completed in state map, not in completed set) is excluded."""
+def test_get_completed_downloads_includes_queued_up_state(client):
+    """Test that 'queuedUP' is included — it maps to 'completed' and is in COMPLETED_STATES."""
     mock_response = Mock()
     mock_response.json.return_value = [
         {"hash": "aaa", "state": "queuedUP", "save_path": "/dl", "name": "Title"},
@@ -974,7 +974,8 @@ def test_get_completed_downloads_excludes_queued_up_state(client):
     with patch.object(client, "_request", return_value=mock_response):
         downloads = client.get_completed_downloads()
 
-    assert downloads == []
+    assert len(downloads) == 1
+    assert downloads[0]["job_id"] == "aaa"
 
 
 def test_get_completed_downloads_omits_category_filter_when_default_category_is_empty(
