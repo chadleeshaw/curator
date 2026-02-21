@@ -266,6 +266,7 @@ export class SettingsManager {
       newsnab: 'Newsnab',
       rss: 'RSS',
       internet_archive: 'Internet Archive',
+      torznab: 'Torznab',
     };
 
     list.innerHTML = '';
