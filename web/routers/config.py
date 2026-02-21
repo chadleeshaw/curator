@@ -73,12 +73,25 @@ def _deep_merge(base: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, Any]:
                         merged_list.append(provider_copy)
                     result[key] = merged_list
                 elif key == "download_clients":
-                    # Preserve masked api_key and password in unified client list
+                    # Preserve masked api_key and password in unified client list.
+                    # Match by api_url first; fall back to type when exactly one
+                    # client of that type exists (avoids cross-contaminating
+                    # credentials when clients are reordered in the UI).
+                    original_clients = result[key]
                     merged_list = []
-                    for i, client in enumerate(value):
+                    for client in value:
                         client_copy = client.copy()
-                        if i < len(result[key]):
-                            original = result[key][i]
+                        test_url = client_copy.get("api_url", "")
+                        client_type = client_copy.get("type", "")
+                        original = next(
+                            (c for c in original_clients if test_url and c.get("api_url") == test_url),
+                            None,
+                        )
+                        if original is None and client_type:
+                            same_type = [c for c in original_clients if c.get("type") == client_type]
+                            if len(same_type) == 1:
+                                original = same_type[0]
+                        if original is not None:
                             if client_copy.get("api_key") == "***":
                                 client_copy["api_key"] = original.get("api_key", "")
                             if client_copy.get("password") == "***":

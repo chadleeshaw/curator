@@ -819,11 +819,13 @@ class TestGetClientForProviderRouting:
         """DEFAULT_PROVIDER_CLIENT_MAP must include torznab → qbittorrent."""
         assert DownloadManager.DEFAULT_PROVIDER_CLIENT_MAP.get("torznab") == "qbittorrent"
 
-    def test_default_provider_client_map_has_four_entries(self):
-        """DEFAULT_PROVIDER_CLIENT_MAP should have exactly four entries."""
-        assert len(DownloadManager.DEFAULT_PROVIDER_CLIENT_MAP) == 4
-        expected_keys = {"internet_archive", "torznab", "newsnab", "rss"}
-        assert set(DownloadManager.DEFAULT_PROVIDER_CLIENT_MAP.keys()) == expected_keys
+    def test_default_provider_client_map_contains_expected_keys(self):
+        """DEFAULT_PROVIDER_CLIENT_MAP must include all known provider → client mappings."""
+        mapping = DownloadManager.DEFAULT_PROVIDER_CLIENT_MAP
+        assert mapping.get("internet_archive") == "internet_archive"
+        assert mapping.get("torznab") == "qbittorrent"
+        assert mapping.get("newsnab") == "default"
+        assert mapping.get("rss") == "default"
 
     def test_torznab_routes_to_qbittorrent_client(self, mock_download_client):
         """Provider 'torznab' should return the qbittorrent client when present."""
