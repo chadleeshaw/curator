@@ -880,7 +880,7 @@ class DownloadMonitor:
     def _sync_discovered_issue_status(
         self,
         submission: DownloadSubmission,
-        new_status: str,
+        new_status: DownloadStatus,
         periodical_id: Optional[int],
         session: Session,
     ) -> None:
@@ -937,8 +937,7 @@ class DownloadMonitor:
                 # Don't commit here - service already commits
 
             elif new_status == DownloadStatus.DOWNLOADING:
-                # Download is progressing
-                discovered_issue.download_status = DownloadStatus.DOWNLOADING
+                # Download is progressing (status already set above)
                 session.commit()
 
             else:

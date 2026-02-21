@@ -411,14 +411,14 @@ class IssueDiscoveryService:
         )
         return {**record_stats, **eval_stats}
 
-    def handle_download_failure(self, issue_id: int, error_message: str, session: Session) -> str:
+    def handle_download_failure(self, issue_id: int, error_message: str, session: Session) -> DownloadStatus:
         """
         Handle a download failure for a discovered issue.
 
         This method:
         1. Increments attempt_count
         2. Compares to max_retries
-        3. Marks as "failed" (can retry) or "permanently_failed" (permanent)
+        3. Marks as FAILED (can retry) or PERMANENTLY_FAILED (permanent)
         4. Adjusts priority (reduce for failures)
         5. Records error message
 
@@ -428,12 +428,12 @@ class IssueDiscoveryService:
             session: Database session
 
         Returns:
-            New status: "failed" or "permanently_failed"
+            New status: DownloadStatus.FAILED or DownloadStatus.PERMANENTLY_FAILED
         """
         issue = session.query(DiscoveredIssue).filter_by(id=issue_id).first()
         if not issue:
             logger.error(f"DiscoveredIssue {issue_id} not found")
-            return "unknown"
+            return DownloadStatus.FAILED
 
         now = utc_now()
         issue.attempt_count += 1
