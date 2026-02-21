@@ -16,6 +16,7 @@ from core.constants.app import (
     DEFAULT_FUZZY_THRESHOLD,
     MAX_DOWNLOAD_RETRIES,
     MAX_DOWNLOAD_RETRIES_IA,
+    MAX_ERROR_LENGTH,
 )
 from core.constants.category import DEFAULT_CATEGORY
 from core.constants.files import BLACKLISTED_FILE_EXTENSIONS
@@ -42,7 +43,6 @@ from services.issue_discovery import IssueDiscoveryService
 logger = logging.getLogger(__name__)
 
 MANUAL_DOWNLOAD_PRIORITY = 100
-SUBMISSION_ID_MAX_LENGTH = 512
 
 
 class DownloadManager:
@@ -912,9 +912,9 @@ class DownloadManager:
             )
             issue.download_status = DownloadStatus.FAILED
             error_str = str(e)
-            if len(error_str) > SUBMISSION_ID_MAX_LENGTH:
-                logger.warning(f"Error message truncated from {len(error_str)} to {SUBMISSION_ID_MAX_LENGTH} chars")
-            issue.last_error = error_str[:SUBMISSION_ID_MAX_LENGTH]
+            if len(error_str) > MAX_ERROR_LENGTH:
+                logger.warning(f"Error message truncated from {len(error_str)} to {MAX_ERROR_LENGTH} chars")
+            issue.last_error = error_str[:MAX_ERROR_LENGTH]
             self._record_attempt(issue)
             session.commit()
             return None
@@ -991,28 +991,20 @@ class DownloadManager:
             logger.info(f"No search results for '{tracking.title}'")
             return results
 
-        # Record all results through IssueDiscoveryService — this creates/updates
-        # DiscoveredIssue records with status="discovered" for new issues.
-        record_stats = self.issue_discovery_service.record_search_results(
+        # Record and evaluate in one step: creates/updates DiscoveredIssue records,
+        # then promotes "discovered" → "wanted" or "ignored" based on tracking rules.
+        pipeline_stats = self.issue_discovery_service.discover_and_evaluate(
             tracking_id=tracking_id,
             search_results=search_results,
             session=session,
         )
         logger.info(
-            f"Recorded search results: {record_stats['new']} new, {record_stats['updated']} updated, "
-            f"{record_stats.get('rejected_non_periodical', 0)} rejected"
-        )
-
-        # Evaluate discovered issues — promotes "discovered" → "wanted" or "ignored"
-        # based on tracking rules. Must be called before get_download_queue, which
-        # only returns "wanted"/"failed" issues.
-        eval_stats = self.issue_discovery_service.evaluate_discovered_issues(
-            tracking_id=tracking_id,
-            session=session,
+            f"Recorded search results: {pipeline_stats['new']} new, {pipeline_stats['updated']} updated, "
+            f"{pipeline_stats.get('rejected_non_periodical', 0)} rejected"
         )
         logger.info(
-            f"Evaluated issues: {eval_stats['wanted']} wanted, {eval_stats['ignored']} ignored, "
-            f"{eval_stats['already_have']} already have"
+            f"Evaluated issues: {pipeline_stats['wanted']} wanted, {pipeline_stats['ignored']} ignored, "
+            f"{pipeline_stats['already_have']} already have"
         )
 
         # Fetch all "wanted" issues for this tracking record and submit them

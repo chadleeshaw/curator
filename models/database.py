@@ -381,8 +381,12 @@ class OCRJob(Base):
         }
 
 
-class DownloadStatus:
-    """String constants for DiscoveredIssue.download_status."""
+class DownloadStatus(enum.StrEnum):
+    """String enum for DiscoveredIssue.download_status.
+
+    Inherits from StrEnum so str(), f-strings, == "value" comparisons, and
+    SQLAlchemy string columns all work without changes to call sites.
+    """
 
     DISCOVERED = "discovered"
     WANTED = "wanted"

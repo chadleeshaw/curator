@@ -387,8 +387,10 @@ class DownloadMonitor:
                 file_path = self._find_file_in_downloads(submission.file_path)
 
                 if not file_path:
-                    # File no longer on disk — skip retry without modifying attempt_count
-                    # This allows natural exhaustion if file reappears, or cleanup by other processes
+                    # File no longer on disk — increment attempt_count so the submission
+                    # still exhausts MAX_IMPORT_RETRIES and doesn't retry indefinitely.
+                    submission.attempt_count += 1
+                    session.commit()
                     logger.debug(f"[DownloadMonitor] Import retry skipped: file gone for submission {submission.id}")
                     continue
 

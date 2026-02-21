@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from core.parsers import Parser, utc_now
 from core.utils.date import dates_are_fuzzy_match
 from core.utils.fuzzy_matching import get_fuzzy_group_id
-from core.constants.app import MAX_DOWNLOAD_RETRIES_IA, NEW_ISSUE_THRESHOLD_DAYS
+from core.constants.app import MAX_DOWNLOAD_RETRIES_IA, MAX_ERROR_LENGTH, NEW_ISSUE_THRESHOLD_DAYS
 from core.constants.country import (
     FULL_NAME_COUNTRY_CODES,
     ISO_COUNTRIES,
@@ -438,9 +438,9 @@ class IssueDiscoveryService:
         now = utc_now()
         issue.attempt_count += 1
         issue.last_attempt = now
-        if len(error_message) > 512:
-            logger.warning(f"Error message truncated from {len(error_message)} to 512 chars for issue {issue_id}")
-        issue.last_error = error_message[:512]  # Truncate to column length
+        if len(error_message) > MAX_ERROR_LENGTH:
+            logger.warning(f"Error message truncated from {len(error_message)} to {MAX_ERROR_LENGTH} chars for issue {issue_id}")
+        issue.last_error = error_message[:MAX_ERROR_LENGTH]
 
         # Check if we've exceeded max retries
         if issue.attempt_count > issue.max_retries:
