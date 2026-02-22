@@ -6,8 +6,10 @@ Supports both individual files (PDF, EPUB) and collection archives (ZIP, TAR.GZ)
 
 import gzip
 import hashlib
+import json
 import logging
 import os
+import re
 import shutil
 import tarfile
 import threading
@@ -37,12 +39,17 @@ from core.constants.internet_archive import (
     IA_STATUS_FAILED,
     IA_DOWNLOAD_BASE_URL,
     IA_COMPRESS_BASE_URL,
+    IA_DOWNLOAD_RESUME_ENABLED,
+    IA_PART_META_EXTENSION,
 )
 from core.constants.files import SUPPORTED_FILE_EXTENSIONS
 from core.interfaces import DownloadClient
 from core.utils.internet_archive import safe_ia_call
 
 logger = logging.getLogger(__name__)
+
+# Valid Internet Archive identifier pattern — used to guard against SSRF via crafted .part.meta files
+_VALID_IA_IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.\-]{0,99}$")
 
 
 class DownloadJob:  # pylint: disable=too-many-instance-attributes
@@ -425,15 +432,139 @@ class InternetArchiveClient(DownloadClient):
             shutil.copyfileobj(src, dst)
         return [dest_path]
 
+    def _save_part_meta(
+        self,
+        meta_path: Path,
+        download_url: str,
+        expected_size: int,
+        etag: Optional[str],
+        last_modified: Optional[str],
+    ):
+        """
+        Save resume metadata as a JSON sidecar alongside a .part file.
+
+        Args:
+            meta_path: Path for the .part.meta file
+            download_url: URL being downloaded
+            expected_size: Content-Length from the server
+            etag: ETag header value (for staleness detection)
+            last_modified: Last-Modified header value (for staleness detection)
+        """
+        meta = {
+            "url": download_url,
+            "expected_size": expected_size,
+            "etag": etag,
+            "last_modified": last_modified,
+            "created_at": time.time(),
+        }
+        try:
+            meta_path.write_text(json.dumps(meta), encoding="utf-8")
+        except OSError as e:
+            logger.warning(f"[{self.name}] Failed to write part meta {meta_path}: {e}")
+
+    def _load_part_meta(self, meta_path: Path) -> Optional[Dict[str, Any]]:
+        """
+        Load resume metadata from a .part.meta sidecar file.
+
+        Args:
+            meta_path: Path to the .part.meta file
+
+        Returns:
+            Dict with resume metadata, or None if missing/corrupt
+        """
+        try:
+            if not meta_path.exists():
+                return None
+            data = json.loads(meta_path.read_text(encoding="utf-8"))
+            # Validate required fields
+            if "url" in data and "expected_size" in data:
+                return data
+            logger.warning(f"[{self.name}] Part meta missing required fields: {meta_path}")
+            return None
+        except (OSError, json.JSONDecodeError, ValueError) as e:
+            logger.warning(f"[{self.name}] Failed to read part meta {meta_path}: {e}")
+            return None
+
+    def _validate_part_meta(self, meta: Dict[str, Any], response_headers: Dict[str, str]) -> bool:
+        """
+        Check if a partial download is still valid by comparing stored metadata
+        against current server response headers. If the file changed on the server,
+        the partial download is stale and must be restarted.
+
+        Args:
+            meta: Previously saved resume metadata
+            response_headers: Headers from a HEAD or GET request to the server
+
+        Returns:
+            True if the partial download is still valid for resume
+        """
+        # ETag mismatch means content changed
+        server_etag = response_headers.get("ETag") or response_headers.get("etag")
+        if meta.get("etag") and server_etag and meta["etag"] != server_etag:
+            logger.info(f"[{self.name}] ETag mismatch — server content changed, restarting download")
+            return False
+
+        # Content-Length mismatch means different file
+        server_length = response_headers.get("Content-Length") or response_headers.get("content-length")
+        stored_size = meta.get("expected_size") or 0
+        if stored_size > 0 and server_length:
+            try:
+                if int(server_length) != int(stored_size):
+                    logger.info(f"[{self.name}] Content-Length mismatch — restarting download")
+                    return False
+            except (ValueError, TypeError):
+                pass
+
+        return True
+
+    def _check_resume_support(self, url: str) -> bool:
+        """
+        Check if the server supports HTTP Range requests via a HEAD request.
+
+        Args:
+            url: Download URL to check
+
+        Returns:
+            True if the server advertises Accept-Ranges: bytes
+        """
+        try:
+            head_resp = requests.head(url, timeout=30, allow_redirects=True)
+            accept_ranges = head_resp.headers.get("Accept-Ranges", "").lower()
+            return accept_ranges == "bytes"
+        except requests.exceptions.RequestException as e:
+            logger.debug(f"[{self.name}] HEAD request failed for resume check: {e}")
+            return False
+
+    def _cleanup_part_files(self, partial_file: Path):
+        """Remove a .part file and its .part.meta sidecar."""
+        meta_path = Path(str(partial_file) + ".meta")
+        for path in (partial_file, meta_path):
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass
+
     def _download_file(self, job: DownloadJob):
         """
         Execute the actual file download in a background thread.
         Handles both single files and collection archives (ZIP, TAR.GZ).
         Uses /compress/ endpoint for items with multiple files of desired format.
 
+        Supports HTTP Range-based resume for direct downloads:
+        - Keeps .part files on failure instead of deleting them
+        - Saves a .part.meta JSON sidecar with URL/ETag/Content-Length for staleness detection
+        - On retry, sends Range header to resume from where the .part file left off
+        - Falls back to full download if server doesn't support Range or content changed
+
+        Resume is NOT attempted for compress (dynamic ZIP) downloads since those are
+        generated server-side on-the-fly and don't support Range requests.
+
         Args:
             job: DownloadJob instance to process
         """
+        partial_file = None  # Defined early so the outer except can reference it
+        is_compress = True  # Safe default: don't preserve .part files if we fail before knowing
+
         try:
             job.status = IA_STATUS_DOWNLOADING
             job.started_at = time.time()
@@ -458,6 +589,7 @@ class InternetArchiveClient(DownloadClient):
             is_collection = strategy["is_collection"]
             file_count = strategy.get("file_count", 1)
             format_name = strategy["format"]
+            is_compress = strategy["strategy"] == "compress"
 
             # For direct downloads, get file size from metadata
             if strategy["strategy"] == "direct" and "file_info" in strategy:
@@ -468,7 +600,7 @@ class InternetArchiveClient(DownloadClient):
             # Determine destination path and extension
             safe_title = "".join(c if c.isalnum() or c in " .-_" else "_" for c in job.title)[:100]
 
-            if strategy["strategy"] == "compress":
+            if is_compress:
                 # Compress endpoint returns a ZIP
                 ext = ".zip"
                 logger.info(f"[{self.name}] Using compress URL for {file_count} {format_name} files")
@@ -497,6 +629,10 @@ class InternetArchiveClient(DownloadClient):
             # from picking up incomplete files. The .part extension is in INCOMPLETE_DOWNLOAD_PATTERNS
             # so find_supported_files() will skip it during import scans.
             partial_file = dest_file.with_suffix(dest_file.suffix + ".part")
+            meta_path = Path(str(partial_file) + ".meta")
+
+            # Resume is only possible for direct downloads (not compress/dynamic ZIPs)
+            can_resume = IA_DOWNLOAD_RESUME_ENABLED and not is_compress
 
             logger.info(
                 f"[{self.name}] Downloading {download_url} -> {dest_file}"
@@ -506,22 +642,89 @@ class InternetArchiveClient(DownloadClient):
             # Download with retry logic
             for attempt in range(IA_DOWNLOAD_RETRY_ATTEMPTS):
                 try:
+                    # Determine resume position from existing .part file
+                    resume_offset = 0
+                    headers = {}
+
+                    if can_resume and partial_file.exists() and partial_file.stat().st_size > 0:
+                        existing_meta = self._load_part_meta(meta_path)
+                        if existing_meta:
+                            # Validate the partial download is still good (content hasn't changed)
+                            if self._check_resume_support(job.download_url):
+                                # Send a HEAD request to verify staleness before resuming
+                                try:
+                                    head_resp = requests.head(
+                                        job.download_url,
+                                        timeout=30,
+                                        allow_redirects=True,
+                                    )
+                                    if self._validate_part_meta(existing_meta, head_resp.headers):
+                                        resume_offset = partial_file.stat().st_size
+                                        headers["Range"] = f"bytes={resume_offset}-"
+                                        logger.info(
+                                            f"[{self.name}] Resuming download for {job.identifier} "
+                                            f"from byte {resume_offset}"
+                                        )
+                                    else:
+                                        # Content changed — restart from scratch
+                                        self._cleanup_part_files(partial_file)
+                                except requests.exceptions.RequestException:
+                                    # HEAD failed — restart from scratch to be safe
+                                    self._cleanup_part_files(partial_file)
+                            else:
+                                # Server doesn't support Range — restart from scratch
+                                logger.debug(
+                                    f"[{self.name}] Server does not support Range requests, " f"restarting download"
+                                )
+                                self._cleanup_part_files(partial_file)
+                        else:
+                            # No valid meta — can't trust the .part file, restart
+                            self._cleanup_part_files(partial_file)
+
                     response = requests.get(
                         job.download_url,
                         stream=True,
                         timeout=IA_DOWNLOAD_TIMEOUT,
+                        headers=headers if headers else None,
                     )
                     response.raise_for_status()
 
-                    # Get content length if available
+                    is_resumed = response.status_code == 206
                     content_length = response.headers.get("content-length")
-                    if content_length:
-                        job.expected_size = int(content_length)
 
-                    # Stream download with progress logging
-                    job.downloaded_size = 0
+                    if is_resumed:
+                        # 206 Partial Content — server accepted our Range request
+                        # content-length is the remaining bytes, not total
+                        if content_length:
+                            job.expected_size = resume_offset + int(content_length)
+                        job.downloaded_size = resume_offset
+                        logger.info(
+                            f"[{self.name}] Server accepted resume at byte {resume_offset} " f"for {job.identifier}"
+                        )
+                    else:
+                        # 200 OK — full download (either no resume attempted, or server ignored Range)
+                        if content_length:
+                            job.expected_size = int(content_length)
+                        else:
+                            job.expected_size = 0  # Unknown size — don't track progress
+                        job.downloaded_size = 0
+                        resume_offset = 0  # Reset in case server ignored our Range header
 
-                    with open(partial_file, "wb") as f:
+                    # Save resume metadata for direct downloads (before writing data)
+                    if can_resume and not is_resumed:
+                        self._save_part_meta(
+                            meta_path,
+                            download_url=job.download_url,
+                            expected_size=job.expected_size,
+                            etag=response.headers.get("ETag"),
+                            last_modified=response.headers.get("Last-Modified"),
+                        )
+
+                    # Stream download with progress tracking
+                    # Use "ab" (append) for resume, "wb" (overwrite) for fresh download
+                    file_mode = "ab" if is_resumed else "wb"
+
+                    with open(partial_file, file_mode) as f:
                         for chunk in response.iter_content(chunk_size=IA_DOWNLOAD_CHUNK_SIZE):
                             if chunk:
                                 f.write(chunk)
@@ -533,10 +736,15 @@ class InternetArchiveClient(DownloadClient):
 
                     # Verify download and rename from .part to final name atomically
                     if partial_file.exists() and partial_file.stat().st_size > 0:
+                        # Clean up the meta sidecar before renaming — download is complete
+                        if meta_path.exists():
+                            meta_path.unlink(missing_ok=True)
+
                         partial_file.rename(dest_file)
                         logger.info(
                             f"[{self.name}] Download completed: {job.identifier} -> {dest_file} "
                             f"({job.downloaded_size / 1024 / 1024:.1f} MB)"
+                            f"{' (resumed)' if is_resumed else ''}"
                         )
 
                         # Check if this is an archive that needs extraction
@@ -567,9 +775,10 @@ class InternetArchiveClient(DownloadClient):
                         f"[{self.name}] Download attempt {attempt + 1}/{IA_DOWNLOAD_RETRY_ATTEMPTS} "
                         f"failed for {job.identifier}: {e}"
                     )
-                    # Clean up partial file before retry or final failure
-                    if partial_file.exists():
-                        partial_file.unlink(missing_ok=True)
+                    # KEEP .part file for resume on next attempt (don't delete it)
+                    # For compress downloads, clean up since resume isn't possible
+                    if not can_resume:
+                        self._cleanup_part_files(partial_file)
                     if attempt < IA_DOWNLOAD_RETRY_ATTEMPTS - 1:
                         time.sleep(IA_DOWNLOAD_RETRY_DELAY)
                     else:
@@ -586,12 +795,10 @@ class InternetArchiveClient(DownloadClient):
                 f"[{self.name}] Download failed for {job.identifier}: {e}",
                 exc_info=True,
             )
-            # Clean up partial file on failure
-            try:
-                if partial_file.exists():
-                    partial_file.unlink(missing_ok=True)
-            except (NameError, Exception):
-                pass  # partial_file may not be defined if failure was before download started
+            # For final failure: keep .part + .meta files for potential recovery on restart
+            # (recover_interrupted_downloads can pick them up). Only clean up compress downloads.
+            if partial_file and not (IA_DOWNLOAD_RESUME_ENABLED and not is_compress):
+                self._cleanup_part_files(partial_file)
 
     def submit(self, url: str, title: str = None, category: str = None) -> Optional[str]:
         """
@@ -784,6 +991,106 @@ class InternetArchiveClient(DownloadClient):
 
         if to_remove:
             logger.info(f"[{self.name}] Cleaned up {len(to_remove)} old jobs")
+
+    def recover_interrupted_downloads(self) -> int:
+        """
+        Scan the downloads directory for .part + .part.meta file pairs left over
+        from interrupted downloads (e.g., process restart). For each valid pair,
+        recreate a DownloadJob and resubmit it to the thread pool so the download
+        resumes from where it left off.
+
+        Returns:
+            Number of downloads resubmitted for recovery
+        """
+        if not IA_DOWNLOAD_RESUME_ENABLED:
+            return 0
+
+        recovered = 0
+        meta_pattern = f"*{IA_PART_META_EXTENSION}"
+
+        try:
+            for meta_path in self.downloads_dir.glob(meta_pattern):
+                # Derive the .part file path from the .meta path
+                # e.g., "Magazine.pdf.part.meta" -> "Magazine.pdf.part"
+                part_path = Path(str(meta_path)[: -len(".meta")])
+
+                if not part_path.exists() or part_path.stat().st_size == 0:
+                    # Orphaned .meta with no .part file — clean up
+                    logger.debug(f"[{self.name}] Removing orphaned meta file: {meta_path}")
+                    meta_path.unlink(missing_ok=True)
+                    continue
+
+                meta = self._load_part_meta(meta_path)
+                if not meta:
+                    # Corrupt or invalid meta — clean up both files
+                    logger.debug(f"[{self.name}] Removing invalid part/meta pair: {part_path}")
+                    self._cleanup_part_files(part_path)
+                    continue
+
+                # Extract the identifier from the URL
+                # URL format: https://archive.org/download/{identifier}/{filename}
+                url = meta.get("url", "")
+                try:
+                    url_parts = url.split("/download/")[1].split("/")
+                    identifier = url_parts[0]
+                except (IndexError, AttributeError):
+                    logger.warning(f"[{self.name}] Cannot parse identifier from URL: {url}")
+                    self._cleanup_part_files(part_path)
+                    continue
+
+                # Validate URL origin and identifier to prevent SSRF via crafted meta files
+                if not url.startswith(IA_DOWNLOAD_BASE_URL):
+                    logger.warning(f"[{self.name}] Meta file URL does not match expected base, skipping: {url!r}")
+                    self._cleanup_part_files(part_path)
+                    continue
+                if not _VALID_IA_IDENTIFIER.match(identifier):
+                    logger.warning(f"[{self.name}] Suspicious identifier in meta file, skipping: {identifier!r}")
+                    self._cleanup_part_files(part_path)
+                    continue
+
+                # Derive the title from the .part filename
+                # e.g., "Magazine_Title.pdf.part" -> "Magazine_Title"
+                part_name = part_path.name  # "Magazine_Title.pdf.part"
+                # Remove .part suffix, then get the stem (without extension)
+                base_name = part_name
+                if base_name.endswith(".part"):
+                    base_name = base_name[: -len(".part")]
+                title = Path(base_name).stem  # Remove the .pdf/.epub etc.
+
+                # Create a recovery job
+                job_id = self._generate_job_id(f"recover-{identifier}")
+                job = DownloadJob(
+                    job_id=job_id,
+                    identifier=identifier,
+                    title=title,
+                    dest_path=str(self.downloads_dir),
+                )
+                job.download_url = url
+
+                with self._jobs_lock:
+                    self._jobs[job_id] = job
+
+                # Submit to thread pool — _download_file will detect the existing .part + .meta
+                # and attempt resume via Range headers
+                self._executor.submit(self._download_file, job)
+                recovered += 1
+
+                try:
+                    part_size_mb = part_path.stat().st_size / 1024 / 1024
+                except OSError:
+                    part_size_mb = 0.0
+                logger.info(
+                    f"[{self.name}] Recovering interrupted download: {identifier} "
+                    f"({part_size_mb:.1f} MB already downloaded)"
+                )
+
+        except OSError as e:
+            logger.error(f"[{self.name}] Error scanning for interrupted downloads: {e}")
+
+        if recovered:
+            logger.info(f"[{self.name}] Recovered {recovered} interrupted download(s)")
+
+        return recovered
 
     def shutdown(self):
         """Shutdown the thread pool executor"""

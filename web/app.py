@@ -52,6 +52,7 @@ from web.routers import (
     tasks,
     tracking,
 )
+from web.routers import sse as sse_router
 from web.middleware.auth import AuthMiddleware
 
 # Import documentation configuration
@@ -60,6 +61,31 @@ from web.docs import OPENAPI_METADATA, OPENAPI_TAGS, DOCS_URLS
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+class EventBus:
+    """Simple pub/sub event bus for pushing server-sent events to connected clients."""
+
+    def __init__(self):
+        self._subscribers: List[asyncio.Queue] = []
+
+    def subscribe(self) -> asyncio.Queue:
+        q: asyncio.Queue = asyncio.Queue(maxsize=10)
+        self._subscribers.append(q)
+        return q
+
+    def unsubscribe(self, q: asyncio.Queue) -> None:
+        try:
+            self._subscribers.remove(q)
+        except ValueError:
+            pass
+
+    async def publish(self, channel: str, data: dict) -> None:
+        for q in list(self._subscribers):
+            try:
+                q.put_nowait({"channel": channel, "data": data})
+            except asyncio.QueueFull:
+                pass  # Drop stale event for slow clients
 
 
 @dataclass
@@ -183,6 +209,9 @@ class AppState:
 
         # === Additional download clients (populated during lifespan) ===
         self.download_clients: Dict[str, Any] = {}
+
+        # === Event bus for server-sent events ===
+        self.event_bus = EventBus()
 
     # -------------------------------------------------------------------------
     # Backward compatibility properties - map old flat attributes to nested ones
@@ -868,6 +897,7 @@ def _initialize_router_dependencies(app: FastAPI, auto_download_task) -> None:
     pages.set_dependencies(app_state.session_factory)
     stacks.set_dependencies(app_state.session_factory)
     ocr_queue.set_dependencies(app_state.session_factory)
+    sse_router.set_dependencies(app_state.event_bus, app_state.auth_manager)
 
     discovery.set_dependencies(
         app_state.session_factory,
@@ -938,6 +968,14 @@ async def lifespan(app: FastAPI):
 
         # Start scheduler in background
         app_state.scheduler_task = asyncio.create_task(app_state.task_scheduler.start())
+
+        # Recover any interrupted Internet Archive downloads from a previous run
+        from clients.internet_archive import InternetArchiveClient
+
+        ia_client = app_state.download_clients.get("internet_archive")
+        if isinstance(ia_client, InternetArchiveClient):
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, ia_client.recover_interrupted_downloads)
 
         # Initialize router dependencies
         _initialize_router_dependencies(app, auto_download_wrapper)
@@ -1062,6 +1100,7 @@ app.include_router(stacks.router)
 app.include_router(pages.router)
 app.include_router(ocr_queue.router)
 app.include_router(discovery.router)
+app.include_router(sse_router.router)
 
 # Mount static files
 try:

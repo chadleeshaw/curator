@@ -119,7 +119,8 @@ INCOMPLETE_DOWNLOAD_PATTERNS = {
     "_unpack_",  # SABnzbd unpacking prefix
     "_UNPACK_",  # SABnzbd unpacking prefix (uppercase)
     ".!qb",  # qBittorrent incomplete extension
-    ".part",  # Firefox/Chrome partial downloads
+    ".part",  # Firefox/Chrome partial downloads / IA partial downloads
+    ".part.meta",  # IA resume metadata sidecar files
     ".crdownload",  # Chrome download in progress
     ".tmp",  # Generic temporary files
 }

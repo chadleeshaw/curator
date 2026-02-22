@@ -298,6 +298,9 @@ async def download_monitoring_task(app_state: "AppState") -> None:
         interval = app_state.tasks_config.get("download_monitor_interval", constants.DOWNLOAD_MONITOR_INTERVAL)
         app_state.download_monitor_task.next_run_time = utc_now() + timedelta(seconds=interval)
         await app_state.download_monitor_task.run()
+        # Always notify: active downloads change progress on every run even when
+        # no items complete, so clients need to refresh to show current state.
+        await app_state.event_bus.publish("download_queue", {"trigger": "update"})
     except Exception as e:
         logger.error(f"Download monitoring error: {e}", exc_info=True)
 
@@ -316,6 +319,9 @@ async def ocr_processing_task(app_state: "AppState") -> None:
         stats = await app_state.ocr_processor_task.run()
         if stats.get("processed", 0) > 0:
             logger.info(f"OCR processor: {stats}")
+            # Only push an SSE update when jobs actually changed state so clients
+            # aren't triggered to refresh on idle runs.
+            await app_state.event_bus.publish("ocr_queue", {"trigger": "update"})
     except Exception as e:
         logger.error(f"OCR processor error: {e}", exc_info=True)
 

@@ -5,6 +5,7 @@
  */
 
 import { APIClient, APIHelper } from '../core/api.js';
+import { AuthManager } from '../core/auth.js';
 import { UIUtils } from '../core/ui-utils.js';
 import {
   ELEMENT_IDS as _ELEMENT_IDS,
@@ -46,8 +47,10 @@ export class DownloadsManager {
    * Create a new DownloadsManager instance
    */
   constructor() {
-    /** @type {number|null} Auto-refresh interval ID */
+    /** @type {number|null} Auto-refresh interval ID (polling fallback) */
     this.refreshInterval = null;
+    /** @type {EventSource|null} SSE connection for real-time updates */
+    this._eventSource = null;
     /** @type {boolean} Whether to include permanently failed issues in display */
     this.showPermanentlyFailed = true;
     /** @type {number} Maximum download retry attempts (NZB) */
@@ -1556,13 +1559,61 @@ export class DownloadsManager {
   }
 
   /**
-   * Start auto-refresh for the tasks tab
+   * Start auto-refresh for the tasks tab using SSE with polling fallback.
    *
    * @returns {void}
    */
   startAutoRefresh() {
     this.stopAutoRefresh();
+    this._connectSSE();
+  }
 
+  /**
+   * Open an SSE connection for download queue updates.
+   * Falls back to polling if the connection cannot be established.
+   *
+   * @private
+   * @returns {void}
+   */
+  _connectSSE() {
+    const token = AuthManager.getToken();
+    if (!token) {
+      this._fallbackToPolling();
+      return;
+    }
+
+    try {
+      this._eventSource = new EventSource(`/api/sse/downloads?token=${encodeURIComponent(token)}`);
+
+      this._eventSource.onmessage = () => {
+        const tasksTab = document.getElementById('tasks-tab');
+        if (tasksTab?.classList.contains('active')) {
+          this.loadDownloadQueue();
+        }
+      };
+
+      this._eventSource.onerror = () => {
+        // Only fall back to polling when the browser has given up reconnecting
+        // (readyState CLOSED). Transient errors use readyState CONNECTING and
+        // the browser will auto-reconnect — closing manually would prevent that.
+        if (this._eventSource?.readyState === EventSource.CLOSED) {
+          this._eventSource = null;
+          this._fallbackToPolling();
+        }
+      };
+    } catch (_err) {
+      this._fallbackToPolling();
+    }
+  }
+
+  /**
+   * Fall back to polling when SSE is unavailable.
+   *
+   * @private
+   * @returns {void}
+   */
+  _fallbackToPolling() {
+    if (this.refreshInterval) return;
     this.refreshInterval = setInterval(() => {
       const tasksTab = document.getElementById('tasks-tab');
       if (tasksTab?.classList.contains('active')) {
@@ -1574,11 +1625,15 @@ export class DownloadsManager {
   }
 
   /**
-   * Stop auto-refresh
+   * Stop auto-refresh and close any open SSE connection.
    *
    * @returns {void}
    */
   stopAutoRefresh() {
+    if (this._eventSource) {
+      this._eventSource.close();
+      this._eventSource = null;
+    }
     if (this.refreshInterval) {
       clearInterval(this.refreshInterval);
       this.refreshInterval = null;

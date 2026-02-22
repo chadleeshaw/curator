@@ -78,6 +78,10 @@ IA_DOWNLOAD_CHUNK_SIZE = 8192  # 8KB chunks for streaming downloads
 IA_DOWNLOAD_RETRY_ATTEMPTS = 3
 IA_DOWNLOAD_RETRY_DELAY = 5  # Seconds between retry attempts
 
+# Resume settings
+IA_DOWNLOAD_RESUME_ENABLED = True  # Enable HTTP Range-based resume for partial downloads
+IA_PART_META_EXTENSION = ".part.meta"  # Sidecar metadata file for resume state
+
 # Provider identification
 IA_PROVIDER_TYPE = "internet_archive"
 IA_PROVIDER_NAME = "Internet Archive"

@@ -9,9 +9,13 @@ Tests cover:
 - Download strategy selection (direct vs compress URL)
 - Text PDF format prioritization
 - Archive extraction (ZIP, TAR, TAR.GZ, GZIP)
+- Download resume via HTTP Range requests
+- Part meta sidecar file management
+- Interrupted download recovery on startup
 """
 
 import gzip
+import json
 import tarfile
 import tempfile
 import zipfile
@@ -27,6 +31,8 @@ from core.constants.internet_archive import (
     IA_TEXT_PDF_FORMATS,
     IA_COMPRESS_BASE_URL,
     IA_DOWNLOAD_BASE_URL,
+    IA_PART_META_EXTENSION,
+    IA_DOWNLOAD_RESUME_ENABLED,
 )
 
 
@@ -371,7 +377,11 @@ class TestDownloadStrategy:
             metadata = self._create_metadata(
                 "mixed_mag",
                 [
-                    {"name": "image.pdf", "format": "Image Container PDF", "size": "5000000"},
+                    {
+                        "name": "image.pdf",
+                        "format": "Image Container PDF",
+                        "size": "5000000",
+                    },
                     {"name": "text.pdf", "format": "Text PDF", "size": "1000000"},
                 ],
             )
@@ -388,7 +398,11 @@ class TestDownloadStrategy:
             metadata = self._create_metadata(
                 "image_only_mag",
                 [
-                    {"name": "scan.pdf", "format": "Image Container PDF", "size": "5000000"},
+                    {
+                        "name": "scan.pdf",
+                        "format": "Image Container PDF",
+                        "size": "5000000",
+                    },
                 ],
             )
 
@@ -709,3 +723,1066 @@ class TestArchiveExtraction:
             assert len(extracted) == 1
             assert extracted[0] == bad_zip
             assert bad_zip.exists()
+
+
+class TestDownloadResume:  # pylint: disable=too-many-public-methods
+    """Test download resume via HTTP Range requests and .part.meta sidecar files"""
+
+    def _create_client(self, tmpdir: str) -> InternetArchiveClient:
+        """Helper to create client with config."""
+        config = {
+            "name": "IA Client",
+            "downloads_dir": tmpdir,
+        }
+        return InternetArchiveClient(config)
+
+    # --- Part meta helpers ---
+
+    def test_save_and_load_part_meta(self):
+        """Test saving and loading resume metadata round-trips correctly."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            meta_path = Path(tmpdir) / "test.pdf.part.meta"
+
+            client._save_part_meta(
+                meta_path,
+                download_url="https://archive.org/download/test/file.pdf",
+                expected_size=1048576,
+                etag='"abc123"',
+                last_modified="Wed, 01 Jan 2025 00:00:00 GMT",
+            )
+
+            meta = client._load_part_meta(meta_path)
+
+            assert meta is not None
+            assert meta["url"] == "https://archive.org/download/test/file.pdf"
+            assert meta["expected_size"] == 1048576
+            assert meta["etag"] == '"abc123"'
+            assert meta["last_modified"] == "Wed, 01 Jan 2025 00:00:00 GMT"
+            assert "created_at" in meta
+
+    def test_load_part_meta_missing_file(self):
+        """Test loading meta from a non-existent file returns None."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            meta_path = Path(tmpdir) / "nonexistent.part.meta"
+
+            result = client._load_part_meta(meta_path)
+
+            assert result is None
+
+    def test_load_part_meta_corrupt_json(self):
+        """Test loading corrupt meta file returns None."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            meta_path = Path(tmpdir) / "corrupt.part.meta"
+            meta_path.write_text("not valid json {{{", encoding="utf-8")
+
+            result = client._load_part_meta(meta_path)
+
+            assert result is None
+
+    def test_load_part_meta_missing_required_fields(self):
+        """Test loading meta with missing required fields returns None."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            meta_path = Path(tmpdir) / "incomplete.part.meta"
+            meta_path.write_text(json.dumps({"etag": "abc"}), encoding="utf-8")
+
+            result = client._load_part_meta(meta_path)
+
+            assert result is None
+
+    # --- Part meta validation ---
+
+    def test_validate_part_meta_matching_etag(self):
+        """Test validation passes when ETag matches."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            meta = {"etag": '"abc123"', "expected_size": 1000}
+            headers = {"ETag": '"abc123"', "Content-Length": "1000"}
+
+            assert client._validate_part_meta(meta, headers) is True
+
+    def test_validate_part_meta_mismatched_etag(self):
+        """Test validation fails when ETag differs (content changed on server)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            meta = {"etag": '"abc123"', "expected_size": 1000}
+            headers = {"ETag": '"def456"', "Content-Length": "1000"}
+
+            assert client._validate_part_meta(meta, headers) is False
+
+    def test_validate_part_meta_mismatched_content_length(self):
+        """Test validation fails when Content-Length differs."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            meta = {"etag": None, "expected_size": 1000}
+            headers = {"Content-Length": "2000"}
+
+            assert client._validate_part_meta(meta, headers) is False
+
+    def test_validate_part_meta_no_etag_same_length(self):
+        """Test validation passes when no ETag but Content-Length matches."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            meta = {"etag": None, "expected_size": 5000}
+            headers = {"Content-Length": "5000"}
+
+            assert client._validate_part_meta(meta, headers) is True
+
+    def test_validate_part_meta_no_headers(self):
+        """Test validation passes when server provides no comparable headers."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            meta = {"etag": None, "expected_size": None}
+            headers = {}
+
+            assert client._validate_part_meta(meta, headers) is True
+
+    # --- Resume support check ---
+
+    def test_check_resume_support_accepts_bytes(self):
+        """Test resume check detects Accept-Ranges: bytes."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+
+            mock_resp = Mock()
+            mock_resp.headers = {"Accept-Ranges": "bytes"}
+
+            with patch("clients.internet_archive.requests.head", return_value=mock_resp):
+                assert client._check_resume_support("https://example.com/file.pdf") is True
+
+    def test_check_resume_support_no_ranges(self):
+        """Test resume check returns False when server doesn't support ranges."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+
+            mock_resp = Mock()
+            mock_resp.headers = {"Accept-Ranges": "none"}
+
+            with patch("clients.internet_archive.requests.head", return_value=mock_resp):
+                assert client._check_resume_support("https://example.com/file.pdf") is False
+
+    def test_check_resume_support_head_fails(self):
+        """Test resume check returns False when HEAD request fails."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+
+            import requests
+
+            with patch(
+                "clients.internet_archive.requests.head",
+                side_effect=requests.exceptions.ConnectionError("timeout"),
+            ):
+                assert client._check_resume_support("https://example.com/file.pdf") is False
+
+    # --- Cleanup helpers ---
+
+    def test_cleanup_part_files_removes_both(self):
+        """Test cleanup removes both .part and .part.meta files."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            part_file = Path(tmpdir) / "test.pdf.part"
+            meta_file = Path(tmpdir) / "test.pdf.part.meta"
+
+            part_file.write_bytes(b"partial data")
+            meta_file.write_text('{"url": "test"}', encoding="utf-8")
+
+            client._cleanup_part_files(part_file)
+
+            assert not part_file.exists()
+            assert not meta_file.exists()
+
+    def test_cleanup_part_files_missing_meta(self):
+        """Test cleanup works when only .part file exists (no .meta)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            part_file = Path(tmpdir) / "test.pdf.part"
+            part_file.write_bytes(b"partial data")
+
+            # Should not raise
+            client._cleanup_part_files(part_file)
+
+            assert not part_file.exists()
+
+    # --- Recovery on startup ---
+
+    def test_recover_finds_valid_part_meta_pairs(self):
+        """Test recovery finds and resubmits interrupted downloads."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+
+            # Create a valid .part + .part.meta pair
+            part_file = Path(tmpdir) / "Magazine_Title.pdf.part"
+            meta_file = Path(tmpdir) / "Magazine_Title.pdf.part.meta"
+            part_file.write_bytes(b"x" * 1024)  # 1KB partial
+            meta = {
+                "url": "https://archive.org/download/test_mag/magazine.pdf",
+                "expected_size": 10240,
+                "etag": '"abc"',
+                "last_modified": None,
+                "created_at": 1000000,
+            }
+            meta_file.write_text(json.dumps(meta), encoding="utf-8")
+
+            with patch.object(client._executor, "submit") as mock_submit:
+                recovered = client.recover_interrupted_downloads()
+
+            assert recovered == 1
+            assert mock_submit.call_count == 1
+
+            # Verify a job was created
+            assert len(client._jobs) == 1
+            job = list(client._jobs.values())[0]
+            assert job.identifier == "test_mag"
+            assert job.download_url == meta["url"]
+
+    def test_recover_skips_orphaned_meta_without_part(self):
+        """Test recovery cleans up .meta files with no corresponding .part file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+
+            # Only create .meta, no .part
+            meta_file = Path(tmpdir) / "Orphan.pdf.part.meta"
+            meta = {
+                "url": "https://archive.org/download/orphan/file.pdf",
+                "expected_size": 5000,
+                "etag": None,
+                "last_modified": None,
+                "created_at": 1000000,
+            }
+            meta_file.write_text(json.dumps(meta), encoding="utf-8")
+
+            with patch.object(client._executor, "submit"):
+                recovered = client.recover_interrupted_downloads()
+
+            assert recovered == 0
+            assert not meta_file.exists()  # Orphaned meta cleaned up
+
+    def test_recover_skips_corrupt_meta(self):
+        """Test recovery cleans up corrupt meta files."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+
+            part_file = Path(tmpdir) / "Bad.pdf.part"
+            meta_file = Path(tmpdir) / "Bad.pdf.part.meta"
+            part_file.write_bytes(b"partial")
+            meta_file.write_text("not json", encoding="utf-8")
+
+            with patch.object(client._executor, "submit"):
+                recovered = client.recover_interrupted_downloads()
+
+            assert recovered == 0
+            assert not part_file.exists()  # Cleaned up
+            assert not meta_file.exists()  # Cleaned up
+
+    def test_recover_returns_zero_when_resume_disabled(self):
+        """Test recovery returns 0 when resume is disabled."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+
+            with patch("clients.internet_archive.IA_DOWNLOAD_RESUME_ENABLED", False):
+                recovered = client.recover_interrupted_downloads()
+
+            assert recovered == 0
+
+    def test_recover_multiple_interrupted_downloads(self):
+        """Test recovery handles multiple interrupted downloads."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+
+            for i in range(3):
+                part_file = Path(tmpdir) / f"Magazine_{i}.pdf.part"
+                meta_file = Path(tmpdir) / f"Magazine_{i}.pdf.part.meta"
+                part_file.write_bytes(b"x" * 512)
+                meta = {
+                    "url": f"https://archive.org/download/mag_{i}/file.pdf",
+                    "expected_size": 10240,
+                    "etag": None,
+                    "last_modified": None,
+                    "created_at": 1000000,
+                }
+                meta_file.write_text(json.dumps(meta), encoding="utf-8")
+
+            with patch.object(client._executor, "submit"):
+                recovered = client.recover_interrupted_downloads()
+
+            assert recovered == 3
+            assert len(client._jobs) == 3
+
+    # --- Constants ---
+
+    def test_resume_constants_defined(self):
+        """Test resume-related constants are properly defined."""
+        assert IA_DOWNLOAD_RESUME_ENABLED is True
+        assert IA_PART_META_EXTENSION == ".part.meta"
+
+    def test_part_meta_in_incomplete_patterns(self):
+        """Test .part.meta is in INCOMPLETE_DOWNLOAD_PATTERNS."""
+        from core.constants.files import INCOMPLETE_DOWNLOAD_PATTERNS
+
+        assert ".part.meta" in INCOMPLETE_DOWNLOAD_PATTERNS
+
+
+class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-methods
+    """
+    Test the resume-specific branches inside _download_file that are NOT covered
+    by TestDownloadResume. These tests drive _download_file directly by mocking
+    the HTTP layer and the IA metadata call so we never hit the network.
+    """
+
+    def _create_client(self, tmpdir: str) -> InternetArchiveClient:
+        config = {"name": "IA Client", "downloads_dir": tmpdir}
+        return InternetArchiveClient(config)
+
+    def _make_strategy(self, tmpdir: str, filename: str = "file.pdf") -> dict:
+        """Return a minimal 'direct' strategy dict for a single PDF."""
+        return {
+            "strategy": "direct",
+            "format": "Text PDF",
+            "files": [{"name": filename, "format": "Text PDF", "size": "10240"}],
+            "url": f"https://archive.org/download/test_mag/{filename}",
+            "is_collection": False,
+            "file_count": 1,
+            "file_info": {"name": filename, "format": "Text PDF", "size": "10240"},
+        }
+
+    def _make_job(self, tmpdir: str, title: str = "Test Magazine") -> "DownloadJob":
+        return DownloadJob(
+            job_id="test_job_id",
+            identifier="test_mag",
+            title=title,
+            dest_path=tmpdir,
+        )
+
+    # ------------------------------------------------------------------
+    # 1. Fresh download: no .part file → _save_part_meta called once
+    # ------------------------------------------------------------------
+
+    def test_fresh_download_saves_part_meta(self):
+        """On first attempt with no existing .part file, _save_part_meta is
+        called once with the response headers (ETag, Last-Modified)."""
+        from requests.structures import CaseInsensitiveDict
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            job = self._make_job(tmpdir)
+            strategy = self._make_strategy(tmpdir)
+
+            mock_response = Mock()
+            mock_response.status_code = 200
+            # Use CaseInsensitiveDict so .get("content-length") works like real requests
+            mock_response.headers = CaseInsensitiveDict(
+                {
+                    "Content-Length": "10240",
+                    "ETag": '"etag123"',
+                    "Last-Modified": "Wed, 01 Jan 2025 00:00:00 GMT",
+                }
+            )
+            # Stream: emit one chunk then stop
+            mock_response.iter_content = Mock(return_value=iter([b"x" * 10240]))
+            mock_response.raise_for_status = Mock()
+
+            with (
+                patch("clients.internet_archive.get_item"),
+                patch("clients.internet_archive.requests.get", return_value=mock_response),
+                patch.object(client, "_get_download_strategy", return_value=strategy),
+                patch.object(client, "_save_part_meta") as mock_save_meta,
+            ):
+                client._download_file(job)
+
+            # _save_part_meta must be called exactly once
+            mock_save_meta.assert_called_once()
+            call_kwargs = mock_save_meta.call_args
+            assert call_kwargs.kwargs["etag"] == '"etag123"'
+            assert call_kwargs.kwargs["expected_size"] == 10240
+            from core.constants.internet_archive import IA_STATUS_COMPLETED
+
+            assert job.status == IA_STATUS_COMPLETED
+
+    # ------------------------------------------------------------------
+    # 2. Server returns 200 instead of 206 after Range request → overwrite
+    # ------------------------------------------------------------------
+
+    def test_server_returns_200_after_range_request_restarts_download(self):
+        """
+        When a .part + .meta exist and _check_resume_support / _validate_part_meta
+        both pass, we send a Range header. If the server responds 200 (instead of
+        206), the code must:
+          - reset resume_offset to 0
+          - use 'wb' (overwrite) file mode
+          - re-save part meta with fresh Content-Length
+        """
+        from requests.structures import CaseInsensitiveDict
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            job = self._make_job(tmpdir)
+            strategy = self._make_strategy(tmpdir)
+
+            # safe_title preserves spaces: "Test Magazine" → "Test Magazine.pdf.part"
+            partial_file = Path(tmpdir) / "Test Magazine.pdf.part"
+            meta_file = Path(tmpdir) / "Test Magazine.pdf.part.meta"
+            partial_file.write_bytes(b"x" * 1024)  # 1 KB already downloaded
+            saved_meta = {
+                "url": "https://archive.org/download/test_mag/file.pdf",
+                "expected_size": 10240,
+                "etag": '"etag123"',
+                "last_modified": None,
+                "created_at": 1000000,
+            }
+            meta_file.write_text(json.dumps(saved_meta), encoding="utf-8")
+
+            # HEAD for _check_resume_support
+            head_resp_support = Mock()
+            head_resp_support.headers = {"Accept-Ranges": "bytes"}
+
+            # HEAD for staleness check inside loop
+            head_resp_stale = Mock()
+            head_resp_stale.headers = CaseInsensitiveDict({"ETag": '"etag123"', "Content-Length": "10240"})
+
+            # GET: server ignores Range, returns 200 with full content
+            get_response = Mock()
+            get_response.status_code = 200  # NOT 206
+            get_response.headers = CaseInsensitiveDict(
+                {
+                    "Content-Length": "10240",
+                    "ETag": '"etag123"',
+                    "Last-Modified": "Wed, 01 Jan 2025 00:00:00 GMT",
+                }
+            )
+            get_response.iter_content = Mock(return_value=iter([b"y" * 10240]))
+            get_response.raise_for_status = Mock()
+
+            # The dedup while-loop checks partial_file.exists() before the download
+            # loop starts. We skip it by returning False on the first call for .part
+            # paths (dedup check), then True on subsequent calls (resume check).
+            _part_exists_calls = [0]
+            _real_exists = Path.exists
+
+            def _selective_exists(self_path):
+                if str(self_path).endswith(".part"):
+                    _part_exists_calls[0] += 1
+                    if _part_exists_calls[0] == 1:
+                        return False  # dedup loop: pretend .part doesn't exist yet
+                return _real_exists(self_path)
+
+            with (
+                patch("clients.internet_archive.get_item"),
+                patch.object(client, "_get_download_strategy", return_value=strategy),
+                patch(
+                    "clients.internet_archive.requests.head",
+                    side_effect=[head_resp_support, head_resp_stale],
+                ),
+                patch("clients.internet_archive.requests.get", return_value=get_response),
+                patch("pathlib.Path.exists", _selective_exists),
+            ):
+                client._download_file(job)
+
+            from core.constants.internet_archive import IA_STATUS_COMPLETED
+
+            assert job.status == IA_STATUS_COMPLETED
+            # When server returns 200 after a resume attempt, resume_offset is reset
+            # to 0 and downloaded_size reflects the full 10240 bytes.
+            assert job.downloaded_size == 10240
+
+    # ------------------------------------------------------------------
+    # 3. HEAD staleness check fails with RequestException → clean up & restart
+    # ------------------------------------------------------------------
+
+    def test_inner_head_request_exception_cleans_up_and_restarts(self):
+        """
+        When the inner HEAD request (for staleness validation inside the retry loop)
+        raises RequestException, the partial download is cleaned up and a fresh
+        download proceeds without a Range header.
+        """
+        import requests as req_lib
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            job = self._make_job(tmpdir)
+            strategy = self._make_strategy(tmpdir)
+
+            # safe_title preserves spaces: "Test Magazine" → "Test Magazine.pdf.part"
+            partial_file = Path(tmpdir) / "Test Magazine.pdf.part"
+            meta_file = Path(tmpdir) / "Test Magazine.pdf.part.meta"
+            partial_file.write_bytes(b"x" * 512)
+            saved_meta = {
+                "url": "https://archive.org/download/test_mag/file.pdf",
+                "expected_size": 10240,
+                "etag": '"etag"',
+                "last_modified": None,
+                "created_at": 1000000,
+            }
+            meta_file.write_text(json.dumps(saved_meta), encoding="utf-8")
+
+            cleanup_called = []
+
+            original_cleanup = client._cleanup_part_files
+
+            def tracking_cleanup(pf):
+                cleanup_called.append(str(pf))
+                original_cleanup(pf)
+
+            get_response = Mock()
+            get_response.status_code = 200
+            get_response.headers = {"Content-Length": "10240"}
+            get_response.iter_content = Mock(return_value=iter([b"z" * 10240]))
+            get_response.raise_for_status = Mock()
+
+            # Skip the dedup loop's .part existence check on first call
+            _part_exists_calls = [0]
+            _real_exists = Path.exists
+
+            def _selective_exists(self_path):
+                if str(self_path).endswith(".part"):
+                    _part_exists_calls[0] += 1
+                    if _part_exists_calls[0] == 1:
+                        return False  # dedup loop: pretend .part doesn't exist yet
+                return _real_exists(self_path)
+
+            with (
+                patch.object(client, "_get_download_strategy", return_value=strategy),
+                patch.object(client, "_cleanup_part_files", side_effect=tracking_cleanup),
+                patch(
+                    "clients.internet_archive.requests.head",
+                    side_effect=[
+                        Mock(headers={"Accept-Ranges": "bytes"}),
+                        req_lib.exceptions.ConnectionError("timeout"),
+                    ],
+                ),
+                patch("clients.internet_archive.requests.get", return_value=get_response),
+                patch("pathlib.Path.exists", _selective_exists),
+            ):
+                client._download_file(job)
+
+            # _cleanup_part_files must have been called (to discard the stale partial)
+            assert len(cleanup_called) >= 1, "Expected _cleanup_part_files to be called"
+            from core.constants.internet_archive import IA_STATUS_COMPLETED
+
+            assert job.status == IA_STATUS_COMPLETED
+
+    # ------------------------------------------------------------------
+    # 4. _validate_part_meta returns False → clean up & restart from 0
+    # ------------------------------------------------------------------
+
+    def test_stale_content_triggers_cleanup_and_full_restart(self):
+        """
+        When _validate_part_meta returns False (ETag mismatch), the partial
+        download is cleaned up and a fresh full download is started (no Range header).
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            job = self._make_job(tmpdir)
+            strategy = self._make_strategy(tmpdir)
+
+            # safe_title preserves spaces: "Test Magazine" → "Test Magazine.pdf.part"
+            partial_file = Path(tmpdir) / "Test Magazine.pdf.part"
+            meta_file = Path(tmpdir) / "Test Magazine.pdf.part.meta"
+            partial_file.write_bytes(b"x" * 512)
+            saved_meta = {
+                "url": "https://archive.org/download/test_mag/file.pdf",
+                "expected_size": 10240,
+                "etag": '"old-etag"',
+                "last_modified": None,
+                "created_at": 1000000,
+            }
+            meta_file.write_text(json.dumps(saved_meta), encoding="utf-8")
+
+            # Server now returns a different ETag → content changed
+            head_for_support = Mock(headers={"Accept-Ranges": "bytes"})
+            head_for_stale = Mock(headers={"ETag": '"new-etag"', "Content-Length": "12000"})
+
+            get_response = Mock()
+            get_response.status_code = 200
+            get_response.headers = {"Content-Length": "12000"}
+            get_response.iter_content = Mock(return_value=iter([b"z" * 12000]))
+            get_response.raise_for_status = Mock()
+
+            cleanup_called = []
+
+            # Skip the dedup loop's .part existence check on first call
+            _part_exists_calls = [0]
+            _real_exists = Path.exists
+
+            def _selective_exists(self_path):
+                if str(self_path).endswith(".part"):
+                    _part_exists_calls[0] += 1
+                    if _part_exists_calls[0] == 1:
+                        return False  # dedup loop: pretend .part doesn't exist yet
+                return _real_exists(self_path)
+
+            with (
+                patch.object(client, "_get_download_strategy", return_value=strategy),
+                patch.object(
+                    client,
+                    "_cleanup_part_files",
+                    side_effect=lambda pf: cleanup_called.append(str(pf)),
+                ),
+                patch(
+                    "clients.internet_archive.requests.head",
+                    side_effect=[head_for_support, head_for_stale],
+                ),
+                patch("clients.internet_archive.requests.get", return_value=get_response),
+                patch("pathlib.Path.exists", _selective_exists),
+            ):
+                client._download_file(job)
+
+            assert len(cleanup_called) >= 1, "Expected _cleanup_part_files on stale content"
+            from core.constants.internet_archive import IA_STATUS_COMPLETED
+
+            assert job.status == IA_STATUS_COMPLETED
+
+    # ------------------------------------------------------------------
+    # 5. _check_resume_support returns False → clean up & restart
+    # ------------------------------------------------------------------
+
+    def test_server_no_range_support_cleans_up_and_restarts(self):
+        """
+        When _check_resume_support returns False, the existing .part file is
+        cleaned up and the download restarts without a Range header.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            job = self._make_job(tmpdir)
+            strategy = self._make_strategy(tmpdir)
+
+            # safe_title preserves spaces: "Test Magazine" → "Test Magazine.pdf.part"
+            partial_file = Path(tmpdir) / "Test Magazine.pdf.part"
+            meta_file = Path(tmpdir) / "Test Magazine.pdf.part.meta"
+            partial_file.write_bytes(b"x" * 512)
+            saved_meta = {
+                "url": "https://archive.org/download/test_mag/file.pdf",
+                "expected_size": 10240,
+                "etag": '"etag"',
+                "last_modified": None,
+                "created_at": 1000000,
+            }
+            meta_file.write_text(json.dumps(saved_meta), encoding="utf-8")
+
+            get_response = Mock()
+            get_response.status_code = 200
+            get_response.headers = {"Content-Length": "10240"}
+            get_response.iter_content = Mock(return_value=iter([b"z" * 10240]))
+            get_response.raise_for_status = Mock()
+
+            cleanup_called = []
+
+            # Skip the dedup loop's .part existence check on first call
+            _part_exists_calls = [0]
+            _real_exists = Path.exists
+
+            def _selective_exists(self_path):
+                if str(self_path).endswith(".part"):
+                    _part_exists_calls[0] += 1
+                    if _part_exists_calls[0] == 1:
+                        return False  # dedup loop: pretend .part doesn't exist yet
+                return _real_exists(self_path)
+
+            with (
+                patch.object(client, "_get_download_strategy", return_value=strategy),
+                patch.object(
+                    client,
+                    "_cleanup_part_files",
+                    side_effect=lambda pf: cleanup_called.append(str(pf)),
+                ),
+                # HEAD returns "none" → server does not support Range
+                patch(
+                    "clients.internet_archive.requests.head",
+                    return_value=Mock(headers={"Accept-Ranges": "none"}),
+                ),
+                patch("clients.internet_archive.requests.get", return_value=get_response),
+                patch("pathlib.Path.exists", _selective_exists),
+            ):
+                client._download_file(job)
+
+            assert len(cleanup_called) >= 1, "Expected cleanup when server has no Range support"
+            from core.constants.internet_archive import IA_STATUS_COMPLETED
+
+            assert job.status == IA_STATUS_COMPLETED
+
+    # ------------------------------------------------------------------
+    # 6. .part exists but meta is missing/corrupt → clean up & restart
+    # ------------------------------------------------------------------
+
+    def test_part_file_without_valid_meta_cleans_up_and_restarts(self):
+        """
+        When a .part file exists but _load_part_meta returns None (missing or
+        corrupt meta), _cleanup_part_files is called and the download restarts
+        from the beginning.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            job = self._make_job(tmpdir)
+            strategy = self._make_strategy(tmpdir)
+
+            # safe_title preserves spaces: "Test Magazine" → "Test Magazine.pdf.part"
+            partial_file = Path(tmpdir) / "Test Magazine.pdf.part"
+            meta_file = Path(tmpdir) / "Test Magazine.pdf.part.meta"
+            partial_file.write_bytes(b"x" * 512)
+            meta_file.write_text("not valid json {{", encoding="utf-8")  # corrupt
+
+            get_response = Mock()
+            get_response.status_code = 200
+            get_response.headers = {"Content-Length": "10240"}
+            get_response.iter_content = Mock(return_value=iter([b"z" * 10240]))
+            get_response.raise_for_status = Mock()
+
+            cleanup_called = []
+
+            # Skip the dedup loop's .part existence check on first call
+            _part_exists_calls = [0]
+            _real_exists = Path.exists
+
+            def _selective_exists(self_path):
+                if str(self_path).endswith(".part"):
+                    _part_exists_calls[0] += 1
+                    if _part_exists_calls[0] == 1:
+                        return False  # dedup loop: pretend .part doesn't exist yet
+                return _real_exists(self_path)
+
+            with (
+                patch.object(client, "_get_download_strategy", return_value=strategy),
+                patch.object(
+                    client,
+                    "_cleanup_part_files",
+                    side_effect=lambda pf: cleanup_called.append(str(pf)),
+                ),
+                patch("clients.internet_archive.requests.get", return_value=get_response),
+                patch("pathlib.Path.exists", _selective_exists),
+            ):
+                client._download_file(job)
+
+            assert len(cleanup_called) >= 1, "Expected cleanup for corrupt meta"
+            from core.constants.internet_archive import IA_STATUS_COMPLETED
+
+            assert job.status == IA_STATUS_COMPLETED
+
+    # ------------------------------------------------------------------
+    # 7. Compress download: .part cleaned up between retries
+    # ------------------------------------------------------------------
+
+    def test_compress_download_cleans_part_on_request_exception(self):
+        """
+        For compress (dynamic ZIP) downloads, can_resume is False.  On a
+        RequestException the .part file must be cleaned up between retries
+        (not preserved like direct downloads).
+        """
+        import requests as req_lib
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            job = self._make_job(tmpdir)
+
+            compress_strategy = {
+                "strategy": "compress",
+                "format": "Text PDF",
+                "files": [
+                    {"name": "a.pdf", "format": "Text PDF", "size": "5120"},
+                    {"name": "b.pdf", "format": "Text PDF", "size": "5120"},
+                    {"name": "c.pdf", "format": "Text PDF", "size": "5120"},
+                ],
+                "url": "https://archive.org/compress/test_mag/formats=TEXT%20PDF",
+                "is_collection": True,
+                "file_count": 3,
+            }
+
+            cleanup_called = []
+
+            with (
+                patch.object(client, "_get_download_strategy", return_value=compress_strategy),
+                patch.object(
+                    client,
+                    "_cleanup_part_files",
+                    side_effect=lambda pf: cleanup_called.append(str(pf)),
+                ),
+                patch(
+                    "clients.internet_archive.requests.get",
+                    side_effect=req_lib.exceptions.ConnectionError("network down"),
+                ),
+                patch("clients.internet_archive.time.sleep"),  # skip retry delays
+            ):
+                client._download_file(job)
+
+            from core.constants.internet_archive import IA_STATUS_FAILED
+
+            assert job.status == IA_STATUS_FAILED
+            # cleanup must be called on every failed attempt for compress downloads
+            assert len(cleanup_called) > 0, "Expected .part cleanup for compress failure"
+
+    # ------------------------------------------------------------------
+    # 8. 206 with no Content-Length → expected_size unchanged
+    # ------------------------------------------------------------------
+
+    def test_206_without_content_length_keeps_existing_expected_size(self):
+        """
+        When server returns 206 but omits Content-Length, job.expected_size
+        should remain at its prior value (from metadata) rather than being reset.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            job = self._make_job(tmpdir)
+            strategy = self._make_strategy(tmpdir)
+
+            # safe_title preserves spaces: "Test Magazine" → "Test Magazine.pdf.part"
+            partial_file = Path(tmpdir) / "Test Magazine.pdf.part"
+            meta_file = Path(tmpdir) / "Test Magazine.pdf.part.meta"
+            resume_offset = 2048
+            partial_file.write_bytes(b"x" * resume_offset)
+            saved_meta = {
+                "url": "https://archive.org/download/test_mag/file.pdf",
+                "expected_size": 10240,
+                "etag": '"etag"',
+                "last_modified": None,
+                "created_at": 1000000,
+            }
+            meta_file.write_text(json.dumps(saved_meta), encoding="utf-8")
+
+            get_response = Mock()
+            get_response.status_code = 206  # Resume accepted
+            get_response.headers = {}  # No Content-Length in 206 response
+            remaining = 10240 - resume_offset
+            get_response.iter_content = Mock(return_value=iter([b"y" * remaining]))
+            get_response.raise_for_status = Mock()
+
+            # Skip the dedup loop's .part existence check on first call
+            _part_exists_calls = [0]
+            _real_exists = Path.exists
+
+            def _selective_exists(self_path):
+                if str(self_path).endswith(".part"):
+                    _part_exists_calls[0] += 1
+                    if _part_exists_calls[0] == 1:
+                        return False  # dedup loop: pretend .part doesn't exist yet
+                return _real_exists(self_path)
+
+            with (
+                patch.object(client, "_get_download_strategy", return_value=strategy),
+                patch(
+                    "clients.internet_archive.requests.head",
+                    side_effect=[
+                        Mock(headers={"Accept-Ranges": "bytes"}),
+                        Mock(headers={"ETag": '"etag"', "Content-Length": "10240"}),
+                    ],
+                ),
+                patch("clients.internet_archive.requests.get", return_value=get_response),
+                patch("pathlib.Path.exists", _selective_exists),
+            ):
+                client._download_file(job)
+
+            from core.constants.internet_archive import IA_STATUS_COMPLETED
+
+            assert job.status == IA_STATUS_COMPLETED
+            # expected_size must not have been zeroed out; it should remain ≥ the
+            # offset we started from (the 206 path only updates it when Content-Length present)
+            assert job.expected_size >= resume_offset
+
+    # ------------------------------------------------------------------
+    # 9. Empty file after streaming raises IOError
+    # ------------------------------------------------------------------
+
+    def test_empty_download_raises_ioerror_and_marks_failed(self):
+        """
+        If all streaming chunks are empty so the .part file ends up 0 bytes,
+        the download must be marked failed (IOError path at line 828).
+        """
+        import requests as req_lib
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            job = self._make_job(tmpdir)
+            strategy = self._make_strategy(tmpdir)
+
+            get_response = Mock()
+            get_response.status_code = 200
+            get_response.headers = {"Content-Length": "10240"}
+            # No chunks at all → file stays at 0 bytes
+            get_response.iter_content = Mock(return_value=iter([]))
+            get_response.raise_for_status = Mock()
+
+            with (
+                patch.object(client, "_get_download_strategy", return_value=strategy),
+                patch("clients.internet_archive.requests.get", return_value=get_response),
+                patch("clients.internet_archive.time.sleep"),
+            ):
+                client._download_file(job)
+
+            from core.constants.internet_archive import IA_STATUS_FAILED
+
+            assert job.status == IA_STATUS_FAILED
+
+
+class TestRecoverInterruptedDownloadsSSRFGuards:
+    """
+    Test the SSRF-prevention guards added to recover_interrupted_downloads.
+    These are the most security-critical paths in the resume feature.
+    """
+
+    def _create_client(self, tmpdir: str) -> InternetArchiveClient:
+        config = {"name": "IA Client", "downloads_dir": tmpdir}
+        return InternetArchiveClient(config)
+
+    def _write_part_and_meta(self, tmpdir: str, filename: str, url: str):
+        """Create a .part + .meta pair with the given URL."""
+        part_file = Path(tmpdir) / filename
+        meta_file = Path(tmpdir) / (filename + ".meta")
+        part_file.write_bytes(b"x" * 512)
+        meta = {
+            "url": url,
+            "expected_size": 10240,
+            "etag": None,
+            "last_modified": None,
+            "created_at": 1000000,
+        }
+        meta_file.write_text(json.dumps(meta), encoding="utf-8")
+        return part_file, meta_file
+
+    # ------------------------------------------------------------------
+    # URL prefix guard
+    # ------------------------------------------------------------------
+
+    def test_recover_rejects_non_archive_org_url(self):
+        """Meta file with a URL pointing to a non-archive.org host is
+        rejected and both files are cleaned up (SSRF guard)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            part_file, meta_file = self._write_part_and_meta(
+                tmpdir,
+                "Evil.pdf.part",
+                "https://evil.example.com/download/test_mag/file.pdf",
+            )
+
+            with patch.object(client._executor, "submit") as mock_submit:
+                recovered = client.recover_interrupted_downloads()
+
+            assert recovered == 0
+            assert mock_submit.call_count == 0
+            # Both files must be cleaned up
+            assert not part_file.exists(), "Expected .part to be cleaned up"
+            assert not meta_file.exists(), "Expected .meta to be cleaned up"
+
+    def test_recover_rejects_url_without_download_segment(self):
+        """Meta file with a well-formed archive.org URL that lacks /download/
+        cannot yield an identifier and must be rejected."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            part_file, meta_file = self._write_part_and_meta(
+                tmpdir,
+                "Bad.pdf.part",
+                "https://archive.org/details/test_mag/file.pdf",  # /details/ not /download/
+            )
+
+            with patch.object(client._executor, "submit") as mock_submit:
+                recovered = client.recover_interrupted_downloads()
+
+            assert recovered == 0
+            assert mock_submit.call_count == 0
+            assert not part_file.exists()
+            assert not meta_file.exists()
+
+    # ------------------------------------------------------------------
+    # Identifier regex guard
+    # ------------------------------------------------------------------
+
+    def test_recover_rejects_path_traversal_identifier(self):
+        """Meta file URL with a path-traversal identifier (../etc) is
+        rejected (identifier regex guard)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            part_file, meta_file = self._write_part_and_meta(
+                tmpdir,
+                "Traversal.pdf.part",
+                "https://archive.org/download/../etc/passwd/file.pdf",
+            )
+
+            with patch.object(client._executor, "submit") as mock_submit:
+                recovered = client.recover_interrupted_downloads()
+
+            assert recovered == 0
+            assert mock_submit.call_count == 0
+            assert not part_file.exists()
+            assert not meta_file.exists()
+
+    def test_recover_rejects_identifier_with_shell_chars(self):
+        """Identifier containing shell metacharacters is rejected by the
+        identifier regex guard."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            part_file, meta_file = self._write_part_and_meta(
+                tmpdir,
+                "Shell.pdf.part",
+                "https://archive.org/download/evil;rm -rf /;/file.pdf",
+            )
+
+            with patch.object(client._executor, "submit") as mock_submit:
+                recovered = client.recover_interrupted_downloads()
+
+            assert recovered == 0
+            assert mock_submit.call_count == 0
+            assert not part_file.exists()
+            assert not meta_file.exists()
+
+    def test_recover_accepts_valid_identifier_formats(self):
+        """Valid IA identifier formats (alphanumeric, dots, dashes, underscores)
+        pass the regex guard and are successfully recovered."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+
+            valid_identifiers = [
+                "simple",
+                "with-dashes",
+                "with_underscores",
+                "with.dots",
+                "Mixed123",
+                "A1B2C3",
+            ]
+
+            for identifier in valid_identifiers:
+                filename = f"{identifier}.pdf.part"
+                part_file = Path(tmpdir) / filename
+                meta_file = Path(tmpdir) / (filename + ".meta")
+                part_file.write_bytes(b"x" * 512)
+                meta = {
+                    "url": f"https://archive.org/download/{identifier}/file.pdf",
+                    "expected_size": 10240,
+                    "etag": None,
+                    "last_modified": None,
+                    "created_at": 1000000,
+                }
+                meta_file.write_text(json.dumps(meta), encoding="utf-8")
+
+            with patch.object(client._executor, "submit"):
+                recovered = client.recover_interrupted_downloads()
+
+            assert recovered == len(valid_identifiers)
+
+    # ------------------------------------------------------------------
+    # Zero-byte .part file
+    # ------------------------------------------------------------------
+
+    def test_recover_skips_zero_byte_part_file(self):
+        """A .part file that exists but is 0 bytes is treated as an orphan
+        and only the .meta is cleaned up (no resubmit)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+
+            part_file = Path(tmpdir) / "Zero.pdf.part"
+            meta_file = Path(tmpdir) / "Zero.pdf.part.meta"
+            part_file.write_bytes(b"")  # Zero bytes
+            meta = {
+                "url": "https://archive.org/download/zero_mag/file.pdf",
+                "expected_size": 10240,
+                "etag": None,
+                "last_modified": None,
+                "created_at": 1000000,
+            }
+            meta_file.write_text(json.dumps(meta), encoding="utf-8")
+
+            with patch.object(client._executor, "submit") as mock_submit:
+                recovered = client.recover_interrupted_downloads()
+
+            assert recovered == 0
+            assert mock_submit.call_count == 0
+            # The orphaned meta must be cleaned up
+            assert not meta_file.exists(), "Expected orphaned .meta to be removed"

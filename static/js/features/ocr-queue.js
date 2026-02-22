@@ -4,6 +4,7 @@
  */
 
 import { APIClient, APIHelper } from '../core/api.js';
+import { AuthManager } from '../core/auth.js';
 import { UIUtils } from '../core/ui-utils.js';
 import {
   ELEMENT_IDS as _ELEMENT_IDS,
@@ -14,7 +15,10 @@ import {
 
 export class OCRQueueManager {
   constructor() {
+    /** @type {number|null} Auto-refresh interval ID (polling fallback) */
     this.refreshInterval = null;
+    /** @type {EventSource|null} SSE connection for real-time updates */
+    this._eventSource = null;
     /** @type {number} Maximum OCR retry attempts */
     this.maxRetries = 3; // Default value, will be loaded from API
     /** @type {string} Current filter (all, active, pending, processing, completed, failed) */
@@ -863,20 +867,72 @@ export class OCRQueueManager {
   }
 
   /**
-   * Start auto-refresh
+   * Start auto-refresh using SSE with polling fallback.
    */
   startAutoRefresh() {
-    if (this.refreshInterval) {
-      clearInterval(this.refreshInterval);
-    }
-    // Refresh every 5 seconds
-    this.refreshInterval = setInterval(() => this.loadQueue(), 5000);
+    this.stopAutoRefresh();
+    this._connectSSE();
   }
 
   /**
-   * Stop auto-refresh
+   * Open an SSE connection for OCR queue updates.
+   * Falls back to polling if the connection cannot be established.
+   *
+   * @private
+   */
+  _connectSSE() {
+    const token = AuthManager.getToken();
+    if (!token) {
+      this._fallbackToPolling();
+      return;
+    }
+
+    try {
+      this._eventSource = new EventSource(`/api/sse/ocr?token=${encodeURIComponent(token)}`);
+
+      this._eventSource.onmessage = () => {
+        this.loadQueue();
+      };
+
+      this._eventSource.onerror = () => {
+        // Only fall back to polling when the browser has given up reconnecting
+        // (readyState CLOSED). Transient errors use readyState CONNECTING and
+        // the browser will auto-reconnect — closing manually would prevent that.
+        if (this._eventSource?.readyState === EventSource.CLOSED) {
+          this._eventSource = null;
+          this._fallbackToPolling();
+        }
+      };
+    } catch (_err) {
+      this._fallbackToPolling();
+    }
+  }
+
+  /**
+   * Fall back to polling when SSE is unavailable.
+   *
+   * @private
+   */
+  _fallbackToPolling() {
+    if (this.refreshInterval) return;
+    this.refreshInterval = setInterval(() => {
+      const queueTab = document.getElementById('queue-tab');
+      if (queueTab?.classList.contains('active')) {
+        this.loadQueue();
+      } else {
+        this.stopAutoRefresh();
+      }
+    }, 5000);
+  }
+
+  /**
+   * Stop auto-refresh and close any open SSE connection.
    */
   stopAutoRefresh() {
+    if (this._eventSource) {
+      this._eventSource.close();
+      this._eventSource = null;
+    }
     if (this.refreshInterval) {
       clearInterval(this.refreshInterval);
       this.refreshInterval = null;
