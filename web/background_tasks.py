@@ -319,9 +319,9 @@ async def ocr_processing_task(app_state: "AppState") -> None:
         stats = await app_state.ocr_processor_task.run()
         if stats.get("processed", 0) > 0:
             logger.info(f"OCR processor: {stats}")
-            # Only push an SSE update when jobs actually changed state so clients
-            # aren't triggered to refresh on idle runs.
-            await app_state.event_bus.publish("ocr_queue", {"trigger": "update"})
+        # Always notify: queue state changes on every run (new jobs processed or
+        # pending count shifts), so connected clients stay in sync.
+        await app_state.event_bus.publish("ocr_queue", {"trigger": "update"})
     except Exception as e:
         logger.error(f"OCR processor error: {e}", exc_info=True)
 

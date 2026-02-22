@@ -87,6 +87,7 @@ export class OCRQueueManager {
 
       // Display queue
       this.displayQueue(queueData, statsData);
+      this._refreshOpenModal(queueData.jobs ?? []);
     } catch (error) {
       // Already logged and displayed by APIHelper
     }
@@ -525,6 +526,24 @@ export class OCRQueueManager {
   }
 
   /**
+   * If the periodical modal is open, refresh its jobs from the latest queue snapshot.
+   * This keeps the modal in sync when an SSE event triggers a background queue reload.
+   *
+   * @param {Array} allJobs - Full unfiltered job list from the API
+   * @private
+   * @returns {void}
+   */
+  _refreshOpenModal(allJobs) {
+    const modal = document.getElementById('ocr-periodical-modal');
+    if (!modal || modal.classList.contains(CSS_CLASSES.HIDDEN)) return;
+    if (!this.currentModalPeriodical) return;
+
+    const fresh = allJobs.filter((job) => job.tracking_title === this.currentModalPeriodical);
+    this.currentModalJobs = fresh;
+    this.renderPeriodicalModal();
+  }
+
+  /**
    * Show error info for a failed OCR job in the modal status bar
    * @param {string} message - The error message to display
    */
@@ -891,7 +910,10 @@ export class OCRQueueManager {
       this._eventSource = new EventSource(`/api/sse/ocr?token=${encodeURIComponent(token)}`);
 
       this._eventSource.onmessage = () => {
-        this.loadQueue();
+        const queueTab = document.getElementById('queue-tab');
+        if (queueTab?.classList.contains('active')) {
+          this.loadQueue();
+        }
       };
 
       this._eventSource.onerror = () => {

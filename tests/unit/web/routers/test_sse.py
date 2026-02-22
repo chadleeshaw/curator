@@ -605,8 +605,12 @@ class TestOCRProcessingTaskPublish:
         bus.publish.assert_called_once_with("ocr_queue", {"trigger": "update"})
 
     @pytest.mark.asyncio
-    async def test_ocr_task_does_not_publish_when_nothing_processed(self):
-        """When OCR processes 0 jobs (idle run), event_bus.publish is NOT called."""
+    async def test_ocr_task_publishes_even_when_nothing_processed(self):
+        """OCR processor always publishes, even on idle runs (processed=0).
+
+        This ensures newly-queued jobs added via the API are reflected in
+        connected clients without waiting for the processor to complete a job.
+        """
         from web.background_tasks import ocr_processing_task
 
         mock_processor = MagicMock()
@@ -622,7 +626,7 @@ class TestOCRProcessingTaskPublish:
 
         await ocr_processing_task(app_state)
 
-        bus.publish.assert_not_called()
+        bus.publish.assert_called_once_with("ocr_queue", {"trigger": "update"})
 
     @pytest.mark.asyncio
     async def test_ocr_task_does_not_publish_on_exception(self):

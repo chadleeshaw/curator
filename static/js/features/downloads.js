@@ -328,6 +328,7 @@ export class DownloadsManager {
       }
 
       this.displayQueue(data);
+      this._refreshOpenModal(data.queue ?? []);
     } catch (error) {
       console.error('[Queue] Failed to load queue:', error);
     }
@@ -923,6 +924,24 @@ export class DownloadsManager {
       container.innerHTML = html;
       document.getElementById('manage-queue-modal')?.classList.remove(CSS_CLASSES.HIDDEN);
     }
+  }
+
+  /**
+   * If the manage-queue modal is open, refresh its data from the latest queue snapshot.
+   * This keeps the modal in sync when an SSE event triggers a background queue reload.
+   *
+   * @param {DownloadItem[]} allItems - Full unfiltered queue from the API
+   * @private
+   * @returns {void}
+   */
+  _refreshOpenModal(allItems) {
+    const modal = document.getElementById('manage-queue-modal');
+    if (!modal || modal.classList.contains(CSS_CLASSES.HIDDEN)) return;
+    if (!this.currentModalPeriodical) return;
+
+    const fresh = allItems.filter((item) => item.periodical === this.currentModalPeriodical);
+    this.currentModalItems = fresh;
+    this.renderManageQueueModal();
   }
 
   /**
@@ -1586,8 +1605,8 @@ export class DownloadsManager {
       this._eventSource = new EventSource(`/api/sse/downloads?token=${encodeURIComponent(token)}`);
 
       this._eventSource.onmessage = () => {
-        const tasksTab = document.getElementById('tasks-tab');
-        if (tasksTab?.classList.contains('active')) {
+        const queueTab = document.getElementById('queue-tab');
+        if (queueTab?.classList.contains('active')) {
           this.loadDownloadQueue();
         }
       };
@@ -1615,8 +1634,8 @@ export class DownloadsManager {
   _fallbackToPolling() {
     if (this.refreshInterval) return;
     this.refreshInterval = setInterval(() => {
-      const tasksTab = document.getElementById('tasks-tab');
-      if (tasksTab?.classList.contains('active')) {
+      const queueTab = document.getElementById('queue-tab');
+      if (queueTab?.classList.contains('active')) {
         this.loadDownloadQueue();
       } else {
         this.stopAutoRefresh();
