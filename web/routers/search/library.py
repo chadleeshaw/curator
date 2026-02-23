@@ -131,15 +131,11 @@ def mark_failed_downloads(
     if tracking_id:
         failed_downloads = [d for d in failed_downloads if d.tracking_id == tracking_id]
 
-    failed_fuzzy_groups = {
-        d.fuzzy_match_group for d in failed_downloads if d.fuzzy_match_group
-    }
+    failed_fuzzy_groups = {d.fuzzy_match_group for d in failed_downloads if d.fuzzy_match_group}
 
     for result in results:
         # Reuse fuzzy_match_group_id if already calculated (from SearchService or cache)
-        fuzzy_group = result.get("fuzzy_match_group_id") or get_fuzzy_group_id(
-            result["title"]
-        )
+        fuzzy_group = result.get("fuzzy_match_group_id") or get_fuzzy_group_id(result["title"])
         if fuzzy_group in failed_fuzzy_groups:
             result["status"] = "failed"
             result["status_badge"] = "Failed Before"
@@ -188,9 +184,7 @@ def get_library_matches(
             matches.append(
                 {
                     "title": title_with_year,
-                    "publication_date": lib_item.issue_date.isoformat()
-                    if lib_item.issue_date
-                    else None,
+                    "publication_date": lib_item.issue_date.isoformat() if lib_item.issue_date else None,
                     "status": "in_library",
                     "status_badge": "In Library",
                     "library_item_id": lib_item.id,
@@ -209,9 +203,7 @@ def get_library_matches(
     return filter_by_language_and_country(matches, filter_language, filter_country)
 
 
-def sort_results_by_relevance(
-    results: List[Dict[str, Any]], query: str
-) -> List[Dict[str, Any]]:
+def sort_results_by_relevance(results: List[Dict[str, Any]], query: str) -> List[Dict[str, Any]]:
     """
     Sort results by fuzzy match score and date.
 
@@ -234,9 +226,7 @@ def sort_results_by_relevance(
             return pub_date.timestamp()
         if isinstance(pub_date, str):
             try:
-                return datetime.fromisoformat(
-                    pub_date.replace("Z", "+00:00")
-                ).timestamp()
+                return datetime.fromisoformat(pub_date.replace("Z", "+00:00")).timestamp()
             except (ValueError, TypeError):
                 return 0
         return 0
@@ -293,9 +283,7 @@ def build_search_response(
             "found": True,
             "results": final_results,
             "library_matches": len(library_matches),
-            "available_to_download": len(
-                [r for r in provider_results if r.get("status") == "available"]
-            ),
+            "available_to_download": len([r for r in provider_results if r.get("status") == "available"]),
             "total_results": len(final_results),
             "provider_errors": provider_errors if provider_errors else None,
             "from_cache": len(cached_results) > 0,
