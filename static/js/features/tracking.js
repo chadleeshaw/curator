@@ -252,19 +252,25 @@ export class TrackingManager {
     ];
     languageSelects.forEach((languageSelect) => {
       if (languageSelect && SUPPORTED_LANGUAGES.length > 0) {
-        // Keep existing options for search filter
+        // Keep existing options for search filter (it has a hard-coded "Any Language" option)
         const existingOptions =
           languageSelect.id === 'search-filter-language' ? languageSelect.innerHTML : '';
 
         languageSelect.innerHTML = existingOptions || '';
 
+        // For new/edit tracking dropdowns, prepend an "Any" option so users can track
+        // a title across all languages without being locked to English.
+        if (languageSelect.id !== 'search-filter-language') {
+          const anyOption = document.createElement('option');
+          anyOption.value = '';
+          anyOption.textContent = 'Any';
+          languageSelect.appendChild(anyOption);
+        }
+
         SUPPORTED_LANGUAGES.forEach((lang) => {
           const option = document.createElement('option');
           option.value = lang;
           option.textContent = lang;
-          if (lang === 'English') {
-            option.selected = true;
-          }
           languageSelect.appendChild(option);
         });
       }
@@ -597,7 +603,7 @@ export class TrackingManager {
       languageSelect.value = currentFilterLanguage;
     } else {
       // Try to detect from title using centralized LANGUAGE_KEYWORDS
-      let detectedLanguage = 'English'; // Default
+      let detectedLanguage = ''; // Default to Any
       for (const [language, keywords] of Object.entries(LANGUAGE_KEYWORDS)) {
         if (keywords.some((keyword) => result.title.includes(keyword))) {
           detectedLanguage = language;
@@ -626,7 +632,7 @@ export class TrackingManager {
         detectedCountry = LANGUAGE_TO_COUNTRY[languageSelect.value];
       }
 
-      countrySelect.value = detectedCountry || 'US'; // Default to US
+      countrySelect.value = detectedCountry || ''; // Default to none
     }
 
     // Hide the search results
@@ -1133,7 +1139,7 @@ export class TrackingManager {
         </div>
         <div class="tracked-card-meta">
           <span class="meta-item">\uD83D\uDCC1 ${category ?? 'Auto-detect'}</span>
-          <span class="meta-item">\uD83C\uDF10 ${language ?? 'English'}</span>
+          ${language ? `<span class="meta-item">\uD83C\uDF10 ${language}</span>` : ''}
           ${countryStats}
           ${issueStats}
           ${libraryStats}
@@ -1314,7 +1320,7 @@ export class TrackingManager {
         document.getElementById('edit-tracking-id').value = trackingId;
         document.getElementById('edit-tracking-title').value = t.title || '';
         document.getElementById('edit-tracking-category').value = t.category || '';
-        document.getElementById('edit-tracking-language').value = t.language || 'English';
+        document.getElementById('edit-tracking-language').value = t.language || '';
         document.getElementById('edit-tracking-country').value = t.country || '';
         document.getElementById('edit-tracking-download-category').value =
           t.download_category || '';
@@ -1753,8 +1759,19 @@ export class TrackingManager {
         }
 
         // If month/issue not found in title, try to extract from publication_date
-        // (but NOT for collections — they group under year 0)
-        if (parsed.month === 0 && !parsed.isCollection && result.publication_date) {
+        // (but NOT for collections — they group under year 0, and NOT when an issue
+        // or volume number was already found — those titles are volume-numbered series
+        // where the publication_date month is just an upload date, not an issue month)
+        // Track whether the month came from the title or was backfilled, because
+        // a backfilled month must not suppress the issue number from the dedup key.
+        let monthFromTitle = parsed.month > 0;
+        if (
+          parsed.month === 0 &&
+          !parsed.isCollection &&
+          !parsed.issue &&
+          !parsed.volume &&
+          result.publication_date
+        ) {
           try {
             const pubDate = new Date(result.publication_date);
             if (!isNaN(pubDate.getTime())) {
@@ -1766,11 +1783,13 @@ export class TrackingManager {
         }
 
         // Create unique key based on year, month, issue, season, and volume.
-        // When month is known (> 0), exclude issue from the key — for monthly magazines the
-        // cumulative issue number (e.g. "#8") is cosmetic and should not prevent deduplication
-        // of library items and provider results that refer to the same calendar issue.
+        // Only suppress the issue number when month came from the title itself —
+        // for monthly magazines the cumulative issue number (e.g. "#8") is cosmetic
+        // and deduplication should group library items with provider results for the
+        // same calendar issue.  When month was backfilled from publication_date the
+        // issue number is meaningful (e.g. quarterly No.01 vs No.04) and must stay.
         const vol = parsed.volume || 0;
-        const issueKey = parsed.month > 0 ? 0 : parsed.issue || 0;
+        const issueKey = monthFromTitle ? 0 : parsed.issue || 0;
         let key = `${parsed.year}-${parsed.month}-${issueKey}-${parsed.season || ''}-v${vol}`;
 
         // When all parsed fields are zero/null (title was completely unparseable), fall back to
@@ -1839,14 +1858,33 @@ export class TrackingManager {
       return b.issue - a.issue;
     });
 
-    // Group by year (volume-only items go under year 0)
+    // Group by semantic bucket:
+    //   'collections' — isCollection flag set (complete runs, packs, sets, bundles)
+    //   'volumes'     — has a volume or issue number but no month (volume-numbered series,
+    //                   regardless of whether a year is also present)
+    //   <year>        — has a year AND a month (normal dated issues, grouped by year number)
     const grouped = {};
     sortedIssues.forEach((issue) => {
-      if (!grouped[issue.year]) {
-        grouped[issue.year] = [];
+      let bucket;
+      if (issue.isCollection) {
+        bucket = 'collections';
+      } else if (!issue.month && (issue.volume > 0 || issue.issue > 0)) {
+        bucket = 'volumes';
+      } else {
+        bucket = issue.year || 0;
       }
-      grouped[issue.year].push(issue);
+      if (!grouped[bucket]) grouped[bucket] = [];
+      grouped[bucket].push(issue);
     });
+
+    // Volumes are numbered sequentially — sort ascending so #1 appears first.
+    if (grouped['volumes']) {
+      grouped['volumes'].sort((a, b) => {
+        const va = a.volume || a.issue || 0;
+        const vb = b.volume || b.issue || 0;
+        return va - vb;
+      });
+    }
 
     return grouped;
   }
@@ -2161,36 +2199,22 @@ export class TrackingManager {
       </div>
       <div style="max-height: 70vh; overflow-y: auto;">`;
 
-    const years = Object.keys(groupedByYear).sort((a, b) => b - a);
+    // Sort display order: collections first, then dated years (descending), then volumes.
+    const years = Object.keys(groupedByYear).sort((a, b) => {
+      if (a === 'collections') return -1;
+      if (b === 'collections') return 1;
+      if (a === 'volumes' && b !== 'volumes') return 1; // volumes after dated years
+      if (b === 'volumes' && a !== 'volumes') return -1;
+      return Number(b) - Number(a); // both dated — desc
+    });
 
-    years.forEach((year) => {
-      const allIssues = groupedByYear[year];
-
-      // Filter issues by source
-      const issues =
-        this.sourceFilter === 'all'
-          ? allIssues
-          : allIssues.filter((issue) => this.issueMatchesSourceFilter(issue, this.sourceFilter));
-
-      if (issues.length === 0) return; // Skip empty year groups after filtering
-
-      // Display label for year groups
-      let yearLabel;
-      if (year === '0') {
-        const hasVolumes = issues.some((i) => i.volume > 0 && !i.isCollection);
-        const hasCollections = issues.some((i) => i.isCollection);
-        if (hasVolumes && hasCollections) yearLabel = '📦 Volumes & Collections';
-        else if (hasVolumes) yearLabel = '📦 Volumes';
-        else yearLabel = '📦 Collections';
-      } else {
-        yearLabel = `📅 ${year}`;
-      }
-      html += `<div style="margin-bottom: 20px;">
-        <h4 style="color: var(--primary-color); margin-bottom: 10px;">${yearLabel}</h4>
-        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px;">`;
-
+    // Render a flat list of issue cards into `html` (no section wrapper).
+    const renderCards = (issues) => {
       issues.forEach((issue) => {
-        // Create display label based on available information
+        // Create display label based on available information.
+        // Precedence: collection > season > month/year > volume+issue > volume > issue
+        // Month/year always wins over volume when both are present — a dated issue
+        // should show its date, not its volume number.
         let displayLabel;
 
         // Priority 0: Collection/Set (if isCollection flag is set)
@@ -2203,31 +2227,23 @@ export class TrackingManager {
         else if (issue.season) {
           displayLabel = issue.season;
         }
-        // Priority 2: Volume with issue (e.g., "Vol 5 #12")
-        else if (issue.volume > 0 && issue.issue > 0) {
-          displayLabel = `Vol ${issue.volume} #${issue.issue}`;
-        }
-        // Priority 3: Volume with month (e.g., "Vol 5 Jan")
-        else if (issue.volume > 0 && issue.month > 0) {
-          displayLabel = `Vol ${issue.volume} ${NUMBER_TO_MONTH[issue.month]}`;
-        }
-        // Priority 4: Volume only (e.g., "Vol 12")
-        else if (issue.volume > 0) {
-          displayLabel = `Vol ${issue.volume}`;
-        }
-        // Priority 5: Month and Issue
-        else if (issue.month > 0 && issue.issue > 0) {
-          displayLabel = `${NUMBER_TO_MONTH[issue.month]} #${issue.issue}`;
-        }
-        // Priority 6: Month only
+        // Priority 2: Month (dated issue) — shown regardless of whether volume is also present
         else if (issue.month > 0) {
           displayLabel = NUMBER_TO_MONTH[issue.month];
         }
-        // Priority 7: Issue number only
+        // Priority 3: Volume with issue number (no month — volume-numbered series)
+        else if (issue.volume > 0 && issue.issue > 0) {
+          displayLabel = `Vol ${issue.volume} #${issue.issue}`;
+        }
+        // Priority 4: Volume only
+        else if (issue.volume > 0) {
+          displayLabel = `Vol ${issue.volume}`;
+        }
+        // Priority 5: Issue number only
         else if (issue.issue > 0) {
           displayLabel = `#${issue.issue}`;
         }
-        // Fallback: Just show year
+        // Fallback: year
         else {
           displayLabel = `${issue.year}`;
         }
@@ -2417,8 +2433,46 @@ export class TrackingManager {
 
         html += cardHtml;
       });
+    }; // end renderCards
 
-      html += `</div></div>`;
+    years.forEach((year) => {
+      const allIssues = groupedByYear[year];
+
+      // Filter issues by source
+      const issues =
+        this.sourceFilter === 'all'
+          ? allIssues
+          : allIssues.filter((issue) => this.issueMatchesSourceFilter(issue, this.sourceFilter));
+
+      if (issues.length === 0) return; // Skip empty year groups after filtering
+
+      if (year === '0') {
+        // Fallback: undated items with no volume/issue number and not a collection.
+        // These couldn't be bucketed more specifically — show under a generic label.
+        html += `<div style="margin-bottom: 20px;">
+          <h4 style="color: var(--primary-color); margin-bottom: 10px;">📅 Unknown Date</h4>
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px;">`;
+        renderCards(issues);
+        html += `</div></div>`;
+      } else if (year === 'volumes') {
+        html += `<div style="margin-bottom: 20px;">
+          <h4 style="color: var(--primary-color); margin-bottom: 10px;">📦 Volumes</h4>
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px;">`;
+        renderCards(issues);
+        html += `</div></div>`;
+      } else if (year === 'collections') {
+        html += `<div style="margin-bottom: 20px;">
+          <h4 style="color: var(--primary-color); margin-bottom: 10px;">📦 Collections</h4>
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px;">`;
+        renderCards(issues);
+        html += `</div></div>`;
+      } else {
+        html += `<div style="margin-bottom: 20px;">
+          <h4 style="color: var(--primary-color); margin-bottom: 10px;">📅 ${year}</h4>
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px;">`;
+        renderCards(issues);
+        html += `</div></div>`;
+      }
     });
 
     html += `</div>`;
@@ -2511,6 +2565,12 @@ export class TrackingManager {
 
     const stackSelect = document.getElementById('new-tracking-stack');
     if (stackSelect) stackSelect.value = '';
+
+    const languageSelect = document.getElementById('new-tracking-language');
+    if (languageSelect) languageSelect.value = '';
+
+    const countrySelect = document.getElementById('new-tracking-country');
+    if (countrySelect) countrySelect.value = '';
   }
 
   /**
@@ -3535,7 +3595,7 @@ window.closeTrackNewPeriodicalModal = () => tracking.closeTrackNewPeriodicalModa
 window.saveNewTracking = async () => {
   const title = document.getElementById('new-tracking-title').value.trim();
   const category = document.getElementById('new-tracking-category').value;
-  const language = document.getElementById('new-tracking-language').value || 'English';
+  const language = document.getElementById('new-tracking-language').value;
   const country = document.getElementById('new-tracking-country').value;
   const downloadCategory = document.getElementById('new-tracking-download-category').value.trim();
 

@@ -42,13 +42,17 @@ async function loadLanguageDropdown() {
       if (!dropdown) return;
       const currentValue = dropdown.value;
       dropdown.innerHTML = '';
+      const anyOption = document.createElement('option');
+      anyOption.value = '';
+      anyOption.textContent = 'Any';
+      dropdown.appendChild(anyOption);
       data.languages.forEach((lang) => {
         const option = document.createElement('option');
         option.value = lang;
         option.textContent = lang;
         dropdown.appendChild(option);
       });
-      if (currentValue) {
+      if (currentValue !== undefined) {
         dropdown.value = currentValue;
       }
     }
@@ -833,7 +837,7 @@ function enableMetadataEdit() {
 
   // Populate form fields
   const languageField = document.getElementById('edit-language');
-  languageField.value = currentPeriodicalData.language || 'English';
+  languageField.value = currentPeriodicalData.language || '';
 
   // Disable language if controlled by tracking
   const languageContainer = document.getElementById('edit-language-container');
