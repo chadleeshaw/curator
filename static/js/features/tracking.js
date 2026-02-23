@@ -1764,7 +1764,20 @@ export class TrackingManager {
         // of library items and provider results that refer to the same calendar issue.
         const vol = parsed.volume || 0;
         const issueKey = parsed.month > 0 ? 0 : parsed.issue || 0;
-        const key = `${parsed.year}-${parsed.month}-${issueKey}-${parsed.season || ''}-v${vol}`;
+        let key = `${parsed.year}-${parsed.month}-${issueKey}-${parsed.season || ''}-v${vol}`;
+
+        // When all parsed fields are zero/null (title was completely unparseable), fall back to
+        // a title-based key so unrelated items don't collapse into one card as "variants".
+        // This handles titles like "Wired 7 in US" where no year/month/issue is recognized.
+        if (
+          parsed.year === 0 &&
+          parsed.month === 0 &&
+          issueKey === 0 &&
+          vol === 0 &&
+          !parsed.season
+        ) {
+          key = `title:${result.title.replace(/\s+/g, ' ').trim().toLowerCase()}`;
+        }
 
         if (!issueMap.has(key)) {
           // Extract language variant from title if present
@@ -2314,9 +2327,7 @@ export class TrackingManager {
         // Show language variants badge if multiple variants exist
         // For library items, only count downloadable (provider) variants
         const providerVariantCount = isLibraryItem
-          ? displayVariants.filter(
-              (v) => v.status !== 'in_library' && v.from_provider !== false && v.url
-            ).length
+          ? displayVariants.filter((v) => v.from_provider !== false && v.url).length
           : displayVariants.length;
         const hasMultipleVariants = isLibraryItem
           ? providerVariantCount > 0

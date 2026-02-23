@@ -7,6 +7,7 @@ a ``parsed_title`` dict ready for direct consumption by the UI.
 """
 
 import logging
+import re
 from typing import Any, Dict, List
 
 from core.constants.date import SEASON_CANONICAL_NAMES
@@ -118,6 +119,17 @@ def _parse_single_result(result: Dict[str, Any]) -> Dict[str, Any]:
                             year = y
             except (ValueError, IndexError):
                 pass
+
+    # Bare-number fallback: for titles like "Wired 7 in US" where no year/month/issue
+    # was extracted, try to find a standalone number (1–4 digits, not a year) as the issue.
+    # This prevents all unparseable titles from sharing the all-zero dedup key.
+    if not is_collection and year == 0 and month == 0 and issue == 0 and volume == 0:
+        bare_num_match = re.search(r"(?<!\d)(\d{1,4})(?!\d)", title)
+        if bare_num_match:
+            candidate = int(bare_num_match.group(1))
+            # Exclude plausible years (1900–2100) to avoid misclassifying year-only titles
+            if not (1900 <= candidate <= 2100):
+                issue = candidate
 
     # For collections, try to extract set number
     if is_collection and issue == 0:

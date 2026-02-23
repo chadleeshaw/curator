@@ -30,6 +30,7 @@ from core.constants.patterns.date import (
 
 from core.constants.patterns.nzb import (
     NZB_COUNTRY_PATTERNS,
+    NZB_COUNTRY_IN_PATTERN,
     NZB_LANGUAGE_PATTERNS,
     NZB_EDITION_PATTERNS,
     NZB_QUALITY_PATTERNS,

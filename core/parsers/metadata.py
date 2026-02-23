@@ -30,6 +30,7 @@ from core.constants.patterns import (
     DATE_PATTERN_MULTI_MONTH_NUMERIC,
     DATE_PATTERN_YEAR_ONLY,
     NZB_COUNTRY_PATTERNS,
+    NZB_COUNTRY_IN_PATTERN,
     NZB_EDITION_PATTERNS,
     NZB_ISSUE_PATTERN,
     NZB_LANGUAGE_PATTERNS,
@@ -144,7 +145,11 @@ class FilenameParser:
 
         # Extract dates from various formats
         remaining_text = self._extract_dates(
-            remaining_text, metadata, numeric_month_data, iso_date_data, month_issue_year_data
+            remaining_text,
+            metadata,
+            numeric_month_data,
+            iso_date_data,
+            month_issue_year_data,
         )
 
         # Extract volume and issue numbers (AFTER dates to avoid conflicts)
@@ -326,6 +331,15 @@ class FilenameParser:
                 remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
                 remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
                 break
+
+        # Apply the India (IN) country code pattern case-sensitively — no re.IGNORECASE — so the
+        # English preposition "in" (always lowercase in running text) is not misidentified.
+        if "country" not in metadata:
+            match = re.search(NZB_COUNTRY_IN_PATTERN, remaining_text)
+            if match:
+                metadata["country"] = "IN"
+                remaining_text = remaining_text[: match.start()] + remaining_text[match.end() :]
+                remaining_text = re.sub(r"\s+", " ", remaining_text).strip()
 
         # Extract language
         for pattern in NZB_LANGUAGE_PATTERNS:
