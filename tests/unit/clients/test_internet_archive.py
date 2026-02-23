@@ -36,6 +36,21 @@ from core.constants.internet_archive import (
 )
 
 
+def _make_get_mock(response):
+    """Wrap a response Mock so requests.get can be used as a context manager.
+
+    Production code uses ``with requests.get(...) as response:``.  Plain
+    ``Mock()`` objects don't implement the context manager protocol, so we
+    configure ``__enter__`` to return the response and ``__exit__`` to be a
+    no-op.  The returned object is suitable for use as ``return_value`` in a
+    ``patch("...requests.get", return_value=_make_get_mock(resp))`` call.
+    """
+    cm = Mock()
+    cm.__enter__ = Mock(return_value=response)
+    cm.__exit__ = Mock(return_value=False)
+    return cm
+
+
 class TestInternetArchiveClientInitialization:
     """Test Internet Archive client initialization"""
 
@@ -1086,7 +1101,10 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
 
             with (
                 patch("clients.internet_archive.get_item"),
-                patch("clients.internet_archive.requests.get", return_value=mock_response),
+                patch(
+                    "clients.internet_archive.requests.get",
+                    return_value=_make_get_mock(mock_response),
+                ),
                 patch.object(client, "_get_download_strategy", return_value=strategy),
                 patch.object(client, "_save_part_meta") as mock_save_meta,
             ):
@@ -1175,7 +1193,10 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
                     "clients.internet_archive.requests.head",
                     side_effect=[head_resp_support, head_resp_stale],
                 ),
-                patch("clients.internet_archive.requests.get", return_value=get_response),
+                patch(
+                    "clients.internet_archive.requests.get",
+                    return_value=_make_get_mock(get_response),
+                ),
                 patch("pathlib.Path.exists", _selective_exists),
             ):
                 client._download_file(job)
@@ -1252,7 +1273,10 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
                         req_lib.exceptions.ConnectionError("timeout"),
                     ],
                 ),
-                patch("clients.internet_archive.requests.get", return_value=get_response),
+                patch(
+                    "clients.internet_archive.requests.get",
+                    return_value=_make_get_mock(get_response),
+                ),
                 patch("pathlib.Path.exists", _selective_exists),
             ):
                 client._download_file(job)
@@ -1324,7 +1348,10 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
                     "clients.internet_archive.requests.head",
                     side_effect=[head_for_support, head_for_stale],
                 ),
-                patch("clients.internet_archive.requests.get", return_value=get_response),
+                patch(
+                    "clients.internet_archive.requests.get",
+                    return_value=_make_get_mock(get_response),
+                ),
                 patch("pathlib.Path.exists", _selective_exists),
             ):
                 client._download_file(job)
@@ -1392,7 +1419,10 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
                     "clients.internet_archive.requests.head",
                     return_value=Mock(headers={"Accept-Ranges": "none"}),
                 ),
-                patch("clients.internet_archive.requests.get", return_value=get_response),
+                patch(
+                    "clients.internet_archive.requests.get",
+                    return_value=_make_get_mock(get_response),
+                ),
                 patch("pathlib.Path.exists", _selective_exists),
             ):
                 client._download_file(job)
@@ -1449,7 +1479,10 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
                     "_cleanup_part_files",
                     side_effect=lambda pf: cleanup_called.append(str(pf)),
                 ),
-                patch("clients.internet_archive.requests.get", return_value=get_response),
+                patch(
+                    "clients.internet_archive.requests.get",
+                    return_value=_make_get_mock(get_response),
+                ),
                 patch("pathlib.Path.exists", _selective_exists),
             ):
                 client._download_file(job)
@@ -1566,7 +1599,10 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
                         Mock(headers={"ETag": '"etag"', "Content-Length": "10240"}),
                     ],
                 ),
-                patch("clients.internet_archive.requests.get", return_value=get_response),
+                patch(
+                    "clients.internet_archive.requests.get",
+                    return_value=_make_get_mock(get_response),
+                ),
                 patch("pathlib.Path.exists", _selective_exists),
             ):
                 client._download_file(job)
@@ -1603,7 +1639,10 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
 
             with (
                 patch.object(client, "_get_download_strategy", return_value=strategy),
-                patch("clients.internet_archive.requests.get", return_value=get_response),
+                patch(
+                    "clients.internet_archive.requests.get",
+                    return_value=_make_get_mock(get_response),
+                ),
                 patch("clients.internet_archive.time.sleep"),
             ):
                 client._download_file(job)
@@ -1879,7 +1918,10 @@ class TestOnProgressCallback:
 
             with (
                 patch("clients.internet_archive.get_item"),
-                patch("clients.internet_archive.requests.get", return_value=mock_response),
+                patch(
+                    "clients.internet_archive.requests.get",
+                    return_value=_make_get_mock(mock_response),
+                ),
                 patch.object(client, "_get_download_strategy", return_value=strategy),
                 patch.object(client, "_save_part_meta"),
             ):
@@ -1915,7 +1957,10 @@ class TestOnProgressCallback:
 
             with (
                 patch("clients.internet_archive.get_item"),
-                patch("clients.internet_archive.requests.get", return_value=mock_response),
+                patch(
+                    "clients.internet_archive.requests.get",
+                    return_value=_make_get_mock(mock_response),
+                ),
                 patch.object(client, "_get_download_strategy", return_value=strategy),
                 patch.object(client, "_save_part_meta"),
             ):
@@ -2029,7 +2074,10 @@ class TestOnProgressCallback:
 
             with (
                 patch("clients.internet_archive.get_item"),
-                patch("clients.internet_archive.requests.get", return_value=mock_response),
+                patch(
+                    "clients.internet_archive.requests.get",
+                    return_value=_make_get_mock(mock_response),
+                ),
                 patch.object(client, "_get_download_strategy", return_value=strategy),
                 patch.object(client, "_save_part_meta"),
             ):
@@ -2073,7 +2121,10 @@ class TestOnProgressCallback:
 
             with (
                 patch("clients.internet_archive.get_item"),
-                patch("clients.internet_archive.requests.get", return_value=mock_response),
+                patch(
+                    "clients.internet_archive.requests.get",
+                    return_value=_make_get_mock(mock_response),
+                ),
                 patch.object(client, "_get_download_strategy", return_value=strategy),
                 patch.object(client, "_save_part_meta"),
             ):

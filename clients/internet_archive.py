@@ -706,66 +706,66 @@ class InternetArchiveClient(DownloadClient):
                             # No valid meta — can't trust the .part file, restart
                             self._cleanup_part_files(partial_file)
 
-                    response = requests.get(
+                    with requests.get(
                         job.download_url,
                         stream=True,
                         timeout=IA_DOWNLOAD_TIMEOUT,
                         headers=headers if headers else None,
-                    )
-                    response.raise_for_status()
+                    ) as response:
+                        response.raise_for_status()
 
-                    is_resumed = response.status_code == 206
-                    content_length = response.headers.get("content-length")
+                        is_resumed = response.status_code == 206
+                        content_length = response.headers.get("content-length")
 
-                    if is_resumed:
-                        # 206 Partial Content — server accepted our Range request
-                        # content-length is the remaining bytes, not total
-                        if content_length:
-                            job.expected_size = resume_offset + int(content_length)
-                        job.downloaded_size = resume_offset
-                        logger.info(
-                            f"[{self.name}] Server accepted resume at byte {resume_offset} " f"for {job.identifier}"
-                        )
-                    else:
-                        # 200 OK — full download (either no resume attempted, or server ignored Range)
-                        if content_length:
-                            job.expected_size = int(content_length)
+                        if is_resumed:
+                            # 206 Partial Content — server accepted our Range request
+                            # content-length is the remaining bytes, not total
+                            if content_length:
+                                job.expected_size = resume_offset + int(content_length)
+                            job.downloaded_size = resume_offset
+                            logger.info(
+                                f"[{self.name}] Server accepted resume at byte {resume_offset} " f"for {job.identifier}"
+                            )
                         else:
-                            job.expected_size = 0  # Unknown size — don't track progress
-                        job.downloaded_size = 0
-                        resume_offset = 0  # Reset in case server ignored our Range header
+                            # 200 OK — full download (either no resume attempted, or server ignored Range)
+                            if content_length:
+                                job.expected_size = int(content_length)
+                            else:
+                                job.expected_size = 0  # Unknown size — don't track progress
+                            job.downloaded_size = 0
+                            resume_offset = 0  # Reset in case server ignored our Range header
 
-                    # Save resume metadata for direct downloads (before writing data)
-                    if can_resume and not is_resumed:
-                        self._save_part_meta(
-                            meta_path,
-                            download_url=job.download_url,
-                            expected_size=job.expected_size,
-                            etag=response.headers.get("ETag"),
-                            last_modified=response.headers.get("Last-Modified"),
-                        )
+                        # Save resume metadata for direct downloads (before writing data)
+                        if can_resume and not is_resumed:
+                            self._save_part_meta(
+                                meta_path,
+                                download_url=job.download_url,
+                                expected_size=job.expected_size,
+                                etag=response.headers.get("ETag"),
+                                last_modified=response.headers.get("Last-Modified"),
+                            )
 
-                    # Stream download with progress tracking
-                    # Use "ab" (append) for resume, "wb" (overwrite) for fresh download
-                    file_mode = "ab" if is_resumed else "wb"
+                        # Stream download with progress tracking
+                        # Use "ab" (append) for resume, "wb" (overwrite) for fresh download
+                        file_mode = "ab" if is_resumed else "wb"
 
-                    _last_notified_progress = -1  # Track last notified progress bucket
+                        _last_notified_progress = -1  # Track last notified progress bucket
 
-                    with open(partial_file, file_mode) as f:
-                        for chunk in response.iter_content(chunk_size=IA_DOWNLOAD_CHUNK_SIZE):
-                            if chunk:
-                                f.write(chunk)
-                                job.downloaded_size += len(chunk)
+                        with open(partial_file, file_mode) as f:
+                            for chunk in response.iter_content(chunk_size=IA_DOWNLOAD_CHUNK_SIZE):
+                                if chunk:
+                                    f.write(chunk)
+                                    job.downloaded_size += len(chunk)
 
-                                # Update progress (SSE pushes this value to subscribers)
-                                if job.expected_size > 0:
-                                    job.progress = int((job.downloaded_size / job.expected_size) * 100)
-                                    # Notify every 5 percentage points so the UI stays
-                                    # current without flooding the event bus.
-                                    progress_bucket = job.progress // 5
-                                    if progress_bucket != _last_notified_progress:
-                                        _last_notified_progress = progress_bucket
-                                        self._notify()
+                                    # Update progress (SSE pushes this value to subscribers)
+                                    if job.expected_size > 0:
+                                        job.progress = int((job.downloaded_size / job.expected_size) * 100)
+                                        # Notify every 5 percentage points so the UI stays
+                                        # current without flooding the event bus.
+                                        progress_bucket = job.progress // 5
+                                        if progress_bucket != _last_notified_progress:
+                                            _last_notified_progress = progress_bucket
+                                            self._notify()
 
                     # Verify download and rename from .part to final name atomically
                     if partial_file.exists() and partial_file.stat().st_size > 0:

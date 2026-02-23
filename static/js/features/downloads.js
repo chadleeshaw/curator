@@ -7,6 +7,7 @@
 import { APIClient, APIHelper } from '../core/api.js';
 import { AuthManager } from '../core/auth.js';
 import { UIUtils } from '../core/ui-utils.js';
+import { escapeHtml } from '../readers/reader-utils.js';
 import {
   ELEMENT_IDS as _ELEMENT_IDS,
   STATUS_MESSAGES as _STATUS_MESSAGES,
@@ -57,22 +58,36 @@ export class DownloadsManager {
     this.maxRetries = 3; // Default value, will be loaded from API
     /** @type {number} Maximum download retry attempts (Internet Archive) */
     this.maxRetriesIA = 5; // Default value, will be loaded from API
-    /** @type {DiscoveredIssue[]|null} Current items in modal */
-    this.currentModalItems = null;
-    /** @type {string|null} Current periodical in modal */
-    this.currentModalPeriodical = null;
-    /** @type {string} Current filter in modal */
-    this.currentModalFilter = 'all';
-    /** @type {string} Current sort field in modal (title, status, date) */
-    this.currentModalSort = 'date';
-    /** @type {boolean} Current sort order in modal (true = ascending, false = descending) */
-    this.currentModalSortAsc = false;
+    /**
+     * State for the "Manage Queue" modal.
+     * Kept separate from the failed modal state so the two don't clobber each other.
+     * @type {{items: DownloadItem[]|null, periodical: string|null, filter: string, sort: string, sortAsc: boolean}}
+     */
+    this._queueModal = {
+      items: null,
+      periodical: null,
+      filter: 'all',
+      sort: 'date',
+      sortAsc: false,
+    };
+    /**
+     * State for the "Manage Failed" modal.
+     * Kept separate from the queue modal state so the two don't clobber each other.
+     * @type {{items: DiscoveredIssue[]|null, periodical: string|null}}
+     */
+    this._failedModal = {
+      items: null,
+      periodical: null,
+    };
     /** @type {string} Current filter for queue view (all, queued, pending, downloading, completed, failed, skipped) */
     this.currentFilter = 'all';
     /** @type {string} Current sort field for queue view (title, status, priority, created_at) */
     this.currentSort = 'title';
     /** @type {boolean} Current sort order (true = ascending, false = descending) */
     this.sortAscending = true;
+    /** @type {Map<number, {periodical: string, items: DiscoveredIssue[]}>} Registry for failed group data, keyed by numeric ID to avoid XSS via onclick */
+    this._failedGroupRegistry = new Map();
+    this._failedGroupNextId = 0;
 
     // Load preferences from localStorage
     this.loadSortPreference();
@@ -143,6 +158,10 @@ export class DownloadsManager {
     const container = document.getElementById('failed-downloads-container');
     if (!container) return;
 
+    // Clear registry on each render to prevent unbounded growth
+    this._failedGroupRegistry.clear();
+    this._failedGroupNextId = 0;
+
     const issues = data.issues || [];
     const grouped = this.groupIssuesByPeriodical(issues);
 
@@ -187,14 +206,18 @@ export class DownloadsManager {
       const hasPermanentlyFailed = permanentlyFailedCount > 0;
       const icon = hasPermanentlyFailed ? '\uD83D\uDEAB' : '\u26A0\uFE0F';
 
+      // Store group data in registry to avoid injecting JSON/user content into onclick attributes
+      const registryId = this._failedGroupNextId++;
+      this._failedGroupRegistry.set(registryId, { periodical, items });
+
       html += `
         <div class="periodical-group-card"
-             onclick="downloads.openManageFailedModal('${periodical}', ${JSON.stringify(items).replace(/"/g, '&quot;')})">
+             onclick="downloads._openFailedGroupById(${registryId})">
           <div class="periodical-group-content">
             <div class="periodical-group-info">
               <div class="periodical-group-header">
                 <span class="periodical-group-icon">${icon}</span>
-                <span class="periodical-group-title">${periodical}</span>
+                <span class="periodical-group-title">${escapeHtml(periodical)}</span>
               </div>
               <div class="periodical-group-subtitle">
                 ${totalCount} issue${totalCount !== 1 ? 's' : ''} need${totalCount === 1 ? 's' : ''} attention
@@ -268,7 +291,7 @@ export class DownloadsManager {
     // Determine which status element to use (modal or base page)
     const failedModal = document.getElementById('manage-failed-modal');
     const statusId =
-      failedModal && !failedModal.classList.contains('hidden')
+      failedModal && !failedModal.classList.contains(CSS_CLASSES.HIDDEN)
         ? 'modal-failed-status'
         : 'downloads-status';
 
@@ -715,9 +738,9 @@ export class DownloadsManager {
    * @returns {void}
    */
   openManageQueueModal(periodical, items, filter = 'all') {
-    this.currentModalItems = items;
-    this.currentModalPeriodical = periodical;
-    this.currentModalFilter = filter;
+    this._queueModal.items = items;
+    this._queueModal.periodical = periodical;
+    this._queueModal.filter = filter;
 
     this.renderManageQueueModal();
   }
@@ -729,11 +752,7 @@ export class DownloadsManager {
    * @private
    */
   renderManageQueueModal() {
-    const {
-      currentModalItems: items,
-      currentModalPeriodical: periodical,
-      currentModalFilter: filter = 'all',
-    } = this;
+    const { items, periodical, filter = 'all' } = this._queueModal;
 
     // Filter items based on current filter
     const filteredItems =
@@ -787,8 +806,8 @@ export class DownloadsManager {
       `;
     } else {
       // Sort filtered items
-      const sortField = this.currentModalSort;
-      const sortAsc = this.currentModalSortAsc;
+      const sortField = this._queueModal.sort;
+      const sortAsc = this._queueModal.sortAsc;
       const sorted = [...filteredItems].sort((a, b) => {
         let cmp = 0;
         switch (sortField) {
@@ -889,7 +908,7 @@ export class DownloadsManager {
 
     const html = `
       <div class="modal-header">
-        <h3>Manage Downloads: ${periodical}</h3>
+        <h3>Manage Downloads: ${escapeHtml(periodical)}</h3>
         <p style="color: var(--text-secondary); margin-top: 8px; font-size: 0.95em;">${items.length} issues - ${statusList}</p>
         ${waitTimeAlert}
         <div id="modal-queue-status" class="hidden" style="margin-top: 10px;"></div>
@@ -901,9 +920,9 @@ export class DownloadsManager {
         <table style="width: 100%; border-collapse: separate; border-spacing: 0 4px; min-width: 700px;">
           <thead style="position: sticky; top: 0; background: var(--surface); z-index: 1;">
             <tr>
-              <th onclick="downloads.sortModalQueue('title')" style="text-align: left; padding: 12px 14px; border-bottom: 2px solid var(--border-color); cursor: pointer; user-select: none;">Issue ${this.currentModalSort === 'title' ? (this.currentModalSortAsc ? '↑' : '↓') : ''}</th>
-              <th onclick="downloads.sortModalQueue('status')" style="text-align: center; padding: 12px 14px; border-bottom: 2px solid var(--border-color); min-width: 160px; cursor: pointer; user-select: none;">Status ${this.currentModalSort === 'status' ? (this.currentModalSortAsc ? '↑' : '↓') : ''}</th>
-              <th onclick="downloads.sortModalQueue('date')" style="text-align: center; padding: 12px 14px; border-bottom: 2px solid var(--border-color); min-width: 80px; cursor: pointer; user-select: none;">Date ${this.currentModalSort === 'date' ? (this.currentModalSortAsc ? '↑' : '↓') : ''}</th>
+              <th onclick="downloads.sortModalQueue('title')" style="text-align: left; padding: 12px 14px; border-bottom: 2px solid var(--border-color); cursor: pointer; user-select: none;">Issue ${this._queueModal.sort === 'title' ? (this._queueModal.sortAsc ? '↑' : '↓') : ''}</th>
+              <th onclick="downloads.sortModalQueue('status')" style="text-align: center; padding: 12px 14px; border-bottom: 2px solid var(--border-color); min-width: 160px; cursor: pointer; user-select: none;">Status ${this._queueModal.sort === 'status' ? (this._queueModal.sortAsc ? '↑' : '↓') : ''}</th>
+              <th onclick="downloads.sortModalQueue('date')" style="text-align: center; padding: 12px 14px; border-bottom: 2px solid var(--border-color); min-width: 80px; cursor: pointer; user-select: none;">Date ${this._queueModal.sort === 'date' ? (this._queueModal.sortAsc ? '↑' : '↓') : ''}</th>
               <th style="text-align: right; padding: 12px 14px; border-bottom: 2px solid var(--border-color); min-width: 200px;">Actions</th>
             </tr>
           </thead>
@@ -912,8 +931,8 @@ export class DownloadsManager {
       </div>
       <div class="modal-footer" style="display: flex; gap: 10px; justify-content: space-between; padding-top: 20px; border-top: 1px solid var(--border-color);">
         <div>
-          <button onclick="downloads.bulkRetryQueue()" class="btn-secondary">\uD83D\uDD04 Retry Failed</button>
-          <button onclick="downloads.bulkRemoveQueue()" class="btn-secondary" style="background: var(--status-failed);">\uD83D\uDDD1\uFE0F Remove All</button>
+          <button id="bulk-retry-btn" onclick="downloads.bulkRetryQueue()" class="btn-secondary">\uD83D\uDD04 Retry Failed</button>
+          <button id="bulk-remove-btn" onclick="downloads.bulkRemoveQueue()" class="btn-secondary" style="background: var(--status-failed);">\uD83D\uDDD1\uFE0F Remove All</button>
         </div>
         <button onclick="downloads.closeManageQueueModal()" class="save-btn">Close</button>
       </div>
@@ -937,10 +956,10 @@ export class DownloadsManager {
   _refreshOpenModal(allItems) {
     const modal = document.getElementById('manage-queue-modal');
     if (!modal || modal.classList.contains(CSS_CLASSES.HIDDEN)) return;
-    if (!this.currentModalPeriodical) return;
+    if (!this._queueModal.periodical) return;
 
-    const fresh = allItems.filter((item) => item.periodical === this.currentModalPeriodical);
-    this.currentModalItems = fresh;
+    const fresh = allItems.filter((item) => item.periodical === this._queueModal.periodical);
+    this._queueModal.items = fresh;
     this.renderManageQueueModal();
   }
 
@@ -951,7 +970,7 @@ export class DownloadsManager {
    * @returns {void}
    */
   filterModalQueue(status) {
-    this.currentModalFilter = status;
+    this._queueModal.filter = status;
     this.renderManageQueueModal();
   }
 
@@ -962,11 +981,11 @@ export class DownloadsManager {
    * @returns {void}
    */
   sortModalQueue(field) {
-    if (this.currentModalSort === field) {
-      this.currentModalSortAsc = !this.currentModalSortAsc;
+    if (this._queueModal.sort === field) {
+      this._queueModal.sortAsc = !this._queueModal.sortAsc;
     } else {
-      this.currentModalSort = field;
-      this.currentModalSortAsc = field === 'title'; // Default: title asc, others desc
+      this._queueModal.sort = field;
+      this._queueModal.sortAsc = field === 'title'; // Default: title asc, others desc
     }
     this.renderManageQueueModal();
   }
@@ -978,31 +997,37 @@ export class DownloadsManager {
    */
   closeManageQueueModal() {
     document.getElementById('manage-queue-modal')?.classList.add(CSS_CLASSES.HIDDEN);
-    this.currentModalItems = null;
-    this.currentModalPeriodical = null;
-    this.currentModalFilter = 'all';
+    this._queueModal.items = null;
+    this._queueModal.periodical = null;
+    this._queueModal.filter = 'all';
+  }
+
+  /**
+   * Open the failed modal using a registry ID (safe alternative to inline JSON injection).
+   * Called from onclick handlers generated by displayFailedDownloads.
+   *
+   * @param {number} id - Registry key from _failedGroupRegistry
+   * @returns {void}
+   */
+  _openFailedGroupById(id) {
+    const entry = this._failedGroupRegistry.get(id);
+    if (!entry) {
+      console.error('[Downloads] Failed group registry entry not found:', id);
+      return;
+    }
+    this.openManageFailedModal(entry.periodical, entry.items);
   }
 
   /**
    * Open modal to manage failed downloads for a periodical
    *
    * @param {string} periodical - The periodical name
-   * @param {DiscoveredIssue[]|string} items - Array of items or JSON string
+   * @param {DiscoveredIssue[]} items - Array of items
    * @returns {void}
    */
   openManageFailedModal(periodical, items) {
-    // Parse items if it's a string
-    if (typeof items === 'string') {
-      try {
-        items = JSON.parse(items.replace(/&quot;/g, '"'));
-      } catch (e) {
-        console.error('[Downloads] Error parsing items:', e);
-        return;
-      }
-    }
-
-    this.currentModalItems = items;
-    this.currentModalPeriodical = periodical;
+    this._failedModal.items = items;
+    this._failedModal.periodical = periodical;
 
     const permanentlyFailedCount = items.filter((i) => i.isPermanentlyFailed).length;
     const failedCount = items.filter((i) => !i.isPermanentlyFailed).length;
@@ -1040,7 +1065,7 @@ export class DownloadsManager {
 
     const html = `
       <div class="modal-header">
-        <h3>Manage Failed Downloads: ${periodical}</h3>
+        <h3>Manage Failed Downloads: ${escapeHtml(periodical)}</h3>
         <p style="color: var(--text-secondary); margin-top: 10px;">${failedCount} recent failures, ${permanentlyFailedCount} permanently failed</p>
         <div id="modal-failed-status" class="hidden" style="margin-top: 10px;"></div>
       </div>
@@ -1058,7 +1083,7 @@ export class DownloadsManager {
         </table>
       </div>
       <div class="modal-footer" style="display: flex; gap: 10px; justify-content: space-between; padding-top: 20px; border-top: 1px solid var(--border-color);">
-        <button onclick="downloads.bulkRetryFailed()" class="btn-primary">\u27F3 Retry All</button>
+        <button id="bulk-retry-failed-btn" onclick="downloads.bulkRetryFailed()" class="btn-primary">\u27F3 Retry All</button>
         <button onclick="downloads.closeManageFailedModal()" class="save-btn">Close</button>
       </div>
     `;
@@ -1077,8 +1102,8 @@ export class DownloadsManager {
    */
   closeManageFailedModal() {
     document.getElementById('manage-failed-modal')?.classList.add(CSS_CLASSES.HIDDEN);
-    this.currentModalItems = null;
-    this.currentModalPeriodical = null;
+    this._failedModal.items = null;
+    this._failedModal.periodical = null;
   }
 
   /**
@@ -1087,11 +1112,11 @@ export class DownloadsManager {
    * @returns {Promise<void>}
    */
   async bulkRetryQueue() {
-    if (!this.currentModalItems) return;
+    if (!this._queueModal.items) return;
 
-    const failedItems = this.currentModalItems.filter(
-      ({ download_status }) =>
-        download_status === 'failed' || download_status === 'permanently_failed'
+    const allItems = [...this._queueModal.items];
+    const failedItems = allItems.filter(
+      ({ status }) => status === 'failed' || status === 'permanently_failed'
     );
     if (failedItems.length === 0) {
       UIUtils.showStatus('modal-queue-status', 'No failed items to retry', 'info');
@@ -1100,34 +1125,43 @@ export class DownloadsManager {
 
     const confirmed = await UIUtils.confirm(
       'Retry Downloads',
-      `Retry ${failedItems.length} failed downloads for ${this.currentModalPeriodical}?`
+      `Retry ${failedItems.length} failed downloads for ${this._queueModal.periodical}?`
     );
     if (!confirmed) return;
+
+    // Disable buttons to prevent duplicate submissions
+    document.getElementById('bulk-retry-btn')?.setAttribute('disabled', '');
+    document.getElementById('bulk-remove-btn')?.setAttribute('disabled', '');
 
     const progress = UIUtils.showProgressModal('Retrying Downloads', failedItems.length);
     let succeeded = 0;
     let failed = 0;
 
-    for (let i = 0; i < failedItems.length; i++) {
-      const { submission_id: submissionId, issue } = failedItems[i];
-      try {
-        progress.update(i + 1, 'Retrying...', `Processing: ${issue ?? 'Unknown'}`);
-        const data = await APIHelper.executeWithErrorHandling(async () => {
-          const response = await APIClient.authenticatedFetch(
-            `/api/downloads/queue/retry/${submissionId}`,
-            { method: 'POST' }
-          );
-          return await response.json();
-        }, 'Downloads');
-        if (data.success) {
-          succeeded++;
-        } else {
+    try {
+      for (let i = 0; i < failedItems.length; i++) {
+        const { submission_id: submissionId, title } = failedItems[i];
+        try {
+          progress.update(i + 1, 'Retrying...', `Processing: ${title ?? 'Unknown'}`);
+          const data = await APIHelper.executeWithErrorHandling(async () => {
+            const response = await APIClient.authenticatedFetch(
+              `/api/downloads/queue/retry/${submissionId}`,
+              { method: 'POST' }
+            );
+            return await response.json();
+          }, 'Downloads');
+          if (data.success) {
+            succeeded++;
+          } else {
+            failed++;
+          }
+        } catch (e) {
+          console.error('[Downloads] Retry failed:', e);
           failed++;
         }
-      } catch (e) {
-        console.error('[Downloads] Retry failed:', e);
-        failed++;
       }
+    } finally {
+      document.getElementById('bulk-retry-btn')?.removeAttribute('disabled');
+      document.getElementById('bulk-remove-btn')?.removeAttribute('disabled');
     }
 
     const message =
@@ -1149,43 +1183,55 @@ export class DownloadsManager {
    * @returns {Promise<void>}
    */
   async bulkRemoveQueue() {
-    if (!this.currentModalItems) return;
+    if (!this._queueModal.items) return;
 
     const confirmed = await UIUtils.confirm(
       'Remove All Downloads',
-      `Remove ALL ${this.currentModalItems.length} downloads for ${this.currentModalPeriodical}? This cannot be undone.`
+      `Remove ALL ${this._queueModal.items.length} downloads for ${this._queueModal.periodical}? This cannot be undone.`
     );
     if (!confirmed) return;
 
-    const progress = UIUtils.showProgressModal('Removing Downloads', this.currentModalItems.length);
+    // Disable buttons to prevent duplicate submissions
+    document.getElementById('bulk-retry-btn')?.setAttribute('disabled', '');
+    document.getElementById('bulk-remove-btn')?.setAttribute('disabled', '');
+
+    // Snapshot the array before the async loop — SSE may replace _queueModal.items mid-loop
+    const itemsToRemove = [...this._queueModal.items];
+
+    const progress = UIUtils.showProgressModal('Removing Downloads', itemsToRemove.length);
     let succeeded = 0;
     let failed = 0;
 
-    for (let i = 0; i < this.currentModalItems.length; i++) {
-      const { submission_id: submissionId, issue } = this.currentModalItems[i];
-      try {
-        progress.update(i + 1, 'Deleting...', `Processing: ${issue ?? 'Unknown'}`);
-        const data = await APIHelper.executeWithErrorHandling(async () => {
-          const response = await APIClient.authenticatedFetch(
-            `/api/downloads/queue/${submissionId}`,
-            { method: 'DELETE' }
-          );
-          return await response.json();
-        }, 'Downloads');
-        if (data.success) {
-          succeeded++;
-        } else {
+    try {
+      for (let i = 0; i < itemsToRemove.length; i++) {
+        const { submission_id: submissionId, issue } = itemsToRemove[i];
+        try {
+          progress.update(i + 1, 'Deleting...', `Processing: ${issue ?? 'Unknown'}`);
+          const data = await APIHelper.executeWithErrorHandling(async () => {
+            const response = await APIClient.authenticatedFetch(
+              `/api/downloads/queue/${submissionId}`,
+              { method: 'DELETE' }
+            );
+            return await response.json();
+          }, 'Downloads');
+          if (data.success) {
+            succeeded++;
+          } else {
+            failed++;
+          }
+        } catch (e) {
+          console.error('[Downloads] Remove failed:', e);
           failed++;
         }
-      } catch (e) {
-        console.error('[Downloads] Remove failed:', e);
-        failed++;
       }
+    } finally {
+      document.getElementById('bulk-retry-btn')?.removeAttribute('disabled');
+      document.getElementById('bulk-remove-btn')?.removeAttribute('disabled');
     }
 
     const message =
       failed > 0
-        ? `Removed ${succeeded} of ${this.currentModalItems.length} downloads (${failed} failed)`
+        ? `Removed ${succeeded} of ${itemsToRemove.length} downloads (${failed} failed)`
         : `Successfully removed all ${succeeded} downloads`;
     progress.complete(message, failed === 0);
 
@@ -1202,48 +1248,55 @@ export class DownloadsManager {
    * @returns {Promise<void>}
    */
   async bulkRetryFailed() {
-    if (!this.currentModalItems) return;
+    if (!this._failedModal.items) return;
 
     const confirmed = await UIUtils.confirm(
       'Retry All Failed',
-      `Retry ALL ${this.currentModalItems.length} failed issues for ${this.currentModalPeriodical}?`
+      `Retry ALL ${this._failedModal.items.length} failed issues for ${this._failedModal.periodical}?`
     );
     if (!confirmed) return;
 
-    const progress = UIUtils.showProgressModal(
-      'Retrying Failed Issues',
-      this.currentModalItems.length
-    );
+    // Disable button to prevent duplicate submissions
+    document.getElementById('bulk-retry-failed-btn')?.setAttribute('disabled', '');
+
+    // Snapshot the array before the async loop — SSE may replace _failedModal.items mid-loop
+    const itemsToRetry = [...this._failedModal.items];
+
+    const progress = UIUtils.showProgressModal('Retrying Failed Issues', itemsToRetry.length);
     let succeeded = 0;
     let failed = 0;
 
-    for (let i = 0; i < this.currentModalItems.length; i++) {
-      const { id, title } = this.currentModalItems[i];
-      try {
-        progress.update(i + 1, 'Retrying...', `Processing: ${title ?? 'Unknown'}`);
-        const data = await APIHelper.executeWithErrorHandling(async () => {
-          const response = await APIClient.authenticatedFetch(
-            `/api/discovered-issues/${id}/retry`,
-            {
-              method: 'POST',
-            }
-          );
-          return await response.json();
-        }, 'Downloads');
-        if (data.success) {
-          succeeded++;
-        } else {
+    try {
+      for (let i = 0; i < itemsToRetry.length; i++) {
+        const { id, title } = itemsToRetry[i];
+        try {
+          progress.update(i + 1, 'Retrying...', `Processing: ${title ?? 'Unknown'}`);
+          const data = await APIHelper.executeWithErrorHandling(async () => {
+            const response = await APIClient.authenticatedFetch(
+              `/api/discovered-issues/${id}/retry`,
+              {
+                method: 'POST',
+              }
+            );
+            return await response.json();
+          }, 'Downloads');
+          if (data.success) {
+            succeeded++;
+          } else {
+            failed++;
+          }
+        } catch (e) {
+          console.error('[Downloads] Retry failed:', e);
           failed++;
         }
-      } catch (e) {
-        console.error('[Downloads] Retry failed:', e);
-        failed++;
       }
+    } finally {
+      document.getElementById('bulk-retry-failed-btn')?.removeAttribute('disabled');
     }
 
     const message =
       failed > 0
-        ? `Retried ${succeeded} of ${this.currentModalItems.length} issues (${failed} failed)`
+        ? `Retried ${succeeded} of ${itemsToRetry.length} issues (${failed} failed)`
         : `Successfully retried all ${succeeded} issues`;
     progress.complete(message, failed === 0);
 
@@ -1255,10 +1308,11 @@ export class DownloadsManager {
   }
 
   /**
-   * Retry a failed download
+   * Toggle display of a status message in the queue modal status area.
+   * If the same message is already visible, hides it; otherwise shows it.
    *
-   * @param {number} submissionId - The submission ID to retry
-   * @returns {Promise<void>}
+   * @param {string} message - The (HTML-encoded) message to display
+   * @param {string} [type='info'] - Message type: 'info' or 'error'
    */
   showItemInfo(message, type = 'info') {
     const decoded = message.replace(/&#39;/g, "'").replace(/&quot;/g, '"');
@@ -1266,7 +1320,7 @@ export class DownloadsManager {
     // Toggle off if already showing this same message
     if (
       statusEl &&
-      !statusEl.classList.contains('hidden') &&
+      !statusEl.classList.contains(CSS_CLASSES.HIDDEN) &&
       statusEl.textContent.includes(decoded)
     ) {
       UIUtils.hideStatus('modal-queue-status');
@@ -1282,7 +1336,7 @@ export class DownloadsManager {
    * @returns {void}
    */
   showItemDetails(submissionId) {
-    const item = (this.currentModalItems || []).find((i) => i.submission_id === submissionId);
+    const item = (this._queueModal.items || []).find((i) => i.submission_id === submissionId);
     if (!item) return;
 
     const statusColor = this.getStatusColor(item.status);
@@ -1380,9 +1434,9 @@ export class DownloadsManager {
     const failedModal = document.getElementById('manage-failed-modal');
 
     let statusId = 'downloads-status';
-    if (queueModal && !queueModal.classList.contains('hidden')) {
+    if (queueModal && !queueModal.classList.contains(CSS_CLASSES.HIDDEN)) {
       statusId = 'modal-queue-status';
-    } else if (failedModal && !failedModal.classList.contains('hidden')) {
+    } else if (failedModal && !failedModal.classList.contains(CSS_CLASSES.HIDDEN)) {
       statusId = 'modal-failed-status';
     }
 
@@ -1429,9 +1483,9 @@ export class DownloadsManager {
     const failedModal = document.getElementById('manage-failed-modal');
 
     let statusId = 'downloads-status';
-    if (queueModal && !queueModal.classList.contains('hidden')) {
+    if (queueModal && !queueModal.classList.contains(CSS_CLASSES.HIDDEN)) {
       statusId = 'modal-queue-status';
-    } else if (failedModal && !failedModal.classList.contains('hidden')) {
+    } else if (failedModal && !failedModal.classList.contains(CSS_CLASSES.HIDDEN)) {
       statusId = 'modal-failed-status';
     }
 

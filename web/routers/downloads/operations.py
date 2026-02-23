@@ -45,17 +45,29 @@ async def clear_pending_downloads() -> Dict[str, Any]:
 
     def operation(db):
         # Get all pending downloads
-        pending_query = db.query(DownloadSubmission).filter(
-            DownloadSubmission.status == DownloadSubmission.StatusEnum.PENDING
+        pending = (
+            db.query(DownloadSubmission)
+            .filter(DownloadSubmission.status == DownloadSubmission.StatusEnum.PENDING)
+            .all()
         )
 
-        count = pending_query.count()
+        count = len(pending)
 
         if count == 0:
             return success_response("No pending downloads to clear", deleted=0)
 
-        # Delete all pending downloads
-        pending_query.delete()
+        # Cancel each job in the download client before removing from DB
+        if _shared._download_manager:
+            for submission in pending:
+                if submission.job_id:
+                    try:
+                        client = _shared._download_manager._get_client_by_name(submission.client_name)
+                        client.delete(submission.job_id)
+                    except Exception as e:
+                        _shared.logger.warning(f"Could not cancel job {submission.job_id} in client: {e}")
+
+        for submission in pending:
+            db.delete(submission)
         db.commit()
 
         _shared.logger.info(f"Cleared {count} pending downloads from queue")
@@ -162,16 +174,29 @@ async def clear_downloading_downloads() -> Dict[str, Any]:
     """Clear all downloading downloads from the queue"""
 
     def operation(db):
-        downloading_query = db.query(DownloadSubmission).filter(
-            DownloadSubmission.status == DownloadSubmission.StatusEnum.DOWNLOADING
+        downloading = (
+            db.query(DownloadSubmission)
+            .filter(DownloadSubmission.status == DownloadSubmission.StatusEnum.DOWNLOADING)
+            .all()
         )
 
-        count = downloading_query.count()
+        count = len(downloading)
 
         if count == 0:
             return success_response("No downloading downloads to clear", deleted=0)
 
-        downloading_query.delete()
+        # Cancel each active job in the download client before removing from DB
+        if _shared._download_manager:
+            for submission in downloading:
+                if submission.job_id:
+                    try:
+                        client = _shared._download_manager._get_client_by_name(submission.client_name)
+                        client.delete(submission.job_id)
+                    except Exception as e:
+                        _shared.logger.warning(f"Could not cancel job {submission.job_id} in client: {e}")
+
+        for submission in downloading:
+            db.delete(submission)
         db.commit()
 
         _shared.logger.info(f"Cleared {count} downloading downloads from queue")
@@ -218,14 +243,29 @@ async def clear_all_downloads() -> Dict[str, Any]:
     """Clear all downloads from the queue"""
 
     def operation(db):
-        all_query = db.query(DownloadSubmission)
+        all_submissions = db.query(DownloadSubmission).all()
 
-        count = all_query.count()
+        count = len(all_submissions)
 
         if count == 0:
             return success_response("No downloads to clear", deleted=0)
 
-        all_query.delete()
+        # Cancel any active jobs (pending or downloading) in the download client
+        if _shared._download_manager:
+            active_statuses = {
+                DownloadSubmission.StatusEnum.PENDING,
+                DownloadSubmission.StatusEnum.DOWNLOADING,
+            }
+            for submission in all_submissions:
+                if submission.job_id and submission.status in active_statuses:
+                    try:
+                        client = _shared._download_manager._get_client_by_name(submission.client_name)
+                        client.delete(submission.job_id)
+                    except Exception as e:
+                        _shared.logger.warning(f"Could not cancel job {submission.job_id} in client: {e}")
+
+        for submission in all_submissions:
+            db.delete(submission)
         db.commit()
 
         _shared.logger.info(f"Cleared {count} downloads from queue")

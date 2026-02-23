@@ -1703,6 +1703,12 @@ async function confirmBulkDelete() {
   const totalIssues = document.querySelectorAll('.issue-card').length;
   const isDeletingAll = ids.length >= totalIssues;
 
+  const confirmBtn = document.getElementById('confirm-bulk-delete-btn');
+  if (confirmBtn) {
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Deleting...';
+  }
+
   try {
     const response = await APIHelper.executeWithErrorHandling(async () => {
       return await APIClient.post('/api/periodicals/bulk/delete', {
@@ -1736,6 +1742,10 @@ async function confirmBulkDelete() {
     console.error('[Periodical] Error in bulk delete:', error);
     const message = error.toUserMessage ? error.toUserMessage() : error.message;
     showNotification('Failed to delete issues: ' + message, 'error');
+    if (confirmBtn) {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = 'Delete Issues';
+    }
   }
 }
 

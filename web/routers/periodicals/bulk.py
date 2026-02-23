@@ -9,6 +9,7 @@ from typing import Any, Dict, List
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm.attributes import flag_modified
 
 from core.constants.files import PDF_COVER_QUALITY_HIGH
 from core.constants.ocr import PDF_COVER_DPI_OCR
@@ -120,6 +121,7 @@ async def bulk_move_to_tracking(request: BulkMoveRequest) -> Dict[str, Any]:
                     # Flush this individual move so the DB sees the updated file_path
                     # before we process the next periodical
                     db.flush()
+                    savepoint.commit()
                     moved_count += 1
 
                 except IntegrityError as e:
@@ -241,6 +243,7 @@ async def bulk_regenerate_thumbnail_ocr(
                     periodical.cover_path = str(cover_path)
                     if periodical.extra_metadata and isinstance(periodical.extra_metadata, dict):
                         periodical.extra_metadata.pop("cover_uploaded", None)
+                        flag_modified(periodical, "extra_metadata")
                     regenerated_count += 1
                 else:
                     failed_ids.append(periodical_id)

@@ -202,6 +202,10 @@ class DownloadMonitor:
         except Exception as e:
             logger.error(f"Error in download monitor task: {e}", exc_info=True)
             self.last_status = "failed"
+            try:
+                session.rollback()
+            except Exception:
+                pass
         finally:
             session.close()
 

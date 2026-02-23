@@ -41,7 +41,7 @@ ORPHANED_SUBMISSION_THRESHOLD_HOURS = 24
 """Hours after which a completed submission with no file_path is considered orphaned and skipped"""
 
 MAX_DOWNLOADS = 10
-"""Maximum number of concurrent downloads allowed system-wide""" ""
+"""Maximum number of concurrent downloads allowed system-wide"""
 
 DOWNLOAD_FILE_SEARCH_DEPTH = 2
 """Maximum directory depth to search for downloaded files"""

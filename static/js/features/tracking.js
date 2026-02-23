@@ -465,7 +465,7 @@ export class TrackingManager {
         } else {
           countDisplay =
             '<strong>Files:</strong> <span class="ia-file-count" data-identifier="' +
-            (result.metadata?.identifier || '') +
+            escapeHtml(result.metadata?.identifier || '') +
             '">Loading...</span>';
         }
       } else {
@@ -484,10 +484,10 @@ export class TrackingManager {
 
       div.innerHTML = `
         <div class="result-info">
-          <h5 class="result-title">${periodical.displayTitle}</h5>
+          <h5 class="result-title">${escapeHtml(periodical.displayTitle)}</h5>
           ${collectionBadge}${providerBadge}
           <p class="result-detail">${countDisplay}</p>
-          ${publisher ? `<p class="result-detail"><strong>Publisher:</strong> ${publisher}</p>` : ''}
+          ${publisher ? `<p class="result-detail"><strong>Publisher:</strong> ${escapeHtml(publisher)}</p>` : ''}
         </div>
         <div class="result-select">→</div>
       `;
@@ -552,9 +552,9 @@ export class TrackingManager {
       div.className = CSS_CLASSES.RESULT_ITEM;
 
       div.innerHTML = `
-        <h5 class="result-title">${result.title}</h5>
-        <p class="result-publisher">${result.publisher || 'Unknown Publisher'}</p>
-        <p class="result-source">${result.source || ''}</p>
+        <h5 class="result-title">${escapeHtml(result.title)}</h5>
+        <p class="result-publisher">${escapeHtml(result.publisher || 'Unknown Publisher')}</p>
+        <p class="result-source">${escapeHtml(result.source || '')}</p>
       `;
 
       div.onclick = () => this.chooseSearchResult(result);
@@ -1531,6 +1531,9 @@ export class TrackingManager {
           issues: entry.availableIssues,
         }),
       });
+      if (!response) {
+        throw new Error('Not authenticated');
+      }
       const data = await response.json();
 
       const parts = [];
@@ -1591,6 +1594,9 @@ export class TrackingManager {
             issues: entry.availableIssues,
           }),
         });
+        if (!response) {
+          throw new Error('Not authenticated');
+        }
         const data = await response.json();
 
         totalSubmitted += data.submitted || 0;

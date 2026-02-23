@@ -756,7 +756,7 @@ class DownloadManager:
         # Check if this is a bad file
         if issue.download_status == DownloadStatus.PERMANENTLY_FAILED:
             logger.warning(f"Skipping bad file (marked as permanently failed): {issue.title}")
-            return DownloadStatus.PERMANENTLY_FAILED
+            return "permanently_failed"
 
         # Check blacklisted file types
         if self._has_blacklisted_extension(issue.title):
@@ -948,15 +948,18 @@ class DownloadManager:
         # Build search result for compatibility
         search_result = self._build_search_result_from_issue(issue, discovered_issue_id)
 
-        # Acquire lock to prevent race condition in concurrent download limit checking
+        # Acquire lock only to check the slot count and make the queue-vs-submit decision.
+        # The actual submission (which calls session.commit()) happens outside the lock
+        # to avoid holding a threading lock across slow DB operations.
         with self._slot_lock:
-            # Check if at download limit - if so, queue the submission
             active_count = self._get_active_download_count(session)
-            if active_count >= self.max_downloads:
-                return self._create_queued_submission(issue, search_result, session)
+            should_queue = active_count >= self.max_downloads
 
-            # Submit to download client
-            return self._submit_issue_to_client(issue, search_result, session)
+        if should_queue:
+            return self._create_queued_submission(issue, search_result, session)
+
+        # Submit to download client (outside the lock)
+        return self._submit_issue_to_client(issue, search_result, session)
 
     def download_all_periodical_issues(self, tracking_id: int, session: Session) -> Dict[str, Any]:
         """
@@ -1149,27 +1152,30 @@ class DownloadManager:
             logger.warning(f"Could not create DB search result: {e}", exc_info=True)
 
         # Skip duplicate checking for manual downloads — user explicitly wants this
-        # Acquire lock to prevent race condition in concurrent download limit checking
+        # Acquire lock only to check the slot count and make the queue-vs-submit decision.
+        # The actual submission (which calls session.commit()) happens outside the lock
+        # to avoid holding a threading lock across slow DB operations.
+        provider = search_result.get("provider", "unknown")
         with self._slot_lock:
-            # Check if at concurrent download limit; queue if so, otherwise submit directly
             active_count = self._get_active_download_count(session)
-            provider = search_result.get("provider", "unknown")
-            if active_count >= self.max_downloads:
-                logger.info(
-                    f"[DownloadManager] At download limit ({active_count}/{self.max_downloads}), "
-                    f"queuing manual download: '{search_result['title']}'"
-                )
-                submission = self._create_submission_record(
-                    tracking_id,
-                    search_result,
-                    DownloadSubmission.StatusEnum.QUEUED,
-                    session,
-                    search_result_db_id=search_result_db_id,
-                    client_name=self._get_client_name_for_provider(provider),
-                    attempt_count=0,
-                )
-            else:
-                submission = self._submit_to_client(tracking_id, search_result, session, search_result_db_id)
+            should_queue = active_count >= self.max_downloads
+
+        if should_queue:
+            logger.info(
+                f"[DownloadManager] At download limit ({active_count}/{self.max_downloads}), "
+                f"queuing manual download: '{search_result['title']}'"
+            )
+            submission = self._create_submission_record(
+                tracking_id,
+                search_result,
+                DownloadSubmission.StatusEnum.QUEUED,
+                session,
+                search_result_db_id=search_result_db_id,
+                client_name=self._get_client_name_for_provider(provider),
+                attempt_count=0,
+            )
+        else:
+            submission = self._submit_to_client(tracking_id, search_result, session, search_result_db_id)
 
         # Attempt to create a DiscoveredIssue and link it so the monitor can track this submission.
         # This is best-effort — we're already in a fallback path, so don't fail if this also errors.
