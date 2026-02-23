@@ -328,7 +328,7 @@ export const HTTP_STATUS = {
 
 export const STORAGE_KEYS = {
   THEME: 'curator-theme',
-  AUTH_TOKEN: 'curator-token',
+  AUTH_TOKEN: 'auth_token',
 };
 
 // ============================================================================

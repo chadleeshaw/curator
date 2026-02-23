@@ -355,13 +355,14 @@ export class TrackingManager {
         `/api/periodicals/search-providers?${params.toString()}`,
         { method: 'POST' }
       );
-      const data = await response.json();
-
       if (!response.ok) {
+        const data = await response.json();
         error.textContent = data.detail || `Error: ${response.status}`;
         error.classList.remove(CSS_CLASSES.HIDDEN);
         return;
       }
+
+      const data = await response.json();
 
       if (data.found && data.results && data.results.length > 0) {
         this.displaySearchResultsGrouped(data.results);
@@ -1233,7 +1234,7 @@ export class TrackingManager {
       }
 
       // Import downloads module and open modal
-      const { downloads } = await import('./downloads.js?v=1767733177');
+      const { downloads } = await import('./downloads.js');
       downloads.openManageFailedModal(periodicalTitle, issues);
     } catch (error) {
       console.error('[Tracking] Error loading failed downloads:', error);

@@ -33,13 +33,13 @@ class EPUBReader {
 
     this.progressManager = new ProgressManager({
       logPrefix: 'EPUBReader',
-      getMagazineId: () => this.periodicalId,
+      getPeriodicalId: () => this.periodicalId,
       getProgressData: () => ({
         current_chapter: this.currentChapterIndex,
         total_pages: this.metadata?.chapters?.length || 0,
       }),
       onProgressLoaded: (progress) => {
-        if (progress.current_chapter !== null) {
+        if (progress.current_chapter != null) {
           const urlParams = new URLSearchParams(window.location.search);
           if (!urlParams.has('chapter')) {
             this.loadChapter(progress.current_chapter);
@@ -204,8 +204,13 @@ class EPUBReader {
       return;
     }
 
+    // Disconnect any previous observer to avoid memory leaks
+    if (this.imageObserver) {
+      this.imageObserver.disconnect();
+    }
+
     const images = container.querySelectorAll('img');
-    const observer = new IntersectionObserver(
+    this.imageObserver = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
@@ -218,14 +223,14 @@ class EPUBReader {
               });
             }
 
-            observer.unobserve(img);
+            this.imageObserver.unobserve(img);
           }
         });
       },
       { rootMargin: '200px' }
     );
 
-    images.forEach((img) => observer.observe(img));
+    images.forEach((img) => this.imageObserver.observe(img));
   }
 
   /**

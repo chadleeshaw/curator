@@ -119,15 +119,16 @@ export class EventHandlers {
       modalMouseDownTarget = null;
     });
 
-    // Close button handlers for all modals
-    document.querySelectorAll('.modal .close').forEach((closeBtn) => {
-      closeBtn.addEventListener('click', (e) => {
+    // Close button handlers for all modals (delegated to catch dynamically added modals)
+    document.addEventListener('click', (e) => {
+      const closeBtn = e.target.closest('.modal .close');
+      if (closeBtn) {
         const modal = closeBtn.closest('.modal');
         if (modal) {
           e.preventDefault();
           modal.classList.add(CSS_CLASSES.HIDDEN);
         }
-      });
+      }
     });
   }
 

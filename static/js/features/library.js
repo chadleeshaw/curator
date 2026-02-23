@@ -135,7 +135,7 @@ export class LibraryManager {
           const img = entry.target;
           const dataSrc = img.getAttribute('data-src');
 
-          if (dataSrc && !img.src) {
+          if (dataSrc && !img.getAttribute('src')) {
             // Load the image
             img.src = dataSrc;
             img.removeAttribute('data-src');
@@ -1163,8 +1163,14 @@ export class LibraryManager {
     // Initial sync
     syncTrackingOptions();
 
-    // Add change listener
-    autoTrackCheckbox?.addEventListener('change', syncTrackingOptions);
+    // Remove any previously attached listener before adding a new one
+    if (autoTrackCheckbox) {
+      if (autoTrackCheckbox._syncTrackingOptions) {
+        autoTrackCheckbox.removeEventListener('change', autoTrackCheckbox._syncTrackingOptions);
+      }
+      autoTrackCheckbox._syncTrackingOptions = syncTrackingOptions;
+      autoTrackCheckbox.addEventListener('change', syncTrackingOptions);
+    }
   }
 
   /**

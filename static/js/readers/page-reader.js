@@ -70,13 +70,13 @@ export class PageReader {
 
     this.progressManager = new ProgressManager({
       logPrefix: this.logPrefix,
-      getMagazineId: () => this.periodicalId,
+      getPeriodicalId: () => this.periodicalId,
       getProgressData: () => ({
         current_page: this.currentPageIndex,
         total_pages: this.metadata?.pages?.length || 0,
       }),
       onProgressLoaded: (progress) => {
-        if (progress.current_page !== null) {
+        if (progress.current_page != null) {
           const urlParams = new URLSearchParams(window.location.search);
           if (!urlParams.has('page')) {
             this.loadPage(progress.current_page);
@@ -275,16 +275,13 @@ export class PageReader {
 
     return new Promise((resolve, reject) => {
       img.onload = () => {
-        const scale = this.zoomLevel / 100;
-        const transformStyle =
-          scale !== 1 ? `transform: scale(${scale}); transform-origin: center;` : '';
-
         contentDiv.innerHTML = `
           <div class="page-image-container ${this.fitMode}">
-            <img src="${imageUrl}" alt="Page ${index + 1}" class="page-image" id="page-image" style="${transformStyle}" />
+            <img src="${imageUrl}" alt="Page ${index + 1}" class="page-image" id="page-image" />
           </div>
         `;
 
+        this.applyZoom(this.zoomLevel);
         contentDiv.scrollTop = 0;
         this.updateURL(index);
         this.loading = false;
@@ -325,15 +322,7 @@ export class PageReader {
             </div>
           `;
 
-          const images = contentDiv.querySelectorAll('.spread-image');
-          const scale = this.zoomLevel / 100;
-          images.forEach((img) => {
-            if (scale !== 1) {
-              img.style.transform = `scale(${scale})`;
-              img.style.transformOrigin = 'center';
-            }
-          });
-
+          this.applyZoom(this.zoomLevel);
           contentDiv.scrollTop = 0;
           this.updateURL(index);
           this.loading = false;
@@ -573,6 +562,56 @@ export class PageReader {
   }
 
   /**
+   * Apply the current zoom level to all visible page images.
+   *
+   * Uses real width/height sizing (not transform: scale) so the layout box
+   * expands when zoomed — this is what makes overflow scrolling / panning work.
+   *
+   * @param {number} zoomLevel - Zoom percentage (50–400)
+   */
+  applyZoom(zoomLevel) {
+    const scale = zoomLevel / 100;
+    const containers = document.querySelectorAll('.page-image-container, .page-spread-container');
+    const images = document.querySelectorAll('.page-image, .spread-image');
+
+    if (scale <= 1) {
+      // At or below 100%: let CSS handle sizing, no scrolling needed
+      images.forEach((img) => {
+        img.style.width = '';
+        img.style.height = '';
+        img.style.maxWidth = '';
+        img.style.maxHeight = '';
+        img.style.transform = '';
+      });
+      containers.forEach((container) => {
+        container.style.overflow = '';
+        container.style.alignItems = '';
+        container.style.justifyContent = '';
+        container.style.cursor = '';
+      });
+    } else {
+      // Above 100%: expand images to their natural size × scale so the
+      // container can scroll to reveal clipped areas
+      images.forEach((img) => {
+        const naturalW = img.naturalWidth || img.offsetWidth;
+        const naturalH = img.naturalHeight || img.offsetHeight;
+        img.style.width = `${Math.round(naturalW * scale)}px`;
+        img.style.height = `${Math.round(naturalH * scale)}px`;
+        img.style.maxWidth = 'none';
+        img.style.maxHeight = 'none';
+        img.style.transform = '';
+      });
+      containers.forEach((container) => {
+        container.style.overflow = 'auto';
+        // Align to top-left so scroll can reach all four edges
+        container.style.alignItems = 'flex-start';
+        container.style.justifyContent = 'flex-start';
+        container.style.cursor = 'grab';
+      });
+    }
+  }
+
+  /**
    * Adjust zoom level
    * @param {number} delta - Amount to change zoom (+/- 10)
    */
@@ -582,18 +621,7 @@ export class PageReader {
     if (zoomDisplay) {
       zoomDisplay.textContent = `${this.zoomLevel}%`;
     }
-
-    const images = document.querySelectorAll('.page-image, .spread-image');
-    const scale = this.zoomLevel / 100;
-    images.forEach((img) => {
-      img.style.transform = `scale(${scale})`;
-      img.style.transformOrigin = 'center';
-    });
-
-    const containers = document.querySelectorAll('.page-image-container, .page-spread-container');
-    containers.forEach((container) => {
-      container.style.overflow = scale > 1 ? 'auto' : '';
-    });
+    this.applyZoom(this.zoomLevel);
   }
 
   /**
@@ -605,16 +633,7 @@ export class PageReader {
     if (zoomDisplay) {
       zoomDisplay.textContent = '100%';
     }
-
-    const images = document.querySelectorAll('.page-image, .spread-image');
-    images.forEach((img) => {
-      img.style.transform = 'scale(1)';
-    });
-
-    const containers = document.querySelectorAll('.page-image-container, .page-spread-container');
-    containers.forEach((container) => {
-      container.style.overflow = '';
-    });
+    this.applyZoom(100);
   }
 
   /**
@@ -729,26 +748,14 @@ export class PageReader {
           zoomDisplay.textContent = `${this.zoomLevel}%`;
         }
 
-        const images = document.querySelectorAll('.page-image, .spread-image');
-        const zoomScale = this.zoomLevel / 100;
-        images.forEach((img) => {
-          img.style.transform = `scale(${zoomScale})`;
-          img.style.transformOrigin = 'center';
-        });
-
-        const containers = document.querySelectorAll(
-          '.page-image-container, .page-spread-container'
-        );
-        containers.forEach((container) => {
-          container.style.overflow = zoomScale > 1 ? 'auto' : '';
-        });
+        this.applyZoom(this.zoomLevel);
       }
     };
 
     const handleTouchEnd = (e) => {
       if (e.touches.length < 2) {
         initialDistance = 0;
-        initialZoom = 100;
+        initialZoom = this.zoomLevel;
       }
     };
 
@@ -773,6 +780,9 @@ export class PageReader {
       if (e.touches.length === 1) {
         touchStartX = e.touches[0].clientX;
         touchStartY = e.touches[0].clientY;
+        // Reset end to start so a tap with no touchmove fires no swipe
+        touchEndX = touchStartX;
+        touchEndY = touchStartY;
       }
     };
 
@@ -784,6 +794,9 @@ export class PageReader {
     };
 
     const handleSwipeEnd = () => {
+      // When zoomed in, let native scroll handle panning — don't navigate pages
+      if (this.zoomLevel > 100) return;
+
       const deltaX = touchEndX - touchStartX;
       const deltaY = touchEndY - touchStartY;
       const minSwipeDistance = 50;

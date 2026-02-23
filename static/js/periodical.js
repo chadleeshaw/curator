@@ -160,10 +160,8 @@ function openDeleteModal(periodicalId, title) {
     titleElement.textContent = `Are you sure you want to delete "${title}"?`;
   }
 
-  // Use showModal() for dialog element
-  if (modal && typeof modal.showModal === 'function') {
-    modal.showModal();
-  } else {
+  // Use class toggle for div-based modal
+  if (modal) {
     modal.classList.remove(CSS_CLASSES.HIDDEN);
   }
 }
@@ -171,10 +169,8 @@ function openDeleteModal(periodicalId, title) {
 function closeDeleteModal() {
   const modal = document.getElementById('delete-modal');
 
-  // Use close() for dialog element
-  if (modal && typeof modal.close === 'function') {
-    modal.close();
-  } else {
+  // Use class toggle for div-based modal
+  if (modal) {
     modal.classList.add(CSS_CLASSES.HIDDEN);
   }
   pendingDeleteId = null;
@@ -997,13 +993,13 @@ async function uploadCoverImage(periodicalId) {
 
   showNotification('🖼️ Uploading cover image...', 'info');
 
-  const response = await fetch(`/api/periodicals/${periodicalId}/upload-cover`, {
-    method: 'POST',
-    body: formData,
-    headers: {
-      Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
-    },
-  });
+  const response = await APIClient.authenticatedFetch(
+    `/api/periodicals/${periodicalId}/upload-cover`,
+    {
+      method: 'POST',
+      body: formData,
+    }
+  );
 
   if (!response.ok) {
     const error = await response.json();

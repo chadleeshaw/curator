@@ -54,6 +54,7 @@ export async function initStackDetail() {
 
   // Get data from template
   const container = document.getElementById('stack-container');
+  if (!container) return;
   const membersData = JSON.parse(container.dataset.members || '[]');
   allMembersData = membersData;
 

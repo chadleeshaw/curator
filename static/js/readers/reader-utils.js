@@ -41,7 +41,6 @@ export class FullscreenManager {
       };
 
       fullscreenBtn.addEventListener('click', toggleHandler);
-      fullscreenBtn.addEventListener('touchend', toggleHandler);
       fullscreenBtn.style.pointerEvents = 'auto';
       fullscreenBtn.style.touchAction = 'manipulation';
 

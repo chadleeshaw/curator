@@ -411,6 +411,7 @@ export class UIUtils {
         </div>
       `;
 
+      document.getElementById('confirm-modal')?.remove();
       document.body.insertAdjacentHTML('beforeend', modalHTML);
 
       const modal = document.getElementById('confirm-modal');

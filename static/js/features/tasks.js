@@ -66,8 +66,8 @@ export class TasksManager {
         return await response.json();
       }, 'Tasks');
       console.log('[Tasks] API Response:', data);
-      console.log('[Tasks] Found tasks:', data.tasks?.length || 0);
-      data.tasks?.forEach((task, idx) => {
+      console.log('[Tasks] Found tasks:', data?.tasks?.length || 0);
+      data?.tasks?.forEach((task, idx) => {
         console.log(`  [${idx}] ${task.id}: last_run=${task.last_run}, status=${task.last_status}`);
       });
       this.displayScheduledTasks(data);

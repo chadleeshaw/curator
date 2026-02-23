@@ -17,6 +17,8 @@ import { stacks } from './features/stacks.js';
 import { EventHandlers } from './event-handlers.js';
 import { CSS_CLASSES } from './core/constants.js';
 
+let queueSwitcherInitialized = false;
+
 /**
  * Initialize the application
  */
@@ -134,6 +136,8 @@ window.addEventListener('hashchange', () => {
  * Initialize queue switcher buttons
  */
 function initQueueSwitcher() {
+  if (queueSwitcherInitialized) return;
+  queueSwitcherInitialized = true;
   const switchButtons = document.querySelectorAll('.queue-switch-btn');
   switchButtons.forEach((btn) => {
     btn.addEventListener('click', () => {

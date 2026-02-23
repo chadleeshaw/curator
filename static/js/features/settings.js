@@ -936,7 +936,6 @@ export class SettingsManager {
     // Map of pattern templates to their keys
     const patternMap = {
       '{category}/{title}/{year}/': 'default',
-      '{category}/{title}/{year}/': 'default',
       '{category}/{title}/Vol{volume}/': 'volume',
       '{category}/{title}/': 'flat',
       '{category}/{title}/Vol{volume}/{year}/': 'volume_year',
