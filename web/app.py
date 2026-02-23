@@ -709,6 +709,21 @@ def _initialize_background_tasks() -> None:
         except ValueError:
             pass  # No download client configured
 
+        # Build a thread-safe notify callback that fires an SSE event immediately
+        # whenever the IA download client reports a status or progress change.
+        # asyncio.run_coroutine_threadsafe schedules the coroutine on the running
+        # event loop from inside the IA download thread without blocking that thread.
+        # get_running_loop() is always valid here — this function is called
+        # synchronously from the lifespan async context manager.
+        _event_bus = app_state.event_bus
+        _loop = asyncio.get_running_loop()
+
+        def _ia_notify_callback() -> None:
+            asyncio.run_coroutine_threadsafe(
+                _event_bus.publish("download_queue", {"trigger": "update"}),
+                _loop,
+            )
+
         app_state.download_monitor_task = DownloadMonitor(
             download_manager=app_state.download_manager,
             file_importer=app_state.file_importer,
@@ -716,6 +731,7 @@ def _initialize_background_tasks() -> None:
             downloads_dir=app_state.storage_config.get("download_dir", "./downloads"),
             issue_discovery_service=app_state.issue_discovery_service,
             remote_path=remote_path,
+            notify_callback=_ia_notify_callback,
         )
         if remote_path:
             logger.info(f"Download monitor task initialized (remote_path: {remote_path})")
@@ -974,7 +990,7 @@ async def lifespan(app: FastAPI):
 
         ia_client = app_state.download_clients.get("internet_archive")
         if isinstance(ia_client, InternetArchiveClient):
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, ia_client.recover_interrupted_downloads)
 
         # Initialize router dependencies

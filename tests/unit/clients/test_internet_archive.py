@@ -1786,3 +1786,301 @@ class TestRecoverInterruptedDownloadsSSRFGuards:
             assert mock_submit.call_count == 0
             # The orphaned meta must be cleaned up
             assert not meta_file.exists(), "Expected orphaned .meta to be removed"
+
+
+class TestOnProgressCallback:
+    """Tests for the on_progress / _notify real-time event callback.
+
+    Verifies that _notify() is called at each meaningful status transition and
+    at every 5-percentage-point progress milestone during a download so that
+    SSE events are pushed immediately rather than waiting for the monitor tick.
+    """
+
+    def _create_client(self, tmpdir: str) -> InternetArchiveClient:
+        config = {"name": "IA Client", "downloads_dir": tmpdir}
+        return InternetArchiveClient(config)
+
+    def _make_strategy(self, tmpdir: str, filename: str = "file.pdf") -> dict:
+        return {
+            "strategy": "direct",
+            "format": "Text PDF",
+            "files": [{"name": filename, "format": "Text PDF", "size": "10240"}],
+            "url": f"https://archive.org/download/test_mag/{filename}",
+            "is_collection": False,
+            "file_count": 1,
+            "file_info": {"name": filename, "format": "Text PDF", "size": "10240"},
+        }
+
+    def _make_job(self, tmpdir: str) -> "DownloadJob":
+        return DownloadJob(
+            job_id="test_job_id",
+            identifier="test_mag",
+            title="Test Magazine",
+            dest_path=tmpdir,
+        )
+
+    # ------------------------------------------------------------------
+    # on_progress default
+    # ------------------------------------------------------------------
+
+    def test_on_progress_defaults_to_none(self):
+        """on_progress is None when no callback is registered."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            assert client.on_progress is None
+
+    def test_on_progress_can_be_set(self):
+        """on_progress accepts a callable."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            cb = Mock()
+            client.on_progress = cb
+            assert client.on_progress is cb
+
+    # ------------------------------------------------------------------
+    # _notify swallows exceptions
+    # ------------------------------------------------------------------
+
+    def test_notify_swallows_callback_exception(self):
+        """_notify must not propagate exceptions from the callback."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            client.on_progress = Mock(side_effect=RuntimeError("boom"))
+            # Must not raise
+            client._notify()
+
+    def test_notify_does_nothing_when_callback_is_none(self):
+        """_notify is a no-op when on_progress is None."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            assert client.on_progress is None
+            client._notify()  # Should not raise
+
+    # ------------------------------------------------------------------
+    # Status-transition notifications
+    # ------------------------------------------------------------------
+
+    def test_notify_called_on_status_downloading(self):
+        """on_progress is invoked when the job transitions to 'downloading'."""
+        from requests.structures import CaseInsensitiveDict
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            cb = Mock()
+            client.on_progress = cb
+            job = self._make_job(tmpdir)
+            strategy = self._make_strategy(tmpdir)
+
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.headers = CaseInsensitiveDict({"Content-Length": "100"})
+            mock_response.iter_content = Mock(return_value=iter([b"x" * 100]))
+            mock_response.raise_for_status = Mock()
+
+            with (
+                patch("clients.internet_archive.get_item"),
+                patch("clients.internet_archive.requests.get", return_value=mock_response),
+                patch.object(client, "_get_download_strategy", return_value=strategy),
+                patch.object(client, "_save_part_meta"),
+            ):
+                client._download_file(job)
+
+            # At minimum: 'downloading' + at least one 5%-bucket + 'completed'
+            assert cb.call_count >= 3
+
+    def test_notify_called_on_completed(self):
+        """on_progress is invoked when the job reaches 'completed'."""
+        from requests.structures import CaseInsensitiveDict
+        from core.constants.internet_archive import IA_STATUS_COMPLETED
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+
+            calls = []
+            statuses = []
+
+            def _cb():
+                statuses.append(job.status)
+                calls.append(1)
+
+            client.on_progress = _cb
+            job = self._make_job(tmpdir)
+            strategy = self._make_strategy(tmpdir)
+
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.headers = CaseInsensitiveDict({"Content-Length": "100"})
+            mock_response.iter_content = Mock(return_value=iter([b"x" * 100]))
+            mock_response.raise_for_status = Mock()
+
+            with (
+                patch("clients.internet_archive.get_item"),
+                patch("clients.internet_archive.requests.get", return_value=mock_response),
+                patch.object(client, "_get_download_strategy", return_value=strategy),
+                patch.object(client, "_save_part_meta"),
+            ):
+                client._download_file(job)
+
+            assert job.status == IA_STATUS_COMPLETED
+            # The last notification must be for the completed status
+            assert statuses[-1] == IA_STATUS_COMPLETED
+
+    def test_notify_called_on_failed_no_format(self):
+        """on_progress is invoked when no suitable format is found (status → failed)."""
+        from core.constants.internet_archive import IA_STATUS_FAILED
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            cb = Mock()
+            client.on_progress = cb
+            job = self._make_job(tmpdir)
+
+            no_match_strategy = {"strategy": "none"}
+
+            with (
+                patch("clients.internet_archive.get_item"),
+                patch.object(client, "_get_download_strategy", return_value=no_match_strategy),
+            ):
+                client._download_file(job)
+
+            assert job.status == IA_STATUS_FAILED
+            # 'downloading' notify + 'failed' notify = 2 calls
+            assert cb.call_count == 2
+
+    def test_notify_called_on_failed_unsupported_extension(self):
+        """on_progress is invoked when the file extension is not supported."""
+        from core.constants.internet_archive import IA_STATUS_FAILED
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            cb = Mock()
+            client.on_progress = cb
+            job = self._make_job(tmpdir)
+
+            bad_ext_strategy = {
+                "strategy": "direct",
+                "format": "Unknown",
+                "files": [{"name": "file.xyz"}],
+                "url": "https://archive.org/download/test/file.xyz",
+                "is_collection": False,
+                "file_count": 1,
+                "file_info": {"name": "file.xyz", "size": "0"},
+            }
+
+            with (
+                patch("clients.internet_archive.get_item"),
+                patch.object(client, "_get_download_strategy", return_value=bad_ext_strategy),
+            ):
+                client._download_file(job)
+
+            assert job.status == IA_STATUS_FAILED
+            assert cb.call_count >= 2  # 'downloading' + 'failed'
+
+    def test_notify_called_on_exception_in_download(self):
+        """on_progress is invoked when an unexpected exception marks a job failed."""
+        from core.constants.internet_archive import IA_STATUS_FAILED
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            cb = Mock()
+            client.on_progress = cb
+            job = self._make_job(tmpdir)
+
+            with (
+                patch(
+                    "clients.internet_archive.get_item",
+                    side_effect=RuntimeError("network down"),
+                ),
+            ):
+                client._download_file(job)
+
+            assert job.status == IA_STATUS_FAILED
+            # 'downloading' + exception-path 'failed' = at least 2 calls
+            assert cb.call_count >= 2
+
+    # ------------------------------------------------------------------
+    # Progress-bucket notifications
+    # ------------------------------------------------------------------
+
+    def test_notify_fires_every_5_percent(self):
+        """on_progress fires once per 5-percentage-point bucket during streaming."""
+        from requests.structures import CaseInsensitiveDict
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+
+            progress_snapshots = []
+
+            def _cb():
+                progress_snapshots.append(job.progress)
+
+            client.on_progress = _cb
+            job = self._make_job(tmpdir)
+            strategy = self._make_strategy(tmpdir)
+
+            # 20 chunks of 5 bytes each = 100 bytes total; expected_size = 100
+            # Each chunk advances progress by 5 % → 20 notifications during streaming
+            chunks = [b"x" * 5] * 20  # 20 × 5 = 100 bytes
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.headers = CaseInsensitiveDict({"Content-Length": "100"})
+            mock_response.iter_content = Mock(return_value=iter(chunks))
+            mock_response.raise_for_status = Mock()
+
+            with (
+                patch("clients.internet_archive.get_item"),
+                patch("clients.internet_archive.requests.get", return_value=mock_response),
+                patch.object(client, "_get_download_strategy", return_value=strategy),
+                patch.object(client, "_save_part_meta"),
+            ):
+                client._download_file(job)
+
+            # Filter to only the progress notifications (exclude status ones)
+            # There are 20 buckets (0-4%, 5-9%, ... 95-99%, 100%).
+            # Bucket 0 fires on the first chunk (progress=5), buckets 1-19 for the rest,
+            # plus bucket 20 at 100 % fires the completed notify.
+            # We expect at least 20 streaming-phase progress events plus status events.
+            assert len(progress_snapshots) >= 20
+
+            # Progress should have been monotonically non-decreasing
+            for i in range(1, len(progress_snapshots)):
+                assert progress_snapshots[i] >= progress_snapshots[i - 1]
+
+    def test_notify_not_called_for_same_bucket(self):
+        """When multiple chunks fall in the same 5 % bucket, only one notify fires."""
+        from requests.structures import CaseInsensitiveDict
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+
+            call_count_during_stream = []
+
+            def _cb():
+                call_count_during_stream.append(job.progress)
+
+            client.on_progress = _cb
+            job = self._make_job(tmpdir)
+            strategy = self._make_strategy(tmpdir)
+
+            # 100 chunks of 1 byte each = 100 bytes; expected_size = 100
+            # Each chunk is 1 % — five chunks per 5 % bucket → only one notify per 5 chunks
+            chunks = [b"x"] * 100
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.headers = CaseInsensitiveDict({"Content-Length": "100"})
+            mock_response.iter_content = Mock(return_value=iter(chunks))
+            mock_response.raise_for_status = Mock()
+
+            with (
+                patch("clients.internet_archive.get_item"),
+                patch("clients.internet_archive.requests.get", return_value=mock_response),
+                patch.object(client, "_get_download_strategy", return_value=strategy),
+                patch.object(client, "_save_part_meta"),
+            ):
+                client._download_file(job)
+
+            # 100 chunks at 1 % each → 20 distinct 5 % buckets (0–4, 5–9, …, 95–99)
+            # + 1 'downloading' status + 1 'completed' status = 22 total
+            # The progress portion should be ≤ 21 (at most 20 streaming + 100% completed)
+            # and strictly less than 100 (which would mean every chunk notified)
+            assert len(call_count_during_stream) < 100

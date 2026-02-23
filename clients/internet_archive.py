@@ -18,7 +18,7 @@ import uuid
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import requests
 from internetarchive import get_item
@@ -101,6 +101,10 @@ class InternetArchiveClient(DownloadClient):
         # Job tracking
         self._jobs: Dict[str, DownloadJob] = {}
         self._jobs_lock = threading.Lock()
+
+        # Optional callback invoked when a job's status or progress changes.
+        # Signature: () -> None.  Thread-safe; called from the IA download thread pool.
+        self.on_progress: Optional[Callable[[], None]] = None
 
         # Thread pool for background downloads
         self._executor = ThreadPoolExecutor(max_workers=self.max_concurrent, thread_name_prefix="ia_download")
@@ -544,6 +548,24 @@ class InternetArchiveClient(DownloadClient):
             except OSError:
                 pass
 
+    def _notify(self) -> None:
+        """Invoke on_progress callback if one is registered.
+
+        Called from background download threads whenever a job transitions to
+        a new status (downloading / completed / failed) or its progress crosses
+        a 5-percentage-point threshold.  Errors in the callback are swallowed so
+        they never interrupt the download.
+        """
+        if self.on_progress is not None:
+            try:
+                self.on_progress()
+            except Exception:  # pylint: disable=broad-except
+                logger.debug(
+                    "[%s] on_progress callback raised an exception",
+                    self.name,
+                    exc_info=True,
+                )
+
     def _download_file(self, job: DownloadJob):
         """
         Execute the actual file download in a background thread.
@@ -568,6 +590,7 @@ class InternetArchiveClient(DownloadClient):
         try:
             job.status = IA_STATUS_DOWNLOADING
             job.started_at = time.time()
+            self._notify()  # Notify: status → downloading
 
             logger.info(f"[{self.name}] Starting download for {job.identifier}")
 
@@ -583,6 +606,7 @@ class InternetArchiveClient(DownloadClient):
                 job.status = IA_STATUS_FAILED
                 job.error = f"No suitable file format found for {job.identifier}"
                 logger.error(f"[{self.name}] {job.error}")
+                self._notify()  # Notify: status → failed
                 return
 
             download_url = strategy["url"]
@@ -614,6 +638,7 @@ class InternetArchiveClient(DownloadClient):
                     job.status = IA_STATUS_FAILED
                     job.error = f"Unsupported file extension '{ext}' for {job.identifier}"
                     logger.warning(f"[{self.name}] Skipping download: {job.error}")
+                    self._notify()  # Notify: status → failed (unsupported extension)
                     return
 
             dest_file = self.downloads_dir / f"{safe_title}{ext}"
@@ -724,15 +749,23 @@ class InternetArchiveClient(DownloadClient):
                     # Use "ab" (append) for resume, "wb" (overwrite) for fresh download
                     file_mode = "ab" if is_resumed else "wb"
 
+                    _last_notified_progress = -1  # Track last notified progress bucket
+
                     with open(partial_file, file_mode) as f:
                         for chunk in response.iter_content(chunk_size=IA_DOWNLOAD_CHUNK_SIZE):
                             if chunk:
                                 f.write(chunk)
                                 job.downloaded_size += len(chunk)
 
-                                # Update progress (UI polls this value)
+                                # Update progress (SSE pushes this value to subscribers)
                                 if job.expected_size > 0:
                                     job.progress = int((job.downloaded_size / job.expected_size) * 100)
+                                    # Notify every 5 percentage points so the UI stays
+                                    # current without flooding the event bus.
+                                    progress_bucket = job.progress // 5
+                                    if progress_bucket != _last_notified_progress:
+                                        _last_notified_progress = progress_bucket
+                                        self._notify()
 
                     # Verify download and rename from .part to final name atomically
                     if partial_file.exists() and partial_file.stat().st_size > 0:
@@ -766,6 +799,7 @@ class InternetArchiveClient(DownloadClient):
                         job.status = IA_STATUS_COMPLETED
                         job.progress = 100
                         job.completed_at = time.time()
+                        self._notify()  # Notify: status → completed
                         return
                     else:
                         raise IOError("Downloaded file is empty or missing")
@@ -787,6 +821,7 @@ class InternetArchiveClient(DownloadClient):
             # All retries exhausted
             job.status = IA_STATUS_FAILED
             job.error = f"Download failed after {IA_DOWNLOAD_RETRY_ATTEMPTS} attempts"
+            self._notify()  # Notify: status → failed (retries exhausted)
 
         except Exception as e:
             job.status = IA_STATUS_FAILED
@@ -795,6 +830,7 @@ class InternetArchiveClient(DownloadClient):
                 f"[{self.name}] Download failed for {job.identifier}: {e}",
                 exc_info=True,
             )
+            self._notify()  # Notify: status → failed (exception)
             # For final failure: keep .part + .meta files for potential recovery on restart
             # (recover_interrupted_downloads can pick them up). Only clean up compress downloads.
             if partial_file and not (IA_DOWNLOAD_RESUME_ENABLED and not is_compress):

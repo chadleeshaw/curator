@@ -52,6 +52,7 @@ class DownloadMonitor:
         issue_discovery_service: Optional[IssueDiscoveryService] = None,
         remote_path: Optional[str] = None,
         import_callback: Optional[Callable] = None,
+        notify_callback: Optional[Callable[[], None]] = None,
     ):
         """
         Initialize download monitor.
@@ -68,6 +69,10 @@ class DownloadMonitor:
                 When set, client paths starting with this prefix are remapped to downloads_dir.
                 Useful when the client runs in a different container with different mount points.
             import_callback: Optional callback to run after importing (e.g., for file processing)
+            notify_callback: Optional zero-argument callable invoked from download threads
+                whenever a job's status or progress changes.  Used to push real-time SSE
+                events without waiting for the next periodic monitor tick.  The callback
+                must be thread-safe; it is called from the IA download thread pool.
         """
         self.download_manager = download_manager
         self.file_importer = file_importer
@@ -81,6 +86,12 @@ class DownloadMonitor:
         self.last_status = None
         self.last_config_warning_time = None  # Rate limit config warning
 
+        # Propagate the notify callback to every IA download client so that
+        # progress/status changes are published immediately rather than waiting
+        # for the next 30-second monitor tick.
+        if notify_callback is not None:
+            self._attach_notify_callback(notify_callback)
+
         # Statistics
         self.stats = {
             "total_runs": 0,
@@ -90,6 +101,26 @@ class DownloadMonitor:
             "last_client_check": None,
             "last_folder_scan": None,
         }
+
+    def _attach_notify_callback(self, notify_callback: Callable[[], None]) -> None:
+        """Register *notify_callback* on every download client that supports it.
+
+        Currently only ``InternetArchiveClient`` exposes ``on_progress``.
+        The method uses duck-typing so future clients gain the same benefit
+        without changes here.
+
+        Note: only the clients present in ``download_manager.download_clients``
+        at construction time receive the callback.  Clients added to the
+        ``DownloadManager`` after this ``DownloadMonitor`` is created will **not**
+        automatically receive the callback.
+        """
+        for client in self.download_manager.download_clients.values():
+            if hasattr(client, "on_progress"):
+                client.on_progress = notify_callback
+                logger.debug(
+                    "[DownloadMonitor] Attached notify_callback to client '%s'",
+                    getattr(client, "name", type(client).__name__),
+                )
 
     async def run(self):
         """
