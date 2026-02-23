@@ -2830,13 +2830,11 @@ window.showLibraryItemDetail = function (issueKey) {
   const variants = window.issueVariants[issueKey];
   if (!variants || variants.length === 0) return;
 
-  // Separate library copies from downloadable provider variants
-  const libraryCopies = variants.filter(
-    (v) => v.status === 'in_library' || v.from_provider === false
-  );
-  const downloadableVariants = variants.filter(
-    (v) => v.status !== 'in_library' && v.from_provider !== false && v.url
-  );
+  // Separate library copies from downloadable provider variants.
+  // Use from_provider as the authoritative signal: false = actual library item,
+  // true = provider result (even if status was promoted to "in_library" due to a match).
+  const libraryCopies = variants.filter((v) => v.from_provider === false);
+  const downloadableVariants = variants.filter((v) => v.from_provider !== false && v.url);
 
   // Build detail section for each library copy
   let detailHtml = '';
