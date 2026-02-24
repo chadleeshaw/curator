@@ -1,10 +1,10 @@
 {
-  "name": "new",
-  "version": "1.1.0",
-  "description": "A modular, extensible system for discovering, downloading, and organizing periodicals using Newsnab APIs (Prowlarr, etc.), SABnzbd, and Open Library.",
+  "name": "curator",
+  "version": "1.2.0",
+  "description": "A self-hosted periodical management system for discovering, downloading, and organizing magazines, comics, and newspapers.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "pytest tests/ -x --ignore=tests/slow"
   },
   "keywords": [],
   "author": "",
