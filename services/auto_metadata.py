@@ -535,22 +535,3 @@ class AutoMetadataService:
             mark_json_modified(periodical, "extra_metadata", "parsed_metadata")
 
         return cleaned
-
-
-def run_auto_metadata_task(db_manager: DatabaseManager) -> Dict[str, Any]:
-    """
-    Run auto-metadata task (standalone function for task runner).
-
-    Args:
-        db_manager: Database manager instance
-
-    Returns:
-        Dictionary with statistics
-    """
-    service = AutoMetadataService(db_manager)
-    session = db_manager.session_factory()
-
-    try:
-        return service.run_full_scan(session)
-    finally:
-        session.close()

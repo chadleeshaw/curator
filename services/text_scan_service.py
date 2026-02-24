@@ -23,12 +23,6 @@ except ImportError:
     logger.debug("pypdf not available for PDF text extraction")
 
 
-class PDFReadTimeout(Exception):
-    """Raised when PDF reading times out."""
-
-    pass
-
-
 def _read_pdf_in_process(pdf_path: str, max_pages: int, result_queue) -> None:
     """
     Read PDF text in a child process. Puts result into queue.
