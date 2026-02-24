@@ -127,9 +127,9 @@ def _assert_accuracy(label: str, meta: dict) -> None:
         f"{label}: expected year={_EXPECTED_YEAR}, got {meta.get('year')!r}\n"
         f"detected_text={meta.get('detected_text', '')[:200]!r}"
     )
-    assert (
-        meta.get("month") == _EXPECTED_MONTH
-    ), f"{label}: expected month={_EXPECTED_MONTH!r}, got {meta.get('month')!r}"
+    assert meta.get("month") == _EXPECTED_MONTH, (
+        f"{label}: expected month={_EXPECTED_MONTH!r}, got {meta.get('month')!r}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -158,12 +158,6 @@ def image_200dpi():
 
 
 @pytest.fixture(scope="module")
-def image_200dpi_gray(image_200dpi):
-    """200 DPI image converted to grayscale."""
-    return image_200dpi.convert("L")
-
-
-@pytest.fixture(scope="module")
 def image_200dpi_resized(image_200dpi):
     """200 DPI image resized to OCR_IMAGE_MAX_DIMENSION on the longest axis."""
     from PIL import Image as PILImage
@@ -172,21 +166,10 @@ def image_200dpi_resized(image_200dpi):
     w, h = image_200dpi.size
     scale = OCR_IMAGE_MAX_DIMENSION / max(w, h)
     if scale < 1.0:
-        return image_200dpi.resize((int(w * scale), int(h * scale)), PILImage.Resampling.LANCZOS)
+        return image_200dpi.resize(
+            (int(w * scale), int(h * scale)), PILImage.Resampling.LANCZOS
+        )
     return image_200dpi
-
-
-@pytest.fixture(scope="module")
-def image_200dpi_gray_resized(image_200dpi_gray):
-    """200 DPI image: grayscale + resized."""
-    from PIL import Image as PILImage
-    from core.constants.ocr import OCR_IMAGE_MAX_DIMENSION
-
-    w, h = image_200dpi_gray.size
-    scale = OCR_IMAGE_MAX_DIMENSION / max(w, h)
-    if scale < 1.0:
-        return image_200dpi_gray.resize((int(w * scale), int(h * scale)), PILImage.Resampling.LANCZOS)
-    return image_200dpi_gray
 
 
 @pytest.fixture(scope="module")
@@ -194,13 +177,6 @@ def image_200dpi_top40(image_200dpi):
     """200 DPI image cropped to the top 40%."""
     w, h = image_200dpi.size
     return image_200dpi.crop((0, 0, w, int(h * 0.4)))
-
-
-@pytest.fixture(scope="module")
-def image_200dpi_top30(image_200dpi):
-    """200 DPI image cropped to the top 30%."""
-    w, h = image_200dpi.size
-    return image_200dpi.crop((0, 0, w, int(h * 0.3)))
 
 
 # ---------------------------------------------------------------------------
@@ -234,28 +210,7 @@ class TestBaseline:
 
 
 # ---------------------------------------------------------------------------
-# Benchmark 2 — Grayscale conversion
-# Tesseract works on luminance internally; converting upfront may reduce its
-# per-pixel work or allow it to skip an internal conversion step.
-# ---------------------------------------------------------------------------
-
-
-class TestGrayscale:
-    """Does converting to grayscale before Tesseract help?"""
-
-    def test_ocr_200dpi_rgb(self, benchmark, ocr_available, image_200dpi):
-        """Baseline: Tesseract on the full 200 DPI RGB image."""
-        data = benchmark(_run_tesseract, image_200dpi)
-        assert "text" in data
-
-    def test_ocr_200dpi_gray(self, benchmark, ocr_available, image_200dpi_gray):
-        """Grayscale 200 DPI image — single channel vs RGB."""
-        data = benchmark(_run_tesseract, image_200dpi_gray)
-        assert "text" in data
-
-
-# ---------------------------------------------------------------------------
-# Benchmark 3 — Resize to OCR_IMAGE_MAX_DIMENSION (1200px)
+# Benchmark 2 — Resize to OCR_IMAGE_MAX_DIMENSION (1200px)
 # The 200 DPI render is already 3820x5556 px — well above what Tesseract needs
 # for large cover text. Downscaling to 1200px on the longest axis reduces pixel
 # count by ~95%, which should be the largest single speedup available.
@@ -270,19 +225,16 @@ class TestResize:
         data = benchmark(_run_tesseract, image_200dpi)
         assert "text" in data
 
-    def test_ocr_200dpi_resized_1200(self, benchmark, ocr_available, image_200dpi_resized):
+    def test_ocr_200dpi_resized_1200(
+        self, benchmark, ocr_available, image_200dpi_resized
+    ):
         """Tesseract on image resized to max 1200px on longest axis."""
         data = benchmark(_run_tesseract, image_200dpi_resized)
         assert "text" in data
 
-    def test_ocr_200dpi_gray_resized_1200(self, benchmark, ocr_available, image_200dpi_gray_resized):
-        """Grayscale + resized to 1200px — combined preprocessing."""
-        data = benchmark(_run_tesseract, image_200dpi_gray_resized)
-        assert "text" in data
-
 
 # ---------------------------------------------------------------------------
-# Benchmark 4 — Crop to top band
+# Benchmark 3 — Crop to top band
 # Magazine cover dates and titles are almost always in the top third or top
 # half of the cover. Cropping eliminates the bulk of the image before OCR.
 # ---------------------------------------------------------------------------
@@ -301,14 +253,9 @@ class TestCrop:
         data = benchmark(_run_tesseract, image_200dpi_top40)
         assert "text" in data
 
-    def test_ocr_200dpi_top30pct(self, benchmark, ocr_available, image_200dpi_top30):
-        """Tesseract on top 30% of 200 DPI image."""
-        data = benchmark(_run_tesseract, image_200dpi_top30)
-        assert "text" in data
-
 
 # ---------------------------------------------------------------------------
-# Benchmark 5 — Parallel page processing
+# Benchmark 4 — Parallel page processing
 # Currently the 2-page scan is sequential: page 1 OCR completes, then page 2.
 # Each pytesseract call spawns its own tesseract subprocess, so they can run
 # in parallel. We pre-render both pages (fitz isn't thread-safe) then submit
@@ -364,28 +311,12 @@ def test_accuracy_200dpi(ocr_available, image_200dpi):
     _assert_accuracy("200 DPI full", meta)
 
 
-def test_accuracy_200dpi_gray(ocr_available, image_200dpi_gray):
-    """Grayscale 200 DPI image must extract year=2000 and month=January."""
-    data = _run_tesseract(image_200dpi_gray)
-    meta = _extract_metadata(data)
-    _accuracy_report("200 DPI gray", meta, image_200dpi_gray.size)
-    _assert_accuracy("200 DPI gray", meta)
-
-
 def test_accuracy_200dpi_resized(ocr_available, image_200dpi_resized):
     """Resized-to-1200px 200 DPI image must extract year=2000 and month=January."""
     data = _run_tesseract(image_200dpi_resized)
     meta = _extract_metadata(data)
     _accuracy_report("200 DPI resized 1200px", meta, image_200dpi_resized.size)
     _assert_accuracy("200 DPI resized 1200px", meta)
-
-
-def test_accuracy_200dpi_gray_resized(ocr_available, image_200dpi_gray_resized):
-    """Grayscale + resized-to-1200px must extract year=2000 and month=January."""
-    data = _run_tesseract(image_200dpi_gray_resized)
-    meta = _extract_metadata(data)
-    _accuracy_report("200 DPI gray+resized 1200px", meta, image_200dpi_gray_resized.size)
-    _assert_accuracy("200 DPI gray+resized 1200px", meta)
 
 
 def test_accuracy_200dpi_top40(ocr_available, image_200dpi_top40):
@@ -396,22 +327,11 @@ def test_accuracy_200dpi_top40(ocr_available, image_200dpi_top40):
     _assert_accuracy("200 DPI top 40%", meta)
 
 
-def test_accuracy_200dpi_top30(ocr_available, image_200dpi_top30):
-    """Top-30% crop of 200 DPI image must extract year=2000 and month=January."""
-    data = _run_tesseract(image_200dpi_top30)
-    meta = _extract_metadata(data)
-    _accuracy_report("200 DPI top 30%", meta, image_200dpi_top30.size)
-    _assert_accuracy("200 DPI top 30%", meta)
-
-
 def test_accuracy_comparison(
     ocr_available,
     image_200dpi,
-    image_200dpi_gray,
     image_200dpi_resized,
-    image_200dpi_gray_resized,
     image_200dpi_top40,
-    image_200dpi_top30,
 ):
     """
     Print a full side-by-side accuracy report for all candidate optimizations.
@@ -421,11 +341,8 @@ def test_accuracy_comparison(
     """
     candidates = [
         ("200 DPI full (baseline)", image_200dpi),
-        ("200 DPI gray", image_200dpi_gray),
         ("200 DPI resized 1200px", image_200dpi_resized),
-        ("200 DPI gray+resized 1200px", image_200dpi_gray_resized),
         ("200 DPI top 40%", image_200dpi_top40),
-        ("200 DPI top 30%", image_200dpi_top30),
     ]
 
     results = []
@@ -444,7 +361,9 @@ def test_accuracy_comparison(
         m_ok = "OK  " if meta.get("month") == baseline_month else "DIFF"
         print(f"    year={y_ok}  month={m_ok}  — {label}")
 
-    assert True  # reporting only — correctness enforced by individual accuracy tests above
+    assert (
+        True
+    )  # reporting only — correctness enforced by individual accuracy tests above
 
 
 # ---------------------------------------------------------------------------
@@ -463,12 +382,16 @@ def _gen_png_in_process_bench(pdf_path: str, png_path: str, result_queue) -> Non
         from pdf2image import convert_from_path
         from PIL import Image
 
-        images = convert_from_path(pdf_path, first_page=1, last_page=1, dpi=200, fmt="png")
+        images = convert_from_path(
+            pdf_path, first_page=1, last_page=1, dpi=200, fmt="png"
+        )
         if images:
             img = images[0]
             if max(img.size) > 1200:
                 ratio = 1200 / max(img.size)
-                img = img.resize(tuple(int(d * ratio) for d in img.size), Image.Resampling.LANCZOS)
+                img = img.resize(
+                    tuple(int(d * ratio) for d in img.size), Image.Resampling.LANCZOS
+                )
             img.save(png_path, "PNG")
             result_queue.put({"success": True})
         else:
