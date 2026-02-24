@@ -11,11 +11,6 @@ from core.constants.validation import COLLECTION_INDICATOR_WORDS
 IA_DEFAULT_ROWS = 500
 IA_DEFAULT_SORT = "-downloads"  # Sort by most downloaded (most popular) first
 
-# Minimum results from collection-filtered search before trying broader search
-# If collection-filtered search returns fewer than this, also run a broad search
-# to catch items in unconfigured collections
-IA_BROAD_SEARCH_THRESHOLD = 50
-
 # Map Curator categories to specific IA collections
 # When a category is specified, only search relevant collections
 IA_CATEGORY_COLLECTION_MAP = {

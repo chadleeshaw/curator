@@ -63,7 +63,6 @@ COLUMN_RENAMES = {
     "search_results": [("magazine_id", "periodical_id")],
     "discovered_issues": [("magazine_id", "periodical_id")],
     "download_submissions": [("magazine_id", "periodical_id")],
-    "downloads": [("magazine_id", "periodical_id")],
     "reading_progress": [("magazine_id", "periodical_id")],
 }
 
@@ -73,3 +72,10 @@ COLUMN_RENAMES = {
 COLUMN_REMOVALS = {
     "periodicals": ["special_edition"],
 }
+
+# Table removals
+# Format: [table_name, ...]
+# These tables are dropped if they still exist in deployed databases.
+TABLE_REMOVALS = [
+    "downloads",  # Superseded by download_submissions; no production callers since v1.0
+]

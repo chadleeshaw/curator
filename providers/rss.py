@@ -159,32 +159,3 @@ class RSSProvider(SearchProvider):
                 return self._feed_cache
 
             return None
-
-    def clear_cache(self) -> None:
-        """Manually clear the feed cache. Useful for testing or forced refresh."""
-        self._feed_cache = None
-        self._cache_time = None
-        logger.info(f"Cleared RSS feed cache for: {self.name}")
-
-    def get_cache_stats(self) -> dict:
-        """
-        Get cache statistics.
-
-        Returns:
-            Dict with cache hits, misses, and hit rate
-        """
-        total = self._cache_hits + self._cache_misses
-        hit_rate = (self._cache_hits / total * 100) if total > 0 else 0
-
-        cache_age = None
-        if self._cache_time:
-            cache_age = int(time.time() - self._cache_time)
-
-        return {
-            "cache_hits": self._cache_hits,
-            "cache_misses": self._cache_misses,
-            "hit_rate": round(hit_rate, 2),
-            "cache_age_seconds": cache_age,
-            "cache_ttl_seconds": self.cache_ttl,
-            "is_cached": self._feed_cache is not None,
-        }

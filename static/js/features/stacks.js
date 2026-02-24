@@ -558,18 +558,6 @@ export class StacksManager {
       return await response.json();
     }, 'Stacks');
   }
-
-  /**
-   * Get all stacks (cached or freshly loaded)
-   *
-   * @returns {Promise<Array>}
-   */
-  async getStacks() {
-    if (!this.stacksLoaded) {
-      await this.loadStacks();
-    }
-    return this.allStacks;
-  }
 }
 
 export const stacks = new StacksManager();

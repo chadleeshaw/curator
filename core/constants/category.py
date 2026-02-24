@@ -126,5 +126,3 @@ CATEGORY_KEYWORDS = {
         "document",
     ],
 }
-
-

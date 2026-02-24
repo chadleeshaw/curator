@@ -137,22 +137,6 @@ class OCRProcessor:
         finally:
             db.close()
 
-    def get_status(self) -> Dict[str, Any]:
-        """
-        Get current OCR queue status.
-
-        Returns:
-            Dictionary with queue statistics
-        """
-        try:
-            db = self.session_factory()
-            status = self.ocr_service.get_queue_status(db)
-            db.close()
-            return status
-        except Exception as e:
-            logger.error(f"Error getting OCR queue status: {e}")
-            return {"error": str(e)}
-
     def shutdown(self):
         """Shutdown the OCR processor gracefully."""
         logger.info("Shutting down OCR processor")

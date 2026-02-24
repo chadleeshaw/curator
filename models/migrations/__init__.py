@@ -9,11 +9,12 @@ Data migrations are defined in data.py and run after schema changes.
 """
 
 from .data import run_data_migrations
-from .schema import COLUMN_ADDITIONS, COLUMN_RENAMES, COLUMN_REMOVALS
+from .schema import COLUMN_ADDITIONS, COLUMN_RENAMES, COLUMN_REMOVALS, TABLE_REMOVALS
 
 __all__ = [
     "COLUMN_ADDITIONS",
     "COLUMN_RENAMES",
     "COLUMN_REMOVALS",
+    "TABLE_REMOVALS",
     "run_data_migrations",
 ]

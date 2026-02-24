@@ -64,6 +64,7 @@ class DatabaseManager:
         migrations_applied += self._rename_columns(inspector)
         self._run_data_migrations()
         migrations_applied += self._remove_deprecated_columns(inspector)
+        migrations_applied += self._drop_deprecated_tables(inspector)
 
         if migrations_applied > 0:
             logger.info(f"Schema migrations complete: {migrations_applied} migration(s) applied")
@@ -215,6 +216,28 @@ class DatabaseManager:
                             f"Could not remove column {table_name}.{column_name}: {drop_error}. "
                             f"This column is deprecated and can be safely ignored."
                         )
+
+        return migrations_applied
+
+    def _drop_deprecated_tables(self, inspector) -> int:
+        from models.migrations import TABLE_REMOVALS
+
+        migrations_applied = 0
+
+        for table_name in TABLE_REMOVALS:
+            if inspector.has_table(table_name):
+                logger.info(f"Dropping deprecated table '{table_name}'")
+                try:
+                    with self.engine.connect() as conn:
+                        conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
+                        conn.commit()
+                    migrations_applied += 1
+                    logger.info(f"✓ Dropped deprecated table {table_name}")
+                except Exception as drop_error:
+                    logger.warning(
+                        f"Could not drop deprecated table {table_name}: {drop_error}. "
+                        f"This table is deprecated and can be safely ignored."
+                    )
 
         return migrations_applied
 

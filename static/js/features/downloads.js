@@ -1308,28 +1308,6 @@ export class DownloadsManager {
   }
 
   /**
-   * Toggle display of a status message in the queue modal status area.
-   * If the same message is already visible, hides it; otherwise shows it.
-   *
-   * @param {string} message - The (HTML-encoded) message to display
-   * @param {string} [type='info'] - Message type: 'info' or 'error'
-   */
-  showItemInfo(message, type = 'info') {
-    const decoded = message.replace(/&#39;/g, "'").replace(/&quot;/g, '"');
-    const statusEl = document.getElementById('modal-queue-status');
-    // Toggle off if already showing this same message
-    if (
-      statusEl &&
-      !statusEl.classList.contains(CSS_CLASSES.HIDDEN) &&
-      statusEl.textContent.includes(decoded)
-    ) {
-      UIUtils.hideStatus('modal-queue-status');
-      return;
-    }
-    UIUtils.showStatus('modal-queue-status', decoded, type === 'error' ? 'error' : 'info');
-  }
-
-  /**
    * Show details modal for a download item
    *
    * @param {number} submissionId - The submission ID
@@ -1935,51 +1913,6 @@ export class DownloadsManager {
   }
 
   /**
-   * Clear all queued downloads from the queue
-   *
-   * @returns {Promise<void>}
-   */
-  async clearQueuedDownloads() {
-    try {
-      // Confirm before clearing
-      const confirmed = await UIUtils.confirm(
-        'Clear Queued Downloads',
-        'Are you sure you want to clear all queued downloads? This cannot be undone.'
-      );
-
-      if (!confirmed) {
-        return;
-      }
-
-      UIUtils.showStatus('downloads-status', '🗑️ Clearing queued downloads...', 'info');
-
-      const data = await APIHelper.executeWithErrorHandling(
-        async () => {
-          const response = await APIClient.authenticatedFetch('/api/downloads/queue/queued', {
-            method: 'DELETE',
-          });
-          return await response.json();
-        },
-        'Downloads',
-        'downloads-status'
-      );
-
-      if (data.success) {
-        UIUtils.showStatus('downloads-status', data.message, 'success');
-        setTimeout(() => {
-          UIUtils.hideStatus('downloads-status');
-          this.loadDownloadQueue(); // Refresh the queue
-        }, 2000);
-      } else {
-        throw new Error(data.message ?? 'Failed to clear queued downloads');
-      }
-    } catch (error) {
-      console.error('[Downloads] Failed to clear queued downloads:', error);
-      UIUtils.showStatus('downloads-status', `Error: ${error.message}`, 'error');
-    }
-  }
-
-  /**
    * Clear downloads by status
    *
    * @param {string} status - Status to clear (all, queued, pending, downloading, completed, failed, skipped)
@@ -2029,54 +1962,6 @@ export class DownloadsManager {
         setTimeout(() => {
           this.loadDownloadQueue();
         }, 1500);
-      }
-    } catch (error) {
-      // Already logged by APIHelper
-    }
-  }
-
-  /**
-   * Clear all failed downloads from the queue
-   *
-   * @returns {Promise<void>}
-   */
-  async clearFailedDownloads() {
-    try {
-      // Confirm before clearing
-      const confirmed = await UIUtils.confirm(
-        'Clear Failed Downloads',
-        'Are you sure you want to clear all failed downloads? This cannot be undone.'
-      );
-
-      if (!confirmed) {
-        return;
-      }
-
-      UIUtils.showStatus('downloads-status', '🗑️ Clearing failed downloads...', 'info');
-
-      const data = await APIHelper.executeWithErrorHandling(
-        async () => {
-          const response = await APIClient.authenticatedFetch('/api/downloads/queue/failed', {
-            method: 'DELETE',
-          });
-          return await response.json();
-        },
-        'Downloads',
-        'downloads-status'
-      );
-
-      if (data.success) {
-        UIUtils.showStatus('downloads-status', data.message, 'success');
-        setTimeout(() => {
-          UIUtils.hideStatus('downloads-status');
-          this.loadDownloadQueue(); // Refresh the queue
-        }, 2000);
-      } else {
-        UIUtils.showStatus(
-          'downloads-status',
-          data.message || 'Failed to clear failed downloads',
-          'error'
-        );
       }
     } catch (error) {
       // Already logged by APIHelper

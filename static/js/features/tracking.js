@@ -548,28 +548,6 @@ export class TrackingManager {
   }
 
   /**
-   * Display search results for user to select
-   */
-  displaySearchResults(results) {
-    const container = document.getElementById(ELEMENT_IDS.TRACKING_SEARCH_RESULT);
-    container.innerHTML = '<h4>Select a Periodical:</h4>';
-
-    results.forEach((result, _index) => {
-      const div = document.createElement('div');
-      div.className = CSS_CLASSES.RESULT_ITEM;
-
-      div.innerHTML = `
-        <h5 class="result-title">${escapeHtml(result.title)}</h5>
-        <p class="result-publisher">${escapeHtml(result.publisher || 'Unknown Publisher')}</p>
-        <p class="result-source">${escapeHtml(result.source || '')}</p>
-      `;
-
-      div.onclick = () => this.chooseSearchResult(result);
-      container.appendChild(div);
-    });
-  }
-
-  /**
    * User selected a search result
    */
   async chooseSearchResult(result) {
