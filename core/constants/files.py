@@ -14,9 +14,6 @@ PIL_MAX_IMAGE_PIXELS = 200000000
 # File Processing - PDF Cover Extraction
 # ==============================================================================
 
-PDF_COVER_DPI = 150
-"""DPI setting for extracting cover images from PDFs"""
-
 PDF_COVER_DPI_LOW = 60
 """Low DPI setting for thumbnails/previews"""
 
@@ -36,15 +33,6 @@ EPUB_COVER_QUALITY = 85
 # ==============================================================================
 # File Organization
 # ==============================================================================
-
-MAX_FILENAME_LENGTH = 200
-"""Maximum length for sanitized filenames"""
-
-DEFAULT_ORGANIZATION_PATTERN = "{category}/{title}/{year}/"
-"""Default pattern for organizing imported files"""
-
-ORGANIZED_FILENAME_PATTERN = "{title} - {month}{year}"
-"""Pattern for organized filenames: e.g., 'Wired - Dec2006'"""
 
 VOLUME_PREFIX = "Vol"
 """Prefix for volume numbers in filenames (e.g., 'Vol1')"""
@@ -125,14 +113,6 @@ INCOMPLETE_DOWNLOAD_PATTERNS = {
     ".tmp",  # Generic temporary files
 }
 """Set of patterns indicating incomplete/temporary downloads that should be skipped during import"""
-
-
-# ==============================================================================
-# File Hashing
-# ==============================================================================
-
-DEFAULT_HASH_CHUNK_SIZE = 8192
-"""Default chunk size in bytes for reading files during hashing (8KB)"""
 
 
 # ==============================================================================

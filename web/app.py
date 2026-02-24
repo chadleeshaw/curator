@@ -1044,13 +1044,14 @@ app.add_middleware(
 
 # Add rate limiting middleware
 from web.middleware import RateLimitMiddleware
+from core.constants.app import RATE_LIMIT_CALLS, RATE_LIMIT_PERIOD, RATE_LIMIT_AUTH_CALLS, RATE_LIMIT_AUTH_PERIOD
 
 app.add_middleware(
     RateLimitMiddleware,
-    calls=60,  # 60 calls per minute for regular endpoints
-    period=60,
-    auth_calls=10,  # 10 calls per minute for auth endpoints
-    auth_period=60,
+    calls=RATE_LIMIT_CALLS,
+    period=RATE_LIMIT_PERIOD,
+    auth_calls=RATE_LIMIT_AUTH_CALLS,
+    auth_period=RATE_LIMIT_AUTH_PERIOD,
 )
 
 
