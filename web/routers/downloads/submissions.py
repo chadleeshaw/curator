@@ -229,7 +229,9 @@ async def download_batch_issues(
             }
 
             try:
-                submission = _shared._download_manager.download_single_issue(request.tracking_id, search_result, db)
+                # Use queue_issue_for_batch to avoid making outbound HTTP calls inside
+                # this request — the queue processor will submit each issue later.
+                submission = _shared._download_manager.queue_issue_for_batch(request.tracking_id, search_result, db)
 
                 if submission:
                     status = submission.status.value
@@ -243,9 +245,9 @@ async def download_batch_issues(
                         failed += 1
                     results.append({"title": issue.title, "status": status})
                 else:
-                    # None means an error (already downloading, permanently failed, etc.)
-                    failed += 1
-                    results.append({"title": issue.title, "status": "failed"})
+                    # None means already active or failed to record — treat as skipped
+                    skipped += 1
+                    results.append({"title": issue.title, "status": "skipped"})
 
             except Exception as e:
                 _shared.logger.error(f"Failed to submit {issue.title}: {e}")

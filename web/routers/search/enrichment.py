@@ -122,9 +122,8 @@ def _parse_single_result(result: Dict[str, Any]) -> Dict[str, Any]:
     else:
         # NZB parser returned None (anti-periodical patterns).
         # Result is already in the pipeline so it passed filter_non_periodicals.
-        # Attempt minimal extraction from publication_date.
+        # Remaining fallbacks below will attempt minimal extraction.
         pass
-
     # Season fallback: check title directly
     if not season:
         season = _extract_season(title)
@@ -157,6 +156,8 @@ def _parse_single_result(result: Dict[str, Any]) -> Dict[str, Any]:
                 issue = candidate_issue
                 month = candidate_month
                 year = 2000 + candidate_yy if candidate_yy <= 29 else 1900 + candidate_yy
+                # NOTE: the 29/30 cutoff follows the ISO 8601 two-digit year windowing
+                # convention.  Revisit after 2029 when "30" starts meaning 2030.
 
     # Bare-number fallback: when no issue/volume was extracted, scan the title for a
     # standalone number that isn't the year.  This covers two cases:
@@ -186,9 +187,9 @@ def _parse_single_result(result: Dict[str, Any]) -> Dict[str, Any]:
             try:
                 parts = pub.split("-")
                 if len(parts) >= 2:
-                    m = int(parts[1])
-                    if 1 <= m <= 12:
-                        month = m
+                    month_num = int(parts[1])
+                    if 1 <= month_num <= 12:
+                        month = month_num
                     if year == 0 and len(parts) >= 1:
                         y = int(parts[0])
                         if 1900 <= y <= 2100:

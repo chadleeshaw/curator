@@ -720,6 +720,10 @@ export class PageReader {
 
     let initialDistance = 0;
     let initialZoom = 100;
+    // Midpoint of the pinch in container-relative coords at gesture start.
+    // Used to scroll the container so the pinch origin stays under the fingers.
+    let pinchMidX = 0;
+    let pinchMidY = 0;
 
     const getDistance = (touches) => {
       const dx = touches[0].clientX - touches[1].clientX;
@@ -727,11 +731,24 @@ export class PageReader {
       return Math.sqrt(dx * dx + dy * dy);
     };
 
+    const getMidpoint = (touches) => ({
+      x: (touches[0].clientX + touches[1].clientX) / 2,
+      y: (touches[0].clientY + touches[1].clientY) / 2,
+    });
+
     const handleTouchStart = (e) => {
       if (e.touches.length === 2) {
         e.preventDefault();
         initialDistance = getDistance(e.touches);
         initialZoom = this.zoomLevel;
+
+        const rect = contentDiv.getBoundingClientRect();
+        const mid = getMidpoint(e.touches);
+        // Store pinch midpoint relative to the content div's top-left corner,
+        // accounting for current scroll so we know which content pixel is under
+        // the fingers at gesture start.
+        pinchMidX = mid.x - rect.left + contentDiv.scrollLeft;
+        pinchMidY = mid.y - rect.top + contentDiv.scrollTop;
       }
     };
 
@@ -739,23 +756,48 @@ export class PageReader {
       if (e.touches.length === 2) {
         e.preventDefault();
         const currentDistance = getDistance(e.touches);
-        const scale = currentDistance / initialDistance;
-        const newZoom = Math.round(initialZoom * scale);
+
+        // Guard against divide-by-zero if initialDistance wasn't captured.
+        if (initialDistance === 0) return;
+
+        // Dampen the raw ratio so slow finger movements don't jump wildly.
+        // A raw ratio of 1.5 (fingers 50% further apart) becomes a 25% zoom-in
+        // rather than 50%.  This makes the gesture feel proportional.
+        const rawRatio = currentDistance / initialDistance;
+        const dampened = 1 + (rawRatio - 1) * 0.5;
+        const newZoom = Math.round(initialZoom * dampened);
 
         this.zoomLevel = Math.max(50, Math.min(400, newZoom));
+
         const zoomDisplay = document.getElementById('zoom-level');
         if (zoomDisplay) {
           zoomDisplay.textContent = `${this.zoomLevel}%`;
         }
 
         this.applyZoom(this.zoomLevel);
+
+        // Use initialZoom (captured at touchstart) as the base for the total scale
+        // ratio — not prevZoom — so the anchor calculation doesn't compound error
+        // across frames and drift away from the pinch origin.
+        const totalScaleRatio = this.zoomLevel / (initialZoom || 100);
+        const newContentX = pinchMidX * totalScaleRatio;
+        const newContentY = pinchMidY * totalScaleRatio;
+
+        // Scroll so that point sits at the same screen position as the original midpoint.
+        const rect = contentDiv.getBoundingClientRect();
+        const mid = getMidpoint(e.touches);
+        contentDiv.scrollLeft = newContentX - (mid.x - rect.left);
+        contentDiv.scrollTop = newContentY - (mid.y - rect.top);
       }
     };
 
     const handleTouchEnd = (e) => {
       if (e.touches.length < 2) {
-        initialDistance = 0;
+        // Reset initialDistance — touchmove guards against divide-by-zero with an
+        // early return when initialDistance === 0, so this is safe.
+        // Update initialZoom so the next pinch gesture starts from the current level.
         initialZoom = this.zoomLevel;
+        initialDistance = 0;
       }
     };
 

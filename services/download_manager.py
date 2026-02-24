@@ -1123,6 +1123,84 @@ class DownloadManager:
         # Submit using the standard Issue Discovery flow
         return self.submit_from_discovered_issue(discovered_issue.id, session)
 
+    def queue_issue_for_batch(
+        self, tracking_id: int, search_result: Dict[str, Any], session: Session
+    ) -> Optional[DownloadSubmission]:
+        """
+        Record a single issue in the discovery system and queue it for download.
+
+        Unlike download_single_issue, this method never calls the download client
+        directly — it always creates a QUEUED submission.  This makes it safe to
+        call for large batches inside a single HTTP request because no outbound
+        HTTP round-trips are made; the queue processor picks up the work later.
+
+        Args:
+            tracking_id: Periodical tracking ID
+            search_result: Search result dict with title, url, provider, etc.
+            session: Database session
+
+        Returns:
+            DownloadSubmission record (status QUEUED), or None on error
+        """
+        from models.database import DiscoveredIssue
+
+        title = search_result["title"]
+        logger.info(f"Queuing issue for batch download: {title} (tracking_id: {tracking_id})")
+
+        # Record in the discovery system so the queue processor can track it
+        record_result = self.issue_discovery_service.record_search_results(
+            tracking_id=tracking_id,
+            search_results=[search_result],
+            session=session,
+        )
+
+        if record_result["new"] == 0 and record_result["updated"] == 0:
+            logger.warning(f"Failed to record search result for batch download: {title}")
+            return None
+
+        # Find the discovered issue by fuzzy_match_group
+        parsed = self.parser.parse_search_result(
+            title=title,
+            url=search_result.get("url", ""),
+            provider=search_result.get("provider", ""),
+        )
+
+        discovered_issue = None
+        if parsed:
+            fuzzy_group = get_fuzzy_group_id(parsed.original_title)
+            discovered_issue = (
+                session.query(DiscoveredIssue)
+                .filter(
+                    DiscoveredIssue.tracking_id == tracking_id,
+                    DiscoveredIssue.fuzzy_match_group == fuzzy_group,
+                )
+                .first()
+            )
+
+        if not discovered_issue:
+            logger.error(f"Could not find DiscoveredIssue after recording for batch: {title}")
+            return None
+
+        # Skip issues already actively downloading or queued — no double-submission
+        if discovered_issue.download_status in (
+            DownloadStatus.DOWNLOADING,
+            DownloadStatus.QUEUED,
+            DownloadStatus.PENDING,
+        ):
+            logger.debug(f"Skipping already-active issue in batch: {title} ({discovered_issue.download_status})")
+            return None
+
+        # Reset failed/skipped issues so the user's explicit request takes priority
+        if discovered_issue.download_status not in (DownloadStatus.WANTED,):
+            discovered_issue.download_status = DownloadStatus.WANTED
+            discovered_issue.download_priority = MANUAL_DOWNLOAD_PRIORITY
+            discovered_issue.attempt_count = 0
+            discovered_issue.last_error = None
+
+        # Always queue — never submit directly to the HTTP client in a batch
+        build = self._build_search_result_from_issue(discovered_issue, discovered_issue.id)
+        return self._create_queued_submission(discovered_issue, build, session)
+
     def _manual_direct_submission(
         self, tracking_id: int, search_result: Dict[str, Any], session: Session
     ) -> Optional[DownloadSubmission]:

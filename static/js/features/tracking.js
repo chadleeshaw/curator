@@ -1714,7 +1714,7 @@ export class TrackingManager {
         if (data.provider_errors && data.provider_errors.length > 0) {
           errorInfo = `<div style="margin-top: 15px; padding: 10px; background: #ffebee; color: var(--error-color); border-radius: 4px; font-size: 0.9em;"><strong>Provider Errors:</strong><br>${data.provider_errors.join('<br>')}</div>`;
         }
-        issuesContent.innerHTML = `<div style="text-align: center; padding: 40px;"><p>No issues found for "${title}"</p>${errorInfo}</div>`;
+        issuesContent.innerHTML = `<div style="text-align: center; padding: 40px;"><p>No issues found for "${escapeHtml(title)}"</p>${errorInfo}</div>`;
       }
     } catch (err) {
       console.error('Error searching issues:', err);
@@ -1831,10 +1831,21 @@ export class TrackingManager {
           existing.variants.push(result);
 
           // Preserve library status - if any variant is in library, mark as in library
+          // and promote its parsed fields — the library item's filename is the
+          // authoritative source for volume/issue/year, so the card label should
+          // reflect what is actually stored, not what a provider title happened to parse to.
           if (result.status === 'in_library') {
             existing.status = 'in_library';
             existing.status_badge = '📚 In Library';
             existing.already_downloaded = true;
+            // Overwrite parsed display fields with the library item's values
+            if (result.parsed_title) {
+              existing.volume = result.parsed_title.volume ?? existing.volume;
+              existing.issue = result.parsed_title.issue ?? existing.issue;
+              existing.year = result.parsed_title.year ?? existing.year;
+              existing.month = result.parsed_title.month ?? existing.month;
+              existing.season = result.parsed_title.season ?? existing.season;
+            }
           }
 
           // If already downloaded, mark the combined entry as downloaded
@@ -2112,8 +2123,12 @@ export class TrackingManager {
   displayCuratedIssues(groupedByYear, title) {
     const issuesContent = document.getElementById('search-issues-content');
 
+    // Reset the variants map each render so stale keys from previous searches
+    // don't accumulate unboundedly in the global object.
+    window.issueVariants = {};
+
     if (Object.keys(groupedByYear).length === 0) {
-      issuesContent.innerHTML = `<div style="text-align: center; padding: 40px;"><p>No issues could be parsed for "${title}"</p></div>`;
+      issuesContent.innerHTML = `<div style="text-align: center; padding: 40px;"><p>No issues could be parsed for "${escapeHtml(title)}"</p></div>`;
       return;
     }
 
@@ -2156,7 +2171,7 @@ export class TrackingManager {
       allProviders.forEach((provider) => {
         const cfg = providerLabels[provider] || { icon: '🔗', label: provider };
         filterBtns.push(
-          `<button onclick="filterSearchBySource('${provider}')" class="sort-btn${this.sourceFilter === provider ? ' active' : ''}">${cfg.icon} ${cfg.label}</button>`
+          `<button onclick="filterSearchBySource('${escapeHtml(provider)}')" class="sort-btn${this.sourceFilter === provider ? ' active' : ''}">${cfg.icon} ${cfg.label}</button>`
         );
       });
       sourceFilterHtml = `
@@ -2189,7 +2204,7 @@ export class TrackingManager {
 
     let html = `
       <div class="search-summary">
-        <h3>Search Results for "${title}"${cacheInfo}</h3>
+        <h3>Search Results for "${escapeHtml(title)}"${cacheInfo}</h3>
         <div class="summary-stats">
           <span class="stat">📚 <strong>${filteredLibraryCount}</strong> in library</span>
           <span class="stat${filteredAvailableCount > 0 ? ' clickable-stat' : ''}" ${filteredAvailableCount > 0 ? 'onclick="downloadAllAvailable()" title="Click to download all available issues"' : ''}>📥 <strong>${filteredAvailableCount}</strong> available</span>
@@ -2392,7 +2407,7 @@ export class TrackingManager {
 
         // Store variants globally for click handlers
         const issueKey = `${issue.year}-${issue.month}-${issue.issue}`;
-        window.issueVariants = window.issueVariants || {};
+        // Store variants for click handlers (cleared at start of each render)
         window.issueVariants[issueKey] = displayVariants;
 
         if (isLibraryItem) {
@@ -3503,12 +3518,12 @@ window.downloadAllAvailable = async function () {
         ? ` from <strong>${tracking.sourceFilter === 'internet_archive' ? 'Internet Archive' : tracking.sourceFilter.charAt(0).toUpperCase() + tracking.sourceFilter.slice(1)}</strong>`
         : '';
     const confirmed = await UIUtils.confirm(
-      'Download All Available Issues',
-      `Are you sure you want to download all <strong>${count}</strong> available issues${sourceNote}?`
+      'Queue All Available Issues',
+      `Are you sure you want to queue all <strong>${count}</strong> available issues${sourceNote} for download?`
     );
     if (!confirmed) return;
 
-    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, `Downloading ${count} issues...`, 'info');
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, `Queueing ${count} issues...`, 'info');
 
     try {
       // Use batch endpoint to submit all issues in a single request

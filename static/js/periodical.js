@@ -52,6 +52,8 @@ async function loadLanguageDropdown() {
         option.textContent = lang;
         dropdown.appendChild(option);
       });
+      // Use `!== undefined` rather than a truthiness check so that an empty string
+      // (selecting "Any") is preserved — `if (currentValue)` would skip restoring it.
       if (currentValue !== undefined) {
         dropdown.value = currentValue;
       }
