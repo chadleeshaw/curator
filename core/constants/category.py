@@ -51,9 +51,9 @@ DEFAULT_CATEGORY = CATEGORY_MAGAZINE
 # Newsnab Category Code Mappings
 # ==============================================================================
 
-# Map Newsnab category codes to Curator categories
+# Map Newsnab category codes to Curator categories (decode map: code → category)
 # Note: Some categories require pattern-based categorization
-NEWSNAB_CATEGORY_MAP = {
+NEWSNAB_CODE_TO_CATEGORY = {
     "7000": CATEGORY_BOOK,  # Books (parent)
     "7010": CATEGORY_MAGAZINE,  # Books/Mags (Magazines)
     "7020": CATEGORY_BOOK,  # Books/EBook
