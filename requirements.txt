@@ -1,6 +1,6 @@
-fastapi==0.104.1
-uvicorn==0.24.0
-httpx<0.28.0  # Pin httpx for compatibility with starlette test client
+fastapi==0.133.0
+uvicorn==0.41.0
+httpx<0.29.0  # Pin httpx for compatibility with starlette test client
 sqlalchemy==2.0.45
 pyyaml==6.0.2
 ruamel.yaml>=0.18.0  # For config sync with comment preservation
@@ -9,8 +9,8 @@ python-Levenshtein>=0.25.0
 Pillow>=11.0.0
 pypdf>=5.1.0
 requests>=2.28.0
-python-multipart==0.0.6
-aiofiles==23.2.1
+python-multipart==0.0.22
+aiofiles==25.1.0
 feedparser>=6.0.11
 internetarchive>=5.7.0
 pdf2image>=1.17.0
