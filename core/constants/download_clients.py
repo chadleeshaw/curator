@@ -54,9 +54,6 @@ NZBGET_POST_PROCESSING_STATUSES = {
 }
 """Queue statuses indicating post-processing stages (download complete, processing in progress)."""
 
-NZBGET_PENDING_STATUSES = {"QUEUED", "PAUSED"}
-"""Queue statuses indicating a pending/paused download."""
-
 
 # ---------------------------------------------------------------------------
 # NZBGet: History composite Status values and human-readable messages

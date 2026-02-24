@@ -24,7 +24,6 @@ from core.constants.language import DEFAULT_LANGUAGE
 from core.constants.title import MAX_COUNTRY_REMOVAL_PASSES
 from core.parsers import sanitize_filename, detect_country, utc_now
 from services.importer.matcher import TrackingMatcher
-from services.cover_extractor import CoverExtractor
 
 from .cleanup import CleanupMixin
 from .models import FilenameComponents
@@ -518,22 +517,6 @@ class FileOrganizer(ReorganizationMixin, CleanupMixin):
         except Exception as e:
             logger.error(f"Error moving file to library {pdf_path}: {e}", exc_info=True)
             return None
-
-    def extract_cover_from_pdf(self, pdf_path: str, output_path: str) -> bool:
-        """
-        Extract cover from periodical file (PDF, EPUB, CBZ, or CBR).
-
-        DEPRECATED: Use CoverExtractor.extract_cover() instead.
-        This method is maintained for backward compatibility.
-
-        Args:
-            pdf_path: Path to periodical file
-            output_path: Where to save the cover JPG
-
-        Returns:
-            True if successful, False otherwise
-        """
-        return CoverExtractor.extract_cover(pdf_path, output_path)
 
     def auto_fix_tracking_ids(
         self,

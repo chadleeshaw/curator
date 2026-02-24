@@ -75,33 +75,6 @@ export class ValidationError extends Error {
 }
 
 /**
- * Error thrown when a required DOM element is not found
- * @extends Error
- */
-export class DOMError extends Error {
-  /**
-   * Create a DOM error
-   * @param {string} message - Error message
-   * @param {string} elementId - The ID of the element that was not found
-   * @param {string} [context=null] - Additional context about where the error occurred
-   */
-  constructor(message, elementId, context = null) {
-    super(message);
-    this.name = 'DOMError';
-    this.elementId = elementId;
-    this.context = context;
-  }
-
-  /**
-   * Get a user-friendly error message
-   * @returns {string} User-friendly message
-   */
-  toUserMessage() {
-    return 'A page element could not be found. Please refresh and try again.';
-  }
-}
-
-/**
  * Error thrown when a network request fails
  * @extends Error
  */

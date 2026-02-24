@@ -8,14 +8,8 @@ for searching and downloading periodicals.
 from core.constants.validation import COLLECTION_INDICATOR_WORDS
 
 # Default search parameters
-IA_DEFAULT_MEDIATYPE = "texts"
 IA_DEFAULT_ROWS = 500
 IA_DEFAULT_SORT = "-downloads"  # Sort by most downloaded (most popular) first
-
-# Minimum results from collection-filtered search before trying broader search
-# If collection-filtered search returns fewer than this, also run a broad search
-# to catch items in unconfigured collections
-IA_BROAD_SEARCH_THRESHOLD = 50
 
 # Map Curator categories to specific IA collections
 # When a category is specified, only search relevant collections
@@ -53,19 +47,6 @@ IA_EXTRACTABLE_EXTENSIONS = {
 # Canonical list lives in validation.COLLECTION_INDICATOR_WORDS
 IA_COLLECTION_KEYWORDS = sorted(COLLECTION_INDICATOR_WORDS)
 
-# File format extensions mapping
-IA_FORMAT_EXTENSIONS = {
-    "PDF": ".pdf",
-    "EPUB": ".epub",
-    "MOBI": ".mobi",
-    "DJVU": ".djvu",
-    "Text PDF": ".pdf",
-    "Image Container PDF": ".pdf",
-    "ZIP": ".zip",
-    "TAR": ".tar",
-    "GZIP": ".gz",
-}
-
 # Rate limiting
 IA_DEFAULT_REQUEST_DELAY = 1.0  # Seconds between API requests
 IA_DEFAULT_MAX_REQUESTS_PER_MINUTE = 15
@@ -84,13 +65,10 @@ IA_PART_META_EXTENSION = ".part.meta"  # Sidecar metadata file for resume state
 
 # Provider identification
 IA_PROVIDER_TYPE = "internet_archive"
-IA_PROVIDER_NAME = "Internet Archive"
 
 # Base URLs
 IA_DOWNLOAD_BASE_URL = "https://archive.org/download"
 IA_COMPRESS_BASE_URL = "https://archive.org/compress"
-IA_DETAILS_BASE_URL = "https://archive.org/details"
-IA_METADATA_BASE_URL = "https://archive.org/metadata"
 
 # Search query templates
 IA_SEARCH_FIELDS = [

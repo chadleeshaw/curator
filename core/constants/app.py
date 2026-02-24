@@ -9,20 +9,6 @@ Application-wide constants for configuration and system behavior
 DEFAULT_FUZZY_THRESHOLD = 80
 """Default threshold for fuzzy string matching (0-100)"""
 
-TITLE_MATCH_THRESHOLD = 85
-"""Higher threshold for strict title matching (0-100)"""
-
-
-# ==============================================================================
-# Pagination
-# ==============================================================================
-
-DEFAULT_PAGE_SIZE = 50
-"""Default number of items per page for list endpoints"""
-
-MAX_PAGE_SIZE = 100
-"""Maximum allowed page size"""
-
 
 # ==============================================================================
 # Downloads and Retries
@@ -68,9 +54,6 @@ DB_LOCK_TIMEOUT = 30.0
 DB_LOCK_RETRY_MAX = 3
 """Maximum number of retries for database lock errors"""
 
-DB_LOCK_RETRY_DELAY = 0.1
-"""Initial delay in seconds between database lock retries (exponential backoff)"""
-
 DB_COMMIT_RETRY_DELAY = 1.0
 """Initial delay in seconds between commit retries on database lock (exponential backoff, longer than query retries)"""
 
@@ -78,9 +61,6 @@ DB_COMMIT_RETRY_DELAY = 1.0
 # ==============================================================================
 # Time Intervals (in seconds)
 # ==============================================================================
-
-AUTO_IMPORT_INTERVAL = 300
-"""Interval for automatic file import checks (5 minutes)"""
 
 AUTO_DOWNLOAD_INTERVAL = 1800
 """Interval for automatic download checks (30 minutes)"""
@@ -114,14 +94,8 @@ Covers monthly magazines (30 days) with buffer for quarterly publications and de
 FEED_ENTRY_RETENTION_DAYS = 7
 """Number of days to retain RSS feed entries before expiring them"""
 
-CACHE_AWARE_SEARCH_SKIP_HOURS = 1
-"""Skip API searches for periodicals with cache matches within this many hours (0 = disabled)"""
-
 SEARCH_RESULT_RETENTION_DAYS = 30
 """Number of days to retain search results in the main database before cleanup"""
-
-TASK_SCHEDULER_CHECK_INTERVAL = 60
-"""Interval for task scheduler checking (1 minute)"""
 
 
 # ==============================================================================

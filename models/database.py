@@ -298,41 +298,6 @@ class DownloadSubmission(Base):
         }
 
 
-class Download(Base):
-    """Track downloads from clients (legacy - for backward compatibility)"""
-
-    __tablename__ = "downloads"
-
-    class StatusEnum(enum.Enum):
-        PENDING = "pending"
-        DOWNLOADING = "downloading"
-        COMPLETED = "completed"
-        FAILED = "failed"
-
-    id = Column(Integer, primary_key=True)
-    job_id = Column(String(255), nullable=False, unique=True, index=True)
-    status = Column(Enum(StatusEnum), default=StatusEnum.PENDING, index=True)
-    source_url = Column(String(512), nullable=False)
-    client_name = Column(String(100), nullable=False)
-    periodical_id = Column(Integer, ForeignKey("periodicals.id"), nullable=True)
-    search_result_id = Column(Integer, ForeignKey("search_results.id"), nullable=True)
-    created_at = Column(UTCDateTime, default=utcnow, index=True)
-    updated_at = Column(UTCDateTime, default=utcnow, onupdate=utcnow)
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "id": self.id,
-            "job_id": self.job_id,
-            "status": self.status.value if self.status else None,
-            "source_url": self.source_url,
-            "client_name": self.client_name,
-            "periodical_id": self.periodical_id,
-            "search_result_id": self.search_result_id,
-            "created_at": _iso(self.created_at),
-            "updated_at": _iso(self.updated_at),
-        }
-
-
 class OCRJob(Base):
     """Track OCR processing jobs for background processing with process pool"""
 

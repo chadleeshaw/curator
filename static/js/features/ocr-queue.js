@@ -670,23 +670,6 @@ export class OCRQueueManager {
   }
 
   /**
-   * Get status badge HTML
-   */
-  getStatusBadge(status) {
-    const badges = {
-      pending:
-        '<span style="background: var(--status-pending); color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.85em;">⏱️ Pending</span>',
-      processing:
-        '<span style="background: var(--status-downloading); color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.85em;">⚡ Processing</span>',
-      completed:
-        '<span style="background: var(--status-completed); color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.85em;">✅ Done</span>',
-      failed:
-        '<span style="background: var(--status-failed); color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.85em;">❌ Failed</span>',
-    };
-    return badges[status] || status;
-  }
-
-  /**
    * Get priority badge HTML
    */
   getPriorityBadge(priority) {
@@ -835,54 +818,6 @@ export class OCRQueueManager {
       // Fallback to showing confirmation without title
       this.showDeleteConfirmation(jobId, 'Unknown Job');
     }
-  }
-
-  /**
-   * Show error details modal
-   */
-  showError(title, errorMessage) {
-    const modal = document.createElement('div');
-    modal.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.5);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 10000;
-    `;
-
-    modal.innerHTML = `
-      <div style="background: var(--surface); border-radius: 8px; padding: 24px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
-        <h3 style="margin: 0 0 16px 0; color: var(--status-failed);">❌ OCR Error Details</h3>
-        <p style="font-weight: 600; margin-bottom: 12px;">${title}</p>
-        <pre style="background: var(--surface-variant); padding: 12px; border-radius: 4px; overflow-x: auto; font-size: 0.9em; color: var(--text-secondary);">${errorMessage}</pre>
-        <button
-          id="close-error-modal"
-          style="margin-top: 16px; background: var(--primary); color: white; padding: 8px 16px; border-radius: 4px; border: none; cursor: pointer; float: right;">
-          Close
-        </button>
-      </div>
-    `;
-
-    // Add click handler for close button
-    const closeBtn = modal.querySelector('#close-error-modal');
-    closeBtn.addEventListener('click', () => modal.remove());
-
-    // Close modal when clicking outside (track mousedown to prevent text selection closing modal)
-    let ocrMouseDown = null;
-    modal.onmousedown = (e) => {
-      ocrMouseDown = e.target;
-    };
-    modal.onclick = (e) => {
-      if (e.target === modal && ocrMouseDown === modal) modal.remove();
-      ocrMouseDown = null;
-    };
-
-    document.body.appendChild(modal);
   }
 
   /**
@@ -1185,97 +1120,6 @@ export class OCRQueueManager {
       if (data) {
         UIUtils.showToast(`Cleared ${data.count || 0} OCR jobs`, 'success');
         await this.loadQueue();
-      }
-    } catch (error) {
-      // Already logged by APIHelper
-    }
-  }
-
-  /**
-   * Clear all failed OCR jobs
-   */
-  async clearFailedJobs() {
-    try {
-      // Show confirmation modal
-      const modal = document.createElement('div');
-      modal.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0,0,0,0.5);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 10000;
-      `;
-
-      const modalContent = document.createElement('div');
-      modalContent.style.cssText =
-        'background: var(--surface); border-radius: 8px; padding: 24px; max-width: 500px; width: 90%; box-shadow: 0 4px 20px rgba(0,0,0,0.3);';
-
-      modalContent.innerHTML = `
-        <h3 style="margin: 0 0 16px 0; color: var(--text-primary);">⚠️ Clear All Failed Jobs</h3>
-        <p style="margin: 0 0 12px 0; color: var(--text-secondary);">Are you sure you want to remove all failed OCR jobs from the queue?</p>
-        <p style="margin: 0 0 20px 0; color: var(--status-failed); font-weight: 600;">This action cannot be undone.</p>
-        <div style="display: flex; gap: 10px; justify-content: flex-end;"></div>
-      `;
-
-      const buttonContainer = modalContent.querySelector('div[style*="display: flex"]');
-
-      const cancelBtn = document.createElement('button');
-      cancelBtn.textContent = 'Cancel';
-      cancelBtn.style.cssText =
-        'background: var(--surface-variant); color: var(--text-primary); padding: 8px 16px; border-radius: 4px; border: 1px solid var(--border); cursor: pointer;';
-      cancelBtn.addEventListener('click', () => modal.remove());
-
-      const deleteBtn = document.createElement('button');
-      deleteBtn.textContent = 'Clear All Failed';
-      deleteBtn.style.cssText =
-        'background: var(--status-failed); color: white; padding: 8px 16px; border-radius: 4px; border: none; cursor: pointer;';
-      deleteBtn.addEventListener('click', async () => {
-        modal.remove();
-        await this.executeClearFailedJobs();
-      });
-
-      buttonContainer.appendChild(cancelBtn);
-      buttonContainer.appendChild(deleteBtn);
-      modal.appendChild(modalContent);
-
-      let clearMouseDown = null;
-      modal.addEventListener('mousedown', (e) => {
-        clearMouseDown = e.target;
-      });
-      modal.addEventListener('click', (e) => {
-        if (e.target === modal && clearMouseDown === modal) modal.remove();
-        clearMouseDown = null;
-      });
-
-      document.body.appendChild(modal);
-    } catch (error) {
-      console.error('[OCR Queue] Error showing clear failed modal:', error);
-    }
-  }
-
-  /**
-   * Execute bulk delete of failed jobs
-   */
-  async executeClearFailedJobs() {
-    try {
-      const response = await APIHelper.executeWithErrorHandling(async () => {
-        return await APIClient.authenticatedFetch('/api/ocr/queue/failed', {
-          method: 'DELETE',
-        });
-      }, 'OCRQueue');
-
-      if (response.ok) {
-        const result = await response.json();
-        UIUtils.showToast(`Cleared ${result.count || 0} failed OCR jobs`, 'success');
-        await this.loadQueue();
-      } else {
-        const error = await response.json();
-        UIUtils.showToast(error.detail || 'Failed to clear jobs', 'error');
       }
     } catch (error) {
       // Already logged by APIHelper

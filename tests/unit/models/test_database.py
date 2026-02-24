@@ -13,7 +13,6 @@ import pytest
 
 from core.database import DatabaseManager
 from models.database import (
-    Download,
     DownloadSubmission,
     Periodical,
     PeriodicalTracking,
@@ -167,31 +166,6 @@ class TestSearchResultModel:
         assert result.fuzzy_match_group_id is None
 
 
-class TestDownloadModel:
-    """Test Download model"""
-
-    def test_download_creation(self):
-        """Test Download model creation"""
-        download = Download(
-            job_id="SAB-12345",
-            status=Download.StatusEnum.DOWNLOADING,
-            source_url="https://example.com/nzb/12345",
-            client_name="sabnzbd",
-        )
-
-        assert download.job_id == "SAB-12345"
-        assert download.status == Download.StatusEnum.DOWNLOADING
-        assert download.source_url == "https://example.com/nzb/12345"
-        assert download.client_name == "sabnzbd"
-
-    def test_download_status_enum(self):
-        """Test Download status enum values"""
-        assert Download.StatusEnum.PENDING.value == "pending"
-        assert Download.StatusEnum.DOWNLOADING.value == "downloading"
-        assert Download.StatusEnum.COMPLETED.value == "completed"
-        assert Download.StatusEnum.FAILED.value == "failed"
-
-
 class TestDownloadSubmissionModel:
     """Test DownloadSubmission model"""
 
@@ -267,21 +241,27 @@ class TestDatabaseOperations:
         session.add(search_result)
         session.flush()
 
-        # Create download linked to both
-        download = Download(
-            job_id="job123",
-            status=Download.StatusEnum.COMPLETED,
+        # Create tracking and download submission linked to search result
+        tracking = PeriodicalTracking(olid="test_olid_fk", title="Test Magazine")
+        session.add(tracking)
+        session.flush()
+
+        submission = DownloadSubmission(
+            tracking_id=tracking.id,
+            job_id="job_fk_123",
+            status=DownloadSubmission.StatusEnum.PENDING,
             source_url="https://test.com/nzb",
+            result_title="Test Issue",
+            fuzzy_match_group="test-group",
             client_name="test_client",
-            periodical_id=mag.id,
             search_result_id=search_result.id,
         )
-        session.add(download)
+        session.add(submission)
         session.commit()
 
         assert search_result.periodical_id == mag.id
-        assert download.periodical_id == mag.id
-        assert download.search_result_id == search_result.id
+        assert submission.tracking_id == tracking.id
+        assert submission.search_result_id == search_result.id
 
     def test_unique_constraint_file_path(self, session):
         """Test unique constraint on Magazine file_path"""

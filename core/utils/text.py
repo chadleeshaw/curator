@@ -46,16 +46,3 @@ def clean_title(title: str, remove_descriptors: bool = False) -> str:
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
 
     return cleaned
-
-
-def normalize_text(text: str) -> str:
-    """
-    Normalize text by converting to lowercase and removing extra whitespace.
-
-    Args:
-        text: Text to normalize
-
-    Returns:
-        Normalized text
-    """
-    return re.sub(r"\s+", " ", text.lower()).strip()

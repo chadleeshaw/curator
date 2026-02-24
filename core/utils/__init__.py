@@ -43,7 +43,7 @@ from .thumbnail import (
 )
 
 # Text processing utilities
-from .text import clean_title, normalize_text
+from .text import clean_title
 
 # Date utilities
 from .date import dates_are_fuzzy_match, get_season_for_month
@@ -82,7 +82,6 @@ __all__ = [
     "ProviderRateLimiter",
     # Text processing utilities
     "clean_title",
-    "normalize_text",
     # Thumbnail utilities
     "THUMBNAIL_MAX_HEIGHT",
     "THUMBNAIL_MAX_WIDTH",

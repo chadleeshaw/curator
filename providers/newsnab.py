@@ -29,7 +29,6 @@ from core.constants.providers import (
 )
 from core.interfaces import SearchProvider, SearchResult
 from core.parsers import utc_now
-from core.utils.query_expansion import expand_search_queries
 
 logger = logging.getLogger(__name__)
 

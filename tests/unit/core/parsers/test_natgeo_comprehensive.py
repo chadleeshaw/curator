@@ -14,7 +14,6 @@ filenames that might appear in the wild.
 
 import sys
 from pathlib import Path
-from typing import List, Dict, Any, Tuple
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 
@@ -145,123 +144,6 @@ FILENAME_PATTERNS = [
     "{title} {specialty} - {month} {year}",  # "National Geographic Kids - Jan 2024"
     "{title} {region} {specialty} {month} {year}",  # "National Geographic US Kids Jan 2024"
 ]
-
-
-# ==============================================================================
-# Test Generation Functions
-# ==============================================================================
-
-
-def generate_title_combinations(limit: int = 50) -> List[Tuple[str, str, str]]:
-    """
-    Generate combinations of base titles, regions, and specialties.
-
-    Args:
-        limit: Maximum number of combinations to generate
-
-    Returns:
-        List of tuples (base_title, region, specialty)
-    """
-    combinations = []
-
-    # Generate all combinations
-    for base in BASE_TITLES[:3]:  # Limit to top 3 base titles for performance
-        for region in REGIONAL_EDITIONS[:10]:  # Top 10 regions
-            for specialty in SPECIALTY_EDITIONS[:3]:  # Top 3 specialties
-                combinations.append((base, region, specialty))
-                if len(combinations) >= limit:
-                    return combinations
-
-    return combinations
-
-
-def generate_filename_variants(
-    base_title: str,
-    region: str,
-    specialty: str,
-    month_str: str,
-    year: int,
-    month_num: int,
-) -> List[Dict[str, Any]]:
-    """
-    Generate filename variants for a given title combination.
-
-    Args:
-        base_title: Base title (e.g., "National Geographic")
-        region: Regional edition (e.g., "US", "UK", "")
-        specialty: Specialty edition (e.g., "Kids", "")
-        month_str: Month string (e.g., "Jan", "January")
-        year: Year (e.g., 2024)
-        month_num: Expected month number (1-12)
-
-    Returns:
-        List of test cases with expected results
-    """
-    variants = []
-
-    # Build title parts
-    title_parts = [base_title]
-    if region:
-        title_parts.append(region)
-    if specialty:
-        title_parts.append(specialty)
-
-    # Try different separators for title
-    title_variants = [
-        " ".join(title_parts),  # Space separated
-        ".".join(title_parts),  # Dot separated
-        "_".join(title_parts),  # Underscore separated
-    ]
-
-    for title_variant in title_variants:
-        # Generate filename using different patterns
-        for pattern in FILENAME_PATTERNS[:3]:  # Limit patterns for performance
-            try:
-                # Build format dict
-                format_dict = {
-                    "title": title_variant,
-                    "region": region or "",
-                    "specialty": specialty or "",
-                    "month": month_str,
-                    "year": year,
-                }
-
-                # Generate filename
-                filename = pattern.format(**format_dict)
-
-                # Clean up empty placeholders
-                filename = filename.replace("  ", " ").replace("..", ".")
-                filename = filename.replace(" -  ", " - ").replace("- ", "-")
-                filename = filename.strip(".- ")
-
-                if not filename:
-                    continue
-
-                # Build expected title
-                expected_title_parts = [base_title]
-                if region:
-                    expected_title_parts.append(region)
-                if specialty:
-                    expected_title_parts.append(specialty)
-                expected_title = " ".join(expected_title_parts)
-
-                variants.append(
-                    {
-                        "filename": filename + ".pdf",
-                        "expected_title": expected_title,
-                        "expected_year": year,
-                        "expected_month": month_num,
-                        "base": base_title,
-                        "region": region,
-                        "specialty": specialty,
-                    }
-                )
-
-            except (KeyError, ValueError):
-                # Skip patterns that don't match our format dict
-                continue
-
-    return variants
 
 
 # ==============================================================================

@@ -404,7 +404,7 @@ class TestInternetArchiveProviderSearch:
         results = provider.search("PC Gamer", aliases=["PC Gamer US", "PC Gamer Magazine"])
 
         # First call is collection-filtered, second may be broad search fallback
-        # (triggered when results < IA_BROAD_SEARCH_THRESHOLD)
+        # (triggered when collection-filtered results are empty)
         assert mock_search.call_count >= 1
 
         # Verify the first query includes all terms with OR

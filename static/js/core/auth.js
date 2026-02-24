@@ -94,20 +94,6 @@ export class AuthManager {
       window.location.href = '/login.html';
     }
   }
-
-  /**
-   * Check if a token exists without redirecting
-   *
-   * @returns {boolean} True if a token exists, false otherwise
-   *
-   * @example
-   * if (AuthManager.hasToken()) {
-   *   showAuthenticatedContent();
-   * }
-   */
-  static hasToken() {
-    return this.getToken() !== null;
-  }
 }
 
 // Expose logout globally for onclick handlers

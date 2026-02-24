@@ -214,79 +214,6 @@ class InternetArchiveClient(DownloadClient):
             "is_collection": False,
         }
 
-    def _get_best_file(
-        self, item_metadata: Dict[str, Any], prefer_collection: bool = False
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Find the best downloadable file from item metadata.
-
-        Args:
-            item_metadata: Item metadata from IA API
-            prefer_collection: If True, prefer collection archive formats (ZIP, etc.)
-
-        Returns:
-            Dict with file info or None
-        """
-        files = item_metadata.get("files", [])
-        if not files:
-            return None
-
-        # Build list of available files by format
-        format_files = {}
-        for f in files:
-            fmt = f.get("format", "")
-            name = f.get("name", "")
-            if fmt and name:
-                size_str = f.get("size", "0")
-                try:
-                    size = int(size_str) if size_str else 0
-                except (ValueError, TypeError):
-                    size = 0
-                format_files.setdefault(fmt, []).append(
-                    {
-                        "name": name,
-                        "format": fmt,
-                        "size": size,
-                        "is_collection": fmt in IA_COLLECTION_FORMATS,
-                    }
-                )
-
-        # If preferring collection, try collection formats first
-        if prefer_collection:
-            for collection_fmt in IA_COLLECTION_FORMATS:
-                if collection_fmt in format_files:
-                    return format_files[collection_fmt][0]
-
-        # PRIORITY 1: Text PDF formats (have embedded OCR text - best for text scanning)
-        for text_pdf_fmt in IA_TEXT_PDF_FORMATS:
-            if text_pdf_fmt in format_files:
-                logger.debug(f"Found preferred text format: {text_pdf_fmt}")
-                return format_files[text_pdf_fmt][0]
-
-        # PRIORITY 2: Find best format in order of preference
-        # Use case-insensitive matching to handle variants like "Text PDF"
-        for preferred_fmt in self.preferred_formats:
-            preferred_lower = preferred_fmt.lower()
-            # First try exact match
-            if preferred_fmt in format_files:
-                return format_files[preferred_fmt][0]
-            # Then try case-insensitive substring match (e.g., "PDF" matches "Text PDF")
-            for fmt, files_list in format_files.items():
-                if preferred_lower in fmt.lower():
-                    return files_list[0]
-
-        # Fallback: return any PDF-like format
-        for fmt, files_list in format_files.items():
-            if "pdf" in fmt.lower():
-                return files_list[0]
-
-        # Last resort: try collection formats
-        for collection_fmt in IA_COLLECTION_FORMATS:
-            if collection_fmt in format_files:
-                return format_files[collection_fmt][0]
-
-        return None
-
     def _is_extractable(self, file_path: Path) -> bool:
         """
         Check if a file is an extractable archive.
@@ -1005,28 +932,6 @@ class InternetArchiveClient(DownloadClient):
                 "success": False,
                 "message": f"Connection test failed: {str(e)}",
             }
-
-    def cleanup_old_jobs(self, max_age_hours: int = 24):
-        """
-        Clean up old completed/failed jobs from memory.
-
-        Args:
-            max_age_hours: Remove jobs older than this many hours
-        """
-        cutoff = time.time() - (max_age_hours * 3600)
-
-        with self._jobs_lock:
-            to_remove = [
-                job_id
-                for job_id, job in self._jobs.items()
-                if job.status in (IA_STATUS_COMPLETED, IA_STATUS_FAILED) and job.created_at < cutoff
-            ]
-
-            for job_id in to_remove:
-                del self._jobs[job_id]
-
-        if to_remove:
-            logger.info(f"[{self.name}] Cleaned up {len(to_remove)} old jobs")
 
     def recover_interrupted_downloads(self) -> int:
         """

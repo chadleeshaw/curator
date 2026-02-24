@@ -6,11 +6,10 @@ modules to avoid copy-pasting the same setup boilerplate.
 """
 
 import pytest
-from unittest.mock import MagicMock
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from models.database import Base, PeriodicalTracking
+from models.database import Base
 from services.issue_discovery import IssueDiscoveryService
 
 
@@ -40,16 +39,3 @@ def issue_discovery_service():
         fuzzy_threshold=80,
         default_max_retries=1,  # 2 total attempts (initial + 1 retry)
     )
-
-
-@pytest.fixture
-def tracking_all():
-    """PeriodicalTracking mock configured for Download All mode (track_all_editions=True)."""
-    tracking = MagicMock(spec=PeriodicalTracking)
-    tracking.id = 1
-    tracking.title = "Test Magazine"
-    tracking.country = "US"
-    tracking.track_all_editions = True
-    tracking.track_new_only = False
-    tracking.selected_years = []
-    return tracking
