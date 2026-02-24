@@ -6,6 +6,7 @@ Automatically discover, download, and organize periodicals (magazines, comics, n
 
 - **Smart Search** - Multi-provider search with intelligent deduplication
 - **Internet Archive** - Free access to millions of magazines, comics, and newspapers
+- **Torrent Support** - Torznab search providers (Prowlarr, Jackett) with qBittorrent
 - **Auto Downloads** - Track periodicals for automatic downloads
 - **Stacks** - Organize periodicals into custom collections
 - **Clean Library** - Automatic organization with consistent naming and cover art
@@ -16,8 +17,8 @@ Automatically discover, download, and organize periodicals (magazines, comics, n
 ## Requirements
 
 - Docker (recommended) or Python 3.13+
-- Newsnab indexer (optional - Prowlarr, NZBHydra2, etc.)
-- Download client (optional - SABnzbd or NZBGet for Usenet)
+- Newsnab or Torznab indexer (optional - Prowlarr, NZBHydra2, Jackett, etc.)
+- Download client (optional - SABnzbd or NZBGet for Usenet; qBittorrent for torrents)
 
 ## Quick Start
 
@@ -80,12 +81,12 @@ search_providers:
 Add Newsnab indexer (optional):
 
 ```yaml
-  - type: newsnab
-    name: Prowlarr
-    enabled: true
-    api_url: 'http://your-prowlarr:9696/api'
-    api_key: 'your_api_key_here'
-    priority: 50
+- type: newsnab
+  name: Prowlarr
+  enabled: true
+  api_url: 'http://your-prowlarr:9696/api'
+  api_key: 'your_api_key_here'
+  priority: 50
 ```
 
 Add download client for Usenet (optional):
@@ -134,6 +135,7 @@ Organize your periodicals into custom collections:
 ### Browse Library
 
 **Library** shows your organized collection with:
+
 - Cover thumbnails
 - Metadata (dates, issue numbers, volumes, special editions)
 - Quick file access and management
@@ -143,17 +145,17 @@ Organize your periodicals into custom collections:
 
 ### Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `TZ` | System | Timezone (e.g., `America/New_York`) |
-| `DISABLE_OCR` | `false` | Disable OCR processing (reduces memory) |
-| `CURATOR_CONFIG_PATH` | `local/config/config.yaml` | Config file location |
-| `CURATOR_DB_PATH` | `local/data/curator.db` | Database location |
-| `CURATOR_DOWNLOAD_DIR` | `local/downloads` | Download directory |
-| `CURATOR_LIBRARY_DIR` | `local/data` | Library directory |
-| `CURATOR_LOG_LEVEL` | `INFO` | Log level (DEBUG, INFO, WARNING, ERROR) |
-| `CURATOR_HOST` | `0.0.0.0` | Server bind address |
-| `CURATOR_PORT` | `8000` | Server port |
+| Variable               | Default                    | Description                             |
+| ---------------------- | -------------------------- | --------------------------------------- |
+| `TZ`                   | System                     | Timezone (e.g., `America/New_York`)     |
+| `DISABLE_OCR`          | `false`                    | Disable OCR processing (reduces memory) |
+| `CURATOR_CONFIG_PATH`  | `local/config/config.yaml` | Config file location                    |
+| `CURATOR_DB_PATH`      | `local/data/curator.db`    | Database location                       |
+| `CURATOR_DOWNLOAD_DIR` | `local/downloads`          | Download directory                      |
+| `CURATOR_LIBRARY_DIR`  | `local/data`               | Library directory                       |
+| `CURATOR_LOG_LEVEL`    | `INFO`                     | Log level (DEBUG, INFO, WARNING, ERROR) |
+| `CURATOR_HOST`         | `0.0.0.0`                  | Server bind address                     |
+| `CURATOR_PORT`         | `8000`                     | Server port                             |
 
 ### Search Providers
 
@@ -177,25 +179,40 @@ search_providers:
 **Newsnab** (Prowlarr, NZBHydra2, etc.):
 
 ```yaml
-  - type: newsnab
-    name: Prowlarr
-    api_url: 'http://prowlarr:9696/api'
-    api_key: 'your_key'
-    enabled: true
-    priority: 50
-    categories: '7000,7010,7020,7030'
-    search_limit: 250
+- type: newsnab
+  name: Prowlarr
+  api_url: 'http://prowlarr:9696/api'
+  api_key: 'your_key'
+  enabled: true
+  priority: 50
+  categories: '7000,7010,7020,7030'
+  search_limit: 250
 ```
 
 **RSS** (fast new release discovery):
 
 ```yaml
-  - type: rss
-    name: MyRSS
-    feed_url: 'http://example.com/feed.rss'
-    enabled: true
-    priority: 50
+- type: rss
+  name: MyRSS
+  feed_url: 'http://example.com/feed.rss'
+  enabled: true
+  priority: 50
 ```
+
+**Torznab** (Prowlarr, Jackett — torrent indexers):
+
+```yaml
+- type: torznab
+  name: Prowlarr
+  api_url: 'http://prowlarr:9696/1/api'
+  api_key: 'your_key'
+  enabled: true
+  priority: 50
+  categories: '7010,7020,7030'
+  search_limit: 100
+```
+
+> Torznab providers require a qBittorrent download client (see below).
 
 ### Download Clients
 
@@ -227,6 +244,18 @@ download_client:
   api_url: 'http://nzbget:6789'
   username: 'nzbget'
   password: 'your_password'
+```
+
+**qBittorrent** (for Torznab providers):
+
+```yaml
+download_clients:
+  - type: qbittorrent
+    name: qBittorrent
+    api_url: 'http://qbittorrent:8090'
+    username: 'admin'
+    password: 'your_password'
+    default_category: curator
 ```
 
 ### Storage
@@ -322,8 +351,8 @@ docker logs curator
 curator/
 ├── core/           # Configuration, parsers, utilities
 ├── models/         # Database models (SQLAlchemy)
-├── providers/      # Search providers (Internet Archive, Newsnab, RSS)
-├── clients/        # Download clients (Internet Archive, SABnzbd, NZBGet)
+├── providers/      # Search providers (Internet Archive, Newsnab, Torznab, RSS)
+├── clients/        # Download clients (Internet Archive, SABnzbd, NZBGet, qBittorrent)
 ├── services/       # Business logic (import, organize, OCR)
 ├── schedulers/     # Background tasks (monitoring, cleanup)
 ├── web/            # FastAPI API & routers
