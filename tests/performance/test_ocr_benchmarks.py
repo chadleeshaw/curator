@@ -127,9 +127,9 @@ def _assert_accuracy(label: str, meta: dict) -> None:
         f"{label}: expected year={_EXPECTED_YEAR}, got {meta.get('year')!r}\n"
         f"detected_text={meta.get('detected_text', '')[:200]!r}"
     )
-    assert meta.get("month") == _EXPECTED_MONTH, (
-        f"{label}: expected month={_EXPECTED_MONTH!r}, got {meta.get('month')!r}"
-    )
+    assert (
+        meta.get("month") == _EXPECTED_MONTH
+    ), f"{label}: expected month={_EXPECTED_MONTH!r}, got {meta.get('month')!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -166,9 +166,7 @@ def image_200dpi_resized(image_200dpi):
     w, h = image_200dpi.size
     scale = OCR_IMAGE_MAX_DIMENSION / max(w, h)
     if scale < 1.0:
-        return image_200dpi.resize(
-            (int(w * scale), int(h * scale)), PILImage.Resampling.LANCZOS
-        )
+        return image_200dpi.resize((int(w * scale), int(h * scale)), PILImage.Resampling.LANCZOS)
     return image_200dpi
 
 
@@ -225,9 +223,7 @@ class TestResize:
         data = benchmark(_run_tesseract, image_200dpi)
         assert "text" in data
 
-    def test_ocr_200dpi_resized_1200(
-        self, benchmark, ocr_available, image_200dpi_resized
-    ):
+    def test_ocr_200dpi_resized_1200(self, benchmark, ocr_available, image_200dpi_resized):
         """Tesseract on image resized to max 1200px on longest axis."""
         data = benchmark(_run_tesseract, image_200dpi_resized)
         assert "text" in data
@@ -361,9 +357,7 @@ def test_accuracy_comparison(
         m_ok = "OK  " if meta.get("month") == baseline_month else "DIFF"
         print(f"    year={y_ok}  month={m_ok}  — {label}")
 
-    assert (
-        True
-    )  # reporting only — correctness enforced by individual accuracy tests above
+    assert True  # reporting only — correctness enforced by individual accuracy tests above
 
 
 # ---------------------------------------------------------------------------
@@ -382,16 +376,12 @@ def _gen_png_in_process_bench(pdf_path: str, png_path: str, result_queue) -> Non
         from pdf2image import convert_from_path
         from PIL import Image
 
-        images = convert_from_path(
-            pdf_path, first_page=1, last_page=1, dpi=200, fmt="png"
-        )
+        images = convert_from_path(pdf_path, first_page=1, last_page=1, dpi=200, fmt="png")
         if images:
             img = images[0]
             if max(img.size) > 1200:
                 ratio = 1200 / max(img.size)
-                img = img.resize(
-                    tuple(int(d * ratio) for d in img.size), Image.Resampling.LANCZOS
-                )
+                img = img.resize(tuple(int(d * ratio) for d in img.size), Image.Resampling.LANCZOS)
             img.save(png_path, "PNG")
             result_queue.put({"success": True})
         else:
