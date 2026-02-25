@@ -292,5 +292,134 @@ class TestUpdateUser:
         assert response.status_code == 401
 
 
+class TestMultiUserManagement:
+    """Test multi-user management endpoints (list, create, delete)."""
+
+    def _get_token(self, client, auth_manager, username="admin", password="adminpass1"):
+        """Helper: create a user and return a valid JWT."""
+        auth_manager.create_credentials(username, password)
+        resp = client.post("/api/auth/login", json={"username": username, "password": password})
+        return resp.json()["token"]
+
+    # ------------------------------------------------------------------
+    # GET /api/auth/users
+    # ------------------------------------------------------------------
+
+    def test_list_users_requires_auth(self, test_client):
+        """List users endpoint must reject unauthenticated requests."""
+        response = test_client.get("/api/auth/users")
+        assert response.status_code == 401
+
+    def test_list_users_returns_current_user(self, test_client, test_auth_manager):
+        """Authenticated request returns at least the current user."""
+        token = self._get_token(test_client, test_auth_manager)
+        response = test_client.get("/api/auth/users", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert any(u["username"] == "admin" for u in data["users"])
+
+    # ------------------------------------------------------------------
+    # POST /api/auth/users
+    # ------------------------------------------------------------------
+
+    def test_create_user_requires_auth(self, test_client):
+        """Create user endpoint must reject unauthenticated requests."""
+        response = test_client.post("/api/auth/users", json={"username": "bob", "password": "bobpass123"})
+        assert response.status_code == 401
+
+    def test_create_user_success(self, test_client, test_auth_manager):
+        """Authenticated admin can create a new user."""
+        token = self._get_token(test_client, test_auth_manager)
+        response = test_client.post(
+            "/api/auth/users",
+            json={"username": "newuser", "password": "newuserpass"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "created" in data["message"].lower()
+
+    def test_create_user_duplicate_rejected(self, test_client, test_auth_manager):
+        """Creating a user with an existing username returns 400."""
+        token = self._get_token(test_client, test_auth_manager)
+        # Create once
+        test_client.post(
+            "/api/auth/users",
+            json={"username": "dupuser", "password": "dupuserpass"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        # Try again with the same username
+        response = test_client.post(
+            "/api/auth/users",
+            json={"username": "dupuser", "password": "anotherpass"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 400
+        assert "already exists" in response.json()["detail"].lower()
+
+    def test_create_user_new_user_can_login(self, test_client, test_auth_manager):
+        """A user created via the admin endpoint can log in."""
+        token = self._get_token(test_client, test_auth_manager)
+        test_client.post(
+            "/api/auth/users",
+            json={"username": "logintest", "password": "logintestpass"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        login = test_client.post("/api/auth/login", json={"username": "logintest", "password": "logintestpass"})
+        assert login.status_code == 200
+        assert login.json()["success"] is True
+
+    # ------------------------------------------------------------------
+    # DELETE /api/auth/users/{user_id}
+    # ------------------------------------------------------------------
+
+    def test_delete_user_requires_auth(self, test_client, test_auth_manager):
+        """Delete user endpoint must reject unauthenticated requests."""
+        # Create a user to get a valid ID
+        test_auth_manager.create_credentials("victim", "victimpass1")
+        users = test_auth_manager.list_users()
+        victim_id = next(u["id"] for u in users if u["username"] == "victim")
+        response = test_client.delete(f"/api/auth/users/{victim_id}")
+        assert response.status_code == 401
+
+    def test_delete_user_success(self, test_client, test_auth_manager):
+        """Authenticated admin can delete another user."""
+        token = self._get_token(test_client, test_auth_manager)
+        # Create a user to delete
+        test_auth_manager.add_user("todelete", "todeletepass")
+        users = test_auth_manager.list_users()
+        target_id = next(u["id"] for u in users if u["username"] == "todelete")
+
+        response = test_client.delete(
+            f"/api/auth/users/{target_id}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+
+    def test_delete_user_not_found(self, test_client, test_auth_manager):
+        """Deleting a non-existent user ID returns 404."""
+        token = self._get_token(test_client, test_auth_manager)
+        response = test_client.delete(
+            "/api/auth/users/999999",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 404
+
+    def test_delete_self_rejected(self, test_client, test_auth_manager):
+        """A user cannot delete their own account."""
+        token = self._get_token(test_client, test_auth_manager)
+        users = test_auth_manager.list_users()
+        own_id = next(u["id"] for u in users if u["username"] == "admin")
+        response = test_client.delete(
+            f"/api/auth/users/{own_id}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 400
+        assert "own account" in response.json()["detail"].lower()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])

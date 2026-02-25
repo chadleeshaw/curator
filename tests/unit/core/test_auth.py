@@ -132,7 +132,11 @@ def test_verify_credentials_invalid_password():
 
 def test_create_token():
     """Test JWT token creation"""
-    mock_session_factory = Mock()
+    mock_creds = Mock()
+    mock_creds.id = 1
+    mock_session = Mock()
+    mock_session.query.return_value.filter_by.return_value.first.return_value = mock_creds
+    mock_session_factory = Mock(return_value=mock_session)
     jwt_secret = "test-secret-key"
 
     auth_manager = AuthManager(mock_session_factory, jwt_secret)
@@ -145,7 +149,11 @@ def test_create_token():
 
 def test_verify_token_valid():
     """Test verifying valid JWT token"""
-    mock_session_factory = Mock()
+    mock_creds = Mock()
+    mock_creds.id = 1
+    mock_session = Mock()
+    mock_session.query.return_value.filter_by.return_value.first.return_value = mock_creds
+    mock_session_factory = Mock(return_value=mock_session)
     jwt_secret = "test-secret-key"
 
     auth_manager = AuthManager(mock_session_factory, jwt_secret)
@@ -182,3 +190,101 @@ def test_username_case_insensitive():
     call_args = mock_session.add.call_args
     credentials_obj = call_args[0][0]
     assert credentials_obj.username == "testuser"
+
+
+# ==============================================================================
+# Multi-user management
+# ==============================================================================
+
+
+def test_add_user_success():
+    """Test adding a new user when no conflict exists"""
+    mock_session = Mock()
+    mock_session.query.return_value.filter_by.return_value.first.return_value = None
+    mock_session_factory = Mock(return_value=mock_session)
+
+    auth_manager = AuthManager(mock_session_factory, "secret")
+    success, message = auth_manager.add_user("newuser", "password123")
+
+    assert success is True
+    assert "created" in message.lower()
+    mock_session.add.assert_called_once()
+
+
+def test_add_user_duplicate():
+    """Test that add_user rejects a duplicate username"""
+    mock_session = Mock()
+    mock_session.query.return_value.filter_by.return_value.first.return_value = Mock()
+    mock_session_factory = Mock(return_value=mock_session)
+
+    auth_manager = AuthManager(mock_session_factory, "secret")
+    success, message = auth_manager.add_user("existinguser", "password123")
+
+    assert success is False
+    assert "already exists" in message.lower()
+    mock_session.add.assert_not_called()
+
+
+def test_add_user_stores_lowercase():
+    """Test that add_user normalises the username to lowercase"""
+    mock_session = Mock()
+    mock_session.query.return_value.filter_by.return_value.first.return_value = None
+    mock_session_factory = Mock(return_value=mock_session)
+
+    auth_manager = AuthManager(mock_session_factory, "secret")
+    auth_manager.add_user("NewUser", "password123")
+
+    credentials_obj = mock_session.add.call_args[0][0]
+    assert credentials_obj.username == "newuser"
+
+
+def test_list_users_returns_dicts():
+    """Test that list_users returns a list of dicts without password hashes"""
+    mock_user1 = Mock()
+    mock_user1.to_dict.return_value = {"id": 1, "username": "alice", "api_token": None}
+    mock_user2 = Mock()
+    mock_user2.to_dict.return_value = {"id": 2, "username": "bob", "api_token": None}
+
+    mock_session = Mock()
+    mock_session.query.return_value.order_by.return_value.all.return_value = [mock_user1, mock_user2]
+    mock_session_factory = Mock(return_value=mock_session)
+
+    auth_manager = AuthManager(mock_session_factory, "secret")
+    users = auth_manager.list_users()
+
+    assert len(users) == 2
+    assert users[0]["username"] == "alice"
+    assert users[1]["username"] == "bob"
+    # Must not expose password hashes
+    for u in users:
+        assert "password_hash" not in u
+
+
+def test_delete_user_success():
+    """Test deleting a user that exists"""
+    mock_creds = Mock()
+    mock_creds.username = "alice"
+    mock_session = Mock()
+    mock_session.query.return_value.filter_by.return_value.first.return_value = mock_creds
+    mock_session_factory = Mock(return_value=mock_session)
+
+    auth_manager = AuthManager(mock_session_factory, "secret")
+    success, message = auth_manager.delete_user(1)
+
+    assert success is True
+    assert "alice" in message
+    mock_session.delete.assert_called_once_with(mock_creds)
+
+
+def test_delete_user_not_found():
+    """Test deleting a user that does not exist"""
+    mock_session = Mock()
+    mock_session.query.return_value.filter_by.return_value.first.return_value = None
+    mock_session_factory = Mock(return_value=mock_session)
+
+    auth_manager = AuthManager(mock_session_factory, "secret")
+    success, message = auth_manager.delete_user(999)
+
+    assert success is False
+    assert "not found" in message.lower()
+    mock_session.delete.assert_not_called()
