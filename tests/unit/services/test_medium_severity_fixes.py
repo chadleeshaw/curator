@@ -361,8 +361,6 @@ class TestNzbProviderRedirects:
 
     def test_get_nzb_content_follows_redirects(self, tmp_path):
         """A 301 redirect from Prowlarr should be followed, not raised as an error."""
-        from unittest.mock import MagicMock, patch
-
         db_path = str(tmp_path / "cache.db")
         service = NzbCacheService(cache_db_path=db_path)
 
@@ -383,7 +381,6 @@ class TestNzbProviderRedirects:
     def test_get_nzb_content_still_raises_on_real_errors(self, tmp_path):
         """Non-redirect errors (404, 500) should still propagate as exceptions."""
         import httpx as _httpx
-        from unittest.mock import MagicMock, patch
 
         db_path = str(tmp_path / "cache.db")
         service = NzbCacheService(cache_db_path=db_path)
