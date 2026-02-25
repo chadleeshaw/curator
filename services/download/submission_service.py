@@ -52,9 +52,7 @@ class SubmissionService:
             The created DownloadSubmission record
         """
         # Get fuzzy match group (reuse if already calculated)
-        fuzzy_group = search_result.get("fuzzy_match_group_id") or get_fuzzy_group_id(
-            search_result["title"]
-        )
+        fuzzy_group = search_result.get("fuzzy_match_group_id") or get_fuzzy_group_id(search_result["title"])
 
         submission = DownloadSubmission(
             user_id=1,
@@ -113,9 +111,7 @@ class SubmissionService:
         Returns:
             True if marked successfully, False if submission not found
         """
-        submission = (
-            session.query(DownloadSubmission).filter_by(id=submission_id).first()
-        )
+        submission = session.query(DownloadSubmission).filter_by(id=submission_id).first()
         if not submission:
             logger.warning(f"Submission {submission_id} not found")
             return False
@@ -123,9 +119,7 @@ class SubmissionService:
         # Mark as processed by clearing file_path (indicates it's been moved/processed)
         submission.file_path = None
         session.commit()
-        logger.info(
-            f"Marked submission {submission_id} as processed: {submission.result_title}"
-        )
+        logger.info(f"Marked submission {submission_id} as processed: {submission.result_title}")
         return True
 
     @staticmethod
@@ -156,9 +150,7 @@ class SubmissionService:
         return submissions
 
     @staticmethod
-    def can_retry_submission(
-        submission: DownloadSubmission, max_retries: int = MAX_DOWNLOAD_RETRIES
-    ) -> bool:
+    def can_retry_submission(submission: DownloadSubmission, max_retries: int = MAX_DOWNLOAD_RETRIES) -> bool:
         """
         Check if a failed submission can be retried.
 
@@ -173,17 +165,12 @@ class SubmissionService:
             return False
 
         if submission.attempt_count >= max_retries:
-            logger.warning(
-                f"Cannot retry submission {submission.id}: "
-                f"max retries ({max_retries}) reached"
-            )
+            logger.warning(f"Cannot retry submission {submission.id}: " f"max retries ({max_retries}) reached")
             return False
 
         # Don't retry submissions older than 7 days to prevent accumulation of old failed downloads
         if (utc_now() - submission.created_at).days > MAX_RETRY_AGE_DAYS:
-            logger.debug(
-                f"Cannot retry submission {submission.id}: older than {MAX_RETRY_AGE_DAYS} days"
-            )
+            logger.debug(f"Cannot retry submission {submission.id}: older than {MAX_RETRY_AGE_DAYS} days")
             return False
 
         return True
@@ -210,6 +197,5 @@ class SubmissionService:
         session.commit()
 
         logger.info(
-            f"Reset submission {submission.id} for retry "
-            f"(attempt {submission.attempt_count}/{max_retries})"
+            f"Reset submission {submission.id} for retry " f"(attempt {submission.attempt_count}/{max_retries})"
         )

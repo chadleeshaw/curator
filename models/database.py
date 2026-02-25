@@ -78,14 +78,10 @@ class Credentials(Base):
     updated_at = Column(UTCDateTime, default=utcnow, onupdate=utcnow)
 
     def set_password(self, password: str) -> None:
-        self.password_hash = bcrypt.hashpw(
-            password.encode("utf-8"), bcrypt.gensalt()
-        ).decode("utf-8")
+        self.password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
     def verify_password(self, password: str) -> bool:
-        return bcrypt.checkpw(
-            password.encode("utf-8"), self.password_hash.encode("utf-8")
-        )
+        return bcrypt.checkpw(password.encode("utf-8"), self.password_hash.encode("utf-8"))
 
     def generate_api_token(self) -> str:
         self.api_token = secrets.token_urlsafe(32)
@@ -136,9 +132,7 @@ class Periodical(Base):
     extra_metadata = Column(JSON, nullable=True)
     created_at = Column(UTCDateTime, default=utcnow, index=True)
     updated_at = Column(UTCDateTime, default=utcnow, onupdate=utcnow)
-    tracking_id = Column(
-        Integer, ForeignKey("periodical_tracking.id"), nullable=True, index=True
-    )
+    tracking_id = Column(Integer, ForeignKey("periodical_tracking.id"), nullable=True, index=True)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -298,12 +292,8 @@ class DownloadSubmission(Base):
         nullable=False,
         index=True,
     )
-    tracking_id = Column(
-        Integer, ForeignKey("periodical_tracking.id"), nullable=False, index=True
-    )
-    search_result_id = Column(
-        Integer, ForeignKey("search_results.id"), nullable=True, index=True
-    )
+    tracking_id = Column(Integer, ForeignKey("periodical_tracking.id"), nullable=False, index=True)
+    search_result_id = Column(Integer, ForeignKey("search_results.id"), nullable=True, index=True)
     job_id = Column(String(255), nullable=True, index=True)
     status = Column(Enum(StatusEnum), default=StatusEnum.PENDING, index=True)
     source_url = Column(String(512), nullable=False)
@@ -354,9 +344,7 @@ class OCRJob(Base):
         HIGH = 10
 
     id = Column(Integer, primary_key=True)
-    periodical_id = Column(
-        Integer, ForeignKey("periodicals.id"), nullable=False, index=True
-    )
+    periodical_id = Column(Integer, ForeignKey("periodicals.id"), nullable=False, index=True)
     status = Column(Enum(StatusEnum), default=StatusEnum.PENDING, index=True)
     priority = Column(Integer, default=PriorityEnum.NORMAL.value, index=True)
     language = Column(String(50), nullable=True)
@@ -397,9 +385,7 @@ class DownloadStatus(enum.StrEnum):
     DISCOVERED = "discovered"
     WANTED = "wanted"
     QUEUED = "queued"  # In Curator's internal queue, not yet sent to download client
-    PENDING = (
-        "pending"  # Submitted to download client and accepted (client-side pending)
-    )
+    PENDING = "pending"  # Submitted to download client and accepted (client-side pending)
     DOWNLOADING = "downloading"
     COMPLETED = "completed"
     FAILED = "failed"
@@ -417,11 +403,7 @@ class DiscoveredIssue(Base):
 
     __tablename__ = "discovered_issues"
 
-    __table_args__ = (
-        Index(
-            "ix_discovered_issues_tracking_fuzzy", "tracking_id", "fuzzy_match_group"
-        ),
-    )
+    __table_args__ = (Index("ix_discovered_issues_tracking_fuzzy", "tracking_id", "fuzzy_match_group"),)
 
     id = Column(Integer, primary_key=True)
     user_id = Column(
@@ -430,9 +412,7 @@ class DiscoveredIssue(Base):
         nullable=False,
         index=True,
     )
-    tracking_id = Column(
-        Integer, ForeignKey("periodical_tracking.id"), nullable=False, index=True
-    )
+    tracking_id = Column(Integer, ForeignKey("periodical_tracking.id"), nullable=False, index=True)
 
     title = Column(String(255), nullable=False, index=True)
     normalized_title = Column(String(255), nullable=False, index=True)
@@ -451,9 +431,7 @@ class DiscoveredIssue(Base):
 
     # Download state: discovered → wanted → queued → pending → downloading → completed/failed/permanently_failed/ignored
     # queued = in Curator's internal queue; pending = submitted to and accepted by download client
-    download_status = Column(
-        String(50), nullable=False, default="discovered", index=True
-    )
+    download_status = Column(String(50), nullable=False, default="discovered", index=True)
     download_priority = Column(Integer, default=50, index=True)
 
     latest_url = Column(String(512), nullable=True)
@@ -461,13 +439,9 @@ class DiscoveredIssue(Base):
     latest_pubdate = Column(UTCDateTime, nullable=True, index=True)
     search_result_ids = Column(JSON, default=list)
 
-    current_submission_id = Column(
-        Integer, ForeignKey("download_submissions.id"), nullable=True, index=True
-    )
+    current_submission_id = Column(Integer, ForeignKey("download_submissions.id"), nullable=True, index=True)
     submission_ids = Column(JSON, default=list)
-    periodical_id = Column(
-        Integer, ForeignKey("periodicals.id"), nullable=True, index=True
-    )
+    periodical_id = Column(Integer, ForeignKey("periodicals.id"), nullable=True, index=True)
 
     attempt_count = Column(Integer, default=0)
     max_retries = Column(Integer, default=1)
@@ -563,9 +537,7 @@ class StackMembership(Base):
         unique=True,
         index=True,
     )
-    periodical_id = Column(
-        Integer, ForeignKey("periodicals.id"), nullable=True, unique=True, index=True
-    )
+    periodical_id = Column(Integer, ForeignKey("periodicals.id"), nullable=True, unique=True, index=True)
     added_at = Column(UTCDateTime, default=utcnow)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -590,9 +562,7 @@ class ReadingProgress(Base):
         nullable=False,
         index=True,
     )
-    periodical_id = Column(
-        Integer, ForeignKey("periodicals.id"), nullable=False, index=True, unique=True
-    )
+    periodical_id = Column(Integer, ForeignKey("periodicals.id"), nullable=False, index=True, unique=True)
     current_page = Column(Integer, nullable=True)
     current_chapter = Column(Integer, nullable=True)
     total_pages = Column(Integer, nullable=True)

@@ -92,9 +92,7 @@ class FileImporter:
         # Initialize specialized helpers
         self.parser = Parser(fuzzy_threshold=fuzzy_threshold)
         self.categorizer = FileCategorizer()
-        self.organizer = FileOrganizer(
-            self.library_base_dir, category_prefix=self.category_prefix
-        )
+        self.organizer = FileOrganizer(self.library_base_dir, category_prefix=self.category_prefix)
 
         # Thread pool for CPU-intensive OCR tasks
         self._ocr_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ocr")
@@ -185,9 +183,7 @@ class FileImporter:
                     del self._folder_marker_refs[folder]
                     self._remove_import_marker(folder)
 
-    def process_downloads(
-        self, session: Session, organization_pattern: Optional[str] = None
-    ) -> Dict[str, Any]:
+    def process_downloads(self, session: Session, organization_pattern: Optional[str] = None) -> Dict[str, Any]:
         """
         Scan downloads folder and process any PDFs found.
 
@@ -237,10 +233,7 @@ class FileImporter:
             """Check if file is within the library directory"""
             try:
                 file_resolved = file_path.resolve()
-                return (
-                    library_dir_resolved in file_resolved.parents
-                    or file_resolved == library_dir_resolved
-                )
+                return library_dir_resolved in file_resolved.parents or file_resolved == library_dir_resolved
             except Exception:
                 return False
 
@@ -252,41 +245,27 @@ class FileImporter:
         all_files = pdf_files + epub_files + cbz_files + cbr_files
 
         if not all_files:
-            logger.info(
-                f"No PDF or EPUB files found in downloads folder: {self.downloads_dir}"
-            )
+            logger.info(f"No PDF or EPUB files found in downloads folder: {self.downloads_dir}")
             return result.to_dict()
 
         logger.info(
             f"[DOWNLOADS IMPORT] Found {len(all_files)} files to process from {self.downloads_dir} "
             f"({len(pdf_files)} PDFs, {len(epub_files)} EPUBs, {len(cbz_files)} CBZs, {len(cbr_files)} CBRs)"
         )
-        logger.info(
-            "[DOWNLOADS IMPORT] Text extraction enabled, OCR queued only for image-based files"
-        )
+        logger.info("[DOWNLOADS IMPORT] Text extraction enabled, OCR queued only for image-based files")
 
         # Process all file types using unified handler
-        self._process_file_batch(
-            pdf_files, "PDF", session, organization_pattern, result, skip_reasons
-        )
-        self._process_file_batch(
-            epub_files, "EPUB", session, organization_pattern, result, skip_reasons
-        )
-        self._process_file_batch(
-            cbz_files, "CBZ", session, organization_pattern, result, skip_reasons
-        )
-        self._process_file_batch(
-            cbr_files, "CBR", session, organization_pattern, result, skip_reasons
-        )
+        self._process_file_batch(pdf_files, "PDF", session, organization_pattern, result, skip_reasons)
+        self._process_file_batch(epub_files, "EPUB", session, organization_pattern, result, skip_reasons)
+        self._process_file_batch(cbz_files, "CBZ", session, organization_pattern, result, skip_reasons)
+        self._process_file_batch(cbr_files, "CBR", session, organization_pattern, result, skip_reasons)
 
         # Log summary
         self._log_import_summary(result, skip_reasons)
 
         return result.to_dict()
 
-    def _log_import_summary(
-        self, result: OperationResult, skip_reasons: Dict[str, int]
-    ) -> None:
+    def _log_import_summary(self, result: OperationResult, skip_reasons: Dict[str, int]) -> None:
         """
         Log a summary of import results.
 
@@ -294,11 +273,7 @@ class FileImporter:
             result: OperationResult with counts
             skip_reasons: Dictionary of skip reasons and their counts
         """
-        total = (
-            result.data.get("imported", 0)
-            + result.data.get("skipped", 0)
-            + result.data.get("failed", 0)
-        )
+        total = result.data.get("imported", 0) + result.data.get("skipped", 0) + result.data.get("failed", 0)
         if total == 0:
             return
 
@@ -314,9 +289,7 @@ class FileImporter:
         if result.data.get("skipped", 0) > 0 or any(skip_reasons.values()):
             logger.info("")
             logger.info("Skip/Failure reasons:")
-            for reason, count in sorted(
-                skip_reasons.items(), key=lambda x: x[1], reverse=True
-            ):
+            for reason, count in sorted(skip_reasons.items(), key=lambda x: x[1], reverse=True):
                 if count > 0:
                     reason_label = {
                         "duplicate_hash": "Duplicate (content hash)",
@@ -364,11 +337,7 @@ class FileImporter:
 
         # Check if tracking record has a custom organization pattern
         if tracking_id and not organization_pattern:
-            tracking_record = (
-                session.query(PeriodicalTracking)
-                .filter(PeriodicalTracking.id == tracking_id)
-                .first()
-            )
+            tracking_record = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
             if tracking_record and tracking_record.organization_pattern:
                 organization_pattern = tracking_record.organization_pattern
                 logger.debug(
@@ -377,9 +346,7 @@ class FileImporter:
 
         return tracking_id, organization_pattern
 
-    def _check_hash_duplicate(
-        self, content_hash: str, pdf_path: Path, skip_organize: bool, session: Session
-    ) -> bool:
+    def _check_hash_duplicate(self, content_hash: str, pdf_path: Path, skip_organize: bool, session: Session) -> bool:
         """
         Check if file already exists in library by content hash.
 
@@ -401,17 +368,13 @@ class FileImporter:
             .first()
         )
         if existing_by_hash:
-            logger.info(
-                f"File already in library: '{pdf_path.name}' (matches existing file by content hash)"
-            )
+            logger.info(f"File already in library: '{pdf_path.name}' (matches existing file by content hash)")
             if not skip_organize:
                 self._cleanup_download_file(pdf_path, defer_folder_deletion=True)
             return True
         return False
 
-    def _build_tracking_title(
-        self, base_title: str, parsed_country: Optional[str], pdf_path: Path
-    ) -> str:
+    def _build_tracking_title(self, base_title: str, parsed_country: Optional[str], pdf_path: Path) -> str:
         """
         Build tracking title, appending country code for regional editions.
 
@@ -427,21 +390,15 @@ class FileImporter:
 
         # Skip if no country or universal/worldwide codes
         if not parsed_country or parsed_country in ["XU", "XW"]:
-            return (
-                sanitize_filename(tracking_title) if tracking_title else tracking_title
-            )
+            return sanitize_filename(tracking_title) if tracking_title else tracking_title
 
         country_code = parsed_country
         filename_lower = pdf_path.stem.lower()
         country_name = ISO_COUNTRIES.get(parsed_country, parsed_country)
 
         # Check if country was explicitly in the filename
-        country_name_in_filename = bool(
-            re.search(rf"\b{re.escape(country_name.lower())}\b", filename_lower)
-        )
-        country_code_in_filename = bool(
-            re.search(rf"\b{re.escape(parsed_country.lower())}\b", filename_lower)
-        )
+        country_name_in_filename = bool(re.search(rf"\b{re.escape(country_name.lower())}\b", filename_lower))
+        country_code_in_filename = bool(re.search(rf"\b{re.escape(parsed_country.lower())}\b", filename_lower))
         country_in_filename = country_name_in_filename or country_code_in_filename
 
         # Append country code if it was in filename and not already in title
@@ -496,23 +453,14 @@ class FileImporter:
             if existing_country:
                 country_name = ISO_COUNTRIES.get(existing_country, existing_country)
                 if existing.title.endswith(f" {existing_country}"):
-                    existing_normalized = (
-                        existing.title[: -len(existing_country) - 1]
-                        + f" {country_name}"
-                    )
+                    existing_normalized = existing.title[: -len(existing_country) - 1] + f" {country_name}"
 
-            is_match, score = self.title_matcher.match(
-                tracking_title, existing_normalized
-            )
+            is_match, score = self.title_matcher.match(tracking_title, existing_normalized)
 
             if is_match and parsed_issue_date and existing.issue_date:
                 # Ensure UTC-aware for comparison: filename-parsed dates are treated as UTC
                 # if naive; DB dates are always UTC-aware via UTCDateTime TypeDecorator.
-                p_date = (
-                    parsed_issue_date
-                    if parsed_issue_date.tzinfo
-                    else parsed_issue_date.replace(tzinfo=UTC)
-                )
+                p_date = parsed_issue_date if parsed_issue_date.tzinfo else parsed_issue_date.replace(tzinfo=UTC)
                 date_diff = abs((p_date - existing.issue_date).days)
                 same_language = (existing.language == parsed_language) or (
                     not existing.language and parsed_language == DEFAULT_LANGUAGE
@@ -521,11 +469,7 @@ class FileImporter:
                 if date_diff <= DUPLICATE_DATE_THRESHOLD_DAYS and same_language:
                     # Content hash safety net: if both hashes are available and differ,
                     # the files are different content — do NOT treat as duplicate
-                    if (
-                        content_hash
-                        and existing.content_hash
-                        and content_hash != existing.content_hash
-                    ):
+                    if content_hash and existing.content_hash and content_hash != existing.content_hash:
                         logger.info(
                             f"Fuzzy match for '{pdf_path.name}' against '{existing.title}' "
                             f"({existing.issue_date.strftime('%b %Y')}) but content hashes differ — "
@@ -540,9 +484,7 @@ class FileImporter:
                         f"Skipping import."
                     )
                     if not skip_organize:
-                        self._cleanup_download_file(
-                            pdf_path, defer_folder_deletion=True
-                        )
+                        self._cleanup_download_file(pdf_path, defer_folder_deletion=True)
                     return True
 
         return False
@@ -573,11 +515,7 @@ class FileImporter:
         target_tracking = None
 
         if tracking_id:
-            target_tracking = (
-                session.query(PeriodicalTracking)
-                .filter(PeriodicalTracking.id == tracking_id)
-                .first()
-            )
+            target_tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
             if target_tracking:
                 # Validate that sidecar tracking matches parsed metadata (country/language)
                 # This prevents "Wired USA" from claiming "Wired Africa" files
@@ -606,9 +544,7 @@ class FileImporter:
                         f"Using provided tracking_id={tracking_id} ('{target_tracking.title}') for '{tracking_title}'"
                     )
             else:
-                logger.warning(
-                    f"Provided tracking_id={tracking_id} not found, will try to find best match"
-                )
+                logger.warning(f"Provided tracking_id={tracking_id} not found, will try to find best match")
 
         if not target_tracking:
             all_tracking = session.query(PeriodicalTracking).all()
@@ -681,9 +617,7 @@ class FileImporter:
                     f"Set tracking and periodical language to '{parsed_language}' for: {target_tracking.title}"
                 )
 
-            logger.debug(
-                f"Linked periodical to tracking: {target_tracking.title} (ID: {target_tracking.id})"
-            )
+            logger.debug(f"Linked periodical to tracking: {target_tracking.title} (ID: {target_tracking.id})")
 
             # Add special edition to selected_editions if applicable
             if is_special_edition and special_name:
@@ -691,9 +625,7 @@ class FileImporter:
                     target_tracking.selected_editions = {}
                 if special_name not in target_tracking.selected_editions:
                     target_tracking.selected_editions[special_name] = True
-                    logger.debug(
-                        f"Added special edition '{special_name}' to tracking: {target_tracking.title}"
-                    )
+                    logger.debug(f"Added special edition '{special_name}' to tracking: {target_tracking.title}")
 
         elif auto_track:
             olid = generate_olid(tracking_title)
@@ -716,14 +648,10 @@ class FileImporter:
             session.add(new_tracking)
             session.flush()
             periodical.tracking_id = new_tracking.id
-            logger.info(
-                f"Created new tracking record: {tracking_title} (ID: {new_tracking.id}, mode: {tracking_mode})"
-            )
+            logger.info(f"Created new tracking record: {tracking_title} (ID: {new_tracking.id}, mode: {tracking_mode})")
 
             if is_special_edition:
-                logger.debug(
-                    f"Detected special edition '{special_name}' for: {tracking_title}"
-                )
+                logger.debug(f"Detected special edition '{special_name}' for: {tracking_title}")
 
     def _run_text_scan(
         self,
@@ -751,9 +679,7 @@ class FileImporter:
 
         try:
             logger.debug(f"Attempting direct text extraction for {periodical.id}")
-            scan_result = TextScanService.scan_document(
-                str(organized_path), language=parsed_language
-            )
+            scan_result = TextScanService.scan_document(str(organized_path), language=parsed_language)
 
             # Store text scan metadata
             if not periodical.parsed_metadata:
@@ -773,9 +699,7 @@ class FileImporter:
             if new_issue_date:
                 periodical.issue_date = new_issue_date
                 metadata_discovered = True
-                logger.debug(
-                    f"Updated issue_date to {new_issue_date.strftime('%Y-%m')} from derived_metadata"
-                )
+                logger.debug(f"Updated issue_date to {new_issue_date.strftime('%Y-%m')} from derived_metadata")
 
             # Check if text scan found volume/issue (flag for reorganization)
             if scan_result.get("volume") or scan_result.get("issue_number"):
@@ -786,21 +710,15 @@ class FileImporter:
                 if not periodical.extra_metadata:
                     periodical.extra_metadata = {}
                 periodical.extra_metadata["needs_reorganization"] = True
-                periodical.extra_metadata["reorganization_reason"] = (
-                    "metadata_discovered_by_text_scan"
-                )
-                logger.info(
-                    f"Flagged {periodical.title} for reorganization (metadata discovered by text scan)"
-                )
+                periodical.extra_metadata["reorganization_reason"] = "metadata_discovered_by_text_scan"
+                logger.info(f"Flagged {periodical.title} for reorganization (metadata discovered by text scan)")
 
             if scan_result.get("text_found"):
                 logger.info(f"Enhanced {periodical.title} with metadata from text scan")
 
             from core.utils.db import mark_json_modified
 
-            mark_json_modified(
-                periodical, "parsed_metadata", "derived_metadata", "extra_metadata"
-            )
+            mark_json_modified(periodical, "parsed_metadata", "derived_metadata", "extra_metadata")
             session.commit()
 
             if scan_result.get("text_found"):
@@ -831,11 +749,7 @@ class FileImporter:
             session: Database session
         """
         try:
-            priority = (
-                OCRJob.PriorityEnum.HIGH.value
-                if not skip_organize
-                else OCRJob.PriorityEnum.NORMAL.value
-            )
+            priority = OCRJob.PriorityEnum.HIGH.value if not skip_organize else OCRJob.PriorityEnum.NORMAL.value
             ocr_job = OCRQueueService.queue_ocr_job(
                 db=session,
                 periodical_id=periodical.id,
@@ -843,13 +757,9 @@ class FileImporter:
                 language=parsed_language,
             )
             if ocr_job:
-                logger.info(
-                    f"Queued OCR job {ocr_job.id} for periodical {periodical.id}"
-                )
+                logger.info(f"Queued OCR job {ocr_job.id} for periodical {periodical.id}")
         except Exception as e:
-            logger.warning(
-                f"Failed to queue OCR job for periodical {periodical.id}: {e}"
-            )
+            logger.warning(f"Failed to queue OCR job for periodical {periodical.id}: {e}")
 
     def _scan_for_missing_date(
         self,
@@ -886,9 +796,7 @@ class FileImporter:
         if file_path.suffix.lower() in [".pdf", ".epub"]:
             try:
                 logger.info(f"Running pre-organization text scan for {file_path.name}")
-                scan_result = TextScanService.scan_document(
-                    str(file_path), language=parsed_language
-                )
+                scan_result = TextScanService.scan_document(str(file_path), language=parsed_language)
                 result["text_scan_result"] = scan_result  # Store for DB
 
                 if scan_result.get("year"):
@@ -917,17 +825,13 @@ class FileImporter:
                     return result
 
             except Exception as e:
-                logger.debug(
-                    f"Pre-organization text scan failed for {file_path.name}: {e}"
-                )
+                logger.debug(f"Pre-organization text scan failed for {file_path.name}: {e}")
 
         # Try OCR if text scan didn't find a date and file is PDF
         if file_path.suffix.lower() == ".pdf" and OCRService.is_available():
             try:
                 logger.info(f"Running pre-organization OCR scan for {file_path.name}")
-                ocr_result = OCRService.analyze_cover(
-                    str(file_path), language=parsed_language
-                )
+                ocr_result = OCRService.analyze_cover(str(file_path), language=parsed_language)
                 result["ocr_scan_result"] = ocr_result  # Store for DB
 
                 if ocr_result and ocr_result.get("year"):
@@ -953,9 +857,7 @@ class FileImporter:
                         result["issue_number"] = ocr_result["issue_number"]
 
             except Exception as e:
-                logger.debug(
-                    f"Pre-organization OCR scan failed for {file_path.name}: {e}"
-                )
+                logger.debug(f"Pre-organization OCR scan failed for {file_path.name}: {e}")
 
         return result
 
@@ -990,14 +892,10 @@ class FileImporter:
             return False
 
         try:
-            logger.info(
-                f"Running immediate OCR scan for {periodical.title} to find date"
-            )
+            logger.info(f"Running immediate OCR scan for {periodical.title} to find date")
 
             # Run OCR directly on the PDF
-            ocr_result = OCRService.analyze_cover(
-                str(organized_path), language=parsed_language
-            )
+            ocr_result = OCRService.analyze_cover(str(organized_path), language=parsed_language)
 
             if not ocr_result or not ocr_result.get("text_found"):
                 logger.debug(f"OCR found no text in {organized_path.name}")
@@ -1024,9 +922,7 @@ class FileImporter:
                 periodical.issue_date = new_issue_date
                 found_date = True
                 metadata_discovered = True
-                logger.info(
-                    f"OCR scan found date {new_issue_date.strftime('%Y-%m')} for {periodical.title}"
-                )
+                logger.info(f"OCR scan found date {new_issue_date.strftime('%Y-%m')} for {periodical.title}")
 
             # Check if OCR found volume/issue that we didn't have
             if ocr_result.get("volume") or ocr_result.get("issue_number"):
@@ -1043,8 +939,7 @@ class FileImporter:
                     periodical.derived_metadata["issue_number"] = {
                         "value": ocr_result["issue_number"],
                         "source": "ocr_scan",
-                        "confidence": ocr_result.get("issue_number_confidence", 70)
-                        / 100.0,
+                        "confidence": ocr_result.get("issue_number_confidence", 70) / 100.0,
                     }
 
             # Flag for reorganization if we discovered new metadata
@@ -1053,24 +948,16 @@ class FileImporter:
                 if not periodical.extra_metadata:
                     periodical.extra_metadata = {}
                 periodical.extra_metadata["needs_reorganization"] = True
-                periodical.extra_metadata["reorganization_reason"] = (
-                    "metadata_discovered_by_ocr"
-                )
-                logger.info(
-                    f"Flagged {periodical.title} for reorganization (metadata discovered by OCR)"
-                )
+                periodical.extra_metadata["reorganization_reason"] = "metadata_discovered_by_ocr"
+                logger.info(f"Flagged {periodical.title} for reorganization (metadata discovered by OCR)")
 
             from core.utils.db import mark_json_modified
 
-            mark_json_modified(
-                periodical, "parsed_metadata", "derived_metadata", "extra_metadata"
-            )
+            mark_json_modified(periodical, "parsed_metadata", "derived_metadata", "extra_metadata")
             session.commit()
 
             if ocr_result.get("year"):
-                logger.info(
-                    f"Enhanced {periodical.title} with metadata from immediate OCR scan"
-                )
+                logger.info(f"Enhanced {periodical.title} with metadata from immediate OCR scan")
                 return found_date
 
             return False
@@ -1095,9 +982,7 @@ class FileImporter:
         """
         parsed = self.parser.parse_file(file_path)
         if not self.title_matcher.validate_before_parsing(parsed.title):
-            logger.warning(
-                f"Skipping invalid release title: {parsed.title} (from {file_path.name})"
-            )
+            logger.warning(f"Skipping invalid release title: {parsed.title} (from {file_path.name})")
             return None
 
         logger.debug(
@@ -1106,9 +991,7 @@ class FileImporter:
         )
         return parsed
 
-    def _get_content_hash(
-        self, file_path: Path, skip_organize: bool, session: Session
-    ) -> Optional[str]:
+    def _get_content_hash(self, file_path: Path, skip_organize: bool, session: Session) -> Optional[str]:
         """
         Calculate content hash and check for hash-based duplicates.
 
@@ -1153,9 +1036,7 @@ class FileImporter:
 
         if tracking_id:
             target_tracking_temp = (
-                session.query(PeriodicalTracking)
-                .filter(PeriodicalTracking.id == tracking_id)
-                .first()
+                session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
             )
             if target_tracking_temp:
                 # Sidecar tracking_id ALWAYS wins — the file was deliberately downloaded for this
@@ -1184,17 +1065,11 @@ class FileImporter:
                     )
             else:
                 # Sidecar had invalid tracking_id, fall back to parsed title
-                logger.warning(
-                    f"Sidecar tracking_id={tracking_id} not found, using parsed title"
-                )
-                tracking_title = self._build_tracking_title(
-                    parsed.base_title, parsed.country, file_path
-                )
+                logger.warning(f"Sidecar tracking_id={tracking_id} not found, using parsed title")
+                tracking_title = self._build_tracking_title(parsed.base_title, parsed.country, file_path)
         else:
             # No sidecar tracking_id, build from parsed filename
-            tracking_title = self._build_tracking_title(
-                parsed.base_title, parsed.country, file_path
-            )
+            tracking_title = self._build_tracking_title(parsed.base_title, parsed.country, file_path)
 
         return tracking_title, needs_date_scan
 
@@ -1260,9 +1135,7 @@ class FileImporter:
         Returns:
             Tuple of (organized_path, cover_path)
         """
-        organization_title = (
-            target_tracking.title if target_tracking else tracking_title
-        )
+        organization_title = target_tracking.title if target_tracking else tracking_title
 
         if skip_organize:
             organized_path = file_path
@@ -1277,16 +1150,12 @@ class FileImporter:
                 "volume": parsed.volume,
                 "issue_number": parsed.issue_number,
             }
-            organized_path = self.organizer.organize(
-                file_path, metadata, category, organization_pattern
-            )
+            organized_path = self.organizer.organize(file_path, metadata, category, organization_pattern)
 
             # Security: Validate organized path is within library directory
             if organized_path:
                 try:
-                    organized_path.resolve().relative_to(
-                        self.library_base_dir.resolve()
-                    )
+                    organized_path.resolve().relative_to(self.library_base_dir.resolve())
                 except ValueError:
                     logger.error(
                         f"Security: Organized path '{organized_path}' is outside library directory '{self.library_base_dir}'. "
@@ -1304,16 +1173,10 @@ class FileImporter:
 
         return organized_path, cover_path
 
-    def _check_for_duplicate_periodical(
-        self, organized_path: Path, session: Session
-    ) -> bool:
+    def _check_for_duplicate_periodical(self, organized_path: Path, session: Session) -> bool:
         """Check if periodical already exists at the organized path."""
         organized_path_str = str(organized_path)
-        existing_by_path = (
-            session.query(Periodical)
-            .filter(Periodical.file_path == organized_path_str)
-            .first()
-        )
+        existing_by_path = session.query(Periodical).filter(Periodical.file_path == organized_path_str).first()
         if existing_by_path:
             logger.info(
                 f"File already in library at organized path: '{organized_path_str}' "
@@ -1383,30 +1246,21 @@ class FileImporter:
         if self._check_for_duplicate_periodical(organized_path, session):
             return None
 
-        organization_title = (
-            target_tracking.title if target_tracking else tracking_title
-        )
+        organization_title = target_tracking.title if target_tracking else tracking_title
         file_scan = self._build_file_scan_metadata(parsed)
-        extra_meta = self._build_extra_metadata(
-            file_path, category, needs_date_scan, cached_scan_results
-        )
+        extra_meta = self._build_extra_metadata(file_path, category, needs_date_scan, cached_scan_results)
         text_scan, ocr_scan = self._extract_cached_scan_results(cached_scan_results)
 
         periodical = Periodical(
             user_id=1,
             title=organization_title,
-            issue_date=parsed.issue_date
-            or datetime(UNKNOWN_ISSUE_DATE_YEAR, 1, 1, tzinfo=UTC),
+            issue_date=parsed.issue_date or datetime(UNKNOWN_ISSUE_DATE_YEAR, 1, 1, tzinfo=UTC),
             language=parsed.language or DEFAULT_LANGUAGE,
             file_path=str(organized_path),
             cover_path=str(cover_path) if cover_path else None,
             content_hash=content_hash,
-            parsed_metadata=build_parsed_metadata(
-                file_scan=file_scan, text_scan=text_scan, ocr_scan=ocr_scan
-            ),
-            derived_metadata=build_derived_metadata(
-                file_scan=file_scan, text_scan=text_scan, ocr_scan=ocr_scan
-            ),
+            parsed_metadata=build_parsed_metadata(file_scan=file_scan, text_scan=text_scan, ocr_scan=ocr_scan),
+            derived_metadata=build_derived_metadata(file_scan=file_scan, text_scan=text_scan, ocr_scan=ocr_scan),
             extra_metadata=extra_meta,
         )
         session.add(periodical)
@@ -1429,16 +1283,11 @@ class FileImporter:
         Force text scan if needs_date_scan (even during bulk imports) to try to find date/volume.
         Otherwise skip during bulk imports for speed.
         """
-        cached_text_scan_exists = (
-            cached_scan_results
-            and cached_scan_results.get("text_scan_result") is not None
-        )
+        cached_text_scan_exists = cached_scan_results and cached_scan_results.get("text_scan_result") is not None
 
         if not cached_text_scan_exists and (not skip_enhancement or needs_date_scan):
             if needs_date_scan:
-                logger.info(
-                    f"Forcing text scan for '{tracking_title}' to find missing date/volume"
-                )
+                logger.info(f"Forcing text scan for '{tracking_title}' to find missing date/volume")
             self._run_text_scan(periodical, organized_path, language, session)
 
     def _run_post_import_ocr(
@@ -1460,36 +1309,20 @@ class FileImporter:
         (avoids duplicate detection issues when multiple files have same fallback date).
         For other files: queue OCR for background processing.
         """
-        cached_ocr_exists = (
-            cached_scan_results
-            and cached_scan_results.get("ocr_scan_result") is not None
-        )
-        cached_date_found = (
-            cached_scan_results and cached_scan_results.get("issue_date") is not None
-        )
+        cached_ocr_exists = cached_scan_results and cached_scan_results.get("ocr_scan_result") is not None
+        cached_date_found = cached_scan_results and cached_scan_results.get("issue_date") is not None
 
-        text_scan_result = (
-            periodical.parsed_metadata.get("text_scan", {})
-            if periodical.parsed_metadata
-            else {}
-        )
+        text_scan_result = periodical.parsed_metadata.get("text_scan", {}) if periodical.parsed_metadata else {}
         text_scan_sufficient = text_scan_result.get("has_sufficient_metadata", False)
         text_scan_found_date = text_scan_result.get("year") is not None
 
         should_run_immediate_ocr = (
-            needs_date_scan
-            and not text_scan_found_date
-            and not cached_date_found
-            and not cached_ocr_exists
+            needs_date_scan and not text_scan_found_date and not cached_date_found and not cached_ocr_exists
         )
 
         if should_run_immediate_ocr:
-            logger.info(
-                f"Text scan didn't find date for '{tracking_title}' - running immediate OCR scan"
-            )
-            ocr_found_date = self._run_ocr_scan(
-                periodical, organized_path, parsed.language, session
-            )
+            logger.info(f"Text scan didn't find date for '{tracking_title}' - running immediate OCR scan")
+            ocr_found_date = self._run_ocr_scan(periodical, organized_path, parsed.language, session)
             if not ocr_found_date:
                 logger.warning(
                     f"Could not determine date for '{tracking_title}' from filename, text, or OCR. "
@@ -1498,9 +1331,7 @@ class FileImporter:
         elif not cached_ocr_exists and should_queue_ocr and not text_scan_sufficient:
             self._queue_ocr_job(periodical, parsed.language, skip_organize, session)
         elif text_scan_sufficient or cached_date_found:
-            logger.info(
-                f"Skipping OCR for '{parsed.title}' - sufficient metadata already found"
-            )
+            logger.info(f"Skipping OCR for '{parsed.title}' - sufficient metadata already found")
 
     def import_supported_files(
         self,
@@ -1577,9 +1408,7 @@ class FileImporter:
             )
 
             # Step 7: Run pre-scan for missing date if needed
-            pre_scan_result = self._run_pre_scan_if_needed(
-                needs_date_scan, skip_organize, file_path, parsed
-            )
+            pre_scan_result = self._run_pre_scan_if_needed(needs_date_scan, skip_organize, file_path, parsed)
 
             # Step 8: Organize file and extract cover
             organized_path, cover_path = self._organize_file_and_extract_cover(
@@ -1632,9 +1461,7 @@ class FileImporter:
             logger.info(f"Added to database: {parsed.title} ({category})")
 
             # Step 11: Run text scan for additional metadata
-            should_queue_ocr = (
-                use_ocr and (cover_path or file_path) and OCRService.is_available()
-            )
+            should_queue_ocr = use_ocr and (cover_path or file_path) and OCRService.is_available()
             self._run_post_import_text_scan(
                 periodical,
                 organized_path,
@@ -1673,9 +1500,7 @@ class FileImporter:
                 try:
                     self._cleanup_download_file(file_path, defer_folder_deletion=True)
                 except Exception as cleanup_error:
-                    logger.warning(
-                        f"Failed to cleanup file after import error: {cleanup_error}"
-                    )
+                    logger.warning(f"Failed to cleanup file after import error: {cleanup_error}")
             return {"skip_reason": "parse_error", "error": str(e)}
 
     def _import_file_worker(
@@ -1708,9 +1533,7 @@ class FileImporter:
             Dict with import result and metadata for aggregation
         """
         parent_dir = file_path.parent
-        is_subfolder = parent_dir != self.downloads_dir and parent_dir.is_relative_to(
-            self.downloads_dir
-        )
+        is_subfolder = parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir)
 
         # Acquire folder marker before processing (only for downloads, not library)
         if is_subfolder and not skip_organize:
@@ -1732,38 +1555,28 @@ class FileImporter:
                     )
             else:
                 # No session factory - this shouldn't happen in parallel mode
-                logger.warning(
-                    f"No session factory for worker processing {file_path.name}"
-                )
+                logger.warning(f"No session factory for worker processing {file_path.name}")
                 return {
                     "file_path": file_path,
                     "file_type": file_type,
                     "result": {"skip_reason": "no_session"},
-                    "parent_dir": parent_dir
-                    if is_subfolder and not skip_organize
-                    else None,
+                    "parent_dir": parent_dir if is_subfolder and not skip_organize else None,
                 }
 
             return {
                 "file_path": file_path,
                 "file_type": file_type,
                 "result": import_result,
-                "parent_dir": parent_dir
-                if is_subfolder and not skip_organize
-                else None,
+                "parent_dir": parent_dir if is_subfolder and not skip_organize else None,
             }
 
         except Exception as e:
-            logger.error(
-                f"Error in worker importing {file_path.name}: {e}", exc_info=True
-            )
+            logger.error(f"Error in worker importing {file_path.name}: {e}", exc_info=True)
             return {
                 "file_path": file_path,
                 "file_type": file_type,
                 "result": {"skip_reason": "parse_error", "error": str(e)},
-                "parent_dir": parent_dir
-                if is_subfolder and not skip_organize
-                else None,
+                "parent_dir": parent_dir if is_subfolder and not skip_organize else None,
             }
 
         finally:
@@ -1807,16 +1620,11 @@ class FileImporter:
         folders_to_cleanup = set()
 
         # Determine if we can use parallel processing
-        use_parallel = (
-            self._session_factory is not None
-            and len(files) > 1
-            and self._parallel_workers > 1
-        )
+        use_parallel = self._session_factory is not None and len(files) > 1 and self._parallel_workers > 1
 
         if use_parallel:
             logger.info(
-                f"Processing {len(files)} {file_type} files in parallel "
-                f"with {self._parallel_workers} workers"
+                f"Processing {len(files)} {file_type} files in parallel " f"with {self._parallel_workers} workers"
             )
             self._process_files_parallel(
                 files,
@@ -1860,9 +1668,7 @@ class FileImporter:
                     is_in_downloads = False
 
                 if not is_in_downloads:
-                    logger.debug(
-                        f"Skipping folder cleanup - not in downloads directory: {folder}"
-                    )
+                    logger.debug(f"Skipping folder cleanup - not in downloads directory: {folder}")
                     continue
 
                 if folder.exists():
@@ -1901,9 +1707,7 @@ class FileImporter:
             use_ocr: Whether to use OCR for metadata extraction
             skip_enhancement: If True, skip cover extraction and text scanning
         """
-        with ThreadPoolExecutor(
-            max_workers=self._parallel_workers, thread_name_prefix="import"
-        ) as executor:
+        with ThreadPoolExecutor(max_workers=self._parallel_workers, thread_name_prefix="import") as executor:
             # Submit all files for processing
             futures = {
                 executor.submit(
@@ -1937,30 +1741,19 @@ class FileImporter:
                 except Exception as e:
                     result.data["failed"] += 1
                     skip_reasons["parse_error"] += 1
-                    error_msg = (
-                        f"Error importing {file_type} {file_path.name}: {str(e)}"
-                    )
-                    result.add_error(
-                        ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True
-                    )
+                    error_msg = f"Error importing {file_type} {file_path.name}: {str(e)}"
+                    result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
                     logger.error(error_msg, exc_info=True)
                     # Clean up the failed file and track folder for cleanup
                     # Only cleanup for downloads (skip_organize=False), never for library imports
                     if not skip_organize:
                         try:
-                            self._cleanup_download_file(
-                                file_path, defer_folder_deletion=True
-                            )
+                            self._cleanup_download_file(file_path, defer_folder_deletion=True)
                             parent_dir = file_path.parent
-                            if (
-                                parent_dir != self.downloads_dir
-                                and parent_dir.is_relative_to(self.downloads_dir)
-                            ):
+                            if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
                                 folders_to_cleanup.add(parent_dir)
                         except Exception as cleanup_error:
-                            logger.warning(
-                                f"Failed to cleanup {file_path.name}: {cleanup_error}"
-                            )
+                            logger.warning(f"Failed to cleanup {file_path.name}: {cleanup_error}")
 
     def _process_files_sequential(
         self,
@@ -2003,9 +1796,7 @@ class FileImporter:
             unique_folders = set()
             for file_path in files:
                 parent_dir = file_path.parent
-                if parent_dir != self.downloads_dir and parent_dir.is_relative_to(
-                    self.downloads_dir
-                ):
+                if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
                     unique_folders.add(parent_dir)
 
             # Create markers for all folders being processed
@@ -2050,26 +1841,17 @@ class FileImporter:
                 result.data["failed"] += 1
                 skip_reasons["parse_error"] += 1
                 error_msg = f"Error importing {file_type} {file_path.name}: {str(e)}"
-                result.add_error(
-                    ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True
-                )
+                result.add_error(ErrorCodes.PROCESSING_FAILED, error_msg, retryable=True)
                 logger.error(error_msg, exc_info=True)
                 # Only cleanup for downloads (skip_organize=False), never for library imports
                 if not skip_organize:
                     try:
-                        self._cleanup_download_file(
-                            file_path, defer_folder_deletion=True
-                        )
+                        self._cleanup_download_file(file_path, defer_folder_deletion=True)
                         parent_dir = file_path.parent
-                        if (
-                            parent_dir != self.downloads_dir
-                            and parent_dir.is_relative_to(self.downloads_dir)
-                        ):
+                        if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
                             folders_to_cleanup.add(parent_dir)
                     except Exception as cleanup_error:
-                        logger.warning(
-                            f"Failed to cleanup {file_path.name}: {cleanup_error}"
-                        )
+                        logger.warning(f"Failed to cleanup {file_path.name}: {cleanup_error}")
 
         # Remove import markers from all processed folders
         for folder in folders_with_markers:
@@ -2107,11 +1889,7 @@ class FileImporter:
                 folders_to_cleanup.add(parent_dir)
         else:
             # Track skip reason
-            skip_reason = (
-                import_result.get("skip_reason", "organization_failed")
-                if import_result
-                else "parse_error"
-            )
+            skip_reason = import_result.get("skip_reason", "organization_failed") if import_result else "parse_error"
             if skip_reason in skip_reasons:
                 skip_reasons[skip_reason] += 1
                 result.data["skipped"] += 1
@@ -2122,18 +1900,14 @@ class FileImporter:
                     f"Failed to import {file_type} {file_path.name}",
                     retryable=True,
                 )
-            logger.debug(
-                f"Skipped {file_type} import ({skip_reason}): {file_path.name}"
-            )
+            logger.debug(f"Skipped {file_type} import ({skip_reason}): {file_path.name}")
             # Only cleanup files from downloads folder, never from library
             if not skip_cleanup:
                 self._cleanup_download_file(file_path, defer_folder_deletion=True)
                 if parent_dir:
                     folders_to_cleanup.add(parent_dir)
 
-    def _cleanup_download_file(
-        self, pdf_path: Path, defer_folder_deletion: bool = False
-    ) -> None:
+    def _cleanup_download_file(self, pdf_path: Path, defer_folder_deletion: bool = False) -> None:
         """
         Clean up a file from downloads folder and optionally its parent directory.
         Also removes sidecar metadata file if present.
@@ -2155,9 +1929,7 @@ class FileImporter:
                 is_in_downloads = False
 
             if not is_in_downloads:
-                logger.debug(
-                    f"Skipping cleanup - file not in downloads directory: {pdf_path}"
-                )
+                logger.debug(f"Skipping cleanup - file not in downloads directory: {pdf_path}")
                 return
 
             # Delete sidecar metadata file if it exists (only for downloads)
@@ -2171,28 +1943,20 @@ class FileImporter:
                         # Use shutil.rmtree to handle non-empty directories
                         import shutil
 
-                        logger.warning(
-                            f"Path is a directory (unexpected), removing recursively: {pdf_path}"
-                        )
+                        logger.warning(f"Path is a directory (unexpected), removing recursively: {pdf_path}")
                         shutil.rmtree(pdf_path)
-                        logger.info(
-                            f"Deleted directory from downloads: {pdf_path.name}"
-                        )
+                        logger.info(f"Deleted directory from downloads: {pdf_path.name}")
                     else:
                         # Regular file, symlink, FIFO, socket, or other special file
                         pdf_path.unlink()
                         logger.info(f"Deleted file from downloads: {pdf_path.name}")
                 except (OSError, PermissionError) as e:
-                    logger.error(
-                        f"Failed to delete {pdf_path.name} from downloads: {e}"
-                    )
+                    logger.error(f"Failed to delete {pdf_path.name} from downloads: {e}")
 
             # Cleanup parent directory only if not deferred
             if not defer_folder_deletion:
                 parent_dir = pdf_path.parent
-                if parent_dir != self.downloads_dir and parent_dir.is_relative_to(
-                    self.downloads_dir
-                ):
+                if parent_dir != self.downloads_dir and parent_dir.is_relative_to(self.downloads_dir):
                     if parent_dir.exists():
                         self._safe_cleanup_download_folder(parent_dir)
         except Exception as e:
@@ -2216,15 +1980,12 @@ class FileImporter:
 
         # Now check this folder: any supported files remaining (directly)?
         remaining_supported = [
-            f
-            for f in folder.iterdir()
-            if f.is_file() and f.suffix.lower() in SUPPORTED_FILE_EXTENSIONS
+            f for f in folder.iterdir() if f.is_file() and f.suffix.lower() in SUPPORTED_FILE_EXTENSIONS
         ]
 
         if remaining_supported:
             logger.info(
-                f"Keeping download folder (contains {len(remaining_supported)} "
-                f"unprocessed file(s)): {folder.name}"
+                f"Keeping download folder (contains {len(remaining_supported)} " f"unprocessed file(s)): {folder.name}"
             )
             return
 
@@ -2240,9 +2001,7 @@ class FileImporter:
             folder.rmdir()
             logger.info(f"Deleted empty download folder: {folder.name}")
         else:
-            logger.info(
-                f"Keeping download folder (contains remaining items): {folder.name}"
-            )
+            logger.info(f"Keeping download folder (contains remaining items): {folder.name}")
 
     def _extract_cover(self, file_path: Path) -> Optional[Path]:
         """
@@ -2278,9 +2037,7 @@ class FileImporter:
         elif extension == ".cbr":
             return extract_cover_from_cbr(file_path, cover_dir)
         else:
-            logger.warning(
-                f"Unsupported file type for cover extraction: {file_path.suffix}"
-            )
+            logger.warning(f"Unsupported file type for cover extraction: {file_path.suffix}")
             return None
 
     def process_organized_files(
@@ -2325,9 +2082,7 @@ class FileImporter:
         all_files = find_supported_files(self.library_base_dir, recursive=True)
 
         if not all_files:
-            logger.info(
-                f"No periodical files found in library folders: {self.library_base_dir}"
-            )
+            logger.info(f"No periodical files found in library folders: {self.library_base_dir}")
             return result.to_dict()
 
         pdf_files = [f for f in all_files if f.suffix.lower() == ".pdf"]
@@ -2351,9 +2106,7 @@ class FileImporter:
             f"from {self.library_base_dir} ({len(pdf_files)} PDFs, {len(epub_files)} EPUBs, "
             f"{len(cbz_files)} CBZs, {len(cbr_files)} CBRs)"
         )
-        logger.info(
-            "[DATA IMPORT] OCR disabled for library imports - will run during next scheduled OCR task"
-        )
+        logger.info("[DATA IMPORT] OCR disabled for library imports - will run during next scheduled OCR task")
 
         # Process all file types using unified batch handler (supports parallel processing)
         self._process_file_batch(

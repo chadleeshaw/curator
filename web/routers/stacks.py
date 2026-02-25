@@ -87,9 +87,7 @@ def _ensure_unique_slug(db, slug: str, exclude_id: Optional[int] = None) -> str:
         counter += 1
 
 
-def _get_stack_preview_covers(
-    db, stack_id: int, limit: int = 4
-) -> List[Dict[str, Any]]:
+def _get_stack_preview_covers(db, stack_id: int, limit: int = 4) -> List[Dict[str, Any]]:
     """
     Get preview cover data for a stack's first N members.
 
@@ -127,9 +125,7 @@ def _get_stack_preview_covers(
             .first()
         )
         if periodical:
-            preview_covers.append(
-                {"periodical_id": periodical.id, "title": periodical.title}
-            )
+            preview_covers.append({"periodical_id": periodical.id, "title": periodical.title})
 
     # Also check direct periodical members
     if len(preview_covers) < limit:
@@ -146,24 +142,16 @@ def _get_stack_preview_covers(
         for member in direct_members:
             if len(preview_covers) >= limit:
                 break
-            periodical = (
-                db.query(Periodical)
-                .filter(Periodical.id == member.periodical_id)
-                .first()
-            )
+            periodical = db.query(Periodical).filter(Periodical.id == member.periodical_id).first()
             if periodical and periodical.cover_path:
-                preview_covers.append(
-                    {"periodical_id": periodical.id, "title": periodical.title}
-                )
+                preview_covers.append({"periodical_id": periodical.id, "title": periodical.title})
 
     return preview_covers
 
 
 def _get_stack_member_count(db, stack_id: int) -> int:
     """Get total member count for a stack."""
-    return (
-        db.query(StackMembership).filter(StackMembership.stack_id == stack_id).count()
-    )
+    return db.query(StackMembership).filter(StackMembership.stack_id == stack_id).count()
 
 
 @router.get("/stacks")
@@ -177,9 +165,7 @@ async def list_stacks() -> Dict[str, Any]:
     """
 
     def operation(db):
-        stacks = (
-            db.query(Stack).order_by(Stack.sort_order.asc(), Stack.name.asc()).all()
-        )
+        stacks = db.query(Stack).order_by(Stack.sort_order.asc(), Stack.name.asc()).all()
 
         stack_list = []
         for stack in stacks:
@@ -215,9 +201,7 @@ async def create_stack(
         # Check for duplicate name
         existing = db.query(Stack).filter(Stack.name == name.strip()).first()
         if existing:
-            raise HTTPException(
-                status_code=409, detail=f"A stack named '{name}' already exists"
-            )
+            raise HTTPException(status_code=409, detail=f"A stack named '{name}' already exists")
 
         slug = _generate_slug(name)
         slug = _ensure_unique_slug(db, slug)
@@ -281,9 +265,7 @@ async def get_stack(slug: str) -> Dict[str, Any]:
             member_data = m.to_dict()
             if m.periodical_tracking_id:
                 tracking = (
-                    db.query(PeriodicalTracking)
-                    .filter(PeriodicalTracking.id == m.periodical_tracking_id)
-                    .first()
+                    db.query(PeriodicalTracking).filter(PeriodicalTracking.id == m.periodical_tracking_id).first()
                 )
                 if tracking:
                     member_data["title"] = tracking.title
@@ -291,11 +273,7 @@ async def get_stack(slug: str) -> Dict[str, Any]:
                     member_data["language"] = tracking.language
                     member_data["type"] = "tracking"
                     # Get library count and latest cover for this tracking
-                    library_count = (
-                        db.query(Periodical)
-                        .filter(Periodical.tracking_id == tracking.id)
-                        .count()
-                    )
+                    library_count = db.query(Periodical).filter(Periodical.tracking_id == tracking.id).count()
                     member_data["library_count"] = library_count
                     latest = (
                         db.query(Periodical)
@@ -308,28 +286,16 @@ async def get_stack(slug: str) -> Dict[str, Any]:
                     )
                     member_data["cover_periodical_id"] = latest.id if latest else None
             elif m.periodical_id:
-                periodical = (
-                    db.query(Periodical)
-                    .filter(Periodical.id == m.periodical_id)
-                    .first()
-                )
+                periodical = db.query(Periodical).filter(Periodical.id == m.periodical_id).first()
                 if periodical:
                     member_data["title"] = periodical.title
                     member_data["category"] = (
-                        periodical.extra_metadata.get("category")
-                        if periodical.extra_metadata
-                        else None
+                        periodical.extra_metadata.get("category") if periodical.extra_metadata else None
                     )
                     member_data["language"] = periodical.language
                     member_data["type"] = "periodical"
-                    member_data["cover_periodical_id"] = (
-                        periodical.id if periodical.cover_path else None
-                    )
-                    member_data["issue_date"] = (
-                        periodical.issue_date.isoformat()
-                        if periodical.issue_date
-                        else None
-                    )
+                    member_data["cover_periodical_id"] = periodical.id if periodical.cover_path else None
+                    member_data["issue_date"] = periodical.issue_date.isoformat() if periodical.issue_date else None
             members.append(member_data)
 
         stack_dict["members"] = members
@@ -364,20 +330,14 @@ async def update_stack(
         if body.name is not None:
             stripped_name = body.name.strip()
             # Check for duplicate name (excluding current stack)
-            existing = (
-                db.query(Stack)
-                .filter(Stack.name == stripped_name, Stack.id != stack.id)
-                .first()
-            )
+            existing = db.query(Stack).filter(Stack.name == stripped_name, Stack.id != stack.id).first()
             if existing:
                 raise HTTPException(
                     status_code=409,
                     detail=f"A stack named '{stripped_name}' already exists",
                 )
             stack.name = stripped_name
-            stack.slug = _ensure_unique_slug(
-                db, _generate_slug(stripped_name), exclude_id=stack.id
-            )
+            stack.slug = _ensure_unique_slug(db, _generate_slug(stripped_name), exclude_id=stack.id)
 
         if body.description is not None:
             stack.description = body.description.strip() if body.description else None
@@ -463,30 +423,18 @@ async def add_members(
         if body.tracking_ids:
             for tid in body.tracking_ids:
                 # Check if tracking exists
-                tracking = (
-                    db.query(PeriodicalTracking)
-                    .filter(PeriodicalTracking.id == tid)
-                    .first()
-                )
+                tracking = db.query(PeriodicalTracking).filter(PeriodicalTracking.id == tid).first()
                 if not tracking:
                     errors.append(f"Tracking ID {tid} not found")
                     continue
 
                 # Check if already in a stack
-                existing = (
-                    db.query(StackMembership)
-                    .filter(StackMembership.periodical_tracking_id == tid)
-                    .first()
-                )
+                existing = db.query(StackMembership).filter(StackMembership.periodical_tracking_id == tid).first()
                 if existing:
                     if existing.stack_id == stack.id:
                         errors.append(f"'{tracking.title}' is already in this stack")
                     else:
-                        other_stack = (
-                            db.query(Stack)
-                            .filter(Stack.id == existing.stack_id)
-                            .first()
-                        )
+                        other_stack = db.query(Stack).filter(Stack.id == existing.stack_id).first()
                         errors.append(
                             f"'{tracking.title}' is already in stack '{other_stack.name if other_stack else 'unknown'}'"
                         )
@@ -508,20 +456,12 @@ async def add_members(
                     continue
 
                 # Check if already in a stack
-                existing = (
-                    db.query(StackMembership)
-                    .filter(StackMembership.periodical_id == pid)
-                    .first()
-                )
+                existing = db.query(StackMembership).filter(StackMembership.periodical_id == pid).first()
                 if existing:
                     if existing.stack_id == stack.id:
                         errors.append(f"'{periodical.title}' is already in this stack")
                     else:
-                        other_stack = (
-                            db.query(Stack)
-                            .filter(Stack.id == existing.stack_id)
-                            .first()
-                        )
+                        other_stack = db.query(Stack).filter(Stack.id == existing.stack_id).first()
                         errors.append(
                             f"'{periodical.title}' is already in stack '{other_stack.name if other_stack else 'unknown'}'"
                         )
@@ -577,9 +517,7 @@ async def remove_member(slug: str, membership_id: int) -> Dict[str, Any]:
             .first()
         )
         if not membership:
-            raise HTTPException(
-                status_code=404, detail="Membership not found in this stack"
-            )
+            raise HTTPException(status_code=404, detail="Membership not found in this stack")
 
         db.delete(membership)
         db.commit()
@@ -608,18 +546,14 @@ async def get_stack_library(slug: str) -> Dict[str, Any]:
         if not stack:
             raise HTTPException(status_code=404, detail=f"Stack '{slug}' not found")
 
-        memberships = (
-            db.query(StackMembership).filter(StackMembership.stack_id == stack.id).all()
-        )
+        memberships = db.query(StackMembership).filter(StackMembership.stack_id == stack.id).all()
 
         periodicals_list = []
         for m in memberships:
             if m.periodical_tracking_id:
                 # Get all periodicals for this tracking
                 tracking = (
-                    db.query(PeriodicalTracking)
-                    .filter(PeriodicalTracking.id == m.periodical_tracking_id)
-                    .first()
+                    db.query(PeriodicalTracking).filter(PeriodicalTracking.id == m.periodical_tracking_id).first()
                 )
                 if not tracking:
                     continue
@@ -630,19 +564,13 @@ async def get_stack_library(slug: str) -> Dict[str, Any]:
                     .first()
                 )
                 if latest:
-                    issue_count = (
-                        db.query(Periodical)
-                        .filter(Periodical.tracking_id == tracking.id)
-                        .count()
-                    )
+                    issue_count = db.query(Periodical).filter(Periodical.tracking_id == tracking.id).count()
                     periodicals_list.append(
                         {
                             "id": latest.id,
                             "title": tracking.title,
                             "language": latest.language or "English",
-                            "issue_date": latest.issue_date.date().isoformat()
-                            if latest.issue_date
-                            else None,
+                            "issue_date": latest.issue_date.date().isoformat() if latest.issue_date else None,
                             "cover_path": latest.cover_path,
                             "tracking_id": tracking.id,
                             "issue_count": issue_count,
@@ -650,20 +578,14 @@ async def get_stack_library(slug: str) -> Dict[str, Any]:
                         }
                     )
             elif m.periodical_id:
-                p = (
-                    db.query(Periodical)
-                    .filter(Periodical.id == m.periodical_id)
-                    .first()
-                )
+                p = db.query(Periodical).filter(Periodical.id == m.periodical_id).first()
                 if p:
                     periodicals_list.append(
                         {
                             "id": p.id,
                             "title": p.title,
                             "language": p.language or "English",
-                            "issue_date": p.issue_date.date().isoformat()
-                            if p.issue_date
-                            else None,
+                            "issue_date": p.issue_date.date().isoformat() if p.issue_date else None,
                             "cover_path": p.cover_path,
                             "tracking_id": p.tracking_id,
                             "issue_count": 1,

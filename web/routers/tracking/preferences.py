@@ -42,9 +42,7 @@ async def save_tracking_preferences(
 
     def operation(db):
         olid = request.olid or generate_olid(request.title)
-        existing = (
-            db.query(PeriodicalTracking).filter(PeriodicalTracking.olid == olid).first()
-        )
+        existing = db.query(PeriodicalTracking).filter(PeriodicalTracking.olid == olid).first()
 
         if existing:
             existing.title = request.title
@@ -85,9 +83,7 @@ async def save_tracking_preferences(
             "track_all_editions": tracking.track_all_editions,
             "track_new_only": tracking.track_new_only,
             "selected_editions": tracking.selected_editions,
-            "selected_count": len(
-                [v for v in tracking.selected_editions.values() if v]
-            ),
+            "selected_count": len([v for v in tracking.selected_editions.values() if v]),
         }
 
     result = await with_db_session(_shared._session_factory, operation)
@@ -115,15 +111,9 @@ async def reorganize_tracking_files(tracking_id: int) -> Dict[str, Any]:
     """
 
     def operation(db):
-        tracking = (
-            db.query(PeriodicalTracking)
-            .filter(PeriodicalTracking.id == tracking_id)
-            .first()
-        )
+        tracking = db.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
         if not tracking:
-            raise HTTPException(
-                status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND
-            )
+            raise HTTPException(status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND)
 
         from models.database import Periodical
 
@@ -135,9 +125,7 @@ async def reorganize_tracking_files(tracking_id: int) -> Dict[str, Any]:
         organization_pattern = tracking.organization_pattern
 
         # Get all periodicals linked to this tracking record
-        periodicals = (
-            db.query(Periodical).filter(Periodical.tracking_id == tracking_id).all()
-        )
+        periodicals = db.query(Periodical).filter(Periodical.tracking_id == tracking_id).all()
 
         files_reorganized = 0
         files_failed = 0
@@ -146,9 +134,7 @@ async def reorganize_tracking_files(tracking_id: int) -> Dict[str, Any]:
         # Use FileOrganizer to reorganize files with the pattern
         from services.file_organizer import FileOrganizer
 
-        organizer = FileOrganizer(
-            str(library_base_dir), category_prefix=category_prefix
-        )
+        organizer = FileOrganizer(str(library_base_dir), category_prefix=category_prefix)
 
         for periodical in periodicals:
             # Check if this is a special edition
@@ -169,29 +155,22 @@ async def reorganize_tracking_files(tracking_id: int) -> Dict[str, Any]:
                         "issue_date": periodical.issue_date,
                         "year": periodical.issue_date.year,
                         "month_name": periodical.issue_date.strftime("%B"),
-                        "language": get_derived_field(periodical, "language")
-                        or DEFAULT_LANGUAGE,
+                        "language": get_derived_field(periodical, "language") or DEFAULT_LANGUAGE,
                         "volume": get_derived_field(periodical, "volume"),
                         "issue_number": get_derived_field(periodical, "issue_number"),
                     }
 
                     # Get category from metadata
                     category = (
-                        periodical.extra_metadata.get("category")
-                        if periodical.extra_metadata
-                        else DEFAULT_CATEGORY
+                        periodical.extra_metadata.get("category") if periodical.extra_metadata else DEFAULT_CATEGORY
                     )
 
                     # Reorganize using FileOrganizer with custom pattern
-                    new_pdf_path = organizer.organize(
-                        old_pdf_path, metadata, category, organization_pattern
-                    )
+                    new_pdf_path = organizer.organize(old_pdf_path, metadata, category, organization_pattern)
 
                     if new_pdf_path:
                         # Check for UNIQUE constraint conflicts
-                        if check_file_path_conflict(
-                            db, str(new_pdf_path), periodical.id
-                        ):
+                        if check_file_path_conflict(db, str(new_pdf_path), periodical.id):
                             logger.error(
                                 f"Cannot update periodical {periodical.id}: Target path {new_pdf_path} "
                                 f"already exists in database for different periodical."
@@ -202,20 +181,14 @@ async def reorganize_tracking_files(tracking_id: int) -> Dict[str, Any]:
                                 if new_pdf_path.exists() and not old_pdf_path.exists():
                                     shutil.move(str(new_pdf_path), str(old_pdf_path))
                             except Exception as rollback_error:
-                                logger.error(
-                                    f"Failed to rollback file move: {rollback_error}"
-                                )
+                                logger.error(f"Failed to rollback file move: {rollback_error}")
                         else:
                             periodical.file_path = str(new_pdf_path)
                             # Cover path is handled by organizer
                             files_reorganized += 1
-                            logger.info(
-                                f"Reorganized: {periodical.title} ({periodical.issue_date.strftime('%b %Y')})"
-                            )
+                            logger.info(f"Reorganized: {periodical.title} ({periodical.issue_date.strftime('%b %Y')})")
                     else:
-                        logger.warning(
-                            f"Failed to reorganize periodical ID {periodical.id}"
-                        )
+                        logger.warning(f"Failed to reorganize periodical ID {periodical.id}")
                         files_failed += 1
                 except Exception as e:
                     logger.error(
@@ -261,15 +234,9 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
     """Update magazine tracking record"""
 
     def operation(db):
-        tracking = (
-            db.query(PeriodicalTracking)
-            .filter(PeriodicalTracking.id == tracking_id)
-            .first()
-        )
+        tracking = db.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
         if not tracking:
-            raise HTTPException(
-                status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND
-            )
+            raise HTTPException(status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND)
 
         # Store old values for change detection
         old_title = tracking.title
@@ -278,13 +245,8 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
         old_aliases = tracking.search_aliases
         title_changed = "title" in updates and updates["title"] != old_title
         language_changed = "language" in updates and updates["language"] != old_language
-        pattern_changed = (
-            "organization_pattern" in updates
-            and updates["organization_pattern"] != old_pattern
-        )
-        aliases_changed = (
-            "search_aliases" in updates and updates["search_aliases"] != old_aliases
-        )
+        pattern_changed = "organization_pattern" in updates and updates["organization_pattern"] != old_pattern
+        aliases_changed = "search_aliases" in updates and updates["search_aliases"] != old_aliases
 
         if "title" in updates:
             tracking.title = updates["title"]
@@ -301,9 +263,7 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
         if "track_new_only" in updates:
             tracking.track_new_only = updates["track_new_only"]
         if "delete_from_client_on_completion" in updates:
-            tracking.delete_from_client_on_completion = updates[
-                "delete_from_client_on_completion"
-            ]
+            tracking.delete_from_client_on_completion = updates["delete_from_client_on_completion"]
         if "organization_pattern" in updates:
             tracking.organization_pattern = updates["organization_pattern"]
         if "search_aliases" in updates:
@@ -322,9 +282,7 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
             category_prefix = get_category_prefix(_shared._import_config)
 
             # Get all periodicals linked to this tracking record
-            periodicals = (
-                db.query(Periodical).filter(Periodical.tracking_id == tracking_id).all()
-            )
+            periodicals = db.query(Periodical).filter(Periodical.tracking_id == tracking_id).all()
 
             for periodical in periodicals:
                 # Check if this is a special edition
@@ -357,14 +315,9 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
                             # Roll back the file move since we can't update the database
                             try:
                                 old_pdf_path = Path(periodical.file_path)
-                                if (
-                                    Path(new_pdf_path).exists()
-                                    and not old_pdf_path.exists()
-                                ):
+                                if Path(new_pdf_path).exists() and not old_pdf_path.exists():
                                     shutil.move(new_pdf_path, str(old_pdf_path))
-                                    logger.info(
-                                        f"Rolled back file move: {new_pdf_path} -> {old_pdf_path}"
-                                    )
+                                    logger.info(f"Rolled back file move: {new_pdf_path} -> {old_pdf_path}")
                             except Exception as rollback_error:
                                 logger.error(
                                     f"Failed to rollback file move for periodical {periodical.id}: {rollback_error}"
@@ -391,9 +344,7 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
             from models.database import Periodical
 
             # Get all periodicals linked to this tracking record
-            periodicals = (
-                db.query(Periodical).filter(Periodical.tracking_id == tracking_id).all()
-            )
+            periodicals = db.query(Periodical).filter(Periodical.tracking_id == tracking_id).all()
 
             for periodical in periodicals:
                 # Update language to match tracking
@@ -412,11 +363,7 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
         if pattern_changed:
             from models.database import Periodical
 
-            files_affected_by_pattern = (
-                db.query(Periodical)
-                .filter(Periodical.tracking_id == tracking_id)
-                .count()
-            )
+            files_affected_by_pattern = db.query(Periodical).filter(Periodical.tracking_id == tracking_id).count()
 
         # Extract tracking data before closing session
         tracking_data = {
@@ -482,9 +429,7 @@ async def update_tracking(tracking_id: int, updates: dict) -> Dict[str, Any]:
         try:
             reset_count = _shared._feed_sync_service.reset_skipped_entries()
             if reset_count > 0:
-                logger.info(
-                    f"Reset {reset_count} feed entries for re-evaluation after tracking update"
-                )
+                logger.info(f"Reset {reset_count} feed entries for re-evaluation after tracking update")
         except Exception:
             logger.warning("Failed to reset skipped feed entries after tracking update")
 
