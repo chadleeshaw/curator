@@ -866,12 +866,8 @@ class TestDownloadResume:  # pylint: disable=too-many-public-methods
             mock_resp = Mock()
             mock_resp.headers = {"Accept-Ranges": "bytes"}
 
-            with patch(
-                "clients.internet_archive.httpx.head", return_value=mock_resp
-            ):
-                assert (
-                    client._check_resume_support("https://example.com/file.pdf") is True
-                )
+            with patch("clients.internet_archive.httpx.head", return_value=mock_resp):
+                assert client._check_resume_support("https://example.com/file.pdf") is True
 
     def test_check_resume_support_no_ranges(self):
         """Test resume check returns False when server doesn't support ranges."""
@@ -881,13 +877,8 @@ class TestDownloadResume:  # pylint: disable=too-many-public-methods
             mock_resp = Mock()
             mock_resp.headers = {"Accept-Ranges": "none"}
 
-            with patch(
-                "clients.internet_archive.httpx.head", return_value=mock_resp
-            ):
-                assert (
-                    client._check_resume_support("https://example.com/file.pdf")
-                    is False
-                )
+            with patch("clients.internet_archive.httpx.head", return_value=mock_resp):
+                assert client._check_resume_support("https://example.com/file.pdf") is False
 
     def test_check_resume_support_head_fails(self):
         """Test resume check returns False when HEAD request fails."""
@@ -900,10 +891,7 @@ class TestDownloadResume:  # pylint: disable=too-many-public-methods
                 "clients.internet_archive.httpx.head",
                 side_effect=httpx.ConnectError("timeout"),
             ):
-                assert (
-                    client._check_resume_support("https://example.com/file.pdf")
-                    is False
-                )
+                assert client._check_resume_support("https://example.com/file.pdf") is False
 
     # --- Cleanup helpers ---
 
@@ -1171,9 +1159,7 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
 
             # HEAD for staleness check inside loop
             head_resp_stale = Mock()
-            head_resp_stale.headers = httpx.Headers(
-                {"ETag": '"etag123"', "Content-Length": "10240"}
-            )
+            head_resp_stale.headers = httpx.Headers({"ETag": '"etag123"', "Content-Length": "10240"})
 
             # GET: server ignores Range, returns 200 with full content
             get_response = Mock()
@@ -1280,9 +1266,7 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
 
             with (
                 patch.object(client, "_get_download_strategy", return_value=strategy),
-                patch.object(
-                    client, "_cleanup_part_files", side_effect=tracking_cleanup
-                ),
+                patch.object(client, "_cleanup_part_files", side_effect=tracking_cleanup),
                 patch(
                     "clients.internet_archive.httpx.head",
                     side_effect=[
@@ -1333,9 +1317,7 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
 
             # Server now returns a different ETag → content changed
             head_for_support = Mock(headers={"Accept-Ranges": "bytes"})
-            head_for_stale = Mock(
-                headers={"ETag": '"new-etag"', "Content-Length": "12000"}
-            )
+            head_for_stale = Mock(headers={"ETag": '"new-etag"', "Content-Length": "12000"})
 
             get_response = Mock()
             get_response.status_code = 200
@@ -1375,9 +1357,7 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
             ):
                 client._download_file(job)
 
-            assert len(cleanup_called) >= 1, (
-                "Expected _cleanup_part_files on stale content"
-            )
+            assert len(cleanup_called) >= 1, "Expected _cleanup_part_files on stale content"
             from core.constants.internet_archive import IA_STATUS_COMPLETED
 
             assert job.status == IA_STATUS_COMPLETED
@@ -1448,9 +1428,7 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
             ):
                 client._download_file(job)
 
-            assert len(cleanup_called) >= 1, (
-                "Expected cleanup when server has no Range support"
-            )
+            assert len(cleanup_called) >= 1, "Expected cleanup when server has no Range support"
             from core.constants.internet_archive import IA_STATUS_COMPLETED
 
             assert job.status == IA_STATUS_COMPLETED
@@ -1547,9 +1525,7 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
             cleanup_called = []
 
             with (
-                patch.object(
-                    client, "_get_download_strategy", return_value=compress_strategy
-                ),
+                patch.object(client, "_get_download_strategy", return_value=compress_strategy),
                 patch.object(
                     client,
                     "_cleanup_part_files",
@@ -1567,9 +1543,7 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
 
             assert job.status == IA_STATUS_FAILED
             # cleanup must be called on every failed attempt for compress downloads
-            assert len(cleanup_called) > 0, (
-                "Expected .part cleanup for compress failure"
-            )
+            assert len(cleanup_called) > 0, "Expected .part cleanup for compress failure"
 
     # ------------------------------------------------------------------
     # 8. 206 with no Content-Length → expected_size unchanged
@@ -2011,9 +1985,7 @@ class TestOnProgressCallback:
 
             with (
                 patch("clients.internet_archive.get_item"),
-                patch.object(
-                    client, "_get_download_strategy", return_value=no_match_strategy
-                ),
+                patch.object(client, "_get_download_strategy", return_value=no_match_strategy),
             ):
                 client._download_file(job)
 
@@ -2043,9 +2015,7 @@ class TestOnProgressCallback:
 
             with (
                 patch("clients.internet_archive.get_item"),
-                patch.object(
-                    client, "_get_download_strategy", return_value=bad_ext_strategy
-                ),
+                patch.object(client, "_get_download_strategy", return_value=bad_ext_strategy),
             ):
                 client._download_file(job)
 

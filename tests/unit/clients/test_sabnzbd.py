@@ -67,9 +67,7 @@ def test_sabnzbd_submit():
     with patch.object(client, "_api_call") as mock_api:
         mock_api.return_value = {"status": True, "nzo_ids": ["nzo_12345"]}
 
-        job_id = client.submit(
-            "https://example.com/nzb/test.nzb", title="Test Magazine"
-        )
+        job_id = client.submit("https://example.com/nzb/test.nzb", title="Test Magazine")
 
         assert job_id == "nzo_12345"
         mock_api.assert_called_once()
@@ -87,16 +85,12 @@ def test_sabnzbd_submit_with_category():
     with patch.object(client, "_api_call") as mock_api:
         mock_api.return_value = {"status": True, "nzo_ids": ["nzo_12345"]}
 
-        job_id = client.submit(
-            "https://example.com/nzb/test.nzb", title="Test Magazine", category="books"
-        )
+        job_id = client.submit("https://example.com/nzb/test.nzb", title="Test Magazine", category="books")
 
         assert job_id == "nzo_12345"
         # Verify category was passed
         call_args = mock_api.call_args[0]
-        params = mock_api.call_args[1].get(
-            "params", call_args[1] if len(call_args) > 1 else {}
-        )
+        params = mock_api.call_args[1].get("params", call_args[1] if len(call_args) > 1 else {})
         assert params.get("cat") == "books"
 
 
@@ -377,9 +371,7 @@ def test_sabnzbd_title_sanitization():
 
         # Verify the title was sanitized in the API call
         call_args = mock_api.call_args
-        params = call_args[1].get(
-            "params", call_args[0][1] if len(call_args[0]) > 1 else {}
-        )
+        params = call_args[1].get("params", call_args[0][1] if len(call_args[0]) > 1 else {})
         sanitized_title = params.get("nzbname", "")
 
         assert "/" not in sanitized_title
@@ -408,17 +400,13 @@ def test_sabnzbd_submit_content_success():
         mock_response.raise_for_status = Mock()
         mock_post.return_value = mock_response
 
-        job_id = client.submit_content(
-            nzb_content=nzb_content, title="Test Magazine", category="books"
-        )
+        job_id = client.submit_content(nzb_content=nzb_content, title="Test Magazine", category="books")
 
         assert job_id == "nzo_content_123"
         mock_post.assert_called_once()
         # Verify it used multipart file upload
         call_kwargs = mock_post.call_args
-        assert "files" in call_kwargs.kwargs or "files" in (
-            call_kwargs[1] if len(call_kwargs) > 1 else {}
-        )
+        assert "files" in call_kwargs.kwargs or "files" in (call_kwargs[1] if len(call_kwargs) > 1 else {})
 
 
 def test_sabnzbd_submit_content_failure():
@@ -458,9 +446,7 @@ def test_sabnzbd_submit_content_with_category():
         mock_response.raise_for_status = Mock()
         mock_post.return_value = mock_response
 
-        job_id = client.submit_content(
-            nzb_content=nzb_content, title="Test", category="magazines"
-        )
+        job_id = client.submit_content(nzb_content=nzb_content, title="Test", category="magazines")
         assert job_id == "nzo_content_123"
 
         # Verify category was included in params

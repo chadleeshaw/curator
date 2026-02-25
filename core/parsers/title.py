@@ -86,12 +86,8 @@ class TitleMatcher:
     def __init__(self, threshold: int = DEFAULT_FUZZY_MATCH_THRESHOLD):
         self.threshold = threshold
         # Compile regex patterns once for performance
-        self._compiled_hash_patterns = [
-            re.compile(p) for p in self.HASHED_RELEASE_PATTERNS
-        ]
-        self._compiled_title_patterns = [
-            (re.compile(p[0], re.IGNORECASE), p[1]) for p in self.TITLE_PATTERNS
-        ]
+        self._compiled_hash_patterns = [re.compile(p) for p in self.HASHED_RELEASE_PATTERNS]
+        self._compiled_title_patterns = [(re.compile(p[0], re.IGNORECASE), p[1]) for p in self.TITLE_PATTERNS]
 
     def validate_before_parsing(self, title: str) -> bool:
         """
@@ -171,14 +167,10 @@ class TitleMatcher:
         )
 
         # Remove torrent tracker suffixes like [ettv], [rartv], [rarbg]
-        title = re.sub(
-            r"\[(?:ettv|rartv|rarbg|cttv|eztv)\]$", "", title, flags=re.IGNORECASE
-        )
+        title = re.sub(r"\[(?:ettv|rartv|rarbg|cttv|eztv)\]$", "", title, flags=re.IGNORECASE)
 
         # Remove common download/unpack prefixes
-        title = re.sub(
-            r"^(?:Unpack|Download|Get|Read)\s+", "", title, flags=re.IGNORECASE
-        )
+        title = re.sub(r"^(?:Unpack|Download|Get|Read)\s+", "", title, flags=re.IGNORECASE)
 
         # Remove language indicators (German, French, etc.) that appear as words
         # Pattern matches language names/codes with word boundaries (spaces, dots, etc.)
@@ -203,18 +195,12 @@ class TitleMatcher:
         title = re.sub(r"\s+True\s+Pdf[\s\-]*", " ", title, flags=re.IGNORECASE)
 
         # Remove release group tags (e.g., "-LORENZ-xpost", "[hash]-xpost") - BEFORE quality removal
-        title = re.sub(
-            r"-[A-Z][A-Za-z0-9]+(?:-[a-z]+)?\[[\w]+\].*$", "", title
-        )  # -LORENZ[hash]
+        title = re.sub(r"-[A-Z][A-Za-z0-9]+(?:-[a-z]+)?\[[\w]+\].*$", "", title)  # -LORENZ[hash]
         title = re.sub(r"\[[\w]+\](?:-[a-z]+)?$", "", title)  # [hash]-xpost or [hash]
-        title = re.sub(
-            r"-[A-Z][A-Za-z0-9]+(?:-[a-z]+)?$", "", title
-        )  # -LORENZ-xpost or -LORENZ
+        title = re.sub(r"-[A-Z][A-Za-z0-9]+(?:-[a-z]+)?$", "", title)  # -LORENZ-xpost or -LORENZ
 
         # Remove quality indicators (480p, 720p, 1080p, 2160p, x264, x265, h264, h265, DD5.1, 10bit, etc.)
-        title = re.sub(
-            r"[\.\s]*(480|720|1080|2160|320)[ip]", "", title, flags=re.IGNORECASE
-        )
+        title = re.sub(r"[\.\s]*(480|720|1080|2160|320)[ip]", "", title, flags=re.IGNORECASE)
         title = re.sub(r"[\.\s]*[xh][\W_]?26[45]", "", title, flags=re.IGNORECASE)
         title = re.sub(r"[\.\s]*DD[\W_]?5[\W_]?1", "", title, flags=re.IGNORECASE)
         title = re.sub(r"[\.\s]*(8|10)bit", "", title, flags=re.IGNORECASE)
@@ -252,20 +238,14 @@ class TitleMatcher:
         # Normalize common country code variations (USA -> US, etc.)
         # Note: UK is kept as UK (not normalized to GB) for better user readability
         # Sort by length (longest first) to avoid replacing "United States" after "USA" in "USA United States"
-        sorted_normalizations = sorted(
-            COUNTRY_CODE_NORMALIZATIONS.items(), key=lambda x: len(x[0]), reverse=True
-        )
+        sorted_normalizations = sorted(COUNTRY_CODE_NORMALIZATIONS.items(), key=lambda x: len(x[0]), reverse=True)
         for long_form, short_form in sorted_normalizations:
             # Match whole words only with word boundaries
-            title = re.sub(
-                rf"\b{re.escape(long_form)}\b", short_form, title, flags=re.IGNORECASE
-            )
+            title = re.sub(rf"\b{re.escape(long_form)}\b", short_form, title, flags=re.IGNORECASE)
 
         # Remove duplicate country indicators
         # Match any country code followed by itself
-        title = re.sub(
-            r"\b(US|UK|DE|FR|ES|IT|NL|AU|CA)\s+\1\b", r"\1", title, flags=re.IGNORECASE
-        )
+        title = re.sub(r"\b(US|UK|DE|FR|ES|IT|NL|AU|CA)\s+\1\b", r"\1", title, flags=re.IGNORECASE)
 
         # Remove issue numbers that appear as metadata: "No 123", "Issue 456", "No.789", "#42", "Vol 5", "Vol.5"
         # Must do this AFTER replacing dots with spaces
@@ -275,12 +255,8 @@ class TitleMatcher:
             title,
             flags=re.IGNORECASE,
         )
-        title = re.sub(
-            r"\s+(?:No|Issue|Vol|Volume|Edition)\s+\d+", "", title, flags=re.IGNORECASE
-        )  # Remove remaining
-        title = re.sub(
-            r"\s+#\d+(?:\s+(?:19|20)\d{2})?$", "", title, flags=re.IGNORECASE
-        )
+        title = re.sub(r"\s+(?:No|Issue|Vol|Volume|Edition)\s+\d+", "", title, flags=re.IGNORECASE)  # Remove remaining
+        title = re.sub(r"\s+#\d+(?:\s+(?:19|20)\d{2})?$", "", title, flags=re.IGNORECASE)
 
         # Remove date patterns like "-October 2016", "-Jan 2025", "August 2020" etc. (common in magazine filenames)
         # Match with or without leading dash/hyphen
@@ -480,9 +456,7 @@ class TitleMatcher:
 
         return (title, False, "")
 
-    def match(
-        self, title1: str, title2: str, use_delimiters: bool = False
-    ) -> Tuple[bool, int]:
+    def match(self, title1: str, title2: str, use_delimiters: bool = False) -> Tuple[bool, int]:
         """
         Check if two titles are similar.
 
@@ -495,9 +469,7 @@ class TitleMatcher:
             Tuple of (is_match, score) where score is 0-100
         """
         if use_delimiters:
-            _, _, fuzzy_score = self.fuzzy_match_with_delimiters(
-                title1, title2, threshold=self.threshold / 100.0
-            )
+            _, _, fuzzy_score = self.fuzzy_match_with_delimiters(title1, title2, threshold=self.threshold / 100.0)
             score = int(fuzzy_score * 100)
             is_match = fuzzy_score >= (self.threshold / 100.0)
         else:
@@ -506,9 +478,7 @@ class TitleMatcher:
 
         return is_match, score
 
-    def _extract_issue_volume_from_title(
-        self, title: str
-    ) -> Tuple[Optional[int], Optional[int]]:
+    def _extract_issue_volume_from_title(self, title: str) -> Tuple[Optional[int], Optional[int]]:
         """
         Extract volume and issue numbers from title.
 
@@ -585,19 +555,13 @@ class TitleMatcher:
             # Skip if this looks like "No 123" or "Vol 5" (issue/volume numbers, not periodical variants)
             if i + 1 < len(words):
                 next_word = words[i + 1].strip(".,;:!?()[]{}\"'")
-                if (
-                    clean_word in ["no", "vol", "volume", "issue", "v"]
-                    and next_word.isdigit()
-                ):
+                if clean_word in ["no", "vol", "volume", "issue", "v"] and next_word.isdigit():
                     continue
 
             # Check if it's a country code (US, UK, DE, FR, etc.)
             # Skip ambiguous codes that are common English words (IT, IN, AT, etc.)
             clean_word_upper = clean_word.upper()
-            if (
-                clean_word_upper in ISO_COUNTRIES
-                and clean_word_upper not in AMBIGUOUS_ISO_CODES
-            ):
+            if clean_word_upper in ISO_COUNTRIES and clean_word_upper not in AMBIGUOUS_ISO_CODES:
                 return clean_word
 
             # Check if it's a regional name (france, germany, etc.)
@@ -672,28 +636,20 @@ class TitleMatcher:
             return (False, 0)
 
         # Step 2: Extract volume/issue numbers from both titles
-        provider_vol, provider_issue = self._extract_issue_volume_from_title(
-            provider_title
-        )
-        library_vol, library_issue = self._extract_issue_volume_from_title(
-            library_title
-        )
+        provider_vol, provider_issue = self._extract_issue_volume_from_title(provider_title)
+        library_vol, library_issue = self._extract_issue_volume_from_title(library_title)
 
         # Step 3: Check volume/issue match if both have them
         if provider_vol is not None and library_vol is not None:
             if provider_vol != library_vol:
                 # Different volumes - not a match
-                logger.debug(
-                    f"Volume mismatch: provider vol {provider_vol} vs library vol {library_vol}"
-                )
+                logger.debug(f"Volume mismatch: provider vol {provider_vol} vs library vol {library_vol}")
                 return (False, 0)
 
         if provider_issue is not None and library_issue is not None:
             if provider_issue != library_issue:
                 # Different issue numbers - not a match
-                logger.debug(
-                    f"Issue mismatch: provider issue {provider_issue} vs library issue {library_issue}"
-                )
+                logger.debug(f"Issue mismatch: provider issue {provider_issue} vs library issue {library_issue}")
                 return (False, 0)
 
         # Step 4: Date range matching (if dates available)
@@ -705,9 +661,7 @@ class TitleMatcher:
                 logger.debug(f"Match by volume/issue: {provider_title}")
                 return (True, title_score)
             # Otherwise rely on title match only
-            logger.debug(
-                f"No date or volume/issue for '{provider_title}', using title-only match"
-            )
+            logger.debug(f"No date or volume/issue for '{provider_title}', using title-only match")
             return (True, title_score)
 
         # Normalize both dates to naive (remove timezone info) for comparison
@@ -720,10 +674,7 @@ class TitleMatcher:
         date_diff_days = abs((provider_date - library_date).days)
 
         # Same month check
-        same_month = (
-            provider_date.year == library_date.year
-            and provider_date.month == library_date.month
-        )
+        same_month = provider_date.year == library_date.year and provider_date.month == library_date.month
 
         # Adjacent dates check (within tolerance, even across month boundaries)
         within_tolerance = date_diff_days <= date_tolerance_days
@@ -732,9 +683,7 @@ class TitleMatcher:
 
         if is_date_match:
             # Reduce confidence score based on date distance
-            date_penalty = min(
-                date_diff_days * DATE_PENALTY_MULTIPLIER, MAX_DATE_PENALTY
-            )
+            date_penalty = min(date_diff_days * DATE_PENALTY_MULTIPLIER, MAX_DATE_PENALTY)
             final_score = max(title_score - date_penalty, 0)
             return (True, final_score)
         else:
