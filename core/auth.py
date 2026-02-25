@@ -80,7 +80,10 @@ class AuthManager:
 
     def create_token(self, username: str) -> str:
         """
-        Create a JWT token for authenticated user.
+        Create a JWT token for the authenticated user.
+
+        The token includes both ``username`` (for display) and ``user_id``
+        (for database filtering) so that queries can scope data per user.
 
         Args:
             username: Username to encode in the token
@@ -88,13 +91,21 @@ class AuthManager:
         Returns:
             JWT token string valid for TOKEN_EXPIRATION_HOURS hours
         """
+        user_id = self._get_user_id(username)
         payload = {
             "username": username,
+            "user_id": user_id,
             "iat": utc_now(),
             "exp": utc_now() + timedelta(hours=TOKEN_EXPIRATION_HOURS),
         }
         token = jwt.encode(payload, self.jwt_secret, algorithm=JWT_ALGORITHM)
         return token
+
+    def _get_user_id(self, username: str) -> Optional[int]:
+        """Return the database ID for the given username, or None if not found."""
+        with get_db_session(self.session_factory) as session:
+            creds = session.query(Credentials).filter_by(username=username.lower()).first()
+            return creds.id if creds else None
 
     def verify_token(self, token: str) -> Tuple[bool, Optional[str]]:
         """
@@ -114,6 +125,19 @@ class AuthManager:
             return False, None
         except jwt.InvalidTokenError:
             return False, None
+
+    def get_user_id_from_token(self, token: str) -> Optional[int]:
+        """
+        Extract user_id from a valid JWT token.
+
+        Returns:
+            user_id integer if the token is valid and contains user_id, otherwise None.
+        """
+        try:
+            payload = jwt.decode(token, self.jwt_secret, algorithms=[JWT_ALGORITHM])
+            return payload.get("user_id")
+        except jwt.InvalidTokenError:
+            return None
 
     def update_credentials(self, username: str, old_password: str, new_password: str) -> Tuple[bool, str]:
         """

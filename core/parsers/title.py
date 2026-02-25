@@ -5,7 +5,7 @@ import re
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional
 
-from fuzzywuzzy import fuzz
+from rapidfuzz import fuzz
 
 from core.constants.country import ISO_COUNTRIES
 from core.constants.periodical import (

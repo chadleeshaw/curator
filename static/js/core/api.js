@@ -49,9 +49,20 @@ export class APIClient {
     }
 
     const { headers: customHeaders, ...restOptions } = options;
+    const method = (options.method || 'GET').toUpperCase();
+
+    // Attach CSRF token for state-changing requests (double-submit cookie pattern).
+    const csrfToken = document.cookie
+      .split('; ')
+      .find((r) => r.startsWith('csrf_token='))
+      ?.split('=')[1];
+
     const headers = {
       ...customHeaders,
       Authorization: `Bearer ${token}`,
+      ...(csrfToken && !['GET', 'HEAD', 'OPTIONS'].includes(method)
+        ? { 'X-CSRF-Token': csrfToken }
+        : {}),
     };
 
     try {

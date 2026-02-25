@@ -13,7 +13,7 @@ import base64
 import logging
 from typing import Any, Dict, List, Optional, Union
 
-import requests
+import httpx
 
 from core.constants.app import HTTP_REQUEST_TIMEOUT
 from core.constants.download_clients import (
@@ -52,7 +52,7 @@ class NZBGetClient(DownloadClient):
 
         try:
             url = f"{self.api_url}/jsonrpc"
-            response = requests.post(
+            response = httpx.post(
                 url,
                 json=payload,
                 auth=(self.username, self.password),
@@ -409,17 +409,17 @@ class NZBGetClient(DownloadClient):
                 "message": "Unexpected response from NZBGet",
             }
 
-        except requests.exceptions.Timeout:
+        except httpx.TimeoutException:
             return {
                 "success": False,
                 "message": "Connection timeout — check your API URL and network",
             }
-        except requests.exceptions.ConnectionError:
+        except httpx.ConnectError:
             return {
                 "success": False,
                 "message": "Connection failed — check your API URL and network",
             }
-        except requests.exceptions.HTTPError as e:
+        except httpx.HTTPStatusError as e:
             if e.response.status_code == 401:
                 return {
                     "success": False,

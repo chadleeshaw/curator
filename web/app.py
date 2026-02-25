@@ -5,6 +5,7 @@ Main FastAPI application module.
 # pylint: disable=too-many-lines
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
@@ -58,8 +59,11 @@ from web.middleware.auth import AuthMiddleware
 # Import documentation configuration
 from web.docs import OPENAPI_METADATA, OPENAPI_TAGS, DOCS_URLS
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure structured logging
+from core.logging_config import configure_logging
+
+_log_level = os.environ.get("CURATOR_LOG_LEVEL", "INFO")
+configure_logging(level=_log_level)
 logger = logging.getLogger(__name__)
 
 
@@ -1033,14 +1037,25 @@ app = FastAPI(
     **DOCS_URLS,
 )
 
-# Add CORS middleware
+# Add CORS middleware — origins loaded from config/env (CURATOR_CORS_ORIGINS or cors_origins in config.yaml)
+_cors_origins = app_state.config_loader.get_cors_origins()
+if _cors_origins == ["*"]:
+    logger.warning(
+        "CORS allow_origins is ['*'] (all origins). "
+        "Restrict this in production via cors_origins in config.yaml or CURATOR_CORS_ORIGINS env var."
+    )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure this in production
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add CSRF protection middleware (double-submit cookie pattern)
+from web.middleware.csrf import CSRFMiddleware
+
+app.add_middleware(CSRFMiddleware)
 
 # Add rate limiting middleware
 from web.middleware import RateLimitMiddleware

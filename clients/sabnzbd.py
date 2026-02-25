@@ -7,7 +7,7 @@ import logging
 import re
 from typing import Any, Dict, List, Optional, Union
 
-import requests
+import httpx
 
 from core.constants.app import HTTP_REQUEST_TIMEOUT
 from core.constants.download_clients import (
@@ -68,7 +68,7 @@ class SABnzbdClient(DownloadClient):
 
         try:
             url = f"{self.api_url}/api"
-            response = requests.get(url, params=params, timeout=HTTP_REQUEST_TIMEOUT)
+            response = httpx.get(url, params=params, timeout=HTTP_REQUEST_TIMEOUT)
             response.raise_for_status()
             return response.json()
         except Exception as e:
@@ -142,7 +142,7 @@ class SABnzbdClient(DownloadClient):
             }
 
             url = f"{self.api_url}/api"
-            response = requests.post(url, params=params, files=files, timeout=HTTP_REQUEST_TIMEOUT)
+            response = httpx.post(url, params=params, files=files, timeout=HTTP_REQUEST_TIMEOUT)
             response.raise_for_status()
             result = response.json()
 
@@ -458,12 +458,12 @@ class SABnzbdClient(DownloadClient):
                 "message": "Unexpected response from SABnzbd",
             }
 
-        except requests.exceptions.Timeout:
+        except httpx.TimeoutException:
             return {
                 "success": False,
                 "message": "Connection timeout - check your API URL and network",
             }
-        except requests.exceptions.ConnectionError:
+        except httpx.ConnectError:
             return {
                 "success": False,
                 "message": "Connection failed - check your API URL and network",

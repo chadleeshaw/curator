@@ -8,7 +8,7 @@ import logging
 import threading
 from typing import Any, Dict, List, Optional
 
-import requests
+import httpx
 
 from core.constants.app import HTTP_REQUEST_TIMEOUT
 from core.constants.download_clients import (
@@ -29,7 +29,7 @@ class QBittorrentClient(DownloadClient):
         self.username = config.get("username", "admin")
         self.password = config.get("password", "")
         self.default_category = config.get("default_category", "curator")
-        self._session = requests.Session()
+        self._session = httpx.Client()
         self._authenticated = False
         self._lock = threading.Lock()
 
@@ -60,7 +60,7 @@ class QBittorrentClient(DownloadClient):
                 return self._login()
             return True
 
-    def _request(self, method: str, path: str, **kwargs) -> Optional[requests.Response]:
+    def _request(self, method: str, path: str, **kwargs) -> Optional[httpx.Response]:
         """
         Make an authenticated request to the qBittorrent API.
 
@@ -88,10 +88,10 @@ class QBittorrentClient(DownloadClient):
             response.raise_for_status()
             return response
 
-        except requests.exceptions.Timeout:
+        except httpx.TimeoutException:
             logger.error(f"qBittorrent request timeout: {path}")
             return None
-        except requests.exceptions.ConnectionError:
+        except httpx.ConnectError:
             logger.error(f"qBittorrent connection error: {path}")
             return None
         except Exception as e:

@@ -443,6 +443,18 @@ server:
   host: 0.0.0.0
   port: 8000
 
+# CORS allowed origins
+# Controls which browser origins can make requests to the API.
+# Default: ["*"] (all origins) — RESTRICT THIS IN PRODUCTION.
+#
+# Examples:
+#   cors_origins: ["http://localhost:8000"]
+#   cors_origins: ["https://curator.myserver.com", "http://192.168.1.10:8000"]
+#
+# Can also be set via environment variable (comma-separated):
+#   CURATOR_CORS_ORIGINS=https://curator.myserver.com,http://192.168.1.10:8000
+cors_origins: ["*"]
+
 # JWT Authentication Secret
 # Used for signing JWT tokens for user authentication
 # If not specified, a secret will be auto-generated on first run and saved to config
@@ -471,6 +483,16 @@ jwt_secret: null # Auto-generated if null/empty
 # Server:
 #   CURATOR_HOST - Server host (default: 0.0.0.0)
 #   CURATOR_PORT - Server port (default: 8000)
+#
+# CORS / Security:
+#   CURATOR_CORS_ORIGINS - Comma-separated allowed origins (e.g. "https://curator.example.com")
+#
+# Credentials (keep API keys out of config.yaml by using env vars instead):
+#   CURATOR_NEWSNAB_API_KEY - Newsnab/Prowlarr provider api_key
+#   CURATOR_TORZNAB_API_KEY - Torznab provider api_key
+#   CURATOR_SABNZBD_API_KEY - SABnzbd api_key
+#   CURATOR_NZBGET_PASSWORD - NZBGet password
+#   CURATOR_QBITTORRENT_PASSWORD - qBittorrent password
 #
 # Special modes:
 #   CURATOR_DRY_RUN - Set to "true" for dry run mode (no file moves)
