@@ -597,17 +597,17 @@ class TestDeduplicationKeyWarning:
         }
 
     def test_no_warning_when_title_ends_in_number(self, caplog):
-        """Titles like '500 Uncensored Sex Acts 126' embed the issue in the fuzzy group ID —
+        """Titles like '500 Cooking Ideas 126' embed the issue in the fuzzy group ID —
         no warning should fire because the key is already unique per issue."""
         import logging
 
         svc = self._make_service()
-        result = self._make_result("500 Uncensored Sex Acts 126")
+        result = self._make_result("500 Cooking Ideas 126")
 
         with caplog.at_level(logging.WARNING, logger="services.download.search_service"):
             key = svc._get_deduplication_key(result)
 
-        assert key == "500-uncensored-sex-acts-126"
+        assert key == "500-cooking-ideas-126"
         assert "no date or issue discriminator" not in caplog.text
 
     def test_no_warning_when_metadata_issue_present(self, caplog):
@@ -637,6 +637,6 @@ class TestDeduplicationKeyWarning:
     def test_keys_are_unique_per_bare_number_issue(self):
         """Each bare-number issue produces a distinct dedup key, so no collapsing occurs."""
         svc = self._make_service()
-        titles = [f"500 Uncensored Sex Acts {n}" for n in [126, 127, 128]]
+        titles = [f"500 Cooking Ideas {n}" for n in [126, 127, 128]]
         keys = [svc._get_deduplication_key(self._make_result(t)) for t in titles]
         assert len(set(keys)) == 3

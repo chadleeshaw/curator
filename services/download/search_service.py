@@ -214,7 +214,7 @@ class SearchService:
 
         if len(key_parts) == 1:
             # Suppress the warning when the fuzzy group ID itself ends in a number — that means
-            # the issue discriminator is embedded in the title (e.g. "500 Uncensored Sex Acts 126")
+            # the issue discriminator is embedded in the title (e.g. "500 Cooking Ideas 126")
             # and the key is already unique per issue without needing a separate date/volume/issue field.
             if not re.search(r"-\d+$", fuzzy_group):
                 logger.warning(
