@@ -533,6 +533,8 @@ class TestDownloadStrategyUrlEncoding:
             assert " " not in strategy["url"], f"Unencoded space in URL: {strategy['url']}"
             assert "%23" in strategy["url"]
 
+
+class TestTextPDFConstants:
     """Test Internet Archive constants for Text PDF handling"""
 
     def test_text_pdf_formats_defined(self):
