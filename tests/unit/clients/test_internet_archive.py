@@ -22,6 +22,7 @@ import zipfile
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
+import httpx
 import pytest
 
 # Path setup handled by conftest.py
@@ -36,14 +37,14 @@ from core.constants.internet_archive import (
 )
 
 
-def _make_get_mock(response):
-    """Wrap a response Mock so requests.get can be used as a context manager.
+def _make_stream_mock(response):
+    """Wrap a response Mock so httpx.stream can be used as a context manager.
 
-    Production code uses ``with requests.get(...) as response:``.  Plain
+    Production code uses ``with httpx.stream(...) as response:``.  Plain
     ``Mock()`` objects don't implement the context manager protocol, so we
     configure ``__enter__`` to return the response and ``__exit__`` to be a
     no-op.  The returned object is suitable for use as ``return_value`` in a
-    ``patch("...requests.get", return_value=_make_get_mock(resp))`` call.
+    ``patch("...httpx.stream", return_value=_make_stream_mock(resp))`` call.
     """
     cm = Mock()
     cm.__enter__ = Mock(return_value=response)
@@ -865,8 +866,12 @@ class TestDownloadResume:  # pylint: disable=too-many-public-methods
             mock_resp = Mock()
             mock_resp.headers = {"Accept-Ranges": "bytes"}
 
-            with patch("clients.internet_archive.requests.head", return_value=mock_resp):
-                assert client._check_resume_support("https://example.com/file.pdf") is True
+            with patch(
+                "clients.internet_archive.httpx.head", return_value=mock_resp
+            ):
+                assert (
+                    client._check_resume_support("https://example.com/file.pdf") is True
+                )
 
     def test_check_resume_support_no_ranges(self):
         """Test resume check returns False when server doesn't support ranges."""
@@ -876,21 +881,29 @@ class TestDownloadResume:  # pylint: disable=too-many-public-methods
             mock_resp = Mock()
             mock_resp.headers = {"Accept-Ranges": "none"}
 
-            with patch("clients.internet_archive.requests.head", return_value=mock_resp):
-                assert client._check_resume_support("https://example.com/file.pdf") is False
+            with patch(
+                "clients.internet_archive.httpx.head", return_value=mock_resp
+            ):
+                assert (
+                    client._check_resume_support("https://example.com/file.pdf")
+                    is False
+                )
 
     def test_check_resume_support_head_fails(self):
         """Test resume check returns False when HEAD request fails."""
         with tempfile.TemporaryDirectory() as tmpdir:
             client = self._create_client(tmpdir)
 
-            import requests
+            import httpx
 
             with patch(
-                "clients.internet_archive.requests.head",
-                side_effect=requests.exceptions.ConnectionError("timeout"),
+                "clients.internet_archive.httpx.head",
+                side_effect=httpx.ConnectError("timeout"),
             ):
-                assert client._check_resume_support("https://example.com/file.pdf") is False
+                assert (
+                    client._check_resume_support("https://example.com/file.pdf")
+                    is False
+                )
 
     # --- Cleanup helpers ---
 
@@ -1078,7 +1091,7 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
     def test_fresh_download_saves_part_meta(self):
         """On first attempt with no existing .part file, _save_part_meta is
         called once with the response headers (ETag, Last-Modified)."""
-        from requests.structures import CaseInsensitiveDict
+        # httpx.Headers provides case-insensitive headers
 
         with tempfile.TemporaryDirectory() as tmpdir:
             client = self._create_client(tmpdir)
@@ -1088,7 +1101,7 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
             mock_response = Mock()
             mock_response.status_code = 200
             # Use CaseInsensitiveDict so .get("content-length") works like real requests
-            mock_response.headers = CaseInsensitiveDict(
+            mock_response.headers = httpx.Headers(
                 {
                     "Content-Length": "10240",
                     "ETag": '"etag123"',
@@ -1096,14 +1109,14 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
                 }
             )
             # Stream: emit one chunk then stop
-            mock_response.iter_content = Mock(return_value=iter([b"x" * 10240]))
+            mock_response.iter_bytes = Mock(return_value=iter([b"x" * 10240]))
             mock_response.raise_for_status = Mock()
 
             with (
                 patch("clients.internet_archive.get_item"),
                 patch(
-                    "clients.internet_archive.requests.get",
-                    return_value=_make_get_mock(mock_response),
+                    "clients.internet_archive.httpx.stream",
+                    return_value=_make_stream_mock(mock_response),
                 ),
                 patch.object(client, "_get_download_strategy", return_value=strategy),
                 patch.object(client, "_save_part_meta") as mock_save_meta,
@@ -1132,7 +1145,7 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
           - use 'wb' (overwrite) file mode
           - re-save part meta with fresh Content-Length
         """
-        from requests.structures import CaseInsensitiveDict
+        # httpx.Headers provides case-insensitive headers
 
         with tempfile.TemporaryDirectory() as tmpdir:
             client = self._create_client(tmpdir)
@@ -1158,19 +1171,21 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
 
             # HEAD for staleness check inside loop
             head_resp_stale = Mock()
-            head_resp_stale.headers = CaseInsensitiveDict({"ETag": '"etag123"', "Content-Length": "10240"})
+            head_resp_stale.headers = httpx.Headers(
+                {"ETag": '"etag123"', "Content-Length": "10240"}
+            )
 
             # GET: server ignores Range, returns 200 with full content
             get_response = Mock()
             get_response.status_code = 200  # NOT 206
-            get_response.headers = CaseInsensitiveDict(
+            get_response.headers = httpx.Headers(
                 {
                     "Content-Length": "10240",
                     "ETag": '"etag123"',
                     "Last-Modified": "Wed, 01 Jan 2025 00:00:00 GMT",
                 }
             )
-            get_response.iter_content = Mock(return_value=iter([b"y" * 10240]))
+            get_response.iter_bytes = Mock(return_value=iter([b"y" * 10240]))
             get_response.raise_for_status = Mock()
 
             # The dedup while-loop checks partial_file.exists() before the download
@@ -1190,12 +1205,12 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
                 patch("clients.internet_archive.get_item"),
                 patch.object(client, "_get_download_strategy", return_value=strategy),
                 patch(
-                    "clients.internet_archive.requests.head",
+                    "clients.internet_archive.httpx.head",
                     side_effect=[head_resp_support, head_resp_stale],
                 ),
                 patch(
-                    "clients.internet_archive.requests.get",
-                    return_value=_make_get_mock(get_response),
+                    "clients.internet_archive.httpx.stream",
+                    return_value=_make_stream_mock(get_response),
                 ),
                 patch("pathlib.Path.exists", _selective_exists),
             ):
@@ -1218,7 +1233,7 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
         raises RequestException, the partial download is cleaned up and a fresh
         download proceeds without a Range header.
         """
-        import requests as req_lib
+        # httpx used directly
 
         with tempfile.TemporaryDirectory() as tmpdir:
             client = self._create_client(tmpdir)
@@ -1249,7 +1264,7 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
             get_response = Mock()
             get_response.status_code = 200
             get_response.headers = {"Content-Length": "10240"}
-            get_response.iter_content = Mock(return_value=iter([b"z" * 10240]))
+            get_response.iter_bytes = Mock(return_value=iter([b"z" * 10240]))
             get_response.raise_for_status = Mock()
 
             # Skip the dedup loop's .part existence check on first call
@@ -1265,17 +1280,19 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
 
             with (
                 patch.object(client, "_get_download_strategy", return_value=strategy),
-                patch.object(client, "_cleanup_part_files", side_effect=tracking_cleanup),
+                patch.object(
+                    client, "_cleanup_part_files", side_effect=tracking_cleanup
+                ),
                 patch(
-                    "clients.internet_archive.requests.head",
+                    "clients.internet_archive.httpx.head",
                     side_effect=[
                         Mock(headers={"Accept-Ranges": "bytes"}),
-                        req_lib.exceptions.ConnectionError("timeout"),
+                        httpx.ConnectError("timeout"),
                     ],
                 ),
                 patch(
-                    "clients.internet_archive.requests.get",
-                    return_value=_make_get_mock(get_response),
+                    "clients.internet_archive.httpx.stream",
+                    return_value=_make_stream_mock(get_response),
                 ),
                 patch("pathlib.Path.exists", _selective_exists),
             ):
@@ -1316,12 +1333,14 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
 
             # Server now returns a different ETag → content changed
             head_for_support = Mock(headers={"Accept-Ranges": "bytes"})
-            head_for_stale = Mock(headers={"ETag": '"new-etag"', "Content-Length": "12000"})
+            head_for_stale = Mock(
+                headers={"ETag": '"new-etag"', "Content-Length": "12000"}
+            )
 
             get_response = Mock()
             get_response.status_code = 200
             get_response.headers = {"Content-Length": "12000"}
-            get_response.iter_content = Mock(return_value=iter([b"z" * 12000]))
+            get_response.iter_bytes = Mock(return_value=iter([b"z" * 12000]))
             get_response.raise_for_status = Mock()
 
             cleanup_called = []
@@ -1345,18 +1364,20 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
                     side_effect=lambda pf: cleanup_called.append(str(pf)),
                 ),
                 patch(
-                    "clients.internet_archive.requests.head",
+                    "clients.internet_archive.httpx.head",
                     side_effect=[head_for_support, head_for_stale],
                 ),
                 patch(
-                    "clients.internet_archive.requests.get",
-                    return_value=_make_get_mock(get_response),
+                    "clients.internet_archive.httpx.stream",
+                    return_value=_make_stream_mock(get_response),
                 ),
                 patch("pathlib.Path.exists", _selective_exists),
             ):
                 client._download_file(job)
 
-            assert len(cleanup_called) >= 1, "Expected _cleanup_part_files on stale content"
+            assert len(cleanup_called) >= 1, (
+                "Expected _cleanup_part_files on stale content"
+            )
             from core.constants.internet_archive import IA_STATUS_COMPLETED
 
             assert job.status == IA_STATUS_COMPLETED
@@ -1391,7 +1412,7 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
             get_response = Mock()
             get_response.status_code = 200
             get_response.headers = {"Content-Length": "10240"}
-            get_response.iter_content = Mock(return_value=iter([b"z" * 10240]))
+            get_response.iter_bytes = Mock(return_value=iter([b"z" * 10240]))
             get_response.raise_for_status = Mock()
 
             cleanup_called = []
@@ -1416,18 +1437,20 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
                 ),
                 # HEAD returns "none" → server does not support Range
                 patch(
-                    "clients.internet_archive.requests.head",
+                    "clients.internet_archive.httpx.head",
                     return_value=Mock(headers={"Accept-Ranges": "none"}),
                 ),
                 patch(
-                    "clients.internet_archive.requests.get",
-                    return_value=_make_get_mock(get_response),
+                    "clients.internet_archive.httpx.stream",
+                    return_value=_make_stream_mock(get_response),
                 ),
                 patch("pathlib.Path.exists", _selective_exists),
             ):
                 client._download_file(job)
 
-            assert len(cleanup_called) >= 1, "Expected cleanup when server has no Range support"
+            assert len(cleanup_called) >= 1, (
+                "Expected cleanup when server has no Range support"
+            )
             from core.constants.internet_archive import IA_STATUS_COMPLETED
 
             assert job.status == IA_STATUS_COMPLETED
@@ -1456,7 +1479,7 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
             get_response = Mock()
             get_response.status_code = 200
             get_response.headers = {"Content-Length": "10240"}
-            get_response.iter_content = Mock(return_value=iter([b"z" * 10240]))
+            get_response.iter_bytes = Mock(return_value=iter([b"z" * 10240]))
             get_response.raise_for_status = Mock()
 
             cleanup_called = []
@@ -1480,8 +1503,8 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
                     side_effect=lambda pf: cleanup_called.append(str(pf)),
                 ),
                 patch(
-                    "clients.internet_archive.requests.get",
-                    return_value=_make_get_mock(get_response),
+                    "clients.internet_archive.httpx.stream",
+                    return_value=_make_stream_mock(get_response),
                 ),
                 patch("pathlib.Path.exists", _selective_exists),
             ):
@@ -1502,7 +1525,7 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
         RequestException the .part file must be cleaned up between retries
         (not preserved like direct downloads).
         """
-        import requests as req_lib
+        # httpx used directly
 
         with tempfile.TemporaryDirectory() as tmpdir:
             client = self._create_client(tmpdir)
@@ -1524,15 +1547,17 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
             cleanup_called = []
 
             with (
-                patch.object(client, "_get_download_strategy", return_value=compress_strategy),
+                patch.object(
+                    client, "_get_download_strategy", return_value=compress_strategy
+                ),
                 patch.object(
                     client,
                     "_cleanup_part_files",
                     side_effect=lambda pf: cleanup_called.append(str(pf)),
                 ),
                 patch(
-                    "clients.internet_archive.requests.get",
-                    side_effect=req_lib.exceptions.ConnectionError("network down"),
+                    "clients.internet_archive.httpx.stream",
+                    side_effect=httpx.ConnectError("network down"),
                 ),
                 patch("clients.internet_archive.time.sleep"),  # skip retry delays
             ):
@@ -1542,7 +1567,9 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
 
             assert job.status == IA_STATUS_FAILED
             # cleanup must be called on every failed attempt for compress downloads
-            assert len(cleanup_called) > 0, "Expected .part cleanup for compress failure"
+            assert len(cleanup_called) > 0, (
+                "Expected .part cleanup for compress failure"
+            )
 
     # ------------------------------------------------------------------
     # 8. 206 with no Content-Length → expected_size unchanged
@@ -1576,7 +1603,7 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
             get_response.status_code = 206  # Resume accepted
             get_response.headers = {}  # No Content-Length in 206 response
             remaining = 10240 - resume_offset
-            get_response.iter_content = Mock(return_value=iter([b"y" * remaining]))
+            get_response.iter_bytes = Mock(return_value=iter([b"y" * remaining]))
             get_response.raise_for_status = Mock()
 
             # Skip the dedup loop's .part existence check on first call
@@ -1593,15 +1620,15 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
             with (
                 patch.object(client, "_get_download_strategy", return_value=strategy),
                 patch(
-                    "clients.internet_archive.requests.head",
+                    "clients.internet_archive.httpx.head",
                     side_effect=[
                         Mock(headers={"Accept-Ranges": "bytes"}),
                         Mock(headers={"ETag": '"etag"', "Content-Length": "10240"}),
                     ],
                 ),
                 patch(
-                    "clients.internet_archive.requests.get",
-                    return_value=_make_get_mock(get_response),
+                    "clients.internet_archive.httpx.stream",
+                    return_value=_make_stream_mock(get_response),
                 ),
                 patch("pathlib.Path.exists", _selective_exists),
             ):
@@ -1623,7 +1650,7 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
         If all streaming chunks are empty so the .part file ends up 0 bytes,
         the download must be marked failed (IOError path at line 828).
         """
-        import requests as req_lib
+        # httpx used directly
 
         with tempfile.TemporaryDirectory() as tmpdir:
             client = self._create_client(tmpdir)
@@ -1634,14 +1661,14 @@ class TestDownloadResumeDownloadFilePaths:  # pylint: disable=too-many-public-me
             get_response.status_code = 200
             get_response.headers = {"Content-Length": "10240"}
             # No chunks at all → file stays at 0 bytes
-            get_response.iter_content = Mock(return_value=iter([]))
+            get_response.iter_bytes = Mock(return_value=iter([]))
             get_response.raise_for_status = Mock()
 
             with (
                 patch.object(client, "_get_download_strategy", return_value=strategy),
                 patch(
-                    "clients.internet_archive.requests.get",
-                    return_value=_make_get_mock(get_response),
+                    "clients.internet_archive.httpx.stream",
+                    return_value=_make_stream_mock(get_response),
                 ),
                 patch("clients.internet_archive.time.sleep"),
             ):
@@ -1901,7 +1928,7 @@ class TestOnProgressCallback:
 
     def test_notify_called_on_status_downloading(self):
         """on_progress is invoked when the job transitions to 'downloading'."""
-        from requests.structures import CaseInsensitiveDict
+        # httpx.Headers provides case-insensitive headers
 
         with tempfile.TemporaryDirectory() as tmpdir:
             client = self._create_client(tmpdir)
@@ -1912,15 +1939,15 @@ class TestOnProgressCallback:
 
             mock_response = Mock()
             mock_response.status_code = 200
-            mock_response.headers = CaseInsensitiveDict({"Content-Length": "100"})
-            mock_response.iter_content = Mock(return_value=iter([b"x" * 100]))
+            mock_response.headers = httpx.Headers({"Content-Length": "100"})
+            mock_response.iter_bytes = Mock(return_value=iter([b"x" * 100]))
             mock_response.raise_for_status = Mock()
 
             with (
                 patch("clients.internet_archive.get_item"),
                 patch(
-                    "clients.internet_archive.requests.get",
-                    return_value=_make_get_mock(mock_response),
+                    "clients.internet_archive.httpx.stream",
+                    return_value=_make_stream_mock(mock_response),
                 ),
                 patch.object(client, "_get_download_strategy", return_value=strategy),
                 patch.object(client, "_save_part_meta"),
@@ -1932,7 +1959,7 @@ class TestOnProgressCallback:
 
     def test_notify_called_on_completed(self):
         """on_progress is invoked when the job reaches 'completed'."""
-        from requests.structures import CaseInsensitiveDict
+        # httpx.Headers provides case-insensitive headers
         from core.constants.internet_archive import IA_STATUS_COMPLETED
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1951,15 +1978,15 @@ class TestOnProgressCallback:
 
             mock_response = Mock()
             mock_response.status_code = 200
-            mock_response.headers = CaseInsensitiveDict({"Content-Length": "100"})
-            mock_response.iter_content = Mock(return_value=iter([b"x" * 100]))
+            mock_response.headers = httpx.Headers({"Content-Length": "100"})
+            mock_response.iter_bytes = Mock(return_value=iter([b"x" * 100]))
             mock_response.raise_for_status = Mock()
 
             with (
                 patch("clients.internet_archive.get_item"),
                 patch(
-                    "clients.internet_archive.requests.get",
-                    return_value=_make_get_mock(mock_response),
+                    "clients.internet_archive.httpx.stream",
+                    return_value=_make_stream_mock(mock_response),
                 ),
                 patch.object(client, "_get_download_strategy", return_value=strategy),
                 patch.object(client, "_save_part_meta"),
@@ -1984,7 +2011,9 @@ class TestOnProgressCallback:
 
             with (
                 patch("clients.internet_archive.get_item"),
-                patch.object(client, "_get_download_strategy", return_value=no_match_strategy),
+                patch.object(
+                    client, "_get_download_strategy", return_value=no_match_strategy
+                ),
             ):
                 client._download_file(job)
 
@@ -2014,7 +2043,9 @@ class TestOnProgressCallback:
 
             with (
                 patch("clients.internet_archive.get_item"),
-                patch.object(client, "_get_download_strategy", return_value=bad_ext_strategy),
+                patch.object(
+                    client, "_get_download_strategy", return_value=bad_ext_strategy
+                ),
             ):
                 client._download_file(job)
 
@@ -2049,7 +2080,7 @@ class TestOnProgressCallback:
 
     def test_notify_fires_every_5_percent(self):
         """on_progress fires once per 5-percentage-point bucket during streaming."""
-        from requests.structures import CaseInsensitiveDict
+        # httpx.Headers provides case-insensitive headers
 
         with tempfile.TemporaryDirectory() as tmpdir:
             client = self._create_client(tmpdir)
@@ -2068,15 +2099,15 @@ class TestOnProgressCallback:
             chunks = [b"x" * 5] * 20  # 20 × 5 = 100 bytes
             mock_response = Mock()
             mock_response.status_code = 200
-            mock_response.headers = CaseInsensitiveDict({"Content-Length": "100"})
-            mock_response.iter_content = Mock(return_value=iter(chunks))
+            mock_response.headers = httpx.Headers({"Content-Length": "100"})
+            mock_response.iter_bytes = Mock(return_value=iter(chunks))
             mock_response.raise_for_status = Mock()
 
             with (
                 patch("clients.internet_archive.get_item"),
                 patch(
-                    "clients.internet_archive.requests.get",
-                    return_value=_make_get_mock(mock_response),
+                    "clients.internet_archive.httpx.stream",
+                    return_value=_make_stream_mock(mock_response),
                 ),
                 patch.object(client, "_get_download_strategy", return_value=strategy),
                 patch.object(client, "_save_part_meta"),
@@ -2096,7 +2127,7 @@ class TestOnProgressCallback:
 
     def test_notify_not_called_for_same_bucket(self):
         """When multiple chunks fall in the same 5 % bucket, only one notify fires."""
-        from requests.structures import CaseInsensitiveDict
+        # httpx.Headers provides case-insensitive headers
 
         with tempfile.TemporaryDirectory() as tmpdir:
             client = self._create_client(tmpdir)
@@ -2115,15 +2146,15 @@ class TestOnProgressCallback:
             chunks = [b"x"] * 100
             mock_response = Mock()
             mock_response.status_code = 200
-            mock_response.headers = CaseInsensitiveDict({"Content-Length": "100"})
-            mock_response.iter_content = Mock(return_value=iter(chunks))
+            mock_response.headers = httpx.Headers({"Content-Length": "100"})
+            mock_response.iter_bytes = Mock(return_value=iter(chunks))
             mock_response.raise_for_status = Mock()
 
             with (
                 patch("clients.internet_archive.get_item"),
                 patch(
-                    "clients.internet_archive.requests.get",
-                    return_value=_make_get_mock(mock_response),
+                    "clients.internet_archive.httpx.stream",
+                    return_value=_make_stream_mock(mock_response),
                 ),
                 patch.object(client, "_get_download_strategy", return_value=strategy),
                 patch.object(client, "_save_part_meta"),

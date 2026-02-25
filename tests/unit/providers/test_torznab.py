@@ -6,8 +6,8 @@ Test suite for Torznab Search Provider
 import xml.etree.ElementTree as ET
 from unittest.mock import Mock, patch
 
+import httpx
 import pytest
-import requests
 
 # Path setup handled by conftest.py
 
@@ -193,7 +193,9 @@ def test_initialization_raises_without_api_url():
 
 def test_search_returns_results(provider):
     """Test that search returns parsed results from XML response."""
-    with patch("providers.torznab.requests.get", return_value=_mock_response(SEARCH_XML_MAGNET)):
+    with patch(
+        "providers.torznab.httpx.get", return_value=_mock_response(SEARCH_XML_MAGNET)
+    ):
         results = provider.search("National Geographic")
 
     assert len(results) == 2
@@ -203,7 +205,9 @@ def test_search_returns_results(provider):
 
 def test_search_result_has_magnet_url(provider):
     """Test that search results contain the magnet URL."""
-    with patch("providers.torznab.requests.get", return_value=_mock_response(SEARCH_XML_MAGNET)):
+    with patch(
+        "providers.torznab.httpx.get", return_value=_mock_response(SEARCH_XML_MAGNET)
+    ):
         results = provider.search("National Geographic")
 
     assert results[0].url == "magnet:?xt=urn:btih:abc123&dn=Nat+Geo"
@@ -211,7 +215,9 @@ def test_search_result_has_magnet_url(provider):
 
 def test_search_result_metadata(provider):
     """Test that search results include seeders, leechers, and size metadata."""
-    with patch("providers.torznab.requests.get", return_value=_mock_response(SEARCH_XML_MAGNET)):
+    with patch(
+        "providers.torznab.httpx.get", return_value=_mock_response(SEARCH_XML_MAGNET)
+    ):
         results = provider.search("National Geographic")
 
     meta = results[0].raw_metadata
@@ -224,7 +230,7 @@ def test_search_result_metadata(provider):
 def test_search_falls_back_to_enclosure_url(provider):
     """Test that search uses enclosure URL when no magnet link is present."""
     with patch(
-        "providers.torznab.requests.get",
+        "providers.torznab.httpx.get",
         return_value=_mock_response(SEARCH_XML_ENCLOSURE),
     ):
         results = provider.search("Some Magazine")
@@ -236,7 +242,7 @@ def test_search_falls_back_to_enclosure_url(provider):
 def test_search_falls_back_to_link_element(provider):
     """Test that search uses <link> element as last resort for URL."""
     with patch(
-        "providers.torznab.requests.get",
+        "providers.torznab.httpx.get",
         return_value=_mock_response(SEARCH_XML_LINK_FALLBACK),
     ):
         results = provider.search("Fallback Magazine")
@@ -247,7 +253,9 @@ def test_search_falls_back_to_link_element(provider):
 
 def test_search_skips_items_without_url(provider):
     """Test that items with no downloadable URL are skipped."""
-    with patch("providers.torznab.requests.get", return_value=_mock_response(SEARCH_XML_NO_URL)):
+    with patch(
+        "providers.torznab.httpx.get", return_value=_mock_response(SEARCH_XML_NO_URL)
+    ):
         results = provider.search("Bad Item")
 
     assert results == []
@@ -256,7 +264,7 @@ def test_search_skips_items_without_url(provider):
 def test_search_skips_items_without_title(provider):
     """Test that items without a title element are skipped."""
     with patch(
-        "providers.torznab.requests.get",
+        "providers.torznab.httpx.get",
         return_value=_mock_response(SEARCH_XML_NO_TITLE),
     ):
         results = provider.search("orphan")
@@ -266,7 +274,9 @@ def test_search_skips_items_without_title(provider):
 
 def test_search_empty_channel(provider):
     """Test that an empty channel returns an empty list."""
-    with patch("providers.torznab.requests.get", return_value=_mock_response(SEARCH_XML_EMPTY)):
+    with patch(
+        "providers.torznab.httpx.get", return_value=_mock_response(SEARCH_XML_EMPTY)
+    ):
         results = provider.search("nothing")
 
     assert results == []
@@ -274,7 +284,9 @@ def test_search_empty_channel(provider):
 
 def test_search_with_aliases_deduplicates(provider):
     """Test that alias searches merge results and deduplicate by URL."""
-    with patch("providers.torznab.requests.get", return_value=_mock_response(SEARCH_XML_MAGNET)):
+    with patch(
+        "providers.torznab.httpx.get", return_value=_mock_response(SEARCH_XML_MAGNET)
+    ):
         results = provider.search("National Geographic", aliases=["Nat Geo"])
 
     # Both searches return the same URLs — results should be deduplicated
@@ -284,7 +296,9 @@ def test_search_with_aliases_deduplicates(provider):
 
 def test_search_includes_api_key_in_request(provider):
     """Test that search request includes apikey parameter."""
-    with patch("providers.torznab.requests.get", return_value=_mock_response(SEARCH_XML_EMPTY)) as mock_get:
+    with patch(
+        "providers.torznab.httpx.get", return_value=_mock_response(SEARCH_XML_EMPTY)
+    ) as mock_get:
         provider.search("test")
 
     call_kwargs = mock_get.call_args[1]
@@ -294,7 +308,9 @@ def test_search_includes_api_key_in_request(provider):
 def test_search_omits_api_key_when_empty():
     """Test that apikey is omitted from request when not configured."""
     p = TorznabProvider({"api_url": "http://localhost:9696"})
-    with patch("providers.torznab.requests.get", return_value=_mock_response(SEARCH_XML_EMPTY)) as mock_get:
+    with patch(
+        "providers.torznab.httpx.get", return_value=_mock_response(SEARCH_XML_EMPTY)
+    ) as mock_get:
         p.search("test")
 
     call_kwargs = mock_get.call_args[1]
@@ -304,8 +320,8 @@ def test_search_omits_api_key_when_empty():
 def test_search_returns_empty_on_connection_error(provider):
     """Test that search returns [] on ConnectionError."""
     with patch(
-        "providers.torznab.requests.get",
-        side_effect=requests.exceptions.ConnectionError("down"),
+        "providers.torznab.httpx.get",
+        side_effect=httpx.ConnectError("down"),
     ):
         results = provider.search("test")
 
@@ -314,7 +330,7 @@ def test_search_returns_empty_on_connection_error(provider):
 
 def test_search_returns_empty_on_timeout(provider):
     """Test that search returns [] on Timeout."""
-    with patch("providers.torznab.requests.get", side_effect=requests.exceptions.Timeout):
+    with patch("providers.torznab.httpx.get", side_effect=httpx.ReadTimeout("timeout")):
         results = provider.search("test")
 
     assert results == []
@@ -322,7 +338,9 @@ def test_search_returns_empty_on_timeout(provider):
 
 def test_search_returns_empty_on_bad_xml(provider):
     """Test that search returns [] when XML response is malformed."""
-    with patch("providers.torznab.requests.get", return_value=_mock_response(b"not xml at all")):
+    with patch(
+        "providers.torznab.httpx.get", return_value=_mock_response(b"not xml at all")
+    ):
         results = provider.search("test")
 
     assert results == []
@@ -335,7 +353,7 @@ def test_search_returns_empty_on_bad_xml(provider):
 
 def test_test_connection_success(provider):
     """Test that test_connection returns success with indexer title."""
-    with patch("providers.torznab.requests.get", return_value=_mock_response(CAPS_XML)):
+    with patch("providers.torznab.httpx.get", return_value=_mock_response(CAPS_XML)):
         result = provider.test_connection()
 
     assert result["success"] is True
@@ -344,7 +362,9 @@ def test_test_connection_success(provider):
 
 def test_test_connection_includes_api_key(provider):
     """Test that test_connection sends the apikey parameter."""
-    with patch("providers.torznab.requests.get", return_value=_mock_response(CAPS_XML)) as mock_get:
+    with patch(
+        "providers.torznab.httpx.get", return_value=_mock_response(CAPS_XML)
+    ) as mock_get:
         provider.test_connection()
 
     call_kwargs = mock_get.call_args[1]
@@ -355,7 +375,9 @@ def test_test_connection_includes_api_key(provider):
 def test_test_connection_no_server_element(provider):
     """Test that test_connection works even if <server> element is absent."""
     xml_no_server = b"""<?xml version="1.0"?><caps></caps>"""
-    with patch("providers.torznab.requests.get", return_value=_mock_response(xml_no_server)):
+    with patch(
+        "providers.torznab.httpx.get", return_value=_mock_response(xml_no_server)
+    ):
         result = provider.test_connection()
 
     assert result["success"] is True
@@ -364,7 +386,7 @@ def test_test_connection_no_server_element(provider):
 
 def test_test_connection_timeout(provider):
     """Test that test_connection handles Timeout gracefully."""
-    with patch("providers.torznab.requests.get", side_effect=requests.exceptions.Timeout):
+    with patch("providers.torznab.httpx.get", side_effect=httpx.ReadTimeout("timeout")):
         result = provider.test_connection()
 
     assert result["success"] is False
@@ -374,13 +396,16 @@ def test_test_connection_timeout(provider):
 def test_test_connection_connection_error(provider):
     """Test that test_connection handles ConnectionError gracefully."""
     with patch(
-        "providers.torznab.requests.get",
-        side_effect=requests.exceptions.ConnectionError("down"),
+        "providers.torznab.httpx.get",
+        side_effect=httpx.ConnectError("down"),
     ):
         result = provider.test_connection()
 
     assert result["success"] is False
-    assert "failed" in result["message"].lower() or "connection" in result["message"].lower()
+    assert (
+        "failed" in result["message"].lower()
+        or "connection" in result["message"].lower()
+    )
 
 
 # ---------------------------------------------------------------------------

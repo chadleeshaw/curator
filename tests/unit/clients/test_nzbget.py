@@ -84,7 +84,9 @@ def test_nzbget_submit():
     with patch.object(client, "_api_call") as mock_api:
         mock_api.return_value = 123  # NZBID returned as number
 
-        job_id = client.submit("https://example.com/nzb/test.nzb", title="Test Magazine")
+        job_id = client.submit(
+            "https://example.com/nzb/test.nzb", title="Test Magazine"
+        )
 
         assert job_id == "123"
         mock_api.assert_called_once()
@@ -93,7 +95,9 @@ def test_nzbget_submit():
         call_args = mock_api.call_args[0]
         assert call_args[0] == "append"
         params = call_args[1]
-        assert params[0] == "Test Magazine.nzb"  # Filename (display name with .nzb extension)
+        assert (
+            params[0] == "Test Magazine.nzb"
+        )  # Filename (display name with .nzb extension)
         assert params[1] == "https://example.com/nzb/test.nzb"  # Content (URL to fetch)
         assert params[2] == ""  # Category (empty)
         assert params[3] == 50  # Priority (high)
@@ -114,7 +118,9 @@ def test_nzbget_submit_with_category():
     with patch.object(client, "_api_call") as mock_api:
         mock_api.return_value = 456
 
-        job_id = client.submit("https://example.com/nzb/test.nzb", title="Test Magazine", category="books")
+        job_id = client.submit(
+            "https://example.com/nzb/test.nzb", title="Test Magazine", category="books"
+        )
 
         assert job_id == "456"
         # Verify category was passed in correct position (index 2)
@@ -232,7 +238,14 @@ def test_nzbget_get_status_post_processing():
     config = {"password": "test-password"}
     client = NZBGetClient(config)
 
-    for pp_status in ["PP_QUEUED", "UNPACKING", "REPAIRING", "VERIFYING_SOURCES", "EXECUTING_SCRIPT", "PP_FINISHED"]:
+    for pp_status in [
+        "PP_QUEUED",
+        "UNPACKING",
+        "REPAIRING",
+        "VERIFYING_SOURCES",
+        "EXECUTING_SCRIPT",
+        "PP_FINISHED",
+    ]:
         with patch.object(client, "_api_call") as mock_api:
             mock_api.return_value = [
                 {
@@ -247,7 +260,9 @@ def test_nzbget_get_status_post_processing():
 
             status = client.get_status("123")
 
-            assert status["status"] == "downloading", f"Expected 'downloading' for {pp_status}"
+            assert status["status"] == "downloading", (
+                f"Expected 'downloading' for {pp_status}"
+            )
             assert "extra_status" in status
 
 
@@ -460,7 +475,9 @@ def test_nzbget_get_completed_downloads():
         assert len(downloads) == 2
         assert downloads[0]["job_id"] == "123"
         assert downloads[0]["title"] == "Magazine 1"
-        assert downloads[0]["file_path"] == "/downloads/mag1"  # DestDir (FinalDir empty)
+        assert (
+            downloads[0]["file_path"] == "/downloads/mag1"
+        )  # DestDir (FinalDir empty)
         assert downloads[1]["job_id"] == "124"
         assert downloads[1]["title"] == "Magazine 2"
         assert downloads[1]["file_path"] == "/library/mag2"  # FinalDir preferred
@@ -528,13 +545,15 @@ def test_nzbget_api_call_json_rpc():
 
     client = NZBGetClient(config)
 
-    with patch("clients.nzbget.requests.post") as mock_post:
+    with patch("clients.nzbget.httpx.post") as mock_post:
         mock_response = Mock()
         mock_response.json.return_value = {"result": 123, "error": None}
         mock_response.raise_for_status = Mock()
         mock_post.return_value = mock_response
 
-        result = client._api_call("append", ["name.nzb", "https://example.com/nzb", "", 50, False, False])
+        result = client._api_call(
+            "append", ["name.nzb", "https://example.com/nzb", "", 50, False, False]
+        )
 
         # Verify JSON-RPC format
         call_args = mock_post.call_args
@@ -553,7 +572,7 @@ def test_nzbget_api_call_error_handling():
 
     client = NZBGetClient(config)
 
-    with patch("clients.nzbget.requests.post") as mock_post:
+    with patch("clients.nzbget.httpx.post") as mock_post:
         mock_post.side_effect = Exception("Connection refused")
 
         result = client._api_call("listgroups", [])
@@ -571,7 +590,7 @@ def test_nzbget_api_call_with_error_response():
 
     client = NZBGetClient(config)
 
-    with patch("clients.nzbget.requests.post") as mock_post:
+    with patch("clients.nzbget.httpx.post") as mock_post:
         mock_response = Mock()
         mock_response.json.return_value = {
             "result": None,
@@ -603,7 +622,9 @@ def test_nzbget_submit_content_success():
     with patch.object(client, "_api_call") as mock_api:
         mock_api.return_value = 12345  # NZBGet returns NZBID as integer
 
-        job_id = client.submit_content(nzb_content=nzb_content, title="Test Magazine", category="books")
+        job_id = client.submit_content(
+            nzb_content=nzb_content, title="Test Magazine", category="books"
+        )
 
         assert job_id == "12345"
         mock_api.assert_called_once()
@@ -716,10 +737,15 @@ def test_nzbget_progress_calculation():
     client = NZBGetClient(config)
 
     # Normal progress
-    assert client._calculate_progress({"DownloadedSizeMB": 500, "FileSizeMB": 1000}) == 50
+    assert (
+        client._calculate_progress({"DownloadedSizeMB": 500, "FileSizeMB": 1000}) == 50
+    )
 
     # Complete
-    assert client._calculate_progress({"DownloadedSizeMB": 1000, "FileSizeMB": 1000}) == 100
+    assert (
+        client._calculate_progress({"DownloadedSizeMB": 1000, "FileSizeMB": 1000})
+        == 100
+    )
 
     # Zero file size (shouldn't divide by zero)
     assert client._calculate_progress({"DownloadedSizeMB": 0, "FileSizeMB": 0}) == 0
