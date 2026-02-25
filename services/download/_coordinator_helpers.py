@@ -44,7 +44,7 @@ def get_client_for_provider(
         if "archive.org" in url or url.startswith("ia:"):
             if "internet_archive" in download_clients:
                 logger.debug(
-                    "Provider '%s' not in routing map, but URL indicates " "Internet Archive - using IA client",
+                    "Provider '%s' not in routing map, but URL indicates Internet Archive - using IA client",
                     provider,
                 )
                 client_type = "internet_archive"

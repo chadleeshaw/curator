@@ -1,6 +1,9 @@
 [MASTER]
 # Ignore external libraries
 ignore=node_modules,.venv,.node_modules
+# alembic is installed in the Docker container but not in the local venv;
+# suppress false-positive import errors for it.
+ignored-modules=alembic,alembic.config,alembic.command
 
 [MESSAGES CONTROL]
 disable=

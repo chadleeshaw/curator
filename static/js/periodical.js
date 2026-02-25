@@ -19,9 +19,7 @@ import {
 
 import {
   initMetadata,
-  showNotification,
   viewMetadata,
-  displayMetadata,
   closeMetadataModal,
   enableMetadataEdit,
   cancelMetadataEdit,
@@ -33,7 +31,6 @@ import {
 
 import {
   initActions,
-  openDeleteModal,
   closeDeleteModal,
   deleteIssue,
   confirmDeleteIssue,
@@ -51,8 +48,6 @@ import {
   toggleIssueSelection,
   selectAllIssues,
   deselectAllIssues,
-  updateBulkSelectionCount,
-  getSelectedIds,
   openBulkMoveModal,
   closeBulkMoveModal,
   confirmBulkMove,

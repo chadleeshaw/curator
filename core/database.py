@@ -83,7 +83,7 @@ class DatabaseManager:
             # Pre-Alembic database: the schema matches revision 001 (no user_id columns).
             # Stamp at 001 so Alembic knows the baseline, then run upgrade to apply
             # any subsequent migrations (e.g. 002 adds user_id columns).
-            logger.info("Existing pre-Alembic database detected. " "Stamping at revision 001, then upgrading to head.")
+            logger.info("Existing pre-Alembic database detected. Stamping at revision 001, then upgrading to head.")
             command.stamp(alembic_cfg, "001")
             command.upgrade(alembic_cfg, "head")
             logger.info("Database upgraded to Alembic head revision.")
