@@ -241,12 +241,23 @@ def test_add_user_stores_lowercase():
 def test_list_users_returns_dicts():
     """Test that list_users returns a list of dicts without password hashes"""
     mock_user1 = Mock()
-    mock_user1.to_dict.return_value = {"id": 1, "username": "alice", "api_token": None}
+    mock_user1.to_public_dict.return_value = {
+        "id": 1,
+        "username": "alice",
+        "is_admin": True,
+    }
     mock_user2 = Mock()
-    mock_user2.to_dict.return_value = {"id": 2, "username": "bob", "api_token": None}
+    mock_user2.to_public_dict.return_value = {
+        "id": 2,
+        "username": "bob",
+        "is_admin": False,
+    }
 
     mock_session = Mock()
-    mock_session.query.return_value.order_by.return_value.all.return_value = [mock_user1, mock_user2]
+    mock_session.query.return_value.order_by.return_value.all.return_value = [
+        mock_user1,
+        mock_user2,
+    ]
     mock_session_factory = Mock(return_value=mock_session)
 
     auth_manager = AuthManager(mock_session_factory, "secret")
@@ -288,3 +299,133 @@ def test_delete_user_not_found():
     assert success is False
     assert "not found" in message.lower()
     mock_session.delete.assert_not_called()
+
+
+# ==============================================================================
+# Cross-user data isolation
+# ==============================================================================
+
+
+def test_update_credentials_only_updates_target_user():
+    """update_credentials must not change another user's password."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from models.database import Base
+
+    engine = create_engine(
+        "sqlite:///file:iso_update_creds?mode=memory&cache=shared&uri=true",
+        connect_args={"check_same_thread": False},
+    )
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine)
+
+    auth = AuthManager(factory, "secret")
+    auth.create_credentials("alice", "alice_pass")
+    auth.add_user("bob", "bob_pass")
+
+    # Change only alice's password
+    success, _ = auth.update_credentials("alice", "alice_pass", "alice_new")
+    assert success is True
+
+    # Bob's original password still works
+    ok, _ = auth.verify_credentials("bob", "bob_pass")
+    assert ok is True, "Bob's password should be unchanged"
+
+    # Alice's old password no longer works
+    ok, _ = auth.verify_credentials("alice", "alice_pass")
+    assert ok is False, "Alice's old password should no longer be valid"
+
+    engine.dispose()
+
+
+def test_update_username_does_not_affect_other_user():
+    """update_username must not alter another user's username."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from models.database import Base
+
+    engine = create_engine(
+        "sqlite:///file:iso_update_username?mode=memory&cache=shared&uri=true",
+        connect_args={"check_same_thread": False},
+    )
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine)
+
+    auth = AuthManager(factory, "secret")
+    auth.create_credentials("alice", "pass")
+    auth.add_user("bob", "pass")
+
+    # Rename alice only
+    success, _ = auth.update_username("alice", "alice_renamed")
+    assert success is True
+
+    # Bob is untouched
+    ok, _ = auth.verify_credentials("bob", "pass")
+    assert ok is True, "Bob's account should still exist with original username"
+
+    # alice no longer exists under old name
+    ok, _ = auth.verify_credentials("alice", "pass")
+    assert ok is False, "Old username 'alice' should no longer exist"
+
+    engine.dispose()
+
+
+def test_delete_user_does_not_affect_other_user():
+    """delete_user must remove only the target row, not other users."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from models.database import Base
+
+    engine = create_engine(
+        "sqlite:///file:iso_delete_user?mode=memory&cache=shared&uri=true",
+        connect_args={"check_same_thread": False},
+    )
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine)
+
+    auth = AuthManager(factory, "secret")
+    auth.create_credentials("alice", "pass")
+    auth.add_user("bob", "pass")
+
+    # Find bob's ID and delete him
+    users = auth.list_users()
+    bob_id = next(u["id"] for u in users if u["username"] == "bob")
+    success, _ = auth.delete_user(bob_id)
+    assert success is True
+
+    # Alice is unaffected
+    ok, _ = auth.verify_credentials("alice", "pass")
+    assert ok is True, "Alice's account should survive bob's deletion"
+
+    # Bob is gone
+    users_after = auth.list_users()
+    assert not any(u["username"] == "bob" for u in users_after)
+
+    engine.dispose()
+
+
+def test_list_users_does_not_expose_password_hash():
+    """list_users must never include password_hash in any returned dict."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from models.database import Base
+
+    engine = create_engine(
+        "sqlite:///file:iso_list_users?mode=memory&cache=shared&uri=true",
+        connect_args={"check_same_thread": False},
+    )
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine)
+
+    auth = AuthManager(factory, "secret")
+    auth.create_credentials("alice", "pass1")
+    auth.add_user("bob", "pass2")
+
+    users = auth.list_users()
+    assert len(users) == 2
+    for user in users:
+        assert "password_hash" not in user, "password_hash must not be exposed"
+        assert "api_token" not in user, "api_token must not be exposed"
+        assert "is_admin" in user, "is_admin should be present in public dict"
+
+    engine.dispose()

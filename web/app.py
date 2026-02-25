@@ -190,7 +190,6 @@ class AppState:
         db_path = self.config.storage.get("db_path", "./data/periodicals.db")
         db_url = f"sqlite:///{db_path}"
         db_manager = DatabaseManager(db_url)
-        db_manager.create_tables()
         db_manager.run_migrations()
         self.db = DatabaseState(
             url=db_url,
@@ -1053,13 +1052,21 @@ app.add_middleware(
 )
 
 # Add CSRF protection middleware (double-submit cookie pattern)
+# Enable the Secure cookie flag only when the server is configured for HTTPS.
 from web.middleware.csrf import CSRFMiddleware
 
-app.add_middleware(CSRFMiddleware)
+_server_config = app_state.config_loader.get_server()
+_csrf_secure = _server_config.get("https", False)
+app.add_middleware(CSRFMiddleware, secure=_csrf_secure)
 
 # Add rate limiting middleware
 from web.middleware import RateLimitMiddleware
-from core.constants.app import RATE_LIMIT_CALLS, RATE_LIMIT_PERIOD, RATE_LIMIT_AUTH_CALLS, RATE_LIMIT_AUTH_PERIOD
+from core.constants.app import (
+    RATE_LIMIT_CALLS,
+    RATE_LIMIT_PERIOD,
+    RATE_LIMIT_AUTH_CALLS,
+    RATE_LIMIT_AUTH_PERIOD,
+)
 
 app.add_middleware(
     RateLimitMiddleware,

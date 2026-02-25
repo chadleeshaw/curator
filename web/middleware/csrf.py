@@ -54,7 +54,17 @@ class CSRFMiddleware(BaseHTTPMiddleware):
 
     Attach after CORSMiddleware in the middleware stack so that CORS preflight
     OPTIONS requests are handled before CSRF checks run.
+
+    Args:
+        secure: Set the CSRF cookie's Secure flag.  Pass ``True`` when the
+                application is served over HTTPS so the cookie is only sent
+                over encrypted connections.  Defaults to ``False`` for local
+                HTTP deployments.
     """
+
+    def __init__(self, app, *, secure: bool = False):
+        super().__init__(app)
+        self._secure = secure
 
     async def dispatch(self, request: Request, call_next) -> Response:
         # Retrieve or generate the CSRF token from the incoming cookie.
@@ -85,7 +95,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
             value=token,
             httponly=False,  # Must be readable by JavaScript
             samesite="strict",
-            secure=False,  # Set to True when serving over HTTPS
+            secure=self._secure,
             path="/",
         )
         return response

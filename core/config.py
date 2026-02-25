@@ -47,7 +47,9 @@ ENV_CURATOR_LOG_LEVEL = "CURATOR_LOG_LEVEL"
 ENV_CURATOR_HOST = "CURATOR_HOST"
 ENV_CURATOR_PORT = "CURATOR_PORT"
 ENV_CURATOR_DRY_RUN = "CURATOR_DRY_RUN"  # Set to "true" to enable dry run for reorganization (default: false)
-ENV_CURATOR_CORS_ORIGINS = "CURATOR_CORS_ORIGINS"  # Comma-separated allowed origins, e.g. "http://localhost:8000,https://myapp.com"
+ENV_CURATOR_CORS_ORIGINS = (
+    "CURATOR_CORS_ORIGINS"  # Comma-separated allowed origins, e.g. "http://localhost:8000,https://myapp.com"
+)
 
 # Default Values
 DEFAULT_CONFIG_PATH = "local/config/config.yaml"
@@ -95,7 +97,7 @@ def _apply_provider_env_overrides(provider: Dict[str, Any]) -> Dict[str, Any]:
         if env_val:
             provider = dict(provider)
             provider["api_key"] = env_val
-            logger.debug(f"Applied {env_var} to {provider_type} provider")
+            logger.debug("Applied %s to %s provider", env_var, provider_type)
     return provider
 
 
@@ -109,7 +111,7 @@ def _apply_client_env_overrides(client: Dict[str, Any]) -> Dict[str, Any]:
             env_val = os.environ.get(env_var)
             if env_val:
                 overrides[field] = env_val
-                logger.debug(f"Applied {env_var} to {client_type} client field '{field}'")
+                logger.debug("Applied %s to %s client field '%s'", env_var, client_type, field)
         if overrides:
             client = {**client, **overrides}
     return client

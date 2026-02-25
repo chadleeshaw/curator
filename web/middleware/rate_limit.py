@@ -29,6 +29,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         period: int = 60,
         auth_calls: int = 5,
         auth_period: int = 60,
+        trusted_proxies: list = None,
     ):
         """
         Initialize rate limiter
@@ -39,12 +40,20 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             period: Time period in seconds for regular endpoints
             auth_calls: Number of calls allowed for auth endpoints
             auth_period: Time period for auth endpoints
+            trusted_proxies: Optional list of trusted proxy IP addresses.
+                When provided, X-Forwarded-For and X-Real-IP headers are
+                honoured only for requests that arrive from one of these
+                addresses.  When None (default), forwarded-for headers are
+                ignored and the direct connection IP is always used, preventing
+                clients from trivially spoofing their identity to bypass rate
+                limits.
         """
         super().__init__(app)
         self.calls = calls
         self.period = period
         self.auth_calls = auth_calls
         self.auth_period = auth_period
+        self.trusted_proxies: set = set(trusted_proxies or [])
 
         # Storage: {client_ip: {endpoint: [timestamps]}}
         self.clients = defaultdict(lambda: defaultdict(list))
@@ -54,21 +63,25 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.cleanup_interval = 300  # 5 minutes
 
     def _get_client_id(self, request: Request) -> str:
-        """Get client identifier from request"""
-        # Try to get real IP from headers (for proxy/load balancer scenarios)
-        forwarded = request.headers.get("X-Forwarded-For")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
+        """
+        Return the real client IP address.
 
-        real_ip = request.headers.get("X-Real-IP")
-        if real_ip:
-            return real_ip
+        Forwarded-for headers are only trusted when the direct connection
+        originates from a configured trusted proxy, preventing IP spoofing.
+        """
+        direct_ip = request.client.host if request.client else "unknown"
 
-        # Fall back to direct client
-        if request.client:
-            return request.client.host
+        # Only honour proxy headers when the direct connection is from a known proxy.
+        if direct_ip in self.trusted_proxies:
+            forwarded = request.headers.get("X-Forwarded-For")
+            if forwarded:
+                return forwarded.split(",")[0].strip()
 
-        return "unknown"
+            real_ip = request.headers.get("X-Real-IP")
+            if real_ip:
+                return real_ip
+
+        return direct_ip
 
     def _cleanup_old_entries(self):
         """Remove old entries to prevent memory bloat"""

@@ -244,3 +244,14 @@ class QBittorrentClient(DownloadClient):
             if part.startswith("xt=urn:btih:"):
                 return part.split(":")[-1].lower()
         return None
+
+    def close(self) -> None:
+        """Close the underlying HTTP session and release network resources."""
+        self._session.close()
+        self._authenticated = False
+
+    def __enter__(self) -> "QBittorrentClient":
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.close()

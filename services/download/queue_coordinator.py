@@ -15,6 +15,10 @@ from models.database import (
     DownloadStatus,
     DownloadSubmission,
 )
+from services.download._coordinator_helpers import (
+    get_active_download_count,
+    get_client_for_provider,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,70 +55,16 @@ class QueueCoordinator:
     # ------------------------------------------------------------------
 
     def _get_client_for_provider(self, provider: str, url: Optional[str] = None) -> DownloadClient:
-        """
-        Get the appropriate download client for a provider.
-
-        Uses URL-based fallback detection if provider routing fails.
-        This handles legacy data where provider field may be incorrect.
-
-        Args:
-            provider: Provider type (e.g., 'internet_archive', 'newsnab')
-            url: Optional download URL for fallback provider detection
-
-        Returns:
-            DownloadClient instance for this provider
-        """
-        # Look up which client type to use for this provider
-        client_type = self.provider_client_map.get(provider, "default")
-
-        # If routing failed (using default) and URL provided, try URL-based detection
-        if client_type == "default" and url:
-            # Check if this is an Internet Archive URL
-            if "archive.org" in url or url.startswith("ia:"):
-                # Try to use IA client if available
-                if "internet_archive" in self.download_clients:
-                    logger.debug(
-                        f"Provider '{provider}' not in routing map, but URL indicates "
-                        f"Internet Archive - using IA client"
-                    )
-                    client_type = "internet_archive"
-                else:
-                    logger.warning(f"Archive.org URL detected but no IA client configured: {url}")
-
-        # Get the client, falling back to default if not available
-        client = self.download_clients.get(client_type)
-        if not client:
-            logger.debug(f"Client '{client_type}' not found for provider '{provider}', using default")
-            client = self.download_clients["default"]
-
-        return client
+        """Get the appropriate download client for a provider."""
+        return get_client_for_provider(self.download_clients, self.provider_client_map, provider, url)
 
     # ------------------------------------------------------------------
     # Slot counting
     # ------------------------------------------------------------------
 
     def _get_active_download_count(self, session: Session) -> int:
-        """
-        Count currently active (pending or downloading) submissions.
-
-        Args:
-            session: Database session
-
-        Returns:
-            Number of active downloads
-        """
-        return (
-            session.query(DownloadSubmission)
-            .filter(
-                DownloadSubmission.status.in_(
-                    [
-                        DownloadSubmission.StatusEnum.PENDING,
-                        DownloadSubmission.StatusEnum.DOWNLOADING,
-                    ]
-                )
-            )
-            .count()
-        )
+        """Count currently active (pending or downloading) submissions."""
+        return get_active_download_count(session)
 
     # ------------------------------------------------------------------
     # Public API methods
@@ -168,7 +118,10 @@ class QueueCoordinator:
         return result
 
     def submit_discovered_batch(
-        self, session: Session, issue_discovery_service: Any, submission_coordinator: Any
+        self,
+        session: Session,
+        issue_discovery_service: Any,
+        submission_coordinator: Any,
     ) -> int:
         """
         Submit discovered issues from the download queue, respecting slot limits.

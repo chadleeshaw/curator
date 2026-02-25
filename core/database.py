@@ -80,13 +80,13 @@ class DatabaseManager:
         existing_tables = set(inspector.get_table_names())
 
         if existing_tables and "alembic_version" not in existing_tables:
-            # Pre-Alembic database: tables already exist, just stamp to mark as current.
-            logger.info(
-                "Existing pre-Alembic database detected. "
-                "Stamping Alembic revision at head — no DDL changes will be made."
-            )
-            command.stamp(alembic_cfg, "head")
-            logger.info("Database stamped at Alembic head revision.")
+            # Pre-Alembic database: the schema matches revision 001 (no user_id columns).
+            # Stamp at 001 so Alembic knows the baseline, then run upgrade to apply
+            # any subsequent migrations (e.g. 002 adds user_id columns).
+            logger.info("Existing pre-Alembic database detected. " "Stamping at revision 001, then upgrading to head.")
+            command.stamp(alembic_cfg, "001")
+            command.upgrade(alembic_cfg, "head")
+            logger.info("Database upgraded to Alembic head revision.")
         else:
             # Fresh database or already managed by Alembic: apply any pending migrations.
             logger.debug("Running Alembic upgrade to head")

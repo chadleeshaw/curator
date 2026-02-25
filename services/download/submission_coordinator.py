@@ -23,6 +23,11 @@ from models.database import (
 )
 from models.database import SearchResult as DBSearchResult
 from services.download.nzb_submit import submit_with_nzb_content
+from services.download._coordinator_helpers import (
+    get_active_download_count,
+    get_client_for_provider,
+    get_download_category,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -76,43 +81,8 @@ class SubmissionCoordinator:
     # ------------------------------------------------------------------
 
     def _get_client_for_provider(self, provider: str, url: Optional[str] = None) -> DownloadClient:
-        """
-        Get the appropriate download client for a provider.
-
-        Uses URL-based fallback detection if provider routing fails.
-        This handles legacy data where provider field may be incorrect.
-
-        Args:
-            provider: Provider type (e.g., 'internet_archive', 'newsnab')
-            url: Optional download URL for fallback provider detection
-
-        Returns:
-            DownloadClient instance for this provider
-        """
-        # Look up which client type to use for this provider
-        client_type = self.provider_client_map.get(provider, "default")
-
-        # If routing failed (using default) and URL provided, try URL-based detection
-        if client_type == "default" and url:
-            # Check if this is an Internet Archive URL
-            if "archive.org" in url or url.startswith("ia:"):
-                # Try to use IA client if available
-                if "internet_archive" in self.download_clients:
-                    logger.debug(
-                        f"Provider '{provider}' not in routing map, but URL indicates "
-                        f"Internet Archive - using IA client"
-                    )
-                    client_type = "internet_archive"
-                else:
-                    logger.warning(f"Archive.org URL detected but no IA client configured: {url}")
-
-        # Get the client, falling back to default if not available
-        client = self.download_clients.get(client_type)
-        if not client:
-            logger.debug(f"Client '{client_type}' not found for provider '{provider}', using default")
-            client = self.download_clients["default"]
-
-        return client
+        """Get the appropriate download client for a provider."""
+        return get_client_for_provider(self.download_clients, self.provider_client_map, provider, url)
 
     def _get_client_name_for_provider(self, provider: str) -> str:
         """
@@ -159,51 +129,12 @@ class SubmissionCoordinator:
     # ------------------------------------------------------------------
 
     def _get_download_category(self, tracking_id: int, session: Session) -> Optional[str]:
-        """
-        Determine the download category for a submission.
-
-        Priority: tracking-specific category > system default.
-
-        Args:
-            tracking_id: Periodical tracking ID
-            session: Database session
-
-        Returns:
-            Category name or None if no category configured
-        """
-        tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
-
-        if tracking and tracking.download_category:
-            logger.debug(f"[DownloadManager] Using tracked item download_category: {tracking.download_category}")
-            return tracking.download_category
-        elif self.default_category:
-            logger.debug(f"[DownloadManager] Using default download_category: {self.default_category}")
-            return self.default_category
-
-        return None
+        """Determine the download category for a submission."""
+        return get_download_category(tracking_id, session, self.default_category)
 
     def _get_active_download_count(self, session: Session) -> int:
-        """
-        Count currently active (pending or downloading) submissions.
-
-        Args:
-            session: Database session
-
-        Returns:
-            Number of active downloads
-        """
-        return (
-            session.query(DownloadSubmission)
-            .filter(
-                DownloadSubmission.status.in_(
-                    [
-                        DownloadSubmission.StatusEnum.PENDING,
-                        DownloadSubmission.StatusEnum.DOWNLOADING,
-                    ]
-                )
-            )
-            .count()
-        )
+        """Count currently active (pending or downloading) submissions."""
+        return get_active_download_count(session)
 
     # ------------------------------------------------------------------
     # Title / file validation helpers

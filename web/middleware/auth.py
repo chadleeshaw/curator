@@ -57,6 +57,9 @@ class AuthMiddleware:
 
         Use this dependency in routes that need to scope queries by user_id.
         For the current single-user deployment, user_id is always 1.
+
+        The JWT is decoded exactly once; both username and user_id are extracted
+        from the same payload to avoid a redundant decode call.
         """
         if not authorization:
             raise HTTPException(status_code=401, detail="Missing authentication token")
@@ -67,9 +70,9 @@ class AuthMiddleware:
 
         token = parts[1]
 
-        is_valid, username = self.auth_manager.verify_token(token)
+        # Decode the JWT a single time and pull out both fields together.
+        is_valid, username, user_id = self.auth_manager.verify_token_full(token)
         if is_valid and username:
-            user_id = self.auth_manager.get_user_id_from_token(token)
             return username, user_id
 
         is_valid, username = self.auth_manager.verify_api_token(token)

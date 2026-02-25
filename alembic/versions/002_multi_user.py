@@ -43,7 +43,7 @@ def upgrade() -> None:
                     "user_id",
                     sa.Integer(),
                     sa.ForeignKey("credentials.id", ondelete="CASCADE"),
-                    nullable=True,  # nullable during migration; set default below
+                    nullable=True,  # nullable during migration; set NOT NULL below
                 )
             )
 
@@ -52,6 +52,10 @@ def upgrade() -> None:
 
         with op.batch_alter_table(table) as batch_op:
             batch_op.create_index(f"ix_{table}_user_id", ["user_id"])
+
+        # Enforce NOT NULL now that every row has a value.
+        with op.batch_alter_table(table) as batch_op:
+            batch_op.alter_column("user_id", nullable=False)
 
 
 def downgrade() -> None:

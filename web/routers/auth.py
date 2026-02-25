@@ -249,13 +249,20 @@ async def regenerate_api_token(
 # ==============================================================================
 
 
+async def _require_admin(username: str, auth_manager: "AuthManager") -> None:
+    """Raise 403 if the authenticated user does not have the admin flag."""
+    if not auth_manager.is_admin(username):
+        raise HTTPException(status_code=403, detail="Admin privileges required")
+
+
 @router.get(
     "/users",
     summary="List all user accounts",
-    description="Return every registered user. Requires a valid session token.",
+    description="Return every registered user. Requires an admin session token.",
     responses={
         200: {"description": "List of users"},
         401: {"description": "Not authenticated", "model": APIError},
+        403: {"description": "Admin privileges required", "model": APIError},
     },
 )
 @handle_api_errors("List users", logger)
@@ -264,6 +271,7 @@ async def list_users(
     auth_manager: "AuthManager" = Depends(get_auth_manager),
 ):
     """List all user accounts (admin view)."""
+    await _require_admin(_username, auth_manager)
     users = auth_manager.list_users()
     return success_response("Users retrieved successfully", users=users)
 
@@ -271,11 +279,12 @@ async def list_users(
 @router.post(
     "/users",
     summary="Create a new user account",
-    description="Create an additional user. Requires a valid session token.",
+    description="Create an additional user. Requires an admin session token.",
     responses={
         200: {"description": "User created successfully"},
         400: {"description": "Username already exists", "model": APIError},
         401: {"description": "Not authenticated", "model": APIError},
+        403: {"description": "Admin privileges required", "model": APIError},
     },
 )
 @handle_api_errors("Create user", logger)
@@ -285,6 +294,7 @@ async def create_user(
     auth_manager: "AuthManager" = Depends(get_auth_manager),
 ):
     """Create an additional user account."""
+    await _require_admin(_username, auth_manager)
     success, message = auth_manager.add_user(request.username, request.password)
     if not success:
         raise HTTPException(status_code=400, detail=message)
@@ -299,6 +309,7 @@ async def create_user(
         200: {"description": "User deleted successfully"},
         400: {"description": "Cannot delete own account", "model": APIError},
         401: {"description": "Not authenticated", "model": APIError},
+        403: {"description": "Admin privileges required", "model": APIError},
         404: {"description": "User not found", "model": APIError},
     },
 )
@@ -309,6 +320,8 @@ async def delete_user(
     auth_manager: "AuthManager" = Depends(get_auth_manager),
 ):
     """Delete a user account by ID."""
+    await _require_admin(current_username, auth_manager)
+
     # Prevent self-deletion
     current_id = auth_manager._get_user_id(current_username)
     if current_id == user_id:

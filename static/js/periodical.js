@@ -128,8 +128,7 @@ function renderIssues() {
     (!yearsData || yearsData.length === 0) &&
     (!specialEditionsData || specialEditionsData.length === 0)
   ) {
-    issuesContainer.innerHTML =
-      '<div class="no-issues">No issues found for this periodical.</div>';
+    issuesContainer.innerHTML = '<div class="no-issues">No issues found for this periodical.</div>';
     return;
   }
 

@@ -17,9 +17,9 @@ from core.parsers import utc_now
 from models.database import (
     DiscoveredIssue,
     DownloadSubmission,
-    PeriodicalTracking,
 )
 from services.download.nzb_submit import submit_with_nzb_content
+from services.download._coordinator_helpers import get_download_category
 
 logger = logging.getLogger(__name__)
 
@@ -106,28 +106,8 @@ class StatusCoordinator:
     # ------------------------------------------------------------------
 
     def _get_download_category(self, tracking_id: int, session: Session) -> Optional[str]:
-        """
-        Determine the download category for a submission.
-
-        Priority: tracking-specific category > system default.
-
-        Args:
-            tracking_id: Periodical tracking ID
-            session: Database session
-
-        Returns:
-            Category name or None if no category configured
-        """
-        tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
-
-        if tracking and tracking.download_category:
-            logger.debug(f"[DownloadManager] Using tracked item download_category: {tracking.download_category}")
-            return tracking.download_category
-        elif self.default_category:
-            logger.debug(f"[DownloadManager] Using default download_category: {self.default_category}")
-            return self.default_category
-
-        return None
+        """Determine the download category for a submission."""
+        return get_download_category(tracking_id, session, self.default_category)
 
     def _get_max_retries_for_submission_context(
         self,

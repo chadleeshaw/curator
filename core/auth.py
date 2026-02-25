@@ -51,8 +51,9 @@ class AuthManager:
             if existing:
                 return False, "Credentials already exist"
 
-            # Create new credentials with lowercase username
-            creds = Credentials(username=username.lower())
+            # Create new credentials with lowercase username.
+            # The first user is always admin.
+            creds = Credentials(username=username.lower(), is_admin=True)
             creds.set_password(password)
             session.add(creds)
             return True, "Credentials created successfully"
@@ -90,8 +91,13 @@ class AuthManager:
 
         Returns:
             JWT token string valid for TOKEN_EXPIRATION_HOURS hours
+
+        Raises:
+            ValueError: If the user does not exist in the database
         """
         user_id = self._get_user_id(username)
+        if user_id is None:
+            raise ValueError(f"Cannot create token: user '{username}' not found")
         payload = {
             "username": username,
             "user_id": user_id,
@@ -139,12 +145,33 @@ class AuthManager:
         except jwt.InvalidTokenError:
             return None
 
+    def verify_token_full(self, token: str) -> Tuple[bool, Optional[str], Optional[int]]:
+        """
+        Decode a JWT exactly once and return (is_valid, username, user_id).
+
+        Prefer this over calling verify_token + get_user_id_from_token in sequence
+        to avoid decoding the same token twice.
+
+        Returns:
+            (True, username, user_id) on success;
+            (False, None, None) on any validation error.
+        """
+        try:
+            payload = jwt.decode(token, self.jwt_secret, algorithms=[JWT_ALGORITHM])
+            username = payload.get("username")
+            user_id = payload.get("user_id")
+            return True, username, user_id
+        except jwt.ExpiredSignatureError:
+            return False, None, None
+        except jwt.InvalidTokenError:
+            return False, None, None
+
     def update_credentials(self, username: str, old_password: str, new_password: str) -> Tuple[bool, str]:
         """
-        Update the password.
+        Update the password for the given user.
 
         Args:
-            username: Current username (not used, kept for API compatibility)
+            username: Username whose password should be updated
             old_password: Current password for verification
             new_password: New password to set
 
@@ -152,7 +179,7 @@ class AuthManager:
             Tuple of (success, message) where success is True if password updated successfully
         """
         with get_db_session(self.session_factory) as session:
-            creds = session.query(Credentials).first()
+            creds = session.query(Credentials).filter_by(username=username.lower()).first()
             if not creds:
                 return False, "No credentials exist"
 
@@ -237,6 +264,12 @@ class AuthManager:
     # Multi-user management
     # ------------------------------------------------------------------
 
+    def is_admin(self, username: str) -> bool:
+        """Return True if the given user has the is_admin flag set."""
+        with get_db_session(self.session_factory) as session:
+            creds = session.query(Credentials).filter_by(username=username.lower()).first()
+            return bool(creds and creds.is_admin)
+
     def add_user(self, username: str, password: str) -> Tuple[bool, str]:
         """
         Create an additional user account.
@@ -271,7 +304,7 @@ class AuthManager:
         """
         with get_db_session(self.session_factory) as session:
             users = session.query(Credentials).order_by(Credentials.id).all()
-            return [u.to_dict() for u in users]
+            return [u.to_public_dict() for u in users]
 
     def delete_user(self, user_id: int) -> Tuple[bool, str]:
         """
