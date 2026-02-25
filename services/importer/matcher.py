@@ -8,7 +8,7 @@ import re
 from typing import Dict, Optional, Tuple
 from dataclasses import dataclass
 
-from fuzzywuzzy import fuzz
+from rapidfuzz import fuzz
 
 from core.constants.matching import (
     FUZZY_THRESHOLD_HIGH,

@@ -5,7 +5,7 @@ import re
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional
 
-from fuzzywuzzy import fuzz
+from rapidfuzz import fuzz
 
 from core.constants.country import ISO_COUNTRIES
 from core.constants.periodical import (
@@ -473,7 +473,7 @@ class TitleMatcher:
             score = int(fuzzy_score * 100)
             is_match = fuzzy_score >= (self.threshold / 100.0)
         else:
-            score = fuzz.token_set_ratio(title1.lower(), title2.lower())
+            score = int(fuzz.token_set_ratio(title1.lower(), title2.lower()))
             is_match = score >= self.threshold
 
         return is_match, score
@@ -612,9 +612,6 @@ class TitleMatcher:
         # Step 1: Fuzzy title matching (using configured threshold)
         is_title_match, title_score = self.match(provider_title, library_title)
 
-        if not is_title_match:
-            return (False, 0)
-
         # Step 1.5: Check for periodical variant mismatch
         # If one title has a periodical variant and the other doesn't (or has a different one),
         # they're different periodicals despite similar base names
@@ -654,15 +651,36 @@ class TitleMatcher:
 
         # Step 4: Date range matching (if dates available)
         if provider_date is None:
-            # No date provided - if we have matching volume/issue, that's good enough
-            if (provider_vol is not None and provider_vol == library_vol) or (
+            # No date provided - if we have matching volume/issue numbers, that's sufficient even
+            # when the raw fuzzy title score is below threshold (e.g. "Comic Issue 123" vs
+            # "Comic #123" score 72 < 80, but issue numbers match and base titles are similar).
+            issue_vol_match = (provider_vol is not None and provider_vol == library_vol) or (
                 provider_issue is not None and provider_issue == library_issue
-            ):
-                logger.debug(f"Match by volume/issue: {provider_title}")
-                return (True, title_score)
+            )
+            if issue_vol_match:
+                # Verify base titles (stripped of issue/volume tokens) are also similar
+                _issue_vol_re = re.compile(
+                    r"(?:#|issue\s*|no\.?\s*)\d+|(?:vol(?:ume)?\.?\s*|v)\d+",
+                    re.IGNORECASE,
+                )
+                base_provider = _issue_vol_re.sub("", provider_title).strip()
+                base_library = _issue_vol_re.sub("", library_title).strip()
+                base_score = int(fuzz.token_set_ratio(base_provider.lower(), base_library.lower()))
+                ISSUE_MATCH_BASE_THRESHOLD = 60
+                if base_score >= ISSUE_MATCH_BASE_THRESHOLD:
+                    logger.debug(f"Match by volume/issue (base score {base_score}): {provider_title}")
+                    return (True, base_score)
+
+            # Fuzzy title threshold still applies when no issue/volume match available
+            if not is_title_match:
+                return (False, 0)
             # Otherwise rely on title match only
             logger.debug(f"No date or volume/issue for '{provider_title}', using title-only match")
             return (True, title_score)
+
+        # Fuzzy title must pass threshold before proceeding to date comparison
+        if not is_title_match:
+            return (False, 0)
 
         # Normalize both dates to naive (remove timezone info) for comparison
         if provider_date.tzinfo is not None:

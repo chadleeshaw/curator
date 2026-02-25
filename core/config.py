@@ -28,6 +28,7 @@ CONFIG_KEY_SERVER = "server"
 CONFIG_KEY_OCR = "ocr"
 CONFIG_KEY_METADATA = "metadata"
 CONFIG_KEY_JWT_SECRET = "jwt_secret"
+CONFIG_KEY_CORS_ORIGINS = "cors_origins"
 
 # Storage Keys
 STORAGE_KEY_DB_PATH = "db_path"
@@ -46,6 +47,9 @@ ENV_CURATOR_LOG_LEVEL = "CURATOR_LOG_LEVEL"
 ENV_CURATOR_HOST = "CURATOR_HOST"
 ENV_CURATOR_PORT = "CURATOR_PORT"
 ENV_CURATOR_DRY_RUN = "CURATOR_DRY_RUN"  # Set to "true" to enable dry run for reorganization (default: false)
+ENV_CURATOR_CORS_ORIGINS = (
+    "CURATOR_CORS_ORIGINS"  # Comma-separated allowed origins, e.g. "http://localhost:8000,https://myapp.com"
+)
 
 # Default Values
 DEFAULT_CONFIG_PATH = "local/config/config.yaml"
@@ -53,6 +57,64 @@ DEFAULT_TEST_CONFIG_PATH = "tests/config.test.yaml"
 DEFAULT_SERVER_HOST = "0.0.0.0"
 DEFAULT_SERVER_PORT = 8000
 DEFAULT_LOG_LEVEL = "INFO"
+
+
+# ==============================================================================
+# Credential env-var injection helpers
+# ==============================================================================
+# These allow API keys and passwords to be supplied via environment variables
+# instead of config.yaml, keeping secrets out of version-controlled YAML files.
+#
+# Supported env vars (all optional — YAML values are used as fallback):
+#
+#   Search providers:
+#     CURATOR_NEWSNAB_API_KEY    — first Newsnab/Prowlarr provider's api_key
+#     CURATOR_TORZNAB_API_KEY    — first Torznab provider's api_key
+#
+#   Download clients:
+#     CURATOR_SABNZBD_API_KEY    — SABnzbd api_key
+#     CURATOR_NZBGET_PASSWORD    — NZBGet password
+#     CURATOR_QBITTORRENT_PASSWORD — qBittorrent password
+
+_PROVIDER_ENV_KEYS: Dict[str, str] = {
+    "newsnab": "CURATOR_NEWSNAB_API_KEY",
+    "torznab": "CURATOR_TORZNAB_API_KEY",
+}
+
+_CLIENT_ENV_KEYS: Dict[str, Dict[str, str]] = {
+    "sabnzbd": {"api_key": "CURATOR_SABNZBD_API_KEY"},
+    "nzbget": {"password": "CURATOR_NZBGET_PASSWORD"},
+    "qbittorrent": {"password": "CURATOR_QBITTORRENT_PASSWORD"},
+}
+
+
+def _apply_provider_env_overrides(provider: Dict[str, Any]) -> Dict[str, Any]:
+    """Inject API key from environment variable into a provider config dict."""
+    provider_type = provider.get("type", "")
+    env_var = _PROVIDER_ENV_KEYS.get(provider_type)
+    if env_var:
+        env_val = os.environ.get(env_var)
+        if env_val:
+            provider = dict(provider)
+            provider["api_key"] = env_val
+            logger.debug("Applied %s to %s provider", env_var, provider_type)
+    return provider
+
+
+def _apply_client_env_overrides(client: Dict[str, Any]) -> Dict[str, Any]:
+    """Inject credentials from environment variables into a client config dict."""
+    client_type = client.get("type", "")
+    field_map = _CLIENT_ENV_KEYS.get(client_type, {})
+    if field_map:
+        overrides = {}
+        for field, env_var in field_map.items():
+            env_val = os.environ.get(env_var)
+            if env_val:
+                overrides[field] = env_val
+                logger.debug("Applied %s to %s client field '%s'", env_var, client_type, field)
+        if overrides:
+            client = {**client, **overrides}
+    return client
 
 
 def _validate_directory(dir_path: Path, dir_name: str) -> None:
@@ -278,7 +340,8 @@ class ConfigLoader:
     def get_search_providers(self) -> List[Dict[str, Any]]:
         """Get enabled search providers (for finding and downloading issues)"""
         providers = self.config.get(CONFIG_KEY_SEARCH_PROVIDERS, [])
-        return [p for p in providers if p.get("enabled", True)]
+        enabled = [p for p in providers if p.get("enabled", True)]
+        return [_apply_provider_env_overrides(p) for p in enabled]
 
     def get_metadata_providers(self) -> List[Dict[str, Any]]:
         """Get enabled metadata providers (for periodical information)"""
@@ -303,7 +366,8 @@ class ConfigLoader:
 
         # New format: non-empty list
         if isinstance(clients, list) and clients:
-            return [c for c in clients if c.get("enabled", True)]
+            enabled = [c for c in clients if c.get("enabled", True)]
+            return [_apply_client_env_overrides(c) for c in enabled]
 
         # Fallback: old named-dict format (should have been migrated, but handle gracefully)
         if isinstance(clients, dict):
@@ -511,6 +575,30 @@ class ConfigLoader:
             server["port"] = int(os.environ[ENV_CURATOR_PORT])
 
         return server
+
+    def get_cors_origins(self) -> List[str]:
+        """
+        Get allowed CORS origins.
+
+        Priority: CURATOR_CORS_ORIGINS env var > cors_origins config key > default ["*"].
+
+        The env var accepts comma-separated origins:
+            CURATOR_CORS_ORIGINS=http://localhost:8000,https://myapp.com
+
+        To lock down CORS in production, set cors_origins in config.yaml or the env var.
+        """
+        env_val = os.environ.get(ENV_CURATOR_CORS_ORIGINS)
+        if env_val:
+            return [o.strip() for o in env_val.split(",") if o.strip()]
+
+        config_val = self.config.get(CONFIG_KEY_CORS_ORIGINS)
+        if config_val:
+            if isinstance(config_val, list):
+                return config_val
+            if isinstance(config_val, str):
+                return [o.strip() for o in config_val.split(",") if o.strip()]
+
+        return ["*"]  # Default: open (restrict via config or env var in production)
 
     def reload_config(self) -> None:
         """Reload config from file"""

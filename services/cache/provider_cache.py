@@ -10,7 +10,7 @@ import logging
 import os
 from typing import Dict, Optional
 
-import requests
+import httpx
 from sqlalchemy import create_engine, func, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
@@ -139,7 +139,7 @@ class NzbCacheService:
 
             # Fetch from provider and cache
             logger.info(f"Fetching NZB from provider: {download_url[:80]}")
-            response = requests.get(download_url, timeout=30)
+            response = httpx.get(download_url, timeout=30)
             response.raise_for_status()
             nzb_content = response.text
 
@@ -170,7 +170,7 @@ class NzbCacheService:
 
             return nzb_content
 
-        except requests.exceptions.RequestException as e:
+        except httpx.HTTPError as e:
             logger.error(f"Failed to fetch NZB from {download_url[:80]}: {e}", exc_info=True)
             return None
 

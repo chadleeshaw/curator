@@ -3,11 +3,11 @@ Database session management
 """
 
 import logging
+import os
 from contextlib import contextmanager
 from typing import Generator
 
-from sqlalchemy import create_engine, event, inspect, text
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import create_engine, event, inspect
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -35,6 +35,7 @@ class DatabaseManager:
             poolclass=poolclass,
             pool_pre_ping=True,
         )
+        self._db_url = db_url
 
         if "sqlite" in db_url and not is_memory_db:
 
@@ -49,197 +50,61 @@ class DatabaseManager:
         self.session_factory = sessionmaker(bind=self.engine)
 
     def create_tables(self):
-        """Create all database tables"""
+        """Create all database tables — used for in-memory test databases only."""
         from models.database import Base
 
         Base.metadata.create_all(self.engine)
 
     def run_migrations(self):
-        """Run database migrations to ensure schema is up to date."""
-        from models.database import Base
+        """
+        Run Alembic database migrations to ensure schema is up to date.
+
+        Strategy:
+          - If the database has tables but no alembic_version table (existing pre-Alembic DB):
+            stamp the database at the current head revision so Alembic knows it's already current.
+          - If the database is empty (new install): run 'upgrade head' to create the full schema.
+          - If alembic_version already exists: run 'upgrade head' to apply any new migrations.
+        """
+        # In-memory databases are set up with create_tables(), not Alembic.
+        if ":memory:" in self._db_url:
+            logger.debug("In-memory database: skipping Alembic, using create_tables()")
+            self.create_tables()
+            return
+
+        from alembic import command
+        from alembic.config import Config
+
+        alembic_cfg = self._build_alembic_config()
 
         inspector = inspect(self.engine)
-        inspector = self._create_missing_tables(inspector, Base)
-        migrations_applied = self._add_missing_columns(inspector)
-        migrations_applied += self._rename_columns(inspector)
-        self._run_data_migrations()
-        migrations_applied += self._remove_deprecated_columns(inspector)
-        migrations_applied += self._drop_deprecated_tables(inspector)
-
-        if migrations_applied > 0:
-            logger.info(f"Schema migrations complete: {migrations_applied} migration(s) applied")
-        else:
-            logger.debug("Schema is up to date, no migrations needed")
-
-    def _create_missing_tables(self, inspector, Base):
-        from models.database import Base as _Base
-
         existing_tables = set(inspector.get_table_names())
-        metadata_tables = set(Base.metadata.tables.keys())
-        missing_tables = metadata_tables - existing_tables
 
-        if missing_tables:
-            logger.info(f"Creating missing tables: {', '.join(sorted(missing_tables))}")
-            Base.metadata.create_all(
-                self.engine,
-                tables=[Base.metadata.tables[name] for name in missing_tables],
-            )
-            logger.info(f"✓ Created {len(missing_tables)} missing table(s)")
-            inspector = inspect(self.engine)
+        if existing_tables and "alembic_version" not in existing_tables:
+            # Pre-Alembic database: the schema matches revision 001 (no user_id columns).
+            # Stamp at 001 so Alembic knows the baseline, then run upgrade to apply
+            # any subsequent migrations (e.g. 002 adds user_id columns).
+            logger.info("Existing pre-Alembic database detected. " "Stamping at revision 001, then upgrading to head.")
+            command.stamp(alembic_cfg, "001")
+            command.upgrade(alembic_cfg, "head")
+            logger.info("Database upgraded to Alembic head revision.")
+        else:
+            # Fresh database or already managed by Alembic: apply any pending migrations.
+            logger.debug("Running Alembic upgrade to head")
+            command.upgrade(alembic_cfg, "head")
 
-        return inspector
+    def _build_alembic_config(self):
+        """Build an Alembic Config object pointing at this database."""
+        from alembic.config import Config
 
-    def _get_validated_schema_tables(self):
-        """Get validated schema tables from Base metadata."""
-        from models.database import Base
+        # Locate alembic.ini relative to this file's package root.
+        here = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(here)
+        ini_path = os.path.join(project_root, "alembic.ini")
 
-        return Base.metadata.tables
-
-    def _add_missing_columns(self, inspector) -> int:
-        from models.migrations import COLUMN_ADDITIONS
-
-        migrations_applied = 0
-        schema_tables = self._get_validated_schema_tables()
-
-        for table_name, columns_to_add in COLUMN_ADDITIONS.items():
-            # Validate table name exists in schema to prevent SQL injection
-            if table_name not in schema_tables:
-                logger.warning(f"Table {table_name} not in schema, skipping column additions")
-                continue
-
-            if not inspector.has_table(table_name):
-                logger.warning(f"Table {table_name} still doesn't exist after migration attempt")
-                continue
-
-            existing_columns = {col["name"] for col in inspector.get_columns(table_name)}
-
-            for column_name, column_def in columns_to_add:
-                if column_name not in existing_columns:
-                    logger.info(f"Adding missing column '{column_name}' to {table_name}")
-                    try:
-                        with self.engine.connect() as conn:
-                            # SQL identifiers (table/column names) cannot be parameterized
-                            # Validation above ensures table_name is in our known schema
-                            conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}"))
-                            conn.commit()
-                        migrations_applied += 1
-                        logger.info(f"✓ Added column {table_name}.{column_name}")
-                    except SQLAlchemyError as db_error:
-                        logger.error(f"Failed to add column {table_name}.{column_name}: {db_error}")
-
-        return migrations_applied
-
-    def _rename_columns(self, inspector) -> int:
-        from models.migrations import COLUMN_RENAMES
-
-        migrations_applied = 0
-        schema_tables = self._get_validated_schema_tables()
-
-        for table_name, renames in COLUMN_RENAMES.items():
-            # Validate table name exists in schema to prevent SQL injection
-            if table_name not in schema_tables:
-                logger.warning(f"Table {table_name} not in schema, skipping column renames")
-                continue
-
-            if not inspector.has_table(table_name):
-                continue
-
-            existing_columns = {col["name"] for col in inspector.get_columns(table_name)}
-
-            for old_name, new_name in renames:
-                if old_name in existing_columns and new_name not in existing_columns:
-                    logger.info(f"Renaming column '{old_name}' to '{new_name}' in {table_name}")
-                    try:
-                        with self.engine.connect() as conn:
-                            # SQL identifiers (table/column names) cannot be parameterized
-                            # Validation above ensures table_name is in our known schema
-                            conn.execute(text(f"ALTER TABLE {table_name} RENAME COLUMN {old_name} TO {new_name}"))
-                            conn.commit()
-                        migrations_applied += 1
-                        logger.info(f"✓ Renamed column {table_name}.{old_name} → {new_name}")
-                    except Exception as rename_error:
-                        logger.error(f"Failed to rename column {table_name}.{old_name}: {rename_error}")
-
-        return migrations_applied
-
-    def _run_data_migrations(self):
-        from models.migrations import run_data_migrations
-
-        session = self.session_factory()
-        try:
-            results = run_data_migrations(session)
-            session.commit()
-
-            total_migrated = sum(results.values())
-            if total_migrated > 0:
-                logger.info(f"Data migrations complete: {total_migrated} record(s) migrated")
-                for migration_name, count in results.items():
-                    if count > 0:
-                        logger.debug(f"  {migration_name}: {count} record(s)")
-        except Exception as migration_error:
-            session.rollback()
-            logger.error(f"Data migration failed: {migration_error}")
-            raise
-        finally:
-            session.close()
-
-    def _remove_deprecated_columns(self, inspector) -> int:
-        from models.migrations import COLUMN_REMOVALS
-
-        migrations_applied = 0
-        schema_tables = self._get_validated_schema_tables()
-
-        for table_name, columns_to_remove in COLUMN_REMOVALS.items():
-            # Validate table name exists in schema to prevent SQL injection
-            if table_name not in schema_tables:
-                logger.warning(f"Table {table_name} not in schema, skipping column removals")
-                continue
-
-            if not inspector.has_table(table_name):
-                continue
-
-            existing_columns = {col["name"] for col in inspector.get_columns(table_name)}
-
-            for column_name in columns_to_remove:
-                if column_name in existing_columns:
-                    logger.info(f"Removing deprecated column '{column_name}' from {table_name}")
-                    try:
-                        with self.engine.connect() as conn:
-                            # SQL identifiers (table/column names) cannot be parameterized
-                            # Validation above ensures table_name is in our known schema
-                            conn.execute(text(f"ALTER TABLE {table_name} DROP COLUMN {column_name}"))
-                            conn.commit()
-                        migrations_applied += 1
-                        logger.info(f"✓ Removed column {table_name}.{column_name}")
-                    except Exception as drop_error:
-                        logger.warning(
-                            f"Could not remove column {table_name}.{column_name}: {drop_error}. "
-                            f"This column is deprecated and can be safely ignored."
-                        )
-
-        return migrations_applied
-
-    def _drop_deprecated_tables(self, inspector) -> int:
-        from models.migrations import TABLE_REMOVALS
-
-        migrations_applied = 0
-
-        for table_name in TABLE_REMOVALS:
-            if inspector.has_table(table_name):
-                logger.info(f"Dropping deprecated table '{table_name}'")
-                try:
-                    with self.engine.connect() as conn:
-                        conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
-                        conn.commit()
-                    migrations_applied += 1
-                    logger.info(f"✓ Dropped deprecated table {table_name}")
-                except Exception as drop_error:
-                    logger.warning(
-                        f"Could not drop deprecated table {table_name}: {drop_error}. "
-                        f"This table is deprecated and can be safely ignored."
-                    )
-
-        return migrations_applied
+        cfg = Config(ini_path)
+        # Override the URL with the live engine URL (handles all path/env-var scenarios).
+        cfg.set_main_option("sqlalchemy.url", str(self.engine.url))
+        return cfg
 
     @contextmanager
     def get_session(self) -> Generator[Session, None, None]:

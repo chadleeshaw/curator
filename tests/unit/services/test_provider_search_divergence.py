@@ -429,7 +429,7 @@ class TestNewsnabCategoryMerge:
         mock_response.text = '<?xml version="1.0"?><rss><channel></channel></rss>'
         return mock_response
 
-    @patch("providers.newsnab.requests.get")
+    @patch("providers.newsnab.httpx.get")
     def test_category_filter_uses_only_mapped_categories(self, mock_get):
         """When category filter is 'Magazines', only mapped categories should be used (not merged with user config)."""
         mock_get.return_value = self._empty_rss_response()
@@ -449,7 +449,7 @@ class TestNewsnabCategoryMerge:
         assert "6000" not in cat_set, "User-only category 6000 should NOT leak through filter"
         assert "7000" not in cat_set, "User-only category 7000 should NOT leak through filter"
 
-    @patch("providers.newsnab.requests.get")
+    @patch("providers.newsnab.httpx.get")
     def test_no_category_filter_uses_user_config(self, mock_get):
         """When no category filter, use user-configured categories as-is."""
         mock_get.return_value = self._empty_rss_response()
@@ -461,7 +461,7 @@ class TestNewsnabCategoryMerge:
         cat_param = call_args[1]["params"]["cat"] if "params" in call_args[1] else call_args[0][1]["cat"]
         assert cat_param == "6000,7000,8000"
 
-    @patch("providers.newsnab.requests.get")
+    @patch("providers.newsnab.httpx.get")
     def test_unknown_category_uses_user_config(self, mock_get):
         """When category filter doesn't exist in map, uses user config."""
         mock_get.return_value = self._empty_rss_response()

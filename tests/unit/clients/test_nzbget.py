@@ -232,7 +232,14 @@ def test_nzbget_get_status_post_processing():
     config = {"password": "test-password"}
     client = NZBGetClient(config)
 
-    for pp_status in ["PP_QUEUED", "UNPACKING", "REPAIRING", "VERIFYING_SOURCES", "EXECUTING_SCRIPT", "PP_FINISHED"]:
+    for pp_status in [
+        "PP_QUEUED",
+        "UNPACKING",
+        "REPAIRING",
+        "VERIFYING_SOURCES",
+        "EXECUTING_SCRIPT",
+        "PP_FINISHED",
+    ]:
         with patch.object(client, "_api_call") as mock_api:
             mock_api.return_value = [
                 {
@@ -528,7 +535,7 @@ def test_nzbget_api_call_json_rpc():
 
     client = NZBGetClient(config)
 
-    with patch("clients.nzbget.requests.post") as mock_post:
+    with patch("clients.nzbget.httpx.post") as mock_post:
         mock_response = Mock()
         mock_response.json.return_value = {"result": 123, "error": None}
         mock_response.raise_for_status = Mock()
@@ -553,7 +560,7 @@ def test_nzbget_api_call_error_handling():
 
     client = NZBGetClient(config)
 
-    with patch("clients.nzbget.requests.post") as mock_post:
+    with patch("clients.nzbget.httpx.post") as mock_post:
         mock_post.side_effect = Exception("Connection refused")
 
         result = client._api_call("listgroups", [])
@@ -571,7 +578,7 @@ def test_nzbget_api_call_with_error_response():
 
     client = NZBGetClient(config)
 
-    with patch("clients.nzbget.requests.post") as mock_post:
+    with patch("clients.nzbget.httpx.post") as mock_post:
         mock_response = Mock()
         mock_response.json.return_value = {
             "result": None,

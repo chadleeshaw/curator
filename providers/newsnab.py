@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional, Sequence
 
-import requests
+import httpx
 
 from core.constants.providers import (
     NEWSNAB_CATEGORY_MAP,
@@ -200,7 +200,7 @@ class NewsnabProvider(SearchProvider):
 
         return None
 
-    def _handle_http_429(self, response: requests.Response) -> bool:
+    def _handle_http_429(self, response: httpx.Response) -> bool:
         """
         Handle HTTP 429 Too Many Requests response.
 
@@ -353,7 +353,7 @@ class NewsnabProvider(SearchProvider):
 
         return results
 
-    def _handle_http_error_rate_limit(self, http_error: requests.exceptions.HTTPError) -> bool:
+    def _handle_http_error_rate_limit(self, http_error: httpx.HTTPStatusError) -> bool:
         """
         Check if HTTP error contains rate limit info and set state accordingly.
 
@@ -487,7 +487,7 @@ class NewsnabProvider(SearchProvider):
 
             logger.debug(f"Newsnab searching: query='{query}', categories={cat_ids}, url={url}")
 
-            response = requests.get(url, params=params, timeout=NEWSNAB_REQUEST_TIMEOUT)
+            response = httpx.get(url, params=params, timeout=NEWSNAB_REQUEST_TIMEOUT)
 
             if response.status_code == 429:
                 self._handle_http_429(response)
@@ -507,12 +507,12 @@ class NewsnabProvider(SearchProvider):
             )
             return results
 
-        except requests.exceptions.HTTPError as e:
+        except httpx.HTTPStatusError as e:
             if self._handle_http_error_rate_limit(e):
                 return []
             logger.error(f"Newsnab XML API HTTP error: {e}")
 
-        except requests.exceptions.RequestException as e:
+        except httpx.HTTPError as e:
             logger.debug(f"Newsnab XML API error: {e}")
         except ET.ParseError as e:
             logger.debug(f"Newsnab XML parse error: {e}")
@@ -551,7 +551,7 @@ class NewsnabProvider(SearchProvider):
 
             logger.debug(f"Newsnab RSS mode: categories={cat_ids}, url={url}")
 
-            response = requests.get(url, params=params, timeout=NEWSNAB_REQUEST_TIMEOUT)
+            response = httpx.get(url, params=params, timeout=NEWSNAB_REQUEST_TIMEOUT)
 
             if response.status_code == 429:
                 self._handle_http_429(response)
@@ -578,7 +578,7 @@ class NewsnabProvider(SearchProvider):
             logger.debug(f"Newsnab (RSS mode) found {len(results)} results in categories {cat_ids}")
             return results
 
-        except requests.exceptions.HTTPError as e:
+        except httpx.HTTPStatusError as e:
             # Check if RSS mode is not supported (HTTP 400 with error code 202)
             if e.response is not None and e.response.status_code == 400:
                 try:
@@ -595,7 +595,7 @@ class NewsnabProvider(SearchProvider):
                 return []
             logger.error(f"Newsnab RSS API HTTP error: {e}")
 
-        except requests.exceptions.RequestException as e:
+        except httpx.HTTPError as e:
             logger.debug(f"Newsnab RSS API error: {e}")
         except ET.ParseError as e:
             logger.debug(f"Newsnab RSS parse error: {e}")
@@ -704,7 +704,7 @@ class NewsnabProvider(SearchProvider):
             }
 
             logger.info(f"Testing Newsnab connection to {url}")
-            response = requests.get(url, params=params, timeout=NEWSNAB_REQUEST_TIMEOUT)
+            response = httpx.get(url, params=params, timeout=NEWSNAB_REQUEST_TIMEOUT)
 
             if response.status_code == 401:
                 return {
@@ -763,17 +763,17 @@ class NewsnabProvider(SearchProvider):
                     "message": f"Invalid XML response: {str(e)}",
                 }
 
-        except requests.exceptions.Timeout:
+        except httpx.TimeoutException:
             return {
                 "success": False,
                 "message": "Connection timeout - check your API URL and network",
             }
-        except requests.exceptions.ConnectionError:
+        except httpx.ConnectError:
             return {
                 "success": False,
                 "message": "Connection failed - check your API URL and network",
             }
-        except requests.exceptions.HTTPError as e:
+        except httpx.HTTPStatusError as e:
             return {
                 "success": False,
                 "message": f"HTTP error: {e.response.status_code}",

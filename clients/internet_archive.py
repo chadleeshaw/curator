@@ -20,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-import requests
+import httpx
 from internetarchive import get_item
 
 from core.constants.internet_archive import (
@@ -459,10 +459,10 @@ class InternetArchiveClient(DownloadClient):
             True if the server advertises Accept-Ranges: bytes
         """
         try:
-            head_resp = requests.head(url, timeout=30, allow_redirects=True)
+            head_resp = httpx.head(url, timeout=30, follow_redirects=True)
             accept_ranges = head_resp.headers.get("Accept-Ranges", "").lower()
             return accept_ranges == "bytes"
-        except requests.exceptions.RequestException as e:
+        except httpx.HTTPError as e:
             logger.debug(f"[{self.name}] HEAD request failed for resume check: {e}")
             return False
 
@@ -605,10 +605,10 @@ class InternetArchiveClient(DownloadClient):
                             if self._check_resume_support(job.download_url):
                                 # Send a HEAD request to verify staleness before resuming
                                 try:
-                                    head_resp = requests.head(
+                                    head_resp = httpx.head(
                                         job.download_url,
                                         timeout=30,
-                                        allow_redirects=True,
+                                        follow_redirects=True,
                                     )
                                     if self._validate_part_meta(existing_meta, head_resp.headers):
                                         resume_offset = partial_file.stat().st_size
@@ -620,7 +620,7 @@ class InternetArchiveClient(DownloadClient):
                                     else:
                                         # Content changed — restart from scratch
                                         self._cleanup_part_files(partial_file)
-                                except requests.exceptions.RequestException:
+                                except httpx.HTTPError:
                                     # HEAD failed — restart from scratch to be safe
                                     self._cleanup_part_files(partial_file)
                             else:
@@ -633,11 +633,12 @@ class InternetArchiveClient(DownloadClient):
                             # No valid meta — can't trust the .part file, restart
                             self._cleanup_part_files(partial_file)
 
-                    with requests.get(
+                    with httpx.stream(
+                        "GET",
                         job.download_url,
-                        stream=True,
                         timeout=IA_DOWNLOAD_TIMEOUT,
                         headers=headers if headers else None,
+                        follow_redirects=True,
                     ) as response:
                         response.raise_for_status()
 
@@ -679,7 +680,7 @@ class InternetArchiveClient(DownloadClient):
                         _last_notified_progress = -1  # Track last notified progress bucket
 
                         with open(partial_file, file_mode) as f:
-                            for chunk in response.iter_content(chunk_size=IA_DOWNLOAD_CHUNK_SIZE):
+                            for chunk in response.iter_bytes(chunk_size=IA_DOWNLOAD_CHUNK_SIZE):
                                 if chunk:
                                     f.write(chunk)
                                     job.downloaded_size += len(chunk)
@@ -731,7 +732,7 @@ class InternetArchiveClient(DownloadClient):
                     else:
                         raise IOError("Downloaded file is empty or missing")
 
-                except requests.exceptions.RequestException as e:
+                except httpx.HTTPError as e:
                     logger.warning(
                         f"[{self.name}] Download attempt {attempt + 1}/{IA_DOWNLOAD_RETRY_ATTEMPTS} "
                         f"failed for {job.identifier}: {e}"

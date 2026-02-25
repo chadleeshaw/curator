@@ -39,7 +39,7 @@ class AuthMiddleware:
 
         token = parts[1]
 
-        # Try JWT token first
+        # Try JWT token first — returns both username and user_id
         is_valid, username = self.auth_manager.verify_token(token)
         if is_valid and username:
             return username
@@ -48,6 +48,37 @@ class AuthMiddleware:
         is_valid, username = self.auth_manager.verify_api_token(token)
         if is_valid and username:
             return username
+
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    async def verify_token_with_id(self, authorization: Optional[str]):
+        """
+        Like verify_token but returns a (username, user_id) tuple.
+
+        Use this dependency in routes that need to scope queries by user_id.
+        For the current single-user deployment, user_id is always 1.
+
+        The JWT is decoded exactly once; both username and user_id are extracted
+        from the same payload to avoid a redundant decode call.
+        """
+        if not authorization:
+            raise HTTPException(status_code=401, detail="Missing authentication token")
+
+        parts = authorization.split()
+        if len(parts) != 2 or parts[0].lower() != "bearer":
+            raise HTTPException(status_code=401, detail="Invalid authorization header")
+
+        token = parts[1]
+
+        # Decode the JWT a single time and pull out both fields together.
+        is_valid, username, user_id = self.auth_manager.verify_token_full(token)
+        if is_valid and username:
+            return username, user_id
+
+        is_valid, username = self.auth_manager.verify_api_token(token)
+        if is_valid and username:
+            user_id = self.auth_manager._get_user_id(username)
+            return username, user_id
 
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 

@@ -180,6 +180,12 @@ class TaskScheduler:
                     logger.warning(
                         f"Forced shutdown - {len(self.active_tasks)} tasks still active: {self.active_tasks}"
                     )
+                    # Cancel any remaining asyncio tasks so they don't linger after shutdown.
+                    pending = set(self._async_tasks)  # copy to avoid mutation during iteration
+                    for t in pending:
+                        t.cancel()
+                    if pending:
+                        await asyncio.gather(*pending, return_exceptions=True)
                 else:
                     logger.info("All active tasks completed successfully")
 

@@ -73,6 +73,7 @@ class Credentials(Base):
     username = Column(String(255), nullable=False, unique=True, index=True)
     password_hash = Column(String(255), nullable=False)
     api_token = Column(String(255), nullable=True, unique=True, index=True)
+    is_admin = Column(Boolean, nullable=False, default=False)
     created_at = Column(UTCDateTime, default=utcnow)
     updated_at = Column(UTCDateTime, default=utcnow, onupdate=utcnow)
 
@@ -96,6 +97,16 @@ class Credentials(Base):
             "updated_at": _iso(self.updated_at),
         }
 
+    def to_public_dict(self) -> Dict[str, Any]:
+        """Like to_dict() but omits the api_token — safe to return to any authenticated user."""
+        return {
+            "id": self.id,
+            "username": self.username,
+            "is_admin": self.is_admin,
+            "created_at": _iso(self.created_at),
+            "updated_at": _iso(self.updated_at),
+        }
+
 
 class Periodical(Base):
     """Physical periodical file with metadata from filename, text extraction, and OCR."""
@@ -103,6 +114,12 @@ class Periodical(Base):
     __tablename__ = "periodicals"
 
     id = Column(Integer, primary_key=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("credentials.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     title = Column(String(255), nullable=False, index=True)
     language = Column(String(50), nullable=True, default=DEFAULT_LANGUAGE, index=True)
     category = Column(String(100), nullable=True, default=DEFAULT_CATEGORY, index=True)
@@ -142,6 +159,12 @@ class PeriodicalTracking(Base):
     __tablename__ = "periodical_tracking"
 
     id = Column(Integer, primary_key=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("credentials.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     olid = Column(String(50), nullable=False, index=True)
     title = Column(String(255), nullable=False, index=True)
     language = Column(String(50), nullable=True, default="English", index=True)
@@ -263,6 +286,12 @@ class DownloadSubmission(Base):
         SKIPPED = "skipped"
 
     id = Column(Integer, primary_key=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("credentials.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     tracking_id = Column(Integer, ForeignKey("periodical_tracking.id"), nullable=False, index=True)
     search_result_id = Column(Integer, ForeignKey("search_results.id"), nullable=True, index=True)
     job_id = Column(String(255), nullable=True, index=True)
@@ -377,6 +406,12 @@ class DiscoveredIssue(Base):
     __table_args__ = (Index("ix_discovered_issues_tracking_fuzzy", "tracking_id", "fuzzy_match_group"),)
 
     id = Column(Integer, primary_key=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("credentials.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     tracking_id = Column(Integer, ForeignKey("periodical_tracking.id"), nullable=False, index=True)
 
     title = Column(String(255), nullable=False, index=True)
@@ -459,6 +494,12 @@ class Stack(Base):
     __tablename__ = "stacks"
 
     id = Column(Integer, primary_key=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("credentials.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     name = Column(String(255), nullable=False, unique=True, index=True)
     slug = Column(String(255), nullable=False, unique=True, index=True)
     description = Column(String(1024), nullable=True)
@@ -515,6 +556,12 @@ class ReadingProgress(Base):
     __tablename__ = "reading_progress"
 
     id = Column(Integer, primary_key=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("credentials.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     periodical_id = Column(Integer, ForeignKey("periodicals.id"), nullable=False, index=True, unique=True)
     current_page = Column(Integer, nullable=True)
     current_chapter = Column(Integer, nullable=True)

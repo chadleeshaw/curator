@@ -1,11 +1,9 @@
 """
-Database migrations for Curator.
+Legacy manual migration system — superseded by Alembic.
 
-This package contains both schema migrations (automatic column additions/renames)
-and data migrations (transforming existing data after schema changes).
-
-Schema migrations are defined in schema.py and run automatically on startup.
-Data migrations are defined in data.py and run after schema changes.
+This package is kept for historical reference only.  The database migration
+system now uses Alembic (see alembic/ at the project root and core/database.py).
+Nothing in the active codebase imports from this package.
 """
 
 from .data import run_data_migrations

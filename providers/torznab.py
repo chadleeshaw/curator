@@ -12,7 +12,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Sequence
 
-import requests
+import httpx
 
 from core.constants.providers import (
     NEWSNAB_REQUEST_TIMEOUT,
@@ -134,7 +134,7 @@ class TorznabProvider(SearchProvider):
         """
         try:
             params = {"t": "caps", "apikey": self.api_key}
-            response = requests.get(
+            response = httpx.get(
                 f"{self.api_url}/api",
                 params=params,
                 timeout=NEWSNAB_REQUEST_TIMEOUT,
@@ -150,12 +150,12 @@ class TorznabProvider(SearchProvider):
 
             return {"success": True, "message": f"Connection successful — {title}"}
 
-        except requests.exceptions.Timeout:
+        except httpx.TimeoutException:
             return {
                 "success": False,
                 "message": "Connection timeout — check your API URL and network",
             }
-        except requests.exceptions.ConnectionError:
+        except httpx.ConnectError:
             return {
                 "success": False,
                 "message": "Connection failed — check your API URL and network",
@@ -185,16 +185,16 @@ class TorznabProvider(SearchProvider):
             params["apikey"] = self.api_key
 
         try:
-            response = requests.get(
+            response = httpx.get(
                 f"{self.api_url}/api",
                 params=params,
                 timeout=NEWSNAB_REQUEST_TIMEOUT,
             )
             response.raise_for_status()
-        except requests.exceptions.Timeout:
+        except httpx.TimeoutException:
             logger.warning(f"Torznab search timeout: {query}")
             return []
-        except requests.exceptions.ConnectionError:
+        except httpx.ConnectError:
             logger.warning(f"Torznab connection error: {query}")
             return []
         except Exception as e:

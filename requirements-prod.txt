@@ -1,11 +1,11 @@
+alembic>=1.13.0
 fastapi==0.133.0
 uvicorn==0.41.0
 httpx<0.29.0
 sqlalchemy==2.0.45
 pyyaml==6.0.2
 ruamel.yaml>=0.18.0
-fuzzywuzzy==0.18.0
-python-Levenshtein>=0.25.0
+rapidfuzz>=3.0.0
 Pillow>=11.0.0
 pypdf>=5.1.0
 requests>=2.28.0
