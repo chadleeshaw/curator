@@ -232,3 +232,60 @@ class AuthManager:
             if not creds:
                 return False, None
             return True, creds.username
+
+    # ------------------------------------------------------------------
+    # Multi-user management
+    # ------------------------------------------------------------------
+
+    def add_user(self, username: str, password: str) -> Tuple[bool, str]:
+        """
+        Create an additional user account.
+
+        Unlike ``create_credentials``, this method does not require that no
+        users exist yet — it is used by an already-authenticated admin to
+        invite additional users.
+
+        Args:
+            username: Username for the new account
+            password: Plain-text password (will be hashed before storage)
+
+        Returns:
+            Tuple of (success, message)
+        """
+        with get_db_session(self.session_factory) as session:
+            existing = session.query(Credentials).filter_by(username=username.lower()).first()
+            if existing:
+                return False, "Username already exists"
+
+            creds = Credentials(username=username.lower())
+            creds.set_password(password)
+            session.add(creds)
+            return True, "User created successfully"
+
+    def list_users(self):
+        """
+        Return a list of all user accounts (without password hashes).
+
+        Returns:
+            List of dicts with id, username, created_at, updated_at
+        """
+        with get_db_session(self.session_factory) as session:
+            users = session.query(Credentials).order_by(Credentials.id).all()
+            return [u.to_dict() for u in users]
+
+    def delete_user(self, user_id: int) -> Tuple[bool, str]:
+        """
+        Delete a user account by ID.
+
+        Args:
+            user_id: Primary key of the Credentials row to remove
+
+        Returns:
+            Tuple of (success, message)
+        """
+        with get_db_session(self.session_factory) as session:
+            creds = session.query(Credentials).filter_by(id=user_id).first()
+            if not creds:
+                return False, "User not found"
+            session.delete(creds)
+            return True, f"User '{creds.username}' deleted successfully"

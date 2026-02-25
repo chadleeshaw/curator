@@ -79,6 +79,13 @@ class UpdateUserRequest(BaseModel):
     new_password: Optional[str] = None
 
 
+class CreateUserRequest(BaseModel):
+    """Request body for an admin creating an additional user account"""
+
+    username: str = Field(..., min_length=1, max_length=255)
+    password: str = Field(..., min_length=8)
+
+
 class APITokenResponse(BaseModel):
     """Response containing the API token"""
 
