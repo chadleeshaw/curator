@@ -42,9 +42,15 @@ def upgrade() -> None:
                 sa.Column(
                     "user_id",
                     sa.Integer(),
-                    sa.ForeignKey("credentials.id", ondelete="CASCADE"),
                     nullable=True,  # nullable during migration; set NOT NULL below
                 )
+            )
+            batch_op.create_foreign_key(
+                f"fk_{table}_user_id",
+                "credentials",
+                ["user_id"],
+                ["id"],
+                ondelete="CASCADE",
             )
 
         # Backfill: assign all existing rows to user 1 (the original single user).
@@ -62,4 +68,5 @@ def downgrade() -> None:
     for table in reversed(_USER_SCOPED_TABLES):
         with op.batch_alter_table(table) as batch_op:
             batch_op.drop_index(f"ix_{table}_user_id")
+            batch_op.drop_constraint(f"fk_{table}_user_id", type_="foreignkey")
             batch_op.drop_column("user_id")
