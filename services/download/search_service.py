@@ -25,7 +25,9 @@ class SearchService:
     # Default priority for providers without explicit priority
     DEFAULT_PROVIDER_PRIORITY = 50
 
-    def __init__(self, search_providers: List[SearchProvider], fuzzy_threshold: int = 80):
+    def __init__(
+        self, search_providers: List[SearchProvider], fuzzy_threshold: int = 80
+    ):
         """
         Initialize search service.
 
@@ -72,14 +74,20 @@ class SearchService:
 
         # Extract language filter from title if present
         # Pattern: "Title - Language" where Language is one of the supported languages
-        language_names = "|".join([lang.capitalize() for lang in LANGUAGE_INDICATORS.keys()])
+        language_names = "|".join(
+            [lang.capitalize() for lang in LANGUAGE_INDICATORS.keys()]
+        )
         language_pattern = rf"\s+-\s+({language_names})$"
         match = re.search(language_pattern, periodical_title, re.IGNORECASE)
 
         if match:
             search_title = periodical_title[: match.start()].strip()
-            language_filter = match.group(1).capitalize()  # Normalize to capitalized form
-            logger.info(f"Searching for '{search_title}' with language filter: {language_filter}")
+            language_filter = match.group(
+                1
+            ).capitalize()  # Normalize to capitalized form
+            logger.info(
+                f"Searching for '{search_title}' with language filter: {language_filter}"
+            )
 
         all_results = []
         provider_errors = []
@@ -91,7 +99,9 @@ class SearchService:
                     logger.debug(f"Searching {provider.name} for: {search_title}")
 
                     # Execute search with timeout, passing aliases for RSS cache matching and IA OR queries
-                    future = executor.submit(provider.search, search_title, None, aliases)
+                    future = executor.submit(
+                        provider.search, search_title, None, aliases
+                    )
                     try:
                         results = future.result(timeout=PROVIDER_SEARCH_TIMEOUT)
                     except FuturesTimeoutError:
@@ -113,7 +123,9 @@ class SearchService:
 
                         # Skip if parser rejected as non-periodical (movies/TV/audiobooks)
                         if parsed is None:
-                            logger.debug(f"Skipping non-periodical result: {result.title}")
+                            logger.debug(
+                                f"Skipping non-periodical result: {result.title}"
+                            )
                             continue
 
                         if not filter_result(
@@ -131,11 +143,19 @@ class SearchService:
                             )
                             continue
 
-                        normalized_search = search_title.replace(".", " ").replace("_", " ")
-                        normalized_result = parsed.title.replace(".", " ").replace("_", " ")
+                        normalized_search = search_title.replace(".", " ").replace(
+                            "_", " "
+                        )
+                        normalized_result = parsed.title.replace(".", " ").replace(
+                            "_", " "
+                        )
 
-                        search_variant = self.title_matcher.extract_periodical_variant(normalized_search)
-                        result_variant = self.title_matcher.extract_periodical_variant(normalized_result)
+                        search_variant = self.title_matcher.extract_periodical_variant(
+                            normalized_search
+                        )
+                        result_variant = self.title_matcher.extract_periodical_variant(
+                            normalized_result
+                        )
                         variants_match = search_variant == result_variant or (
                             search_variant is None and result_variant is None
                         )
@@ -154,18 +174,23 @@ class SearchService:
                                 "provider": parsed.provider,
                                 "publication_date": parsed.publication_date,
                                 "raw_metadata": parsed.raw_metadata,
-                                "fuzzy_match_group_id": get_fuzzy_group_id(parsed.title),
+                                "fuzzy_match_group_id": get_fuzzy_group_id(
+                                    parsed.title
+                                ),
                             }
                         )
 
                 except Exception as e:
-                    logger.error(f"Error searching {provider.name} for '{periodical_title}': {e}")
+                    logger.error(
+                        f"Error searching {provider.name} for '{periodical_title}': {e}"
+                    )
                     provider_errors.append({"provider": provider.name, "error": str(e)})
 
         # Log provider errors summary if any occurred
         if provider_errors:
             logger.warning(
-                f"Provider errors during search for '{periodical_title}': " f"{len(provider_errors)} provider(s) failed"
+                f"Provider errors during search for '{periodical_title}': "
+                f"{len(provider_errors)} provider(s) failed"
             )
             for error_info in provider_errors:
                 logger.debug(f"  {error_info['provider']}: {error_info['error']}")
@@ -199,7 +224,9 @@ class SearchService:
             "Tech Magazine No 11 - Feb 2024" -> "tech_2024-02_i11"
             "Wired Vol 30 No 1" -> "wired_v30_i1"
         """
-        fuzzy_group = result.get("fuzzy_match_group_id") or get_fuzzy_group_id(result["title"])
+        fuzzy_group = result.get("fuzzy_match_group_id") or get_fuzzy_group_id(
+            result["title"]
+        )
         key_parts = [fuzzy_group]
 
         pub_date = result.get("publication_date")
@@ -213,14 +240,20 @@ class SearchService:
             key_parts.append(f"i{metadata['issue']}")
 
         if len(key_parts) == 1:
-            logger.warning(
-                f"Dedup key has no date or issue discriminator for '{result['title']}' — "
-                f"different issues of the same periodical may be collapsed"
-            )
+            # Suppress the warning when the fuzzy group ID itself ends in a number — that means
+            # the issue discriminator is embedded in the title (e.g. "500 Uncensored Sex Acts 126")
+            # and the key is already unique per issue without needing a separate date/volume/issue field.
+            if not re.search(r"-\d+$", fuzzy_group):
+                logger.warning(
+                    f"Dedup key has no date or issue discriminator for '{result['title']}' — "
+                    f"different issues of the same periodical may be collapsed"
+                )
 
         return "_".join(key_parts)
 
-    def _deduplicate_with_provider_preference(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _deduplicate_with_provider_preference(
+        self, results: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
         """
         Deduplicate search results, keeping results from preferred providers.
 
@@ -241,7 +274,8 @@ class SearchService:
 
         # Get provider priorities for sorting
         provider_priorities = {
-            p.type: getattr(p, "priority", self.DEFAULT_PROVIDER_PRIORITY) for p in self.search_providers
+            p.type: getattr(p, "priority", self.DEFAULT_PROVIDER_PRIORITY)
+            for p in self.search_providers
         }
 
         # Group results by deduplication key (title + date + issue/volume)
@@ -258,7 +292,9 @@ class SearchService:
             else:
                 # Sort by provider priority (lower = better)
                 group_results.sort(
-                    key=lambda r: provider_priorities.get(r.get("provider"), self.DEFAULT_PROVIDER_PRIORITY)
+                    key=lambda r: provider_priorities.get(
+                        r.get("provider"), self.DEFAULT_PROVIDER_PRIORITY
+                    )
                 )
                 best_result = group_results[0]
                 deduplicated.append(best_result)

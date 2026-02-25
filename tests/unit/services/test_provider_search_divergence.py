@@ -95,23 +95,38 @@ class TestIaFilteringUtility:
 
     def test_title_matches_query_good_match(self):
         """Title containing all search terms should pass."""
-        assert title_matches_query("National Geographic January 2024", "National Geographic") is True
+        assert (
+            title_matches_query(
+                "National Geographic January 2024", "National Geographic"
+            )
+            is True
+        )
 
     def test_title_matches_query_poor_match(self):
         """Title not matching search terms should fail."""
-        assert title_matches_query("Cooking Recipes Vol 5", "National Geographic") is False
+        assert (
+            title_matches_query("Cooking Recipes Vol 5", "National Geographic") is False
+        )
 
     def test_title_matches_query_partial_match_long_query(self):
         """50% match passes for queries with 3+ terms (uses default threshold)."""
         # 3-term query: "National Geographic Traveller"
         # "National Geographic" matches (2/3 = 66% >= 50%)
-        assert title_matches_query("National Geographic January 2024", "National Geographic Traveller") is True
+        assert (
+            title_matches_query(
+                "National Geographic January 2024", "National Geographic Traveller"
+            )
+            is True
+        )
 
     def test_title_matches_query_partial_match_short_query_fails(self):
         """Partial matches fail for short queries (1-2 terms require 100% match)."""
         # 2-term query: "National Geographic"
         # "National Review" only has 1/2 terms (50% < 100% required) → fails
-        assert title_matches_query("National Review January 2024", "National Geographic") is False
+        assert (
+            title_matches_query("National Review January 2024", "National Geographic")
+            is False
+        )
 
     def test_title_matches_query_short_terms_now_included(self):
         """Terms with 2+ chars are now checked (includes magazine abbreviations like PC, GQ)."""
@@ -158,7 +173,12 @@ class TestIaFilteringUtility:
 
     def test_filter_result_poor_title_filtered(self):
         """IA results with poor title match should be filtered out."""
-        assert filter_result("Cooking Recipes Vol 5", "internet_archive", {}, "National Geographic") is False
+        assert (
+            filter_result(
+                "Cooking Recipes Vol 5", "internet_archive", {}, "National Geographic"
+            )
+            is False
+        )
 
     def test_filter_result_good_match_passes(self):
         """IA results with good title match should pass."""
@@ -174,7 +194,10 @@ class TestIaFilteringUtility:
 
     def test_filter_result_no_query_skips_title_check(self):
         """When search_query is None, title-match check should be skipped."""
-        assert filter_result("Completely Unrelated Title", "internet_archive", {}, None) is True
+        assert (
+            filter_result("Completely Unrelated Title", "internet_archive", {}, None)
+            is True
+        )
 
 
 class TestCollectionQueryAutoAllow:
@@ -356,20 +379,28 @@ class TestCollectionDescriptorStripping:
         """'Hobby Magazine Collection' should become 'Hobby Magazine'."""
         from web.routers.search.providers import _strip_collection_descriptors
 
-        assert _strip_collection_descriptors("Hobby Magazine Collection") == "Hobby Magazine"
+        assert (
+            _strip_collection_descriptors("Hobby Magazine Collection")
+            == "Hobby Magazine"
+        )
 
     def test_strips_multiple_descriptors(self):
         """'National Geographic Complete Collection' should become 'National Geographic'."""
         from web.routers.search.providers import _strip_collection_descriptors
 
-        assert _strip_collection_descriptors("National Geographic Complete Collection") == "National Geographic"
+        assert (
+            _strip_collection_descriptors("National Geographic Complete Collection")
+            == "National Geographic"
+        )
 
     def test_strips_pack_and_bundle(self):
         """Pack and Bundle descriptors should be stripped."""
         from web.routers.search.providers import _strip_collection_descriptors
 
         assert _strip_collection_descriptors("PC Gamer Pack 2024") == "PC Gamer 2024"
-        assert _strip_collection_descriptors("Wired Magazine Bundle") == "Wired Magazine"
+        assert (
+            _strip_collection_descriptors("Wired Magazine Bundle") == "Wired Magazine"
+        )
 
     def test_strips_archive_and_set(self):
         """Archive and Set descriptors should be stripped."""
@@ -383,7 +414,10 @@ class TestCollectionDescriptorStripping:
         from web.routers.search.providers import _strip_collection_descriptors
 
         assert _strip_collection_descriptors("PC Gamer") == "PC Gamer"
-        assert _strip_collection_descriptors("National Geographic") == "National Geographic"
+        assert (
+            _strip_collection_descriptors("National Geographic")
+            == "National Geographic"
+        )
         assert _strip_collection_descriptors("Hobby") == "Hobby"
 
     def test_all_descriptor_words_preserves_query(self):
@@ -439,15 +473,23 @@ class TestNewsnabCategoryMerge:
 
         # Verify the request was made with only mapped categories
         call_args = mock_get.call_args
-        cat_param = call_args[1]["params"]["cat"] if "params" in call_args[1] else call_args[0][1]["cat"]
+        cat_param = (
+            call_args[1]["params"]["cat"]
+            if "params" in call_args[1]
+            else call_args[0][1]["cat"]
+        )
         cat_set = set(cat_param.split(","))
 
         # Should include ONLY mapped categories (7010,8000,8010), NOT user-configured extras
         assert "7010" in cat_set, "Mapped category 7010 should be included"
         assert "8000" in cat_set, "Mapped category 8000 should be included"
         assert "8010" in cat_set, "Mapped category 8010 should be included"
-        assert "6000" not in cat_set, "User-only category 6000 should NOT leak through filter"
-        assert "7000" not in cat_set, "User-only category 7000 should NOT leak through filter"
+        assert "6000" not in cat_set, (
+            "User-only category 6000 should NOT leak through filter"
+        )
+        assert "7000" not in cat_set, (
+            "User-only category 7000 should NOT leak through filter"
+        )
 
     @patch("providers.newsnab.httpx.get")
     def test_no_category_filter_uses_user_config(self, mock_get):
@@ -458,7 +500,11 @@ class TestNewsnabCategoryMerge:
         provider._search_xml_api("test", None)
 
         call_args = mock_get.call_args
-        cat_param = call_args[1]["params"]["cat"] if "params" in call_args[1] else call_args[0][1]["cat"]
+        cat_param = (
+            call_args[1]["params"]["cat"]
+            if "params" in call_args[1]
+            else call_args[0][1]["cat"]
+        )
         assert cat_param == "6000,7000,8000"
 
     @patch("providers.newsnab.httpx.get")
@@ -470,7 +516,11 @@ class TestNewsnabCategoryMerge:
         provider._search_xml_api("test", "NonExistentCategory")
 
         call_args = mock_get.call_args
-        cat_param = call_args[1]["params"]["cat"] if "params" in call_args[1] else call_args[0][1]["cat"]
+        cat_param = (
+            call_args[1]["params"]["cat"]
+            if "params" in call_args[1]
+            else call_args[0][1]["cat"]
+        )
         assert cat_param == "6000,7000,8000"
 
 
@@ -569,3 +619,86 @@ class TestProviderTimeout:
         assert len(results) == 1  # Fast provider's result
         assert len(errors) == 1  # Slow provider's timeout error
         assert results[0]["title"] == "Fast Result"
+
+
+# =============================================================================
+# Dedup key — bare-number title suppression
+# =============================================================================
+
+
+class TestDeduplicationKeyWarning:
+    """Verify that _get_deduplication_key only warns when the key genuinely has
+    no discriminator — not when the issue number is embedded in the title."""
+
+    def _make_service(self):
+        from services.download.search_service import SearchService
+
+        svc = SearchService.__new__(SearchService)
+        svc.search_providers = []
+        svc.DEFAULT_PROVIDER_PRIORITY = 999
+        return svc
+
+    def _make_result(
+        self, title, pub_date=None, volume=None, issue=None, fuzzy_group=None
+    ):
+        return {
+            "title": title,
+            "fuzzy_match_group_id": fuzzy_group or get_fuzzy_group_id(title),
+            "publication_date": pub_date,
+            "raw_metadata": {
+                k: v
+                for k, v in {"volume": volume, "issue": issue}.items()
+                if v is not None
+            },
+        }
+
+    def test_no_warning_when_title_ends_in_number(self, caplog):
+        """Titles like '500 Uncensored Sex Acts 126' embed the issue in the fuzzy group ID —
+        no warning should fire because the key is already unique per issue."""
+        import logging
+
+        svc = self._make_service()
+        result = self._make_result("500 Uncensored Sex Acts 126")
+
+        with caplog.at_level(
+            logging.WARNING, logger="services.download.search_service"
+        ):
+            key = svc._get_deduplication_key(result)
+
+        assert key == "500-uncensored-sex-acts-126"
+        assert "no date or issue discriminator" not in caplog.text
+
+    def test_no_warning_when_metadata_issue_present(self, caplog):
+        """Explicit issue in raw_metadata — no warning."""
+        import logging
+
+        svc = self._make_service()
+        result = self._make_result("Some Magazine", issue=42)
+
+        with caplog.at_level(
+            logging.WARNING, logger="services.download.search_service"
+        ):
+            svc._get_deduplication_key(result)
+
+        assert "no date or issue discriminator" not in caplog.text
+
+    def test_warning_fires_when_truly_no_discriminator(self, caplog):
+        """A title with no trailing number and no metadata — warning should fire."""
+        import logging
+
+        svc = self._make_service()
+        result = self._make_result("Efg Presents Purely Legal")
+
+        with caplog.at_level(
+            logging.WARNING, logger="services.download.search_service"
+        ):
+            svc._get_deduplication_key(result)
+
+        assert "no date or issue discriminator" in caplog.text
+
+    def test_keys_are_unique_per_bare_number_issue(self):
+        """Each bare-number issue produces a distinct dedup key, so no collapsing occurs."""
+        svc = self._make_service()
+        titles = [f"500 Uncensored Sex Acts {n}" for n in [126, 127, 128]]
+        keys = [svc._get_deduplication_key(self._make_result(t)) for t in titles]
+        assert len(set(keys)) == 3
