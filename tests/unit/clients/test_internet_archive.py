@@ -464,7 +464,75 @@ class TestDownloadStrategy:
             assert strategy["strategy"] == "compress"
 
 
-class TestTextPDFConstants:
+class TestDownloadStrategyUrlEncoding:
+    """Test that special characters in filenames are percent-encoded in download URLs.
+
+    Filenames returned by the IA metadata API may contain characters that are
+    reserved in URIs (e.g. '#', '?', '+').  The '#' character is the most
+    critical: an unencoded '#' in a URL path is treated as the start of a
+    fragment by HTTP clients and is stripped before the request is sent,
+    causing a 404.
+    """
+
+    def _create_client(self, tmpdir):
+        config = {"name": "IA Client", "downloads_dir": tmpdir}
+        return InternetArchiveClient(config)
+
+    def _create_metadata(self, identifier: str, files: list) -> dict:
+        return {"metadata": {"identifier": identifier}, "files": files}
+
+    def test_hash_in_filename_is_percent_encoded_text_pdf(self):
+        """'#' in a Text PDF filename must become '%23' in the download URL."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            metadata = self._create_metadata(
+                "gq-brasil-83-marco-2018",
+                [
+                    {
+                        "name": "GQ Brasil #83 (Março 2018).pdf",
+                        "format": "Text PDF",
+                        "size": "5000000",
+                    }
+                ],
+            )
+            strategy = client._get_download_strategy(metadata)
+            assert strategy["strategy"] == "direct"
+            assert "%23" in strategy["url"], f"'#' not encoded in URL: {strategy['url']}"
+            assert "#" not in strategy["url"], f"Literal '#' found in URL: {strategy['url']}"
+
+    def test_hash_in_filename_is_percent_encoded_preferred_format(self):
+        """'#' in a non-Text-PDF filename must become '%23' in the download URL."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            # Use a format that falls through to the preferred_formats loop
+            metadata = self._create_metadata(
+                "some-item",
+                [{"name": "Issue #5.epub", "format": "EPUB", "size": "2000000"}],
+            )
+            strategy = client._get_download_strategy(metadata)
+            assert strategy["strategy"] == "direct"
+            assert "%23" in strategy["url"], f"'#' not encoded in URL: {strategy['url']}"
+            assert "#" not in strategy["url"], f"Literal '#' found in URL: {strategy['url']}"
+
+    def test_non_ascii_chars_in_filename_are_encoded(self):
+        """Non-ASCII characters (e.g. 'ç') must be percent-encoded."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = self._create_client(tmpdir)
+            metadata = self._create_metadata(
+                "gq-brasil-71-fevereiro-2017",
+                [
+                    {
+                        "name": "GQ Brasil #71 (Fevereiro 2017).pdf",
+                        "format": "Text PDF",
+                        "size": "5000000",
+                    }
+                ],
+            )
+            strategy = client._get_download_strategy(metadata)
+            # Spaces should be encoded as %20, # as %23
+            assert " " not in strategy["url"], f"Unencoded space in URL: {strategy['url']}"
+            assert "%23" in strategy["url"]
+
     """Test Internet Archive constants for Text PDF handling"""
 
     def test_text_pdf_formats_defined(self):

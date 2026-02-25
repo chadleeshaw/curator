@@ -32,7 +32,9 @@ def auth_headers(client):
     """
     try:
         # Try to login with test credentials
-        response = client.post("/api/login", json={"username": "admin", "password": "admin"})  # Default credentials
+        response = client.post(
+            "/api/login", json={"username": "admin", "password": "admin"}
+        )  # Default credentials
         if response.status_code == 200:
             token = response.json()["access_token"]
             return {"Authorization": f"Bearer {token}"}
@@ -230,11 +232,14 @@ class TestAuthenticationPOST:
         """Benchmark login with invalid credentials (endpoint may not exist)"""
 
         def post_login():
-            return client.post("/api/login", json={"username": "invalid", "password": "invalid"})
+            return client.post(
+                "/api/login", json={"username": "invalid", "password": "invalid"}
+            )
 
         result = benchmark(post_login)
-        # Should return 401 for invalid credentials, 404 if endpoint doesn't exist
-        assert result.status_code in [401, 404, 422]
+        # Should return 401 for invalid credentials, 404 if endpoint doesn't exist,
+        # or 403 if CSRF middleware blocks the request before routing
+        assert result.status_code in [401, 403, 404, 422]
 
     def test_login_missing_fields(self, benchmark, client):
         """Benchmark login with missing fields (endpoint may not exist)"""
@@ -243,10 +248,13 @@ class TestAuthenticationPOST:
             return client.post("/api/login", json={})
 
         result = benchmark(post_login)
-        # Should return 422 for validation error, 404 if endpoint doesn't exist
-        assert result.status_code in [404, 422]
+        # Should return 422 for validation error, 404 if endpoint doesn't exist,
+        # or 403 if CSRF middleware blocks the request before routing
+        assert result.status_code in [403, 404, 422]
 
 
 if __name__ == "__main__":
     # Allow running directly for quick tests
-    print("Run with: .venv/bin/python -m pytest tests/performance/test_api_benchmarks.py --benchmark-only -v")
+    print(
+        "Run with: .venv/bin/python -m pytest tests/performance/test_api_benchmarks.py --benchmark-only -v"
+    )

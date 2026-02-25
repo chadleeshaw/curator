@@ -604,6 +604,7 @@ class TestDeduplicationKeyWarning:
         svc = self._make_service()
         result = self._make_result("500 Cooking Ideas 126")
 
+        caplog.clear()
         with caplog.at_level(logging.WARNING, logger="services.download.search_service"):
             key = svc._get_deduplication_key(result)
 
@@ -617,22 +618,24 @@ class TestDeduplicationKeyWarning:
         svc = self._make_service()
         result = self._make_result("Some Magazine", issue=42)
 
+        caplog.clear()
         with caplog.at_level(logging.WARNING, logger="services.download.search_service"):
             svc._get_deduplication_key(result)
 
         assert "no date or issue discriminator" not in caplog.text
 
-    def test_warning_fires_when_truly_no_discriminator(self, caplog):
+    def test_warning_fires_when_truly_no_discriminator(self):
         """A title with no trailing number and no metadata — warning should fire."""
-        import logging
+        from unittest.mock import patch
 
         svc = self._make_service()
         result = self._make_result("Efg Presents Purely Legal")
 
-        with caplog.at_level(logging.WARNING, logger="services.download.search_service"):
+        with patch("services.download.search_service.logger") as mock_logger:
             svc._get_deduplication_key(result)
 
-        assert "no date or issue discriminator" in caplog.text
+        mock_logger.warning.assert_called_once()
+        assert "no date or issue discriminator" in mock_logger.warning.call_args[0][0]
 
     def test_keys_are_unique_per_bare_number_issue(self):
         """Each bare-number issue produces a distinct dedup key, so no collapsing occurs."""

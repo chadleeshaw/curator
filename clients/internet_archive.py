@@ -19,6 +19,7 @@ import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
+from urllib.parse import quote
 
 import httpx
 from internetarchive import get_item
@@ -173,7 +174,7 @@ class InternetArchiveClient(DownloadClient):
                         "strategy": "direct",
                         "format": text_pdf_fmt,
                         "files": matching_files,
-                        "url": f"{IA_DOWNLOAD_BASE_URL}/{identifier}/{file_info['name']}",
+                        "url": f"{IA_DOWNLOAD_BASE_URL}/{identifier}/{quote(file_info['name'], safe='')}",
                         "is_collection": False,
                         "file_count": 1,
                         "file_info": file_info,
@@ -200,7 +201,7 @@ class InternetArchiveClient(DownloadClient):
                             "strategy": "direct",
                             "format": fmt,
                             "files": fmt_files,
-                            "url": f"{IA_DOWNLOAD_BASE_URL}/{identifier}/{file_info['name']}",
+                            "url": f"{IA_DOWNLOAD_BASE_URL}/{identifier}/{quote(file_info['name'], safe='')}",
                             "is_collection": False,
                             "file_count": len(fmt_files),
                             "file_info": file_info,
