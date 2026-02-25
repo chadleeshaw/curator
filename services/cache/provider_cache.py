@@ -73,7 +73,12 @@ class NzbCacheService:
 
     def _drop_legacy_tables(self):
         """Drop tables from old cache systems that are no longer needed."""
-        legacy_tables = ["cached_releases", "cached_releases_fts", "sync_status", "rss_cache"]
+        legacy_tables = [
+            "cached_releases",
+            "cached_releases_fts",
+            "sync_status",
+            "rss_cache",
+        ]
         legacy_triggers = [
             "cached_releases_fts_insert",
             "cached_releases_fts_delete",
@@ -139,7 +144,7 @@ class NzbCacheService:
 
             # Fetch from provider and cache
             logger.info(f"Fetching NZB from provider: {download_url[:80]}")
-            response = httpx.get(download_url, timeout=30)
+            response = httpx.get(download_url, timeout=30, follow_redirects=True)
             response.raise_for_status()
             nzb_content = response.text
 

@@ -3,6 +3,7 @@ Tests for medium severity architecture fixes:
 1. Shared cache engine — FeedSyncService and NzbCacheService accept shared session factory
 2. SearchResult periodic cleanup — SEARCH_RESULT_RETENTION_DAYS constant exists
 3. Download slot race condition — DownloadManager._slot_lock serializes concurrent access
+4. NZB provider redirects — get_nzb_content follows HTTP 301/302 redirects
 """
 
 import sys
@@ -21,7 +22,13 @@ from core.parsers.date import utc_now
 
 from core.interfaces import DownloadClient
 from models.cache import CacheBase, NzbCache, RssFeedEntry
-from models.database import Base, DownloadSubmission, DiscoveredIssue, PeriodicalTracking, SearchResult
+from models.database import (
+    Base,
+    DownloadSubmission,
+    DiscoveredIssue,
+    PeriodicalTracking,
+    SearchResult,
+)
 from services.cache.feed_sync import FeedSyncService
 from services.cache.provider_cache import NzbCacheService
 
@@ -340,3 +347,56 @@ class TestDownloadSlotLock:
             t.join(timeout=5)
 
         assert max_concurrent[0] <= 1, f"Expected max 1 concurrent, got {max_concurrent[0]}"
+
+
+# =============================================================================
+# Fix 4: NZB provider redirects
+# =============================================================================
+
+
+class TestNzbProviderRedirects:
+    """Prowlarr/Newsnab download endpoints often return 301/302 redirects to the
+    upstream indexer's NZB URL.  httpx does not follow redirects by default, so
+    get_nzb_content must pass follow_redirects=True."""
+
+    def test_get_nzb_content_follows_redirects(self, tmp_path):
+        """A 301 redirect from Prowlarr should be followed, not raised as an error."""
+        from unittest.mock import MagicMock, patch
+
+        db_path = str(tmp_path / "cache.db")
+        service = NzbCacheService(cache_db_path=db_path)
+
+        nzb_xml = '<?xml version="1.0"?><nzb xmlns="http://www.newzbin.com/DTD/2003/nzb"><file></file></nzb>'
+
+        mock_response = MagicMock()
+        mock_response.text = nzb_xml
+        mock_response.raise_for_status = MagicMock()  # does not raise
+
+        with patch("services.cache.provider_cache.httpx.get", return_value=mock_response) as mock_get:
+            result = service.get_nzb_content("http://prowlarr.local/1/download?apikey=abc&link=xyz")
+
+        assert result == nzb_xml
+        # Verify follow_redirects=True was passed
+        _, kwargs = mock_get.call_args
+        assert kwargs.get("follow_redirects") is True, "follow_redirects=True must be passed to httpx.get"
+
+    def test_get_nzb_content_still_raises_on_real_errors(self, tmp_path):
+        """Non-redirect errors (404, 500) should still propagate as exceptions."""
+        import httpx as _httpx
+        from unittest.mock import MagicMock, patch
+
+        db_path = str(tmp_path / "cache.db")
+        service = NzbCacheService(cache_db_path=db_path)
+
+        mock_response = MagicMock()
+        mock_response.raise_for_status.side_effect = _httpx.HTTPStatusError(
+            "404 Not Found",
+            request=MagicMock(),
+            response=MagicMock(status_code=404),
+        )
+
+        with patch("services.cache.provider_cache.httpx.get", return_value=mock_response):
+            result = service.get_nzb_content("http://prowlarr.local/1/download?apikey=abc&link=missing")
+
+        # On HTTP error, get_nzb_content returns None (logged as error, not re-raised)
+        assert result is None
