@@ -86,6 +86,7 @@ class TestDownloadSubmission:
             olid="test_magazine",
             title="Test Magazine",
             track_all_editions=False,
+            user_id=1,
         )
         session.add(tracking)
         session.flush()
@@ -99,6 +100,7 @@ class TestDownloadSubmission:
             latest_url="http://example.com/test.nzb",
             latest_provider="test",
             download_status="wanted",
+            user_id=1,
         )
         session.add(issue)
         session.commit()
@@ -122,6 +124,7 @@ class TestDownloadSubmission:
             olid="test_magazine",
             title="Test Magazine",
             track_all_editions=False,
+            user_id=1,
         )
         session.add(tracking)
         session.flush()
@@ -135,6 +138,7 @@ class TestDownloadSubmission:
             latest_url="http://example.com/test1.nzb",
             latest_provider="test",
             download_status="wanted",
+            user_id=1,
         )
         session.add(issue)
         session.commit()
@@ -162,6 +166,7 @@ class TestDownloadStatusTracking:
         tracking = PeriodicalTracking(
             olid="test_magazine",
             title="Test Magazine",
+            user_id=1,
         )
         session.add(tracking)
         session.flush()
@@ -174,6 +179,7 @@ class TestDownloadStatusTracking:
             result_title="Test Issue",
             fuzzy_match_group="test-issue",
             client_name="TestClient",
+            user_id=1,
         )
         session.add(submission)
         session.commit()
@@ -193,7 +199,11 @@ class TestDownloadStatusTracking:
         session = session_factory()
 
         # Create tracking
-        tracking = PeriodicalTracking(olid="test_mag", title="Test")
+        tracking = PeriodicalTracking(
+            olid="test_mag",
+            title="Test",
+            user_id=1,
+        )
         session.add(tracking)
         session.flush()
 
@@ -206,6 +216,7 @@ class TestDownloadStatusTracking:
             result_title="Issue 1",
             fuzzy_match_group="issue-1",
             client_name="TestClient",
+            user_id=1,
         )
         downloading = DownloadSubmission(
             tracking_id=tracking.id,
@@ -215,6 +226,7 @@ class TestDownloadStatusTracking:
             result_title="Issue 2",
             fuzzy_match_group="issue-2",
             client_name="TestClient",
+            user_id=1,
         )
         completed = DownloadSubmission(
             tracking_id=tracking.id,
@@ -225,6 +237,7 @@ class TestDownloadStatusTracking:
             fuzzy_match_group="issue-3",
             client_name="TestClient",
             file_path="/test/job_3.pdf",
+            user_id=1,
         )
 
         session.add_all([pending, downloading, completed])
@@ -250,7 +263,11 @@ class TestDownloadCompletion:
         session = session_factory()
 
         # Create tracking
-        tracking = PeriodicalTracking(olid="test_mag", title="Test")
+        tracking = PeriodicalTracking(
+            olid="test_mag",
+            title="Test",
+            user_id=1,
+        )
         session.add(tracking)
         session.flush()
 
@@ -264,6 +281,7 @@ class TestDownloadCompletion:
             fuzzy_match_group="issue-1",
             client_name="TestClient",
             file_path="/downloads/job_1.pdf",
+            user_id=1,
         )
         completed2 = DownloadSubmission(
             tracking_id=tracking.id,
@@ -274,6 +292,7 @@ class TestDownloadCompletion:
             fuzzy_match_group="issue-2",
             client_name="TestClient",
             file_path="/downloads/job_2.pdf",
+            user_id=1,
         )
 
         session.add_all([completed1, completed2])
@@ -294,7 +313,11 @@ class TestDownloadCompletion:
         session = session_factory()
 
         # Create tracking and completed submission
-        tracking = PeriodicalTracking(olid="test_mag", title="Test")
+        tracking = PeriodicalTracking(
+            olid="test_mag",
+            title="Test",
+            user_id=1,
+        )
         session.add(tracking)
         session.flush()
 
@@ -307,6 +330,7 @@ class TestDownloadCompletion:
             fuzzy_match_group="issue-1",
             client_name="TestClient",
             file_path="/downloads/job_1.pdf",
+            user_id=1,
         )
         session.add(submission)
         session.commit()

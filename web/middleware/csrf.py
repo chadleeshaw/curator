@@ -94,7 +94,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
             key=CSRF_COOKIE_NAME,
             value=token,
             httponly=False,  # Must be readable by JavaScript
-            samesite="strict",
+            samesite="lax",
             secure=self._secure,
             path="/",
         )

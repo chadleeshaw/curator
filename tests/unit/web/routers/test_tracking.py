@@ -49,6 +49,7 @@ class TestTrackingCreation:
             first_publish_year=1888,
             track_all_editions=True,
             last_metadata_update=datetime.now(UTC),
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -69,6 +70,7 @@ class TestTrackingCreation:
         tracking = PeriodicalTracking(
             olid="OL99999W",
             title="Test Magazine",
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -96,6 +98,7 @@ class TestTrackingUpdates:
             olid="OL12345W",
             title="Wired Magazine",
             track_all_editions=False,
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -127,6 +130,7 @@ class TestTrackingUpdates:
                 "OL222M": True,
                 "OL333M": False,
             },
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -148,8 +152,16 @@ class TestTrackingQueries:
         session = session_factory()
 
         # Create multiple tracking records
-        tracking1 = PeriodicalTracking(olid="OL11111W", title="Magazine A")
-        tracking2 = PeriodicalTracking(olid="OL22222W", title="Magazine B")
+        tracking1 = PeriodicalTracking(
+            olid="OL11111W",
+            title="Magazine A",
+            user_id=1,
+        )
+        tracking2 = PeriodicalTracking(
+            olid="OL22222W",
+            title="Magazine B",
+            user_id=1,
+        )
         session.add_all([tracking1, tracking2])
         session.commit()
 
@@ -170,16 +182,19 @@ class TestTrackingQueries:
             olid="OL11111W",
             title="Magazine A",
             track_all_editions=True,
+            user_id=1,
         )
         track_selective = PeriodicalTracking(
             olid="OL22222W",
             title="Magazine B",
             track_all_editions=False,
+            user_id=1,
         )
         track_all2 = PeriodicalTracking(
             olid="OL33333W",
             title="Magazine C",
             track_all_editions=True,
+            user_id=1,
         )
         session.add_all([track_all1, track_selective, track_all2])
         session.commit()
@@ -200,6 +215,7 @@ class TestTrackingQueries:
             olid="OL12345W",
             title="Vintage Magazine",
             selected_years=[2020, 2021, 2022],
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -222,6 +238,7 @@ class TestTrackingDeletion:
         tracking = PeriodicalTracking(
             olid="OL12345W",
             title="Temporary Magazine",
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -257,6 +274,7 @@ class TestTrackingMetadata:
             olid="OL12345W",
             title="Time Magazine",
             periodical_metadata=metadata,
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -277,6 +295,7 @@ class TestTrackingMetadata:
             olid="OL12345W",
             title="Test Magazine",
             last_metadata_update=None,
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -306,6 +325,7 @@ class TestTrackingUniqueness:
             olid="OL12345W",
             title="Wired Magazine",
             language="English",
+            user_id=1,
         )
         session.add(tracking1)
         session.commit()
@@ -315,6 +335,7 @@ class TestTrackingUniqueness:
             olid="OL12345W",  # Same OLID
             title="Wired Magazine",
             language="German",
+            user_id=1,
         )
         session.add(tracking2)
         session.commit()  # Should not raise - duplicate OLID with different language is allowed
@@ -345,12 +366,14 @@ class TestTrackingMerge:
             title="Wired",
             track_all_editions=True,
             last_metadata_update=datetime.now(UTC),
+            user_id=1,
         )
         tracking2 = PeriodicalTracking(
             olid="OL67890W",
             title="Wired Magazine",
             track_all_editions=True,
             last_metadata_update=datetime.now(UTC),
+            user_id=1,
         )
         session.add_all([tracking1, tracking2])
         session.commit()
@@ -362,6 +385,7 @@ class TestTrackingMerge:
             issue_date=datetime(2024, 1, 1),
             file_path="/test/wired-jan2024.pdf",
             tracking_id=tracking1.id,
+            user_id=1,
         )
         mag2 = Periodical(
             title="Wired Magazine",
@@ -369,6 +393,7 @@ class TestTrackingMerge:
             issue_date=datetime(2024, 2, 1),
             file_path="/test/wired-feb2024.pdf",
             tracking_id=tracking2.id,
+            user_id=1,
         )
         mag3 = Periodical(
             title="Wired Magazine",
@@ -376,6 +401,7 @@ class TestTrackingMerge:
             issue_date=datetime(2024, 3, 1),
             file_path="/test/wired-mar2024.pdf",
             tracking_id=tracking2.id,
+            user_id=1,
         )
         session.add_all([mag1, mag2, mag3])
         session.commit()
@@ -443,6 +469,7 @@ class TestTrackingMerge:
             language="English",  # Explicitly set
             track_all_editions=True,
             last_metadata_update=datetime.now(UTC),
+            user_id=1,
         )
         tracking2 = PeriodicalTracking(
             olid="OL222W",
@@ -450,6 +477,7 @@ class TestTrackingMerge:
             language="German",  # Different language
             track_all_editions=True,
             last_metadata_update=datetime.now(UTC),
+            user_id=1,
         )
         session.add_all([tracking1, tracking2])
         session.commit()
@@ -461,6 +489,7 @@ class TestTrackingMerge:
             issue_date=datetime(2024, 1, 1),
             file_path="/test/natgeo-en-jan.pdf",
             tracking_id=tracking1.id,
+            user_id=1,
         )
         mag2_de = Periodical(
             title="NatGeo Magazine",
@@ -468,6 +497,7 @@ class TestTrackingMerge:
             issue_date=datetime(2024, 1, 1),
             file_path="/test/natgeo-de-jan.pdf",
             tracking_id=tracking2.id,
+            user_id=1,
         )
         session.add_all([mag1_en, mag2_de])
         session.commit()
@@ -514,12 +544,14 @@ class TestTrackingMerge:
             title="National Geographic",
             track_all_editions=True,
             last_metadata_update=datetime.now(UTC),
+            user_id=1,
         )
         tracking2 = PeriodicalTracking(
             olid="OL_SPECIAL",
             title="National Geographic Special Edition",
             track_all_editions=True,
             last_metadata_update=datetime.now(UTC),
+            user_id=1,
         )
         session.add_all([tracking1, tracking2])
         session.commit()
@@ -531,6 +563,7 @@ class TestTrackingMerge:
             issue_date=datetime(2024, 1, 1),
             file_path="/lib/natgeo-jan2024.pdf",
             tracking_id=tracking1.id,
+            user_id=1,
         )
         special_mag = Periodical(
             title="National Geographic Special Edition",
@@ -539,6 +572,7 @@ class TestTrackingMerge:
             file_path="/lib/natgeo-special-jan2024.pdf",
             tracking_id=tracking2.id,
             extra_metadata={"special_edition": "Special Edition"},
+            user_id=1,
         )
         session.add_all([regular_mag, special_mag])
         session.commit()
@@ -590,6 +624,7 @@ class TestTitleChangeFileReorganization:
                 title="Old Magazine Name",
                 category=CATEGORY_MAGAZINE,
                 track_all_editions=True,
+                user_id=1,
             )
             session.add(tracking)
             session.commit()
@@ -614,6 +649,7 @@ class TestTitleChangeFileReorganization:
                 cover_path=str(old_cover),
                 tracking_id=tracking_id,
                 extra_metadata={"category": CATEGORY_MAGAZINE},
+                user_id=1,
             )
             session.add(magazine)
             session.commit()
@@ -677,6 +713,7 @@ class TestTitleChangeFileReorganization:
                 olid="OL12345W",
                 title="National Geographic",
                 category=CATEGORY_MAGAZINE,
+                user_id=1,
             )
             session.add(tracking)
             session.commit()
@@ -698,6 +735,7 @@ class TestTitleChangeFileReorganization:
                     "category": CATEGORY_MAGAZINE,
                     "special_edition": "Swimsuit Edition",
                 },
+                user_id=1,
             )
             session.add(special_magazine)
             session.commit()
@@ -732,6 +770,7 @@ class TestTitleChangeFileReorganization:
                 olid="OL12345W",
                 title="Wired Magazine",
                 category=CATEGORY_MAGAZINE,
+                user_id=1,
             )
             session.add(tracking)
             session.commit()
@@ -758,6 +797,7 @@ class TestTitleChangeFileReorganization:
                     file_path=str(pdf_path),
                     tracking_id=tracking_id,
                     extra_metadata={"category": CATEGORY_MAGAZINE},
+                    user_id=1,
                 )
                 session.add(magazine)
                 magazines.append(magazine)

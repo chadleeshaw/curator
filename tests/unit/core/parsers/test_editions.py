@@ -51,6 +51,7 @@ class TestSelectedEditionsDict:
         tracking = PeriodicalTracking(
             olid="test-mag",
             title="Test Magazine",
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -68,6 +69,7 @@ class TestSelectedEditionsDict:
             olid="test-mag",
             title="Test Magazine",
             selected_editions={"OL123456M": True, "OL123457M": True},
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -86,6 +88,7 @@ class TestSelectedEditionsDict:
             olid="test-mag",
             title="Test Magazine",
             selected_editions={"OL123456M": True, "OL123457M": False},
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -112,6 +115,7 @@ class TestAutoDownloadIntegration:
             track_all_editions=False,
             track_new_only=False,
             selected_editions={"OL123456M": True},
+            user_id=1,
         )
         session.add(tracking)
         session.commit()

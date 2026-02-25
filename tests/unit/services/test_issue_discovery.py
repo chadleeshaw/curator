@@ -33,6 +33,7 @@ class TestRecordSearchResults:
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -91,6 +92,7 @@ class TestRecordSearchResults:
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -164,6 +166,7 @@ class TestEvaluateDiscoveredIssues:
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -220,6 +223,7 @@ class TestEvaluateDiscoveredIssues:
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -230,6 +234,7 @@ class TestEvaluateDiscoveredIssues:
             issue_date=datetime(2024, 1, 15),
             file_path="/path/to/magazine.pdf",
             tracking_id=tracking.id,
+            user_id=1,
         )
         session.add(magazine)
         session.commit()
@@ -281,6 +286,7 @@ class TestDownloadFailureHandling:
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -339,6 +345,7 @@ class TestDownloadFailureHandling:
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -406,6 +413,7 @@ class TestGetDownloadQueue:
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -474,6 +482,7 @@ class TestGetDownloadQueue:
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -534,6 +543,7 @@ class TestRetryPermanentlyFailed:
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -597,6 +607,7 @@ class TestRetryPermanentlyFailed:
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -677,6 +688,7 @@ class TestSecondSearchReEvaluation:
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -720,6 +732,7 @@ class TestSecondSearchReEvaluation:
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -779,6 +792,7 @@ class TestSecondSearchReEvaluation:
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -815,6 +829,7 @@ class TestSecondSearchReEvaluation:
             olid="test-mag",
             title="Test Magazine",
             track_all_editions=True,
+            user_id=1,
         )
         session.add(tracking)
         session.commit()

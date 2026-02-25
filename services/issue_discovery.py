@@ -123,7 +123,10 @@ class IssueDiscoveryService:
 
                 url = search_result.get("url", "")
                 provider = search_result.get("provider", "")
-                pubdate = self._parse_pubdate(search_result.get("pubdate") or search_result.get("publication_date"))
+                pubdate = self._parse_pubdate(
+                    search_result.get("pubdate")
+                    or search_result.get("publication_date")
+                )
 
                 parsed = self.parser.parse_search_result(
                     title=title,
@@ -151,9 +154,13 @@ class IssueDiscoveryService:
                 )
 
                 if existing:
-                    self._update_existing_issue(existing, search_result, parsed, pubdate, now)
+                    self._update_existing_issue(
+                        existing, search_result, parsed, pubdate, now
+                    )
                     stats["updated"] += 1
-                    logger.debug(f"Updated existing issue: {fuzzy_group} (seen {existing.times_seen} times)")
+                    logger.debug(
+                        f"Updated existing issue: {fuzzy_group} (seen {existing.times_seen} times)"
+                    )
                 else:
                     new_issue = self._create_new_issue(
                         tracking_id,
@@ -207,14 +214,19 @@ class IssueDiscoveryService:
             logger.warning(f"Failed to parse pubdate '{pubdate_str}': {parse_error}")
             return None
 
-    def _ia_title_matches_tracking(self, result: Dict[str, Any], tracking: PeriodicalTracking) -> bool:
+    def _ia_title_matches_tracking(
+        self, result: Dict[str, Any], tracking: PeriodicalTracking
+    ) -> bool:
         """Return False for Internet Archive results whose title doesn't match the tracked periodical."""
         if result.get("provider") != "internet_archive":
             return True
 
         title = result.get("title", "")
         if not title_matches_query(title, tracking.title):
-            logger.debug(f"Skipping IA result with poor title match: '{title}' " f"(tracking '{tracking.title}')")
+            logger.debug(
+                f"Skipping IA result with poor title match: '{title}' "
+                f"(tracking '{tracking.title}')"
+            )
             return False
         return True
 
@@ -227,7 +239,9 @@ class IssueDiscoveryService:
     #   PERMANENTLY_FAILED — has an explicit admin override path (retry_permanently_failed).
     _REEVALUATE_ON_RESEEN = frozenset({DownloadStatus.WANTED, DownloadStatus.FAILED})
 
-    def _update_existing_issue(self, existing: DiscoveredIssue, result: Dict[str, Any], parsed, pubdate, now) -> None:
+    def _update_existing_issue(
+        self, existing: DiscoveredIssue, result: Dict[str, Any], parsed, pubdate, now
+    ) -> None:
         """Update an existing DiscoveredIssue with fresher data from a new search result.
 
         If the issue is in a re-evaluable state (WANTED or FAILED), reset it to DISCOVERED
@@ -239,11 +253,16 @@ class IssueDiscoveryService:
         existing.times_seen += 1
 
         should_update_url = (
-            pubdate is not None and (existing.latest_pubdate is None or pubdate > existing.latest_pubdate)
+            pubdate is not None
+            and (existing.latest_pubdate is None or pubdate > existing.latest_pubdate)
         ) or (pubdate is None and existing.latest_pubdate is None)
 
         if should_update_url:
-            if pubdate and existing.latest_pubdate and pubdate > existing.latest_pubdate:
+            if (
+                pubdate
+                and existing.latest_pubdate
+                and pubdate > existing.latest_pubdate
+            ):
                 logger.debug(
                     f"Preferring newer NZB for {existing.fuzzy_match_group}: {pubdate} > {existing.latest_pubdate}"
                 )
@@ -276,6 +295,7 @@ class IssueDiscoveryService:
         """Build a new DiscoveredIssue from a parsed search result."""
         search_result_id = result.get("search_result_id")
         return DiscoveredIssue(
+            user_id=1,
             tracking_id=tracking_id,
             title=title,
             normalized_title=parsed.cleaned_title.lower(),
@@ -295,7 +315,11 @@ class IssueDiscoveryService:
             latest_provider=parsed.provider,
             latest_pubdate=pubdate,
             search_result_ids=[search_result_id] if search_result_id else [],
-            max_retries=(MAX_DOWNLOAD_RETRIES_IA if provider == "internet_archive" else self.default_max_retries),
+            max_retries=(
+                MAX_DOWNLOAD_RETRIES_IA
+                if provider == "internet_archive"
+                else self.default_max_retries
+            ),
             extra_metadata={
                 "raw_title": title,
                 "base_title": parsed.base_title,
@@ -304,7 +328,9 @@ class IssueDiscoveryService:
             },
         )
 
-    def evaluate_discovered_issues(self, tracking_id: int, session: Session) -> Dict[str, int]:
+    def evaluate_discovered_issues(
+        self, tracking_id: int, session: Session
+    ) -> Dict[str, int]:
         """
         Evaluate all "discovered" issues and determine which should be downloaded.
 
@@ -343,7 +369,9 @@ class IssueDiscoveryService:
             .all()
         )
 
-        logger.info(f"Evaluating {len(discovered)} discovered issues for '{tracking.title}'")
+        logger.info(
+            f"Evaluating {len(discovered)} discovered issues for '{tracking.title}'"
+        )
 
         for issue in discovered:
             try:
@@ -362,7 +390,9 @@ class IssueDiscoveryService:
                     issue.download_status = DownloadStatus.WANTED
                     issue.download_priority = self._calculate_priority(issue, tracking)
                     stats["wanted"] += 1
-                    logger.info(f"Marked as wanted (priority {issue.download_priority}): {issue.title}")
+                    logger.info(
+                        f"Marked as wanted (priority {issue.download_priority}): {issue.title}"
+                    )
                 else:
                     issue.download_status = DownloadStatus.IGNORED
                     issue.download_priority = 0
@@ -419,7 +449,9 @@ class IssueDiscoveryService:
             "errors": record_stats["errors"] + eval_stats["errors"],
         }
 
-    def handle_download_failure(self, issue_id: int, error_message: str, session: Session) -> DownloadStatus:
+    def handle_download_failure(
+        self, issue_id: int, error_message: str, session: Session
+    ) -> DownloadStatus:
         """
         Handle a download failure for a discovered issue.
 
@@ -457,14 +489,18 @@ class IssueDiscoveryService:
             # Permanent failure - mark as permanently_failed
             issue.download_status = DownloadStatus.PERMANENTLY_FAILED
             issue.download_priority = 0
-            logger.warning(f"Marking as permanently_failed after {issue.attempt_count} attempts: {issue.title}")
+            logger.warning(
+                f"Marking as permanently_failed after {issue.attempt_count} attempts: {issue.title}"
+            )
             new_status = DownloadStatus.PERMANENTLY_FAILED
         else:
             # Temporary failure - can retry
             issue.download_status = DownloadStatus.FAILED
             # Reduce priority slightly for failed downloads
             issue.download_priority = max(1, issue.download_priority - 10)
-            logger.info(f"Download failed (attempt {issue.attempt_count}/{issue.max_retries + 1}): {issue.title}")
+            logger.info(
+                f"Download failed (attempt {issue.attempt_count}/{issue.max_retries + 1}): {issue.title}"
+            )
             new_status = DownloadStatus.FAILED
 
         session.commit()
@@ -488,7 +524,9 @@ class IssueDiscoveryService:
             List of DiscoveredIssue objects ready for download
         """
         query = session.query(DiscoveredIssue).filter(
-            DiscoveredIssue.download_status.in_([DownloadStatus.WANTED, DownloadStatus.FAILED])
+            DiscoveredIssue.download_status.in_(
+                [DownloadStatus.WANTED, DownloadStatus.FAILED]
+            )
         )
 
         if tracking_id:
@@ -506,7 +544,9 @@ class IssueDiscoveryService:
         logger.debug(f"Download queue: {len(issues)} issues ready")
         return issues
 
-    def retry_permanently_failed(self, issue_id: int, session: Session, reset_attempts: bool = True) -> bool:
+    def retry_permanently_failed(
+        self, issue_id: int, session: Session, reset_attempts: bool = True
+    ) -> bool:
         """
         Manually retry a permanently_failed issue (admin override).
 
@@ -524,7 +564,9 @@ class IssueDiscoveryService:
             return False
 
         if issue.download_status != DownloadStatus.PERMANENTLY_FAILED:
-            logger.warning(f"Issue {issue_id} is not marked as permanently_failed (status: {issue.download_status})")
+            logger.warning(
+                f"Issue {issue_id} is not marked as permanently_failed (status: {issue.download_status})"
+            )
             return False
 
         if reset_attempts:
@@ -562,11 +604,15 @@ class IssueDiscoveryService:
         # Layer 1: Pattern analysis (most important - works across all categories)
         # Check anti-patterns FIRST - reject collections/books even if they have dates
         if self._has_anti_periodical_patterns(title):
-            logger.debug(f"[VALIDATION] Rejecting '{title}': Has anti-periodical patterns")
+            logger.debug(
+                f"[VALIDATION] Rejecting '{title}': Has anti-periodical patterns"
+            )
             return False
 
         if not self._has_periodical_patterns(title):
-            logger.debug(f"[VALIDATION] Rejecting '{title}': No periodical patterns found")
+            logger.debug(
+                f"[VALIDATION] Rejecting '{title}': No periodical patterns found"
+            )
             return False
 
         # Has periodical patterns - accept regardless of category
@@ -606,7 +652,9 @@ class IssueDiscoveryService:
 
         for pattern in PERIODICAL_PATTERNS:
             if re.search(pattern, title_lower_normalized, re.IGNORECASE):
-                logger.debug(f"Found periodical pattern in '{title}' (after normalization): {pattern}")
+                logger.debug(
+                    f"Found periodical pattern in '{title}' (after normalization): {pattern}"
+                )
                 return True
 
         return False
@@ -639,7 +687,9 @@ class IssueDiscoveryService:
 
         return False
 
-    def _should_download(self, issue: DiscoveredIssue, tracking: PeriodicalTracking) -> bool:
+    def _should_download(
+        self, issue: DiscoveredIssue, tracking: PeriodicalTracking
+    ) -> bool:
         """
         Determine if an issue should be downloaded based on tracking rules.
 
@@ -655,7 +705,8 @@ class IssueDiscoveryService:
 
         if issue_country != tracking_country:
             logger.debug(
-                f"Skipping '{issue.title}': Country mismatch " f"(issue: {issue_country}, tracking: {tracking_country})"
+                f"Skipping '{issue.title}': Country mismatch "
+                f"(issue: {issue_country}, tracking: {tracking_country})"
             )
             return False
 
@@ -680,7 +731,9 @@ class IssueDiscoveryService:
                 current_year = utc_now().year
                 return issue.year >= current_year
             else:
-                logger.debug(f"Skipping issue with no date for track_new_only: {issue.title}")
+                logger.debug(
+                    f"Skipping issue with no date for track_new_only: {issue.title}"
+                )
                 return False
 
         if tracking.selected_years and issue.year:
@@ -688,7 +741,9 @@ class IssueDiscoveryService:
 
         return False
 
-    def _calculate_priority(self, issue: DiscoveredIssue, tracking: PeriodicalTracking) -> int:
+    def _calculate_priority(
+        self, issue: DiscoveredIssue, tracking: PeriodicalTracking
+    ) -> int:
         """
         Calculate download priority for an issue (1-100, higher = download first).
 
@@ -767,7 +822,11 @@ class IssueDiscoveryService:
         Returns:
             Magazine ID if issue already exists in library, None otherwise
         """
-        existing = session.query(Periodical).filter(Periodical.tracking_id == tracking.id).all()
+        existing = (
+            session.query(Periodical)
+            .filter(Periodical.tracking_id == tracking.id)
+            .all()
+        )
 
         if not existing:
             return None
@@ -776,7 +835,9 @@ class IssueDiscoveryService:
         if issue.issue_date:
             issue_date_only = issue.issue_date.date()
             for mag in existing:
-                if mag.issue_date and dates_are_fuzzy_match(mag.issue_date.date(), issue_date_only):
+                if mag.issue_date and dates_are_fuzzy_match(
+                    mag.issue_date.date(), issue_date_only
+                ):
                     logger.debug(
                         f"Fuzzy date match found: library {mag.issue_date.date()} matches search {issue_date_only}"
                     )
@@ -786,7 +847,9 @@ class IssueDiscoveryService:
         if issue.fuzzy_match_group:
             for mag in existing:
                 if get_fuzzy_group_id(mag.title) == issue.fuzzy_match_group:
-                    logger.debug(f"Fuzzy group match found: library '{mag.title}' matches {issue.fuzzy_match_group}")
+                    logger.debug(
+                        f"Fuzzy group match found: library '{mag.title}' matches {issue.fuzzy_match_group}"
+                    )
                     return mag.id
 
         return None

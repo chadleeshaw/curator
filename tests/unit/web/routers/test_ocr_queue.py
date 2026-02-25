@@ -40,6 +40,7 @@ def sample_periodical(test_db):
         category="Magazine",
         file_path="test/path.pdf",
         issue_date=datetime.now(UTC),
+        user_id=1,
     )
     session.add(periodical)
     session.commit()
@@ -61,8 +62,20 @@ class TestGetOcrQueue:
         session = session_factory()
 
         # Create test periodicals first
-        mag1 = Periodical(id=1, title="Test Magazine 1", issue_date=datetime.now(UTC), file_path="/test/mag1.pdf")
-        mag2 = Periodical(id=2, title="Test Magazine 2", issue_date=datetime.now(UTC), file_path="/test/mag2.pdf")
+        mag1 = Periodical(
+            id=1,
+            title="Test Magazine 1",
+            issue_date=datetime.now(UTC),
+            file_path="/test/mag1.pdf",
+            user_id=1,
+        )
+        mag2 = Periodical(
+            id=2,
+            title="Test Magazine 2",
+            issue_date=datetime.now(UTC),
+            file_path="/test/mag2.pdf",
+            user_id=1,
+        )
         session.add_all([mag1, mag2])
         session.flush()
 
@@ -96,8 +109,20 @@ class TestGetOcrQueue:
         session = session_factory()
 
         # Create test periodicals first
-        mag1 = Periodical(id=1, title="Test Magazine 1", issue_date=datetime.now(UTC), file_path="/test/mag1.pdf")
-        mag2 = Periodical(id=2, title="Test Magazine 2", issue_date=datetime.now(UTC), file_path="/test/mag2.pdf")
+        mag1 = Periodical(
+            id=1,
+            title="Test Magazine 1",
+            issue_date=datetime.now(UTC),
+            file_path="/test/mag1.pdf",
+            user_id=1,
+        )
+        mag2 = Periodical(
+            id=2,
+            title="Test Magazine 2",
+            issue_date=datetime.now(UTC),
+            file_path="/test/mag2.pdf",
+            user_id=1,
+        )
         session.add_all([mag1, mag2])
         session.flush()
 

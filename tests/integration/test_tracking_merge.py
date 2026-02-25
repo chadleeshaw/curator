@@ -57,18 +57,21 @@ class TestTrackingMergeIntegration:
             title="Wired",
             track_all_editions=True,
             last_metadata_update=datetime.now(UTC),
+            user_id=1,
         )
         tracking_wired_mag = PeriodicalTracking(
             olid="OL456W",
             title="Wired Magazine",
             track_all_editions=True,
             last_metadata_update=datetime.now(UTC),
+            user_id=1,
         )
         tracking_wired_uk = PeriodicalTracking(
             olid="OL789W",
             title="Wired UK",
             track_all_editions=True,
             last_metadata_update=datetime.now(UTC),
+            user_id=1,
         )
         session.add_all([tracking_wired, tracking_wired_mag, tracking_wired_uk])
         session.commit()
@@ -81,6 +84,7 @@ class TestTrackingMergeIntegration:
                 issue_date=datetime(2024, 1, 1),
                 file_path="/library/wired-jan2024.pdf",
                 tracking_id=tracking_wired.id,
+                user_id=1,
             ),
             Periodical(
                 title="Wired",
@@ -88,6 +92,7 @@ class TestTrackingMergeIntegration:
                 issue_date=datetime(2024, 2, 1),
                 file_path="/library/wired-feb2024.pdf",
                 tracking_id=tracking_wired.id,
+                user_id=1,
             ),
             Periodical(
                 title="Wired Magazine",
@@ -95,6 +100,7 @@ class TestTrackingMergeIntegration:
                 issue_date=datetime(2024, 3, 1),
                 file_path="/library/wired-magazine-mar2024.pdf",
                 tracking_id=tracking_wired_mag.id,
+                user_id=1,
             ),
             Periodical(
                 title="Wired Magazine",
@@ -102,6 +108,7 @@ class TestTrackingMergeIntegration:
                 issue_date=datetime(2024, 4, 1),
                 file_path="/library/wired-magazine-apr2024.pdf",
                 tracking_id=tracking_wired_mag.id,
+                user_id=1,
             ),
             Periodical(
                 title="Wired UK",
@@ -109,6 +116,7 @@ class TestTrackingMergeIntegration:
                 issue_date=datetime(2024, 5, 1),
                 file_path="/library/wired-uk-may2024.pdf",
                 tracking_id=tracking_wired_uk.id,
+                user_id=1,
             ),
         ]
         session.add_all(magazines)
@@ -205,6 +213,7 @@ class TestTrackingMergeIntegration:
             language="English",
             track_all_editions=True,
             last_metadata_update=datetime.now(UTC),
+            user_id=1,
         )
         tracking_fr = PeriodicalTracking(
             olid="OL_FR",
@@ -212,6 +221,7 @@ class TestTrackingMergeIntegration:
             language="French",
             track_all_editions=True,
             last_metadata_update=datetime.now(UTC),
+            user_id=1,
         )
         session.add_all([tracking_en, tracking_fr])
         session.commit()
@@ -224,6 +234,7 @@ class TestTrackingMergeIntegration:
                 issue_date=datetime(2024, 1, 1),
                 file_path="/lib/monde-en-jan.pdf",
                 tracking_id=tracking_en.id,
+                user_id=1,
             ),
             Periodical(
                 title="Monde Diplomatique",
@@ -231,6 +242,7 @@ class TestTrackingMergeIntegration:
                 issue_date=datetime(2024, 1, 1),
                 file_path="/lib/monde-fr-jan.pdf",
                 tracking_id=tracking_fr.id,
+                user_id=1,
             ),
         ]
         session.add_all(magazines)
@@ -294,12 +306,14 @@ class TestTrackingMergeIntegration:
                 title="Wired",
                 track_all_editions=True,
                 last_metadata_update=datetime.now(UTC),
+                user_id=1,
             )
             tracking_wired_mag = PeriodicalTracking(
                 olid="OL456W",
                 title="Wired Magazine",
                 track_all_editions=True,
                 last_metadata_update=datetime.now(UTC),
+                user_id=1,
             )
             session.add_all([tracking_wired, tracking_wired_mag])
             session.commit()
@@ -313,6 +327,7 @@ class TestTrackingMergeIntegration:
                 cover_path=str(wired_jan_jpg),
                 tracking_id=tracking_wired.id,
                 extra_metadata={"category": CATEGORY_MAGAZINE},
+                user_id=1,
             )
             mag2 = Periodical(
                 title="Wired Magazine",
@@ -322,6 +337,7 @@ class TestTrackingMergeIntegration:
                 cover_path=str(wired_mag_feb_jpg),
                 tracking_id=tracking_wired_mag.id,
                 extra_metadata={"category": CATEGORY_MAGAZINE},
+                user_id=1,
             )
             session.add_all([mag1, mag2])
             session.commit()
@@ -464,6 +480,7 @@ class TestTrackingMergeIntegration:
             country="us",
             track_all_editions=True,
             last_metadata_update=datetime.now(UTC),
+            user_id=1,
         )
         tracking_b = PeriodicalTracking(
             olid="OL456B",
@@ -473,6 +490,7 @@ class TestTrackingMergeIntegration:
             country="us",
             track_all_editions=True,
             last_metadata_update=datetime.now(UTC),
+            user_id=1,
         )
         session.add_all([tracking_a, tracking_b])
         session.commit()
@@ -505,6 +523,7 @@ class TestTrackingMergeIntegration:
                 tracking_id=tracking_b.id,
                 category=CATEGORY_MAGAZINE,
                 language="en",
+                user_id=1,
             )
             periodicals.append(mag)
             session.add(mag)

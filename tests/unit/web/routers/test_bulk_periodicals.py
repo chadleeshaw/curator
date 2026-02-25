@@ -73,12 +73,14 @@ def tracking_records(test_db):
             title="Magazine A",
             language="English",
             category="Magazines",
+            user_id=1,
         )
         tracking_b = PeriodicalTracking(
             olid="OL_TEST_B",
             title="Magazine B",
             language="English",
             category="Magazines",
+            user_id=1,
         )
         session.add_all([tracking_a, tracking_b])
         session.commit()
@@ -109,6 +111,7 @@ def sample_issues(test_db, tracking_records, tmp_path):
             file_path=str(file_path),
             tracking_id=tracking_a_id,
             issue_date=datetime(2024, i + 1, 1),
+            user_id=1,
         )
         session.add(issue)
         session.flush()

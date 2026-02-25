@@ -70,6 +70,7 @@ def sample_tracking(test_db):
         olid="OL12345W",
         title="Test Magazine",
         last_metadata_update=datetime.now(UTC),
+        user_id=1,
     )
     session.add(tracking)
     session.commit()
@@ -92,6 +93,7 @@ def sample_discovered_issue(test_db, sample_tracking):
         last_seen=datetime.now(UTC),
         download_status="discovered",
         latest_url="http://example.com/download",
+        user_id=1,
     )
     session.add(issue)
     session.commit()

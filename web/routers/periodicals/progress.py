@@ -40,7 +40,11 @@ async def get_progress(magazine_id: int) -> Dict[str, Any]:
         _shared.get_periodical_or_404(db, magazine_id)
 
         # Get progress
-        progress = db.query(ReadingProgress).filter(ReadingProgress.periodical_id == magazine_id).first()
+        progress = (
+            db.query(ReadingProgress)
+            .filter(ReadingProgress.periodical_id == magazine_id)
+            .first()
+        )
 
         return progress.to_dict() if progress else None
 
@@ -62,10 +66,14 @@ async def update_progress(magazine_id: int, update: ProgressUpdate) -> Dict[str,
         _shared.get_periodical_or_404(db, magazine_id)
 
         # Get or create progress record
-        progress = db.query(ReadingProgress).filter(ReadingProgress.periodical_id == magazine_id).first()
+        progress = (
+            db.query(ReadingProgress)
+            .filter(ReadingProgress.periodical_id == magazine_id)
+            .first()
+        )
 
         if not progress:
-            progress = ReadingProgress(periodical_id=magazine_id)
+            progress = ReadingProgress(periodical_id=magazine_id, user_id=1)
             db.add(progress)
 
         # Update fields
@@ -78,9 +86,15 @@ async def update_progress(magazine_id: int, update: ProgressUpdate) -> Dict[str,
 
         # Calculate progress percentage
         if progress.total_pages and progress.total_pages > 0:
-            current = progress.current_page if progress.current_page is not None else progress.current_chapter
+            current = (
+                progress.current_page
+                if progress.current_page is not None
+                else progress.current_chapter
+            )
             if current is not None:
-                progress.progress_percent = int((current + 1) / progress.total_pages * 100)
+                progress.progress_percent = int(
+                    (current + 1) / progress.total_pages * 100
+                )
 
         progress.last_read_at = utc_now()
         progress.updated_at = utc_now()
@@ -106,7 +120,11 @@ async def delete_progress(magazine_id: int) -> Dict[str, str]:
         _shared.get_periodical_or_404(db, magazine_id)
 
         # Delete progress if exists
-        progress = db.query(ReadingProgress).filter(ReadingProgress.periodical_id == magazine_id).first()
+        progress = (
+            db.query(ReadingProgress)
+            .filter(ReadingProgress.periodical_id == magazine_id)
+            .first()
+        )
 
         if progress:
             db.delete(progress)

@@ -64,12 +64,16 @@ async def start_tracking_periodical(
 ) -> Dict[str, Any]:
     """Start tracking a periodical"""
     if not title or len(title.strip()) < 2:
-        raise HTTPException(status_code=400, detail="Title must be at least 2 characters")
+        raise HTTPException(
+            status_code=400, detail="Title must be at least 2 characters"
+        )
 
     olid = generate_olid(title)
 
     def operation(db):
-        existing = db.query(PeriodicalTracking).filter(PeriodicalTracking.olid == olid).first()
+        existing = (
+            db.query(PeriodicalTracking).filter(PeriodicalTracking.olid == olid).first()
+        )
         if existing:
             return error_response(
                 f"Already tracking '{title}'",
@@ -77,6 +81,7 @@ async def start_tracking_periodical(
             )
 
         tracking = PeriodicalTracking(
+            user_id=1,
             olid=olid,
             title=title.strip(),
             category=category.strip() if category else None,
@@ -119,7 +124,11 @@ async def list_tracked_periodicals(
         query = db.query(PeriodicalTracking)
 
         if sort_by == "category":
-            sort_expr = PeriodicalTracking.category.desc() if is_descending else PeriodicalTracking.category.asc()
+            sort_expr = (
+                PeriodicalTracking.category.desc()
+                if is_descending
+                else PeriodicalTracking.category.asc()
+            )
             query = query.order_by(sort_expr, PeriodicalTracking.title.asc())
         elif sort_by == "tracking_mode":
             if is_descending:
@@ -133,10 +142,18 @@ async def list_tracked_periodicals(
                     PeriodicalTracking.track_new_only.desc(),
                 )
         elif sort_by == "language":
-            sort_expr = PeriodicalTracking.language.desc() if is_descending else PeriodicalTracking.language.asc()
+            sort_expr = (
+                PeriodicalTracking.language.desc()
+                if is_descending
+                else PeriodicalTracking.language.asc()
+            )
             query = query.order_by(sort_expr, PeriodicalTracking.title.asc())
         elif sort_by == "created_at":
-            sort_expr = PeriodicalTracking.created_at.desc() if is_descending else PeriodicalTracking.created_at.asc()
+            sort_expr = (
+                PeriodicalTracking.created_at.desc()
+                if is_descending
+                else PeriodicalTracking.created_at.asc()
+            )
             query = query.order_by(sort_expr)
         elif sort_by == "latest_issue":
             sort_expr = (
@@ -159,7 +176,11 @@ async def list_tracked_periodicals(
             # library_count is computed post-query; skip SQL ordering here
             pass
         else:
-            sort_expr = PeriodicalTracking.title.desc() if is_descending else PeriodicalTracking.title.asc()
+            sort_expr = (
+                PeriodicalTracking.title.desc()
+                if is_descending
+                else PeriodicalTracking.title.asc()
+            )
             query = query.order_by(sort_expr)
 
         tracked = query.offset(skip).limit(limit).all()
@@ -168,7 +189,9 @@ async def list_tracked_periodicals(
         # Compute library count and failed download count for each tracked periodical
         tracked_list = []
         for t in tracked:
-            library_count = db.query(Periodical).filter(Periodical.tracking_id == t.id).count()
+            library_count = (
+                db.query(Periodical).filter(Periodical.tracking_id == t.id).count()
+            )
 
             # Count failed downloads from both sources for backward compatibility:
             # 1. New Issue Discovery system (canonical going forward)
@@ -177,7 +200,9 @@ async def list_tracked_periodicals(
                 db.query(DiscoveredIssue)
                 .filter(
                     DiscoveredIssue.tracking_id == t.id,
-                    DiscoveredIssue.download_status.in_([DownloadStatus.FAILED, DownloadStatus.PERMANENTLY_FAILED]),
+                    DiscoveredIssue.download_status.in_(
+                        [DownloadStatus.FAILED, DownloadStatus.PERMANENTLY_FAILED]
+                    ),
                 )
                 .count()
             )
@@ -202,9 +227,17 @@ async def list_tracked_periodicals(
                 "stack_description": None,
                 "stack_categories": [],
             }
-            stack_membership = db.query(StackMembership).filter(StackMembership.periodical_tracking_id == t.id).first()
+            stack_membership = (
+                db.query(StackMembership)
+                .filter(StackMembership.periodical_tracking_id == t.id)
+                .first()
+            )
             if stack_membership:
-                stack = db.query(Stack).filter(Stack.id == stack_membership.stack_id).first()
+                stack = (
+                    db.query(Stack)
+                    .filter(Stack.id == stack_membership.stack_id)
+                    .first()
+                )
                 if stack:
                     stack_info = {
                         "stack_id": stack.id,
@@ -225,13 +258,19 @@ async def list_tracked_periodicals(
                     "track_all_editions": t.track_all_editions,
                     "track_new_only": t.track_new_only,
                     "selected_count": (
-                        len([v for v in t.selected_editions.values() if v]) if t.selected_editions else 0
+                        len([v for v in t.selected_editions.values() if v])
+                        if t.selected_editions
+                        else 0
                     ),
                     "total_known": t.total_editions_known,
                     "library_count": library_count,
                     "failed_count": failed_count,
                     "created_at": (t.created_at.isoformat() if t.created_at else None),
-                    "last_issue_added": (t.last_metadata_update.isoformat() if t.last_metadata_update else None),
+                    "last_issue_added": (
+                        t.last_metadata_update.isoformat()
+                        if t.last_metadata_update
+                        else None
+                    ),
                     "stack_id": stack_info["stack_id"],
                     "stack_name": stack_info["stack_name"],
                     "stack_slug": stack_info["stack_slug"],
@@ -261,9 +300,15 @@ async def get_tracking_details(tracking_id: int) -> Dict[str, Any]:
     """Get detailed tracking information for a specific magazine"""
 
     def operation(db):
-        tracking = db.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
+        tracking = (
+            db.query(PeriodicalTracking)
+            .filter(PeriodicalTracking.id == tracking_id)
+            .first()
+        )
         if not tracking:
-            raise HTTPException(status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND)
+            raise HTTPException(
+                status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND
+            )
 
         return success_response(
             None,
@@ -286,9 +331,13 @@ async def get_tracking_details(tracking_id: int) -> Dict[str, Any]:
                 "search_aliases": tracking.search_aliases,
                 "metadata": tracking.periodical_metadata,
                 "last_metadata_update": (
-                    tracking.last_metadata_update.isoformat() if tracking.last_metadata_update else None
+                    tracking.last_metadata_update.isoformat()
+                    if tracking.last_metadata_update
+                    else None
                 ),
-                "created_at": (tracking.created_at.isoformat() if tracking.created_at else None),
+                "created_at": (
+                    tracking.created_at.isoformat() if tracking.created_at else None
+                ),
             },
         )
 
@@ -332,7 +381,11 @@ def _reorganize_periodical_files(
     responses={
         200: {
             "description": "Tracking stopped successfully",
-            "content": {"application/json": {"example": {"success": True, "message": "Stopped tracking 'Wired'"}}},
+            "content": {
+                "application/json": {
+                    "example": {"success": True, "message": "Stopped tracking 'Wired'"}
+                }
+            },
         },
         404: {"description": ErrorMessages.TRACKING_NOT_FOUND, "model": APIError},
         500: {"description": "Failed to delete tracking", "model": APIError},
@@ -343,9 +396,15 @@ async def delete_tracking(tracking_id: int) -> Dict[str, Any]:
     """Delete a magazine tracking record"""
 
     def operation(db):
-        tracking = db.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
+        tracking = (
+            db.query(PeriodicalTracking)
+            .filter(PeriodicalTracking.id == tracking_id)
+            .first()
+        )
         if not tracking:
-            raise HTTPException(status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND)
+            raise HTTPException(
+                status_code=404, detail=ErrorMessages.TRACKING_NOT_FOUND
+            )
 
         title = tracking.title
 
@@ -356,7 +415,9 @@ async def delete_tracking(tracking_id: int) -> Dict[str, Any]:
             .delete(synchronize_session="fetch")
         )
         if membership_deleted:
-            logger.info(f"Removed {membership_deleted} stack membership(s) for tracking: {title}")
+            logger.info(
+                f"Removed {membership_deleted} stack membership(s) for tracking: {title}"
+            )
 
         # Null out tracking_id on linked periodicals to prevent orphaned FK references
         # (periodicals remain in library but are no longer linked to this tracking)
@@ -375,7 +436,9 @@ async def delete_tracking(tracking_id: int) -> Dict[str, Any]:
             .delete(synchronize_session="fetch")
         )
         if issues_deleted:
-            logger.info(f"Removed {issues_deleted} discovered issue(s) for tracking: {title}")
+            logger.info(
+                f"Removed {issues_deleted} discovered issue(s) for tracking: {title}"
+            )
 
         # Clean up download submissions (non-nullable FK to tracking)
         downloads_deleted = (
@@ -384,7 +447,9 @@ async def delete_tracking(tracking_id: int) -> Dict[str, Any]:
             .delete(synchronize_session="fetch")
         )
         if downloads_deleted:
-            logger.info(f"Removed {downloads_deleted} download submission(s) for tracking: {title}")
+            logger.info(
+                f"Removed {downloads_deleted} download submission(s) for tracking: {title}"
+            )
 
         db.delete(tracking)
         db.commit()

@@ -666,6 +666,7 @@ class TestBlacklistFiltering:
             latest_url=url,
             latest_provider="MockProvider",
             download_status="wanted",
+            user_id=1,
         )
         session.add(issue)
         session.flush()
@@ -679,7 +680,12 @@ class TestBlacklistFiltering:
         )
 
     def _make_tracking(self, session, title: str, olid: str):
-        tracking = PeriodicalTracking(title=title, olid=olid, language="en")
+        tracking = PeriodicalTracking(
+            title=title,
+            olid=olid,
+            language="en",
+            user_id=1,
+        )
         session.add(tracking)
         session.flush()
         return tracking
@@ -931,7 +937,12 @@ class TestTorznabQBittorrentIntegration:
         engine, session_factory = test_db
         session = session_factory()
 
-        tracking = PeriodicalTracking(title="Test Magazine", olid="test_magazine", language="en")
+        tracking = PeriodicalTracking(
+            title="Test Magazine",
+            olid="test_magazine",
+            language="en",
+            user_id=1,
+        )
         session.add(tracking)
         session.commit()
 
@@ -986,6 +997,7 @@ class TestDuplicateDetectionConsistency:
             language="English",
             country="US",
             category="Magazine",
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -998,6 +1010,7 @@ class TestDuplicateDetectionConsistency:
             category="Magazine",
             issue_date=datetime(2024, 1, 1, tzinfo=UTC),
             file_path="/library/PCGamerUS/2024/PCGamerUS - 2024-01.pdf",
+            user_id=1,
         )
         session.add(library_item)
         session.commit()
@@ -1063,6 +1076,7 @@ class TestDuplicateDetectionConsistency:
             language="English",
             country="US",
             category="Magazine",
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -1075,6 +1089,7 @@ class TestDuplicateDetectionConsistency:
             category="Magazine",
             issue_date=datetime(2024, 1, 1, tzinfo=UTC),
             file_path="/library/TechWeekly/2024/TechWeekly - 2024-01-01.pdf",
+            user_id=1,
         )
         session.add(library_item)
         session.commit()
@@ -1126,6 +1141,7 @@ class TestDuplicateDetectionConsistency:
             language="English",
             country="US",
             category="Magazine",
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -1138,6 +1154,7 @@ class TestDuplicateDetectionConsistency:
             category="Magazine",
             issue_date=datetime(2024, 1, 1, tzinfo=UTC),
             file_path="/library/ScienceMonthly/2024/ScienceMonthly - 2024-01.pdf",
+            user_id=1,
         )
         session.add(library_item)
         session.commit()
@@ -1185,6 +1202,7 @@ class TestDuplicateDetectionConsistency:
             language="English",
             country="US",
             category="Magazine",
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -1197,6 +1215,7 @@ class TestDuplicateDetectionConsistency:
             category="Magazine",
             issue_date=datetime(2024, 1, 1, tzinfo=UTC),
             file_path="/library/AutoToday/2024/AutoToday - 2024-01.pdf",
+            user_id=1,
         )
         session.add(library_item)
         session.commit()

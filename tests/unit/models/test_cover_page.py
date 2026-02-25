@@ -41,6 +41,7 @@ class TestCoverPagePersistence:
                 issue_date=datetime(2024, 1, 1),
                 file_path="/test/magazine.pdf",
                 extra_metadata={"cover_page": 3},
+                user_id=1,
             )
             session.add(magazine)
             session.commit()
@@ -64,6 +65,7 @@ class TestCoverPagePersistence:
                 language="English",
                 issue_date=datetime(2024, 1, 1),
                 file_path="/test/magazine.pdf",
+                user_id=1,
             )
             session.add(magazine)
             session.commit()
@@ -90,6 +92,7 @@ class TestCoverPagePersistence:
                 issue_date=datetime(2024, 1, 1),
                 file_path="/test/magazine.pdf",
                 extra_metadata={"cover_page": 1},
+                user_id=1,
             )
             session.add(magazine)
             session.commit()
@@ -121,6 +124,7 @@ class TestCoverPagePersistence:
                 issue_date=datetime(2024, 1, 1),
                 file_path="/test/magazine1.pdf",
                 extra_metadata={"cover_page": 1},
+                user_id=1,
             )
             session.add(magazine1)
 
@@ -131,6 +135,7 @@ class TestCoverPagePersistence:
                 issue_date=datetime(2024, 2, 1),
                 file_path="/test/magazine2.pdf",
                 extra_metadata={"cover_page": 3},
+                user_id=1,
             )
             session.add(magazine2)
             session.commit()
@@ -159,6 +164,7 @@ class TestCoverPagePersistence:
                 issue_date=datetime(2024, 1, 1),
                 file_path="/test/magazine.pdf",
                 extra_metadata={"cover_page": 4, "other_data": "value"},
+                user_id=1,
             )
             session.add(magazine)
             session.commit()
@@ -188,6 +194,7 @@ class TestCoverPagePersistence:
                 language="English",
                 issue_date=datetime(2024, 1, 1),
                 file_path="/test/magazine.pdf",
+                user_id=1,
             )
             session.add(magazine)
             session.commit()
@@ -213,6 +220,7 @@ class TestCoverPagePersistence:
                 issue_date=datetime(2024, 1, 1),
                 file_path="/test/magazine.pdf",
                 extra_metadata={"cover_page": 2},
+                user_id=1,
             )
             session.add(magazine)
             session.commit()

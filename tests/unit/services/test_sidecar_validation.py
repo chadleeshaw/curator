@@ -11,7 +11,13 @@ def test_sidecar_country_mismatch_rejects_tracking():
     importer = FileImporter(downloads_dir=Path("/tmp"), library_base_dir=Path("/tmp"))
 
     # Mock tracking record: Wired USA (country=US)
-    usa_tracking = PeriodicalTracking(id=2, title="Wired USA", country="US", language="English")
+    usa_tracking = PeriodicalTracking(
+        id=2,
+        title="Wired USA",
+        country="US",
+        language="English",
+        user_id=1,
+    )
 
     # Mock session
     session = MagicMock()
@@ -37,7 +43,13 @@ def test_sidecar_language_mismatch_rejects_tracking():
     importer = FileImporter(downloads_dir=Path("/tmp"), library_base_dir=Path("/tmp"))
 
     # Mock tracking record: Wired USA (language=English)
-    usa_tracking = PeriodicalTracking(id=2, title="Wired USA", country="US", language="English")
+    usa_tracking = PeriodicalTracking(
+        id=2,
+        title="Wired USA",
+        country="US",
+        language="English",
+        user_id=1,
+    )
 
     session = MagicMock()
     session.query().filter().first.return_value = usa_tracking
@@ -61,7 +73,13 @@ def test_sidecar_matching_country_language_accepts():
     """Sidecar tracking_id should be accepted if metadata matches."""
     importer = FileImporter(downloads_dir=Path("/tmp"), library_base_dir=Path("/tmp"))
 
-    usa_tracking = PeriodicalTracking(id=2, title="Wired USA", country="US", language="English")
+    usa_tracking = PeriodicalTracking(
+        id=2,
+        title="Wired USA",
+        country="US",
+        language="English",
+        user_id=1,
+    )
 
     session = MagicMock()
     session.query().filter().first.return_value = usa_tracking
@@ -86,7 +104,11 @@ def test_sidecar_no_country_on_tracking_accepts():
 
     # Tracking with no country specified
     generic_tracking = PeriodicalTracking(
-        id=1, title="Wired", country=None, language="English"  # No country constraint
+        id=1,
+        title="Wired",
+        country=None,
+        language="English",  # No country constraint
+        user_id=1,
     )
 
     session = MagicMock()

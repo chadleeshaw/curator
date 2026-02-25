@@ -159,6 +159,7 @@ class TestPeriodicalTrackingWorkflow:
             olid="OL12345W",
             title="Wired Magazine",
             track_all_editions=True,
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -200,6 +201,7 @@ class TestDownloadWorkflow:
             olid="test_magazine",
             title="Test Magazine",
             track_all_editions=False,
+            user_id=1,
         )
         session.add(tracking)
         session.flush()
@@ -217,6 +219,7 @@ class TestDownloadWorkflow:
             latest_url="http://example.com/test.nzb",
             latest_provider="test",
             download_status="wanted",
+            user_id=1,
         )
         session.add(issue)
         session.commit()
@@ -238,7 +241,11 @@ class TestDownloadWorkflow:
         from core.utils.fuzzy_matching import get_fuzzy_group_id
 
         # Setup tracking
-        tracking = PeriodicalTracking(olid="test_mag", title="Test")
+        tracking = PeriodicalTracking(
+            olid="test_mag",
+            title="Test",
+            user_id=1,
+        )
         session.add(tracking)
         session.flush()
 
@@ -254,6 +261,7 @@ class TestDownloadWorkflow:
             latest_url="http://example.com/1.nzb",
             latest_provider="test",
             download_status="wanted",
+            user_id=1,
         )
         session.add(issue)
         session.commit()
@@ -346,6 +354,7 @@ class TestEndToEndJourney:
             olid="wired_magazine",
             title="Wired",
             track_all_editions=True,
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -364,6 +373,7 @@ class TestEndToEndJourney:
             latest_url="http://example.com/wired-jan-2024.nzb",
             latest_provider="test",
             download_status="wanted",
+            user_id=1,
         )
         session.add(issue)
         session.commit()
@@ -380,6 +390,7 @@ class TestEndToEndJourney:
             title="Wired",
             issue_date=datetime(2024, 1, 1),
             file_path=updated.file_path or "/test/wired.pdf",
+            user_id=1,
         )
         session.add(magazine)
         session.commit()
@@ -396,7 +407,11 @@ class TestErrorRecovery:
     def test_failed_download_retry(self, session, mock_download_client):
         """Test retrying a failed download"""
         # Setup
-        tracking = PeriodicalTracking(olid="test", title="Test")
+        tracking = PeriodicalTracking(
+            olid="test",
+            title="Test",
+            user_id=1,
+        )
         session.add(tracking)
         session.flush()
 
@@ -410,6 +425,7 @@ class TestErrorRecovery:
             client_name="TestClient",
             last_error="Network error",
             attempt_count=1,
+            user_id=1,
         )
         session.add(submission)
         session.commit()

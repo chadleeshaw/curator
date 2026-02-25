@@ -53,7 +53,12 @@ def mock_client():
 
 def _create_tracking(session, title="Test Magazine"):
     """Helper to create a tracking record"""
-    tracking = PeriodicalTracking(title=title, olid=title.lower().replace(" ", "_"), language="en")
+    tracking = PeriodicalTracking(
+        title=title,
+        olid=title.lower().replace(" ", "_"),
+        language="en",
+        user_id=1,
+    )
     session.add(tracking)
     session.commit()
     return tracking
@@ -76,6 +81,7 @@ def _create_discovered_issue(
         download_status=status,
         latest_url=url,
         latest_provider="newsnab",
+        user_id=1,
     )
     session.add(issue)
     session.commit()
@@ -91,6 +97,7 @@ def _create_active_submission(session, tracking_id, title, status=DownloadSubmis
         status=status,
         job_id=f"job_{title.lower().replace(' ', '_')}",
         client_name="MockClient",
+        user_id=1,
     )
     session.add(submission)
     session.commit()

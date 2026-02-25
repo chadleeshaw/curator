@@ -100,7 +100,11 @@ class TestEnsureUniqueSlug:
         db = session_factory()
 
         # Create an existing stack with the slug
-        stack = Stack(name="My Stack", slug="my-stack")
+        stack = Stack(
+            name="My Stack",
+            slug="my-stack",
+            user_id=1,
+        )
         db.add(stack)
         db.commit()
 
@@ -114,8 +118,20 @@ class TestEnsureUniqueSlug:
         db = session_factory()
 
         # Create stacks with slug and slug-1
-        db.add(Stack(name="My Stack", slug="my-stack"))
-        db.add(Stack(name="My Stack 1", slug="my-stack-1"))
+        db.add(
+            Stack(
+                name="My Stack",
+                slug="my-stack",
+                user_id=1,
+            )
+        )
+        db.add(
+            Stack(
+                name="My Stack 1",
+                slug="my-stack-1",
+                user_id=1,
+            )
+        )
         db.commit()
 
         result = _ensure_unique_slug(db, "my-stack")
@@ -127,7 +143,11 @@ class TestEnsureUniqueSlug:
         _, session_factory = test_db
         db = session_factory()
 
-        stack = Stack(name="My Stack", slug="my-stack")
+        stack = Stack(
+            name="My Stack",
+            slug="my-stack",
+            user_id=1,
+        )
         db.add(stack)
         db.commit()
 
@@ -145,7 +165,12 @@ class TestStackModel:
         _, session_factory = test_db
         db = session_factory()
 
-        stack = Stack(name="Science Magazines", slug="science-magazines", description="All science stuff")
+        stack = Stack(
+            name="Science Magazines",
+            slug="science-magazines",
+            description="All science stuff",
+            user_id=1,
+        )
         db.add(stack)
         db.commit()
 
@@ -162,10 +187,22 @@ class TestStackModel:
         _, session_factory = test_db
         db = session_factory()
 
-        db.add(Stack(name="Unique", slug="unique"))
+        db.add(
+            Stack(
+                name="Unique",
+                slug="unique",
+                user_id=1,
+            )
+        )
         db.commit()
 
-        db.add(Stack(name="Unique", slug="unique-2"))
+        db.add(
+            Stack(
+                name="Unique",
+                slug="unique-2",
+                user_id=1,
+            )
+        )
         with pytest.raises(IntegrityError):
             db.commit()
         db.rollback()
@@ -176,10 +213,22 @@ class TestStackModel:
         _, session_factory = test_db
         db = session_factory()
 
-        db.add(Stack(name="Stack A", slug="same-slug"))
+        db.add(
+            Stack(
+                name="Stack A",
+                slug="same-slug",
+                user_id=1,
+            )
+        )
         db.commit()
 
-        db.add(Stack(name="Stack B", slug="same-slug"))
+        db.add(
+            Stack(
+                name="Stack B",
+                slug="same-slug",
+                user_id=1,
+            )
+        )
         with pytest.raises(IntegrityError):
             db.commit()
         db.rollback()
@@ -190,7 +239,13 @@ class TestStackModel:
         _, session_factory = test_db
         db = session_factory()
 
-        stack = Stack(name="Test", slug="test", description="desc", sort_order=5)
+        stack = Stack(
+            name="Test",
+            slug="test",
+            description="desc",
+            sort_order=5,
+            user_id=1,
+        )
         db.add(stack)
         db.commit()
 
@@ -208,7 +263,11 @@ class TestStackModel:
         _, session_factory = test_db
         db = session_factory()
 
-        stack = Stack(name="Defaults", slug="defaults")
+        stack = Stack(
+            name="Defaults",
+            slug="defaults",
+            user_id=1,
+        )
         db.add(stack)
         db.commit()
 
@@ -226,11 +285,19 @@ class TestStackMembershipModel:
         _, session_factory = test_db
         db = session_factory()
 
-        stack = Stack(name="Stack", slug="stack")
+        stack = Stack(
+            name="Stack",
+            slug="stack",
+            user_id=1,
+        )
         db.add(stack)
         db.commit()
 
-        tracking = PeriodicalTracking(olid="OL1W", title="Mag A")
+        tracking = PeriodicalTracking(
+            olid="OL1W",
+            title="Mag A",
+            user_id=1,
+        )
         db.add(tracking)
         db.commit()
 
@@ -250,11 +317,20 @@ class TestStackMembershipModel:
         _, session_factory = test_db
         db = session_factory()
 
-        stack = Stack(name="Stack", slug="stack")
+        stack = Stack(
+            name="Stack",
+            slug="stack",
+            user_id=1,
+        )
         db.add(stack)
         db.commit()
 
-        periodical = Periodical(title="Mag B", file_path="/tmp/test.pdf", issue_date=datetime.now(UTC))
+        periodical = Periodical(
+            title="Mag B",
+            file_path="/tmp/test.pdf",
+            issue_date=datetime.now(UTC),
+            user_id=1,
+        )
         db.add(periodical)
         db.commit()
 
@@ -272,12 +348,24 @@ class TestStackMembershipModel:
         _, session_factory = test_db
         db = session_factory()
 
-        stack1 = Stack(name="Stack 1", slug="stack-1")
-        stack2 = Stack(name="Stack 2", slug="stack-2")
+        stack1 = Stack(
+            name="Stack 1",
+            slug="stack-1",
+            user_id=1,
+        )
+        stack2 = Stack(
+            name="Stack 2",
+            slug="stack-2",
+            user_id=1,
+        )
         db.add_all([stack1, stack2])
         db.commit()
 
-        tracking = PeriodicalTracking(olid="OL2W", title="Mag C")
+        tracking = PeriodicalTracking(
+            olid="OL2W",
+            title="Mag C",
+            user_id=1,
+        )
         db.add(tracking)
         db.commit()
 
@@ -297,12 +385,25 @@ class TestStackMembershipModel:
         _, session_factory = test_db
         db = session_factory()
 
-        stack1 = Stack(name="Stack A", slug="stack-a")
-        stack2 = Stack(name="Stack B", slug="stack-b")
+        stack1 = Stack(
+            name="Stack A",
+            slug="stack-a",
+            user_id=1,
+        )
+        stack2 = Stack(
+            name="Stack B",
+            slug="stack-b",
+            user_id=1,
+        )
         db.add_all([stack1, stack2])
         db.commit()
 
-        periodical = Periodical(title="Mag D", file_path="/tmp/test2.pdf", issue_date=datetime.now(UTC))
+        periodical = Periodical(
+            title="Mag D",
+            file_path="/tmp/test2.pdf",
+            issue_date=datetime.now(UTC),
+            user_id=1,
+        )
         db.add(periodical)
         db.commit()
 
@@ -320,12 +421,24 @@ class TestStackMembershipModel:
         _, session_factory = test_db
         db = session_factory()
 
-        stack = Stack(name="Multi", slug="multi")
+        stack = Stack(
+            name="Multi",
+            slug="multi",
+            user_id=1,
+        )
         db.add(stack)
         db.commit()
 
-        t1 = PeriodicalTracking(olid="OL3W", title="Mag E")
-        t2 = PeriodicalTracking(olid="OL4W", title="Mag F")
+        t1 = PeriodicalTracking(
+            olid="OL3W",
+            title="Mag E",
+            user_id=1,
+        )
+        t2 = PeriodicalTracking(
+            olid="OL4W",
+            title="Mag F",
+            user_id=1,
+        )
         db.add_all([t1, t2])
         db.commit()
 
@@ -342,11 +455,19 @@ class TestStackMembershipModel:
         _, session_factory = test_db
         db = session_factory()
 
-        stack = Stack(name="Dict Test", slug="dict-test")
+        stack = Stack(
+            name="Dict Test",
+            slug="dict-test",
+            user_id=1,
+        )
         db.add(stack)
         db.commit()
 
-        tracking = PeriodicalTracking(olid="OL5W", title="Mag G")
+        tracking = PeriodicalTracking(
+            olid="OL5W",
+            title="Mag G",
+            user_id=1,
+        )
         db.add(tracking)
         db.commit()
 
@@ -366,11 +487,19 @@ class TestStackMembershipModel:
         _, session_factory = test_db
         db = session_factory()
 
-        stack = Stack(name="Deletable", slug="deletable")
+        stack = Stack(
+            name="Deletable",
+            slug="deletable",
+            user_id=1,
+        )
         db.add(stack)
         db.commit()
 
-        tracking = PeriodicalTracking(olid="OL6W", title="Mag H")
+        tracking = PeriodicalTracking(
+            olid="OL6W",
+            title="Mag H",
+            user_id=1,
+        )
         db.add(tracking)
         db.commit()
 

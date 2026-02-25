@@ -35,6 +35,7 @@ def test_apply_year_from_scan():
         issue_date=datetime(2000, 1, 1),
         file_path="/test/path.pdf",
         extra_metadata={},
+        user_id=1,
     )
 
     scan_metadata = {"year": 2024, "month": 6, "issue_number": 42}
@@ -56,6 +57,7 @@ def test_apply_volume_from_scan():
         issue_date=datetime(2024, 1, 1),
         file_path="/test/path.pdf",
         extra_metadata={},
+        user_id=1,
     )
 
     scan_metadata = {"volume": 32, "issue_number": 5, "year": 2023}
@@ -81,6 +83,7 @@ def test_dont_overwrite_existing_year():
             "year": _derived_entry(2023),
             "month": _derived_entry(3),
         },
+        user_id=1,
     )
 
     # OCR provides different year but with low confidence (below 70% threshold)
@@ -111,6 +114,7 @@ def test_dont_overwrite_existing_issue_number():
         derived_metadata={
             "issue_number": _derived_entry(405),
         },
+        user_id=1,
     )
 
     # OCR provides different issue number but with low confidence
@@ -138,6 +142,7 @@ def test_apply_special_edition_flag():
         issue_date=datetime(2024, 12, 1),
         file_path="/test/path.pdf",
         extra_metadata={},
+        user_id=1,
     )
 
     scan_metadata = {"year": 2024, "month": 12, "special_edition": True}
@@ -162,6 +167,7 @@ def test_partial_metadata_enhancement():
         derived_metadata={
             "year": _derived_entry(2024),
         },
+        user_id=1,
     )
 
     scan_metadata = {
@@ -195,6 +201,7 @@ def test_no_update_when_all_fields_present():
             "volume": _derived_entry(10),
             "issue_number": _derived_entry(123),
         },
+        user_id=1,
     )
 
     # OCR provides different values but all with low confidence (below thresholds)
@@ -228,6 +235,7 @@ def test_empty_scan_metadata():
         issue_date=datetime(2024, 1, 1),
         file_path="/test/path.pdf",
         extra_metadata={},
+        user_id=1,
     )
 
     scan_metadata = {}
@@ -247,6 +255,7 @@ def test_none_scan_metadata():
         issue_date=datetime(2024, 1, 1),
         file_path="/test/path.pdf",
         extra_metadata={},
+        user_id=1,
     )
 
     updated = _apply_scan_metadata_to_periodical(periodical, None)
@@ -265,6 +274,7 @@ def test_update_issue_date_when_year_found():
         file_path="/test/path.pdf",
         extra_metadata={},
         created_at=created_time,
+        user_id=1,
     )
 
     scan_metadata = {"year": 2023, "month": 7}
@@ -290,6 +300,7 @@ def test_month_stored_as_int():
             issue_date=datetime(2024, 1, 1),
             file_path="/test/path.pdf",
             extra_metadata={},
+            user_id=1,
         )
 
         scan_metadata = {"month": month_num}
@@ -307,6 +318,7 @@ def test_month_name_string_normalized_to_int():
         issue_date=datetime(2024, 1, 1),
         file_path="/test/path.pdf",
         extra_metadata={},
+        user_id=1,
     )
 
     scan_metadata = {"month": "June", "month_confidence": 90}

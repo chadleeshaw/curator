@@ -34,7 +34,7 @@ class TestMetadataAggregation:
     def setup_method(self):
         """Set up test fixtures"""
         # pylint: disable=attribute-defined-outside-init
-        self.periodical = Periodical()
+        self.periodical = Periodical(user_id=1)
         self.periodical.title = "Test Magazine"
         self.periodical.extra_metadata = {}
 

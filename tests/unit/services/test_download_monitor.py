@@ -756,6 +756,7 @@ class TestImportRetry:
             olid="OL-test",
             title="Test Magazine",
             language="English",
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -775,6 +776,7 @@ class TestImportRetry:
             file_path=str(test_file),
             last_error="Import/processing failed",
             attempt_count=0,
+            user_id=1,
         )
         session.add(submission)
         session.commit()
@@ -809,6 +811,7 @@ class TestImportRetry:
             olid="OL-test2",
             title="Gone Magazine",
             language="English",
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -825,6 +828,7 @@ class TestImportRetry:
             file_path=str(downloads_dir / "nonexistent.pdf"),
             last_error="Import/processing failed",
             attempt_count=0,
+            user_id=1,
         )
         session.add(submission)
         session.commit()
@@ -856,6 +860,7 @@ class TestImportRetry:
             olid="OL-test3",
             title="Exhausted Magazine",
             language="English",
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -873,7 +878,8 @@ class TestImportRetry:
             status=DownloadSubmission.StatusEnum.FAILED,
             file_path=str(test_file),
             last_error="Import/processing failed",
-            attempt_count=MAX_IMPORT_RETRIES,  # Already exhausted
+            attempt_count=MAX_IMPORT_RETRIES,  # Already exhausted,
+            user_id=1,
         )
         session.add(submission)
         session.commit()
@@ -906,6 +912,7 @@ class TestImportRetry:
             olid="OL-test4",
             title="Download Fail Magazine",
             language="English",
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -922,6 +929,7 @@ class TestImportRetry:
             file_path=None,  # No file — download never completed
             last_error="Connection timeout",
             attempt_count=0,
+            user_id=1,
         )
         session.add(submission)
         session.commit()

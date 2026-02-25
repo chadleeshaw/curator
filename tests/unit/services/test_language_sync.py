@@ -42,6 +42,7 @@ class TestLanguageSynchronization:
                 language="English",
                 track_all_editions=True,
                 last_metadata_update=datetime.now(UTC),
+                user_id=1,
             )
             session.add(tracking)
             session.commit()
@@ -54,6 +55,7 @@ class TestLanguageSynchronization:
                     issue_date=datetime(2024, 1, 1),
                     file_path="/test/mag_jan_2024.pdf",
                     tracking_id=tracking.id,
+                    user_id=1,
                 ),
                 Periodical(
                     title="Test Magazine",
@@ -61,6 +63,7 @@ class TestLanguageSynchronization:
                     issue_date=datetime(2024, 2, 1),
                     file_path="/test/mag_feb_2024.pdf",
                     tracking_id=tracking.id,
+                    user_id=1,
                 ),
                 Periodical(
                     title="Test Magazine",
@@ -68,6 +71,7 @@ class TestLanguageSynchronization:
                     issue_date=datetime(2024, 3, 1),
                     file_path="/test/mag_mar_2024.pdf",
                     tracking_id=tracking.id,
+                    user_id=1,
                 ),
             ]
             session.add_all(periodicals)
@@ -104,6 +108,7 @@ class TestLanguageSynchronization:
                 language="English",
                 track_all_editions=True,
                 last_metadata_update=datetime.now(UTC),
+                user_id=1,
             )
             session.add(tracking)
             session.commit()
@@ -116,6 +121,7 @@ class TestLanguageSynchronization:
                     issue_date=datetime(2024, 1, 1),
                     file_path="/test/multi_jan.pdf",
                     tracking_id=tracking.id,
+                    user_id=1,
                 ),
                 Periodical(
                     title="Multi-Lang Magazine",
@@ -123,6 +129,7 @@ class TestLanguageSynchronization:
                     issue_date=datetime(2024, 2, 1),
                     file_path="/test/multi_feb.pdf",
                     tracking_id=tracking.id,
+                    user_id=1,
                 ),
                 Periodical(
                     title="Multi-Lang Magazine",
@@ -130,6 +137,7 @@ class TestLanguageSynchronization:
                     issue_date=datetime(2024, 3, 1),
                     file_path="/test/multi_mar.pdf",
                     tracking_id=tracking.id,
+                    user_id=1,
                 ),
             ]
             session.add_all(periodicals)
@@ -166,6 +174,7 @@ class TestLanguageSynchronization:
                 language="English",
                 track_all_editions=True,
                 last_metadata_update=datetime.now(UTC),
+                user_id=1,
             )
             session.add(tracking)
             session.commit()  # Commit to get tracking.id
@@ -177,6 +186,7 @@ class TestLanguageSynchronization:
                 issue_date=datetime(2024, 1, 1),
                 file_path="/test/tracked.pdf",
                 tracking_id=tracking.id,
+                user_id=1,
             )
 
             # Create untracked periodical (different language)
@@ -186,6 +196,7 @@ class TestLanguageSynchronization:
                 issue_date=datetime(2024, 1, 1),
                 file_path="/test/independent.pdf",
                 tracking_id=None,
+                user_id=1,
             )
 
             session.add_all([tracked, untracked])
@@ -224,6 +235,7 @@ class TestLanguageSynchronization:
                 language="English",
                 track_all_editions=True,
                 last_metadata_update=datetime.now(UTC),
+                user_id=1,
             )
             session.add(tracking)
             session.commit()
@@ -259,6 +271,7 @@ class TestLanguageSynchronization:
                 language="German",
                 track_all_editions=True,
                 last_metadata_update=datetime.now(UTC),
+                user_id=1,
             )
             session.add(tracking)
             session.commit()
@@ -270,6 +283,7 @@ class TestLanguageSynchronization:
                 language="English",  # Initially set from parser
                 issue_date=datetime(2024, 1, 1),
                 file_path="/test/german_mag.pdf",
+                user_id=1,
             )
 
             # Simulate import linking logic

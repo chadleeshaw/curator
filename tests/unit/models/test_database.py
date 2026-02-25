@@ -78,6 +78,7 @@ class TestMagazineModel:
             title="Test Magazine",
             issue_date=datetime(2023, 1, 1),
             file_path="/test/path.pdf",
+            user_id=1,
         )
         session.add(mag)
         session.commit()
@@ -116,6 +117,7 @@ class TestMagazineTracking:
         tracking = PeriodicalTracking(
             olid="OL9876543W",
             title="Scientific American",
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -172,7 +174,7 @@ class TestDownloadSubmissionModel:
     def test_download_submission_creation(self, session):
         """Test DownloadSubmission creation"""
         # Create tracking first
-        tracking = PeriodicalTracking(olid="test_mag", title="Test")
+        tracking = PeriodicalTracking(olid="test_mag", title="Test", user_id=1)
         session.add(tracking)
         session.flush()
 
@@ -184,6 +186,7 @@ class TestDownloadSubmissionModel:
             result_title="Test Issue",
             fuzzy_match_group="test-group",
             client_name="TestClient",
+            user_id=1,
         )
         session.add(submission)
         session.commit()
@@ -210,6 +213,7 @@ class TestDatabaseOperations:
             title="Test Magazine",
             issue_date=datetime(2023, 1, 1),
             file_path="/test/path.pdf",
+            user_id=1,
         )
         session.add(mag)
         session.commit()
@@ -226,6 +230,7 @@ class TestDatabaseOperations:
             title="Test Magazine",
             issue_date=datetime(2023, 1, 1),
             file_path="/test/path.pdf",
+            user_id=1,
         )
         session.add(mag)
         session.flush()
@@ -242,7 +247,7 @@ class TestDatabaseOperations:
         session.flush()
 
         # Create tracking and download submission linked to search result
-        tracking = PeriodicalTracking(olid="test_olid_fk", title="Test Magazine")
+        tracking = PeriodicalTracking(olid="test_olid_fk", title="Test Magazine", user_id=1)
         session.add(tracking)
         session.flush()
 
@@ -255,6 +260,7 @@ class TestDatabaseOperations:
             fuzzy_match_group="test-group",
             client_name="test_client",
             search_result_id=search_result.id,
+            user_id=1,
         )
         session.add(submission)
         session.commit()
@@ -269,6 +275,7 @@ class TestDatabaseOperations:
             title="Magazine 1",
             issue_date=datetime(2023, 1, 1),
             file_path="/unique/path.pdf",
+            user_id=1,
         )
         session.add(mag1)
         session.commit()
@@ -278,6 +285,7 @@ class TestDatabaseOperations:
             title="Magazine 2",
             issue_date=datetime(2023, 2, 1),
             file_path="/unique/path.pdf",
+            user_id=1,
         )
         session.add(mag2)
 
@@ -287,11 +295,11 @@ class TestDatabaseOperations:
     def test_olid_can_be_duplicate_for_languages(self, session):
         """Test that OLID can be shared across different language editions"""
         # Same OLID but different languages - should be allowed
-        tracking1 = PeriodicalTracking(olid="OL12345W", title="Wired Magazine", language="English")
+        tracking1 = PeriodicalTracking(olid="OL12345W", title="Wired Magazine", language="English", user_id=1)
         session.add(tracking1)
         session.commit()
 
-        tracking2 = PeriodicalTracking(olid="OL12345W", title="Wired Magazine", language="German")
+        tracking2 = PeriodicalTracking(olid="OL12345W", title="Wired Magazine", language="German", user_id=1)
         session.add(tracking2)
         session.commit()  # Should not raise - duplicate OLID is allowed
 
@@ -310,6 +318,7 @@ class TestLanguageFields:
             title="Test Magazine",
             issue_date=datetime(2024, 1, 1),
             file_path="/test/magazine.pdf",
+            user_id=1,
         )
         session.add(mag)
         session.commit()
@@ -323,6 +332,7 @@ class TestLanguageFields:
             issue_date=datetime(2024, 1, 1),
             file_path="/test/wired_de.pdf",
             language="German",
+            user_id=1,
         )
         session.add(mag)
         session.commit()
@@ -338,6 +348,7 @@ class TestLanguageFields:
         tracking = PeriodicalTracking(
             olid="OL12345W",
             title="Test Periodical",
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -350,6 +361,7 @@ class TestLanguageFields:
             olid="OL99999W",
             title="Revista Española",
             language="Spanish",
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -367,6 +379,7 @@ class TestLanguageFields:
             olid="wired",
             title="Wired Magazine",
             language="English",
+            user_id=1,
         )
         session.add(tracking_en)
 
@@ -375,6 +388,7 @@ class TestLanguageFields:
             olid="wired",
             title="Wired Magazine",
             language="German",
+            user_id=1,
         )
         session.add(tracking_de)
 
@@ -383,6 +397,7 @@ class TestLanguageFields:
             olid="wired",
             title="Wired Magazine",
             language="French",
+            user_id=1,
         )
         session.add(tracking_fr)
 
@@ -403,12 +418,14 @@ class TestLanguageFields:
             issue_date=datetime(2024, 1, 1),
             file_path="/test/pcgamer_en.pdf",
             language="English",
+            user_id=1,
         )
         mag_en2 = Periodical(
             title="Wired",
             issue_date=datetime(2024, 1, 1),
             file_path="/test/wired_en.pdf",
             language="English",
+            user_id=1,
         )
 
         # Add German magazines
@@ -417,12 +434,14 @@ class TestLanguageFields:
             issue_date=datetime(2024, 1, 1),
             file_path="/test/pcgamer_de.pdf",
             language="German",
+            user_id=1,
         )
         mag_de2 = Periodical(
             title="Wired",
             issue_date=datetime(2024, 1, 1),
             file_path="/test/wired_de.pdf",
             language="German",
+            user_id=1,
         )
 
         session.add_all([mag_en1, mag_en2, mag_de1, mag_de2])
@@ -445,6 +464,7 @@ class TestTimestampFields:
             title="Timestamped Magazine",
             issue_date=datetime(2023, 1, 1),
             file_path="/test/timestamps.pdf",
+            user_id=1,
         )
         session.add(mag)
         session.commit()
@@ -456,7 +476,7 @@ class TestTimestampFields:
 
     def test_tracking_timestamps(self, session):
         """Test MagazineTracking timestamps"""
-        tracking = PeriodicalTracking(olid="test_olid", title="Test")
+        tracking = PeriodicalTracking(olid="test_olid", title="Test", user_id=1)
         session.add(tracking)
         session.commit()
 

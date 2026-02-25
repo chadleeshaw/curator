@@ -345,6 +345,7 @@ class TestFeedMatchService:
             language="English",
             search_aliases=aliases,
             track_all_editions=track_all_editions,
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -515,6 +516,7 @@ class TestFeedSyncMatchIntegration:
             title="Popular Mechanics",
             language="English",
             track_all_editions=True,
+            user_id=1,
         )
         main_db_session.add(tracking)
         main_db_session.commit()
@@ -556,6 +558,7 @@ class TestFeedSyncMatchIntegration:
             title="The Economist",
             language="English",
             track_all_editions=True,
+            user_id=1,
         )
         main_db_session.add(tracking)
         main_db_session.commit()
@@ -653,6 +656,7 @@ class TestResetSkippedEntries:
             title="PC Gamer",
             language="English",
             track_all_editions=True,
+            user_id=1,
         )
         main_db_session.add(tracking)
         main_db_session.commit()
@@ -679,6 +683,7 @@ class TestResetSkippedEntries:
             title="Wired",
             language="English",
             track_all_editions=True,
+            user_id=1,
         )
         main_db_session.add(tracking)
         main_db_session.commit()

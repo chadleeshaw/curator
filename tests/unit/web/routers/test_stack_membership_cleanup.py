@@ -51,7 +51,11 @@ def db_with_stack_and_periodical(test_db):
     _, session_factory = test_db
     db = session_factory()
 
-    stack = Stack(name="Test Stack", slug="test-stack")
+    stack = Stack(
+        name="Test Stack",
+        slug="test-stack",
+        user_id=1,
+    )
     db.add(stack)
     db.commit()
 
@@ -60,6 +64,7 @@ def db_with_stack_and_periodical(test_db):
         file_path="/tmp/test.pdf",
         issue_date=datetime.now(UTC),
         language="eng",
+        user_id=1,
     )
     db.add(periodical)
     db.commit()
@@ -77,11 +82,19 @@ def db_with_stack_and_tracking(test_db):
     _, session_factory = test_db
     db = session_factory()
 
-    stack = Stack(name="Test Stack", slug="test-stack")
+    stack = Stack(
+        name="Test Stack",
+        slug="test-stack",
+        user_id=1,
+    )
     db.add(stack)
     db.commit()
 
-    tracking = PeriodicalTracking(olid="OL100W", title="Test Magazine")
+    tracking = PeriodicalTracking(
+        olid="OL100W",
+        title="Test Magazine",
+        user_id=1,
+    )
     db.add(tracking)
     db.commit()
 
@@ -120,7 +133,11 @@ class TestDeletePeriodicalCleansUpMembership:
         _, session_factory = test_db
         db = session_factory()
 
-        stack = Stack(name="Multi Stack", slug="multi-stack")
+        stack = Stack(
+            name="Multi Stack",
+            slug="multi-stack",
+            user_id=1,
+        )
         db.add(stack)
         db.commit()
 
@@ -132,6 +149,7 @@ class TestDeletePeriodicalCleansUpMembership:
                 file_path=f"/tmp/test_{i}.pdf",
                 issue_date=datetime(2024, i + 1, 1, tzinfo=UTC),
                 language="eng",
+                user_id=1,
             )
             db.add(p)
             db.commit()
@@ -167,6 +185,7 @@ class TestDeletePeriodicalCleansUpMembership:
             title="No Stack Mag",
             file_path="/tmp/nostackmag.pdf",
             issue_date=datetime.now(UTC),
+            user_id=1,
         )
         db.add(periodical)
         db.commit()
@@ -217,11 +236,19 @@ class TestDeleteTrackingCleansUpMembership:
         _, session_factory = test_db
         db = session_factory()
 
-        stack = Stack(name="Full Stack", slug="full-stack")
+        stack = Stack(
+            name="Full Stack",
+            slug="full-stack",
+            user_id=1,
+        )
         db.add(stack)
         db.commit()
 
-        tracking = PeriodicalTracking(olid="OL200W", title="Full Mag")
+        tracking = PeriodicalTracking(
+            olid="OL200W",
+            title="Full Mag",
+            user_id=1,
+        )
         db.add(tracking)
         db.commit()
 
@@ -230,6 +257,7 @@ class TestDeleteTrackingCleansUpMembership:
             file_path="/tmp/full.pdf",
             issue_date=datetime.now(UTC),
             tracking_id=tracking.id,
+            user_id=1,
         )
         db.add(periodical)
         db.commit()
@@ -267,12 +295,24 @@ class TestMergeTrackingTransfersMembership:
         _, session_factory = test_db
         db = session_factory()
 
-        stack = Stack(name="Merge Stack", slug="merge-stack")
+        stack = Stack(
+            name="Merge Stack",
+            slug="merge-stack",
+            user_id=1,
+        )
         db.add(stack)
         db.commit()
 
-        source = PeriodicalTracking(olid="OL300W", title="Source Mag")
-        target = PeriodicalTracking(olid="OL301W", title="Target Mag")
+        source = PeriodicalTracking(
+            olid="OL300W",
+            title="Source Mag",
+            user_id=1,
+        )
+        target = PeriodicalTracking(
+            olid="OL301W",
+            title="Target Mag",
+            user_id=1,
+        )
         db.add_all([source, target])
         db.commit()
 
@@ -310,13 +350,29 @@ class TestMergeTrackingTransfersMembership:
         _, session_factory = test_db
         db = session_factory()
 
-        stack1 = Stack(name="Stack A", slug="stack-a")
-        stack2 = Stack(name="Stack B", slug="stack-b")
+        stack1 = Stack(
+            name="Stack A",
+            slug="stack-a",
+            user_id=1,
+        )
+        stack2 = Stack(
+            name="Stack B",
+            slug="stack-b",
+            user_id=1,
+        )
         db.add_all([stack1, stack2])
         db.commit()
 
-        source = PeriodicalTracking(olid="OL400W", title="Source")
-        target = PeriodicalTracking(olid="OL401W", title="Target")
+        source = PeriodicalTracking(
+            olid="OL400W",
+            title="Source",
+            user_id=1,
+        )
+        target = PeriodicalTracking(
+            olid="OL401W",
+            title="Target",
+            user_id=1,
+        )
         db.add_all([source, target])
         db.commit()
 
@@ -356,8 +412,16 @@ class TestMergeTrackingTransfersMembership:
         _, session_factory = test_db
         db = session_factory()
 
-        source = PeriodicalTracking(olid="OL500W", title="Source")
-        target = PeriodicalTracking(olid="OL501W", title="Target")
+        source = PeriodicalTracking(
+            olid="OL500W",
+            title="Source",
+            user_id=1,
+        )
+        target = PeriodicalTracking(
+            olid="OL501W",
+            title="Target",
+            user_id=1,
+        )
         db.add_all([source, target])
         db.commit()
 
@@ -384,12 +448,24 @@ class TestPurgeDatabaseCleansUpStacks:
         db = session_factory()
 
         # Create stacks
-        stack1 = Stack(name="Stack 1", slug="stack-1")
-        stack2 = Stack(name="Stack 2", slug="stack-2")
+        stack1 = Stack(
+            name="Stack 1",
+            slug="stack-1",
+            user_id=1,
+        )
+        stack2 = Stack(
+            name="Stack 2",
+            slug="stack-2",
+            user_id=1,
+        )
         db.add_all([stack1, stack2])
         db.commit()
 
-        tracking = PeriodicalTracking(olid="OL600W", title="Purge Mag")
+        tracking = PeriodicalTracking(
+            olid="OL600W",
+            title="Purge Mag",
+            user_id=1,
+        )
         db.add(tracking)
         db.commit()
 
@@ -398,6 +474,7 @@ class TestPurgeDatabaseCleansUpStacks:
             file_path="/tmp/purge.pdf",
             issue_date=datetime.now(UTC),
             tracking_id=tracking.id,
+            user_id=1,
         )
         db.add(periodical)
         db.commit()

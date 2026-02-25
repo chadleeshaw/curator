@@ -80,9 +80,13 @@ class SubmissionCoordinator:
     # Client routing helpers
     # ------------------------------------------------------------------
 
-    def _get_client_for_provider(self, provider: str, url: Optional[str] = None) -> DownloadClient:
+    def _get_client_for_provider(
+        self, provider: str, url: Optional[str] = None
+    ) -> DownloadClient:
         """Get the appropriate download client for a provider."""
-        return get_client_for_provider(self.download_clients, self.provider_client_map, provider, url)
+        return get_client_for_provider(
+            self.download_clients, self.provider_client_map, provider, url
+        )
 
     def _get_client_name_for_provider(self, provider: str) -> str:
         """
@@ -128,7 +132,9 @@ class SubmissionCoordinator:
     # Category and slot helpers
     # ------------------------------------------------------------------
 
-    def _get_download_category(self, tracking_id: int, session: Session) -> Optional[str]:
+    def _get_download_category(
+        self, tracking_id: int, session: Session
+    ) -> Optional[str]:
         """Determine the download category for a submission."""
         return get_download_category(tracking_id, session, self.default_category)
 
@@ -319,7 +325,9 @@ class SubmissionCoordinator:
         if submission_id not in (issue.submission_ids or []):
             issue.submission_ids = (issue.submission_ids or []) + [submission_id]
 
-    def _build_search_result_from_issue(self, issue, discovered_issue_id: int) -> Dict[str, Any]:
+    def _build_search_result_from_issue(
+        self, issue, discovered_issue_id: int
+    ) -> Dict[str, Any]:
         """
         Build search_result dict from DiscoveredIssue for use by submission helpers.
 
@@ -339,7 +347,9 @@ class SubmissionCoordinator:
             "raw_metadata": issue.extra_metadata or {},
         }
 
-    def _create_queued_submission(self, issue, search_result: Dict[str, Any], session: Session) -> DownloadSubmission:
+    def _create_queued_submission(
+        self, issue, search_result: Dict[str, Any], session: Session
+    ) -> DownloadSubmission:
         """
         Create a queued submission when at download limit.
 
@@ -354,7 +364,10 @@ class SubmissionCoordinator:
         provider = issue.latest_provider or "unknown"
         active_count = self._get_active_download_count(session)
 
-        logger.info(f"At download limit ({active_count}/{self.max_downloads}), " f"queuing download: '{issue.title}'")
+        logger.info(
+            f"At download limit ({active_count}/{self.max_downloads}), "
+            f"queuing download: '{issue.title}'"
+        )
 
         submission = self._create_submission_record(
             issue.tracking_id,
@@ -427,7 +440,9 @@ class SubmissionCoordinator:
                 )
                 return None
 
-            logger.debug(f"[DownloadManager] Client {client.name} accepted, job_id: {job_id}")
+            logger.debug(
+                f"[DownloadManager] Client {client.name} accepted, job_id: {job_id}"
+            )
             submission = self._create_submission_record(
                 tracking_id,
                 search_result,
@@ -438,11 +453,15 @@ class SubmissionCoordinator:
                 client_name=client.name,
                 attempt_count=0,
             )
-            logger.info(f"Submitted download: {title} (job_id: {job_id}, client: {client.name})")
+            logger.info(
+                f"Submitted download: {title} (job_id: {job_id}, client: {client.name})"
+            )
             return submission
 
         except Exception as e:
-            self._handle_submission_error(tracking_id, search_result, e, session, search_result_db_id)
+            self._handle_submission_error(
+                tracking_id, search_result, e, session, search_result_db_id
+            )
             return None
 
     def _validate_discovered_issue(self, issue, session: Session) -> Optional[str]:
@@ -477,12 +496,16 @@ class SubmissionCoordinator:
 
         # Check if this is a bad file
         if issue.download_status == DownloadStatus.PERMANENTLY_FAILED:
-            logger.warning(f"Skipping bad file (marked as permanently failed): {issue.title}")
+            logger.warning(
+                f"Skipping bad file (marked as permanently failed): {issue.title}"
+            )
             return "permanently_failed"
 
         # Check blacklisted file types
         if self._has_blacklisted_extension(issue.title):
-            logger.warning(f"Skipping discovered issue with blacklisted extension: {issue.title}")
+            logger.warning(
+                f"Skipping discovered issue with blacklisted extension: {issue.title}"
+            )
             issue.download_status = DownloadStatus.PERMANENTLY_FAILED
             issue.last_error = "Blacklisted file extension"
             session.commit()
@@ -534,7 +557,9 @@ class SubmissionCoordinator:
             )
 
             if not job_id:
-                logger.warning(f"Download client {client.name} rejected submission: {issue.title}")
+                logger.warning(
+                    f"Download client {client.name} rejected submission: {issue.title}"
+                )
                 issue.download_status = DownloadStatus.FAILED
                 issue.last_error = f"Client {client.name} rejected submission"
                 self._record_attempt(issue)
@@ -553,14 +578,18 @@ class SubmissionCoordinator:
             )
 
             # Update DiscoveredIssue with submission info
-            issue.download_status = DownloadStatus.PENDING  # Submitted to and accepted by download client
+            issue.download_status = (
+                DownloadStatus.PENDING
+            )  # Submitted to and accepted by download client
             issue.current_submission_id = submission.id
             self._register_submission_id(issue, submission.id)
             self._record_attempt(issue)
 
             session.commit()
 
-            logger.info(f"Submitted discovered issue: {issue.title} (job_id: {job_id}, submission_id: {submission.id})")
+            logger.info(
+                f"Submitted discovered issue: {issue.title} (job_id: {job_id}, submission_id: {submission.id})"
+            )
             return submission
 
         except Exception as e:
@@ -571,13 +600,17 @@ class SubmissionCoordinator:
             issue.download_status = DownloadStatus.FAILED
             error_str = str(e)
             if len(error_str) > MAX_ERROR_LENGTH:
-                logger.warning(f"Error message truncated from {len(error_str)} to {MAX_ERROR_LENGTH} chars")
+                logger.warning(
+                    f"Error message truncated from {len(error_str)} to {MAX_ERROR_LENGTH} chars"
+                )
             issue.last_error = error_str[:MAX_ERROR_LENGTH]
             self._record_attempt(issue)
             session.commit()
             return None
 
-    def submit_from_discovered_issue(self, discovered_issue_id: int, session: Session) -> Optional[DownloadSubmission]:
+    def submit_from_discovered_issue(
+        self, discovered_issue_id: int, session: Session
+    ) -> Optional[DownloadSubmission]:
         """
         Submit a download from a DiscoveredIssue (new Issue Discovery & Tracking system).
 
@@ -592,13 +625,19 @@ class SubmissionCoordinator:
             DownloadSubmission record if submitted, None if error or already downloading
         """
         # Get the discovered issue
-        issue = session.query(DiscoveredIssue).filter(DiscoveredIssue.id == discovered_issue_id).first()
+        issue = (
+            session.query(DiscoveredIssue)
+            .filter(DiscoveredIssue.id == discovered_issue_id)
+            .first()
+        )
 
         # Validate the issue
         error = self._validate_discovered_issue(issue, session)
         if error:
             if error not in ["already_downloading", "permanently_failed"]:
-                logger.error(f"DiscoveredIssue validation failed: {error} (id: {discovered_issue_id})")
+                logger.error(
+                    f"DiscoveredIssue validation failed: {error} (id: {discovered_issue_id})"
+                )
             return None
 
         # Build search result for compatibility
@@ -669,12 +708,16 @@ class SubmissionCoordinator:
                 attempt_count=0,
             )
         else:
-            submission = self._submit_to_client(tracking_id, search_result, session, search_result_db_id)
+            submission = self._submit_to_client(
+                tracking_id, search_result, session, search_result_db_id
+            )
 
         # Attempt to create a DiscoveredIssue and link it so the monitor can track this submission.
         # This is best-effort — we're already in a fallback path, so don't fail if this also errors.
         if submission:
-            self._link_manual_submission_to_discovered_issue(tracking_id, search_result, submission, session)
+            self._link_manual_submission_to_discovered_issue(
+                tracking_id, search_result, submission, session
+            )
 
         return submission
 
@@ -703,9 +746,13 @@ class SubmissionCoordinator:
             url = search_result.get("url", "")
             provider = search_result.get("provider", "unknown")
 
-            parsed = self.parser.parse_search_result(title=title, url=url, provider=provider)
+            parsed = self.parser.parse_search_result(
+                title=title, url=url, provider=provider
+            )
             if not parsed:
-                logger.debug(f"[DownloadManager] Could not parse title for manual submission link: {title}")
+                logger.debug(
+                    f"[DownloadManager] Could not parse title for manual submission link: {title}"
+                )
                 return
 
             fuzzy_group = get_fuzzy_group_id(parsed.original_title)
@@ -723,13 +770,18 @@ class SubmissionCoordinator:
             if not discovered_issue:
                 now = utc_now()
                 discovered_issue = DiscoveredIssue(
+                    user_id=1,
                     tracking_id=tracking_id,
                     title=title,
                     normalized_title=parsed.cleaned_title.lower(),
                     fuzzy_match_group=fuzzy_group,
                     issue_date=parsed.publication_date,
-                    year=parsed.publication_date.year if parsed.publication_date else None,
-                    month=parsed.publication_date.month if parsed.publication_date else None,
+                    year=parsed.publication_date.year
+                    if parsed.publication_date
+                    else None,
+                    month=parsed.publication_date.month
+                    if parsed.publication_date
+                    else None,
                     language=parsed.language,
                     country=parsed.country,
                     first_seen=now,
@@ -741,7 +793,9 @@ class SubmissionCoordinator:
                 )
                 session.add(discovered_issue)
                 session.flush()
-                logger.debug(f"[DownloadManager] Created DiscoveredIssue for manual fallback submission: {title}")
+                logger.debug(
+                    f"[DownloadManager] Created DiscoveredIssue for manual fallback submission: {title}"
+                )
 
             # Set status and link to submission
             if submission.status == DownloadSubmission.StatusEnum.PENDING:
@@ -791,7 +845,9 @@ class SubmissionCoordinator:
             DownloadSubmission record if successful
         """
         title = search_result["title"]
-        logger.info(f"Submitting single issue download: {title} (tracking_id: {tracking_id})")
+        logger.info(
+            f"Submitting single issue download: {title} (tracking_id: {tracking_id})"
+        )
 
         # Record this as a discovered issue (will be "wanted" if it matches tracking rules)
         record_result = self.issue_discovery_service.record_search_results(
@@ -801,7 +857,9 @@ class SubmissionCoordinator:
         )
 
         if record_result["new"] == 0 and record_result["updated"] == 0:
-            logger.warning(f"Failed to record search result for manual download: {title}")
+            logger.warning(
+                f"Failed to record search result for manual download: {title}"
+            )
             return self._manual_direct_submission(tracking_id, search_result, session)
 
         # Find the discovered issue by fuzzy_match_group (same approach as issue_discovery)
@@ -846,7 +904,9 @@ class SubmissionCoordinator:
         # Submit using the standard Issue Discovery flow
         return self.submit_from_discovered_issue(discovered_issue.id, session)
 
-    def download_all_periodical_issues(self, tracking_id: int, session: Session) -> Dict[str, Any]:
+    def download_all_periodical_issues(
+        self, tracking_id: int, session: Session
+    ) -> Dict[str, Any]:
         """
         Search for all issues of a tracked periodical and submit downloads.
         Called when track_all_editions is set to True.
@@ -862,13 +922,19 @@ class SubmissionCoordinator:
             Dict with submission results
         """
         # Get tracking record
-        tracking = session.query(PeriodicalTracking).filter(PeriodicalTracking.id == tracking_id).first()
+        tracking = (
+            session.query(PeriodicalTracking)
+            .filter(PeriodicalTracking.id == tracking_id)
+            .first()
+        )
 
         if not tracking:
             logger.error(f"Tracking record not found: {tracking_id}")
             return {"submitted": 0, "skipped": 0, "failed": 0}
 
-        logger.info(f"Starting download search for all issues of: {tracking.title} (tracking_id: {tracking_id})")
+        logger.info(
+            f"Starting download search for all issues of: {tracking.title} (tracking_id: {tracking_id})"
+        )
 
         # Search for issues — delegate to a search service if available, otherwise use stored reference
         search_results = self._search_periodical_issues(tracking.title, session)
@@ -933,7 +999,9 @@ class SubmissionCoordinator:
 
         return results
 
-    def _search_periodical_issues(self, periodical_title: str, session: Session) -> List[Dict[str, Any]]:
+    def _search_periodical_issues(
+        self, periodical_title: str, session: Session
+    ) -> List[Dict[str, Any]]:
         """
         Search all providers for available issues of a periodical.
         Delegates to the search_service stored on this coordinator.
@@ -946,7 +1014,9 @@ class SubmissionCoordinator:
             List of search results
         """
         if not self.search_service:
-            logger.error("[SubmissionCoordinator] No search_service configured for download_all_periodical_issues")
+            logger.error(
+                "[SubmissionCoordinator] No search_service configured for download_all_periodical_issues"
+            )
             return []
         return self.search_service.search_periodical_issues(periodical_title, session)
 
@@ -970,7 +1040,9 @@ class SubmissionCoordinator:
             DownloadSubmission record (status QUEUED), or None on error
         """
         title = search_result["title"]
-        logger.info(f"Queuing issue for batch download: {title} (tracking_id: {tracking_id})")
+        logger.info(
+            f"Queuing issue for batch download: {title} (tracking_id: {tracking_id})"
+        )
 
         # Record in the discovery system so the queue processor can track it
         record_result = self.issue_discovery_service.record_search_results(
@@ -980,7 +1052,9 @@ class SubmissionCoordinator:
         )
 
         if record_result["new"] == 0 and record_result["updated"] == 0:
-            logger.warning(f"Failed to record search result for batch download: {title}")
+            logger.warning(
+                f"Failed to record search result for batch download: {title}"
+            )
             return None
 
         # Find the discovered issue by fuzzy_match_group
@@ -1003,7 +1077,9 @@ class SubmissionCoordinator:
             )
 
         if not discovered_issue:
-            logger.error(f"Could not find DiscoveredIssue after recording for batch: {title}")
+            logger.error(
+                f"Could not find DiscoveredIssue after recording for batch: {title}"
+            )
             return None
 
         # Skip issues already actively downloading or queued — no double-submission
@@ -1012,7 +1088,9 @@ class SubmissionCoordinator:
             DownloadStatus.QUEUED,
             DownloadStatus.PENDING,
         ):
-            logger.debug(f"Skipping already-active issue in batch: {title} ({discovered_issue.download_status})")
+            logger.debug(
+                f"Skipping already-active issue in batch: {title} ({discovered_issue.download_status})"
+            )
             return None
 
         # Reset failed/skipped issues so the user's explicit request takes priority
@@ -1023,5 +1101,7 @@ class SubmissionCoordinator:
             discovered_issue.last_error = None
 
         # Always queue — never submit directly to the HTTP client in a batch
-        build = self._build_search_result_from_issue(discovered_issue, discovered_issue.id)
+        build = self._build_search_result_from_issue(
+            discovered_issue, discovered_issue.id
+        )
         return self._create_queued_submission(discovered_issue, build, session)

@@ -69,6 +69,7 @@ class TestSelectPeriodicalsToSearch:
             title="Never Searched Magazine",
             track_all_editions=True,
             last_searched=None,
+            user_id=1,
         )
         recently_searched = PeriodicalTracking(
             olid="recent",
@@ -76,6 +77,7 @@ class TestSelectPeriodicalsToSearch:
             track_all_editions=True,
             last_searched=datetime.now(UTC) - timedelta(minutes=30),
             search_interval_hours=6,
+            user_id=1,
         )
         session.add_all([never_searched, recently_searched])
         session.commit()
@@ -102,14 +104,16 @@ class TestSelectPeriodicalsToSearch:
             title="Overdue Magazine",
             track_all_editions=True,
             last_searched=datetime.now(UTC) - timedelta(hours=7),  # 7 hours ago
-            search_interval_hours=6,  # Should have been searched 1 hour ago
+            search_interval_hours=6,  # Should have been searched 1 hour ago,
+            user_id=1,
         )
         not_due = PeriodicalTracking(
             olid="not-due",
             title="Not Due Magazine",
             track_all_editions=True,
             last_searched=datetime.now(UTC) - timedelta(minutes=30),  # 30 min ago
-            search_interval_hours=6,  # Not due yet
+            search_interval_hours=6,  # Not due yet,
+            user_id=1,
         )
         session.add_all([overdue, not_due])
         session.commit()
@@ -137,6 +141,7 @@ class TestSelectPeriodicalsToSearch:
                 track_all_editions=True,
                 last_searched=datetime.now(UTC) - timedelta(hours=10),
                 search_interval_hours=6,
+                user_id=1,
             )
             session.add(tracking)
         session.commit()
@@ -161,6 +166,7 @@ class TestSelectPeriodicalsToSearch:
             track_all_editions=True,
             last_searched=datetime.now(UTC) - timedelta(days=10),
             search_interval_hours=6,
+            user_id=1,
         )
         slightly_overdue = PeriodicalTracking(
             olid="slightly-overdue",
@@ -168,6 +174,7 @@ class TestSelectPeriodicalsToSearch:
             track_all_editions=True,
             last_searched=datetime.now(UTC) - timedelta(hours=7),
             search_interval_hours=6,
+            user_id=1,
         )
         session.add_all([slightly_overdue, very_overdue])  # Add in reverse order
         session.commit()
@@ -194,6 +201,7 @@ class TestSelectPeriodicalsToSearch:
             track_all_editions=False,
             track_new_only=False,
             last_searched=None,
+            user_id=1,
         )
         # Track all editions: should be included
         track_all = PeriodicalTracking(
@@ -202,6 +210,7 @@ class TestSelectPeriodicalsToSearch:
             track_all_editions=True,
             track_new_only=False,
             last_searched=None,
+            user_id=1,
         )
         # Track new only: should be included
         track_new = PeriodicalTracking(
@@ -210,6 +219,7 @@ class TestSelectPeriodicalsToSearch:
             track_all_editions=False,
             track_new_only=True,
             last_searched=None,
+            user_id=1,
         )
         # Selected years: should be included
         track_years = PeriodicalTracking(
@@ -219,6 +229,7 @@ class TestSelectPeriodicalsToSearch:
             track_new_only=False,
             selected_years=[2024, 2025],
             last_searched=None,
+            user_id=1,
         )
         session.add_all([watch_only, track_all, track_new, track_years])
         session.commit()
@@ -251,6 +262,7 @@ class TestSelectPeriodicalsToSearch:
             track_new_only=False,
             last_searched=datetime.now(UTC) - timedelta(days=30),
             search_interval_hours=6,
+            user_id=1,
         )
         # Downloadable and overdue
         download_overdue = PeriodicalTracking(
@@ -259,6 +271,7 @@ class TestSelectPeriodicalsToSearch:
             track_all_editions=True,
             last_searched=datetime.now(UTC) - timedelta(days=30),
             search_interval_hours=6,
+            user_id=1,
         )
         session.add_all([watch_overdue, download_overdue])
         session.commit()
@@ -288,6 +301,7 @@ class TestUpdateSearchStats:
             last_searched=datetime.now(UTC) - timedelta(hours=7),
             search_interval_hours=6,  # Normal interval
             searches_without_new_issues=2,
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -319,7 +333,8 @@ class TestUpdateSearchStats:
             track_all_editions=True,
             last_searched=datetime.now(UTC) - timedelta(hours=7),
             search_interval_hours=6,
-            searches_without_new_issues=0,  # Start at 0
+            searches_without_new_issues=0,  # Start at 0,
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -351,7 +366,8 @@ class TestUpdateSearchStats:
             track_all_editions=True,
             last_searched=datetime.now(UTC) - timedelta(hours=7),
             search_interval_hours=6,  # Normal
-            searches_without_new_issues=2,  # Need 3 for slow (threshold)
+            searches_without_new_issues=2,  # Need 3 for slow (threshold),
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -382,7 +398,8 @@ class TestUpdateSearchStats:
             track_all_editions=True,
             last_searched=datetime.now(UTC) - timedelta(days=2),
             search_interval_hours=24,  # Slow
-            searches_without_new_issues=5,  # Need 6+ for very_slow
+            searches_without_new_issues=5,  # Need 6+ for very_slow,
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -414,6 +431,7 @@ class TestUpdateSearchStats:
             last_searched=datetime.now(UTC) - timedelta(days=8),
             search_interval_hours=168,  # Very slow
             searches_without_new_issues=10,
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -449,6 +467,7 @@ class TestResetSearchInterval:
             last_searched=datetime.now(UTC) - timedelta(days=8),
             search_interval_hours=168,  # Very slow
             searches_without_new_issues=10,
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
@@ -501,20 +520,23 @@ class TestGetSearchStatistics:
             track_all_editions=True,
             last_searched=None,  # Never searched
             search_interval_hours=6,
+            user_id=1,
         )
         tracking2 = PeriodicalTracking(
             olid="mag-2",
             title="Magazine 2",
             track_all_editions=True,
             last_searched=datetime.now(UTC) - timedelta(hours=1),
-            search_interval_hours=1,  # Rapid
+            search_interval_hours=1,  # Rapid,
+            user_id=1,
         )
         tracking3 = PeriodicalTracking(
             olid="mag-3",
             title="Magazine 3",
             track_all_editions=True,
             last_searched=datetime.now(UTC) - timedelta(hours=5),
-            search_interval_hours=6,  # Normal
+            search_interval_hours=6,  # Normal,
+            user_id=1,
         )
         session.add_all([tracking1, tracking2, tracking3])
         session.commit()
@@ -548,6 +570,7 @@ class TestIntervalTransitions:
             last_searched=datetime.now(UTC),
             search_interval_hours=6,  # Normal
             searches_without_new_issues=0,
+            user_id=1,
         )
         session.add(tracking)
         session.commit()
