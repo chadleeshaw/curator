@@ -353,7 +353,7 @@ nav:not(.breadcrumb) {
   margin-bottom: 30px;
   padding: 15px;
   background: var(--surface-variant);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   flex-wrap: wrap;
 }
 
@@ -390,7 +390,7 @@ nav:not(.breadcrumb) {
 .queue-select {
   padding: 8px 12px;
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--text-primary);
   font-size: 14px;

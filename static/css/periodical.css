@@ -141,7 +141,7 @@
 
 .bulk-btn {
   padding: 10px 18px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   font-weight: 600;
   font-size: 14px;
   cursor: pointer;
@@ -235,7 +235,7 @@
 .header-content-row .sort-controls select {
   padding: 8px 12px;
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--text-primary);
   font-size: 14px;
@@ -310,7 +310,7 @@
 .special-edition-section {
   background: linear-gradient(135deg, rgba(255, 215, 0, 0.05) 0%, rgba(255, 193, 7, 0.05) 100%);
   padding: 20px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   margin-bottom: 60px;
   border: 2px solid rgba(255, 215, 0, 0.3);
 }
@@ -331,7 +331,7 @@
 .issue-card {
   background: var(--surface);
   border: 2px solid var(--border-color);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   transition:
     transform var(--transition-base),
@@ -407,7 +407,7 @@
 
 .issue-actions button {
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   font-weight: 600;
   transition:
@@ -470,7 +470,7 @@
 /* Status message styles - theme-aware */
 #status-message {
   padding: 15px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   border: 2px solid;
   font-weight: 500;
 }
@@ -525,8 +525,8 @@ body.dark-mode #status-message.status-error {
   border: 1px solid var(--border-color);
   width: 90%;
   max-width: 600px;
-  border-radius: 10px;
-  box-shadow: 0 8px 32px rgb(0 0 0 / 0.3);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xl);
   max-height: calc(100vh - 40px);
   display: flex;
   flex-direction: column;
@@ -600,7 +600,7 @@ body.dark-mode #status-message.status-error {
 .metadata-value pre {
   background: var(--surface-variant);
   padding: 10px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   overflow-x: auto;
   font-size: 0.85em;
 }
@@ -652,7 +652,7 @@ body.dark-mode #status-message.status-error {
 .form-select {
   width: 100%;
   padding: 6px 8px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   border: 2px solid var(--border-color);
   background: var(--surface);
   color: var(--text-primary);
@@ -676,7 +676,7 @@ body.dark-mode #status-message.status-error {
 .form-input-file {
   width: 100%;
   padding: 8px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   border: 2px dashed var(--border-color);
   background: var(--surface);
   color: var(--text-primary);
@@ -697,7 +697,7 @@ body.dark-mode #status-message.status-error {
 .cover-upload-preview img {
   max-width: 100%;
   max-height: 200px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   border: 2px solid var(--border-color);
 }
 
@@ -771,7 +771,7 @@ body.dark-mode #status-message.status-error {
   padding: 12px;
   margin-bottom: 20px;
   font-size: 14px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   border: 2px solid var(--border-color);
   background: var(--surface);
   color: var(--text-primary);
@@ -822,7 +822,7 @@ body.dark-mode #status-message.status-error {
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    border-radius: 8px !important;
+    border-radius: var(--radius-sm) !important;
     border: 2px solid var(--border-color) !important;
     background: var(--surface) !important;
     color: var(--text-primary) !important;
@@ -881,7 +881,7 @@ body.dark-mode #status-message.status-error {
     padding: 0 !important;
     font-size: 20px !important;
     flex-shrink: 0 !important;
-    border-radius: 10px !important;
+    border-radius: var(--radius-md) !important;
     border: 2px solid var(--border-color) !important;
     display: flex !important;
     align-items: center !important;
