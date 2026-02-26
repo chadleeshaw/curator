@@ -2,8 +2,8 @@
 
 /* Login page body styles */
 body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: linear-gradient(135deg, var(--primary-500) 0%, var(--primary-800) 100%);
   min-height: 100vh;
   display: flex;
   align-items: center;
@@ -18,11 +18,13 @@ body {
 
 .login-container {
   background: var(--surface);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 10px 40px rgb(0 0 0 / 0.2);
+  padding: 40px;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-color);
   width: 100%;
   max-width: 400px;
-  padding: 40px;
+  text-align: center;
 }
 
 .login-header {
@@ -72,20 +74,23 @@ body {
 
 .submit-btn {
   width: 100%;
-  padding: 12px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  padding: 14px;
+  background: var(--primary-color);
+  color: var(--on-primary);
   border: none;
-  border-radius: var(--radius-md);
-  font-size: 16px;
-  font-weight: 600;
+  border-radius: var(--radius-xl);
+  font-size: var(--font-size-base);
+  font-weight: 500;
+  letter-spacing: 0.1px;
   cursor: pointer;
   transition:
     transform var(--transition-fast),
     box-shadow var(--transition-fast);
+  box-shadow: var(--shadow-sm);
 }
 
 .submit-btn:hover:not(:disabled) {
+  background: var(--primary-dark);
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
 }
