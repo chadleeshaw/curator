@@ -168,8 +168,8 @@
 /* Two-column layout for compact fields */
 #track-new-periodical-modal .field-row,
 #edit-tracking-modal .field-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   margin-bottom: 10px;
 }
@@ -2080,7 +2080,7 @@
   /* Break two-column grid to single column on mobile */
   #track-new-periodical-modal .field-row,
   #edit-tracking-modal .field-row {
-    grid-template-columns: 1fr !important;
+    flex-direction: column !important;
     gap: 10px !important;
   }
 
