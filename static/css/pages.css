@@ -114,19 +114,22 @@
    ========================================================================== */
 
 #track-new-periodical-modal .modal-content,
-#edit-tracking-modal .modal-content {
+#edit-tracking-modal .modal-content,
+#merge-selection-modal .modal-content {
   max-width: 700px;
 }
 
 #track-new-periodical-modal h2,
-#edit-tracking-modal h2 {
+#edit-tracking-modal h2,
+#merge-selection-modal h3 {
   font-size: 22px;
   margin-bottom: 6px;
 }
 
 #track-new-periodical-modal > div > p:first-of-type,
 #track-new-periodical-modal .modal-content > p,
-#edit-tracking-modal .modal-content > p {
+#edit-tracking-modal .modal-content > p,
+#merge-selection-modal .modal-content > p {
   font-size: 13px;
   color: var(--text-secondary);
   margin-bottom: 12px;
@@ -2064,7 +2067,8 @@
 
   /* Track New Periodical Modal & Edit Tracking Modal - mobile layout */
   #track-new-periodical-modal .modal-content,
-  #edit-tracking-modal .modal-content {
+  #edit-tracking-modal .modal-content,
+  #merge-selection-modal .modal-content {
     max-width: 95% !important;
     padding: 16px !important;
     max-height: 90vh;
@@ -2072,7 +2076,8 @@
   }
 
   #track-new-periodical-modal h2,
-  #edit-tracking-modal h2 {
+  #edit-tracking-modal h2,
+  #merge-selection-modal h3 {
     font-size: 18px;
     margin-bottom: 8px;
   }
@@ -2083,7 +2088,8 @@
   }
 
   #track-new-periodical-modal p,
-  #edit-tracking-modal p {
+  #edit-tracking-modal p,
+  #merge-selection-modal p {
     font-size: 12px;
     line-height: 1.4;
   }
