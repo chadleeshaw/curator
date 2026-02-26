@@ -244,28 +244,21 @@ export class TrackingManager {
    */
   populateFormDropdowns() {
     // Populate language dropdown
-    // Populate language dropdowns (new, edit, and search filter)
+    // Populate language dropdowns (new, edit)
     const languageSelects = [
       document.getElementById('new-tracking-language'),
       document.getElementById('edit-tracking-language'),
-      document.getElementById('search-filter-language'),
     ];
     languageSelects.forEach((languageSelect) => {
       if (languageSelect && SUPPORTED_LANGUAGES.length > 0) {
-        // Keep existing options for search filter (it has a hard-coded "Any Language" option)
-        const existingOptions =
-          languageSelect.id === 'search-filter-language' ? languageSelect.innerHTML : '';
-
-        languageSelect.innerHTML = existingOptions || '';
+        languageSelect.innerHTML = '';
 
         // For new/edit tracking dropdowns, prepend an "Any" option so users can track
         // a title across all languages without being locked to English.
-        if (languageSelect.id !== 'search-filter-language') {
-          const anyOption = document.createElement('option');
-          anyOption.value = '';
-          anyOption.textContent = 'Any';
-          languageSelect.appendChild(anyOption);
-        }
+        const anyOption = document.createElement('option');
+        anyOption.value = '';
+        anyOption.textContent = 'Any';
+        languageSelect.appendChild(anyOption);
 
         SUPPORTED_LANGUAGES.forEach((lang) => {
           const option = document.createElement('option');
@@ -276,11 +269,10 @@ export class TrackingManager {
       }
     });
 
-    // Populate country dropdowns (new, edit, and search filter)
+    // Populate country dropdowns (new, edit)
     const countrySelects = [
       document.getElementById('new-tracking-country'),
       document.getElementById('edit-tracking-country'),
-      document.getElementById('search-filter-country'),
     ];
     countrySelects.forEach((countrySelect) => {
       if (countrySelect && Object.keys(ISO_COUNTRIES).length > 0) {
@@ -305,7 +297,7 @@ export class TrackingManager {
             const option = document.createElement('option');
             option.value = code;
             option.textContent = `${name} (${code})`;
-            if (code === 'US' && countrySelect.id !== 'search-filter-country') {
+            if (code === 'US') {
               option.selected = true;
             }
             countrySelect.appendChild(option);
@@ -322,8 +314,6 @@ export class TrackingManager {
    */
   async searchPeriodicalMetadata() {
     const query = document.getElementById(ELEMENT_IDS.TRACKING_SEARCH_QUERY)?.value.trim() ?? '';
-    const filterLanguage = document.getElementById(ELEMENT_IDS.SEARCH_FILTER_LANGUAGE)?.value ?? '';
-    const filterCountry = document.getElementById(ELEMENT_IDS.SEARCH_FILTER_COUNTRY)?.value ?? '';
     const filterCategory = document.getElementById(ELEMENT_IDS.NEW_TRACKING_CATEGORY)?.value ?? '';
 
     if (!query) {
@@ -344,14 +334,6 @@ export class TrackingManager {
       const params = new URLSearchParams({
         query: query,
       });
-
-      if (filterLanguage) {
-        params.append('language', filterLanguage);
-      }
-
-      if (filterCountry) {
-        params.append('country', filterCountry);
-      }
 
       if (filterCategory) {
         params.append('category', filterCategory);
@@ -375,8 +357,6 @@ export class TrackingManager {
         result.classList.remove(CSS_CLASSES.HIDDEN);
       } else {
         const filterInfo = [];
-        if (filterLanguage) filterInfo.push(`Language: ${filterLanguage}`);
-        if (filterCountry) filterInfo.push(`Country: ${filterCountry}`);
         if (filterCategory) filterInfo.push(`Category: ${filterCategory}`);
         const filterText = filterInfo.length > 0 ? ` (Filters: ${filterInfo.join(', ')})` : '';
         error.textContent = `${data.message || 'Periodical not found'}${filterText}`;
@@ -575,43 +555,31 @@ export class TrackingManager {
       categorySelect.value = '';
     }
 
-    // Set language (from filters or detect from title using centralized keywords)
-    const currentFilterLanguage = document.getElementById('search-filter-language')?.value;
-    if (currentFilterLanguage && currentFilterLanguage !== '') {
-      languageSelect.value = currentFilterLanguage;
-    } else {
-      // Try to detect from title using centralized LANGUAGE_KEYWORDS
-      let detectedLanguage = ''; // Default to Any
-      for (const [language, keywords] of Object.entries(LANGUAGE_KEYWORDS)) {
-        if (keywords.some((keyword) => result.title.includes(keyword))) {
-          detectedLanguage = language;
-          break;
-        }
+    // Set language (detect from title using centralized keywords)
+    let detectedLanguage = ''; // Default to Any
+    for (const [language, keywords] of Object.entries(LANGUAGE_KEYWORDS)) {
+      if (keywords.some((keyword) => result.title.includes(keyword))) {
+        detectedLanguage = language;
+        break;
       }
-      languageSelect.value = detectedLanguage;
+    }
+    languageSelect.value = detectedLanguage;
+
+    // Set country (detect from title using centralized indicators)
+    let detectedCountry = '';
+    for (const [code, indicators] of Object.entries(COUNTRY_INDICATORS)) {
+      if (indicators.some((ind) => result.title.includes(ind))) {
+        detectedCountry = code;
+        break;
+      }
     }
 
-    // Set country (from filters or detect from title using centralized indicators)
-    const currentFilterCountry = document.getElementById('search-filter-country')?.value;
-    if (currentFilterCountry && currentFilterCountry !== '') {
-      countrySelect.value = currentFilterCountry;
-    } else {
-      // Try to detect from title using centralized COUNTRY_INDICATORS
-      let detectedCountry = '';
-      for (const [code, indicators] of Object.entries(COUNTRY_INDICATORS)) {
-        if (indicators.some((ind) => result.title.includes(ind))) {
-          detectedCountry = code;
-          break;
-        }
-      }
-
-      // If no country detected, try to infer from detected language
-      if (!detectedCountry && languageSelect.value && LANGUAGE_TO_COUNTRY[languageSelect.value]) {
-        detectedCountry = LANGUAGE_TO_COUNTRY[languageSelect.value];
-      }
-
-      countrySelect.value = detectedCountry || ''; // Default to none
+    // If no country detected, try to infer from detected language
+    if (!detectedCountry && languageSelect.value && LANGUAGE_TO_COUNTRY[languageSelect.value]) {
+      detectedCountry = LANGUAGE_TO_COUNTRY[languageSelect.value];
     }
+
+    countrySelect.value = detectedCountry || ''; // Default to none
 
     // Hide the search results
     document.getElementById(ELEMENT_IDS.TRACKING_SEARCH_RESULT).classList.add(CSS_CLASSES.HIDDEN);

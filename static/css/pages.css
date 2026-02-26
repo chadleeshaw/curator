@@ -168,10 +168,10 @@
 /* Two-column layout for compact fields */
 #track-new-periodical-modal .field-row,
 #edit-tracking-modal .field-row {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-bottom: 10px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 12px;
 }
 
 #track-new-periodical-modal .field-row .settings-field,
@@ -2080,8 +2080,8 @@
   /* Break two-column grid to single column on mobile */
   #track-new-periodical-modal .field-row,
   #edit-tracking-modal .field-row {
-    flex-direction: column !important;
-    gap: 10px !important;
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
   }
 
   #track-new-periodical-modal .field-row .settings-field,
@@ -2104,12 +2104,6 @@
     width: 100%;
     padding: 10px 14px;
     font-size: 14px;
-  }
-
-  /* Language/Country filters - stack vertically */
-  #track-new-periodical-modal .settings-field > div[style*='display: flex'] > div {
-    flex: none !important;
-    width: 100%;
   }
 
   #track-new-periodical-modal .settings-field label {
@@ -2150,39 +2144,5 @@
     flex: none !important;
     padding: 11px 16px;
     font-size: 14px;
-  }
-}
-
-/* Tracking Modal Input Layout */
-@media (min-width: 640px) {
-  #track-new-periodical-modal .modal-content > div[style*='margin-top: 30px'],
-  #edit-tracking-modal .modal-content {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-  }
-
-  /* Make header, title, save buttons span full width */
-  #track-new-periodical-modal .modal-content > div[style*="margin-top: 30px"] > h3,
-  #track-new-periodical-modal .modal-content > div[style*="margin-top: 30px"] > p,
-  #track-new-periodical-modal .modal-content > div[style*="margin-top: 30px"] > .settings-field:first-of-type,
-  #track-new-periodical-modal .modal-content > div[style*="margin-top: 30px"] > .settings-field:last-of-type,
-  #track-new-periodical-modal .modal-content > div[style*="margin-top: 30px"] > .flex,
-  #edit-tracking-modal .modal-content > span,
-  #edit-tracking-modal .modal-content > h2,
-  #edit-tracking-modal .modal-content > .settings-field:nth-of-type(1), /* Title */
-  #edit-tracking-modal .modal-content > .settings-field:nth-of-type(4), /* Aliases */
-  #edit-tracking-modal .modal-content > .settings-field:nth-of-type(5), /* Tracking Mode */
-  #edit-tracking-modal .modal-content > .settings-field:nth-of-type(6), /* History Checkbox */
-  #edit-tracking-modal .modal-content > .settings-field:nth-of-type(7), /* Org Pattern */
-  #edit-tracking-modal .modal-content > .settings-field:nth-of-type(8), /* Custom Pattern */
-  #edit-tracking-modal .modal-content > .flex {
-    grid-column: 1 / -1;
-  }
-
-  /* Reset field-rows since grid is handling layout now */
-  #track-new-periodical-modal .field-row,
-  #edit-tracking-modal .field-row {
-    display: contents; /* Strip out the field row container entirely so children become grid items */
   }
 }
