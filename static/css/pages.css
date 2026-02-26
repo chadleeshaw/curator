@@ -2152,3 +2152,24 @@
     font-size: 14px;
   }
 }
+
+  /* Tracking Modal Input Layout */
+  @media (min-width: 640px) {
+    #track-periodical-modal .modal-content form,
+    .modal-grid-form {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    
+    #track-periodical-modal .settings-field:first-child,
+    #track-periodical-modal .btn-primary,
+    .modal-grid-form .full-width {
+      grid-column: 1 / -1;
+    }
+    
+    #track-periodical-modal h3,
+    #track-periodical-modal p {
+      grid-column: 1 / -1;
+    }
+  }

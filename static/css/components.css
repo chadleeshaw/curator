@@ -342,23 +342,24 @@
 .settings-field input[type='number'],
 .settings-field select {
   width: 100%;
-  padding: 10px;
+  padding: 14px 16px;
   border: 1px solid var(--border-color);
-  border-radius: 5px;
-  font-size: 14px;
-  background: var(--input-bg);
+  border-radius: var(--radius-md); /* M3 text field radius */
+  font-size: var(--font-size-base);
+  background: var(--surface-variant);
   color: var(--text-primary);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
 .settings-field select {
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
-  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f0f0f0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23CAC4D0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
   background-repeat: no-repeat;
-  background-position: right 10px center;
+  background-position: right 16px center;
   background-size: 20px;
-  padding-right: 35px;
+  padding-right: 40px;
 }
 
 .settings-field input[type='text']:focus,
@@ -367,7 +368,8 @@
 .settings-field select:focus {
   outline: none;
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  background: var(--surface);
+  box-shadow: 0 0 0 2px rgba(109, 40, 217, 0.2);
 }
 
 /* ==========================================================================
