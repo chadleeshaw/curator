@@ -10,26 +10,27 @@
   :root:not([data-theme='light']) {
     /* Surface Colors */
     --background: #141218;
-    --surface: #211F26; /* M3 Surface Container */
-    --surface-variant: #36343B; /* M3 Surface Container Highest */
+    --surface: #211f26; /* M3 Surface Container */
+    --surface-variant: #36343b; /* M3 Surface Container Highest */
 
     /* Text Colors */
-    --text-primary: #E6E0E9;
-    --text-secondary: #CAC4D0;
-    --text-disabled: #938F99;
+    --text-primary: #e6e0e9;
+    --text-secondary: #cac4d0;
+    --text-disabled: #938f99;
 
     /* Border & Divider Colors */
-    --border-color: #49454F;
-    --table-border: #49454F;
-    --url-text: #D0BCFF;
+    --border-color: #49454f;
+    --table-border: #49454f;
+    --url-text: #d0bcff;
 
     /* Input Colors */
-    --input-bg: #36343B;
-    
+    --input-bg: #36343b;
+
     /* Primary color override for dark mode */
-    --primary-color: #9F7AEA;
-    --on-primary: #FFFFFF;
-    --primary-dark: #8B5CF6;
+    --primary-color: #9f7aea;
+    --primary-rgb: 159, 122, 234;
+    --on-primary: #ffffff;
+    --primary-dark: #8b5cf6;
   }
 
   :root:not([data-theme='light']) img {
@@ -45,26 +46,27 @@
 body.dark-mode {
   /* Surface Colors */
   --background: #141218;
-  --surface: #211F26; /* M3 Surface Container */
-  --surface-variant: #36343B; /* M3 Surface Container Highest */
+  --surface: #211f26; /* M3 Surface Container */
+  --surface-variant: #36343b; /* M3 Surface Container Highest */
 
   /* Text Colors */
-  --text-primary: #E6E0E9;
-  --text-secondary: #CAC4D0;
-  --text-disabled: #938F99;
+  --text-primary: #e6e0e9;
+  --text-secondary: #cac4d0;
+  --text-disabled: #938f99;
 
   /* Border & Divider Colors */
-  --border-color: #49454F;
-  --table-border: #49454F;
-  --url-text: #D0BCFF;
+  --border-color: #49454f;
+  --table-border: #49454f;
+  --url-text: #d0bcff;
 
   /* Input Colors */
-  --input-bg: #36343B;
-  
+  --input-bg: #36343b;
+
   /* Primary color override for dark mode */
-    --primary-color: #9F7AEA;
-    --on-primary: #FFFFFF;
-    --primary-dark: #8B5CF6;
+  --primary-color: #9f7aea;
+  --primary-rgb: 159, 122, 234;
+  --on-primary: #ffffff;
+  --primary-dark: #8b5cf6;
 }
 
 /* Dark mode specific image adjustments */

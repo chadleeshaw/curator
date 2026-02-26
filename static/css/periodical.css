@@ -65,14 +65,14 @@
   border-color: var(--primary-color);
   box-shadow:
     0 0 0 2px var(--primary-color),
-    0 4px 12px rgb(99 102 241 / 0.3);
+    0 4px 12px rgba(var(--primary-rgb), 0.3);
 }
 
 .bulk-select-mode .issue-card.bulk-selected .issue-cover::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: rgb(99 102 241 / 0.1);
+  background: rgba(var(--primary-rgb), 0.1);
   pointer-events: none;
 }
 
@@ -346,7 +346,7 @@
 .issue-card:hover {
   transform: translateY(-4px);
   border-color: var(--primary-color);
-  box-shadow: 0 8px 16px rgb(99 102 241 / 0.2);
+  box-shadow: 0 8px 16px rgba(var(--primary-rgb), 0.2);
 }
 
 .issue-cover {

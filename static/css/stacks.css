@@ -178,7 +178,7 @@
   margin-top: 4px;
   font-size: 11px;
   font-weight: 600;
-  background: rgba(99, 102, 241, 0.15);
+  background: rgba(var(--primary-rgb), 0.15);
   color: var(--primary-color);
   border-radius: var(--radius-md);
   letter-spacing: 0.3px;
@@ -237,7 +237,7 @@
 .stack-group-header:hover {
   border-color: var(--primary-color);
   background: var(--surface-hover, var(--surface));
-  box-shadow: 0 4px 16px rgb(99 102 241 / 0.15);
+  box-shadow: 0 4px 16px rgba(var(--primary-rgb), 0.15);
 }
 
 .stack-group-header:hover::before,
@@ -338,7 +338,7 @@
 
 /* Legacy styles kept for backward compatibility */
 .stack-group-count {
-  background: rgba(99, 102, 241, 0.15);
+  background: rgba(var(--primary-rgb), 0.15);
   color: var(--primary-color);
   padding: 3px 10px;
   border-radius: var(--radius-md);
@@ -448,7 +448,7 @@
 }
 
 .stack-category-pill.selected {
-  background: rgba(99, 102, 241, 0.15);
+  background: rgba(var(--primary-rgb), 0.15);
   border-color: var(--primary-color);
   color: var(--primary-color);
   font-weight: 600;
@@ -468,7 +468,7 @@
   border-radius: var(--radius-md);
   font-size: 11px;
   font-weight: 600;
-  background: rgba(99, 102, 241, 0.15);
+  background: rgba(var(--primary-rgb), 0.15);
   color: var(--primary-color);
   white-space: nowrap;
 }
@@ -693,7 +693,7 @@
 }
 
 .stack-search-row.searching {
-  background: rgba(99, 102, 241, 0.08);
+  background: rgba(var(--primary-rgb), 0.08);
 }
 
 .stack-search-row.has-results {
@@ -871,7 +871,7 @@
 
 .stack-management-card:hover {
   border-color: var(--primary-color);
-  box-shadow: 0 4px 16px rgb(99 102 241 / 0.1);
+  box-shadow: 0 4px 16px rgba(var(--primary-rgb), 0.1);
 }
 
 .stack-management-info h4 {
@@ -971,11 +971,11 @@
 }
 
 .stack-assignment-item:hover {
-  background: rgba(99, 102, 241, 0.1);
+  background: rgba(var(--primary-rgb), 0.1);
 }
 
 .stack-assignment-item.selected {
-  background: rgba(99, 102, 241, 0.2);
+  background: rgba(var(--primary-rgb), 0.2);
   font-weight: 500;
 }
 

@@ -102,14 +102,14 @@ header p {
   display: inline-block;
   font-size: 5em;
   animation: coin-flip-once 1.5s ease-in-out;
-  filter: drop-shadow(0 4px 12px rgba(99, 102, 241, 0.4)) drop-shadow(0 8px 16px rgba(0, 0, 0, 0.3));
+  filter: drop-shadow(0 4px 12px rgba(var(--primary-rgb), 0.4)) drop-shadow(0 8px 16px rgba(0, 0, 0, 0.3));
   transition: all 0.3s ease;
 }
 
 .coin-emoji:hover {
   animation: coin-flip 1s ease-in-out infinite;
-  filter: drop-shadow(0 4px 20px rgba(99, 102, 241, 0.8))
-    drop-shadow(0 8px 24px rgba(99, 102, 241, 0.4)) drop-shadow(0 12px 32px rgba(0, 0, 0, 0.4));
+  filter: drop-shadow(0 4px 20px rgba(var(--primary-rgb), 0.8))
+    drop-shadow(0 8px 24px rgba(var(--primary-rgb), 0.4)) drop-shadow(0 12px 32px rgba(0, 0, 0, 0.4));
   transform: scale(1.05);
 }
 
