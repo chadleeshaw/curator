@@ -14,6 +14,8 @@ Automatically discover, download, and organize periodicals (magazines, comics, n
 - **Web Interface** - Modern, responsive UI to browse and manage your collection
 - **Background Tasks** - Automated monitoring, cleanup, and processing
 
+![Library Screenshot](docs/screenshots/library.jpg)
+
 ## Requirements
 
 - Docker (recommended) or Python 3.13+
