@@ -279,9 +279,9 @@ nav:not(.breadcrumb) {
 }
 
 .nav-btn.active {
-  background: var(--primary-100); /* M3 Secondary Container */
-  color: var(--primary-900); /* M3 On Secondary Container */
-  box-shadow: none; /* Removed shadow for active state in M3 */
+  background: var(--primary-color);
+  color: var(--on-primary);
+  box-shadow: var(--shadow-sm); /* Added small shadow back */
 }
 
 /* ==========================================================================

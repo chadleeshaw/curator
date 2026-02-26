@@ -29,9 +29,9 @@
   --primary-900: #4C1D95;
 
   /* Legacy aliases */
-  --primary-color: var(--primary-700);
+  --primary-color: #5C32BA;
   --on-primary: #FFFFFF;
-  --primary-dark: var(--primary-800);
+  --primary-dark: #4B279A;
   --primary-light: var(--primary-400);
 
   /* Secondary Color Scale */
