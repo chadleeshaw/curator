@@ -16,19 +16,20 @@
   background: var(--surface);
   padding: var(--space-lg);
   border-radius: var(--radius-xl);
-  border: 2px solid var(--border-color);
+  border: 1px solid var(--border-color); /* M3 outlined card */
   text-align: center;
   transition:
     border-color var(--transition-base),
     transform var(--transition-base),
     box-shadow var(--transition-base);
+  box-shadow: var(--shadow-sm);
   contain: layout style paint;
 }
 
 .stat-card:hover {
   border-color: var(--primary-color);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgb(99 102 241 / 0.15);
+  box-shadow: var(--shadow-md);
 }
 
 .stat-value {
@@ -55,35 +56,43 @@
 .btn-secondary,
 .btn-small,
 .btn-danger {
-  padding: var(--space-sm) var(--space-lg);
+  padding: 10px 24px;
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-xl); /* Fully rounded buttons */
   cursor: pointer;
   font-size: var(--font-size-sm);
   font-weight: 500;
+  letter-spacing: 0.1px; /* M3 label-large tracking */
   transition:
     background-color var(--transition-fast),
+    color var(--transition-fast),
+    box-shadow var(--transition-fast),
     transform var(--transition-fast);
-}
-
-.btn-primary:active,
-.btn-secondary:active,
-.btn-small:active,
-.btn-danger:active {
-  transform: translateY(1px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .btn-primary {
   background: var(--primary-color);
-  color: white;
+  color: #FFFFFF; /* On Primary */
+  box-shadow: var(--shadow-sm); /* Elevated button */
 }
 
 .btn-primary:hover {
   background: var(--primary-dark);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active {
+  box-shadow: var(--shadow-sm);
+  transform: translateY(0);
 }
 
 .btn-secondary {
-  background: var(--surface-variant);
+  background: var(--surface-variant); /* Tonal button */
   color: var(--text-primary);
 }
 
@@ -171,20 +180,59 @@
   align-items: center;
 }
 
-.save-btn {
-  background: var(--primary-color);
-  color: white;
-  padding: var(--space-sm) var(--space-lg);
+
+.save-btn, .btn-save, .btn-cancel, .btn-delete {
+  padding: 10px 24px;
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-xl);
   cursor: pointer;
+  font-size: var(--font-size-sm);
   font-weight: 500;
-  transition: background-color var(--transition-fast);
+  letter-spacing: 0.1px;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: var(--shadow-sm);
 }
 
-.save-btn:hover {
-  background: var(--primary-dark);
+.save-btn, .btn-save {
+  background: var(--primary-color);
+  color: #FFFFFF;
 }
+
+.save-btn:hover, .btn-save:hover {
+  background: var(--primary-dark);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.btn-cancel {
+  background: var(--surface-variant);
+  color: var(--text-primary);
+  box-shadow: none;
+}
+
+.btn-cancel:hover {
+  background: var(--border-color);
+}
+
+.btn-delete {
+  background: var(--error-600);
+  color: #FFFFFF;
+}
+
+.btn-delete:hover {
+  background: var(--error-700);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
 
 /* ==========================================================================
    Forms
@@ -198,18 +246,19 @@
 
 .search-form input {
   flex: 1;
-  padding: var(--space-md);
-  border: 2px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  font-size: var(--font-size-base);
-  transition: border-color var(--transition-base);
-  background: var(--surface);
+  padding: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl); /* Fully rounded search bar */
+  background: var(--surface-variant);
   color: var(--text-primary);
+  font-size: var(--font-size-base);
+  transition: all 0.2s ease;
 }
 
 .search-form input:focus {
-  outline: none;
   border-color: var(--primary-color);
+  background: var(--surface);
+  box-shadow: 0 0 0 2px rgba(103, 80, 164, 0.2);
 }
 
 .search-form button {
@@ -334,21 +383,22 @@
 
 .periodical-card {
   background: var(--surface);
-  border: 2px solid var(--border-color);
-  border-radius: 12px;
+  border: 1px solid var(--border-color); /* M3 outlined card */
+  border-radius: var(--radius-lg); /* 16px */
   overflow: hidden;
   cursor: pointer;
   transition:
     transform var(--transition-base),
-    border-color var(--transition-base),
-    box-shadow var(--transition-base);
+    box-shadow var(--transition-base),
+    border-color var(--transition-base);
+  box-shadow: var(--shadow-sm);
   contain: layout style paint;
 }
 
 .periodical-card:hover {
-  transform: translateY(-4px);
+  transform: translateY(-2px);
   border-color: var(--primary-color);
-  box-shadow: 0 8px 16px rgb(99 102 241 / 0.2);
+  box-shadow: var(--shadow-md);
 }
 
 .periodical-cover {
@@ -878,22 +928,31 @@
 
 .modal-content {
   background-color: var(--surface);
-  padding: 20px;
-  border-radius: 10px;
+  padding: 32px;
+  border-radius: var(--radius-xl); /* M3 Dialog radius */
+  box-shadow: var(--shadow-xl);
+  max-width: 600px;
   width: 90%;
-  max-width: 900px;
-  max-height: 80vh;
-  overflow: auto;
+  max-height: 90vh;
+  overflow-y: auto;
   position: relative;
+  border: 1px solid var(--border-color); /* To separate from background gracefully in some themes */
 }
 
 /* Flexbox layout for modals with header/body/footer structure.
    Keeps header and footer pinned; only the body scrolls. */
 #manage-queue-modal .modal-content,
 #manage-failed-modal .modal-content {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  background-color: var(--surface);
+  padding: 32px;
+  border-radius: var(--radius-xl); /* M3 Dialog radius */
+  box-shadow: var(--shadow-xl);
+  max-width: 600px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  border: 1px solid var(--border-color); /* To separate from background gracefully in some themes */
 }
 
 #manage-queue-modal-content,

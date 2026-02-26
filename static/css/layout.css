@@ -17,10 +17,10 @@
 
 header {
   background: var(--surface);
-  padding: 16px 32px;
-  border-radius: 12px;
-  box-shadow: var(--shadow-md);
-  margin-bottom: 28px;
+  padding: 24px 32px;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 24px;
   text-align: center;
   max-height: 300px;
   overflow: hidden;
@@ -238,25 +238,26 @@ nav:not(.breadcrumb) {
   margin-bottom: 28px;
   background: var(--surface);
   padding: 8px;
-  border-radius: 12px;
-  box-shadow: var(--shadow-md);
+  border-radius: var(--radius-xl); /* M3 fully rounded container */
+  box-shadow: var(--shadow-sm);
 }
 
 .nav-btn {
   flex: 1;
-  padding: 12px 20px;
+  padding: 12px 24px;
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  border-radius: 8px;
+  border-radius: var(--radius-xl); /* Pill shape for active indicators */
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--font-size-sm);
+  font-weight: 500; /* M3 label-large */
+  letter-spacing: 0.1px;
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .nav-icon {
@@ -268,14 +269,14 @@ nav:not(.breadcrumb) {
 }
 
 .nav-btn:hover {
-  background: rgba(99, 102, 241, 0.1);
-  color: var(--primary-color);
+  background: var(--surface-variant);
+  color: var(--text-primary);
 }
 
 .nav-btn.active {
-  background: var(--primary-color);
-  color: white;
-  box-shadow: var(--shadow-md);
+  background: var(--primary-100); /* M3 Secondary Container */
+  color: var(--primary-900); /* M3 On Secondary Container */
+  box-shadow: none; /* Removed shadow for active state in M3 */
 }
 
 /* ==========================================================================
@@ -326,10 +327,11 @@ nav:not(.breadcrumb) {
 .tasks-container,
 .queue-container,
 .settings-container {
-  padding: 30px;
+  padding: 32px;
   background: var(--surface);
-  border-radius: 10px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-color);
   position: relative;
   max-width: 100%;
   box-sizing: border-box;
