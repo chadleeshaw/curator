@@ -27,9 +27,9 @@
     --input-bg: #36343B;
     
     /* Primary color override for dark mode */
-    --primary-color: #D0BCFF;
-    --on-primary: #381E72;
-    --primary-dark: #B69DF8;
+    --primary-color: #8B5CF6;
+    --on-primary: #FFFFFF;
+    --primary-dark: #7C3AED;
   }
 
   :root:not([data-theme='light']) img {
@@ -62,9 +62,9 @@ body.dark-mode {
   --input-bg: #36343B;
   
   /* Primary color override for dark mode */
-  --primary-color: #D0BCFF;
-  --on-primary: #381E72;
-  --primary-dark: #B69DF8;
+    --primary-color: #8B5CF6;
+    --on-primary: #FFFFFF;
+    --primary-dark: #7C3AED;
 }
 
 /* Dark mode specific image adjustments */
