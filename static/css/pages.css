@@ -2155,7 +2155,7 @@
 
 /* Tracking Modal Input Layout */
 @media (min-width: 640px) {
-  #track-new-periodical-modal .modal-content > div[style*="margin-top: 30px"],
+  #track-new-periodical-modal .modal-content > div[style*='margin-top: 30px'],
   #edit-tracking-modal .modal-content {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -2179,11 +2179,10 @@
   #edit-tracking-modal .modal-content > .flex {
     grid-column: 1 / -1;
   }
-  
+
   /* Reset field-rows since grid is handling layout now */
   #track-new-periodical-modal .field-row,
   #edit-tracking-modal .field-row {
     display: contents; /* Strip out the field row container entirely so children become grid items */
   }
-}
 }

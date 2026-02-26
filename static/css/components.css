@@ -180,8 +180,10 @@
   align-items: center;
 }
 
-
-.save-btn, .btn-save, .btn-cancel, .btn-delete {
+.save-btn,
+.btn-save,
+.btn-cancel,
+.btn-delete {
   padding: 10px 24px;
   border: none;
   border-radius: var(--radius-xl);
@@ -201,12 +203,14 @@
   box-shadow: var(--shadow-sm);
 }
 
-.save-btn, .btn-save {
+.save-btn,
+.btn-save {
   background: var(--primary-color);
   color: var(--on-primary);
 }
 
-.save-btn:hover, .btn-save:hover {
+.save-btn:hover,
+.btn-save:hover {
   background: var(--primary-dark);
   box-shadow: var(--shadow-md);
   transform: translateY(-1px);
@@ -224,7 +228,7 @@
 
 .btn-delete {
   background: var(--error-600);
-  color: #FFFFFF;
+  color: #ffffff;
 }
 
 .btn-delete:hover {
@@ -232,7 +236,6 @@
   box-shadow: var(--shadow-md);
   transform: translateY(-1px);
 }
-
 
 /* ==========================================================================
    Forms
@@ -258,7 +261,7 @@
 .search-form input:focus {
   border-color: var(--primary-color);
   background: var(--surface);
-  box-shadow: 0 0 0 2px rgba(103, 80, 164, 0.2);
+  box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.2);
 }
 
 .search-form button {
@@ -348,7 +351,10 @@
   font-size: var(--font-size-base);
   background: var(--surface-variant);
   color: var(--text-primary);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
 }
 
 .settings-field select {
@@ -369,7 +375,7 @@
   outline: none;
   border-color: var(--primary-color);
   background: var(--surface);
-  box-shadow: 0 0 0 2px rgba(109, 40, 217, 0.2);
+  box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.2);
 }
 
 /* ==========================================================================
@@ -406,7 +412,7 @@
 .periodical-cover {
   width: 100%;
   height: 220px;
-  background: linear-gradient(135deg, var(--primary-color) 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -945,16 +951,9 @@
    Keeps header and footer pinned; only the body scrolls. */
 #manage-queue-modal .modal-content,
 #manage-failed-modal .modal-content {
-  background-color: var(--surface);
-  padding: 32px;
-  border-radius: var(--radius-xl); /* M3 Dialog radius */
-  box-shadow: var(--shadow-xl);
-  max-width: 600px;
-  width: 90%;
-  max-height: 90vh;
-  overflow-y: auto;
-  position: relative;
-  border: 1px solid var(--border-color); /* To separate from background gracefully in some themes */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 #manage-queue-modal-content,
