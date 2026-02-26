@@ -520,34 +520,40 @@
 /* Queue switcher buttons */
 .queue-switcher {
   display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
+  gap: 8px;
+  margin-bottom: 24px;
+  background: var(--surface-variant);
+  padding: 8px;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-color);
 }
 
 .queue-switch-btn {
   display: flex;
   align-items: center;
+  justify-content: center;
+  flex: 1;
   gap: 8px;
   padding: 12px 20px;
-  border: 2px solid var(--border-color);
-  border-radius: 8px;
-  background: var(--surface);
+  border: none;
+  border-radius: var(--radius-xl);
+  background: transparent;
   color: var(--text-secondary);
-  font-size: 15px;
+  font-size: var(--font-size-sm);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .queue-switch-btn:hover {
-  background: var(--surface-hover);
-  border-color: var(--primary-color);
+  background: var(--surface);
+  color: var(--text-primary);
 }
 
 .queue-switch-btn.active {
   background: var(--primary-color);
-  border-color: var(--primary-color);
   color: var(--on-primary);
+  box-shadow: var(--shadow-sm);
 }
 
 /* Queue header row - two column layout */
