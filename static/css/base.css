@@ -30,6 +30,7 @@
 
   /* Legacy aliases */
   --primary-color: var(--primary-500);
+  --on-primary: #FFFFFF;
   --primary-dark: var(--primary-600);
   --primary-light: var(--primary-400);
 

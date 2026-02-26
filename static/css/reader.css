@@ -48,7 +48,7 @@ body {
 .btn {
   padding: 8px 16px;
   background: var(--primary-color);
-  color: white;
+  color: var(--on-primary);
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -169,7 +169,7 @@ body {
 
 .chapter-item.active {
   background: var(--primary-color);
-  color: white;
+  color: var(--on-primary);
   font-weight: 500;
 }
 
@@ -245,7 +245,7 @@ body {
 .fit-btn.active,
 .control-btn.active {
   background: var(--primary-color);
-  color: white;
+  color: var(--on-primary);
   border-color: var(--primary-color);
 }
 

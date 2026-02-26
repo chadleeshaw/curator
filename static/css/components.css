@@ -76,7 +76,7 @@
 
 .btn-primary {
   background: var(--primary-color);
-  color: #FFFFFF; /* On Primary */
+  color: var(--on-primary); /* On Primary */
   box-shadow: var(--shadow-sm); /* Elevated button */
 }
 
@@ -104,7 +104,7 @@
   padding: var(--space-xs) var(--space-md);
   font-size: var(--font-size-xs);
   background: var(--primary-color);
-  color: white;
+  color: var(--on-primary);
 }
 
 .btn-small:hover {
@@ -143,13 +143,13 @@
 
 .sort-btn:hover {
   background: var(--primary-color);
-  color: white;
+  color: var(--on-primary);
   border-color: var(--primary-color);
 }
 
 .sort-btn.active {
   background: var(--primary-color);
-  color: white;
+  color: var(--on-primary);
   border-color: var(--primary-color);
 }
 
@@ -170,7 +170,7 @@
 
 .sort-toggle-btn:hover {
   background: var(--primary-color);
-  color: white;
+  color: var(--on-primary);
   border-color: var(--primary-color);
 }
 
@@ -203,7 +203,7 @@
 
 .save-btn, .btn-save {
   background: var(--primary-color);
-  color: #FFFFFF;
+  color: var(--on-primary);
 }
 
 .save-btn:hover, .btn-save:hover {
@@ -264,7 +264,7 @@
 .search-form button {
   padding: var(--space-md) var(--space-2xl);
   background: var(--primary-color);
-  color: white;
+  color: var(--on-primary);
   border: none;
   border-radius: var(--radius-lg);
   cursor: pointer;
@@ -408,7 +408,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: var(--on-primary);
   font-size: 13px;
   font-weight: 600;
   text-align: center;
@@ -597,7 +597,7 @@
   padding: 8px 16px;
   margin-left: 10px;
   background: var(--primary-color);
-  color: white;
+  color: var(--on-primary);
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -695,7 +695,7 @@
 
 .merge-controls #merge-mode-toggle.active {
   background: var(--primary-color);
-  color: white;
+  color: var(--on-primary);
 }
 
 .merge-controls .hidden {
@@ -808,7 +808,7 @@
 .btn-icon:hover {
   background: var(--primary-color);
   border-color: var(--primary-color);
-  color: white;
+  color: var(--on-primary);
   transform: scale(1.1);
 }
 
@@ -1197,7 +1197,7 @@
 
 .settings-nav-btn:hover {
   background: var(--primary-color);
-  color: white;
+  color: var(--on-primary);
   border-color: var(--primary-color);
 }
 
@@ -1276,7 +1276,7 @@
 
 .settings-tab-btn.active {
   background: var(--primary-color);
-  color: white;
+  color: var(--on-primary);
   border-color: var(--primary-color);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
@@ -1362,7 +1362,7 @@
 .priority-badge {
   padding: 4px 10px;
   background: var(--primary-color);
-  color: white;
+  color: var(--on-primary);
   border-radius: 12px;
   font-size: 11px;
   font-weight: 600;
@@ -1407,7 +1407,7 @@
 
 .queue-switch-btn.active {
   background: var(--primary-color);
-  color: white;
+  color: var(--on-primary);
   border-color: var(--primary-color);
   font-weight: 600;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
@@ -1467,7 +1467,7 @@
 
 .filter-btn.active {
   background: var(--primary-color);
-  color: white;
+  color: var(--on-primary);
   border-color: var(--primary-color);
   font-weight: 600;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
@@ -2107,7 +2107,7 @@
 
 .summary-stats .clickable-stat:hover {
   background: var(--primary-color);
-  color: white;
+  color: var(--on-primary);
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
   border-color: var(--primary-color);
@@ -2116,7 +2116,7 @@
 /* Active state for mobile touch */
 .summary-stats .clickable-stat:active {
   background: var(--primary-color);
-  color: white;
+  color: var(--on-primary);
   transform: translateY(0);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }

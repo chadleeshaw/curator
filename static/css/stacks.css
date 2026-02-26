@@ -386,7 +386,7 @@
 .stack-group-search-btn:hover {
   background: var(--primary-color);
   border-color: var(--primary-color);
-  color: white;
+  color: var(--on-primary);
   transform: scale(1.1);
 }
 
@@ -479,7 +479,7 @@
 
 .stack-page-header {
   background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 50%, #2563eb 100%);
-  color: white;
+  color: var(--on-primary);
   padding: 20px 24px;
   margin-bottom: 20px;
   text-align: center;
@@ -803,7 +803,7 @@
   font-weight: 700;
   white-space: nowrap;
   background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-  color: white;
+  color: var(--on-primary);
   border: none;
   border-radius: 8px;
   cursor: pointer;

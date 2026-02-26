@@ -10,8 +10,8 @@
   :root:not([data-theme='light']) {
     /* Surface Colors */
     --background: #141218;
-    --surface: #141218;
-    --surface-variant: #49454F;
+    --surface: #211F26; /* M3 Surface Container */
+    --surface-variant: #36343B; /* M3 Surface Container Highest */
 
     /* Text Colors */
     --text-primary: #E6E0E9;
@@ -24,10 +24,11 @@
     --url-text: #D0BCFF;
 
     /* Input Colors */
-    --input-bg: #49454F;
+    --input-bg: #36343B;
     
     /* Primary color override for dark mode */
     --primary-color: #D0BCFF;
+    --on-primary: #381E72;
     --primary-dark: #B69DF8;
   }
 
@@ -44,8 +45,8 @@
 body.dark-mode {
   /* Surface Colors */
   --background: #141218;
-  --surface: #141218;
-  --surface-variant: #49454F;
+  --surface: #211F26; /* M3 Surface Container */
+  --surface-variant: #36343B; /* M3 Surface Container Highest */
 
   /* Text Colors */
   --text-primary: #E6E0E9;
@@ -58,10 +59,11 @@ body.dark-mode {
   --url-text: #D0BCFF;
 
   /* Input Colors */
-  --input-bg: #49454F;
+  --input-bg: #36343B;
   
   /* Primary color override for dark mode */
   --primary-color: #D0BCFF;
+  --on-primary: #381E72;
   --primary-dark: #B69DF8;
 }
 
@@ -83,7 +85,7 @@ body.dark-mode .periodical-card:hover img {
   height: 56px;
   border-radius: var(--radius-lg); /* M3 rounded square FAB */
   background: var(--primary-color);
-  color: white; /* On Primary */
+  color: var(--on-primary); /* On Primary */
   border: none;
   cursor: pointer;
   font-size: 24px;

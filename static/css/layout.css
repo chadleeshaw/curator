@@ -62,18 +62,18 @@ header p {
   align-items: center;
   gap: 8px;
   padding: 8px 14px;
-  background: rgba(99, 102, 241, 0.1);
-  border: 1px solid rgba(99, 102, 241, 0.3);
-  border-radius: 8px;
+  background: var(--surface-variant);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl);
   color: var(--text-primary);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  letter-spacing: 0.1px;
   transition: all 0.2s ease;
 }
 
 .stat-badge:hover {
-  background: rgba(99, 102, 241, 0.15);
-  border-color: rgba(99, 102, 241, 0.5);
+  background: var(--border-color);
   transform: translateX(2px);
 }
 
@@ -154,17 +154,22 @@ header p {
   top: 0;
   right: 0;
   padding: 8px 16px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  border-radius: 4px;
+  background: var(--surface-variant);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl);
   cursor: pointer;
-  font-size: 14px;
-  transition: opacity 0.2s;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  letter-spacing: 0.1px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
 }
 
 .logout-btn:hover {
-  opacity: 0.9;
+  background: var(--border-color);
 }
 
 /* ==========================================================================
