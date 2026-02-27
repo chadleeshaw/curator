@@ -325,7 +325,7 @@
 
 .issues-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 180px));
+  grid-template-columns: repeat(auto-fill, minmax(174px, 1fr));
   gap: 24px;
   margin-bottom: 40px;
 }
