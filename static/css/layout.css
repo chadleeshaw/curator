@@ -17,10 +17,10 @@
 
 header {
   background: var(--surface);
-  padding: 24px 32px;
+  padding: 12px 32px;
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-sm);
-  margin-bottom: 24px;
+  margin-bottom: 12px;
   text-align: center;
   max-height: 300px;
   overflow: hidden;
@@ -28,16 +28,16 @@ header {
 
 header h1 {
   color: var(--primary-color);
-  margin-bottom: 2px;
-  margin-top: 2px;
-  font-size: 36px;
+  margin-bottom: 0;
+  margin-top: 0;
+  font-size: 24px;
   font-weight: 700;
   letter-spacing: -0.5px;
 }
 
 header p {
   color: var(--text-secondary);
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 400;
   margin: 0;
 }
@@ -100,16 +100,18 @@ header p {
 
 .coin-emoji {
   display: inline-block;
-  font-size: 5em;
+  font-size: 3em;
   animation: coin-flip-once 1.5s ease-in-out;
-  filter: drop-shadow(0 4px 12px rgba(var(--primary-rgb), 0.4)) drop-shadow(0 8px 16px rgba(0, 0, 0, 0.3));
+  filter: drop-shadow(0 4px 12px rgba(var(--primary-rgb), 0.4))
+    drop-shadow(0 8px 16px rgba(0, 0, 0, 0.3));
   transition: all 0.3s ease;
 }
 
 .coin-emoji:hover {
   animation: coin-flip 1s ease-in-out infinite;
   filter: drop-shadow(0 4px 20px rgba(var(--primary-rgb), 0.8))
-    drop-shadow(0 8px 24px rgba(var(--primary-rgb), 0.4)) drop-shadow(0 12px 32px rgba(0, 0, 0, 0.4));
+    drop-shadow(0 8px 24px rgba(var(--primary-rgb), 0.4))
+    drop-shadow(0 12px 32px rgba(0, 0, 0, 0.4));
   transform: scale(1.05);
 }
 
@@ -240,7 +242,7 @@ nav:not(.breadcrumb) {
 nav:not(.breadcrumb) {
   display: flex;
   gap: 8px;
-  margin-bottom: 28px;
+  margin-bottom: 12px;
   background: var(--surface);
   padding: 8px;
   border-radius: var(--radius-xl); /* M3 fully rounded container */

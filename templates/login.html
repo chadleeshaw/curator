@@ -1,113 +1,139 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Login to Curator - Search, download, and organize your periodicals">
-    <meta name="theme-color" content="#5c32ba">
-    <meta name="robots" content="noindex, nofollow">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Login to Curator - Search, download, and organize your periodicals"
+    />
+    <meta name="theme-color" content="#5c32ba" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap"
+      rel="stylesheet"
+    />
     <title>Curator - Login</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🪙</text></svg>">
-    <link rel="stylesheet" href="/static/css/base.css">
-    <link rel="stylesheet" href="/static/css/login.css">
-</head>
-<body>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🪙</text></svg>"
+    />
+    <link rel="stylesheet" href="/static/css/base.css" />
+    <link rel="stylesheet" href="/static/css/themes.css" />
+    <link rel="stylesheet" href="/static/css/login.css" />
+  </head>
+  <body>
     <main class="login-main" role="main">
-        <div class="login-container">
-            <header class="login-header">
-                <h1>🪙 Curator</h1>
-                <p>Search, download, organize, and read your periodicals</p>
-            </header>
+      <div class="login-container">
+        <header class="login-header">
+          <h1>🪙 Curator</h1>
+          <p>Search, download, organize, and read your periodicals</p>
+        </header>
 
-            <div id="errorMessage" class="error-message" role="alert" aria-live="assertive"></div>
-            <div id="successMessage" class="success-message" role="status" aria-live="polite"></div>
+        <div id="errorMessage" class="error-message" role="alert" aria-live="assertive"></div>
+        <div id="successMessage" class="success-message" role="status" aria-live="polite"></div>
 
-            <!-- Login Mode -->
-            <section id="loginMode" aria-labelledby="login-title">
-                <h2 id="login-title" class="sr-only">Login Form</h2>
-                <form id="loginForm" onsubmit="handleLogin(event)" novalidate>
-                    <div class="form-group">
-                        <label for="loginUsername">Username</label>
-                        <input type="text" 
-                               id="loginUsername" 
-                               name="username"
-                               required 
-                               aria-required="true"
-                               autocomplete="username">
-                    </div>
-                    <div class="form-group form-group-password">
-                        <label for="loginPassword">Password</label>
-                        <input type="password" 
-                               id="loginPassword" 
-                               name="password"
-                               required 
-                               aria-required="true"
-                               autocomplete="current-password">
-                        <button type="button" 
-                                class="toggle-password" 
-                                onclick="togglePasswordVisibility('loginPassword')"
-                                aria-label="Toggle password visibility">
-                            <span aria-hidden="true">👁️</span>
-                        </button>
-                    </div>
-                    <button type="submit" class="submit-btn" id="loginBtn">Sign In</button>
-                </form>
-            </section>
+        <!-- Login Mode -->
+        <section id="loginMode" aria-labelledby="login-title">
+          <h2 id="login-title" class="sr-only">Login Form</h2>
+          <form id="loginForm" onsubmit="handleLogin(event)" novalidate>
+            <div class="form-group">
+              <label for="loginUsername">Username</label>
+              <input
+                type="text"
+                id="loginUsername"
+                name="username"
+                required
+                aria-required="true"
+                autocomplete="username"
+              />
+            </div>
+            <div class="form-group form-group-password">
+              <label for="loginPassword">Password</label>
+              <input
+                type="password"
+                id="loginPassword"
+                name="password"
+                required
+                aria-required="true"
+                autocomplete="current-password"
+              />
+              <button
+                type="button"
+                class="toggle-password"
+                onclick="togglePasswordVisibility('loginPassword')"
+                aria-label="Toggle password visibility"
+              >
+                <span aria-hidden="true">👁️</span>
+              </button>
+            </div>
+            <button type="submit" class="submit-btn" id="loginBtn">Sign In</button>
+          </form>
+        </section>
 
-            <!-- Setup Mode -->
-            <section id="setupMode" class="hidden" aria-labelledby="setup-title">
-                <h2 id="setup-title" class="sr-only">Setup Form</h2>
-                <form id="setupForm" onsubmit="handleSetup(event)" novalidate>
-                    <p class="setup-instructions">Create your admin account to get started</p>
-                    <div class="form-group">
-                        <label for="setupUsername">Username</label>
-                        <input type="text" 
-                               id="setupUsername" 
-                               name="username"
-                               required 
-                               aria-required="true"
-                               minlength="3"
-                               autocomplete="username">
-                    </div>
-                    <div class="form-group form-group-password">
-                        <label for="setupPassword">Password</label>
-                        <input type="password" 
-                               id="setupPassword" 
-                               name="password"
-                               required 
-                               aria-required="true"
-                               minlength="8"
-                               autocomplete="new-password">
-                        <button type="button" 
-                                class="toggle-password" 
-                                onclick="togglePasswordVisibility('setupPassword')"
-                                aria-label="Toggle password visibility">
-                            <span aria-hidden="true">👁️</span>
-                        </button>
-                    </div>
-                    <div class="form-group form-group-password">
-                        <label for="setupPasswordConfirm">Confirm Password</label>
-                        <input type="password" 
-                               id="setupPasswordConfirm" 
-                               name="confirmPassword"
-                               required 
-                               aria-required="true"
-                               minlength="8"
-                               autocomplete="new-password">
-                        <button type="button" 
-                                class="toggle-password" 
-                                onclick="togglePasswordVisibility('setupPasswordConfirm')"
-                                aria-label="Toggle password visibility">
-                            <span aria-hidden="true">👁️</span>
-                        </button>
-                    </div>
-                    <button type="submit" class="submit-btn" id="setupBtn">Create Credentials</button>
-                </form>
-            </section>
-        </div>
+        <!-- Setup Mode -->
+        <section id="setupMode" class="hidden" aria-labelledby="setup-title">
+          <h2 id="setup-title" class="sr-only">Setup Form</h2>
+          <form id="setupForm" onsubmit="handleSetup(event)" novalidate>
+            <p class="setup-instructions">Create your admin account to get started</p>
+            <div class="form-group">
+              <label for="setupUsername">Username</label>
+              <input
+                type="text"
+                id="setupUsername"
+                name="username"
+                required
+                aria-required="true"
+                minlength="3"
+                autocomplete="username"
+              />
+            </div>
+            <div class="form-group form-group-password">
+              <label for="setupPassword">Password</label>
+              <input
+                type="password"
+                id="setupPassword"
+                name="password"
+                required
+                aria-required="true"
+                minlength="8"
+                autocomplete="new-password"
+              />
+              <button
+                type="button"
+                class="toggle-password"
+                onclick="togglePasswordVisibility('setupPassword')"
+                aria-label="Toggle password visibility"
+              >
+                <span aria-hidden="true">👁️</span>
+              </button>
+            </div>
+            <div class="form-group form-group-password">
+              <label for="setupPasswordConfirm">Confirm Password</label>
+              <input
+                type="password"
+                id="setupPasswordConfirm"
+                name="confirmPassword"
+                required
+                aria-required="true"
+                minlength="8"
+                autocomplete="new-password"
+              />
+              <button
+                type="button"
+                class="toggle-password"
+                onclick="togglePasswordVisibility('setupPasswordConfirm')"
+                aria-label="Toggle password visibility"
+              >
+                <span aria-hidden="true">👁️</span>
+              </button>
+            </div>
+            <button type="submit" class="submit-btn" id="setupBtn">Create Credentials</button>
+          </form>
+        </section>
+      </div>
     </main>
 
     <script src="/static/js/login.js"></script>
-</body>
+  </body>
 </html>

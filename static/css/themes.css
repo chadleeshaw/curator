@@ -9,9 +9,9 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     /* Surface Colors */
-    --background: #21222c;
-    --surface: #282a36; /* Dracula Background */
-    --surface-variant: #44475a; /* Dracula Current Line */
+    --background: #1a1b26; /* Page body — darkest layer */
+    --surface: #252640; /* Cards/containers */
+    --surface-variant: #30324f; /* Elevated panels / section headers */
 
     /* Text Colors */
     --text-primary: #f8f8f2; /* Dracula Foreground */
@@ -21,16 +21,17 @@
     /* Border & Divider Colors */
     --border-color: #44475a;
     --table-border: #44475a;
+    --input-border: #5a5d7a; /* Brighter border for form inputs — more visible on dark surfaces */
     --url-text: #8be9fd; /* Dracula Cyan */
 
     /* Input Colors */
-    --input-bg: #21222c;
+    --input-bg: #191a2a; /* Inset fields — noticeably darker than --surface */
 
     /* Primary color override for dark mode */
-    --primary-color: #6272a4; /* Dracula Comment color (more muted purple/blue) */
-    --primary-rgb: 98, 114, 164;
+    --primary-color: #7b68ee; /* Saturated purple but not too bright */
+    --primary-rgb: 123, 104, 238;
     --on-primary: #f8f8f2;
-    --primary-dark: #44475a;
+    --primary-dark: #6a5acd;
   }
 
   :root:not([data-theme='light']) img {
@@ -45,9 +46,9 @@
 /* Manual dark mode toggle - class-based */
 body.dark-mode {
   /* Surface Colors */
-  --background: #21222c;
-  --surface: #282a36; /* Dracula Background */
-  --surface-variant: #44475a; /* Dracula Current Line */
+  --background: #1a1b26; /* Page body — darkest layer */
+  --surface: #252640; /* Cards/containers */
+  --surface-variant: #30324f; /* Elevated panels / section headers */
 
   /* Text Colors */
   --text-primary: #f8f8f2; /* Dracula Foreground */
@@ -57,16 +58,17 @@ body.dark-mode {
   /* Border & Divider Colors */
   --border-color: #44475a;
   --table-border: #44475a;
+  --input-border: #5a5d7a; /* Brighter border for form inputs — more visible on dark surfaces */
   --url-text: #8be9fd; /* Dracula Cyan */
 
   /* Input Colors */
-  --input-bg: #21222c;
+  --input-bg: #191a2a; /* Inset fields — noticeably darker than --surface */
 
   /* Primary color override for dark mode */
-  --primary-color: #8b5cf6; /* Deeper Purple */
-  --primary-rgb: 139, 92, 246;
+  --primary-color: #7b68ee; /* Saturated purple but not too bright */
+  --primary-rgb: 123, 104, 238;
   --on-primary: #f8f8f2;
-  --primary-dark: #7c3aed;
+  --primary-dark: #6a5acd;
 }
 
 /* Dark mode specific image adjustments */
@@ -109,4 +111,58 @@ body.dark-mode .periodical-card:hover img {
 .theme-toggle:active {
   transform: translateY(0);
   box-shadow: var(--shadow-sm); /* M3 FAB pressed elevation */
+}
+
+/* ==========================================================================
+   Dark Mode Input Visual Definition
+   Use inset box-shadow to make inputs clearly legible on dark surfaces,
+   regardless of inline border styles that can't be overridden by cascade.
+   ========================================================================== */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light'])
+    input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='submit']):not(
+      [type='button']
+    ),
+  :root:not([data-theme='light']) select,
+  :root:not([data-theme='light']) textarea {
+    box-shadow:
+      0 0 0 1px var(--input-border),
+      inset 0 1px 3px rgba(0, 0, 0, 0.4);
+  }
+
+  :root:not([data-theme='light'])
+    input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='submit']):not(
+      [type='button']
+    ):focus,
+  :root:not([data-theme='light']) select:focus,
+  :root:not([data-theme='light']) textarea:focus {
+    box-shadow:
+      0 0 0 2px var(--primary-color),
+      inset 0 1px 3px rgba(0, 0, 0, 0.4);
+    outline: none;
+  }
+}
+
+body.dark-mode
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='submit']):not(
+    [type='button']
+  ),
+body.dark-mode select,
+body.dark-mode textarea {
+  box-shadow:
+    0 0 0 1px var(--input-border),
+    inset 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+body.dark-mode
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='submit']):not(
+    [type='button']
+  ):focus,
+body.dark-mode select:focus,
+body.dark-mode textarea:focus {
+  box-shadow:
+    0 0 0 2px var(--primary-color),
+    inset 0 1px 3px rgba(0, 0, 0, 0.4);
+  outline: none;
 }

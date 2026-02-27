@@ -47,7 +47,7 @@
 .tracking-step {
   margin-bottom: 30px;
   padding: 20px;
-  background: var(--surface-variant);
+  background: var(--surface);
   border-left: 4px solid var(--primary-color);
   border-radius: var(--radius-sm);
   transition: opacity 0.3s;
@@ -76,7 +76,7 @@
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   font-size: 14px;
-  background: var(--surface);
+  background: var(--input-bg);
   color: var(--text-primary);
 }
 
@@ -285,7 +285,7 @@
 }
 
 .tracked-item {
-  background: var(--surface-variant);
+  background: var(--surface);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   padding: 15px;
@@ -327,7 +327,7 @@
    ========================================================================== */
 
 .task-card {
-  background: var(--surface-variant);
+  background: var(--surface);
   border-left: 4px solid var(--primary-color);
   border-radius: var(--radius-sm);
   padding: 20px;
@@ -374,7 +374,7 @@
 }
 
 .task-actions button:disabled {
-  background: var(--surface-variant);
+  background: var(--surface);
   color: var(--text-disabled);
   cursor: not-allowed;
 }
@@ -393,7 +393,7 @@
 .search-mode {
   margin-bottom: 20px;
   padding: 15px;
-  background: var(--surface-variant);
+  background: var(--surface);
   border-radius: var(--radius-sm);
 }
 
@@ -411,7 +411,7 @@
 #manual-providers {
   margin-bottom: 20px;
   padding: 15px;
-  background: var(--surface-variant);
+  background: var(--surface);
   border-radius: var(--radius-sm);
 }
 
@@ -433,7 +433,7 @@
 
 .status-info-item {
   padding: 15px;
-  background: var(--surface-variant);
+  background: var(--surface);
   border-radius: var(--radius-sm);
   margin-bottom: 15px;
 }
@@ -533,7 +533,7 @@
   display: flex;
   gap: 8px;
   margin-bottom: 24px;
-  background: var(--surface-variant);
+  background: var(--surface);
   padding: 8px;
   border-radius: var(--radius-xl);
   border: 1px solid var(--border-color);
@@ -611,7 +611,7 @@
   padding: 6px 30px 6px 10px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  background: var(--surface);
+  background: var(--input-bg);
   color: var(--text-primary);
   font-size: 14px;
   cursor: pointer;
@@ -647,7 +647,7 @@
   padding: 6px 30px 6px 10px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  background: var(--surface);
+  background: var(--input-bg);
   color: var(--text-primary);
   font-size: 14px;
   cursor: pointer;
@@ -676,7 +676,7 @@
   padding: 6px 30px 6px 10px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  background: var(--surface);
+  background: var(--input-bg);
   color: var(--text-primary);
   font-size: 14px;
   cursor: pointer;
@@ -748,26 +748,39 @@
   }
 
   header {
-    padding: 20px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+    max-height: none;
   }
 
   header h1 {
-    font-size: 24px;
+    font-size: 18px;
+    margin-bottom: 0;
+  }
+
+  header p {
+    font-size: 12px;
+  }
+
+  .coin-emoji {
+    font-size: 1.8em;
   }
 
   /* Mobile nav - horizontal emoji-only buttons */
   nav {
     flex-direction: row;
     justify-content: space-around;
-    padding: 6px;
-    gap: 4px;
+    padding: 5px;
+    gap: 3px;
+    overflow: hidden;
+    margin-bottom: 12px !important;
   }
 
   .nav-btn {
     flex: 1;
-    padding: 10px 4px;
+    padding: 8px 2px;
     min-width: 0;
-    font-size: 20px;
+    font-size: 18px;
   }
 
   .nav-btn .nav-text {
@@ -779,7 +792,7 @@
   }
 
   .tab {
-    padding: 15px;
+    padding: 0 15px 15px;
     max-width: 100%;
     overflow-x: hidden;
   }
@@ -916,6 +929,12 @@
   #scheduled-tasks-list {
     max-width: 100%;
     padding: 0;
+    margin-top: 10px !important;
+  }
+
+  /* Neutralize inline margin-bottom on the timezone banner so grid gap alone governs spacing */
+  #scheduled-tasks-list > div:first-child {
+    margin-bottom: 0 !important;
   }
 
   /* Queue page - mobile layout */
@@ -1363,12 +1382,18 @@
   }
 
   .btn-icon {
-    min-width: 44px !important;
-    width: 44px !important;
-    height: 44px !important;
-    font-size: 18px !important;
-    padding: 8px !important;
+    min-width: 52px !important;
+    width: auto !important;
+    height: auto !important;
+    font-size: 16px !important;
+    padding: 6px 8px !important;
+    flex-direction: column !important;
+    gap: 3px !important;
     border-radius: var(--radius-md) !important;
+  }
+
+  .btn-icon .btn-label {
+    display: block !important;
   }
 
   /* Empty state in tracking */
@@ -1689,20 +1714,29 @@
     margin-bottom: 20px !important;
   }
 
-  /* Import buttons - side by side */
+  /* Import buttons - compact side-by-side row on mobile */
   .library-controls-row > div {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
+    display: flex !important;
+    flex-direction: row !important;
     gap: 8px !important;
     width: 100% !important;
   }
 
   .library-controls-row .btn-primary,
   .library-controls-row .import-button-group {
-    padding: 12px 8px !important;
-    font-size: 12px !important;
+    flex: 1 !important;
+    width: auto !important;
+    padding: 8px 6px !important;
+    font-size: 11px !important;
     border-radius: var(--radius-md) !important;
-    white-space: nowrap !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+    text-align: center !important;
+    box-sizing: border-box !important;
+    background: var(--surface-variant) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--border-color) !important;
+    line-height: 1.3 !important;
   }
 
   .sort-controls {
@@ -1916,22 +1950,24 @@
 
   .tracking-controls-row > div {
     display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
-    gap: 8px !important;
+    grid-template-columns: 1fr 1fr 1fr !important;
+    gap: 6px !important;
     width: 100% !important;
   }
 
   .tracking-controls-row > div > button:last-child:nth-child(odd) {
-    grid-column: 1 / -1;
+    grid-column: auto;
   }
 
   .tracking-controls-row button,
   .tracking-controls-row .btn-primary {
     margin-left: 0 !important;
-    padding: 12px 8px !important;
-    font-size: 12px !important;
+    padding: 10px 4px !important;
+    font-size: 11px !important;
     border-radius: var(--radius-md) !important;
-    white-space: nowrap !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+    text-align: center !important;
     width: 100% !important;
   }
 
@@ -1992,6 +2028,16 @@
     width: 100%;
     padding: 12px 16px;
     font-size: 14px;
+  }
+
+  /* Provider/client action buttons — compact, not full-width */
+  .provider-block .btn-secondary,
+  .provider-block .btn-primary,
+  .provider-block .btn-danger {
+    width: auto !important;
+    padding: 8px 14px !important;
+    font-size: 13px !important;
+    flex: 0 0 auto !important;
   }
 
   /* Settings navigation - grid layout */

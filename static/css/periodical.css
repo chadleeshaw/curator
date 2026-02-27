@@ -8,7 +8,7 @@
   padding: 8px 14px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  background: var(--surface-variant);
+  background: var(--input-bg);
   color: var(--text-secondary);
   font-size: 18px;
   line-height: 1;
@@ -236,7 +236,7 @@
   padding: 8px 12px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  background: var(--surface);
+  background: var(--input-bg);
   color: var(--text-primary);
   font-size: 14px;
   cursor: pointer;
@@ -252,8 +252,10 @@
    ========================================================================== */
 
 .periodical-header {
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
-  color: var(--on-primary);
+  background: var(--surface-variant);
+  border: 1px solid var(--border-color);
+  border-left: 4px solid var(--primary-color);
+  color: var(--text-primary);
   padding: 32px 24px;
   margin-bottom: 24px;
   text-align: center;
@@ -269,8 +271,8 @@
 
 .periodical-header p {
   margin: 4px 0 0 0;
-  opacity: 0.9;
   font-size: 0.95em;
+  color: var(--text-secondary);
 }
 
 .back-button {
@@ -323,7 +325,7 @@
 
 .issues-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
   gap: 24px;
   margin-bottom: 40px;
 }
@@ -376,7 +378,7 @@
 }
 
 .issue-info {
-  padding: 16px;
+  padding: 12px;
   flex-grow: 1;
   display: flex;
   flex-direction: column;
@@ -401,7 +403,7 @@
 
 .issue-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   margin-top: 12px;
 }
 
@@ -416,7 +418,7 @@
     transform var(--transition-fast),
     color var(--transition-fast);
   font-size: 13px;
-  padding: 8px 14px;
+  padding: 6px 10px;
 }
 
 .open-pdf-btn {
@@ -424,6 +426,15 @@
   background: var(--primary-color);
   color: var(--on-primary);
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.open-pdf-btn .btn-text {
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .open-pdf-btn:hover {
@@ -436,11 +447,11 @@
   background: var(--surface-variant);
   color: var(--text-primary);
   border: 2px solid var(--border-color);
-  padding: 8px 10px;
+  padding: 6px 8px;
   min-width: auto;
-  font-size: 18px;
-  width: 40px;
-  height: 40px;
+  font-size: 16px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -533,8 +544,9 @@ body.dark-mode #status-message.status-error {
 }
 
 .metadata-header {
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
-  color: var(--on-primary);
+  background: var(--surface-variant);
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
   padding: 20px;
   border-radius: 10px 10px 0 0;
   display: flex;
@@ -548,7 +560,7 @@ body.dark-mode #status-message.status-error {
 }
 
 .metadata-close {
-  color: white;
+  color: var(--text-secondary);
   font-size: 28px;
   font-weight: bold;
   cursor: pointer;
@@ -654,7 +666,7 @@ body.dark-mode #status-message.status-error {
   padding: 6px 8px;
   border-radius: var(--radius-sm);
   border: 2px solid var(--border-color);
-  background: var(--surface);
+  background: var(--input-bg);
   color: var(--text-primary);
 }
 
@@ -773,7 +785,7 @@ body.dark-mode #status-message.status-error {
   font-size: 14px;
   border-radius: var(--radius-sm);
   border: 2px solid var(--border-color);
-  background: var(--surface);
+  background: var(--input-bg);
   color: var(--text-primary);
 }
 

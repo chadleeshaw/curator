@@ -391,8 +391,8 @@ export function createIssueCard(
 
   const openButton = document.createElement('button');
   openButton.className = 'open-pdf-btn';
-  openButton.textContent = '📖';
   openButton.title = 'Open file';
+  openButton.innerHTML = '📖 <span class="btn-text">Open</span>';
   openButton.onclick = (e) => {
     e.stopPropagation();
     openPDF(issue.id);
@@ -401,8 +401,8 @@ export function createIssueCard(
 
   const metadataButton = document.createElement('button');
   metadataButton.className = 'metadata-btn';
-  metadataButton.textContent = 'ℹ️';
   metadataButton.title = 'View metadata';
+  metadataButton.innerHTML = 'ℹ️';
   metadataButton.onclick = (e) => {
     e.stopPropagation();
     viewMetadata(issue.id);

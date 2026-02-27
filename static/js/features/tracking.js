@@ -863,10 +863,10 @@ export class TrackingManager {
             </div>
           </div>
           <div class="tracked-card-buttons">
-            <button class="btn-icon stack-edit-btn" title="Edit stack">\u270f\ufe0f</button>
-            <button class="btn-icon stack-assign-btn" title="Manage members">\ud83d\udccb</button>
-            <button class="btn-icon stack-search-btn" title="Search for issues">\ud83d\udd0d</button>
-            <button class="btn-icon btn-danger stack-delete-btn" title="Delete stack">\ud83d\uddd1\ufe0f</button>
+            <button class="btn-icon stack-edit-btn" title="Edit stack">\u270f\ufe0f<span class="btn-label">Edit</span></button>
+            <button class="btn-icon stack-assign-btn" title="Manage members">\ud83d\udccb<span class="btn-label">Members</span></button>
+            <button class="btn-icon stack-search-btn" title="Search for issues">\ud83d\udd0d<span class="btn-label">Search</span></button>
+            <button class="btn-icon btn-danger stack-delete-btn" title="Delete stack">\ud83d\uddd1\ufe0f<span class="btn-label">Delete</span></button>
           </div>
         `;
 
@@ -1094,9 +1094,9 @@ export class TrackingManager {
         </div>
       </div>
       <div class="tracked-card-buttons">
-        <button onclick="editTracking(${id})" class="btn-icon" title="Edit">\u270F\uFE0F</button>
-        <button class="btn-icon search-issues-btn" data-tracking-id="${id}" title="Search Issues">\uD83D\uDD0D</button>
-        <button class="btn-icon btn-danger delete-tracking-btn" data-tracking-id="${id}" title="Delete">\uD83D\uDDD1\uFE0F</button>
+        <button onclick="editTracking(${id})" class="btn-icon" title="Edit">\u270F\uFE0F<span class="btn-label">Edit</span></button>
+        <button class="btn-icon search-issues-btn" data-tracking-id="${id}" title="Search Issues">\uD83D\uDD0D<span class="btn-label">Search</span></button>
+        <button class="btn-icon btn-danger delete-tracking-btn" data-tracking-id="${id}" title="Delete">\uD83D\uDDD1\uFE0F<span class="btn-label">Delete</span></button>
       </div>
     `;
 

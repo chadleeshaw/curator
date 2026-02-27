@@ -13,10 +13,10 @@
 }
 
 .stat-card {
-  background: var(--surface);
   padding: var(--space-lg);
   border-radius: var(--radius-xl);
-  border: 1px solid var(--border-color); /* M3 outlined card */
+  border: 1px solid var(--border-color);
+  background: var(--surface); /* M3 outlined card */
   text-align: center;
   transition:
     border-color var(--transition-base),
@@ -92,12 +92,14 @@
 }
 
 .btn-secondary {
-  background: var(--surface-variant); /* Tonal button */
+  background: var(--surface-variant);
   color: var(--text-primary);
+  border: 1px solid var(--input-border, var(--border-color));
 }
 
 .btn-secondary:hover {
   background: var(--border-color);
+  border-color: var(--text-secondary);
 }
 
 .btn-small {
@@ -128,7 +130,7 @@
 
 .sort-btn {
   padding: var(--space-sm) var(--space-md);
-  background: var(--surface-variant);
+  background: var(--input-bg);
   color: var(--text-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
@@ -155,7 +157,7 @@
 
 .sort-toggle-btn {
   padding: 8px 14px;
-  background: var(--surface-variant);
+  background: var(--input-bg);
   color: var(--text-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
@@ -219,6 +221,7 @@
 .btn-cancel {
   background: var(--surface-variant);
   color: var(--text-primary);
+  border: 1px solid var(--border-color);
   box-shadow: none;
 }
 
@@ -250,9 +253,9 @@
 .search-form input {
   flex: 1;
   padding: 16px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--input-border, var(--border-color));
+  background: var(--input-bg);
   border-radius: var(--radius-xl); /* Fully rounded search bar */
-  background: var(--surface-variant);
   color: var(--text-primary);
   font-size: var(--font-size-base);
   transition: all 0.2s ease;
@@ -260,7 +263,6 @@
 
 .search-form input:focus {
   border-color: var(--primary-color);
-  background: var(--surface);
   box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.2);
 }
 
@@ -303,8 +305,9 @@
   color: var(--text-primary);
   margin-bottom: var(--space-md);
   padding: var(--space-sm);
-  background: var(--surface);
+  background: var(--input-bg);
   border: 1px solid var(--border-color);
+  background: var(--input-bg);
   border-radius: var(--radius-md);
   transition:
     border-color var(--transition-fast),
@@ -346,10 +349,10 @@
 .settings-field select {
   width: 100%;
   padding: 14px 16px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--input-border, var(--border-color));
+  background: var(--input-bg);
   border-radius: var(--radius-md); /* M3 text field radius */
   font-size: var(--font-size-base);
-  background: var(--surface-variant);
   color: var(--text-primary);
   transition:
     border-color 0.2s ease,
@@ -358,6 +361,7 @@
 }
 
 .settings-field select {
+  background-color: var(--input-bg);
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
@@ -374,7 +378,6 @@
 .settings-field select:focus {
   outline: none;
   border-color: var(--primary-color);
-  background: var(--surface);
   box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.2);
 }
 
@@ -390,8 +393,8 @@
 }
 
 .periodical-card {
-  background: var(--surface);
-  border: 1px solid var(--border-color); /* M3 outlined card */
+  background: var(--surface); /* M3 outlined card */
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-lg); /* 16px */
   overflow: hidden;
   cursor: pointer;
@@ -412,11 +415,11 @@
 .periodical-cover {
   width: 100%;
   height: 220px;
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+  background: linear-gradient(135deg, var(--surface-variant) 0%, var(--background) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--on-primary);
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 600;
   text-align: center;
@@ -426,6 +429,9 @@
 }
 
 .periodical-cover img {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -555,10 +561,10 @@
 }
 
 .info-card {
-  background: var(--surface);
   padding: 15px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
+  background: var(--surface);
   display: flex;
   gap: 20px;
   align-items: flex-start;
@@ -618,7 +624,6 @@
 }
 
 .edition-card {
-  background: var(--surface);
   border: 2px solid var(--border-color);
   border-radius: var(--radius-md);
   transition:
@@ -671,8 +676,8 @@
 
 /* Tracked Periodicals Card */
 .tracked-card {
-  background: var(--surface);
-  border: 2px solid var(--border-color);
+  background: var(--surface-variant);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   padding: 24px;
   margin-bottom: 16px;
@@ -792,6 +797,13 @@
   grid-column: 3;
 }
 
+.btn-icon .btn-label {
+  display: none;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+}
+
 .btn-icon {
   padding: 10px;
   border: 2px solid var(--border-color);
@@ -881,8 +893,8 @@
    ========================================================================== */
 
 .merge-select-item {
-  background: var(--surface-variant);
   border: 1px solid var(--border-color);
+  background: var(--surface);
   border-radius: var(--radius-md);
   padding: var(--space-md);
   margin-bottom: var(--space-sm);
@@ -896,7 +908,6 @@
 
 .merge-select-item:hover {
   border-color: var(--primary-color);
-  background: var(--surface);
 }
 
 .merge-select-item input[type='checkbox'] {
@@ -944,7 +955,8 @@
   max-height: 90vh;
   overflow-y: auto;
   position: relative;
-  border: 1px solid var(--border-color); /* To separate from background gracefully in some themes */
+  border: 1px solid var(--border-color);
+  background: var(--surface); /* To separate from background gracefully in some themes */
 }
 
 /* Flexbox layout for modals with header/body/footer structure.
@@ -999,7 +1011,6 @@
 }
 
 .delete-modal-content {
-  background: var(--surface);
   border-radius: var(--radius-md);
   padding: 30px;
   max-width: 500px;
@@ -1130,10 +1141,10 @@
 
 .provider-block {
   border: 1px solid var(--border-color);
-  padding: 15px;
-  margin-bottom: 15px;
-  border-radius: var(--radius-sm);
   background: var(--surface);
+  padding: 20px;
+  margin-bottom: 15px;
+  border-radius: var(--radius-md);
 }
 
 .provider-block h4 {
@@ -1179,18 +1190,18 @@
   grid-template-columns: repeat(5, 1fr);
   gap: 12px;
   padding: 16px;
-  background: var(--surface-variant);
   border-radius: var(--radius-xl);
   border: 1px solid var(--border-color);
+  background: var(--surface);
   max-width: 100%;
   box-sizing: border-box;
 }
 
 .settings-nav-btn {
   padding: 10px 16px;
-  background: var(--surface);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
+  background: var(--surface);
   border-radius: var(--radius-xl);
   cursor: pointer;
   font-size: var(--font-size-sm);
@@ -1218,9 +1229,9 @@
   gap: 8px;
   margin-bottom: 24px;
   padding: 8px;
-  background: var(--surface-variant);
   border-radius: var(--radius-xl);
   border: 1px solid var(--border-color);
+  background: var(--surface-variant);
 }
 
 .settings-tab-btn {
@@ -1255,29 +1266,35 @@
 @media (max-width: 768px) {
   .settings-tabs-nav {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 6px;
     padding: 6px;
   }
 
   .settings-tab-btn {
     min-width: 0;
-    padding: 10px 4px;
-    font-size: 20px;
-    height: 48px;
+    padding: 10px 8px;
+    font-size: var(--font-size-sm);
+    height: auto;
+    gap: 6px;
   }
 
   .settings-tab-btn .nav-text {
-    display: none;
+    display: block;
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .settings-tab-btn .nav-icon {
     display: block;
+    font-size: 16px;
+    flex-shrink: 0;
   }
 }
 
 .settings-tab-btn:hover {
-  background: var(--surface);
   color: var(--text-primary);
 }
 
@@ -1391,9 +1408,9 @@
 .queue-switch-btn {
   flex: 1;
   padding: 14px 24px;
+  color: var(--text-secondary);
+  border: 1px solid var(--input-border, var(--border-color));
   background: var(--surface-variant);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 15px;
@@ -1521,7 +1538,6 @@
    ========================================================================== */
 
 .issue-card {
-  background: var(--surface);
   padding: var(--space-md);
   margin: 8px 0;
   border: 2px solid var(--border-color);
@@ -1577,6 +1593,7 @@
   padding: 20px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
+  background: var(--surface);
   text-align: center;
   box-shadow: var(--shadow-sm);
 }
@@ -1668,6 +1685,7 @@
   border-radius: var(--radius-md);
   overflow: hidden;
   border: 1px solid var(--border-color);
+  background: var(--input-bg);
 }
 
 .progress-bar {
@@ -1817,8 +1835,8 @@
   text-align: left;
   padding: 15px;
   border: 1px solid var(--border-color);
+  background: var(--input-bg);
   border-radius: var(--radius-md);
-  background: var(--surface);
   cursor: pointer;
   transition: all 0.2s ease;
   margin-bottom: 10px;
@@ -1991,11 +2009,11 @@
 }
 
 .periodical-group-card {
-  background: var(--surface-variant);
   border-radius: var(--radius-sm);
   padding: 18px;
   cursor: pointer;
   border: 1px solid var(--border-color);
+  background: var(--surface);
   transition: all 0.2s ease;
   box-shadow: var(--shadow-sm);
 }
@@ -2142,6 +2160,40 @@
   .summary-stats .clickable-stat {
     padding: 12px 16px;
     min-height: 52px;
+  }
+
+  /* Queue sub-tab buttons — prevent text wrapping */
+  .queue-switch-btn {
+    padding: 10px 12px;
+    font-size: 13px;
+    white-space: nowrap;
+    flex-shrink: 1;
+    min-width: 0;
+    gap: 6px;
+  }
+
+  /* Settings tab nav — 2 columns with labels on mobile */
+  .settings-tabs-nav {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+    padding: 6px;
+  }
+
+  .settings-tab-btn {
+    padding: 10px 8px;
+    height: auto;
+    font-size: var(--font-size-sm);
+    gap: 6px;
+  }
+
+  .settings-tab-btn .nav-text {
+    display: block;
+    font-size: 11px;
+  }
+
+  .settings-tab-btn .nav-icon {
+    font-size: 16px;
+    flex-shrink: 0;
   }
 }
 

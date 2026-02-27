@@ -83,9 +83,9 @@
                 onchange="setLibrarySortField(this.value)"
                 style="
                   padding: 8px 12px;
-                  border: 1px solid var(--border-color);
+                  border: 1px solid var(--input-border, var(--border-color));
                   border-radius: 6px;
-                  background: var(--surface);
+                  background: var(--input-bg);
                   color: var(--text-primary);
                   font-size: 14px;
                   cursor: pointer;
@@ -129,9 +129,9 @@
                 style="
                   width: 100%;
                   padding: 10px 14px;
-                  border: 1px solid var(--border-color);
+                  border: 1px solid var(--input-border, var(--border-color));
                   border-radius: 6px;
-                  background: var(--surface);
+                  background: var(--input-bg);
                   color: var(--text-primary);
                   font-size: 14px;
                 "
@@ -151,9 +151,9 @@
                 onchange="setLibraryFilter('category', this.value)"
                 style="
                   padding: 8px 12px;
-                  border: 1px solid var(--border-color);
+                  border: 1px solid var(--input-border, var(--border-color));
                   border-radius: 6px;
-                  background: var(--surface);
+                  background: var(--input-bg);
                   color: var(--text-primary);
                   font-size: 14px;
                   cursor: pointer;
@@ -182,9 +182,9 @@
                 onchange="setLibraryFilter('language', this.value)"
                 style="
                   padding: 8px 12px;
-                  border: 1px solid var(--border-color);
+                  border: 1px solid var(--input-border, var(--border-color));
                   border-radius: 6px;
-                  background: var(--surface);
+                  background: var(--input-bg);
                   color: var(--text-primary);
                   font-size: 14px;
                   cursor: pointer;
@@ -251,9 +251,9 @@
                   onchange="setTrackingSortField(this.value)"
                   style="
                     padding: 8px 12px;
-                    border: 1px solid var(--border-color);
+                    border: 1px solid var(--input-border, var(--border-color));
                     border-radius: 6px;
-                    background: var(--surface);
+                    background: var(--input-bg);
                     color: var(--text-primary);
                     font-size: 14px;
                     cursor: pointer;
@@ -299,9 +299,9 @@
                   style="
                     width: 100%;
                     padding: 10px 14px;
-                    border: 1px solid var(--border-color);
+                    border: 1px solid var(--input-border, var(--border-color));
                     border-radius: 6px;
-                    background: var(--surface);
+                    background: var(--input-bg);
                     color: var(--text-primary);
                     font-size: 14px;
                   "
@@ -321,9 +321,9 @@
                   onchange="setTrackingFilter('category', this.value)"
                   style="
                     padding: 8px 12px;
-                    border: 1px solid var(--border-color);
+                    border: 1px solid var(--input-border, var(--border-color));
                     border-radius: 6px;
-                    background: var(--surface);
+                    background: var(--input-bg);
                     color: var(--text-primary);
                     font-size: 14px;
                     cursor: pointer;
@@ -352,9 +352,9 @@
                   onchange="setTrackingFilter('language', this.value)"
                   style="
                     padding: 8px 12px;
-                    border: 1px solid var(--border-color);
+                    border: 1px solid var(--input-border, var(--border-color));
                     border-radius: 6px;
-                    background: var(--surface);
+                    background: var(--input-bg);
                     color: var(--text-primary);
                     font-size: 14px;
                     cursor: pointer;
@@ -389,15 +389,13 @@
               <div
                 style="display: flex; gap: 10px; flex-wrap: wrap; width: 100%; align-items: center"
               >
-                <button onclick="openTrackNewPeriodicalModal()" class="btn-primary">
-                  📌 Track New Periodical
+                <button onclick="openTrackNewPeriodicalModal()" class="btn-primary" style="flex: 1">
+                  📌 Track New
                 </button>
-                <button onclick="openMergeModal()" class="btn-primary">🔀 Merge Tracking</button>
-                <button
-                  onclick="openCreateStackModal()"
-                  class="btn-primary"
-                  style="margin-left: auto"
-                >
+                <button onclick="openMergeModal()" class="btn-primary" style="flex: 1">
+                  🔀 Merge Tracking
+                </button>
+                <button onclick="openCreateStackModal()" class="btn-primary" style="flex: 1">
                   📂 Create Stack
                 </button>
               </div>
@@ -874,7 +872,7 @@
                     padding: 8px 12px;
                     border: 1px solid var(--border);
                     border-radius: 4px;
-                    background: var(--background);
+                    background: var(--input-bg);
                     color: var(--text-primary);
                     margin-top: 8px;
                   "
@@ -899,7 +897,7 @@
                     padding: 8px 12px;
                     border: 1px solid var(--border);
                     border-radius: 4px;
-                    background: var(--background);
+                    background: var(--input-bg);
                     color: var(--text-primary);
                   "
                 />
@@ -992,7 +990,7 @@
                         padding: 8px 12px;
                         border: 1px solid var(--border);
                         border-radius: 4px;
-                        background: var(--background);
+                        background: var(--input-bg);
                         color: var(--text-primary);
                       "
                     >
@@ -1014,7 +1012,7 @@
                         padding: 8px 12px;
                         border: 1px solid var(--border);
                         border-radius: 4px;
-                        background: var(--background);
+                        background: var(--input-bg);
                         color: var(--text-primary);
                       "
                     >
@@ -1042,7 +1040,7 @@
                         padding: 8px 12px;
                         border: 1px solid var(--border);
                         border-radius: 4px;
-                        background: var(--background);
+                        background: var(--input-bg);
                         color: var(--text-primary);
                         margin-top: 8px;
                       "
@@ -2674,9 +2672,9 @@
             class="w-full"
             style="
               padding: 10px 14px;
-              border: 1px solid var(--border-color);
+              border: 1px solid var(--input-border, var(--border-color));
               border-radius: 6px;
-              background: var(--surface);
+              background: var(--input-bg);
               color: var(--text-primary);
               font-size: 14px;
             "
@@ -2691,9 +2689,9 @@
             class="w-full"
             style="
               padding: 10px 14px;
-              border: 1px solid var(--border-color);
+              border: 1px solid var(--input-border, var(--border-color));
               border-radius: 6px;
-              background: var(--surface);
+              background: var(--input-bg);
               color: var(--text-primary);
               font-size: 14px;
               resize: vertical;
