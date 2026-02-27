@@ -9,28 +9,28 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     /* Surface Colors */
-    --background: #141218;
-    --surface: #211f26; /* M3 Surface Container */
-    --surface-variant: #36343b; /* M3 Surface Container Highest */
+    --background: #21222c;
+    --surface: #282a36; /* Dracula Background */
+    --surface-variant: #44475a; /* Dracula Current Line */
 
     /* Text Colors */
-    --text-primary: #e6e0e9;
-    --text-secondary: #cac4d0;
-    --text-disabled: #938f99;
+    --text-primary: #f8f8f2; /* Dracula Foreground */
+    --text-secondary: #bfbfbf; /* Lightened comment */
+    --text-disabled: #6272a4; /* Dracula Comment */
 
     /* Border & Divider Colors */
-    --border-color: #49454f;
-    --table-border: #49454f;
-    --url-text: #d0bcff;
+    --border-color: #44475a;
+    --table-border: #44475a;
+    --url-text: #8be9fd; /* Dracula Cyan */
 
     /* Input Colors */
-    --input-bg: #36343b;
+    --input-bg: #21222c;
 
     /* Primary color override for dark mode */
-    --primary-color: #9f7aea;
-    --primary-rgb: 159, 122, 234;
-    --on-primary: #ffffff;
-    --primary-dark: #8b5cf6;
+    --primary-color: #8b5cf6; /* Deeper Purple */
+    --primary-rgb: 139, 92, 246;
+    --on-primary: #f8f8f2;
+    --primary-dark: #7c3aed;
   }
 
   :root:not([data-theme='light']) img {
@@ -45,28 +45,28 @@
 /* Manual dark mode toggle - class-based */
 body.dark-mode {
   /* Surface Colors */
-  --background: #141218;
-  --surface: #211f26; /* M3 Surface Container */
-  --surface-variant: #36343b; /* M3 Surface Container Highest */
+  --background: #21222c;
+  --surface: #282a36; /* Dracula Background */
+  --surface-variant: #44475a; /* Dracula Current Line */
 
   /* Text Colors */
-  --text-primary: #e6e0e9;
-  --text-secondary: #cac4d0;
-  --text-disabled: #938f99;
+  --text-primary: #f8f8f2; /* Dracula Foreground */
+  --text-secondary: #bfbfbf; /* Lightened comment */
+  --text-disabled: #6272a4; /* Dracula Comment */
 
   /* Border & Divider Colors */
-  --border-color: #49454f;
-  --table-border: #49454f;
-  --url-text: #d0bcff;
+  --border-color: #44475a;
+  --table-border: #44475a;
+  --url-text: #8be9fd; /* Dracula Cyan */
 
   /* Input Colors */
-  --input-bg: #36343b;
+  --input-bg: #21222c;
 
   /* Primary color override for dark mode */
-  --primary-color: #9f7aea;
-  --primary-rgb: 159, 122, 234;
-  --on-primary: #ffffff;
-  --primary-dark: #8b5cf6;
+  --primary-color: #8b5cf6; /* Deeper Purple */
+  --primary-rgb: 139, 92, 246;
+  --on-primary: #f8f8f2;
+  --primary-dark: #7c3aed;
 }
 
 /* Dark mode specific image adjustments */
