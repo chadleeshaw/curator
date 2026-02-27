@@ -2,18 +2,58 @@
    Stack Cards - Fanned magazine pile visual for library grid
    ========================================================================== */
 
+/* Wrapper for stack card — positions the "stacked paper" layers and the card */
+.stack-card-wrap {
+  position: relative;
+  /* Reserve space for the offset layers so they don't overlap neighbours */
+  margin-right: 8px;
+  margin-bottom: 8px;
+}
+
+/* Remove pseudo-element approach — no ::before/::after on wrap */
+
+/* Real sibling divs that simulate stacked cards behind the main card */
+.stack-layer {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  transition: border-color var(--transition-fast);
+  pointer-events: none;
+}
+
+.stack-layer-1 {
+  transform: translate(4px, 4px);
+}
+
+.stack-layer-2 {
+  transform: translate(8px, 8px);
+}
+
+/* On hover, recolour layers to primary accent */
+.stack-card-wrap:hover .stack-layer {
+  border-color: var(--primary-color);
+}
+
 /* Stack card modifier — inherits .periodical-card base styles */
 .stack-card {
   position: relative;
   border-color: var(--border-color);
-  box-shadow:
-    4px 4px 0 -1px var(--surface),
-    4px 4px 0 0 var(--border-color),
-    8px 8px 0 -1px var(--surface),
-    8px 8px 0 0 var(--border-color);
-  transition:
-    border-color var(--transition-fast),
-    box-shadow var(--transition-fast);
+  transition: border-color var(--transition-fast);
+  /* layout+style contain only — no paint containment */
+  contain: layout style;
+}
+
+/* Keep cover top-corners rounded (card overflow:hidden would normally do this,
+   but the card sits above a wrapper so we set it explicitly) */
+.stack-card .periodical-cover {
+  border-radius: 10px 10px 0 0;
+}
+
+/* Highlight the card border on wrapper hover */
+.stack-card-wrap:hover .stack-card {
+  border-color: var(--primary-color);
 }
 
 /* + button inside library stack card — match Open button sizing */
@@ -25,28 +65,6 @@
   font-size: 18px;
   font-weight: 700;
   border-radius: var(--radius-sm);
-}
-
-.periodical-card.stack-card:hover {
-  border-color: var(--primary-color);
-  box-shadow:
-    4px 4px 0 -1px var(--surface),
-    4px 4px 0 0 var(--primary-color),
-    8px 8px 0 -1px var(--surface),
-    8px 8px 0 0 var(--primary-color);
-  overflow: visible;
-  contain: none;
-  z-index: 50;
-}
-
-/* Keep rounded corners when overflow is visible (no longer clipped by parent) */
-.periodical-card.stack-card:hover .periodical-cover {
-  border-radius: 10px 10px 0 0;
-}
-
-/* Allow cover area to overflow on hover */
-.periodical-card.stack-card:hover .stack-cover {
-  overflow: visible;
 }
 
 /* Fanned cover needs relative positioning for layers */
@@ -697,7 +715,7 @@
 }
 
 .stack-search-row.has-results {
-  background: rgba(34, 197, 94, 0.08);
+  background: rgba(34, 197, 94, 0.05);
 }
 
 .stack-search-row.error {
@@ -724,7 +742,7 @@
 }
 
 .stack-search-row.has-results .stack-search-row-result {
-  color: #22c55e;
+  color: var(--text-secondary);
 }
 
 .stack-search-summary {
@@ -742,7 +760,7 @@
 }
 
 .stack-search-stats .stat-available {
-  color: #22c55e;
+  color: var(--text-secondary);
 }
 
 .stack-search-stats .stat-error {
@@ -755,9 +773,9 @@
   font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
-  background: rgba(34, 197, 94, 0.15);
-  color: #22c55e;
-  border: 1px solid rgba(34, 197, 94, 0.3);
+  background: rgba(var(--primary-rgb), 0.12);
+  color: var(--primary-color);
+  border: 1px solid rgba(var(--primary-rgb), 0.25);
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition:
@@ -766,7 +784,7 @@
 }
 
 .stack-search-dl-btn:hover {
-  background: rgba(34, 197, 94, 0.25);
+  background: rgba(var(--primary-rgb), 0.22);
   transform: translateY(-1px);
 }
 
@@ -777,9 +795,9 @@
 }
 
 .stack-search-dl-btn.dl-done {
-  background: rgba(34, 197, 94, 0.1);
+  background: rgba(var(--primary-rgb), 0.07);
   border-color: transparent;
-  color: #22c55e;
+  color: var(--text-secondary);
   cursor: default;
 }
 
@@ -802,7 +820,7 @@
   font-size: 14px;
   font-weight: 700;
   white-space: nowrap;
-  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  background: var(--primary-color);
   color: var(--on-primary);
   border: none;
   border-radius: var(--radius-sm);
@@ -810,12 +828,12 @@
   transition:
     transform 0.15s ease,
     box-shadow 0.15s ease;
-  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+  box-shadow: 0 2px 8px rgba(var(--primary-rgb), 0.25);
 }
 
 .stack-search-dl-all-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
+  box-shadow: 0 4px 12px rgba(var(--primary-rgb), 0.35);
 }
 
 .stack-search-dl-all-btn:disabled {
@@ -826,7 +844,7 @@
 }
 
 .stack-search-dl-all-btn.dl-done {
-  background: linear-gradient(135deg, #065f46 0%, #064e3b 100%);
+  background: rgba(var(--primary-rgb), 0.35);
   box-shadow: none;
   cursor: default;
 }
