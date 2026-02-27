@@ -8,7 +8,7 @@
   padding: 8px 14px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  background: var(--surface-variant);
+  background: var(--input-bg);
   color: var(--text-secondary);
   font-size: 18px;
   line-height: 1;
@@ -27,12 +27,12 @@
 .bulk-select-btn:hover {
   background: var(--primary-color);
   border-color: var(--primary-color);
-  color: white;
+  color: var(--on-primary);
 }
 
 .bulk-select-btn.active {
   background: var(--primary-color);
-  color: white;
+  color: var(--on-primary);
   border-color: var(--primary-color);
 }
 
@@ -65,14 +65,14 @@
   border-color: var(--primary-color);
   box-shadow:
     0 0 0 2px var(--primary-color),
-    0 4px 12px rgb(99 102 241 / 0.3);
+    0 4px 12px rgba(var(--primary-rgb), 0.3);
 }
 
 .bulk-select-mode .issue-card.bulk-selected .issue-cover::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: rgb(99 102 241 / 0.1);
+  background: rgba(var(--primary-rgb), 0.1);
   pointer-events: none;
 }
 
@@ -141,7 +141,7 @@
 
 .bulk-btn {
   padding: 10px 18px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   font-weight: 600;
   font-size: 14px;
   cursor: pointer;
@@ -235,8 +235,8 @@
 .header-content-row .sort-controls select {
   padding: 8px 12px;
   border: 1px solid var(--border-color);
-  border-radius: 6px;
-  background: var(--surface);
+  border-radius: var(--radius-sm);
+  background: var(--input-bg);
   color: var(--text-primary);
   font-size: 14px;
   cursor: pointer;
@@ -252,12 +252,15 @@
    ========================================================================== */
 
 .periodical-header {
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
-  color: white;
-  padding: 20px 20px;
-  margin-bottom: 20px;
+  background: var(--surface-variant);
+  border: 1px solid var(--border-color);
+  border-left: 4px solid var(--primary-color);
+  color: var(--text-primary);
+  padding: 32px 24px;
+  margin-bottom: 24px;
   text-align: center;
-  border-radius: 8px;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
 }
 
 .periodical-header h1 {
@@ -268,26 +271,27 @@
 
 .periodical-header p {
   margin: 4px 0 0 0;
-  opacity: 0.9;
   font-size: 0.95em;
+  color: var(--text-secondary);
 }
 
 .back-button {
-  display: inline-block;
-  margin-bottom: 20px;
-  padding: 10px 20px;
-  background: var(--primary-color);
-  color: white;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 24px;
+  padding: 10px 24px;
+  background: var(--surface-variant);
+  color: var(--text-primary);
   text-decoration: none;
-  border-radius: var(--radius-md);
-  font-weight: 600;
-  transition:
-    background-color var(--transition-fast),
-    transform var(--transition-fast);
+  border-radius: var(--radius-xl);
+  font-weight: 500;
+  letter-spacing: 0.1px;
+  transition: all var(--transition-fast);
 }
 
 .back-button:hover {
-  background: var(--primary-dark);
+  background: var(--border-color);
   transform: translateY(-1px);
 }
 
@@ -308,7 +312,7 @@
 .special-edition-section {
   background: linear-gradient(135deg, rgba(255, 215, 0, 0.05) 0%, rgba(255, 193, 7, 0.05) 100%);
   padding: 20px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   margin-bottom: 60px;
   border: 2px solid rgba(255, 215, 0, 0.3);
 }
@@ -321,15 +325,16 @@
 
 .issues-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 180px));
   gap: 24px;
   margin-bottom: 40px;
 }
 
 .issue-card {
   background: var(--surface);
-  border: 2px solid var(--border-color);
-  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 0;
   overflow: hidden;
   transition:
     transform var(--transition-base),
@@ -338,13 +343,12 @@
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  contain: layout style paint;
 }
 
 .issue-card:hover {
   transform: translateY(-4px);
   border-color: var(--primary-color);
-  box-shadow: 0 8px 16px rgb(99 102 241 / 0.2);
+  box-shadow: 0 8px 16px rgba(var(--primary-rgb), 0.2);
 }
 
 .issue-cover {
@@ -359,6 +363,9 @@
 }
 
 .issue-cover img {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -399,13 +406,14 @@
 
 .issue-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   margin-top: 12px;
+  justify-content: flex-start;
 }
 
 .issue-actions button {
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   font-weight: 600;
   transition:
@@ -414,14 +422,26 @@
     transform var(--transition-fast),
     color var(--transition-fast);
   font-size: 13px;
-  padding: 8px 14px;
+  padding: 6px 10px;
 }
 
 .open-pdf-btn {
   flex: 1;
   background: var(--primary-color);
-  color: white;
-  white-space: nowrap;
+  color: var(--on-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-xl);
+  height: 36px;
+}
+
+.open-pdf-btn .btn-text {
+  display: inline;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .open-pdf-btn:hover {
@@ -431,14 +451,13 @@
 
 .metadata-btn,
 .delete-issue-btn {
+  flex: none;
   background: var(--surface-variant);
   color: var(--text-primary);
   border: 2px solid var(--border-color);
-  padding: 8px 10px;
-  min-width: auto;
-  font-size: 18px;
-  width: 40px;
-  height: 40px;
+  padding: 6px 8px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -447,7 +466,7 @@
 .metadata-btn:hover {
   background: var(--primary-color);
   border-color: var(--primary-color);
-  color: white;
+  color: var(--on-primary);
   transform: scale(1.1);
 }
 
@@ -468,7 +487,7 @@
 /* Status message styles - theme-aware */
 #status-message {
   padding: 15px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   border: 2px solid;
   font-weight: 500;
 }
@@ -523,16 +542,17 @@ body.dark-mode #status-message.status-error {
   border: 1px solid var(--border-color);
   width: 90%;
   max-width: 600px;
-  border-radius: 10px;
-  box-shadow: 0 8px 32px rgb(0 0 0 / 0.3);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xl);
   max-height: calc(100vh - 40px);
   display: flex;
   flex-direction: column;
 }
 
 .metadata-header {
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
-  color: white;
+  background: var(--surface-variant);
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
   padding: 20px;
   border-radius: 10px 10px 0 0;
   display: flex;
@@ -546,7 +566,7 @@ body.dark-mode #status-message.status-error {
 }
 
 .metadata-close {
-  color: white;
+  color: var(--text-secondary);
   font-size: 28px;
   font-weight: bold;
   cursor: pointer;
@@ -598,7 +618,7 @@ body.dark-mode #status-message.status-error {
 .metadata-value pre {
   background: var(--surface-variant);
   padding: 10px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   overflow-x: auto;
   font-size: 0.85em;
 }
@@ -650,9 +670,9 @@ body.dark-mode #status-message.status-error {
 .form-select {
   width: 100%;
   padding: 6px 8px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   border: 2px solid var(--border-color);
-  background: var(--surface);
+  background: var(--input-bg);
   color: var(--text-primary);
 }
 
@@ -674,7 +694,7 @@ body.dark-mode #status-message.status-error {
 .form-input-file {
   width: 100%;
   padding: 8px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   border: 2px dashed var(--border-color);
   background: var(--surface);
   color: var(--text-primary);
@@ -695,7 +715,7 @@ body.dark-mode #status-message.status-error {
 .cover-upload-preview img {
   max-width: 100%;
   max-height: 200px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   border: 2px solid var(--border-color);
 }
 
@@ -769,9 +789,9 @@ body.dark-mode #status-message.status-error {
   padding: 12px;
   margin-bottom: 20px;
   font-size: 14px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   border: 2px solid var(--border-color);
-  background: var(--surface);
+  background: var(--input-bg);
   color: var(--text-primary);
 }
 
@@ -784,17 +804,22 @@ body.dark-mode #status-message.status-error {
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
   .issues-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
+    gap: 16px;
     padding: 0 8px;
+    margin-bottom: 30px;
   }
 
   .issue-cover {
-    height: 160px;
+    height: 180px;
+  }
+
+  .issue-cover-placeholder {
+    font-size: 10px;
+    padding: 10px;
   }
 
   .issue-info {
-    padding: 8px;
+    padding: 10px;
   }
 
   .issue-actions {
@@ -812,26 +837,31 @@ body.dark-mode #status-message.status-error {
   .open-pdf-btn,
   .metadata-btn,
   .delete-issue-btn {
-    flex: 1 !important;
+    flex: none !important;
     height: 36px !important;
-    width: auto !important;
+    width: 36px !important;
+    min-width: 0 !important;
     padding: 0 !important;
-    font-size: 16px !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    border-radius: 8px !important;
+    border-radius: var(--radius-sm) !important;
     border: 2px solid var(--border-color) !important;
     background: var(--surface) !important;
     color: var(--text-primary) !important;
     cursor: pointer !important;
     transition: all 0.2s ease !important;
+    overflow: hidden !important;
   }
 
   .open-pdf-btn {
     background: var(--primary-color) !important;
     border-color: var(--primary-color) !important;
-    color: white !important;
+    color: var(--on-primary) !important;
+  }
+
+  .open-pdf-btn .btn-text {
+    display: none !important;
   }
 
   .open-pdf-btn:hover,
@@ -844,7 +874,7 @@ body.dark-mode #status-message.status-error {
   .metadata-btn:active {
     background: var(--primary-color) !important;
     border-color: var(--primary-color) !important;
-    color: white !important;
+    color: var(--on-primary) !important;
   }
 
   .delete-issue-btn:hover,
@@ -879,7 +909,7 @@ body.dark-mode #status-message.status-error {
     padding: 0 !important;
     font-size: 20px !important;
     flex-shrink: 0 !important;
-    border-radius: 10px !important;
+    border-radius: var(--radius-md) !important;
     border: 2px solid var(--border-color) !important;
     display: flex !important;
     align-items: center !important;

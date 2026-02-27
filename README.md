@@ -14,6 +14,8 @@ Automatically discover, download, and organize periodicals (magazines, comics, n
 - **Web Interface** - Modern, responsive UI to browse and manage your collection
 - **Background Tasks** - Automated monitoring, cleanup, and processing
 
+![Library](docs/screenshots/desktop_library.jpg)
+
 ## Requirements
 
 - Docker (recommended) or Python 3.13+
@@ -305,16 +307,18 @@ python main.py
 ### Available Commands
 
 ```bash
-make help           # Show all commands
-make install        # Install dependencies
-make run            # Run the application
-make test           # Run all tests
-make test-unit      # Fast unit tests only
-make test-coverage  # Run tests with coverage
-make lint           # Check code style
-make ci-lint        # CI linters (matches GitHub Actions)
-make format         # Auto-format code
-make clean          # Clean build artifacts
+make help                # Show all commands
+make install             # Install dependencies
+make run                 # Run the application
+make test                # Run all tests
+make test-unit           # Fast unit tests only
+make test-coverage       # Run tests with coverage
+make lint                # Check code style
+make ci-lint             # CI linters (matches GitHub Actions)
+make format              # Auto-format code
+make clean               # Clean build artifacts
+make screenshots         # Capture all UI screenshots (app must be running)
+make screenshot-library  # Capture library tab screenshot only
 ```
 
 The project includes a pre-push Git hook that runs `make ci-lint` automatically.

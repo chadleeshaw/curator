@@ -9,22 +9,29 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     /* Surface Colors */
-    --background: #1a1a1a;
-    --surface: #2d2d2d;
-    --surface-variant: #3d3d3d;
+    --background: #1a1b26; /* Page body — darkest layer */
+    --surface: #252640; /* Cards/containers */
+    --surface-variant: #30324f; /* Elevated panels / section headers */
 
     /* Text Colors */
-    --text-primary: #f0f0f0;
-    --text-secondary: #b0b0b0;
-    --text-disabled: #707070;
+    --text-primary: #f8f8f2; /* Dracula Foreground */
+    --text-secondary: #bfbfbf; /* Lightened comment */
+    --text-disabled: #6272a4; /* Dracula Comment */
 
     /* Border & Divider Colors */
-    --border-color: #4a4a4a;
-    --table-border: #4a4a4a;
-    --url-text: #999;
+    --border-color: #44475a;
+    --table-border: #44475a;
+    --input-border: #5a5d7a; /* Brighter border for form inputs — more visible on dark surfaces */
+    --url-text: #8be9fd; /* Dracula Cyan */
 
     /* Input Colors */
-    --input-bg: #4a4a4a;
+    --input-bg: #191a2a; /* Inset fields — noticeably darker than --surface */
+
+    /* Primary color override for dark mode */
+    --primary-color: #7b68ee; /* Saturated purple but not too bright */
+    --primary-rgb: 123, 104, 238;
+    --on-primary: #f8f8f2;
+    --primary-dark: #6a5acd;
   }
 
   :root:not([data-theme='light']) img {
@@ -39,22 +46,29 @@
 /* Manual dark mode toggle - class-based */
 body.dark-mode {
   /* Surface Colors */
-  --background: #1a1a1a;
-  --surface: #2d2d2d;
-  --surface-variant: #3d3d3d;
+  --background: #1a1b26; /* Page body — darkest layer */
+  --surface: #252640; /* Cards/containers */
+  --surface-variant: #30324f; /* Elevated panels / section headers */
 
   /* Text Colors */
-  --text-primary: #f0f0f0;
-  --text-secondary: #b0b0b0;
-  --text-disabled: #707070;
+  --text-primary: #f8f8f2; /* Dracula Foreground */
+  --text-secondary: #bfbfbf; /* Lightened comment */
+  --text-disabled: #6272a4; /* Dracula Comment */
 
   /* Border & Divider Colors */
-  --border-color: #4a4a4a;
-  --table-border: #4a4a4a;
-  --url-text: #999;
+  --border-color: #44475a;
+  --table-border: #44475a;
+  --input-border: #5a5d7a; /* Brighter border for form inputs — more visible on dark surfaces */
+  --url-text: #8be9fd; /* Dracula Cyan */
 
   /* Input Colors */
-  --input-bg: #4a4a4a;
+  --input-bg: #191a2a; /* Inset fields — noticeably darker than --surface */
+
+  /* Primary color override for dark mode */
+  --primary-color: #7b68ee; /* Saturated purple but not too bright */
+  --primary-rgb: 123, 104, 238;
+  --on-primary: #f8f8f2;
+  --primary-dark: #6a5acd;
 }
 
 /* Dark mode specific image adjustments */
@@ -69,28 +83,78 @@ body.dark-mode .periodical-card:hover img {
 /* Theme toggle button */
 .theme-toggle {
   position: fixed;
-  bottom: 20px;
-  right: 20px;
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
+  bottom: 24px;
+  right: 24px;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-lg); /* M3 rounded square FAB */
   background: var(--primary-color);
-  color: white;
+  color: var(--on-primary); /* On Primary */
   border: none;
   cursor: pointer;
   font-size: 24px;
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-md); /* M3 FAB elevation */
   transition:
-    transform 0.2s,
-    box-shadow 0.2s;
+    transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .theme-toggle:hover {
-  transform: scale(1.1);
-  box-shadow: var(--shadow-xl);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg); /* M3 FAB hovered elevation */
 }
 
 .theme-toggle:active {
-  transform: scale(0.95);
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm); /* M3 FAB pressed elevation */
+}
+
+/* ==========================================================================
+   Dark Mode Input Visual Definition
+   Use inset box-shadow to make inputs clearly legible on dark surfaces,
+   regardless of inline border styles that can't be overridden by cascade.
+   ========================================================================== */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light'])
+    input:not([type='checkbox'], [type='radio'], [type='range'], [type='submit'], [type='button']),
+  :root:not([data-theme='light']) select,
+  :root:not([data-theme='light']) textarea {
+    box-shadow:
+      0 0 0 1px var(--input-border),
+      inset 0 1px 3px rgba(0, 0, 0, 0.4);
+  }
+
+  :root:not([data-theme='light'])
+    input:not([type='checkbox'], [type='radio'], [type='range'], [type='submit'], [type='button']):focus,
+  :root:not([data-theme='light']) select:focus,
+  :root:not([data-theme='light']) textarea:focus {
+    box-shadow:
+      0 0 0 2px var(--primary-color),
+      inset 0 1px 3px rgba(0, 0, 0, 0.4);
+    outline: none;
+  }
+}
+
+body.dark-mode
+  input:not([type='checkbox'], [type='radio'], [type='range'], [type='submit'], [type='button']),
+body.dark-mode select,
+body.dark-mode textarea {
+  box-shadow:
+    0 0 0 1px var(--input-border),
+    inset 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+body.dark-mode
+  input:not([type='checkbox'], [type='radio'], [type='range'], [type='submit'], [type='button']):focus,
+body.dark-mode select:focus,
+body.dark-mode textarea:focus {
+  box-shadow:
+    0 0 0 2px var(--primary-color),
+    inset 0 1px 3px rgba(0, 0, 0, 0.4);
+  outline: none;
 }

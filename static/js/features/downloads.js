@@ -168,7 +168,7 @@ export class DownloadsManager {
     if (grouped.length === 0) {
       container.innerHTML = `
         <div class="${CSS_CLASSES.EMPTY_STATE}">
-          <div class="${CSS_CLASSES.EMPTY_STATE_ICON}">\u2705</div>
+          <div class="${CSS_CLASSES.EMPTY_STATE_ICON}"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg></div>
           <p class="${CSS_CLASSES.EMPTY_STATE_TITLE}">No failed downloads</p>
           <p class="${CSS_CLASSES.EMPTY_STATE_SUBTITLE}">All downloads completed successfully</p>
         </div>
@@ -204,7 +204,9 @@ export class DownloadsManager {
     grouped.forEach((group) => {
       const { periodical, permanentlyFailedCount, failedCount, totalCount, items } = group;
       const hasPermanentlyFailed = permanentlyFailedCount > 0;
-      const icon = hasPermanentlyFailed ? '\uD83D\uDEAB' : '\u26A0\uFE0F';
+      const icon = hasPermanentlyFailed
+        ? '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--status-failed)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>'
+        : '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--warning-color)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
 
       // Store group data in registry to avoid injecting JSON/user content into onclick attributes
       const registryId = this._failedGroupNextId++;
@@ -570,7 +572,7 @@ export class DownloadsManager {
       headerRow.innerHTML = `
         <td style="padding: 12px; font-weight: bold;">
           <div>
-            <span style="font-size: 1.1em;">\uD83D\uDCF0 ${periodical}</span>
+            <span style="font-size: 1.1em;">${periodical}</span>
             <span style="margin-left: 15px; font-size: 0.9em; color: var(--text-secondary);">${items.length} issues</span>
           </div>
           <div class="mobile-summary" style="display: none; margin-top: 6px;">
@@ -768,7 +770,7 @@ export class DownloadsManager {
     const waitTimeAlert = waitInfo
       ? `<div style="background: var(--surface-variant); padding: 10px; border-radius: 6px; margin-top: 10px; border-left: 3px solid var(--status-failed);">
            <div style="display: flex; align-items: center; gap: 8px;">
-             <span style="font-size: 1.3em;">⏱️</span>
+              <span style="font-size: 1.3em;"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--status-failed)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
              <div>
                <div style="font-weight: 600; color: var(--status-failed);">Rate Limited</div>
                <div style="font-size: 0.85em; color: var(--text-secondary);">
@@ -931,8 +933,8 @@ export class DownloadsManager {
       </div>
       <div class="modal-footer" style="display: flex; gap: 10px; justify-content: space-between; padding-top: 20px; border-top: 1px solid var(--border-color);">
         <div>
-          <button id="bulk-retry-btn" onclick="downloads.bulkRetryQueue()" class="btn-secondary">\uD83D\uDD04 Retry Failed</button>
-          <button id="bulk-remove-btn" onclick="downloads.bulkRemoveQueue()" class="btn-secondary" style="background: var(--status-failed);">\uD83D\uDDD1\uFE0F Remove All</button>
+          <button id="bulk-retry-btn" onclick="downloads.bulkRetryQueue()" class="btn-secondary"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Retry Failed</button>
+          <button id="bulk-remove-btn" onclick="downloads.bulkRemoveQueue()" class="btn-secondary" style="background: var(--status-failed);"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Remove All</button>
         </div>
         <button onclick="downloads.closeManageQueueModal()" class="save-btn">Close</button>
       </div>
@@ -1083,7 +1085,7 @@ export class DownloadsManager {
         </table>
       </div>
       <div class="modal-footer" style="display: flex; gap: 10px; justify-content: space-between; padding-top: 20px; border-top: 1px solid var(--border-color);">
-        <button id="bulk-retry-failed-btn" onclick="downloads.bulkRetryFailed()" class="btn-primary">\u27F3 Retry All</button>
+        <button id="bulk-retry-failed-btn" onclick="downloads.bulkRetryFailed()" class="btn-primary"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Retry All</button>
         <button onclick="downloads.closeManageFailedModal()" class="save-btn">Close</button>
       </div>
     `;
@@ -1708,7 +1710,7 @@ export class DownloadsManager {
         return;
       }
 
-      UIUtils.showStatus('downloads-status', '🗑️ Clearing pending downloads...', 'info');
+      UIUtils.showStatus('downloads-status', 'Clearing pending downloads...', 'info');
 
       const data = await APIHelper.executeWithErrorHandling(
         async () => {
@@ -1943,7 +1945,7 @@ export class DownloadsManager {
         return;
       }
 
-      UIUtils.showStatus('downloads-status', `🗑️ Clearing ${actualStatus} downloads...`, 'info');
+      UIUtils.showStatus('downloads-status', `Clearing ${actualStatus} downloads...`, 'info');
 
       const endpoint = `/api/downloads/queue/${actualStatus}`;
       const data = await APIHelper.executeWithErrorHandling(

@@ -68,6 +68,8 @@ from core.constants.date import MONTH_TO_NUMBER
 make run                    # Start application
 make install                # Install dependencies
 make install-hooks          # Install git pre-push hooks
+make screenshots            # Capture all UI screenshots (app must be running)
+make screenshot-library     # Capture library tab screenshot only
 ```
 
 ### Testing
@@ -163,10 +165,12 @@ curator/
 │   │   └── readers/     # PDF, EPUB, comic readers
 │   └── css/
 ├── templates/           # HTML templates
-└── tests/               # Test suite
-    ├── unit/
-    ├── integration/
-    └── e2e/
+├── tests/               # Test suite
+│   ├── unit/
+│   ├── integration/
+│   └── e2e/
+└── tools/               # Dev tooling
+    └── screenshots/     # Playwright screenshot scripts (output → docs/screenshots/)
 ```
 
 ---
@@ -219,6 +223,7 @@ UNKNOWN_ISSUE_DATE_YEAR = 1900
 ```
 
 When adding new constants:
+
 1. Find appropriate file in `core/constants/` by domain
 2. Add constant with descriptive docstring
 3. Export from `core/constants/__init__.py` if widely used
@@ -262,6 +267,7 @@ logger.error("Error occurred", exc_info=True)
 #### Code Cleanliness
 
 **No unused code:**
+
 - No unused imports
 - No unused variables
 - No unused functions
@@ -348,7 +354,7 @@ class TestFilenameParser:
         """Test parsing month and year from filename"""
         parser = FilenameParser()
         result = parser.extract_from_nzb_title("Magazine - Jan2024")
-        
+
         assert result["month"] == 1
         assert result["year"] == 2024
 ```
@@ -439,6 +445,7 @@ __all__ = [
 ### Config Synchronization
 
 The application automatically synchronizes user configuration with `config.template.yaml` on startup:
+
 - User values are preserved
 - New options added with defaults
 - Deprecated keys removed
@@ -514,7 +521,8 @@ The validation logic is in services/file_organizer/core.py:459
 
 ---
 
-**Remember**: 
+**Remember**:
+
 - Always use `.venv/bin/python` for Python commands
 - Run `make ci-lint` before committing
 - Keep code clean - no unused imports/variables

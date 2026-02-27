@@ -391,8 +391,9 @@ export function createIssueCard(
 
   const openButton = document.createElement('button');
   openButton.className = 'open-pdf-btn';
-  openButton.textContent = '📖';
   openButton.title = 'Open file';
+  openButton.innerHTML =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg> <span class="btn-text">Open</span>';
   openButton.onclick = (e) => {
     e.stopPropagation();
     openPDF(issue.id);
@@ -401,8 +402,9 @@ export function createIssueCard(
 
   const metadataButton = document.createElement('button');
   metadataButton.className = 'metadata-btn';
-  metadataButton.textContent = 'ℹ️';
   metadataButton.title = 'View metadata';
+  metadataButton.innerHTML =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
   metadataButton.onclick = (e) => {
     e.stopPropagation();
     viewMetadata(issue.id);
@@ -411,7 +413,8 @@ export function createIssueCard(
 
   const deleteButton = document.createElement('button');
   deleteButton.className = 'delete-issue-btn';
-  deleteButton.textContent = '🗑️';
+  deleteButton.innerHTML =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
   deleteButton.title = 'Delete this issue';
   deleteButton.onclick = (e) => {
     e.stopPropagation();

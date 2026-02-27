@@ -106,7 +106,7 @@ if (document.getElementById('periodical-sort-select')) {
 
 initMetadata(state);
 initActions(state);
-initBreadcrumb();
+initBreadcrumb(); // async — updates breadcrumb once stack name is fetched
 initBulkOps(state, rerender);
 
 // ---------------------------------------------------------------------------

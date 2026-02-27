@@ -175,30 +175,57 @@ export function goBack() {
  * Detect if navigated from a stack detail page and update the breadcrumb accordingly.
  * Called once during initialisation.
  */
-export function initBreadcrumb() {
+export async function initBreadcrumb() {
   try {
-    const ref = document.referrer;
-    if (ref) {
-      const refUrl = new URL(ref);
-      const stackMatch = refUrl.pathname.match(/^\/stacks\/([^/]+)/);
-      if (stackMatch) {
-        window._stackReturnUrl = refUrl.pathname;
-        const breadcrumb = document.getElementById('breadcrumb');
-        if (breadcrumb) {
-          const stackSlug = stackMatch[1];
-          const title = document.getElementById('periodical-title')?.textContent || '';
-          const stackName = UIUtils.toTitleCase(decodeURIComponent(stackSlug).replace(/-/g, ' '));
-          breadcrumb.innerHTML =
-            `<a href="/#library">Library</a>` +
-            `<span class="separator">/</span>` +
-            `<a href="/stacks/${stackSlug}">${stackName}</a>` +
-            `<span class="separator">/</span>` +
-            `<span class="current">${title}</span>`;
+    const urlParams = new URLSearchParams(window.location.search);
+    const paramStackName = urlParams.get('from_stack_name');
+    const paramStackSlug = urlParams.get('from_stack_slug');
+
+    // Determine the stack slug — prefer URL param, fall back to referrer path
+    let stackSlug = paramStackSlug || null;
+    let stackReturnPath = stackSlug ? `/stacks/${stackSlug}` : null;
+
+    if (!stackSlug) {
+      const ref = document.referrer;
+      if (ref) {
+        const refUrl = new URL(ref);
+        const stackMatch = refUrl.pathname.match(/^\/stacks\/([^/]+)/);
+        if (stackMatch) {
+          stackSlug = stackMatch[1];
+          stackReturnPath = refUrl.pathname;
         }
       }
     }
+
+    if (!stackSlug) return;
+
+    window._stackReturnUrl = stackReturnPath;
+    const breadcrumb = document.getElementById('breadcrumb');
+    if (!breadcrumb) return;
+
+    const title = document.getElementById('periodical-title')?.textContent || '';
+
+    let stackName = paramStackName;
+    if (!stackName) {
+      // Fall back: fetch from API (covers direct navigation / bookmarks)
+      try {
+        const response = await APIClient.get(`/api/stacks/${stackSlug}`);
+        const data = await response.json();
+        if (data.name) stackName = data.name;
+      } catch {
+        // Last resort: derive from slug
+        stackName = UIUtils.toTitleCase(decodeURIComponent(stackSlug).replace(/-/g, ' '));
+      }
+    }
+
+    breadcrumb.innerHTML =
+      `<a href="/#library">Library</a>` +
+      `<span class="separator">/</span>` +
+      `<a href="/stacks/${stackSlug}">${stackName}</a>` +
+      `<span class="separator">/</span>` +
+      `<span class="current">${title}</span>`;
   } catch {
-    // Ignore referrer parsing errors
+    // Ignore breadcrumb errors
   }
 }
 

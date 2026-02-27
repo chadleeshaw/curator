@@ -11,16 +11,32 @@
   padding: 24px;
 }
 
+/* Detail pages (stack, periodical) wrap their content in a surface card
+   so they match the Library tab's visual depth */
+.container.detail-page {
+  background: var(--surface);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-color);
+}
+
+/* On detail pages, stretch the surface card to fill remaining viewport height.
+   The breadcrumb nav is ~44px; subtract that plus the container's top margin (12px). */
+.detail-body .container.detail-page {
+  margin-top: 12px;
+  min-height: calc(100vh - 104px);
+}
+
 /* ==========================================================================
    Header
    ========================================================================== */
 
 header {
   background: var(--surface);
-  padding: 16px 32px;
-  border-radius: 12px;
-  box-shadow: var(--shadow-md);
-  margin-bottom: 28px;
+  padding: 12px 32px;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 12px;
   text-align: center;
   max-height: 300px;
   overflow: hidden;
@@ -28,16 +44,16 @@ header {
 
 header h1 {
   color: var(--primary-color);
-  margin-bottom: 2px;
-  margin-top: 2px;
-  font-size: 36px;
+  margin-bottom: 0;
+  margin-top: 0;
+  font-size: 24px;
   font-weight: 700;
   letter-spacing: -0.5px;
 }
 
 header p {
   color: var(--text-secondary);
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 400;
   margin: 0;
 }
@@ -62,18 +78,18 @@ header p {
   align-items: center;
   gap: 8px;
   padding: 8px 14px;
-  background: rgba(99, 102, 241, 0.1);
-  border: 1px solid rgba(99, 102, 241, 0.3);
-  border-radius: 8px;
+  background: var(--surface-variant);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl);
   color: var(--text-primary);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  letter-spacing: 0.1px;
   transition: all 0.2s ease;
 }
 
 .stat-badge:hover {
-  background: rgba(99, 102, 241, 0.15);
-  border-color: rgba(99, 102, 241, 0.5);
+  background: var(--border-color);
   transform: translateX(2px);
 }
 
@@ -100,16 +116,18 @@ header p {
 
 .coin-emoji {
   display: inline-block;
-  font-size: 5em;
+  font-size: 3em;
   animation: coin-flip-once 1.5s ease-in-out;
-  filter: drop-shadow(0 4px 12px rgba(99, 102, 241, 0.4)) drop-shadow(0 8px 16px rgba(0, 0, 0, 0.3));
+  filter: drop-shadow(0 4px 12px rgba(var(--primary-rgb), 0.4))
+    drop-shadow(0 8px 16px rgba(0, 0, 0, 0.3));
   transition: all 0.3s ease;
 }
 
 .coin-emoji:hover {
   animation: coin-flip 1s ease-in-out infinite;
-  filter: drop-shadow(0 4px 20px rgba(99, 102, 241, 0.8))
-    drop-shadow(0 8px 24px rgba(99, 102, 241, 0.4)) drop-shadow(0 12px 32px rgba(0, 0, 0, 0.4));
+  filter: drop-shadow(0 4px 20px rgba(var(--primary-rgb), 0.8))
+    drop-shadow(0 8px 24px rgba(var(--primary-rgb), 0.4))
+    drop-shadow(0 12px 32px rgba(0, 0, 0, 0.4));
   transform: scale(1.05);
 }
 
@@ -154,17 +172,22 @@ header p {
   top: 0;
   right: 0;
   padding: 8px 16px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  border-radius: 4px;
+  background: var(--surface-variant);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl);
   cursor: pointer;
-  font-size: 14px;
-  transition: opacity 0.2s;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  letter-spacing: 0.1px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
 }
 
 .logout-btn:hover {
-  opacity: 0.9;
+  background: var(--border-color);
 }
 
 /* ==========================================================================
@@ -235,28 +258,29 @@ nav:not(.breadcrumb) {
 nav:not(.breadcrumb) {
   display: flex;
   gap: 8px;
-  margin-bottom: 28px;
+  margin-bottom: 12px;
   background: var(--surface);
   padding: 8px;
-  border-radius: 12px;
-  box-shadow: var(--shadow-md);
+  border-radius: var(--radius-xl); /* M3 fully rounded container */
+  box-shadow: var(--shadow-sm);
 }
 
 .nav-btn {
   flex: 1;
-  padding: 12px 20px;
+  padding: 12px 24px;
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  border-radius: 8px;
+  border-radius: var(--radius-xl); /* Pill shape for active indicators */
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--font-size-sm);
+  font-weight: 500; /* M3 label-large */
+  letter-spacing: 0.1px;
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .nav-icon {
@@ -268,14 +292,14 @@ nav:not(.breadcrumb) {
 }
 
 .nav-btn:hover {
-  background: rgba(99, 102, 241, 0.1);
-  color: var(--primary-color);
+  background: var(--surface-variant);
+  color: var(--text-primary);
 }
 
 .nav-btn.active {
   background: var(--primary-color);
-  color: white;
-  box-shadow: var(--shadow-md);
+  color: var(--on-primary);
+  box-shadow: var(--shadow-sm); /* Added small shadow back */
 }
 
 /* ==========================================================================
@@ -326,10 +350,11 @@ nav:not(.breadcrumb) {
 .tasks-container,
 .queue-container,
 .settings-container {
-  padding: 30px;
+  padding: 32px;
   background: var(--surface);
-  border-radius: 10px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-color);
   position: relative;
   max-width: 100%;
   box-sizing: border-box;
@@ -346,7 +371,7 @@ nav:not(.breadcrumb) {
   margin-bottom: 30px;
   padding: 15px;
   background: var(--surface-variant);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   flex-wrap: wrap;
 }
 
@@ -383,7 +408,7 @@ nav:not(.breadcrumb) {
 .queue-select {
   padding: 8px 12px;
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--text-primary);
   font-size: 14px;

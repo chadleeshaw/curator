@@ -729,7 +729,8 @@ export class LibraryManager {
       // No covers at all - show placeholder
       const placeholder = document.createElement('div');
       placeholder.className = 'stack-cover-placeholder';
-      placeholder.textContent = '📚';
+      placeholder.innerHTML =
+        '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>';
       cover.appendChild(placeholder);
     } else if (coverIds.length === 1) {
       // Single cover - show full size
@@ -774,14 +775,25 @@ export class LibraryManager {
     h4.textContent = stack.name;
     info.appendChild(h4);
 
-    if (stack.description) {
-      const desc = document.createElement('p');
-      desc.textContent = stack.description;
-      desc.style.overflow = 'hidden';
-      desc.style.textOverflow = 'ellipsis';
-      desc.style.whiteSpace = 'nowrap';
-      info.appendChild(desc);
-    }
+    const desc = document.createElement('p');
+    desc.textContent = stack.description || '';
+    desc.style.overflow = 'hidden';
+    desc.style.textOverflow = 'ellipsis';
+    desc.style.whiteSpace = 'nowrap';
+    desc.style.visibility = stack.description ? 'visible' : 'hidden';
+    info.appendChild(desc);
+
+    // Derive latest issue date from the items array
+    const latestDate = items.reduce((best, item) => {
+      if (!item.issue_date) return best;
+      const d = new Date(item.issue_date);
+      return !best || d > best ? d : best;
+    }, null);
+
+    const latestP = document.createElement('p');
+    latestP.textContent = latestDate ? `Latest: ${latestDate.toLocaleDateString()}` : '';
+    latestP.style.visibility = latestDate ? 'visible' : 'hidden';
+    info.appendChild(latestP);
 
     const countP = document.createElement('p');
     countP.textContent = `${stack.member_count} periodical${stack.member_count !== 1 ? 's' : ''}`;
@@ -792,9 +804,9 @@ export class LibraryManager {
     actionsDiv.className = 'periodical-actions';
 
     const viewBtn = document.createElement('button');
-    viewBtn.className = 'stack-toggle-btn';
+    viewBtn.className = 'btn-primary card-open-btn';
+    viewBtn.textContent = 'Open';
     viewBtn.setAttribute('aria-label', 'Open stack');
-    viewBtn.innerHTML = '<span class="stack-toggle-icon">→</span>';
     viewBtn.onclick = (e) => {
       e.stopPropagation();
       window.location.href = `/stacks/${stack.slug}`;
@@ -809,7 +821,20 @@ export class LibraryManager {
       window.location.href = `/stacks/${stack.slug}`;
     };
 
-    return card;
+    // Wrap in a positioning container. Two real sibling divs act as the
+    // "stacked paper" layers — they sit before the card in DOM order so
+    // they paint behind it without any z-index stacking context tricks.
+    const wrap = document.createElement('div');
+    wrap.className = 'stack-card-wrap';
+    const layer1 = document.createElement('div');
+    layer1.className = 'stack-layer stack-layer-1';
+    const layer2 = document.createElement('div');
+    layer2.className = 'stack-layer stack-layer-2';
+    wrap.appendChild(layer2); // deepest first
+    wrap.appendChild(layer1);
+    wrap.appendChild(card);
+
+    return wrap;
   }
 
   /**
@@ -914,12 +939,8 @@ export class LibraryManager {
 
     // View button
     const viewBtn = document.createElement('button');
-    viewBtn.className = 'btn-primary';
+    viewBtn.className = 'btn-primary card-open-btn';
     viewBtn.textContent = 'Open';
-    viewBtn.style.flex = '1';
-    viewBtn.style.padding = '8px 14px';
-    viewBtn.style.fontSize = '13px';
-    viewBtn.style.fontWeight = '600';
     viewBtn.onclick = (e) => {
       e.stopPropagation();
       e.preventDefault();
@@ -930,7 +951,8 @@ export class LibraryManager {
     // Delete button
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'btn-icon btn-danger';
-    deleteBtn.textContent = '\uD83D\uDDD1\uFE0F';
+    deleteBtn.innerHTML =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
     deleteBtn.title = 'Delete this periodical';
     deleteBtn.onclick = (e) => {
       e.stopPropagation();

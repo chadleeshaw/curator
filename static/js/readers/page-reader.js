@@ -51,14 +51,20 @@ export class PageReader {
     this.metadata = null;
     this.currentPageIndex = 0;
     this.loading = false;
-    // Mobile portrait: fit-width, Desktop/landscape: fit-height
+    // Fit mode: restore saved preference, fall back to viewport heuristic
+    const _savedFitMode = localStorage.getItem('reader-fit-mode');
     this.fitMode =
-      window.innerWidth <= 768 && window.innerHeight > window.innerWidth
+      _savedFitMode ||
+      (window.innerWidth <= 768 && window.innerHeight > window.innerWidth
         ? 'fit-width'
-        : 'fit-height';
+        : 'fit-height');
     this.zoomLevel = 100; // 50-400%
-    // Default to spread mode on desktop or landscape orientation
-    this.spreadMode = window.innerWidth > 768 || window.innerWidth > window.innerHeight;
+    // Spread mode: restore saved preference, fall back to viewport heuristic
+    const _savedSpread = localStorage.getItem('reader-spread-mode');
+    this.spreadMode =
+      _savedSpread !== null
+        ? _savedSpread === 'true'
+        : window.innerWidth > 768 || window.innerWidth > window.innerHeight;
     this.coverPageIndex = 0; // Index of the cover page (default 0)
     this.prefetchCache = new Map(); // Cache for prefetched images
     this.workerInitialized = false; // Media worker status
@@ -159,7 +165,9 @@ export class PageReader {
       const spreadBtn = document.getElementById('spread-btn');
       if (spreadBtn) {
         spreadBtn.classList.toggle('active', this.spreadMode);
-        spreadBtn.textContent = this.spreadMode ? '📖' : '📄';
+        spreadBtn.innerHTML = this.spreadMode
+          ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>'
+          : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
         spreadBtn.title = this.spreadMode ? 'Single page mode (S)' : 'Two-page spread mode (S)';
       }
 
@@ -519,6 +527,7 @@ export class PageReader {
    */
   setFitMode(mode) {
     this.fitMode = mode;
+    localStorage.setItem('reader-fit-mode', mode);
 
     const singleContainer = document.querySelector('.page-image-container');
     const spreadContainer = document.querySelector('.page-spread-container');
@@ -641,10 +650,13 @@ export class PageReader {
    */
   async toggleSpreadMode() {
     this.spreadMode = !this.spreadMode;
+    localStorage.setItem('reader-spread-mode', String(this.spreadMode));
     const btn = document.getElementById('spread-btn');
     if (btn) {
       btn.classList.toggle('active', this.spreadMode);
-      btn.textContent = this.spreadMode ? '📖' : '📄';
+      btn.innerHTML = this.spreadMode
+        ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>'
+        : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
       btn.title = this.spreadMode ? 'Single page mode' : 'Two-page spread mode';
     }
     await this.loadPage(this.currentPageIndex);
@@ -678,18 +690,22 @@ export class PageReader {
 
       if (shouldBeSpread !== this.spreadMode) {
         this.spreadMode = shouldBeSpread;
+        localStorage.setItem('reader-spread-mode', String(this.spreadMode));
         needsReload = true;
 
         const spreadBtn = document.getElementById('spread-btn');
         if (spreadBtn) {
           spreadBtn.classList.toggle('active', this.spreadMode);
-          spreadBtn.textContent = this.spreadMode ? '📖' : '📄';
+          spreadBtn.innerHTML = this.spreadMode
+            ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>'
+            : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
           spreadBtn.title = this.spreadMode ? 'Single page mode (S)' : 'Two-page spread mode (S)';
         }
       }
 
       if (shouldBeFitMode !== this.fitMode) {
         this.fitMode = shouldBeFitMode;
+        localStorage.setItem('reader-fit-mode', this.fitMode);
         needsReload = true;
 
         document.querySelectorAll('.fit-btn[data-mode]').forEach((btn) => {

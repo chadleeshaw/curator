@@ -190,9 +190,15 @@ function goBack() {
  */
 function navigateToItem(item) {
   let url = `/periodicals/${encodeURIComponent(item.title)}`;
-  if (item.language) {
-    url += `?language=${encodeURIComponent(item.language)}`;
-  }
+  const params = new URLSearchParams();
+  if (item.language) params.set('language', item.language);
+  // Pass stack name and slug so the periodical breadcrumb can use them without an extra API call
+  const stackNameEl = document.getElementById('stack-title');
+  if (stackNameEl) params.set('from_stack_name', stackNameEl.textContent.trim());
+  const slugMatch = window.location.pathname.match(/^\/stacks\/([^/]+)/);
+  if (slugMatch) params.set('from_stack_slug', slugMatch[1]);
+  const qs = params.toString();
+  if (qs) url += `?${qs}`;
   window.location.href = url;
 }
 
@@ -271,11 +277,20 @@ function createMemberCard(item) {
   }
   info.appendChild(subtitle);
 
-  // Add inline navigation hint at bottom of info section
-  const navHint = document.createElement('div');
-  navHint.className = 'stack-detail-nav-hint';
-  navHint.textContent = 'View →';
-  info.appendChild(navHint);
+  // Action buttons matching library card style
+  const actionsDiv = document.createElement('div');
+  actionsDiv.className = 'periodical-actions';
+
+  const openBtn = document.createElement('button');
+  openBtn.className = 'btn-primary card-open-btn';
+  openBtn.textContent = 'Open';
+  openBtn.setAttribute('aria-label', `Open ${item.title}`);
+  openBtn.onclick = (e) => {
+    e.stopPropagation();
+    navigateToItem(item);
+  };
+  actionsDiv.appendChild(openBtn);
+  info.appendChild(actionsDiv);
 
   card.appendChild(info);
 
@@ -298,7 +313,8 @@ async function searchStack() {
   const titleEl = document.getElementById('stack-search-title');
 
   searchBtn.disabled = true;
-  searchBtn.textContent = '⏳ Searching...';
+  searchBtn.innerHTML =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M8 16H3v5"/></svg> Searching...';
   panel.classList.remove('hidden');
   summary.classList.add('hidden');
   titleEl.textContent = `Searching ${trackedMembers.length} tracked item${trackedMembers.length !== 1 ? 's' : ''}...`;
@@ -328,7 +344,8 @@ async function searchStack() {
     const actionsEl = document.getElementById(`search-actions-${i}`);
     const rowEl = document.getElementById(`search-row-${i}`);
 
-    statusEl.textContent = '🔄';
+    statusEl.innerHTML =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>';
     resultEl.textContent = 'Searching...';
     rowEl.classList.add('searching');
 
@@ -372,7 +389,8 @@ async function searchStack() {
               .filter((issue) => issue.url),
           });
 
-          statusEl.textContent = '📥';
+          statusEl.innerHTML =
+            '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17V3"/><path d="m6 11 6 6 6-6"/><path d="M19 21H5"/></svg>';
           resultEl.innerHTML = `<strong>${available}</strong> available, ${inLib} in library`;
           actionsEl.innerHTML = `<button class="stack-search-dl-btn" onclick="downloadMemberIssues(${i})" title="Download ${available} issues">⬇ ${available}</button>`;
           rowEl.classList.add('has-results');
@@ -401,11 +419,11 @@ async function searchStack() {
   summary.classList.remove('hidden');
   let summaryHtml = `<div class="stack-search-stats">`;
   if (totalAvailable > 0) {
-    summaryHtml += `<span class="stat stat-available">📥 <strong>${totalAvailable}</strong> new issue${totalAvailable !== 1 ? 's' : ''} available</span>`;
+    summaryHtml += `<span class="stat stat-available"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17V3"/><path d="m6 11 6 6 6-6"/><path d="M19 21H5"/></svg> <strong>${totalAvailable}</strong> new issue${totalAvailable !== 1 ? 's' : ''} available</span>`;
   } else {
     summaryHtml += `<span class="stat">✅ All up to date</span>`;
   }
-  summaryHtml += `<span class="stat">📚 <strong>${totalInLibrary}</strong> already in library</span>`;
+  summaryHtml += `<span class="stat"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/></svg> <strong>${totalInLibrary}</strong> already in library</span>`;
   if (totalErrors > 0) {
     summaryHtml += `<span class="stat stat-error">❌ ${totalErrors} error${totalErrors !== 1 ? 's' : ''}</span>`;
   }
@@ -418,7 +436,8 @@ async function searchStack() {
   summary.innerHTML = summaryHtml;
 
   searchBtn.disabled = false;
-  searchBtn.textContent = '🔍 Search for Issues';
+  searchBtn.innerHTML =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg> Search for Issues';
   isSearching = false;
 }
 

@@ -244,28 +244,21 @@ export class TrackingManager {
    */
   populateFormDropdowns() {
     // Populate language dropdown
-    // Populate language dropdowns (new, edit, and search filter)
+    // Populate language dropdowns (new, edit)
     const languageSelects = [
       document.getElementById('new-tracking-language'),
       document.getElementById('edit-tracking-language'),
-      document.getElementById('search-filter-language'),
     ];
     languageSelects.forEach((languageSelect) => {
       if (languageSelect && SUPPORTED_LANGUAGES.length > 0) {
-        // Keep existing options for search filter (it has a hard-coded "Any Language" option)
-        const existingOptions =
-          languageSelect.id === 'search-filter-language' ? languageSelect.innerHTML : '';
-
-        languageSelect.innerHTML = existingOptions || '';
+        languageSelect.innerHTML = '';
 
         // For new/edit tracking dropdowns, prepend an "Any" option so users can track
         // a title across all languages without being locked to English.
-        if (languageSelect.id !== 'search-filter-language') {
-          const anyOption = document.createElement('option');
-          anyOption.value = '';
-          anyOption.textContent = 'Any';
-          languageSelect.appendChild(anyOption);
-        }
+        const anyOption = document.createElement('option');
+        anyOption.value = '';
+        anyOption.textContent = 'Any';
+        languageSelect.appendChild(anyOption);
 
         SUPPORTED_LANGUAGES.forEach((lang) => {
           const option = document.createElement('option');
@@ -276,11 +269,10 @@ export class TrackingManager {
       }
     });
 
-    // Populate country dropdowns (new, edit, and search filter)
+    // Populate country dropdowns (new, edit)
     const countrySelects = [
       document.getElementById('new-tracking-country'),
       document.getElementById('edit-tracking-country'),
-      document.getElementById('search-filter-country'),
     ];
     countrySelects.forEach((countrySelect) => {
       if (countrySelect && Object.keys(ISO_COUNTRIES).length > 0) {
@@ -305,7 +297,7 @@ export class TrackingManager {
             const option = document.createElement('option');
             option.value = code;
             option.textContent = `${name} (${code})`;
-            if (code === 'US' && countrySelect.id !== 'search-filter-country') {
+            if (code === 'US') {
               option.selected = true;
             }
             countrySelect.appendChild(option);
@@ -322,8 +314,6 @@ export class TrackingManager {
    */
   async searchPeriodicalMetadata() {
     const query = document.getElementById(ELEMENT_IDS.TRACKING_SEARCH_QUERY)?.value.trim() ?? '';
-    const filterLanguage = document.getElementById(ELEMENT_IDS.SEARCH_FILTER_LANGUAGE)?.value ?? '';
-    const filterCountry = document.getElementById(ELEMENT_IDS.SEARCH_FILTER_COUNTRY)?.value ?? '';
     const filterCategory = document.getElementById(ELEMENT_IDS.NEW_TRACKING_CATEGORY)?.value ?? '';
 
     if (!query) {
@@ -344,14 +334,6 @@ export class TrackingManager {
       const params = new URLSearchParams({
         query: query,
       });
-
-      if (filterLanguage) {
-        params.append('language', filterLanguage);
-      }
-
-      if (filterCountry) {
-        params.append('country', filterCountry);
-      }
 
       if (filterCategory) {
         params.append('category', filterCategory);
@@ -375,8 +357,6 @@ export class TrackingManager {
         result.classList.remove(CSS_CLASSES.HIDDEN);
       } else {
         const filterInfo = [];
-        if (filterLanguage) filterInfo.push(`Language: ${filterLanguage}`);
-        if (filterCountry) filterInfo.push(`Country: ${filterCountry}`);
         if (filterCategory) filterInfo.push(`Category: ${filterCategory}`);
         const filterText = filterInfo.length > 0 ? ` (Filters: ${filterInfo.join(', ')})` : '';
         error.textContent = `${data.message || 'Periodical not found'}${filterText}`;
@@ -481,12 +461,12 @@ export class TrackingManager {
 
       // Show provider badge for IA items
       const providerBadge = periodical.isInternetArchive
-        ? '<span class="provider-badge ia-badge">🏛️ Internet Archive</span>'
+        ? '<span class="provider-badge ia-badge">Internet Archive</span>'
         : '';
 
       // Show collection badge for collection archives
       const collectionBadge = periodical.isCollection
-        ? '<span class="provider-badge collection-badge">📦 Collection</span>'
+        ? '<span class="provider-badge collection-badge">Collection</span>'
         : '';
 
       div.innerHTML = `
@@ -575,43 +555,31 @@ export class TrackingManager {
       categorySelect.value = '';
     }
 
-    // Set language (from filters or detect from title using centralized keywords)
-    const currentFilterLanguage = document.getElementById('search-filter-language')?.value;
-    if (currentFilterLanguage && currentFilterLanguage !== '') {
-      languageSelect.value = currentFilterLanguage;
-    } else {
-      // Try to detect from title using centralized LANGUAGE_KEYWORDS
-      let detectedLanguage = ''; // Default to Any
-      for (const [language, keywords] of Object.entries(LANGUAGE_KEYWORDS)) {
-        if (keywords.some((keyword) => result.title.includes(keyword))) {
-          detectedLanguage = language;
-          break;
-        }
+    // Set language (detect from title using centralized keywords)
+    let detectedLanguage = ''; // Default to Any
+    for (const [language, keywords] of Object.entries(LANGUAGE_KEYWORDS)) {
+      if (keywords.some((keyword) => result.title.includes(keyword))) {
+        detectedLanguage = language;
+        break;
       }
-      languageSelect.value = detectedLanguage;
+    }
+    languageSelect.value = detectedLanguage;
+
+    // Set country (detect from title using centralized indicators)
+    let detectedCountry = '';
+    for (const [code, indicators] of Object.entries(COUNTRY_INDICATORS)) {
+      if (indicators.some((ind) => result.title.includes(ind))) {
+        detectedCountry = code;
+        break;
+      }
     }
 
-    // Set country (from filters or detect from title using centralized indicators)
-    const currentFilterCountry = document.getElementById('search-filter-country')?.value;
-    if (currentFilterCountry && currentFilterCountry !== '') {
-      countrySelect.value = currentFilterCountry;
-    } else {
-      // Try to detect from title using centralized COUNTRY_INDICATORS
-      let detectedCountry = '';
-      for (const [code, indicators] of Object.entries(COUNTRY_INDICATORS)) {
-        if (indicators.some((ind) => result.title.includes(ind))) {
-          detectedCountry = code;
-          break;
-        }
-      }
-
-      // If no country detected, try to infer from detected language
-      if (!detectedCountry && languageSelect.value && LANGUAGE_TO_COUNTRY[languageSelect.value]) {
-        detectedCountry = LANGUAGE_TO_COUNTRY[languageSelect.value];
-      }
-
-      countrySelect.value = detectedCountry || ''; // Default to none
+    // If no country detected, try to infer from detected language
+    if (!detectedCountry && languageSelect.value && LANGUAGE_TO_COUNTRY[languageSelect.value]) {
+      detectedCountry = LANGUAGE_TO_COUNTRY[languageSelect.value];
     }
+
+    countrySelect.value = detectedCountry || ''; // Default to none
 
     // Hide the search results
     document.getElementById(ELEMENT_IDS.TRACKING_SEARCH_RESULT).classList.add(CSS_CLASSES.HIDDEN);
@@ -777,12 +745,12 @@ export class TrackingManager {
       const filterDesc = this.filterManager.getActiveFilterDescription();
       container.innerHTML = `
         <div class="empty-state">
-          <div class="empty-state-icon">📚</div>
+          <div class="empty-state-icon"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></div>
           <h3>No Tracked Periodicals Found</h3>
           <p>No periodicals found${filterDesc}.</p>
           ${
             !this.filterManager.hasActiveFilters()
-              ? '<button onclick="openTrackNewPeriodicalModal()" class="btn-primary" style="margin-top: 16px;">📌 Track Your First Periodical</button>'
+              ? "<button onclick=\"openTrackNewPeriodicalModal()\" class=\"btn-primary\" style=\"margin-top: 16px;\"><svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z'/><circle cx='12' cy='10' r='3'/></svg> Track Your First Periodical</button>"
               : '<button onclick="clearTrackingFilters()" class="btn-secondary" style="margin-top: 16px;">✕ Clear Filters</button>'
           }
         </div>
@@ -868,7 +836,7 @@ export class TrackingManager {
 
         const failedHtml =
           totalFailed > 0
-            ? `<span class="stack-stat-failed">\u26a0\ufe0f ${totalFailed} failed</span>`
+            ? `<span class="stack-stat-failed"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--warning-color)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> ${totalFailed} failed</span>`
             : '';
 
         const descHtml = description
@@ -889,16 +857,16 @@ export class TrackingManager {
               ${categoryBadges ? `<span class="stack-category-badges">${categoryBadges}</span>` : ''}
             </div>
             <div class="stack-group-meta">
-              <span class="meta-item">\ud83d\udcc1 ${items.length} periodical${items.length !== 1 ? 's' : ''}</span>
-              <span class="meta-item">\ud83d\udcda ${totalIssues} issue${totalIssues !== 1 ? 's' : ''}</span>
+              <span class="meta-item"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> ${items.length} periodical${items.length !== 1 ? 's' : ''}</span>
+              <span class="meta-item"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg> ${totalIssues} issue${totalIssues !== 1 ? 's' : ''}</span>
               ${failedHtml}
             </div>
           </div>
           <div class="tracked-card-buttons">
-            <button class="btn-icon stack-edit-btn" title="Edit stack">\u270f\ufe0f</button>
-            <button class="btn-icon stack-assign-btn" title="Manage members">\ud83d\udccb</button>
-            <button class="btn-icon stack-search-btn" title="Search for issues">\ud83d\udd0d</button>
-            <button class="btn-icon btn-danger stack-delete-btn" title="Delete stack">\ud83d\uddd1\ufe0f</button>
+            <button class="btn-icon stack-edit-btn" title="Edit stack"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg><span class="btn-label">Edit</span></button>
+            <button class="btn-icon stack-assign-btn" title="Manage members"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg><span class="btn-label">Members</span></button>
+            <button class="btn-icon stack-search-btn" title="Search for issues"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><span class="btn-label">Search</span></button>
+            <button class="btn-icon btn-danger stack-delete-btn" title="Delete stack"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg><span class="btn-label">Delete</span></button>
           </div>
         `;
 
@@ -1081,27 +1049,24 @@ export class TrackingManager {
     // Determine tracking badge
     let trackingBadge = '';
     if (trackAll) {
-      trackingBadge =
-        '<span class="tracking-badge badge-download-all">\u2B07\uFE0F All Issues</span>';
+      trackingBadge = '<span class="tracking-badge badge-download-all">↓ All Issues</span>';
     } else if (trackNew) {
-      trackingBadge =
-        '<span class="tracking-badge badge-download-new">\u2B07\uFE0F New Issues</span>';
+      trackingBadge = '<span class="tracking-badge badge-download-new">↓ New Issues</span>';
     } else {
-      trackingBadge =
-        '<span class="tracking-badge badge-watch">\uD83D\uDC41\uFE0F Watch Only</span>';
+      trackingBadge = '<span class="tracking-badge badge-watch">Watch Only</span>';
     }
 
-    const countryStats = country ? `<span class="country">\uD83C\uDF0D ${country}</span>` : '';
+    const countryStats = country ? `<span class="country">${country}</span>` : '';
     const issueStats =
       totalKnown > 0 ? `<span class="issue-count">${totalKnown} issues found</span>` : '';
-    const libraryStats = `<span class="library-count">\uD83D\uDCDA ${libraryCount} in library</span>`;
+    const libraryStats = `<span class="library-count">${libraryCount} in library</span>`;
     const selectedStats =
       selectedCount > 0
         ? `<span class="selected-count">\u2022 ${selectedCount} selected</span>`
         : '';
     const failedStats =
       failedCount > 0
-        ? `<span class="failed-count" style="color: var(--text-secondary); cursor: pointer;" data-tracking-id="${id}" title="Click to view failed downloads">\u26A0\uFE0F ${failedCount} failed</span>`
+        ? `<span class="failed-count" style="color: var(--text-secondary); cursor: pointer;" data-tracking-id="${id}" title="Click to view failed downloads"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--warning-color)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-1px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> ${failedCount} failed</span>`
         : '';
 
     const checkboxHtml = this.mergeMode
@@ -1116,8 +1081,8 @@ export class TrackingManager {
           ${trackingBadge}
         </div>
         <div class="tracked-card-meta">
-          <span class="meta-item">\uD83D\uDCC1 ${category ?? 'Auto-detect'}</span>
-          ${language ? `<span class="meta-item">\uD83C\uDF10 ${language}</span>` : ''}
+          <span class="meta-item">${category ?? 'Auto-detect'}</span>
+          ${language ? `<span class="meta-item">${language}</span>` : ''}
           ${countryStats}
           ${issueStats}
           ${libraryStats}
@@ -1126,9 +1091,9 @@ export class TrackingManager {
         </div>
       </div>
       <div class="tracked-card-buttons">
-        <button onclick="editTracking(${id})" class="btn-icon" title="Edit">\u270F\uFE0F</button>
-        <button class="btn-icon search-issues-btn" data-tracking-id="${id}" title="Search Issues">\uD83D\uDD0D</button>
-        <button class="btn-icon btn-danger delete-tracking-btn" data-tracking-id="${id}" title="Delete">\uD83D\uDDD1\uFE0F</button>
+        <button onclick="editTracking(${id})" class="btn-icon" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg><span class="btn-label">Edit</span></button>
+        <button class="btn-icon search-issues-btn" data-tracking-id="${id}" title="Search Issues"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><span class="btn-label">Search</span></button>
+        <button class="btn-icon btn-danger delete-tracking-btn" data-tracking-id="${id}" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg><span class="btn-label">Delete</span></button>
       </div>
     `;
 
@@ -1385,7 +1350,7 @@ export class TrackingManager {
       row.className = 'stack-search-row';
       row.id = `stack-sr-${i}`;
       row.innerHTML = `
-        <div class="stack-search-row-status" id="stack-sr-status-${i}">\u23f3</div>
+        <div class="stack-search-row-status" id="stack-sr-status-${i}">…</div>
         <div class="stack-search-row-title">${item.title}${item.language && item.language !== 'English' ? ` <span class="language-badge" style="font-size:9px;padding:1px 6px;margin:0">${item.language}</span>` : ''}</div>
         <div class="stack-search-row-actions" id="stack-sr-actions-${i}"></div>
         <div class="stack-search-row-result" id="stack-sr-result-${i}">Waiting...</div>`;
@@ -1403,7 +1368,8 @@ export class TrackingManager {
       const actionsEl = document.getElementById(`stack-sr-actions-${i}`);
       const rowEl = document.getElementById(`stack-sr-${i}`);
 
-      statusEl.textContent = '\ud83d\udd04';
+      statusEl.innerHTML =
+        '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>';
       resultEl.textContent = 'Searching...';
       rowEl.classList.add('searching');
 
@@ -1446,23 +1412,24 @@ export class TrackingManager {
                 .filter((issue) => issue.url),
             });
 
-            statusEl.textContent = '\ud83d\udce5';
+            statusEl.innerHTML =
+              '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/></svg>';
             resultEl.innerHTML = `<strong>${available}</strong> available, ${inLib} in library`;
-            actionsEl.innerHTML = `<button class="stack-search-dl-btn" onclick="downloadStackSearchMember(${i})" title="Download ${available} issues">\u2b07 ${available}</button>`;
+            actionsEl.innerHTML = `<button class="stack-search-dl-btn" onclick="downloadStackSearchMember(${i})" title="Download ${available} issues">↓ ${available}</button>`;
             rowEl.classList.add('has-results');
           } else {
-            statusEl.textContent = '\u2705';
+            statusEl.textContent = '✓';
             resultEl.textContent = `${inLib} in library, nothing new`;
             rowEl.classList.add('complete');
           }
         } else {
-          statusEl.textContent = '\u2796';
+          statusEl.textContent = '−';
           resultEl.textContent = 'No results';
           rowEl.classList.add('complete');
         }
       } catch (err) {
         console.error(`Stack search error for ${item.title}:`, err);
-        statusEl.textContent = '\u274c';
+        statusEl.textContent = '✗';
         resultEl.textContent = 'Error';
         rowEl.classList.remove('searching');
         rowEl.classList.add('error');
@@ -1476,17 +1443,17 @@ export class TrackingManager {
     let summaryHtml =
       '<div class="stack-search-stats" style="display:flex;gap:16px;flex-wrap:wrap;font-size:14px;color:var(--text-secondary);">';
     if (totalAvailable > 0) {
-      summaryHtml += `<span style="color:#22c55e;">\ud83d\udce5 <strong>${totalAvailable}</strong> new issue${totalAvailable !== 1 ? 's' : ''} available</span>`;
+      summaryHtml += `<span style="color:#22c55e;"><strong>${totalAvailable}</strong> new issue${totalAvailable !== 1 ? 's' : ''} available</span>`;
     } else {
-      summaryHtml += '<span>\u2705 All up to date</span>';
+      summaryHtml += '<span>✓ All up to date</span>';
     }
-    summaryHtml += `<span>\ud83d\udcda <strong>${totalInLibrary}</strong> already in library</span>`;
+    summaryHtml += `<span><strong>${totalInLibrary}</strong> already in library</span>`;
     if (totalErrors > 0) {
-      summaryHtml += `<span style="color:var(--error-color);">\u274c ${totalErrors} error${totalErrors !== 1 ? 's' : ''}</span>`;
+      summaryHtml += `<span style="color:var(--error-color);">✗ ${totalErrors} error${totalErrors !== 1 ? 's' : ''}</span>`;
     }
     summaryHtml += '</div>';
     if (totalAvailable > 0) {
-      summaryHtml += `<div style="margin-top:10px;"><button class="stack-search-dl-all-btn" onclick="downloadAllStackSearchIssues()" id="stack-sr-dl-all">\u2b07 Download All ${totalAvailable} Issues</button></div>`;
+      summaryHtml += `<div style="margin-top:10px;"><button class="stack-search-dl-all-btn" onclick="downloadAllStackSearchIssues()" id="stack-sr-dl-all">↓ Download All ${totalAvailable} Issues</button></div>`;
     }
     doneEl.innerHTML = summaryHtml;
   }
@@ -1504,7 +1471,7 @@ export class TrackingManager {
     const btn = document.querySelector(`#stack-sr-actions-${memberIdx} .stack-search-dl-btn`);
     if (btn) {
       btn.disabled = true;
-      btn.textContent = '\u23f3';
+      btn.textContent = '…';
     }
 
     try {
@@ -1529,7 +1496,7 @@ export class TrackingManager {
 
       if (btn) {
         const hasErrors = data.failed > 0;
-        btn.textContent = hasErrors ? '\u26a0\ufe0f' : '\u2705';
+        btn.textContent = hasErrors ? '⚠' : '✓';
         btn.title = parts.join(', ');
         btn.classList.add(hasErrors ? 'dl-warning' : 'dl-done');
       }
@@ -1538,7 +1505,7 @@ export class TrackingManager {
     } catch (err) {
       console.error(`Download error for stack member ${memberIdx}:`, err);
       if (btn) {
-        btn.textContent = '\u274c';
+        btn.textContent = '✗';
         btn.title = err.message;
         btn.disabled = false;
       }
@@ -1554,7 +1521,7 @@ export class TrackingManager {
     const dlAllBtn = document.getElementById('stack-sr-dl-all');
     if (dlAllBtn) {
       dlAllBtn.disabled = true;
-      dlAllBtn.textContent = '\u23f3 Downloading...';
+      dlAllBtn.textContent = '… Downloading...';
     }
 
     let totalSubmitted = 0;
@@ -1567,7 +1534,7 @@ export class TrackingManager {
       const btn = document.querySelector(`#stack-sr-actions-${idx} .stack-search-dl-btn`);
       if (btn) {
         btn.disabled = true;
-        btn.textContent = '\u23f3';
+        btn.textContent = '…';
       }
 
       try {
@@ -1591,7 +1558,7 @@ export class TrackingManager {
 
         if (btn) {
           const hasErrors = data.failed > 0;
-          btn.textContent = hasErrors ? '\u26a0\ufe0f' : '\u2705';
+          btn.textContent = hasErrors ? '⚠' : '✓';
           btn.classList.add(hasErrors ? 'dl-warning' : 'dl-done');
         }
 
@@ -1600,7 +1567,7 @@ export class TrackingManager {
         console.error(`Download error for stack member:`, err);
         totalFailed += entry.availableIssues.length;
         if (btn) {
-          btn.textContent = '\u274c';
+          btn.textContent = '✗';
           btn.disabled = false;
         }
       }
@@ -1614,9 +1581,7 @@ export class TrackingManager {
       if (totalFailed > 0) parts.push(`${totalFailed} failed`);
 
       const hasErrors = totalFailed > 0;
-      dlAllBtn.textContent = hasErrors
-        ? `\u26a0\ufe0f ${parts.join(', ')}`
-        : `\u2705 ${parts.join(', ')}`;
+      dlAllBtn.textContent = hasErrors ? `⚠ ${parts.join(', ')}` : `✓ ${parts.join(', ')}`;
       dlAllBtn.classList.add(hasErrors ? 'dl-warning' : 'dl-done');
     }
   }
@@ -1799,7 +1764,7 @@ export class TrackingManager {
             already_downloaded: result.already_downloaded || false,
             download_failed: result.download_failed || false,
             status: result.status || 'available',
-            status_badge: result.status_badge || '📥 Available',
+            status_badge: result.status_badge || 'Available',
             language: language,
             variants: [result], // Store all variants
           });
@@ -1814,7 +1779,7 @@ export class TrackingManager {
           // reflect what is actually stored, not what a provider title happened to parse to.
           if (result.status === 'in_library') {
             existing.status = 'in_library';
-            existing.status_badge = '📚 In Library';
+            existing.status_badge = 'In Library';
             existing.already_downloaded = true;
             // Overwrite parsed display fields with the library item's values
             if (result.parsed_title) {
@@ -1891,19 +1856,19 @@ export class TrackingManager {
     // Provider-specific styling
     const providerStyles = {
       internet_archive: {
-        icon: '🏛️',
+        icon: '',
         label: 'Internet Archive',
         color: '#428bca',
         bgColor: '#e8f4fc',
       },
       newsnab: {
-        icon: '📰',
+        icon: '',
         label: 'Newsnab',
         color: '#5cb85c',
         bgColor: '#e8f5e9',
       },
       rss: {
-        icon: '📡',
+        icon: '',
         label: 'RSS',
         color: '#f0ad4e',
         bgColor: '#fff8e1',
@@ -1911,7 +1876,7 @@ export class TrackingManager {
     };
 
     const style = providerStyles[providerLower] || {
-      icon: '🔗',
+      icon: '',
       label: provider,
       color: '#6c757d',
       bgColor: '#f5f5f5',
@@ -2135,9 +2100,9 @@ export class TrackingManager {
 
     // Provider display config
     const providerLabels = {
-      newsnab: { icon: '📰', label: 'Newsnab' },
-      internet_archive: { icon: '🏛️', label: 'Internet Archive' },
-      rss: { icon: '📡', label: 'RSS' },
+      newsnab: { icon: '', label: 'Newsnab' },
+      internet_archive: { icon: '', label: 'Internet Archive' },
+      rss: { icon: '', label: 'RSS' },
     };
 
     // Build source filter buttons (only show if more than one provider)
@@ -2147,9 +2112,9 @@ export class TrackingManager {
         `<button onclick="filterSearchBySource('all')" class="sort-btn${this.sourceFilter === 'all' ? ' active' : ''}">All</button>`,
       ];
       allProviders.forEach((provider) => {
-        const cfg = providerLabels[provider] || { icon: '🔗', label: provider };
+        const cfg = providerLabels[provider] || { icon: '', label: provider };
         filterBtns.push(
-          `<button onclick="filterSearchBySource('${escapeHtml(provider)}')" class="sort-btn${this.sourceFilter === provider ? ' active' : ''}">${cfg.icon} ${cfg.label}</button>`
+          `<button onclick="filterSearchBySource('${escapeHtml(provider)}')" class="sort-btn${this.sourceFilter === provider ? ' active' : ''}">${cfg.icon ? cfg.icon + ' ' : ''}${cfg.label}</button>`
         );
       });
       sourceFilterHtml = `
@@ -2184,9 +2149,9 @@ export class TrackingManager {
       <div class="search-summary">
         <h3>Search Results for "${escapeHtml(title)}"${cacheInfo}</h3>
         <div class="summary-stats">
-          <span class="stat">📚 <strong>${filteredLibraryCount}</strong> in library</span>
-          <span class="stat${filteredAvailableCount > 0 ? ' clickable-stat' : ''}" ${filteredAvailableCount > 0 ? 'onclick="downloadAllAvailable()" title="Click to download all available issues"' : ''}>📥 <strong>${filteredAvailableCount}</strong> available</span>
-          <span class="stat">🎯 <strong>${filteredTotalCount}</strong> total</span>
+          <span class="stat"><strong>${filteredLibraryCount}</strong> in library</span>
+          <span class="stat${filteredAvailableCount > 0 ? ' clickable-stat' : ''}" ${filteredAvailableCount > 0 ? 'onclick="downloadAllAvailable()" title="Click to download all available issues"' : ''}><strong>${filteredAvailableCount}</strong> available</span>
+          <span class="stat"><strong>${filteredTotalCount}</strong> total</span>
         </div>
         ${sourceFilterHtml}
       </div>
@@ -2293,21 +2258,24 @@ export class TrackingManager {
           borderColor = '#28a745';
           opacity = '0.95';
           textColor = '#155724';
-          statusIcon = '📚';
+          statusIcon =
+            '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>';
           statusText = 'In Library';
         } else if (hasFailed) {
           backgroundColor = '#fff3cd';
           borderColor = '#ffc107';
           opacity = '0.9';
           textColor = '#856404';
-          statusIcon = '⚠️';
+          statusIcon =
+            '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
           statusText = 'Failed';
         } else {
           backgroundColor = '#d1ecf1';
           borderColor = '#17a2b8';
           opacity = '1';
           textColor = '#0c5460';
-          statusIcon = '📥';
+          statusIcon =
+            '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/></svg>';
           statusText = 'Available';
         }
 
@@ -2349,7 +2317,7 @@ export class TrackingManager {
           ? providerVariantCount > 0
           : displayVariants.length > 1;
         const variantsBadge = hasMultipleVariants
-          ? `<div style="font-size: 10px; margin-top: 6px; color: var(--primary-color); font-weight: 600;">📥 ${providerVariantCount} variant${providerVariantCount !== 1 ? 's' : ''}</div>`
+          ? `<div style="font-size: 10px; margin-top: 6px; color: var(--primary-color); font-weight: 600;">${providerVariantCount} variant${providerVariantCount !== 1 ? 's' : ''}</div>`
           : isLibraryItem
             ? ''
             : issue.language
@@ -2359,7 +2327,7 @@ export class TrackingManager {
         // Age badge for available/failed issues (not library items)
         const ageBadge =
           newestAge && !isLibraryItem
-            ? `<div class="issue-age-badge ${ageColorClass}" title="NZB posted ${newestAge} ago - newer is better for Usenet retention">⏱️ ${newestAge}</div>`
+            ? `<div class="issue-age-badge ${ageColorClass}" title="NZB posted ${newestAge} ago - newer is better for Usenet retention">${newestAge}</div>`
             : '';
 
         // Size badge — show file size (and file count for collections)
@@ -2367,7 +2335,7 @@ export class TrackingManager {
         const sizeStr = formatFileSize(issue.size);
         if (sizeStr) {
           const filesStr = issue.files > 1 ? ` · ${issue.files} files` : '';
-          sizeBadge = `<div style="font-size: 10px; margin-top: 4px; color: var(--text-secondary);" title="Download size">💾 ${sizeStr}${filesStr}</div>`;
+          sizeBadge = `<div style="font-size: 10px; margin-top: 4px; color: var(--text-secondary);" title="Download size">${sizeStr}${filesStr}</div>`;
         }
 
         let cardHtml = `<div style="
@@ -2443,25 +2411,25 @@ export class TrackingManager {
         // Fallback: undated items with no volume/issue number and not a collection.
         // These couldn't be bucketed more specifically — show under a generic label.
         html += `<div style="margin-bottom: 20px;">
-          <h4 style="color: var(--primary-color); margin-bottom: 10px;">📅 Unknown Date</h4>
+          <h4 style="color: var(--primary-color); margin-bottom: 10px;">Unknown Date</h4>
           <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px;">`;
         renderCards(issues);
         html += `</div></div>`;
       } else if (year === 'volumes') {
         html += `<div style="margin-bottom: 20px;">
-          <h4 style="color: var(--primary-color); margin-bottom: 10px;">📦 Volumes</h4>
+          <h4 style="color: var(--primary-color); margin-bottom: 10px;">Volumes</h4>
           <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px;">`;
         renderCards(issues);
         html += `</div></div>`;
       } else if (year === 'collections') {
         html += `<div style="margin-bottom: 20px;">
-          <h4 style="color: var(--primary-color); margin-bottom: 10px;">📦 Collections</h4>
+          <h4 style="color: var(--primary-color); margin-bottom: 10px;">Collections</h4>
           <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px;">`;
         renderCards(issues);
         html += `</div></div>`;
       } else {
         html += `<div style="margin-bottom: 20px;">
-          <h4 style="color: var(--primary-color); margin-bottom: 10px;">📅 ${year}</h4>
+          <h4 style="color: var(--primary-color); margin-bottom: 10px;">${year}</h4>
           <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px;">`;
         renderCards(issues);
         html += `</div></div>`;
@@ -2846,7 +2814,7 @@ window.selectIssueWithVariants = function (issueKey, alreadyDownloaded, hasFaile
       0;
     const variantSizeStr = formatFileSize(variantSize);
     const sizeBadge = variantSizeStr
-      ? `<span class="variant-age" style="background: var(--surface-variant);">💾 ${variantSizeStr}</span>`
+      ? `<span class="variant-age" style="background: var(--surface-variant);">${variantSizeStr}</span>`
       : '';
 
     // Provider info
@@ -2957,9 +2925,9 @@ window.showLibraryItemDetail = function (issueKey) {
       detailHtml += `
       <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
         <button class="save-btn btn-cancel" style="font-size: 0.8em; padding: 4px 12px;"
-          onclick="moveLibraryCopy(${copyId}, '${issueKey}')">📦 Move to Tracking</button>
+          onclick="moveLibraryCopy(${copyId}, '${issueKey}')">Move to Tracking</button>
         <button class="save-btn btn-delete" style="font-size: 0.8em; padding: 4px 12px;"
-          onclick="deleteLibraryCopy(${copyId}, '${issueKey}')">🗑️ Remove from Library</button>
+          onclick="deleteLibraryCopy(${copyId}, '${issueKey}')"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-1px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> Remove from Library</button>
       </div>`;
     }
   });
@@ -2991,7 +2959,7 @@ window.showLibraryItemDetail = function (issueKey) {
     <div id="library-detail-modal" class="modal" style="display: flex;">
       <div class="modal-content" style="max-width: 550px;">
         <span class="close" onclick="closeLibraryDetailModal()">&times;</span>
-        <h2 style="margin-bottom: 16px;">📚 Library Item</h2>
+        <h2 style="margin-bottom: 16px;"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-3px;margin-right:6px"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>Library Item</h2>
         ${detailHtml}
         ${replacementHtml}
       </div>
@@ -3134,7 +3102,7 @@ window.moveLibraryCopy = async function (periodicalId, issueKey) {
       <div id="move-library-copy-modal" class="modal" style="display: flex;">
         <div class="modal-content" style="max-width: 500px;">
           <span class="close" onclick="closeMoveLibraryCopyModal()">&times;</span>
-          <h2 style="margin-bottom: 16px;">📦 Move to Tracking</h2>
+          <h2 style="margin-bottom: 16px;">Move to Tracking</h2>
           <p style="color: var(--text-secondary); margin-bottom: 12px; font-size: 0.9em;">
             Select the tracking record to move this issue to. The file will be renamed and reorganized automatically.
           </p>
@@ -3240,10 +3208,10 @@ window.selectIssue = async function (title, provider, url, alreadyDownloaded, do
   let confirmMessage = `<p><strong>File:</strong> ${title}</p><p><strong>Provider:</strong> ${provider}</p>`;
   if (alreadyDownloaded) {
     confirmMessage +=
-      '<p style="color: #ff9800; margin-top: 10px;">⚠️ You already have this issue in your library.</p><p>Re-download it anyway?</p>';
+      '<p style="color: #ff9800; margin-top: 10px;">You already have this issue in your library.</p><p>Re-download it anyway?</p>';
   } else if (downloadFailed) {
     confirmMessage +=
-      '<p style="color: #f44336; margin-top: 10px;">⚠️ This download failed previously.</p><p>The file may be corrupt or unavailable. Try again anyway?</p>';
+      '<p style="color: #f44336; margin-top: 10px;">This download failed previously.</p><p>The file may be corrupt or unavailable. Try again anyway?</p>';
   } else {
     confirmMessage += '<p style="margin-top: 10px;">Download this issue?</p>';
   }
@@ -3284,7 +3252,7 @@ window.openMergeModal = async function () {
       console.log('Showing warning status');
       UIUtils.showStatus(
         ELEMENT_IDS.TRACKING_STATUS,
-        '⚠️ You need at least 2 tracked periodicals to merge',
+        'You need at least 2 tracked periodicals to merge',
         'warning'
       );
       return;
@@ -3310,7 +3278,7 @@ window.openMergeModal = async function () {
 
     modal.innerHTML = `
       <div class="modal-content" style="max-width: 600px;">
-        <h3>🔀 Merge Tracking Records</h3>
+        <h3><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-3px;margin-right:6px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><circle cx="6" cy="18" r="3"/></svg>Merge Tracking Records</h3>
         <p style="color: var(--text-secondary); margin-bottom: 20px;">Select 2 or more tracking records to merge. You'll choose which one to keep in the next step.</p>
         <div id="merge-selection-list" style="max-height: 400px; overflow-y: auto; margin-bottom: 20px;">
           ${trackingOptions}
@@ -3358,7 +3326,7 @@ window.showMergeTargetSelection = async function () {
   if (selectedIds.length < 2) {
     UIUtils.showStatus(
       ELEMENT_IDS.TRACKING_STATUS,
-      '⚠️ Please select at least 2 tracking records',
+      'Please select at least 2 tracking records',
       'warning'
     );
     return;
@@ -3433,7 +3401,7 @@ window.confirmMerge = async function () {
   const sourceIds = allSelectedIds.filter((id) => id !== targetId);
 
   if (!targetId || sourceIds.length === 0) {
-    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, '⚠️ Invalid selection', 'warning');
+    UIUtils.showStatus(ELEMENT_IDS.TRACKING_STATUS, 'Invalid selection', 'warning');
     return;
   }
 

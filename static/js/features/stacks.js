@@ -85,11 +85,11 @@ export class StacksManager {
     if (this.allStacks.length === 0) {
       container.innerHTML = `
         <div class="empty-state">
-          <div class="empty-state-icon">📚</div>
+          <div class="empty-state-icon"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></div>
           <h3>No Stacks Yet</h3>
           <p>Create your first stack to group related periodicals together.</p>
           <button onclick="openCreateStackModal()" class="btn-primary" style="margin-top: 16px">
-            ➕ Create Stack
+            Create Stack
           </button>
         </div>
       `;
@@ -116,7 +116,7 @@ export class StacksManager {
     info.className = 'stack-management-info';
 
     const h4 = document.createElement('h4');
-    h4.textContent = `📚 ${stack.name}`;
+    h4.textContent = stack.name;
     info.appendChild(h4);
 
     if (stack.description) {
@@ -141,7 +141,8 @@ export class StacksManager {
     const viewBtn = document.createElement('button');
     viewBtn.className = 'btn-icon';
     viewBtn.title = 'View Stack';
-    viewBtn.textContent = '👁️';
+    viewBtn.innerHTML =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
     viewBtn.onclick = () => {
       window.location.href = `/stacks/${stack.slug}`;
     };
@@ -150,21 +151,24 @@ export class StacksManager {
     const assignBtn = document.createElement('button');
     assignBtn.className = 'btn-icon';
     assignBtn.title = 'Manage Members';
-    assignBtn.textContent = '📋';
+    assignBtn.innerHTML =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>';
     assignBtn.onclick = () => this.openAssignModal(stack);
     actions.appendChild(assignBtn);
 
     const editBtn = document.createElement('button');
     editBtn.className = 'btn-icon';
     editBtn.title = 'Edit';
-    editBtn.textContent = '✏️';
+    editBtn.innerHTML =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
     editBtn.onclick = () => this.openEditStackModal(stack);
     actions.appendChild(editBtn);
 
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'btn-icon btn-danger';
     deleteBtn.title = 'Delete';
-    deleteBtn.textContent = '🗑️';
+    deleteBtn.innerHTML =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
     deleteBtn.onclick = () => this.openDeleteStackModal(stack);
     actions.appendChild(deleteBtn);
 
@@ -226,7 +230,7 @@ export class StacksManager {
     if (descInput) descInput.value = '';
 
     const modalTitle = document.getElementById('stack-modal-title');
-    if (modalTitle) modalTitle.textContent = '➕ Create New Stack';
+    if (modalTitle) modalTitle.textContent = 'Create New Stack';
 
     const saveBtn = document.getElementById('stack-modal-save-btn');
     if (saveBtn) {
@@ -252,7 +256,7 @@ export class StacksManager {
     if (descInput) descInput.value = stack.description || '';
 
     const modalTitle = document.getElementById('stack-modal-title');
-    if (modalTitle) modalTitle.textContent = '✏️ Edit Stack';
+    if (modalTitle) modalTitle.textContent = 'Edit Stack';
 
     const saveBtn = document.getElementById('stack-modal-save-btn');
     if (saveBtn) {
