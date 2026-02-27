@@ -185,7 +185,7 @@ body {
   text-decoration: underline;
 }
 
-.form-group-password {
+.form-group-password .input-wrapper {
   position: relative;
 }
 
@@ -214,4 +214,15 @@ body {
 
 .toggle-password:hover {
   color: var(--text-primary);
+}
+
+/* Dark mode: replace the vivid purple gradient with a near-black background */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) body {
+    background: var(--background);
+  }
+}
+
+body.dark-mode {
+  background: var(--background);
 }

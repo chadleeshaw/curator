@@ -339,7 +339,8 @@
 .issue-card {
   background: var(--surface);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
+  padding: 0;
   overflow: hidden;
   transition:
     transform var(--transition-base),
@@ -348,7 +349,6 @@
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  contain: layout style paint;
 }
 
 .issue-card:hover {
@@ -369,6 +369,9 @@
 }
 
 .issue-cover img {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
