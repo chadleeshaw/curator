@@ -1,4 +1,4 @@
-.PHONY: help lint format lint-python lint-js lint-css format-python format-js format-css test test-unit test-integration test-e2e test-routers test-coverage test-quick test-perf test-perf-api test-perf-ocr test-perf-ocr-accuracy test-perf-load install install-hooks run clean ci-lint
+.PHONY: help lint format lint-python lint-js lint-css format-python format-js format-css test test-unit test-integration test-e2e test-routers test-coverage test-quick test-perf test-perf-api test-perf-ocr test-perf-ocr-accuracy test-perf-load install install-hooks run clean ci-lint screenshots screenshot-library
 
 PYTHON_FILES := $(shell find . -name '*.py' -not -path './.venv/*' -not -path './node_modules/*' -not -path './.node_modules/*')
 JS_FILES := static/js/*.js
@@ -16,6 +16,8 @@ help:
 	@echo "  make format           Format all code (Python, JS, CSS)"
 	@echo "  make lint             Run all linters"
 	@echo "  make ci-lint          Run CI linters"
+	@echo "  make screenshots      Capture all UI screenshots (requires running app)"
+	@echo "  make screenshot-library  Capture library tab screenshot only"
 	@echo ""
 	@echo "Linting:"
 	@echo "  make lint-python      Lint Python files (pylint + flake8)"
@@ -185,6 +187,17 @@ test-perf-load-ui:
 	@echo "🔥 Starting Locust web UI..."
 	@echo "Open http://localhost:8089 in your browser"
 	@locust -f tests/performance/locustfile.py --host http://localhost:8000
+
+# Screenshots
+screenshots:
+	@echo "📸 Capturing all UI screenshots (app must be running on http://localhost:8000)..."
+	@node tools/screenshots/screenshot_capture.js
+	@echo "✅ Screenshots saved to docs/screenshots/"
+
+screenshot-library:
+	@echo "📸 Capturing library screenshot (app must be running on http://localhost:8000)..."
+	@node tools/screenshots/screenshot.js
+	@echo "✅ Screenshot saved to docs/screenshots/desktop_library.jpg"
 
 # Cleanup
 clean:

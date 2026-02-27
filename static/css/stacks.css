@@ -5,9 +5,10 @@
 /* Wrapper for stack card — positions the "stacked paper" layers and the card */
 .stack-card-wrap {
   position: relative;
+  z-index: 1; /* paint above sibling grid cells so offset layers aren't covered */
   /* Reserve space for the offset layers so they don't overlap neighbours */
-  margin-right: 8px;
-  margin-bottom: 8px;
+  margin-right: 10px;
+  margin-bottom: 10px;
 }
 
 /* Remove pseudo-element approach — no ::before/::after on wrap */
@@ -17,21 +18,24 @@
   position: absolute;
   inset: 0;
   border-radius: var(--radius-lg);
-  background: var(--surface);
-  border: 1px solid var(--border-color);
+  background: var(
+    --surface-variant,
+    color-mix(in srgb, var(--surface) 85%, var(--primary-color) 15%)
+  );
+  border: 1px solid rgba(var(--primary-rgb), 0.55);
   transition: border-color var(--transition-fast);
   pointer-events: none;
 }
 
 .stack-layer-1 {
-  transform: translate(4px, 4px);
+  transform: translate(5px, 5px);
 }
 
 .stack-layer-2 {
-  transform: translate(8px, 8px);
+  transform: translate(10px, 10px);
 }
 
-/* On hover, recolour layers to primary accent */
+/* On hover, recolour layers to full primary accent */
 .stack-card-wrap:hover .stack-layer {
   border-color: var(--primary-color);
 }

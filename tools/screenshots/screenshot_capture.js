@@ -70,7 +70,7 @@ async function shot(page, filePath) {
       console.log(`  Tab: ${tab}`);
       await clickTab(page, tab);
       if (tab === 'library') await page.waitForTimeout(3000);
-      await shot(page, `screenshots/desktop_${tab}.jpg`);
+      await shot(page, `docs/screenshots/desktop_${tab}.jpg`);
     }
 
     // Periodical detail page
@@ -82,7 +82,7 @@ async function shot(page, filePath) {
       });
       await enableDarkMode(page);
       await page.waitForTimeout(1500);
-      await shot(page, 'screenshots/desktop_periodical.jpg');
+      await shot(page, 'docs/screenshots/desktop_periodical.jpg');
     } catch (e) {
       console.warn('  Periodical detail failed:', e.message);
     }
@@ -97,7 +97,7 @@ async function shot(page, filePath) {
     const pg = await ctx.newPage();
     await pg.goto('http://localhost:8000/login.html', { waitUntil: 'networkidle', timeout: 10000 });
     await pg.waitForTimeout(500);
-    await shot(pg, 'screenshots/desktop_login.jpg');
+    await shot(pg, 'docs/screenshots/desktop_login.jpg');
     await ctx.close();
   } catch (e) {
     console.warn('  Login page failed:', e.message);
@@ -119,16 +119,16 @@ async function shot(page, filePath) {
       console.log(`  Tab: ${tab}`);
       await clickTab(page, tab);
       if (tab === 'library') await page.waitForTimeout(3000);
-      await shot(page, `screenshots/mobile_${tab}.jpg`);
+      await shot(page, `docs/screenshots/mobile_${tab}.jpg`);
       // Extra full-page shot for settings to see provider buttons
       if (tab === 'settings') {
         await page.screenshot({
-          path: 'screenshots/mobile_settings_full.jpg',
+          path: 'docs/screenshots/mobile_settings_full.jpg',
           type: 'jpeg',
           quality: 90,
           fullPage: true,
         });
-        console.log('  Saved: screenshots/mobile_settings_full.jpg');
+        console.log('  Saved: docs/screenshots/mobile_settings_full.jpg');
       }
     }
 
@@ -146,7 +146,7 @@ async function shot(page, filePath) {
     const pg = await ctx.newPage();
     await pg.goto('http://localhost:8000/login.html', { waitUntil: 'networkidle', timeout: 10000 });
     await pg.waitForTimeout(500);
-    await shot(pg, 'screenshots/mobile_login.jpg');
+    await shot(pg, 'docs/screenshots/mobile_login.jpg');
     await ctx.close();
   } catch (e) {
     console.warn('  Mobile login failed:', e.message);
