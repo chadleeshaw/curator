@@ -1395,18 +1395,17 @@
   }
 
   .btn-icon {
-    min-width: 52px !important;
-    width: auto !important;
-    height: auto !important;
-    font-size: 16px !important;
-    padding: 6px 8px !important;
-    flex-direction: column !important;
-    gap: 3px !important;
+    min-width: 44px !important;
+    width: 44px !important;
+    height: 44px !important;
+    padding: 10px !important;
+    flex-direction: row !important;
+    gap: 0 !important;
     border-radius: var(--radius-md) !important;
   }
 
   .btn-icon .btn-label {
-    display: block !important;
+    display: none !important;
   }
 
   /* Empty state in tracking */
@@ -1619,29 +1618,6 @@
     font-size: 1.3em !important;
     padding-bottom: 8px !important;
     margin-bottom: 16px !important;
-  }
-
-  .issues-grid {
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)) !important;
-    gap: 16px !important;
-    margin-bottom: 30px !important;
-  }
-
-  .issue-card {
-    border-radius: var(--radius-md);
-  }
-
-  .issue-cover {
-    height: 150px !important;
-  }
-
-  .issue-cover-placeholder {
-    font-size: 10px !important;
-    padding: 10px !important;
-  }
-
-  .issue-info {
-    padding: 10px !important;
   }
 
   .issue-date {

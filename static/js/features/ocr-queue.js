@@ -244,7 +244,7 @@ export class OCRQueueManager {
       const processingJobs = jobs.filter((j) => j.status === 'processing');
       let statusIndicators = '';
       if (processingJobs.length > 0) {
-        statusIndicators += `<span style="background: var(--status-downloading); color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.85em; white-space: nowrap;">⚡ ${processingJobs.length} processing</span>`;
+        statusIndicators += `<span style="background: var(--status-downloading); color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.85em; white-space: nowrap;">${processingJobs.length} processing</span>`;
       }
 
       // Build uniform summary bubbles (fixed order, always shown)
@@ -261,7 +261,7 @@ export class OCRQueueManager {
       headerRow.innerHTML = `
         <td style="padding: 12px; font-weight: bold;">
           <div>
-            <span style="font-size: 1.1em;">📋 ${periodical}</span>
+            <span style="font-size: 1.1em;">${periodical}</span>
             <span style="margin-left: 15px; font-size: 0.9em; color: var(--text-secondary);">${jobs.length} issue${jobs.length !== 1 ? 's' : ''}</span>
           </div>
           <div class="mobile-summary" style="display: none; margin-top: 6px;">
@@ -612,7 +612,7 @@ export class OCRQueueManager {
       if (job.last_error) {
         errorHtml = `
           <div style="margin-top: 20px;">
-            <h4 style="color: var(--status-failed); margin-bottom: 10px;">❌ Error Details</h4>
+            <h4 style="color: var(--status-failed); margin-bottom: 10px;">Error Details</h4>
             <pre style="background: var(--surface-variant); padding: 12px; border-radius: 4px; overflow-x: auto; font-size: 0.85em; color: var(--text-secondary);">${job.last_error}</pre>
           </div>
         `;
@@ -639,13 +639,13 @@ export class OCRQueueManager {
             ${job.completed_at ? `<strong>Completed:</strong><span>${new Date(job.completed_at).toLocaleString()}</span>` : ''}
           </div>
 
-          <h4 style="margin-bottom: 10px;">📄 Extracted Metadata</h4>
+          <h4 style="margin-bottom: 10px;">Extracted Metadata</h4>
           ${metadataHtml}
 
           ${errorHtml}
         </div>
         <div class="modal-footer" style="display: flex; gap: 10px; justify-content: flex-end; padding-top: 20px; border-top: 1px solid var(--border-color);">
-          ${job.status === 'failed' ? `<button onclick="ocrQueue.retryJob(${job.id}); ocrQueue.closeJobDetailsModal();" class="btn-primary">🔄 Retry</button>` : ''}
+          ${job.status === 'failed' ? `<button onclick="ocrQueue.retryJob(${job.id}); ocrQueue.closeJobDetailsModal();" class="btn-primary"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Retry</button>` : ''}
           <button onclick="ocrQueue.closeJobDetailsModal()" class="btn-secondary">Close</button>
         </div>
       `;
@@ -674,11 +674,11 @@ export class OCRQueueManager {
    */
   getPriorityBadge(priority) {
     if (priority >= 10) {
-      return '<span style="color: var(--status-failed); font-weight: bold;">🔥 High</span>';
+      return '<span style="color: var(--status-failed); font-weight: bold;">High</span>';
     } else if (priority >= 5) {
-      return '<span style="color: var(--text-primary);">⚡ Normal</span>';
+      return '<span style="color: var(--text-primary);">Normal</span>';
     } else {
-      return '<span style="color: var(--text-secondary);">💤 Low</span>';
+      return '<span style="color: var(--text-secondary);">Low</span>';
     }
   }
 
@@ -728,7 +728,7 @@ export class OCRQueueManager {
       'background: var(--surface); border-radius: 8px; padding: 24px; max-width: 500px; width: 90%; box-shadow: 0 4px 20px rgba(0,0,0,0.3);';
 
     modalContent.innerHTML = `
-      <h3 style="margin: 0 0 16px 0; color: var(--text-primary);">⚠️ Remove OCR Job</h3>
+      <h3 style="margin: 0 0 16px 0; color: var(--text-primary);">Remove OCR Job</h3>
       <p style="margin: 0 0 12px 0; color: var(--text-secondary);">Are you sure you want to remove this OCR job from the queue?</p>
       <p style="margin: 0 0 20px 0; color: var(--text-primary); font-weight: 600;">${jobTitle}</p>
       <div style="display: flex; gap: 10px; justify-content: flex-end;"></div>
@@ -1103,7 +1103,7 @@ export class OCRQueueManager {
         return;
       }
 
-      UIUtils.showStatus('ocr-queue-status', `🗑️ Clearing ${actualStatus} OCR jobs...`, 'info');
+      UIUtils.showStatus('ocr-queue-status', `Clearing ${actualStatus} OCR jobs...`, 'info');
 
       const endpoint = `/api/ocr/queue/${actualStatus}`;
       const data = await APIHelper.executeWithErrorHandling(

@@ -175,7 +175,7 @@ export function goBack() {
  * Detect if navigated from a stack detail page and update the breadcrumb accordingly.
  * Called once during initialisation.
  */
-export function initBreadcrumb() {
+export async function initBreadcrumb() {
   try {
     const ref = document.referrer;
     if (ref) {
@@ -187,7 +187,24 @@ export function initBreadcrumb() {
         if (breadcrumb) {
           const stackSlug = stackMatch[1];
           const title = document.getElementById('periodical-title')?.textContent || '';
-          const stackName = UIUtils.toTitleCase(decodeURIComponent(stackSlug).replace(/-/g, ' '));
+
+          // Prefer the name passed as a query param (set by stacks-detail.js navigateToItem)
+          // so we get the real casing without an extra API round-trip.
+          const urlParams = new URLSearchParams(window.location.search);
+          let stackName = urlParams.get('from_stack_name');
+
+          if (!stackName) {
+            // Fall back: fetch from API (covers direct navigation / bookmarks)
+            try {
+              const response = await APIClient.get(`/api/stacks/${stackSlug}`);
+              const data = await response.json();
+              if (data.name) stackName = data.name;
+            } catch {
+              // Last resort: derive from slug
+              stackName = UIUtils.toTitleCase(decodeURIComponent(stackSlug).replace(/-/g, ' '));
+            }
+          }
+
           breadcrumb.innerHTML =
             `<a href="/#library">Library</a>` +
             `<span class="separator">/</span>` +

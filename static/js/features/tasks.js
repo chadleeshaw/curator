@@ -115,9 +115,9 @@ export class TasksManager {
           const stats = task.stats;
           timestampsHtml = `
           <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 0.85em; color: var(--text-secondary); display: grid; gap: 6px;">
-            ${stats.last_client_check ? `<div>🕐 Last client check: <strong>${new Date(stats.last_client_check).toLocaleString()}</strong></div>` : ''}
-            ${stats.last_folder_scan ? `<div>🕐 Last folder scan: <strong>${new Date(stats.last_folder_scan).toLocaleString()}</strong></div>` : ''}
-            ${stats.last_process_time ? `<div>🕐 Last OCR process: <strong>${new Date(stats.last_process_time).toLocaleString()}</strong></div>` : ''}
+            ${stats.last_client_check ? `<div>Last client check: <strong>${new Date(stats.last_client_check).toLocaleString()}</strong></div>` : ''}
+            ${stats.last_folder_scan ? `<div>Last folder scan: <strong>${new Date(stats.last_folder_scan).toLocaleString()}</strong></div>` : ''}
+            ${stats.last_process_time ? `<div>Last OCR process: <strong>${new Date(stats.last_process_time).toLocaleString()}</strong></div>` : ''}
           </div>
         `;
         }
@@ -137,15 +137,15 @@ export class TasksManager {
               <div style="color: var(--text-secondary); font-size: 0.9em;">
                 <div style="margin-bottom: 10px;">${task.description || ''}</div>
                 <div style="display: grid; gap: 4px;">
-                  <div>⏱️ Interval: ${task.interval}s</div>
+                  <div>Interval: ${task.interval}s</div>
                   <div>✓ Last run: ${lastRun}</div>
-                  <div>⏭️ Next run: ${isEnabled ? nextRun : 'Disabled'}</div>
+                  <div>Next run: ${isEnabled ? nextRun : 'Disabled'}</div>
                   ${task.last_status ? `<div style="color: ${task.last_status === 'success' ? 'var(--status-completed)' : 'var(--status-failed)'};">Status: ${task.last_status}</div>` : ''}
                 </div>
               </div>
               ${timestampsHtml}
             </div>
-            <button onclick="runTaskManually('${task.id}')" class="btn-primary" style="flex-shrink: 0;">▶️ Run Now</button>
+            <button onclick="runTaskManually('${task.id}')" class="btn-primary" style="flex-shrink: 0;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg> Run Now</button>
           </div>
         </div>
       `;
@@ -158,7 +158,6 @@ export class TasksManager {
         'afterbegin',
         `
         <div style="padding: 15px 20px; background: var(--surface-variant); border-radius: 8px; border: 1px solid var(--border); margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
-          <span style="font-size: 1.2em;">🌍</span>
           <span style="color: var(--text-secondary);">Timezone:</span>
           <strong style="color: var(--text-primary);">${timezone}</strong>
         </div>
@@ -227,7 +226,7 @@ export class TasksManager {
     }
 
     try {
-      UIUtils.showStatus('reorganize-status', '🔍 Analyzing files...', 'info');
+      UIUtils.showStatus('reorganize-status', 'Analyzing files...', 'info');
       document.getElementById('reorganize-results').innerHTML = '';
 
       const params = new URLSearchParams({
@@ -314,7 +313,7 @@ export class TasksManager {
     }
 
     try {
-      UIUtils.showStatus('reorganize-status', '📁 Reorganizing files...', 'info');
+      UIUtils.showStatus('reorganize-status', 'Reorganizing files...', 'info');
       document.getElementById('reorganize-results').innerHTML = '';
 
       const params = new URLSearchParams({
@@ -377,7 +376,7 @@ export class TasksManager {
 
     let html = `
       <div style="padding: 15px; background: var(--background); border: 1px solid var(--border); border-radius: 6px;">
-        <h4 style="margin-top: 0; color: var(--text-primary);">${isPreview ? '🔍 Preview' : '✓ Completed'}</h4>
+        <h4 style="margin-top: 0; color: var(--text-primary);">${isPreview ? 'Preview' : '✓ Completed'}</h4>
         <div style="display: grid; gap: 8px; font-size: 0.95em;">
           <div><strong>Category:</strong> ${data.category}</div>
           <div><strong>Pattern:</strong> ${data.pattern}</div>
@@ -395,7 +394,7 @@ export class TasksManager {
       html += `
         <div style="margin-top: 20px;">
           <h5 style="margin: 0 0 10px 0; color: var(--text-primary); font-size: 1em;">
-            📁 ${isPreview ? 'Folder Changes Preview' : 'Completed Changes'} (${data.changes.length})
+            ${isPreview ? 'Folder Changes Preview' : 'Completed Changes'} (${data.changes.length})
           </h5>
           <div style="max-height: 400px; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px;">
             ${data.changes
@@ -404,17 +403,17 @@ export class TasksManager {
                 (change) => `
               <div style="padding: 10px; border-bottom: 1px solid var(--border-subtle); font-size: 0.9em;">
                 <div style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 6px;">
-                  ${change.title_changed ? '<span title="Title updated">🏷️</span>' : '<span title="Title unchanged">📄</span>'}
+                  ${change.title_changed ? '<span title="Title updated"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span>' : '<span title="Title unchanged"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span>'}
                   <div style="flex: 1;">
                     <div style="color: var(--text-primary); font-weight: 500; margin-bottom: 4px;">
                       ${change.title_changed ? `${this.escapeHtml(change.old_title)} → ${this.escapeHtml(change.new_title)}` : this.escapeHtml(change.new_title)}
                     </div>
                     <div style="font-family: monospace; font-size: 0.85em; color: var(--text-secondary);">
                       <div title="Old folder" style="color: var(--status-failed); margin-bottom: 2px;">
-                        ❌ ${this.escapeHtml(change.old_folder)}/
+                        ✗ ${this.escapeHtml(change.old_folder)}/
                       </div>
                       <div title="New folder" style="color: var(--status-completed);">
-                        ✅ ${this.escapeHtml(change.new_folder)}/
+                        ✓ ${this.escapeHtml(change.new_folder)}/
                       </div>
                     </div>
                   </div>
@@ -434,7 +433,7 @@ export class TasksManager {
             }
           </div>
           <div style="margin-top: 8px; font-size: 0.85em; color: var(--text-hint);">
-            💡 Legend: 🏷️ = Title updated (country added), 📄 = Title unchanged
+            Legend: tag icon = Title updated (country added), file icon = Title unchanged
           </div>
         </div>
       `;
@@ -444,7 +443,7 @@ export class TasksManager {
       if (data.files_reorganized > 0) {
         html += `
           <div style="margin-top: 20px; padding: 10px; background: var(--background-secondary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-hint);">
-            ℹ️ Detailed changes list not available
+            Detailed changes list not available
           </div>
         `;
       }
@@ -453,7 +452,7 @@ export class TasksManager {
     if (data.errors && data.errors.length > 0) {
       html += `
         <div style="margin-top: 15px; padding: 10px; background: var(--status-failed-bg); border: 1px solid var(--status-failed); border-radius: 4px;">
-          <strong style="color: var(--status-failed);">⚠️ Errors (${data.errors.length}):</strong>
+          <strong style="color: var(--status-failed);">Errors (${data.errors.length}):</strong>
           <ul style="margin: 8px 0 0 20px; color: var(--text-secondary); font-size: 0.9em;">
             ${data.errors
               .slice(0, 5)

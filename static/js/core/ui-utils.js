@@ -291,13 +291,17 @@ export class UIUtils {
    * @example
    * UIUtils.toTitleCase('hello world'); // 'Hello World'
    * UIUtils.toTitleCase('nat geo mines'); // 'Nat Geo Mines'
+   * UIUtils.toTitleCase('pc magazine'); // 'PC Magazine'
    */
   static toTitleCase(str) {
     if (!str) return '';
     return str
-      .toLowerCase()
       .split(' ')
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .map((word) => {
+        // Preserve words that are already all-caps (acronyms like PC, USA, TV)
+        if (word.length > 1 && word === word.toUpperCase()) return word;
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+      })
       .join(' ');
   }
 

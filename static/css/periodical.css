@@ -331,14 +331,14 @@
 
 .issues-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 24px;
   margin-bottom: 40px;
 }
 
 .issue-card {
   background: var(--surface);
-  border: 2px solid var(--border-color);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   overflow: hidden;
   transition:
@@ -384,7 +384,7 @@
 }
 
 .issue-info {
-  padding: 12px;
+  padding: 16px;
   flex-grow: 1;
   display: flex;
   flex-direction: column;
@@ -411,6 +411,7 @@
   display: flex;
   gap: 6px;
   margin-top: 12px;
+  justify-content: flex-start;
 }
 
 .issue-actions button {
@@ -429,6 +430,7 @@
 
 .open-pdf-btn {
   flex: 1;
+  min-width: 0;
   background: var(--primary-color);
   color: var(--on-primary);
   white-space: nowrap;
@@ -436,6 +438,7 @@
   align-items: center;
   justify-content: center;
   gap: 4px;
+  padding: 6px 8px;
 }
 
 .open-pdf-btn .btn-text {
@@ -450,12 +453,11 @@
 
 .metadata-btn,
 .delete-issue-btn {
+  flex: none;
   background: var(--surface-variant);
   color: var(--text-primary);
   border: 2px solid var(--border-color);
   padding: 6px 8px;
-  min-width: auto;
-  font-size: 16px;
   width: 36px;
   height: 36px;
   display: flex;
@@ -804,17 +806,23 @@ body.dark-mode #status-message.status-error {
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
   .issues-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 16px;
     padding: 0 8px;
+    margin-bottom: 30px;
   }
 
   .issue-cover {
-    height: 160px;
+    height: 180px;
+  }
+
+  .issue-cover-placeholder {
+    font-size: 10px;
+    padding: 10px;
   }
 
   .issue-info {
-    padding: 8px;
+    padding: 10px;
   }
 
   .issue-actions {
@@ -834,9 +842,9 @@ body.dark-mode #status-message.status-error {
   .delete-issue-btn {
     flex: 1 !important;
     height: 36px !important;
-    width: auto !important;
+    width: 0 !important;
+    min-width: 0 !important;
     padding: 0 !important;
-    font-size: 16px !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
@@ -846,6 +854,11 @@ body.dark-mode #status-message.status-error {
     color: var(--text-primary) !important;
     cursor: pointer !important;
     transition: all 0.2s ease !important;
+    overflow: hidden !important;
+  }
+
+  .open-pdf-btn .btn-text {
+    display: none !important;
   }
 
   .open-pdf-btn {

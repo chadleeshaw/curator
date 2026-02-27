@@ -729,7 +729,8 @@ export class LibraryManager {
       // No covers at all - show placeholder
       const placeholder = document.createElement('div');
       placeholder.className = 'stack-cover-placeholder';
-      placeholder.textContent = '📚';
+      placeholder.innerHTML =
+        '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>';
       cover.appendChild(placeholder);
     } else if (coverIds.length === 1) {
       // Single cover - show full size
@@ -943,7 +944,8 @@ export class LibraryManager {
     // Delete button
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'btn-icon btn-danger';
-    deleteBtn.textContent = '\uD83D\uDDD1\uFE0F';
+    deleteBtn.innerHTML =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
     deleteBtn.title = 'Delete this periodical';
     deleteBtn.onclick = (e) => {
       e.stopPropagation();

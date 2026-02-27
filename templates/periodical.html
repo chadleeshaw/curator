@@ -10,7 +10,7 @@
     <title>{{PERIODICAL_TITLE}} - Curator</title>
     <link
       rel="icon"
-      href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🪙</text></svg>"
+      href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%237b68ee%22 stroke-width=%221.75%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z%22/><path d=%22M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z%22/></svg>"
     />
     <link rel="stylesheet" href="/static/css/base.css" />
     <link rel="stylesheet" href="/static/css/themes.css" />
@@ -26,7 +26,23 @@
       <span class="separator">/</span>
       <span class="current">{{PERIODICAL_TITLE}}</span>
       <button class="logout-btn breadcrumb-logout" onclick="periodicalPageLogout()">
-        🚪 Logout
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+          <polyline points="16 17 21 12 16 7" />
+          <line x1="21" y1="12" x2="9" y2="12" />
+        </svg>
+        Logout
       </button>
     </nav>
 
@@ -40,7 +56,22 @@
         <div class="header-content-row">
           <div>
             <h1 id="periodical-title">
-              <span class="header-icon">📖</span><span>{{PERIODICAL_TITLE}}</span>
+              <span class="header-icon"
+                ><svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="28"
+                  height="28"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--primary-color)"
+                  stroke-width="1.75"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg></span
+              ><span>{{PERIODICAL_TITLE}}</span>
             </h1>
             <p id="periodical-subtitle">Published Issues by Year</p>
           </div>
@@ -87,7 +118,28 @@
           <p id="delete-modal-title" class="delete-modal-subtitle"></p>
 
           <div class="bg-warning rounded-lg p-15 mb-20">
-            <strong>⚠️ Warning:</strong> This action cannot be undone.
+            <strong>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="var(--warning-color)"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                style="vertical-align: middle; margin-right: 4px"
+              >
+                <path
+                  d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" /></svg
+              >Warning:
+            </strong>
+            This action cannot be undone.
           </div>
 
           <div class="bg-surface-variant rounded-lg p-15 mb-20">
@@ -142,7 +194,24 @@
     <div id="metadata-modal" class="metadata-modal">
       <div class="metadata-content">
         <div class="metadata-header">
-          <h3>📋 Issue Metadata</h3>
+          <h3>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              style="vertical-align: middle; margin-right: 6px"
+            >
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg
+            >Issue Metadata
+          </h3>
           <button class="metadata-close" onclick="closeMetadataModal()">&times;</button>
         </div>
         <div class="metadata-body" id="metadata-body">
@@ -155,7 +224,23 @@
               <select id="edit-language" class="form-input">
                 <!-- Languages populated dynamically from API -->
               </select>
-              <small class="form-hint">📌 Controlled by tracking record</small>
+              <small class="form-hint">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                  style="vertical-align: middle; margin-right: 2px"
+                >
+                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" /></svg
+                >Controlled by tracking record
+              </small>
             </div>
             <div class="form-field">
               <label class="form-label">Year</label>
@@ -167,7 +252,24 @@
                 max="2100"
                 class="form-input"
               />
-              <small class="form-hint">✏️ Issue-specific</small>
+              <small class="form-hint">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                  style="vertical-align: middle; margin-right: 2px"
+                >
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg
+                >Issue-specific
+              </small>
             </div>
             <div class="form-field">
               <label class="form-label">Month/Period</label>
@@ -178,7 +280,22 @@
                 class="form-input"
               />
               <small class="form-hint"
-                >✏️ Issue-specific (supports multi-month like "June/July")</small
+                ><svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                  style="vertical-align: middle; margin-right: 2px"
+                >
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg
+                >Issue-specific (supports multi-month like "June/July")</small
               >
             </div>
             <div id="edit-country-container" class="form-field">
@@ -189,7 +306,23 @@
                 placeholder="e.g., US, UK, International"
                 class="form-input"
               />
-              <small class="form-hint">📌 Controlled by tracking record</small>
+              <small class="form-hint">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                  style="vertical-align: middle; margin-right: 2px"
+                >
+                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" /></svg
+                >Controlled by tracking record
+              </small>
             </div>
             <div class="form-field">
               <label class="form-label">Issue Number</label>
@@ -199,7 +332,24 @@
                 placeholder="e.g., 405, 2024-01"
                 class="form-input"
               />
-              <small class="form-hint">✏️ Issue-specific</small>
+              <small class="form-hint"
+                ><svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                  style="vertical-align: middle; margin-right: 2px"
+                >
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg
+                >Issue-specific</small
+              >
             </div>
             <div class="form-field">
               <label class="form-label">Volume</label>
@@ -209,7 +359,24 @@
                 placeholder="e.g., 32, Vol. 32"
                 class="form-input"
               />
-              <small class="form-hint">✏️ Issue-specific</small>
+              <small class="form-hint"
+                ><svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                  style="vertical-align: middle; margin-right: 2px"
+                >
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg
+                >Issue-specific</small
+              >
             </div>
             <div id="special-edition-name-field" class="hidden form-field">
               <label class="form-label">Special Edition Name</label>
@@ -219,7 +386,24 @@
                 placeholder="e.g., Swimsuit Edition, Holiday Special"
                 class="form-input"
               />
-              <small class="form-hint">✏️ Issue-specific</small>
+              <small class="form-hint"
+                ><svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                  style="vertical-align: middle; margin-right: 2px"
+                >
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg
+                >Issue-specific</small
+              >
             </div>
             <div class="form-field">
               <label class="form-label">Cover Page Number</label>
@@ -231,7 +415,22 @@
                 class="form-input"
               />
               <small class="form-hint"
-                >📄 Specify which PDF page to use as cover (default: 1)</small
+                ><svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                  style="vertical-align: middle; margin-right: 2px"
+                >
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" /></svg
+                >Specify which PDF page to use as cover (default: 1)</small
               >
             </div>
             <div class="form-field">
@@ -252,7 +451,23 @@
                 </div>
               </div>
               <small class="form-hint"
-                >🖼️ Optional: Upload a custom cover image (JPG, PNG, WebP)</small
+                ><svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                  style="vertical-align: middle; margin-right: 2px"
+                >
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <polyline points="21 15 16 10 5 21" /></svg
+                >Optional: Upload a custom cover image (JPG, PNG, WebP)</small
               >
             </div>
           </div>
@@ -260,25 +475,106 @@
         <div class="metadata-footer">
           <div id="metadata-view-buttons" class="metadata-view-buttons">
             <button onclick="enableMetadataEdit()" class="btn-primary full-width">
-              ✏️ Edit Metadata
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+              Edit Metadata
             </button>
             <button
               onclick="toggleSpecialEdition()"
               class="btn-secondary full-width"
               id="toggle-special-btn"
             >
-              ⭐ Toggle Special Edition
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <polygon
+                  points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+                />
+              </svg>
+              Toggle Special Edition
             </button>
             <button onclick="openMoveIssueModal()" class="btn-secondary full-width">
-              🔀 Move to Different Tracking
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="18" cy="18" r="3" />
+                <circle cx="6" cy="6" r="3" />
+                <path d="M13 6h3a2 2 0 0 1 2 2v7" />
+                <line x1="6" y1="9" x2="6" y2="21" />
+              </svg>
+              Move to Different Tracking
             </button>
             <button onclick="regenerateThumbnailOcr()" class="btn-secondary full-width">
-              🔄 Regenerate Thumbnail &amp; OCR
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <polyline points="23 4 23 10 17 10" />
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+              </svg>
+              Regenerate Thumbnail &amp; OCR
             </button>
           </div>
           <div id="metadata-edit-buttons" class="hidden metadata-edit-buttons">
             <button onclick="cancelMetadataEdit()" class="btn-secondary flex-1">Cancel</button>
-            <button onclick="saveMetadataEdit()" class="btn-primary flex-1">💾 Save Changes</button>
+            <button onclick="saveMetadataEdit()" class="btn-primary flex-1">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                <polyline points="17 21 17 13 7 13 7 21" />
+                <polyline points="7 3 7 8 15 8" />
+              </svg>
+              Save Changes
+            </button>
           </div>
         </div>
       </div>
@@ -287,7 +583,26 @@
     <!-- Move Issue Modal -->
     <div id="move-issue-modal" class="modal hidden">
       <div class="modal-content move-modal-content">
-        <h3>🔀 Move Issue to Different Tracking</h3>
+        <h3>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            style="vertical-align: middle; margin-right: 6px"
+          >
+            <circle cx="18" cy="18" r="3" />
+            <circle cx="6" cy="6" r="3" />
+            <path d="M13 6h3a2 2 0 0 1 2 2v7" />
+            <line x1="6" y1="9" x2="6" y2="21" /></svg
+          >Move Issue to Different Tracking
+        </h3>
         <p class="modal-description">
           Select which tracking record this issue should belong to. This is useful for correcting
           misplaced issues.
@@ -320,12 +635,64 @@
         </div>
         <div class="bulk-action-buttons">
           <button onclick="openBulkMoveModal()" class="btn-primary bulk-btn">
-            🔀 Move to Tracking
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="18" cy="18" r="3" />
+              <circle cx="6" cy="6" r="3" />
+              <path d="M13 6h3a2 2 0 0 1 2 2v7" />
+              <line x1="6" y1="9" x2="6" y2="21" />
+            </svg>
+            Move to Tracking
           </button>
           <button onclick="openBulkRegenerateModal()" class="btn-primary bulk-btn">
-            🔄 Regenerate Thumbnail & OCR
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <polyline points="23 4 23 10 17 10" />
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+            </svg>
+            Regenerate Thumbnail &amp; OCR
           </button>
-          <button onclick="openBulkDeleteModal()" class="btn-delete bulk-btn">🗑️ Delete</button>
+          <button onclick="openBulkDeleteModal()" class="btn-delete bulk-btn">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+              <path d="M10 11v6" />
+              <path d="M14 11v6" />
+              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+            </svg>
+            Delete
+          </button>
           <button onclick="toggleBulkSelectMode()" class="btn-secondary bulk-btn">Cancel</button>
         </div>
       </div>
@@ -334,7 +701,24 @@
     <!-- Bulk Regenerate Thumbnail & OCR Modal -->
     <div id="bulk-regenerate-modal" class="modal hidden">
       <div class="modal-content delete-modal-content" style="max-width: 600px">
-        <h3>🔄 Regenerate Thumbnails & OCR</h3>
+        <h3>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            style="vertical-align: middle; margin-right: 6px"
+          >
+            <polyline points="23 4 23 10 17 10" />
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg
+          >Regenerate Thumbnails &amp; OCR
+        </h3>
         <p class="delete-modal-subtitle">
           Regenerate cover thumbnails and queue OCR for
           <strong id="bulk-regenerate-count">0</strong> selected issue(s)?
@@ -363,7 +747,26 @@
     <!-- Bulk Move Modal -->
     <div id="bulk-move-modal" class="modal hidden">
       <div class="modal-content move-modal-content">
-        <h3>🔀 Move Issues to Different Tracking</h3>
+        <h3>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            style="vertical-align: middle; margin-right: 6px"
+          >
+            <circle cx="18" cy="18" r="3" />
+            <circle cx="6" cy="6" r="3" />
+            <path d="M13 6h3a2 2 0 0 1 2 2v7" />
+            <line x1="6" y1="9" x2="6" y2="21" /></svg
+          >Move Issues to Different Tracking
+        </h3>
         <p class="modal-description">
           Move <strong id="bulk-move-count">0</strong> selected issue(s) to a different tracking
           record.
@@ -401,7 +804,28 @@
         </p>
 
         <div class="bg-warning rounded-lg p-15 mb-20">
-          <strong>⚠️ Warning:</strong> This action cannot be undone.
+          <strong>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="var(--warning-color)"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              style="vertical-align: middle; margin-right: 4px"
+            >
+              <path
+                d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+              />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" /></svg
+            >Warning:
+          </strong>
+          This action cannot be undone.
         </div>
 
         <div class="bg-surface-variant rounded-lg p-15 mb-20">

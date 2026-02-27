@@ -307,16 +307,18 @@ python main.py
 ### Available Commands
 
 ```bash
-make help           # Show all commands
-make install        # Install dependencies
-make run            # Run the application
-make test           # Run all tests
-make test-unit      # Fast unit tests only
-make test-coverage  # Run tests with coverage
-make lint           # Check code style
-make ci-lint        # CI linters (matches GitHub Actions)
-make format         # Auto-format code
-make clean          # Clean build artifacts
+make help                # Show all commands
+make install             # Install dependencies
+make run                 # Run the application
+make test                # Run all tests
+make test-unit           # Fast unit tests only
+make test-coverage       # Run tests with coverage
+make lint                # Check code style
+make ci-lint             # CI linters (matches GitHub Actions)
+make format              # Auto-format code
+make clean               # Clean build artifacts
+make screenshots         # Capture all UI screenshots (app must be running)
+make screenshot-library  # Capture library tab screenshot only
 ```
 
 The project includes a pre-push Git hook that runs `make ci-lint` automatically.

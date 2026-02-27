@@ -100,10 +100,10 @@ export function displayMetadata(data) {
   const toggleBtn = document.getElementById('toggle-special-btn');
   if (toggleBtn) {
     if (isSpecial) {
-      toggleBtn.textContent = '⭐ Unmark Special Edition';
+      toggleBtn.textContent = 'Unmark Special Edition';
       toggleBtn.title = 'Remove special edition status';
     } else {
-      toggleBtn.textContent = '⭐ Mark as Special Edition';
+      toggleBtn.textContent = 'Mark as Special Edition';
       toggleBtn.title = 'Mark this issue as a special edition';
     }
   }
@@ -153,7 +153,7 @@ export function displayMetadata(data) {
   const dbSection = document.createElement('div');
   dbSection.style.marginBottom = '20px';
   dbSection.innerHTML =
-    '<h4 style="margin: 0 0 10px 0; color: var(--primary-color);">💾 Database Fields</h4>';
+    '<h4 style="margin: 0 0 10px 0; color: var(--primary-color);">Database Fields</h4>';
   metadataBody.appendChild(dbSection);
 
   // Display all database fields dynamically (excluding JSON columns which are shown separately)
@@ -193,7 +193,7 @@ export function displayMetadata(data) {
     const derivedSection = document.createElement('div');
     derivedSection.style.marginTop = '20px';
     derivedSection.innerHTML =
-      '<h4 style="margin: 0 0 10px 0; color: var(--primary-color);">📊 Derived Metadata (Merged from Scans)</h4>';
+      '<h4 style="margin: 0 0 10px 0; color: var(--primary-color);">Derived Metadata (Merged from Scans)</h4>';
     metadataBody.appendChild(derivedSection);
 
     // Display all derived metadata fields dynamically
@@ -225,9 +225,9 @@ export function displayMetadata(data) {
         // Show value with source badge
         const sourceBadge =
           {
-            file_scan: '📁 File',
-            text_scan: '📄 Text',
-            ocr_scan: '🔍 OCR',
+            file_scan: 'File',
+            text_scan: 'Text',
+            ocr_scan: 'OCR',
           }[source] || source;
 
         const confBadge =
@@ -427,7 +427,7 @@ export function enableMetadataEdit() {
   // Update the label to indicate if it's currently marked as special edition
   const specialLabel = specialField.querySelector('label');
   if (isSpecial) {
-    specialLabel.textContent = 'Special Edition Name ⭐';
+    specialLabel.textContent = 'Special Edition Name';
   } else {
     specialLabel.textContent = 'Special Edition Name';
   }
@@ -492,7 +492,7 @@ export function clearCoverUpload() {
 export async function regenerateThumbnailOcr() {
   if (!_state.currentPeriodicalId) return;
 
-  showNotification('🔄 Regenerating thumbnail and queuing OCR...', 'info');
+  showNotification('Regenerating thumbnail and queuing OCR...', 'info');
 
   try {
     const data = await APIHelper.executeWithErrorHandling(async () => {
@@ -503,7 +503,7 @@ export async function regenerateThumbnailOcr() {
     }, 'Periodical');
 
     if (data.skipped) {
-      showNotification(`ℹ️ ${data.message}`, 'info');
+      showNotification(data.message, 'info');
       return;
     }
 
@@ -511,7 +511,7 @@ export async function regenerateThumbnailOcr() {
       ? 'OCR job queued — metadata will update when processing completes.'
       : data.ocr_message || 'OCR was not queued.';
 
-    showNotification(`✅ Thumbnail regenerated. ${ocrNote}`, 'success');
+    showNotification(`Thumbnail regenerated. ${ocrNote}`, 'success');
 
     // Refresh the metadata modal and page to show updated cover
     await viewMetadata(_state.currentPeriodicalId);
@@ -539,7 +539,7 @@ async function uploadCoverImage(periodicalId) {
   const formData = new FormData();
   formData.append('file', fileInput.files[0]);
 
-  showNotification('🖼️ Uploading cover image...', 'info');
+  showNotification('Uploading cover image...', 'info');
 
   const response = await APIClient.authenticatedFetch(
     `/api/periodicals/${periodicalId}/upload-cover`,
@@ -607,14 +607,11 @@ export async function saveMetadataEdit() {
     if (hasCustomCover) {
       await uploadCoverImage(_state.currentPeriodicalId);
     } else if (shouldRegenerateCover) {
-      showNotification('🔄 Regenerating cover from page ' + coverPage, 'info');
+      showNotification('Regenerating cover from page ' + coverPage, 'info');
       await APIHelper.executeWithErrorHandling(async () => {
-        await APIClient.post(
-          `/api/periodicals/${_state.currentPeriodicalId}/regenerate-cover`,
-          {
-            page_number: parseInt(coverPage),
-          }
-        );
+        await APIClient.post(`/api/periodicals/${_state.currentPeriodicalId}/regenerate-cover`, {
+          page_number: parseInt(coverPage),
+        });
       }, 'Periodical');
     }
 
@@ -624,14 +621,14 @@ export async function saveMetadataEdit() {
     clearCoverUpload();
 
     // Show success message
-    showNotification('✅ Metadata updated successfully', 'success');
+    showNotification('Metadata updated successfully', 'success');
 
     // Refresh the page to show updated data
     setTimeout(() => window.location.reload(), 1000);
   } catch (error) {
     console.error('[Periodical] Error updating metadata:', error);
     const message = error.toUserMessage ? error.toUserMessage() : 'Failed to update metadata';
-    showNotification('❌ ' + message, 'error');
+    showNotification('Error: ' + message, 'error');
   }
 }
 
