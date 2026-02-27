@@ -9,6 +9,7 @@
   /* Reserve space for the offset layers so they don't overlap neighbours */
   margin-right: 10px;
   margin-bottom: 10px;
+  height: 100%;
 }
 
 /* Remove pseudo-element approach — no ::before/::after on wrap */
@@ -47,6 +48,9 @@
   transition: border-color var(--transition-fast);
   /* layout+style contain only — no paint containment */
   contain: layout style;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Keep cover top-corners rounded (card overflow:hidden would normally do this,
@@ -58,17 +62,6 @@
 /* Highlight the card border on wrapper hover */
 .stack-card-wrap:hover .stack-card {
   border-color: var(--primary-color);
-}
-
-/* + button inside library stack card — match Open button sizing */
-.stack-card .periodical-actions .stack-toggle-btn {
-  width: auto;
-  height: auto;
-  flex: 1;
-  padding: 8px 14px;
-  font-size: 18px;
-  font-weight: 700;
-  border-radius: var(--radius-sm);
 }
 
 /* Fanned cover needs relative positioning for layers */
@@ -623,7 +616,6 @@
   text-overflow: unset !important;
   white-space: normal !important;
   line-height: 1.35;
-  min-height: 2.7em;
   margin-bottom: 6px !important;
 }
 
@@ -655,7 +647,7 @@
 .stack-detail-subtitle {
   color: var(--text-secondary);
   font-size: 12px;
-  margin: 0 !important;
+  margin: 0 0 8px !important;
   line-height: 1.4;
 }
 

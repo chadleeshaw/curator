@@ -19,35 +19,15 @@
     <link rel="stylesheet" href="/static/css/pages.css" />
     <link rel="stylesheet" href="/static/css/periodical.css" />
   </head>
-  <body>
+  <body class="detail-body">
     <!-- Breadcrumb (outside container for sticky positioning) -->
     <nav id="breadcrumb" class="breadcrumb detail-breadcrumb">
       <a href="/#library">Library</a>
       <span class="separator">/</span>
       <span class="current">{{PERIODICAL_TITLE}}</span>
-      <button class="logout-btn breadcrumb-logout" onclick="periodicalPageLogout()">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-          <polyline points="16 17 21 12 16 7" />
-          <line x1="21" y1="12" x2="9" y2="12" />
-        </svg>
-        Logout
-      </button>
     </nav>
-
     <div
-      class="container"
+      class="container detail-page"
       id="periodical-container"
       data-years="{{YEARS_DATA}}"
       data-special-editions="{{SPECIAL_EDITIONS_DATA}}"
@@ -887,17 +867,5 @@
     </div>
 
     <script type="module" src="/static/js/periodical.js?v=1768776457"></script>
-    <script>
-      function periodicalPageLogout() {
-        const token = localStorage.getItem('auth_token');
-        fetch('/api/auth/logout', {
-          method: 'POST',
-          headers: token ? { Authorization: 'Bearer ' + token } : {},
-        }).finally(() => {
-          localStorage.removeItem('auth_token');
-          window.location.href = '/login.html';
-        });
-      }
-    </script>
   </body>
 </html>

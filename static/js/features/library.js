@@ -775,14 +775,25 @@ export class LibraryManager {
     h4.textContent = stack.name;
     info.appendChild(h4);
 
-    if (stack.description) {
-      const desc = document.createElement('p');
-      desc.textContent = stack.description;
-      desc.style.overflow = 'hidden';
-      desc.style.textOverflow = 'ellipsis';
-      desc.style.whiteSpace = 'nowrap';
-      info.appendChild(desc);
-    }
+    const desc = document.createElement('p');
+    desc.textContent = stack.description || '';
+    desc.style.overflow = 'hidden';
+    desc.style.textOverflow = 'ellipsis';
+    desc.style.whiteSpace = 'nowrap';
+    desc.style.visibility = stack.description ? 'visible' : 'hidden';
+    info.appendChild(desc);
+
+    // Derive latest issue date from the items array
+    const latestDate = items.reduce((best, item) => {
+      if (!item.issue_date) return best;
+      const d = new Date(item.issue_date);
+      return !best || d > best ? d : best;
+    }, null);
+
+    const latestP = document.createElement('p');
+    latestP.textContent = latestDate ? `Latest: ${latestDate.toLocaleDateString()}` : '';
+    latestP.style.visibility = latestDate ? 'visible' : 'hidden';
+    info.appendChild(latestP);
 
     const countP = document.createElement('p');
     countP.textContent = `${stack.member_count} periodical${stack.member_count !== 1 ? 's' : ''}`;
@@ -793,9 +804,9 @@ export class LibraryManager {
     actionsDiv.className = 'periodical-actions';
 
     const viewBtn = document.createElement('button');
-    viewBtn.className = 'stack-toggle-btn';
+    viewBtn.className = 'btn-primary card-open-btn';
+    viewBtn.textContent = 'Open';
     viewBtn.setAttribute('aria-label', 'Open stack');
-    viewBtn.innerHTML = '<span class="stack-toggle-icon">→</span>';
     viewBtn.onclick = (e) => {
       e.stopPropagation();
       window.location.href = `/stacks/${stack.slug}`;
@@ -928,12 +939,8 @@ export class LibraryManager {
 
     // View button
     const viewBtn = document.createElement('button');
-    viewBtn.className = 'btn-primary';
+    viewBtn.className = 'btn-primary card-open-btn';
     viewBtn.textContent = 'Open';
-    viewBtn.style.flex = '1';
-    viewBtn.style.padding = '8px 14px';
-    viewBtn.style.fontSize = '13px';
-    viewBtn.style.fontWeight = '600';
     viewBtn.onclick = (e) => {
       e.stopPropagation();
       e.preventDefault();

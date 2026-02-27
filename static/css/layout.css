@@ -11,6 +11,22 @@
   padding: 24px;
 }
 
+/* Detail pages (stack, periodical) wrap their content in a surface card
+   so they match the Library tab's visual depth */
+.container.detail-page {
+  background: var(--surface);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-color);
+}
+
+/* On detail pages, stretch the surface card to fill remaining viewport height.
+   The breadcrumb nav is ~44px; subtract that plus the container's top margin (12px). */
+.detail-body .container.detail-page {
+  margin-top: 12px;
+  min-height: calc(100vh - 104px);
+}
+
 /* ==========================================================================
    Header
    ========================================================================== */

@@ -180,12 +180,6 @@
   box-shadow: var(--shadow-md);
 }
 
-.breadcrumb-logout {
-  margin-left: auto;
-  padding: 6px 14px;
-  font-size: 0.85em;
-}
-
 /* Collapsible header banner (shared by periodical + stacks pages) */
 .collapsible-header {
   transition:
@@ -331,33 +325,9 @@
 
 .issues-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(150px, 180px));
   gap: 24px;
   margin-bottom: 40px;
-}
-
-@media (min-width: 600px) {
-  .issues-grid {
-    grid-template-columns: repeat(4, 1fr);
-  }
-}
-
-@media (min-width: 800px) {
-  .issues-grid {
-    grid-template-columns: repeat(5, 1fr);
-  }
-}
-
-@media (min-width: 1000px) {
-  .issues-grid {
-    grid-template-columns: repeat(6, 1fr);
-  }
-}
-
-@media (min-width: 1300px) {
-  .issues-grid {
-    grid-template-columns: repeat(7, 1fr);
-  }
 }
 
 .issue-card {
@@ -456,19 +426,22 @@
 }
 
 .open-pdf-btn {
-  flex: none;
-  width: 36px;
-  height: 36px;
+  flex: 1;
   background: var(--primary-color);
   color: var(--on-primary);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 6px;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-xl);
+  height: 36px;
 }
 
 .open-pdf-btn .btn-text {
-  display: none;
+  display: inline;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .open-pdf-btn:hover {
@@ -885,6 +858,10 @@ body.dark-mode #status-message.status-error {
     background: var(--primary-color) !important;
     border-color: var(--primary-color) !important;
     color: var(--on-primary) !important;
+  }
+
+  .open-pdf-btn .btn-text {
+    display: none !important;
   }
 
   .open-pdf-btn:hover,

@@ -192,9 +192,11 @@ function navigateToItem(item) {
   let url = `/periodicals/${encodeURIComponent(item.title)}`;
   const params = new URLSearchParams();
   if (item.language) params.set('language', item.language);
-  // Pass the real stack name so the periodical breadcrumb can use it without an extra API call
+  // Pass stack name and slug so the periodical breadcrumb can use them without an extra API call
   const stackNameEl = document.getElementById('stack-title');
   if (stackNameEl) params.set('from_stack_name', stackNameEl.textContent.trim());
+  const slugMatch = window.location.pathname.match(/^\/stacks\/([^/]+)/);
+  if (slugMatch) params.set('from_stack_slug', slugMatch[1]);
   const qs = params.toString();
   if (qs) url += `?${qs}`;
   window.location.href = url;
@@ -275,11 +277,20 @@ function createMemberCard(item) {
   }
   info.appendChild(subtitle);
 
-  // Add inline navigation hint at bottom of info section
-  const navHint = document.createElement('div');
-  navHint.className = 'stack-detail-nav-hint';
-  navHint.textContent = 'View →';
-  info.appendChild(navHint);
+  // Action buttons matching library card style
+  const actionsDiv = document.createElement('div');
+  actionsDiv.className = 'periodical-actions';
+
+  const openBtn = document.createElement('button');
+  openBtn.className = 'btn-primary card-open-btn';
+  openBtn.textContent = 'Open';
+  openBtn.setAttribute('aria-label', `Open ${item.title}`);
+  openBtn.onclick = (e) => {
+    e.stopPropagation();
+    navigateToItem(item);
+  };
+  actionsDiv.appendChild(openBtn);
+  info.appendChild(actionsDiv);
 
   card.appendChild(info);
 

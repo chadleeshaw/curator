@@ -51,14 +51,20 @@ export class PageReader {
     this.metadata = null;
     this.currentPageIndex = 0;
     this.loading = false;
-    // Mobile portrait: fit-width, Desktop/landscape: fit-height
+    // Fit mode: restore saved preference, fall back to viewport heuristic
+    const _savedFitMode = localStorage.getItem('reader-fit-mode');
     this.fitMode =
-      window.innerWidth <= 768 && window.innerHeight > window.innerWidth
+      _savedFitMode ||
+      (window.innerWidth <= 768 && window.innerHeight > window.innerWidth
         ? 'fit-width'
-        : 'fit-height';
+        : 'fit-height');
     this.zoomLevel = 100; // 50-400%
-    // Default to spread mode on desktop or landscape orientation
-    this.spreadMode = window.innerWidth > 768 || window.innerWidth > window.innerHeight;
+    // Spread mode: restore saved preference, fall back to viewport heuristic
+    const _savedSpread = localStorage.getItem('reader-spread-mode');
+    this.spreadMode =
+      _savedSpread !== null
+        ? _savedSpread === 'true'
+        : window.innerWidth > 768 || window.innerWidth > window.innerHeight;
     this.coverPageIndex = 0; // Index of the cover page (default 0)
     this.prefetchCache = new Map(); // Cache for prefetched images
     this.workerInitialized = false; // Media worker status
@@ -521,6 +527,7 @@ export class PageReader {
    */
   setFitMode(mode) {
     this.fitMode = mode;
+    localStorage.setItem('reader-fit-mode', mode);
 
     const singleContainer = document.querySelector('.page-image-container');
     const spreadContainer = document.querySelector('.page-spread-container');
@@ -643,6 +650,7 @@ export class PageReader {
    */
   async toggleSpreadMode() {
     this.spreadMode = !this.spreadMode;
+    localStorage.setItem('reader-spread-mode', String(this.spreadMode));
     const btn = document.getElementById('spread-btn');
     if (btn) {
       btn.classList.toggle('active', this.spreadMode);
@@ -682,6 +690,7 @@ export class PageReader {
 
       if (shouldBeSpread !== this.spreadMode) {
         this.spreadMode = shouldBeSpread;
+        localStorage.setItem('reader-spread-mode', String(this.spreadMode));
         needsReload = true;
 
         const spreadBtn = document.getElementById('spread-btn');
@@ -696,6 +705,7 @@ export class PageReader {
 
       if (shouldBeFitMode !== this.fitMode) {
         this.fitMode = shouldBeFitMode;
+        localStorage.setItem('reader-fit-mode', this.fitMode);
         needsReload = true;
 
         document.querySelectorAll('.fit-btn[data-mode]').forEach((btn) => {
