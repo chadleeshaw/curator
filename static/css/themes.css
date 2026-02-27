@@ -27,10 +27,10 @@
     --input-bg: #21222c;
 
     /* Primary color override for dark mode */
-    --primary-color: #8b5cf6; /* Deeper Purple */
-    --primary-rgb: 139, 92, 246;
+    --primary-color: #6272a4; /* Dracula Comment color (more muted purple/blue) */
+    --primary-rgb: 98, 114, 164;
     --on-primary: #f8f8f2;
-    --primary-dark: #7c3aed;
+    --primary-dark: #44475a;
   }
 
   :root:not([data-theme='light']) img {
