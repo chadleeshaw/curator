@@ -858,7 +858,7 @@ export class TrackingManager {
             </div>
             <div class="stack-group-meta">
               <span class="meta-item"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 2 7 12 12 22 7"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg> ${items.length} periodical${items.length !== 1 ? 's' : ''}</span>
-              <span class="meta-item"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 2 7 12 12 22 7"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg> ${totalIssues} issue${totalIssues !== 1 ? 's' : ''}</span>
+              <span class="meta-item"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg> ${totalIssues} issue${totalIssues !== 1 ? 's' : ''}</span>
               ${failedHtml}
             </div>
           </div>
@@ -1056,10 +1056,12 @@ export class TrackingManager {
       trackingBadge = '<span class="tracking-badge badge-watch">Watch Only</span>';
     }
 
-    const countryStats = country ? `<span class="country">${country}</span>` : '';
+    const countryStats = country
+      ? `<span class="country"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-1px"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> ${country}</span>`
+      : '';
     const issueStats =
       totalKnown > 0 ? `<span class="issue-count">${totalKnown} issues found</span>` : '';
-    const libraryStats = `<span class="library-count">${libraryCount} in library</span>`;
+    const libraryStats = `<span class="library-count"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-1px"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg> ${libraryCount} in library</span>`;
     const selectedStats =
       selectedCount > 0
         ? `<span class="selected-count">\u2022 ${selectedCount} selected</span>`
@@ -1081,8 +1083,8 @@ export class TrackingManager {
           ${trackingBadge}
         </div>
         <div class="tracked-card-meta">
-          <span class="meta-item">${category ?? 'Auto-detect'}</span>
-          ${language ? `<span class="meta-item">${language}</span>` : ''}
+          <span class="meta-item"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-1px"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> ${category ?? 'Auto-detect'}</span>
+          ${language ? `<span class="meta-item"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-1px"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> ${language}</span>` : ''}
           ${countryStats}
           ${issueStats}
           ${libraryStats}
@@ -2149,7 +2151,7 @@ export class TrackingManager {
       <div class="search-summary">
         <h3>Search Results for "${escapeHtml(title)}"${cacheInfo}</h3>
         <div class="summary-stats">
-          <span class="stat"><strong>${filteredLibraryCount}</strong> in library</span>
+          <span class="stat"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-1px"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg> <strong>${filteredLibraryCount}</strong> in library</span>
           <span class="stat${filteredAvailableCount > 0 ? ' clickable-stat' : ''}" ${filteredAvailableCount > 0 ? 'onclick="downloadAllAvailable()" title="Click to download all available issues"' : ''}><strong>${filteredAvailableCount}</strong> available</span>
           <span class="stat"><strong>${filteredTotalCount}</strong> total</span>
         </div>
