@@ -705,8 +705,12 @@
 /* Queue Stats Grid */
 .queue-stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
   gap: 15px;
+}
+
+#queue-stats .queue-stats-grid {
+  grid-template-columns: repeat(6, 1fr);
 }
 
 .queue-stat-item {
@@ -1646,9 +1650,9 @@
   .open-pdf-btn,
   .metadata-btn,
   .delete-issue-btn {
-    flex: 1 !important;
+    flex: none !important;
     height: 36px !important;
-    width: auto !important;
+    width: 36px !important;
     padding: 0 !important;
     font-size: 16px !important;
     display: flex !important;

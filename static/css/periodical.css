@@ -331,9 +331,33 @@
 
 .issues-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 24px;
   margin-bottom: 40px;
+}
+
+@media (min-width: 600px) {
+  .issues-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (min-width: 800px) {
+  .issues-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+@media (min-width: 1000px) {
+  .issues-grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}
+
+@media (min-width: 1300px) {
+  .issues-grid {
+    grid-template-columns: repeat(7, 1fr);
+  }
 }
 
 .issue-card {
@@ -432,21 +456,19 @@
 }
 
 .open-pdf-btn {
-  flex: 1;
-  min-width: 0;
+  flex: none;
+  width: 36px;
+  height: 36px;
   background: var(--primary-color);
   color: var(--on-primary);
-  white-space: nowrap;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 6px 8px;
+  padding: 6px;
 }
 
 .open-pdf-btn .btn-text {
-  font-size: 12px;
-  font-weight: 600;
+  display: none;
 }
 
 .open-pdf-btn:hover {
@@ -809,7 +831,6 @@ body.dark-mode #status-message.status-error {
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
   .issues-grid {
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
     gap: 16px;
     padding: 0 8px;
     margin-bottom: 30px;
@@ -843,9 +864,9 @@ body.dark-mode #status-message.status-error {
   .open-pdf-btn,
   .metadata-btn,
   .delete-issue-btn {
-    flex: 1 !important;
+    flex: none !important;
     height: 36px !important;
-    width: 0 !important;
+    width: 36px !important;
     min-width: 0 !important;
     padding: 0 !important;
     display: flex !important;
@@ -858,10 +879,6 @@ body.dark-mode #status-message.status-error {
     cursor: pointer !important;
     transition: all 0.2s ease !important;
     overflow: hidden !important;
-  }
-
-  .open-pdf-btn .btn-text {
-    display: none !important;
   }
 
   .open-pdf-btn {
